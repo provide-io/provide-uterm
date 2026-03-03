@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Trade Wars 2002 - Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-page: #0a0a0a;
+      --bg-terminal: #0a0a0a;
+      --green-base: #22c55e;
+      --green-bright: #4ade80;
+      --text-primary: #e2e8f0;
+      --text-dim: #64748b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100dvh;
+      height: calc(var(--vh, 1dvh) * 100);
+      background: var(--bg-page);
+      color: var(--text-primary);
+      font-family: 'Fira Code', 'Consolas', monospace;
+      overflow: hidden;
+      overscroll-behavior: none;  /* prevent pull-to-refresh and rubber-band scroll */
+    }
+
+    /* ── Page Layout ── */
+    .page-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      width: 100%;
+      padding: 20px;
+      position: relative;
+    }
+
+    /* ── Gear Icon ── */
+    .gear-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 2000;
+      background: rgba(30, 30, 30, 0.8);
+      border: 1px solid #444;
+      border-radius: 8px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #888;
+      font-size: 24px;
+      line-height: 1;
+    }
+    .gear-btn:hover { border-color: var(--green-base); color: var(--green-base); }
+    .gear-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+    /* ── Settings Panel ── */
+    .settings-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1999;
+    }
+    .settings-overlay.open { display: block; }
+
+    .settings-panel {
+      position: fixed;
+      top: 68px;
+      right: 16px;
+      z-index: 2001;
+      width: 300px;
+      background: #1a1a2e;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 20px;
+      display: none;
+      max-height: calc(100vh - 90px);
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .settings-panel.open { display: block; }
+
+    .settings-panel h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      margin: 16px 0 8px 0;
+    }
+    .settings-panel h3:first-child { margin-top: 0; }
+
+    .theme-options {
+      display: flex;
+      gap: 6px;
+    }
+    .theme-btn {
+      flex: 1;
+      padding: 8px 4px;
+      background: #111;
+      border: 2px solid #333;
+      border-radius: 6px;
+      color: #aaa;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .theme-btn:hover { border-color: #666; }
+    .theme-btn.active { border-color: var(--green-base); color: var(--green-base); }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+    .setting-row label {
+      font-size: 12px;
+      color: #ccc;
+    }
+    .setting-row input[type="range"] {
+      width: 120px;
+      accent-color: var(--green-base);
+    }
+    .setting-row .val {
+      font-size: 11px;
+      color: var(--green-base);
+      min-width: 32px;
+      text-align: right;
+    }
+    .setting-row input[type="color"] {
+      width: 32px;
+      height: 24px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    .setting-row input[type="checkbox"] {
+      accent-color: var(--green-base);
+      width: 16px;
+      height: 16px;
+    }
+
+    /* ── Frame: Common ── */
+    /* Height chain: page-wrapper → frameRoot → terminal-frame → screen-inset → terminal
+       Must flow all the way down for FitAddon to measure both dimensions. */
+    #frameRoot {
+      width: 100%;
+      max-width: 1100px;
+      height: 100%;
+    }
+
+    .terminal-frame {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    .screen-inset {
+      flex: 1;
+      min-height: 0;
+    }
+
+    #terminal {
+      overflow: hidden;
+      height: 100%;
+    }
+
+    .xterm { padding: 0; }
+
+    /* ── Connection Status (inside frame) ── */
+    .frame-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #555;
+      display: inline-block;
+    }
+    .status-dot.connected {
+      background: var(--green-base);
+      box-shadow: 0 0 6px var(--green-base);
+    }
+
+    /* ══════════════════════════════════════
+       Theme A: CRT Monitor
+       ══════════════════════════════════════ */
+    .theme-crt .terminal-frame {
+      background: linear-gradient(145deg, #111 0%, #0d0d0d 50%, #111 100%);
+      border-radius: 18px;
+      padding: 28px 28px 12px 28px;
+      box-shadow:
+        0 0 0 2px #111,
+        0 4px 20px rgba(0,0,0,0.8),
+        inset 0 2px 4px rgba(255,255,255,0.05);
+    }
+    .theme-crt .screen-inset {
+      background: #000;
+      border-radius: 8px;
+      padding: 6px;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.9), inset 0 0 4px rgba(0,0,0,0.5);
+      position: relative;
+      overflow: hidden;
+    }
+    .theme-crt .frame-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 6px 2px 6px;
+    }
+    .theme-crt .frame-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .theme-crt .led {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #333;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .theme-crt .led.on {
+      background: var(--green-base);
+      box-shadow: 0 0 4px var(--green-base), 0 0 8px var(--green-base);
+    }
+
+    /* CRT scanlines */
+    .theme-crt.fx-scanlines .screen-inset::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px
+      );
+      pointer-events: none;
+      z-index: 10;
+    }
+    /* CRT vignette */
+    .theme-crt.fx-vignette .screen-inset::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.4) 100%);
+      pointer-events: none;
+      z-index: 10;
+      border-radius: 8px;
+    }
+
+    /* ══════════════════════════════════════
+       Theme B: BBS/DOS Frame
+       ══════════════════════════════════════ */
+    .theme-bbs .terminal-frame {
+      border: 2px solid #444;
+      background: #111;
+    }
+    .theme-bbs .frame-header {
+      background: linear-gradient(90deg, #000080, #0000b0);
+      padding: 4px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .theme-bbs .frame-header-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #fff;
+      letter-spacing: 1px;
+    }
+    .theme-bbs .screen-inset {
+      position: relative;
+      overflow: hidden;
+    }
+    .theme-bbs .frame-statusbar {
+      background: linear-gradient(90deg, #000080, #0000a0);
+      padding: 3px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    /* BBS scanlines */
+    .theme-bbs.fx-scanlines .screen-inset::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px
+      );
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* ══════════════════════════════════════
+       Theme C: Floating Glass
+       ══════════════════════════════════════ */
+    .theme-glass .terminal-frame {
+      border-radius: 12px;
+      background: rgba(20, 20, 30, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .theme-glass .frame-titlebar {
+      padding: 8px 14px;
+      text-align: center;
+      font-size: 11px;
+      color: #777;
+      letter-spacing: 1px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .theme-glass .screen-inset {
+      position: relative;
+      overflow: hidden;
+    }
+    .theme-glass .frame-statusbar {
+      padding: 4px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #555;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Glass glow */
+    .theme-glass.fx-glow .terminal-frame {
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 40px rgba(34,197,94,0.06);
+    }
+
+    /* Glass scanlines */
+    .theme-glass.fx-scanlines .screen-inset::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* ── Loading Overlay ── */
+    .loading {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(13, 17, 23, 0.95);
+      padding: 30px 50px;
+      border: 2px solid var(--green-base);
+      border-radius: 8px;
+      text-align: center;
+      z-index: 100;
+      font-size: 13px;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid var(--text-dim);
+      border-top-color: var(--green-base);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scrollbar styling for settings panel ── */
+    .settings-panel::-webkit-scrollbar { width: 6px; }
+    .settings-panel::-webkit-scrollbar-track { background: transparent; }
+    .settings-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    /* ══════════════════════════════════════
+       Mobile / Responsive Adjustments
+       ══════════════════════════════════════ */
+    @media (max-width: 768px), (max-height: 600px) {
+      .page-wrapper {
+        padding: 0;
+        align-items: flex-start;
+      }
+
+      #frameRoot {
+        width: 100%;
+        height: 100%;
+      }
+
+      .terminal-frame {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        border-radius: 0 !important;
+        border: none !important;
+        padding: 4px !important;
+        box-shadow: none !important;
+      }
+
+      /* Force flex child to calculate height from parent, not content */
+      .screen-inset,
+      .theme-crt .screen-inset,
+      .theme-bbs .screen-inset,
+      .theme-glass .screen-inset {
+        flex: 1;
+        height: 0;
+        border-radius: 0 !important;
+      }
+
+      #terminal { height: 100%; }
+
+      /* Gradient at the bottom edge of the terminal — travels with the frame.
+         Fades to the terminal bg color so it blends clean against any bg. */
+      .screen-inset { position: relative; }
+      .screen-inset::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 40px;
+        background: linear-gradient(to bottom, transparent, var(--bg-terminal, #0a0a0a));
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      /* Hide decorative chrome — both scoped and unscoped for full coverage */
+      .frame-bottom, .theme-crt .frame-bottom,
+      .frame-header, .theme-bbs .frame-header,
+      .frame-statusbar, .theme-bbs .frame-statusbar, .theme-glass .frame-statusbar,
+      .frame-titlebar, .theme-glass .frame-titlebar {
+        display: none !important;
+      }
+
+      .gear-btn {
+        top: 4px;
+        right: 4px;
+        width: 32px;
+        height: 32px;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      .gear-btn svg { width: 18px; height: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Gear Button -->
+  <button class="gear-btn" id="gearBtn" title="Settings">
+    <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/></svg>
+  </button>
+
+  <!-- Settings Panel Overlay (click to close) -->
+  <div class="settings-overlay" id="settingsOverlay"></div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <h3>Theme</h3>
+    <div class="theme-options">
+      <button class="theme-btn" data-theme="crt">CRT</button>
+      <button class="theme-btn" data-theme="bbs">BBS/DOS</button>
+      <button class="theme-btn" data-theme="glass">Glass</button>
+    </div>
+
+    <h3>Terminal Size</h3>
+    <div class="setting-row">
+      <label>Columns</label>
+      <input type="range" id="setCols" min="80" max="120" value="80">
+      <span class="val" id="valCols">80</span>
+    </div>
+    <div class="setting-row">
+      <label>Rows</label>
+      <input type="range" id="setRows" min="25" max="40" value="25">
+      <span class="val" id="valRows">25</span>
+    </div>
+    <div class="setting-row">
+      <label>Font Size</label>
+      <input type="range" id="setFontSize" min="11" max="18" value="14">
+      <span class="val" id="valFontSize">14px</span>
+    </div>
+
+    <h3>Colors</h3>
+    <div class="setting-row">
+      <label>Page Background</label>
+      <input type="color" id="setPageBg" value="#0a0a0a">
+    </div>
+    <div class="setting-row">
+      <label>Terminal Background</label>
+      <input type="color" id="setTermBg" value="#0a0a0a">
+    </div>
+
+    <h3>Effects</h3>
+    <div class="setting-row">
+      <label>Scanlines</label>
+      <input type="checkbox" id="fxScanlines">
+    </div>
+    <div class="setting-row">
+      <label>Vignette</label>
+      <input type="checkbox" id="fxVignette">
+    </div>
+    <div class="setting-row">
+      <label>Glow</label>
+      <input type="checkbox" id="fxGlow">
+    </div>
+  </div>
+
+  <!-- Page Wrapper (centers the terminal) -->
+  <div class="page-wrapper" id="pageWrapper">
+    <div id="frameRoot">
+      <!-- Frame content is built by JS based on active theme -->
+    </div>
+    <div class="loading" id="loadingScreen">
+      <div>
+        <div class="loading-spinner"></div>
+        Initializing Terminal Connection...
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/lib/addon-fit.js"></script>
+  <script src="terminal.js"></script>
+</body>
+</html>

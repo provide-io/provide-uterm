@@ -1,0 +1,94 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provide-terminal"
+version = "0.1.0"
+description = "Shared terminal I/O primitives for the provide ecosystem"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+websocket = ["fastapi>=0.110"]
+ssh       = ["asyncssh>=2.14"]
+emulator  = ["pyte>=0.8"]
+cli       = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0"]
+all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0"]
+
+[project.scripts]
+provideterm = "provide.terminal.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"provide.terminal" = ["frontend/*"]
+
+[dependency-groups]
+dev = [
+    "asyncssh>=2.22.0",
+    "bandit>=1.9",
+    "httpx>=0.27",
+    "mypy>=1.19",
+    "pre-commit>=4.0",
+    "pyte>=0.8.2",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.3",
+    "pytest-cov>=7.0",
+    "pytest-playwright>=0.7.2",
+    "pytest-xdist>=3.8",
+    "ruff>=0.15",
+    "ty>=0.0.17",
+    "websockets>=16.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-ra",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PTH"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402", "B905"]
+
+[tool.coverage.run]
+source = ["provide"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["src"]
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+
+[tool.ty.environment]
+python-version = "3.11"
