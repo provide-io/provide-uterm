@@ -1,0 +1,33 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.2
+    hooks:
+      - id: ruff
+        args: [--fix, --unsafe-fixes]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy src/
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
+
+      - id: ty
+        name: ty check
+        entry: ty check src/
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
+
+      - id: bandit
+        name: bandit
+        entry: bandit -r src/ -ll
+        language: system
+        pass_filenames: false
+        always_run: true
+        types: [python]
