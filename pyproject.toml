@@ -46,6 +46,7 @@ dev = [
     "pytest-xdist>=3.8",
     "ruff>=0.15",
     "ty>=0.0.17",
+    "uv>=0.10.7",
     "websockets>=16.0",
 ]
 

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 try:
     from fastapi import WebSocket  # noqa: TC002
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for hijack hub/routes: pip install 'provide-terminal[websocket]'") from _e
 
@@ -38,8 +38,8 @@ class HijackSession:
 
 
 @dataclass
-class BotTermState:
-    """Per-bot connection state held by :class:`~provide.terminal.hijack.hub.TermHub`."""
+class WorkerTermState:
+    """Per-worker connection state held by :class:`~provide.terminal.hijack.hub.TermHub`."""
 
     worker_ws: WebSocket | None = None
     browsers: set[WebSocket] = field(default_factory=set)
@@ -57,20 +57,20 @@ class BotTermState:
 
 
 class HijackAcquireRequest(BaseModel):
-    owner: str = "mcp"
-    lease_s: int = 90
+    owner: str = Field("mcp", max_length=200)
+    lease_s: int = Field(90, ge=1, le=3600)
 
 
 class HijackHeartbeatRequest(BaseModel):
-    lease_s: int = 90
+    lease_s: int = Field(90, ge=1, le=3600)
 
 
 class HijackSendRequest(BaseModel):
-    keys: str
-    expect_prompt_id: str | None = None
-    expect_regex: str | None = None
-    timeout_ms: int = 2000
-    poll_interval_ms: int = 120
+    keys: str = Field(..., max_length=10_000)
+    expect_prompt_id: str | None = Field(None, max_length=200)
+    expect_regex: str | None = Field(None, max_length=1_000)
+    timeout_ms: int = Field(2000, ge=100, le=30_000)
+    poll_interval_ms: int = Field(120, ge=50, le=5_000)
 
 
 # ---------------------------------------------------------------------------

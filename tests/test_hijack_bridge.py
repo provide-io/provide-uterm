@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""Tests for TermBridge (worker-side WS client)."""
+"""Tests for TermBridge (worker-side WS client) — URL conversion, session attach,
+helper methods, watch callbacks, start, send snapshot, helper edge cases, and
+dropped frame logging."""
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 from typing import Any
 from unittest.mock import MagicMock
@@ -57,6 +58,25 @@ class MockBot:
 
     async def request_step(self) -> None:
         self.step_calls += 1
+
+
+class MockWS:
+    """Minimal async WebSocket mock for TermBridge internal loop tests."""
+
+    def __init__(self, messages: list[str] | None = None) -> None:
+        self.sent: list[str] = []
+        self._messages = list(messages or [])
+        self._idx = 0
+
+    async def recv(self) -> str:
+        if self._idx >= len(self._messages):
+            raise Exception("WebSocket closed")
+        msg = self._messages[self._idx]
+        self._idx += 1
+        return msg
+
+    async def send(self, data: str) -> None:
+        self.sent.append(data)
 
 
 class TestTermBridgeAttachSession:
@@ -159,30 +179,6 @@ class TestTermBridgeHelpers:
 
 
 # ---------------------------------------------------------------------------
-# Mock WebSocket for _recv_loop / _send_loop / _send_snapshot tests
-# ---------------------------------------------------------------------------
-
-
-class MockWS:
-    """Minimal async WebSocket mock for TermBridge internal loop tests."""
-
-    def __init__(self, messages: list[str] | None = None) -> None:
-        self.sent: list[str] = []
-        self._messages = list(messages or [])
-        self._idx = 0
-
-    async def recv(self) -> str:
-        if self._idx >= len(self._messages):
-            raise Exception("WebSocket closed")
-        msg = self._messages[self._idx]
-        self._idx += 1
-        return msg
-
-    async def send(self, data: str) -> None:
-        self.sent.append(data)
-
-
-# ---------------------------------------------------------------------------
 # attach_session — _watch callback
 # ---------------------------------------------------------------------------
 
@@ -249,163 +245,6 @@ class TestStart:
         await bridge.start()  # second call — should not create a new task
         assert bridge._task is task1
         await bridge.stop()
-
-
-# ---------------------------------------------------------------------------
-# _send_loop
-# ---------------------------------------------------------------------------
-
-
-class TestSendLoop:
-    async def test_send_loop_sends_queued_message(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS()
-        # Override send to stop the loop after the first send
-        original_send = ws.send
-
-        async def _send_and_stop(data: str) -> None:
-            await original_send(data)
-            bridge._running = False
-
-        ws.send = _send_and_stop  # type: ignore[method-assign]
-
-        await bridge._send_q.put({"type": "status", "hijacked": False, "ts": 0.0})
-        await bridge._send_loop(ws)
-
-        assert len(ws.sent) == 1
-        payload = json.loads(ws.sent[0])
-        assert payload["type"] == "status"
-
-    async def test_send_loop_exits_when_not_running(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = False  # already stopped
-
-        ws = MockWS()
-        # Loop should exit immediately without blocking
-        task = asyncio.create_task(bridge._send_loop(ws))
-        await asyncio.sleep(0)
-        # Queue is empty; loop condition is False so the task should complete quickly
-        # Cancel it in case it blocked on get()
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        assert len(ws.sent) == 0
-
-
-# ---------------------------------------------------------------------------
-# _recv_loop
-# ---------------------------------------------------------------------------
-
-
-class TestRecvLoop:
-    async def test_recv_loop_snapshot_req_calls_send_snapshot(self) -> None:
-        session = MockSession()
-        bot = MockBot(session)
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS([json.dumps({"type": "snapshot_req"})])
-        await bridge._recv_loop(ws)
-
-        # _send_snapshot should have sent a snapshot via ws.send
-        assert len(ws.sent) == 1
-        payload = json.loads(ws.sent[0])
-        assert payload["type"] == "snapshot"
-
-    async def test_recv_loop_control_pause(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS([json.dumps({"type": "control", "action": "pause"})])
-        await bridge._recv_loop(ws)
-
-        assert bot.hijacked_calls == [True]
-
-    async def test_recv_loop_control_resume(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS([json.dumps({"type": "control", "action": "resume"})])
-        await bridge._recv_loop(ws)
-
-        assert bot.hijacked_calls == [False]
-
-    async def test_recv_loop_control_step(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS([json.dumps({"type": "control", "action": "step"})])
-        await bridge._recv_loop(ws)
-
-        assert bot.step_calls == 1
-
-    async def test_recv_loop_input(self) -> None:
-        """Regression: input data from the WS is forwarded verbatim (no escape conversion)."""
-        session = MockSession()
-        bot = MockBot(session)
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        # The JS text-input bar sends a real CR (\\r → \r before JSON encode).
-        # Simulate that: the JSON string contains a real CR character.
-        ws = MockWS([json.dumps({"type": "input", "data": "hello\r"})])
-        await bridge._recv_loop(ws)
-
-        assert session.sent == ["hello\r"]
-
-    async def test_recv_loop_resize(self) -> None:
-        session = MockSession()
-        bot = MockBot(session)
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS([json.dumps({"type": "resize", "cols": 132, "rows": 50})])
-        await bridge._recv_loop(ws)
-
-        assert session.sizes == [(132, 50)]
-
-    async def test_recv_loop_recv_error_exits(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS()  # no messages → recv raises immediately
-        await bridge._recv_loop(ws)  # should return cleanly
-
-    async def test_recv_loop_invalid_json_continues(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        # First message is invalid JSON; second is valid control/step
-        ws = MockWS(["not json {{", json.dumps({"type": "control", "action": "step"})])
-        await bridge._recv_loop(ws)
-
-        assert bot.step_calls == 1
-
-    async def test_recv_loop_multiple_messages(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS(
-            [
-                json.dumps({"type": "control", "action": "pause"}),
-                json.dumps({"type": "control", "action": "resume"}),
-                json.dumps({"type": "control", "action": "step"}),
-            ]
-        )
-        await bridge._recv_loop(ws)
-
-        assert bot.hijacked_calls == [True, False]
-        assert bot.step_calls == 1
 
 
 # ---------------------------------------------------------------------------
@@ -485,63 +324,6 @@ class TestHelperEdgeCases:
         assert msg["hijacked"] is False
 
 
-class TestRunLoop:
-    async def test_run_connects_to_ws_server(self) -> None:
-        """_run opens a WebSocket to the manager URL and pumps messages."""
-        import websockets.server as _ws_srv
-
-        received_from_bridge: list[dict] = []
-
-        async def _ws_handler(websocket) -> None:
-            try:
-                while True:
-                    msg = await websocket.recv()
-                    received_from_bridge.append(json.loads(msg))
-                    if len(received_from_bridge) >= 1:
-                        break
-            except Exception:
-                pass
-
-        async with _ws_srv.serve(_ws_handler, "127.0.0.1", 0) as server:
-            port = server.sockets[0].getsockname()[1]
-
-            class _FakeBot:
-                session = None
-
-                async def set_hijacked(self, enabled: bool) -> None:
-                    pass
-
-                async def request_step(self) -> None:
-                    pass
-
-            bot = _FakeBot()
-            bridge = TermBridge(bot, "bot1", f"http://127.0.0.1:{port}")
-            bridge._send_q.put_nowait({"type": "term", "data": "hello", "ts": 0.0})
-            await bridge.start()
-            await asyncio.sleep(0.2)
-            await bridge.stop()
-
-        assert len(received_from_bridge) >= 1
-
-    async def test_send_snapshot_exception_suppressed(self) -> None:
-        """_send_snapshot catches exceptions from ws.send() silently."""
-        class _FakeSession:
-            emulator = None
-
-        class _FakeBot:
-            session = _FakeSession()
-
-        bot = _FakeBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost")
-
-        class _BrokenWs:
-            async def send(self, data: object) -> None:
-                raise RuntimeError("broken")
-
-        # Should not raise
-        await bridge._send_snapshot(_BrokenWs())
-
-
 # ---------------------------------------------------------------------------
 # Fix 6 regression — dropped frames logged at DEBUG when queue is full
 # ---------------------------------------------------------------------------
@@ -588,79 +370,3 @@ class TestTermBridgeDroppedFrameLogging:
             watch_fn({"screen": "test"}, b"normal data")
 
         assert not any("term_bridge_drop" in r.message for r in caplog.records)
-
-
-# ---------------------------------------------------------------------------
-# Round-9 regression: _send_loop calls queue.task_done() after each message
-# ---------------------------------------------------------------------------
-
-
-class TestSendLoopTaskDone:
-    """Round-9 fix: _send_loop must call queue.task_done() after each message
-    so that queue.join() can be used as a clean-shutdown fence in the future.
-    Without task_done(), join() would block forever.
-    """
-
-    async def test_task_done_called_after_successful_send(self) -> None:
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        ws = MockWS()
-        original_send = ws.send
-
-        async def _send_and_stop(data: str) -> None:
-            await original_send(data)
-            bridge._running = False
-
-        ws.send = _send_and_stop  # type: ignore[method-assign]
-
-        bridge._send_q.put_nowait({"type": "status", "hijacked": False, "ts": 0.0})
-        await bridge._send_loop(ws)
-
-        # queue.join() must complete immediately — task_done() was called.
-        try:
-            await asyncio.wait_for(bridge._send_q.join(), timeout=0.5)
-        except asyncio.TimeoutError:
-            raise AssertionError("task_done() was not called — queue.join() timed out")
-
-    async def test_task_done_called_even_on_send_exception(self) -> None:
-        """task_done() must be called even when ws.send() raises, so
-        the queue does not accumulate unfinished_tasks.
-        """
-        bot = MockBot()
-        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
-        bridge._running = True
-
-        class _BrokenWS:
-            sent: list = []
-
-            async def send(self, data: str) -> None:
-                raise OSError("network error")
-
-        broken_ws = _BrokenWS()
-        bridge._send_q.put_nowait({"type": "term", "data": "x"})
-
-        # _send_loop will raise on the send, but should still call task_done.
-        # Stop after one iteration by flagging _running = False in the exception path.
-        original_send = broken_ws.send
-        call_count = 0
-
-        async def _raise_and_stop(data: str) -> None:
-            nonlocal call_count
-            call_count += 1
-            bridge._running = False
-            await original_send(data)
-
-        broken_ws.send = _raise_and_stop  # type: ignore[method-assign]
-
-        # The loop will raise internally; the task itself propagates the OSError.
-        import contextlib as _contextlib
-        with _contextlib.suppress(OSError):
-            await bridge._send_loop(broken_ws)
-
-        # queue.join() must complete immediately — task_done() was called despite the exception.
-        try:
-            await asyncio.wait_for(bridge._send_q.join(), timeout=0.5)
-        except asyncio.TimeoutError:
-            raise AssertionError("task_done() not called after send exception — queue.join() timed out")

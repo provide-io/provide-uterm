@@ -36,7 +36,8 @@ class HijackableMixin:
     The dashboard calls :meth:`request_step` to allow one loop iteration while paused.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
         self._hijacked: bool = False
         self._hijack_event: asyncio.Event = asyncio.Event()
         self._hijack_event.set()  # not hijacked by default → event is set → no blocking
