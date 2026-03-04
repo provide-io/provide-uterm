@@ -10,17 +10,17 @@ Mount via :meth:`~provide.terminal.hijack.hub.TermHub.create_router`::
     app.include_router(hub.create_router())
 
 WebSocket endpoints:
-- ``/ws/worker/{bot_id}/term``  — worker → hub (terminal output, snapshots)
-- ``/ws/bot/{bot_id}/term``     — browser → hub (dashboard viewer + hijack control)
+- ``/ws/worker/{worker_id}/term``  — worker → hub (terminal output, snapshots)
+- ``/ws/browser/{worker_id}/term`` — browser → hub (dashboard viewer + hijack control)
 
 REST endpoints (require a live hijack session):
-- ``POST /bot/{id}/hijack/acquire``
-- ``POST /bot/{id}/hijack/{hid}/heartbeat``
-- ``GET  /bot/{id}/hijack/{hid}/snapshot``
-- ``GET  /bot/{id}/hijack/{hid}/events``
-- ``POST /bot/{id}/hijack/{hid}/send``
-- ``POST /bot/{id}/hijack/{hid}/step``
-- ``POST /bot/{id}/hijack/{hid}/release``
+- ``POST /worker/{id}/hijack/acquire``
+- ``POST /worker/{id}/hijack/{hid}/heartbeat``
+- ``GET  /worker/{id}/hijack/{hid}/snapshot``
+- ``GET  /worker/{id}/hijack/{hid}/events``
+- ``POST /worker/{id}/hijack/{hid}/send``
+- ``POST /worker/{id}/hijack/{hid}/step``
+- ``POST /worker/{id}/hijack/{hid}/release``
 """
 
 from __future__ import annotations

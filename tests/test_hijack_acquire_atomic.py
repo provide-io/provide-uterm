@@ -24,7 +24,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import BotTermState, HijackSession
+from provide.terminal.hijack.models import WorkerTermState, HijackSession
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ class TestTryAcquireRestHijack:
     async def test_first_caller_wins(self) -> None:
         """Two concurrent calls: exactly one succeeds, one gets already_hijacked."""
         hub = TermHub()
-        hub._bots["bot1"] = BotTermState(worker_ws=AsyncMock())
+        hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock())
 
         results: list[tuple[bool, str | None]] = []
 
@@ -83,7 +83,7 @@ class TestTryAcquireRestHijack:
     async def test_returns_already_hijacked_when_ws_owner_set(self) -> None:
         hub = TermHub()
         mock_ws = AsyncMock()
-        hub._bots["bot1"] = BotTermState(worker_ws=AsyncMock(), hijack_owner=mock_ws)
+        hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock(), hijack_owner=mock_ws)
 
         ok, err = await hub._try_acquire_rest_hijack(
             "bot1", owner="t", lease_s=60, hijack_id="x", now=time.time()
@@ -93,7 +93,7 @@ class TestTryAcquireRestHijack:
 
     async def test_returns_already_hijacked_when_session_active(self) -> None:
         hub = TermHub()
-        hub._bots["bot1"] = BotTermState(
+        hub._workers["bot1"] = WorkerTermState(
             worker_ws=AsyncMock(), hijack_session=_active_session()
         )
 
@@ -105,7 +105,7 @@ class TestTryAcquireRestHijack:
 
     async def test_writes_session_on_success(self) -> None:
         hub = TermHub()
-        hub._bots["bot1"] = BotTermState(worker_ws=AsyncMock())
+        hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock())
         hid = str(uuid.uuid4())
         now = time.time()
 
@@ -115,7 +115,7 @@ class TestTryAcquireRestHijack:
 
         assert ok is True
         assert err is None
-        st = hub._bots["bot1"]
+        st = hub._workers["bot1"]
         assert st.hijack_session is not None
         assert st.hijack_session.hijack_id == hid
         assert st.hijack_session.owner == "owner1"
@@ -130,7 +130,7 @@ class TestTryAcquireWsHijack:
     async def test_first_caller_wins(self) -> None:
         """Two concurrent WS callers: exactly one wins the hijack."""
         hub = TermHub()
-        hub._bots["bot1"] = BotTermState(worker_ws=AsyncMock())
+        hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock())
 
         ws_a = AsyncMock()
         ws_b = AsyncMock()
@@ -150,7 +150,7 @@ class TestTryAcquireWsHijack:
 
     async def test_no_worker_returns_no_worker(self) -> None:
         hub = TermHub()
-        hub._bots["bot1"] = BotTermState(worker_ws=None)
+        hub._workers["bot1"] = WorkerTermState(worker_ws=None)
 
         ok, err = await hub._try_acquire_ws_hijack("bot1", AsyncMock())
         assert ok is False
@@ -164,7 +164,7 @@ class TestTryAcquireWsHijack:
 
     async def test_rest_session_blocks_ws_acquire(self) -> None:
         hub = TermHub()
-        hub._bots["bot1"] = BotTermState(
+        hub._workers["bot1"] = WorkerTermState(
             worker_ws=AsyncMock(), hijack_session=_active_session()
         )
         ok, err = await hub._try_acquire_ws_hijack("bot1", AsyncMock())
@@ -174,12 +174,12 @@ class TestTryAcquireWsHijack:
     async def test_sets_owner_and_expiry_on_success(self) -> None:
         hub = TermHub(dashboard_hijack_lease_s=60)
         ws = AsyncMock()
-        hub._bots["bot1"] = BotTermState(worker_ws=AsyncMock())
+        hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock())
 
         ok, err = await hub._try_acquire_ws_hijack("bot1", ws)
 
         assert ok is True
-        st = hub._bots["bot1"]
+        st = hub._workers["bot1"]
         assert st.hijack_owner is ws
         assert st.hijack_owner_expires_at is not None
         assert st.hijack_owner_expires_at > time.time()
@@ -196,15 +196,15 @@ def test_rest_acquire_rejects_concurrent_duplicate() -> None:
 
     # Pre-wire a worker WebSocket so the endpoint doesn't short-circuit on missing worker.
     worker_ws = AsyncMock()
-    hub._bots["botX"] = BotTermState(worker_ws=worker_ws)
+    hub._workers["botX"] = WorkerTermState(worker_ws=worker_ws)
 
     with TestClient(app) as client:
         # First acquire — succeeds
-        r1 = client.post("/bot/botX/hijack/acquire", json={"owner": "tester", "lease_s": 60})
+        r1 = client.post("/worker/botX/hijack/acquire", json={"owner": "tester", "lease_s": 60})
         assert r1.status_code == 200, r1.json()
 
         # Second acquire with existing active session — must fail
-        r2 = client.post("/bot/botX/hijack/acquire", json={"owner": "tester2", "lease_s": 60})
+        r2 = client.post("/worker/botX/hijack/acquire", json={"owner": "tester2", "lease_s": 60})
         assert r2.status_code == 409
         assert "hijacked" in r2.json()["error"].lower()
 
@@ -217,7 +217,7 @@ def test_rest_acquire_rejects_concurrent_duplicate() -> None:
 def test_ws_hijack_request_no_worker_returns_error() -> None:
     """hijack_request with no worker connected returns error (no_worker path)."""
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/bot/nobot/term") as browser:
+    with TestClient(app) as client, client.websocket_connect("/ws/browser/nobot/term") as browser:
         # Drain hello + hijack_state
         browser.receive_json()
         browser.receive_json()
@@ -247,7 +247,7 @@ def test_disconnect_as_owner_sends_resume_and_clears_owner() -> None:
         # snapshot_req on worker connect
         worker.receive_json()
 
-        with client.websocket_connect("/ws/bot/bot3/term") as browser:
+        with client.websocket_connect("/ws/browser/bot3/term") as browser:
             browser.receive_json()  # hello
             browser.receive_json()  # hijack_state
             # browser connect triggers _request_snapshot → second snapshot_req
@@ -264,7 +264,7 @@ def test_disconnect_as_owner_sends_resume_and_clears_owner() -> None:
         assert ctrl["action"] == "resume"
 
     # hijack_owner must be cleared
-    st = hub._bots.get("bot3")
+    st = hub._workers.get("bot3")
     if st:
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None

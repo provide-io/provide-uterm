@@ -123,7 +123,7 @@ class TerminalSSHServer(asyncssh.SSHServer):
 
     def connection_made(self, conn: asyncssh.SSHServerConnection) -> None:
         peer = conn.get_extra_info("peername")
-        peer_ip = peer[0] if peer else ""
+        peer_ip = peer[0] if peer else "unknown"
         addr = f"{peer[0]}:{peer[1]}" if peer else "unknown"
 
         count = self._ip_connections.get(peer_ip, 0)

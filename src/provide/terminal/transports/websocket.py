@@ -44,6 +44,10 @@ class WebSocketStreamReader:
                 self._buffer.extend(text.encode("utf-8"))
             except (WebSocketDisconnect, RuntimeError):
                 self._closed = True
+                if self._buffer:
+                    result = bytes(self._buffer)
+                    self._buffer.clear()
+                    return result
                 return b""
 
         result = bytes(self._buffer[:n])

@@ -71,7 +71,7 @@ async def _ws_to_tcp(ws: object, writer: asyncio.StreamWriter) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
     async for message in ws:  # type: ignore[attr-defined]
         if isinstance(message, str):
-            writer.write(message.encode("utf-8", errors="replace"))
+            writer.write(message.encode("latin-1", errors="replace"))
         else:
             writer.write(message)
         await writer.drain()
@@ -87,7 +87,7 @@ async def _pipe_ws(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, w
         _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
+        await asyncio.gather(*[*_done, *pending], return_exceptions=True)
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ class SshWsGateway:
                     _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
                     for task in pending:
                         task.cancel()
-                    await asyncio.gather(*pending, return_exceptions=True)
+                    await asyncio.gather(*[*_done, *pending], return_exceptions=True)
             except Exception as exc:
                 logger.debug("ssh_ws_session_ended: %s", exc)
             finally:
@@ -251,4 +251,4 @@ async def _ws_to_ssh(ws: object, process: object) -> None:
         if isinstance(message, str):
             stdout.write(message)
         else:
-            stdout.write(message.decode("utf-8", errors="replace"))
+            stdout.write(message.decode("latin-1", errors="replace"))

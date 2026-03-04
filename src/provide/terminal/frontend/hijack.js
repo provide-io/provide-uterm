@@ -1,11 +1,11 @@
 /**
  * ProvideHijack - Embeddable terminal hijack control widget.
  *
- * Connects to the TermHub browser WebSocket endpoint (/ws/bot/{botId}/term)
+ * Connects to the TermHub browser WebSocket endpoint (/ws/browser/{workerId}/term)
  * and provides live terminal viewing plus hijack controls (pause/step/release).
  *
  * Usage:
- *   const w = new ProvideHijack(containerEl, { botId: 'mybot' });
+ *   const w = new ProvideHijack(containerEl, { workerId: 'myworker' });
  *   w.connect();    // called automatically on construction
  *   w.disconnect(); // close WS
  *   w.dispose();    // tear down entirely
@@ -38,9 +38,9 @@ class ProvideHijack {
    *
    * @param {HTMLElement} container - Element to mount the widget into.
    * @param {object} [config={}] - Configuration options.
-   * @param {string} [config.wsUrl] - Full WS URL. If omitted, auto-built from botId.
-   * @param {string} [config.botId] - Bot ID (used in auto URL and display title).
-   * @param {string} [config.wsPathPrefix='/ws/bot'] - Path prefix for auto URL construction.
+   * @param {string} [config.wsUrl] - Full WS URL. If omitted, auto-built from workerId.
+   * @param {string} [config.workerId] - Worker ID (used in auto URL and display title).
+   * @param {string} [config.wsPathPrefix='/ws/browser'] - Path prefix for auto URL construction.
    * @param {string|null} [config.title] - Override toolbar title text.
    * @param {boolean} [config.showInput=true] - Show text-input bar when hijacked.
    * @param {boolean} [config.showAnalysis=true] - Show collapsible analysis panel.
@@ -50,7 +50,7 @@ class ProvideHijack {
   constructor(container, config = {}) {
     this._container = container;
     this._config = {
-      wsPathPrefix: '/ws/bot',
+      wsPathPrefix: '/ws/browser',
       showInput: true,
       showAnalysis: true,
       heartbeatInterval: 5000,
@@ -69,6 +69,7 @@ class ProvideHijack {
     this._reconnectAttempt = 0;
     this._hijacked = false;
     this._hijackedByMe = false;
+    this._workerOnline = false;
     this._mobileKeysVisible = false;
     this._root = null;
 
@@ -87,6 +88,7 @@ class ProvideHijack {
   /** Close the WebSocket connection. */
   disconnect() {
     this._clearHeartbeat();
+    if (this._ro) { this._ro.disconnect(); this._ro = null; }
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
@@ -99,8 +101,7 @@ class ProvideHijack {
 
   /** Tear down entirely: xterm, WebSocket, ResizeObserver, and DOM. */
   dispose() {
-    this.disconnect();
-    if (this._ro) { this._ro.disconnect(); this._ro = null; }
+    this.disconnect(); // handles _ro, _heartbeatTimer, _ws, _reconnectTimer
     if (this._term) { this._term.dispose(); this._term = null; }
     this._fitAddon = null;
     if (this._root && this._root.parentNode) {
@@ -130,17 +131,17 @@ class ProvideHijack {
       if (url.startsWith('/')) return `${proto}//${location.host}${url}`;
       return url; // already absolute ws:// or wss://
     }
-    const botId = encodeURIComponent(this._config.botId || 'default');
-    const prefix = this._config.wsPathPrefix || '/ws/bot';
-    return `${proto}//${location.host}${prefix}/${botId}/term`;
+    const workerId = encodeURIComponent(this._config.workerId || 'default');
+    const prefix = this._config.wsPathPrefix || '/ws/browser';
+    return `${proto}//${location.host}${prefix}/${workerId}/term`;
   }
 
   // ── DOM Construction ────────────────────────────────────────────────────────
 
   _buildDOM() {
     const p = (id) => `h-${this._uid}-${id}`; // ID prefix helper
-    const botId = this._config.botId || '';
-    const title = this._config.title || (botId ? `Terminal: ${botId}` : 'Terminal');
+    const workerId = this._config.workerId || '';
+    const title = this._config.title || (workerId ? `Terminal: ${workerId}` : 'Terminal');
     const showAnalysis = this._config.showAnalysis !== false;
 
     const root = document.createElement('div');
@@ -283,6 +284,8 @@ class ProvideHijack {
       this._clearHeartbeat();
       this._hijacked = false;
       this._hijackedByMe = false;
+      this._workerOnline = false;
+      this._updateStatus();
       this._updateButtons();
       this._ws = null;
       this._scheduleReconnect();
@@ -338,12 +341,14 @@ class ProvideHijack {
     switch (msg.type) {
 
       case 'term':
+        this._workerOnline = true;
         if (msg.data) {
           try { this._ensureTerm().write(msg.data); } catch (_) {}
         }
         break;
 
       case 'snapshot': {
+        this._workerOnline = true;
         const promptId = msg.prompt_detected && msg.prompt_detected.prompt_id;
         this._setPromptId(promptId || '');
         try {
@@ -366,9 +371,16 @@ class ProvideHijack {
       }
 
       case 'hello':
-        // {type, bot_id, can_hijack, hijacked, hijacked_by_me}
+        // {type, worker_id, can_hijack, hijacked, hijacked_by_me}
         this._hijacked = !!msg.hijacked;
         this._hijackedByMe = !!msg.hijacked_by_me;
+        this._workerOnline = !!msg.worker_online;
+        this._updateStatus();
+        this._updateButtons();
+        break;
+
+      case 'worker_connected':
+        this._workerOnline = true;
         this._updateStatus();
         this._updateButtons();
         break;
@@ -383,6 +395,15 @@ class ProvideHijack {
         } else {
           this._clearHeartbeat();
         }
+        this._updateStatus();
+        this._updateButtons();
+        break;
+
+      case 'worker_disconnected':
+        this._workerOnline = false;
+        this._hijacked = false;
+        this._hijackedByMe = false;
+        this._clearHeartbeat();
         this._updateStatus();
         this._updateButtons();
         break;
@@ -415,6 +436,8 @@ class ProvideHijack {
       this._setStatus('warn', 'Hijacked (you)');
     } else if (this._hijacked) {
       this._setStatus('bad', 'Hijacked (other)');
+    } else if (!this._workerOnline) {
+      this._setStatus('bad', 'Worker offline');
     } else {
       this._setStatus('live', 'Connected (watching)');
     }
@@ -445,11 +468,11 @@ class ProvideHijack {
         .forEach(b => { if (b) b.disabled = true; });
       return;
     }
-    if (hijackBtn)  hijackBtn.disabled  = this._hijacked;
+    if (hijackBtn)  hijackBtn.disabled  = this._hijacked || !this._workerOnline;
     if (stepBtn)    stepBtn.disabled    = !this._hijackedByMe;
     if (releaseBtn) releaseBtn.disabled = !this._hijackedByMe;
-    if (resyncBtn)  resyncBtn.disabled  = false;
-    if (analyzeBtn) analyzeBtn.disabled = false;
+    if (resyncBtn)  resyncBtn.disabled  = !this._workerOnline;
+    if (analyzeBtn) analyzeBtn.disabled = !this._hijackedByMe;
   }
 
   _setPromptId(id) {
@@ -496,6 +519,7 @@ class ProvideHijack {
 
     this._q('analyze').addEventListener('click', () => {
       if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+      if (!this._hijackedByMe) return;
       this._wsSend({ type: 'analyze_req' });
     });
 

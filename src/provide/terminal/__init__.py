@@ -69,7 +69,7 @@ __all__ = [
 
 
 _FASTAPI_EXPORTS: frozenset[str] = frozenset({"mount_terminal_ui", "create_ws_terminal_router", "WsTerminalProxy"})
-_GATEWAY_EXPORTS: frozenset[str] = frozenset({"TelnetWsGateway"})
+_GATEWAY_EXPORTS: frozenset[str] = frozenset({"TelnetWsGateway", "SshWsGateway"})
 
 
 def __getattr__(name: str) -> object:

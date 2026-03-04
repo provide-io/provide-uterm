@@ -5,8 +5,8 @@
 
 """Worker-side terminal bridge to a Swarm Manager.
 
-Connects a running bot/worker process to the manager WebSocket endpoint
-``/ws/worker/{bot_id}/term``.
+Connects a running worker process to the manager WebSocket endpoint
+``/ws/worker/{worker_id}/term``.
 
 Forwards:
 - Live terminal output from session watchers → hub → browsers.
@@ -27,6 +27,13 @@ import json
 import logging
 import time
 from typing import Any, Protocol, runtime_checkable
+
+
+def _safe_int(val: Any, default: int) -> int:
+    try:
+        return int(default if val is None else val)
+    except (ValueError, TypeError):
+        return default
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +70,8 @@ class WorkerSession(Protocol):
 
 
 @runtime_checkable
-class WorkerBot(Protocol):
-    """Minimal interface that a bot must provide for TermBridge."""
+class Worker(Protocol):
+    """Minimal interface that a worker must provide for TermBridge."""
 
     @property
     def session(self) -> WorkerSession | None:
@@ -89,14 +96,14 @@ class TermBridge:
     """Worker-side WebSocket bridge to the Swarm Manager terminal hub.
 
     Args:
-        bot: Object implementing :class:`WorkerBot` (duck-typed).
-        bot_id: Unique bot identifier used in the WebSocket URL.
+        bot: Object implementing :class:`Worker` (duck-typed).
+        worker_id: Unique worker identifier used in the WebSocket URL.
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
 
-    def __init__(self, bot: Any, bot_id: str, manager_url: str) -> None:
+    def __init__(self, bot: Any, worker_id: str, manager_url: str) -> None:
         self._bot = bot
-        self._bot_id = bot_id
+        self._worker_id = worker_id
         self._manager_url = manager_url
         self._send_q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2000)
         self._latest_snapshot: dict[str, Any] | None = None
@@ -118,11 +125,11 @@ class TermBridge:
             self._latest_snapshot = snapshot
             if not raw:
                 return
-            text = raw.decode("cp437", errors="replace")
+            text = raw.decode("latin-1", errors="replace")
             try:
                 self._send_q.put_nowait({"type": "term", "data": text, "ts": time.time()})
             except asyncio.QueueFull:
-                logger.debug("term_bridge_drop bot_id=%s queue_full", self._bot_id)
+                logger.debug("term_bridge_drop worker_id=%s queue_full", self._worker_id)
 
         session.add_watch(_watch, interval_s=0.0)
 
@@ -147,14 +154,16 @@ class TermBridge:
         try:
             import websockets
         except ImportError:  # pragma: no cover
-            logger.warning("term_bridge_no_websockets bot_id=%s", self._bot_id)
+            logger.warning("term_bridge_no_websockets worker_id=%s", self._worker_id)
             return
 
-        url = _to_ws_url(self._manager_url, f"/ws/worker/{self._bot_id}/term")
-        logger.info("term_bridge_connecting bot_id=%s url=%s", self._bot_id, url)
+        url = _to_ws_url(self._manager_url, f"/ws/worker/{self._worker_id}/term")
+        logger.info("term_bridge_connecting worker_id=%s url=%s", self._worker_id, url)
 
         attempt = 0
         while self._running:
+            send_task: asyncio.Task[None] | None = None
+            recv_task: asyncio.Task[None] | None = None
             try:
                 async with websockets.connect(url, max_size=10 * 1024 * 1024) as ws:
                     attempt = 0  # reset backoff on successful connect
@@ -173,11 +182,16 @@ class TermBridge:
                             if exc:
                                 raise exc
             except asyncio.CancelledError:
+                tasks = [task for task in (send_task, recv_task) if task is not None]
+                for task in tasks:
+                    task.cancel()
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
                 return
             except Exception as exc:
                 logger.warning(
-                    "term_bridge_disconnected bot_id=%s error=%s attempt=%d",
-                    self._bot_id,
+                    "term_bridge_disconnected worker_id=%s error=%s attempt=%d",
+                    self._worker_id,
                     exc,
                     attempt,
                 )
@@ -195,39 +209,63 @@ class TermBridge:
         while self._running:
             msg = await self._send_q.get()
             try:
-                await ws.send(json.dumps(msg, ensure_ascii=True))
+                try:
+                    payload = json.dumps(msg, ensure_ascii=True)
+                except Exception as exc:
+                    # Serialization failure: skip the bad message rather than
+                    # tearing down the connection and triggering reconnect churn.
+                    logger.warning("_send_loop serialization_error worker_id=%s: %s", self._worker_id, exc)
+                    continue
+                try:
+                    await ws.send(payload)
+                except Exception as exc:
+                    logger.warning(
+                        "_send_loop network_error worker_id=%s msg_type=%s: %s",
+                        self._worker_id,
+                        msg.get("type"),
+                        exc,
+                    )
+                    raise  # propagate to _run to trigger reconnect
             finally:
-                # Always mark the item done so queue.join() never deadlocks if
-                # it is added as a shutdown fence in the future.
+                # Always mark the item done — including on CancelledError — so
+                # queue.join() never deadlocks if used as a shutdown fence.
                 self._send_q.task_done()
 
     async def _recv_loop(self, ws: Any) -> None:
-        while self._running:
-            try:
-                raw = await ws.recv()
-            except Exception:
-                return
-            try:
-                msg = json.loads(raw)
-            except Exception:  # noqa: S112
-                continue
-            mtype = msg.get("type")
-            if mtype == "snapshot_req":
-                await self._send_snapshot(ws)
-            elif mtype == "control":
-                action = msg.get("action")
-                if action == "pause":
-                    await self._set_hijacked(True)
-                elif action == "resume":
-                    await self._set_hijacked(False)
-                elif action == "step":
-                    await self._request_step()
-            elif mtype == "input":
-                data = msg.get("data", "")
-                if data:
-                    await self._send_keys(data)
-            elif mtype == "resize":
-                await self._set_size(int(msg.get("cols", 80) or 80), int(msg.get("rows", 25) or 25))
+        try:
+            while self._running:
+                try:
+                    raw = await ws.recv()
+                except Exception as exc:
+                    logger.debug("_recv_loop recv error worker_id=%s: %s", self._worker_id, exc)
+                    return
+                try:
+                    msg = json.loads(raw)
+                except Exception:  # noqa: S112
+                    continue
+                mtype = msg.get("type")
+                if mtype == "snapshot_req":
+                    await self._send_snapshot(ws)
+                elif mtype == "control":
+                    action = msg.get("action")
+                    if action == "pause":
+                        await self._set_hijacked(True)
+                    elif action == "resume":
+                        await self._set_hijacked(False)
+                    elif action == "step":
+                        await self._request_step()
+                elif mtype == "input":
+                    data = msg.get("data", "")
+                    if data:
+                        await self._send_keys(data)
+                elif mtype == "resize":
+                    await self._set_size(_safe_int(msg.get("cols"), 80), _safe_int(msg.get("rows"), 25))
+        finally:
+            # Ensure the bot is never left permanently paused if the connection
+            # drops while a hijack was active.  The hub clears its own hijack
+            # state in ws_worker_term's finally block, but it cannot send a
+            # resume over a closed socket — so the bridge must self-clear here.
+            await self._set_hijacked(False)
 
     async def _send_snapshot(self, ws: Any) -> None:
         session = getattr(self._bot, "session", None)
@@ -255,33 +293,42 @@ class TermBridge:
                     ensure_ascii=True,
                 )
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("_send_snapshot failed worker_id=%s: %s", self._worker_id, exc)
             return
 
     async def _send_keys(self, data: str) -> None:
         session = getattr(self._bot, "session", None)
         if session is None:
             return
-        with contextlib.suppress(Exception):
+        try:
             await session.send(data)
+        except Exception as exc:
+            logger.debug("_send_keys failed: %s", exc)
 
     async def _request_step(self) -> None:
         fn = getattr(self._bot, "request_step", None)
         if callable(fn):
-            with contextlib.suppress(Exception):
+            try:
                 await fn()
+            except Exception as exc:
+                logger.debug("_request_step failed: %s", exc)
 
     async def _set_size(self, cols: int, rows: int) -> None:
         session = getattr(self._bot, "session", None)
         if session is None:
             return
-        with contextlib.suppress(Exception):
+        try:
             await session.set_size(cols, rows)
+        except Exception as exc:
+            logger.debug("_set_size failed: %s", exc)
 
     async def _set_hijacked(self, enabled: bool) -> None:
         fn = getattr(self._bot, "set_hijacked", None)
         if callable(fn):
-            with contextlib.suppress(Exception):
+            try:
                 await fn(enabled)
+            except Exception as exc:
+                logger.debug("_set_hijacked failed: %s", exc)
         with contextlib.suppress(asyncio.QueueFull):
             self._send_q.put_nowait({"type": "status", "hijacked": enabled, "ts": time.time()})
