@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import time
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import WorkerTermState, HijackSession
+from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
 # ---------------------------------------------------------------------------
 # Shared helpers (mirrors test_hijack_ws.py)
@@ -187,10 +187,9 @@ def test_non_owner_browser_disconnect_does_not_send_resume() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_hijack_request_send_fail_fires_notify_disabled() -> None:
-    """Round-8 fix 2: when _send_worker returns False after WS hijack acquired,
-    on_hijack_changed(enabled=False) must fire (so the bot automation can resume).
-    Previously a separate _set_hijack_owner + notify risked a spurious double-fire."""
+def test_hijack_request_send_fail_no_notify_no_owner() -> None:
+    """Pause send to worker fails before ownership is written — hijack is never
+    acquired so on_hijack_changed must NOT fire and hijack_owner stays None."""
     callbacks: list[tuple] = []
 
     def on_changed(bot_id: str, enabled: bool, owner: object) -> None:
@@ -217,13 +216,14 @@ def test_hijack_request_send_fail_fires_notify_disabled() -> None:
             with patch.object(hub, "_send_worker", side_effect=_fail_pause):
                 browser.send_json({"type": "hijack_request"})
                 err = browser.receive_json()
+                # browser also receives hijack_state after error
+                state = browser.receive_json()
 
             assert err["type"] == "error"
-            disabled_calls = [(b, e, o) for b, e, o in callbacks if not e]
-            assert disabled_calls, "on_hijack_changed(enabled=False) must be called after send failure"
-            assert disabled_calls[-1][0] == "bot1"
-            # Hub must not consider bot1 hijacked after the rollback.
-            # Check while connections are live — bot is pruned once all disconnect.
+            assert state["type"] == "hijack_state"
+            # Pause was never delivered so ownership was never written —
+            # on_hijack_changed must not fire at all.
+            assert not callbacks, "on_hijack_changed must not fire when pause send fails before ownership is written"
             st = hub._workers.get("bot1")
             assert st is not None
             assert st.hijack_owner is None
@@ -245,9 +245,7 @@ def test_ping_is_silently_ignored() -> None:
 
             # Worker receives the snapshot_req forwarded from the browser
             msg = worker.receive_json()
-            assert msg["type"] == "snapshot_req", (
-                f"Expected snapshot_req after ping but got: {msg}"
-            )
+            assert msg["type"] == "snapshot_req", f"Expected snapshot_req after ping but got: {msg}"
 
 
 def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
@@ -262,18 +260,17 @@ def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    # Pre-install an active REST session so rest_active=True after WS release
-    rest_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
-        hijack_session=_active_session(rest_id, "rest_owner"),
-    )
-
     with TestClient(fapp) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
         with client.websocket_connect("/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
+
+            # Install the REST session AFTER the worker connects so it is not
+            # cleared by the reconnect stale-state cleanup.
+            rest_id = str(uuid.uuid4())
+            hub._workers["bot1"].hijack_session = _active_session(rest_id, "rest_owner")
 
             orig_send = hub._send_worker
 
@@ -311,20 +308,19 @@ def test_worker_disconnect_broadcasts_worker_disconnected_to_browsers() -> None:
     """
     app, hub = make_app()
 
-    with TestClient(app) as client:
-        # Browser outer → stays alive when worker (inner) exits.
-        with client.websocket_connect("/ws/browser/bot1/term") as browser:
-            _read_initial_browser_messages(browser)
+    # Browser outer → stays alive when worker (inner) exits.
+    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+        _read_initial_browser_messages(browser)
 
-            with client.websocket_connect("/ws/worker/bot1/term") as worker:
-                _read_worker_connected(browser)
-                _read_worker_snapshot_req(worker)
-                # worker exits this block → disconnect
+        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+            _read_worker_connected(browser)
+            _read_worker_snapshot_req(worker)
+            # worker exits this block → disconnect
 
-            # Worker has disconnected; browser is still open.
-            msg = browser.receive_json()
-            assert msg["type"] == "worker_disconnected", f"Expected worker_disconnected but got: {msg}"
-            assert msg["worker_id"] == "bot1"
+        # Worker has disconnected; browser is still open.
+        msg = browser.receive_json()
+        assert msg["type"] == "worker_disconnected", f"Expected worker_disconnected but got: {msg}"
+        assert msg["worker_id"] == "bot1"
 
 
 def test_worker_disconnect_clears_rest_hijack_session() -> None:
@@ -340,16 +336,13 @@ def test_worker_disconnect_clears_rest_hijack_session() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    session_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
-        hijack_session=_active_session(session_id, "rest_owner"),
-    )
-
-    with TestClient(fapp) as client:
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
-            _read_worker_snapshot_req(worker)
-            assert hub._workers["bot1"].hijack_session is not None
-            # worker disconnects → finally block clears hijack_session
+    with TestClient(fapp) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+        _read_worker_snapshot_req(worker)
+        # Install REST session after connect so it is not cleared by reconnect cleanup.
+        session_id = str(uuid.uuid4())
+        hub._workers["bot1"].hijack_session = _active_session(session_id, "rest_owner")
+        assert hub._workers["bot1"].hijack_session is not None
+        # worker disconnects → finally block clears hijack_session
 
     # State is pruned (no browsers remain) but the notify must have fired.
     disabled_calls = [(b, e, o) for b, e, o in callbacks if not e]
@@ -365,34 +358,33 @@ def test_worker_disconnect_clears_ws_hijack_owner() -> None:
     """
     app, hub = make_app()
 
-    with TestClient(app) as client:
-        # Browser outer — stays alive when worker (inner) exits.
-        with client.websocket_connect("/ws/browser/bot1/term") as browser:
-            _read_initial_browser_messages(browser)
+    # Browser outer — stays alive when worker (inner) exits.
+    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+        _read_initial_browser_messages(browser)
 
-            with client.websocket_connect("/ws/worker/bot1/term") as worker:
-                _read_worker_connected(browser)
-                _read_worker_snapshot_req(worker)
+        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+            _read_worker_connected(browser)
+            _read_worker_snapshot_req(worker)
 
-                # Browser acquires dashboard WS hijack.
-                browser.send_json({"type": "hijack_request"})
-                # Drain the hijack_state broadcast confirming acquisition.
-                msg = browser.receive_json()
-                assert msg["type"] == "hijack_state", f"Expected hijack_state but got: {msg}"
-
-                st = hub._workers.get("bot1")
-                assert st is not None and st.hijack_owner is not None, "hijack_owner should be set"
-                # worker exits → finally block clears hijack_owner
-
-            # Worker disconnected; browser is still open.
+            # Browser acquires dashboard WS hijack.
+            browser.send_json({"type": "hijack_request"})
+            # Drain the hijack_state broadcast confirming acquisition.
             msg = browser.receive_json()
-            assert msg["type"] == "worker_disconnected"
+            assert msg["type"] == "hijack_state", f"Expected hijack_state but got: {msg}"
 
-            # Check state while browser is still alive (prevents premature prune).
             st = hub._workers.get("bot1")
-            assert st is not None, "state should still exist while browser is connected"
-            assert st.hijack_owner is None, "hijack_owner must be cleared on worker disconnect"
-            assert st.hijack_owner_expires_at is None, "hijack_owner_expires_at must be cleared"
+            assert st is not None and st.hijack_owner is not None, "hijack_owner should be set"
+            # worker exits → finally block clears hijack_owner
+
+        # Worker disconnected; browser is still open.
+        msg = browser.receive_json()
+        assert msg["type"] == "worker_disconnected"
+
+        # Check state while browser is still alive (prevents premature prune).
+        st = hub._workers.get("bot1")
+        assert st is not None, "state should still exist while browser is connected"
+        assert st.hijack_owner is None, "hijack_owner must be cleared on worker disconnect"
+        assert st.hijack_owner_expires_at is None, "hijack_owner_expires_at must be cleared"
 
 
 def test_worker_disconnect_fires_notify_when_ws_hijack_active() -> None:
@@ -408,20 +400,19 @@ def test_worker_disconnect_fires_notify_when_ws_hijack_active() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client:
-        with client.websocket_connect("/ws/browser/bot1/term") as browser:
-            _read_initial_browser_messages(browser)
+    with TestClient(fapp) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+        _read_initial_browser_messages(browser)
 
-            with client.websocket_connect("/ws/worker/bot1/term") as worker:
-                _read_worker_connected(browser)
-                _read_worker_snapshot_req(worker)
+        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+            _read_worker_connected(browser)
+            _read_worker_snapshot_req(worker)
 
-                browser.send_json({"type": "hijack_request"})
-                msg = browser.receive_json()
-                assert msg["type"] == "hijack_state"
-                # worker exits with active WS hijack lease
+            browser.send_json({"type": "hijack_request"})
+            msg = browser.receive_json()
+            assert msg["type"] == "hijack_state"
+            # worker exits with active WS hijack lease
 
-            browser.receive_json()  # drain worker_disconnected
+        browser.receive_json()  # drain worker_disconnected
 
     disabled_calls = [(b, e, o) for b, e, o in callbacks if not e]
     assert disabled_calls, "on_hijack_changed(enabled=False) must fire when worker disconnects with WS hijack"
@@ -439,10 +430,9 @@ def test_worker_disconnect_no_notify_when_no_session() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client:
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
-            _read_worker_snapshot_req(worker)
-            # worker disconnects with no hijack session
+    with TestClient(fapp) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+        _read_worker_snapshot_req(worker)
+        # worker disconnects with no hijack session
 
     disabled_calls = [(b, e, o) for b, e, o in callbacks if not e]
     assert not disabled_calls, (

@@ -28,7 +28,8 @@ except ImportError as _e:  # pragma: no cover
 
 import logging
 
-from provide.terminal.hijack.models import WorkerTermState, HijackSession, extract_prompt_id
+from provide.terminal.hijack.hub.ownership import _HijackOwnershipMixin
+from provide.terminal.hijack.models import WorkerTermState, extract_prompt_id
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +37,10 @@ logger = logging.getLogger(__name__)
 HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
 
 
-class TermHub:
+class TermHub(_HijackOwnershipMixin):
     """In-memory registry for terminal WebSocket connections.
 
-    Manages the lifecycle of worker ↔ browser terminal streams and hijack leases.
+    Manages the lifecycle of worker / browser terminal streams and hijack leases.
 
     Args:
         on_hijack_changed: Optional async or sync callback invoked whenever hijack
@@ -91,7 +92,7 @@ class TermHub:
             return
         result = cb(worker_id, enabled, owner)
         if inspect.isawaitable(result):
-            task = asyncio.create_task(result)  # type: ignore[arg-type]
+            task: asyncio.Task[object] = asyncio.create_task(result)  # type: ignore[arg-type]
             task.add_done_callback(
                 lambda t: (
                     logger.warning("on_hijack_changed callback raised worker_id=%s error=%s", worker_id, t.exception())
@@ -100,78 +101,18 @@ class TermHub:
                 )
             )
 
-    async def _append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def _append_event(
+        self, worker_id: str, event_type: str, data: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         payload = data or {}
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
-                # Worker was pruned before this event could be recorded; drop it
-                # rather than resurrecting a ghost WorkerTermState.
                 return {"seq": 0, "ts": time.time(), "type": event_type, "data": payload}
             st.event_seq += 1
             evt: dict[str, Any] = {"seq": st.event_seq, "ts": time.time(), "type": event_type, "data": payload}
             st.events.append(evt)
             return evt
-
-    async def _cleanup_expired_hijack(self, worker_id: str) -> bool:
-        now = time.time()
-        rest_expired = False
-        dashboard_expired = False
-        should_resume = False
-
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None:
-                return False
-
-            if st.hijack_session is not None and st.hijack_session.lease_expires_at <= now:
-                st.hijack_session = None
-                rest_expired = True
-
-            if (
-                st.hijack_owner is not None
-                and st.hijack_owner_expires_at is not None
-                and st.hijack_owner_expires_at <= now
-            ):
-                st.hijack_owner = None
-                st.hijack_owner_expires_at = None
-                dashboard_expired = True
-
-            should_resume = (
-                (rest_expired or dashboard_expired) and st.hijack_owner is None and st.hijack_session is None
-            )
-
-        if not rest_expired and not dashboard_expired:
-            return False
-
-        if should_resume:
-            await self._send_worker(
-                worker_id,
-                {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": now},
-            )
-            self._notify_hijack_changed(worker_id, enabled=False, owner=None)
-
-        if rest_expired:
-            await self._append_event(worker_id, "hijack_lease_expired")
-        if dashboard_expired:
-            await self._append_event(worker_id, "hijack_owner_expired")
-        await self._broadcast_hijack_state(worker_id)
-        await self._prune_if_idle(worker_id)
-        return True
-
-    async def _get_rest_session(self, worker_id: str, hijack_id: str) -> HijackSession | None:
-        await self._cleanup_expired_hijack(worker_id)
-        # Re-read hijack_session under the lock to avoid a TOCTOU window where
-        # _cleanup_expired_hijack drops the lock and a concurrent request clears
-        # or replaces the session before we inspect it.
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None:
-                return None
-            hs = st.hijack_session
-            if hs is None or hs.lease_expires_at <= time.time() or hs.hijack_id != hijack_id:
-                return None
-            return hs
 
     @staticmethod
     def _snapshot_matches(
@@ -199,9 +140,7 @@ class TermHub:
             if snap is not None and snap.get("ts", 0) > req_ts:
                 return snap
             await asyncio.sleep(0.08)
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            return st.last_snapshot if st is not None else None
+        return None
 
     async def _wait_for_guard(
         self,
@@ -220,11 +159,6 @@ class TermHub:
                 return False, None, f"invalid expect_regex: {exc}"
 
         if not expect_prompt_id and regex_obj is None:
-            # No guard constraints: return the most recently cached snapshot.
-            # Contract: callers receive whatever was last broadcast by the worker;
-            # the value may be stale if the worker has been idle.  A snapshot_req
-            # is fired so the next caller gets a fresher value, but this call does
-            # not wait for the worker's response.
             async with self._lock:
                 st = self._workers.get(worker_id)
                 snap = st.last_snapshot if st is not None else None
@@ -246,10 +180,6 @@ class TermHub:
         return False, last_snapshot, "prompt_guard_not_satisfied"
 
     async def _broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
-        # Snapshot browsers under the lock — mirrors _broadcast_hijack_state.
-        # A concurrent disconnect finally block can mutate st.browsers between
-        # the _get() lock release and iteration, so we must hold the lock while
-        # taking the snapshot.
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
@@ -264,16 +194,30 @@ class TermHub:
                 logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, exc)
                 dead.add(ws)
         if dead:
+            notify_hijack_off = False
             async with self._lock:
                 st2 = self._workers.get(worker_id)
                 if st2 is not None:
                     for ws in dead:
                         st2.browsers.discard(ws)
+                        if self._is_dashboard_hijack_active(st2) and st2.hijack_owner is ws:
+                            st2.hijack_owner = None
+                            st2.hijack_owner_expires_at = None
+                            notify_hijack_off = not self._is_rest_session_active(st2)
+            if notify_hijack_off:
+                async with self._lock:
+                    _st3 = self._workers.get(worker_id)
+                    if _st3 is not None and self._is_hijacked(_st3):
+                        notify_hijack_off = False
+            if notify_hijack_off:
+                await self._send_worker(
+                    worker_id,
+                    {"type": "control", "action": "resume", "owner": "dead-socket", "lease_s": 0, "ts": time.time()},
+                )
+                self._notify_hijack_changed(worker_id, enabled=False, owner=None)
+            await self._broadcast_hijack_state(worker_id)
 
     async def _broadcast_hijack_state(self, worker_id: str) -> None:
-        # Snapshot all mutable fields under the lock so that concurrent hijack
-        # state changes during the async broadcast loop don't produce inconsistent
-        # per-client messages (e.g. owner changing between two send_text awaits).
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
@@ -283,6 +227,7 @@ class TermHub:
             is_hijacked = self._is_hijacked(st)
             is_dashboard = self._is_dashboard_hijack_active(st)
             is_rest = self._is_rest_session_active(st)
+            input_mode = st.input_mode
             lease_expires_at = (
                 st.hijack_session.lease_expires_at
                 if is_rest and st.hijack_session is not None
@@ -305,6 +250,7 @@ class TermHub:
                             "hijacked": is_hijacked,
                             "owner": owner,
                             "lease_expires_at": lease_expires_at,
+                            "input_mode": input_mode,
                         },
                         ensure_ascii=True,
                     )
@@ -313,17 +259,30 @@ class TermHub:
                 logger.debug("broadcast_hijack_state_send_failed worker_id=%s: %s", worker_id, exc)
                 dead.add(ws)
         if dead:
+            notify_hijack_off = False
             async with self._lock:
                 st2 = self._workers.get(worker_id)
                 if st2 is not None:
                     for ws in dead:
                         st2.browsers.discard(ws)
+                        if self._is_dashboard_hijack_active(st2) and st2.hijack_owner is ws:
+                            st2.hijack_owner = None
+                            st2.hijack_owner_expires_at = None
+                            notify_hijack_off = not self._is_rest_session_active(st2)
+            if notify_hijack_off:
+                async with self._lock:
+                    _st3 = self._workers.get(worker_id)
+                    if _st3 is not None and self._is_hijacked(_st3):
+                        notify_hijack_off = False
+            if notify_hijack_off:
+                await self._send_worker(
+                    worker_id,
+                    {"type": "control", "action": "resume", "owner": "dead-socket", "lease_s": 0, "ts": time.time()},
+                )
+                self._notify_hijack_changed(worker_id, enabled=False, owner=None)
+            await self._broadcast_hijack_state(worker_id)
 
     async def _send_worker(self, worker_id: str, msg: dict[str, Any]) -> bool:
-        # Capture ws under the lock: avoids both creating blank state for unknown
-        # workers (the old _get used setdefault) and a TOCTOU window where a
-        # concurrent disconnect could set worker_ws=None between lock release and
-        # the send_text call below.
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None or st.worker_ws is None:
@@ -346,137 +305,22 @@ class TermHub:
             st = self._workers.get(worker_id)
             if st is None:
                 return
-            if (
-                st.worker_ws is None
-                and not st.browsers
-                and st.hijack_owner is None
-                and st.hijack_session is None
-            ):
+            if st.worker_ws is None and not st.browsers and st.hijack_owner is None and st.hijack_session is None:
                 del self._workers[worker_id]
                 logger.debug("pruned idle worker_id=%s", worker_id)
 
-    async def _try_acquire_rest_hijack(
-        self,
-        worker_id: str,
-        *,
-        owner: str,
-        lease_s: int,
-        hijack_id: str,
-        now: float,
-    ) -> tuple[bool, str | None]:
-        """Atomically check availability and create a REST hijack session.
-
-        Must be called *after* confirming the worker is present via
-        :meth:`_send_worker`; this method re-validates liveness inside the
-        lock so that a worker disconnect racing between :meth:`_send_worker`
-        returning ``True`` and this method acquiring the lock cannot create
-        an orphaned session (a ``HijackSession`` with no live ``worker_ws``
-        that blocks future hijack attempts until the lease expires).
-
-        Returns:
-            ``(True, None)`` on success.
-            ``(False, "no_worker")`` if the worker disconnected before the lock.
-            ``(False, "already_hijacked")`` if another session is active.
-        """
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False, "no_worker"
-            if self._is_dashboard_hijack_active(st) or self._is_rest_session_active(st):
-                return False, "already_hijacked"
-            st.hijack_session = HijackSession(
-                hijack_id=hijack_id,
-                owner=owner,
-                acquired_at=now,
-                lease_expires_at=now + lease_s,
-                last_heartbeat=now,
-            )
-        return True, None
-
-    async def _try_acquire_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
-        """Atomically check availability and set the dashboard WS hijack owner.
-
-        Returns:
-            ``(True, None)`` on success.
-            ``(False, "no_worker")`` if no worker is connected.
-            ``(False, "already_hijacked")`` if another hijack is active.
-        """
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False, "no_worker"
-            if self._is_dashboard_hijack_active(st) or self._is_rest_session_active(st):
-                return False, "already_hijacked"
-            ttl = self._dashboard_hijack_lease_s
-            st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + ttl
-        return True, None
-
-    async def _touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.hijack_owner is None:
-                return None
-            ttl = self._dashboard_hijack_lease_s if lease_s is None else max(1, min(int(lease_s), 600))
-            st.hijack_owner_expires_at = time.time() + ttl
-            return st.hijack_owner_expires_at
-
-    async def _touch_if_owner(self, worker_id: str, ws: WebSocket) -> float | None:
-        """Atomically verify WS ownership and extend lease; returns new expiry or None."""
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or not self._is_dashboard_hijack_active(st) or st.hijack_owner is not ws:
-                return None
-            st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
-            return st.hijack_owner_expires_at
-
-    async def _is_owner(self, worker_id: str, ws: WebSocket) -> bool:
-        # Read under the lock so the owner identity check is not a TOCTOU with
-        # concurrent hijack_request / hijack_release / disconnect handlers.
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None:
-                return False
-            return self._is_dashboard_hijack_active(st) and st.hijack_owner is ws
-
-    async def _try_release_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
-        """Atomically verify ownership and clear it in a single lock block.
-
-        Prevents the TOCTOU window in voluntary ``hijack_release`` where
-        a concurrent ``hijack_request`` could steal ownership between
-        :meth:`_is_owner` returning ``True`` and :meth:`_set_hijack_owner`
-        clearing the owner field.
-
-        Also captures REST-session liveness inside the same lock block so that
-        callers can decide whether to fire ``on_hijack_changed`` without a
-        separate :meth:`_get` call outside the lock.
-
-        Returns:
-            ``(released, rest_active)`` where *released* is ``True`` if *ws*
-            was the active dashboard hijack owner and was cleared, and
-            *rest_active* is ``True`` if a REST hijack session is still active
-            after the release.
-        """
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or not self._is_dashboard_hijack_active(st) or st.hijack_owner is not ws:
-                rest_active = st is not None and self._is_rest_session_active(st)
-                return False, rest_active
-            st.hijack_owner = None
-            st.hijack_owner_expires_at = None
-            rest_active = self._is_rest_session_active(st)
-        return True, rest_active
-
     async def _hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> dict[str, Any]:
-        # Snapshot all mutable fields under the lock — mirrors _broadcast_hijack_state
-        # to prevent stale reads when concurrent hijack changes race against this call.
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
-                return {"type": "hijack_state", "hijacked": False, "owner": None, "lease_expires_at": None}
+                return {
+                    "type": "hijack_state", "hijacked": False, "owner": None,
+                    "lease_expires_at": None, "input_mode": "hijack",
+                }
             is_dashboard = self._is_dashboard_hijack_active(st)
             is_rest = self._is_rest_session_active(st)
             is_h = is_dashboard or is_rest
+            input_mode = st.input_mode
             lease_expires_at = (
                 st.hijack_session.lease_expires_at
                 if is_rest and st.hijack_session is not None
@@ -493,7 +337,63 @@ class TermHub:
             "hijacked": is_h,
             "owner": owner,
             "lease_expires_at": lease_expires_at,
+            "input_mode": input_mode,
         }
+
+    async def _set_input_mode(self, worker_id: str, mode: str) -> tuple[bool, str | None]:
+        """Set input_mode under lock. Rejects if active hijack when switching to "open".
+
+        Returns:
+            ``(True, None)`` on success.
+            ``(False, "not_found")`` if worker not registered.
+            ``(False, "active_hijack")`` if a hijack is active and mode is "open".
+        """
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is None:
+                return False, "not_found"
+            if mode == "open" and self._is_hijacked(st):
+                return False, "active_hijack"
+            st.input_mode = mode
+        await self._broadcast(
+            worker_id,
+            {"type": "input_mode_changed", "input_mode": mode, "ts": time.time()},
+        )
+        await self._broadcast_hijack_state(worker_id)
+        return True, None
+
+    async def _disconnect_worker(self, worker_id: str) -> bool:
+        """Programmatically disconnect the worker WS. Returns True if a worker was connected."""
+        ws: WebSocket | None = None
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is None or st.worker_ws is None:
+                return False
+            ws = st.worker_ws
+            st.worker_ws = None
+            # Clear hijack state atomically
+            was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
+            st.hijack_session = None
+            st.hijack_owner = None
+            st.hijack_owner_expires_at = None
+        # Close WS outside lock
+        try:
+            await ws.close()
+        except Exception as exc:
+            logger.debug("disconnect_worker close error worker_id=%s: %s", worker_id, exc)
+        await self._broadcast(
+            worker_id,
+            {"type": "worker_disconnected", "worker_id": worker_id, "ts": time.time()},
+        )
+        if was_hijacked:
+            self._notify_hijack_changed(worker_id, enabled=False, owner=None)
+            await self._broadcast_hijack_state(worker_id)
+        await self._prune_if_idle(worker_id)
+        return True
+
+    def _can_send_input(self, st: WorkerTermState, ws: WebSocket) -> bool:
+        """Check if *ws* can send input to the worker (open mode or hijack owner)."""
+        return st.input_mode == "open" or (self._is_dashboard_hijack_active(st) and st.hijack_owner is ws)
 
     async def _request_snapshot(self, worker_id: str) -> None:
         await self._send_worker(worker_id, {"type": "snapshot_req", "req_id": str(uuid.uuid4()), "ts": time.time()})

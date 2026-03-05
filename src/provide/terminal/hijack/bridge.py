@@ -35,6 +35,7 @@ def _safe_int(val: Any, default: int) -> int:
     except (ValueError, TypeError):
         return default
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -241,7 +242,7 @@ class TermBridge:
                     return
                 try:
                     msg = json.loads(raw)
-                except Exception:  # noqa: S112
+                except Exception:  # noqa: S112  # nosec B112
                     continue
                 mtype = msg.get("type")
                 if mtype == "snapshot_req":

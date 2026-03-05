@@ -250,7 +250,6 @@ class TestCmdListen:
 class TestCmdProxySshImportError:
     def test_ssh_import_error_exits(self) -> None:
         """SSH import failure in _cmd_proxy prints error and exits with code 1."""
-        import importlib
 
         original = sys.modules.get("provide.terminal.transports.ssh")
         sys.modules["provide.terminal.transports.ssh"] = None  # type: ignore[assignment]

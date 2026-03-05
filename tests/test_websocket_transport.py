@@ -112,6 +112,7 @@ class TestWebSocketStreamWriter:
 
     async def test_drain_with_disconnect_marks_closed(self) -> None:
         from fastapi import WebSocketDisconnect
+
         from provide.terminal.transports.websocket import WebSocketStreamWriter
 
         class _DisconnectingWs:

@@ -68,6 +68,7 @@ class TestTerminalEmulator:
         # Process content on row 0, then move cursor to row 1 (below content).
         # _is_cursor_at_end returns True (cursor_y > last content row_idx).
         import pyte  # noqa: F401
+
         emu = TerminalEmulator(cols=80, rows=5)
         emu.process(b"hello")
         # Move cursor to next line explicitly via ANSI

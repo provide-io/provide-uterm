@@ -70,6 +70,7 @@ class ProvideHijack {
     this._hijacked = false;
     this._hijackedByMe = false;
     this._workerOnline = false;
+    this._inputMode = 'hijack'; // "hijack" | "open"
     this._mobileKeysVisible = false;
     this._root = null;
 
@@ -209,10 +210,10 @@ class ProvideHijack {
       this._ro.observe(termDiv);
     }
 
-    // Forward keyboard input to WS when hijacked
+    // Forward keyboard input to WS when hijacked or in open mode
     this._term.onData((data) => {
       if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
-      if (!this._hijackedByMe) return;
+      if (this._inputMode !== 'open' && !this._hijackedByMe) return;
       this._wsSend({ type: 'input', data });
     });
 
@@ -285,6 +286,7 @@ class ProvideHijack {
       this._hijacked = false;
       this._hijackedByMe = false;
       this._workerOnline = false;
+      this._inputMode = 'hijack';
       this._updateStatus();
       this._updateButtons();
       this._ws = null;
@@ -328,7 +330,7 @@ class ProvideHijack {
       btn.className = 'mkey';
       btn.textContent = label;
       btn.addEventListener('click', () => {
-        if (!this._hijackedByMe) return;
+        if (this._inputMode !== 'open' && !this._hijackedByMe) return;
         this._wsSend({ type: 'input', data });
       });
       container.appendChild(btn);
@@ -371,10 +373,11 @@ class ProvideHijack {
       }
 
       case 'hello':
-        // {type, worker_id, can_hijack, hijacked, hijacked_by_me}
+        // {type, worker_id, can_hijack, hijacked, hijacked_by_me, input_mode}
         this._hijacked = !!msg.hijacked;
         this._hijackedByMe = !!msg.hijacked_by_me;
         this._workerOnline = !!msg.worker_online;
+        if (msg.input_mode) this._inputMode = msg.input_mode;
         this._updateStatus();
         this._updateButtons();
         break;
@@ -386,9 +389,10 @@ class ProvideHijack {
         break;
 
       case 'hijack_state':
-        // {type, hijacked, owner: "me"|"other"|null, lease_expires_at}
+        // {type, hijacked, owner: "me"|"other"|null, lease_expires_at, input_mode}
         this._hijacked = !!msg.hijacked;
         this._hijackedByMe = msg.owner === 'me';
+        if (msg.input_mode) this._inputMode = msg.input_mode;
         // Keep the heartbeat interval in sync with ownership.
         if (this._hijackedByMe) {
           this._startHeartbeat();
@@ -404,6 +408,12 @@ class ProvideHijack {
         this._hijacked = false;
         this._hijackedByMe = false;
         this._clearHeartbeat();
+        this._updateStatus();
+        this._updateButtons();
+        break;
+
+      case 'input_mode_changed':
+        if (msg.input_mode) this._inputMode = msg.input_mode;
         this._updateStatus();
         this._updateButtons();
         break;
@@ -438,20 +448,23 @@ class ProvideHijack {
       this._setStatus('bad', 'Hijacked (other)');
     } else if (!this._workerOnline) {
       this._setStatus('bad', 'Worker offline');
+    } else if (this._inputMode === 'open') {
+      this._setStatus('live', 'Connected (shared)');
     } else {
       this._setStatus('live', 'Connected (watching)');
     }
 
-    // Show/hide text-input row based on whether we hold the hijack
+    // Show/hide text-input row based on whether we can send input
+    const canInput = this._hijackedByMe || this._inputMode === 'open';
     if (this._config.showInput !== false) {
       const row = this._q('inputrow');
-      if (row) row.classList.toggle('visible', connected && this._hijackedByMe);
+      if (row) row.classList.toggle('visible', connected && canInput);
     }
 
     // Show/hide mobile-keys row
     if (this._config.mobileKeys !== false) {
       const mkRow = this._q('mobilekeys');
-      if (mkRow) mkRow.classList.toggle('visible', connected && this._hijackedByMe && this._mobileKeysVisible);
+      if (mkRow) mkRow.classList.toggle('visible', connected && canInput && this._mobileKeysVisible);
     }
   }
 
@@ -468,11 +481,16 @@ class ProvideHijack {
         .forEach(b => { if (b) b.disabled = true; });
       return;
     }
-    if (hijackBtn)  hijackBtn.disabled  = this._hijacked || !this._workerOnline;
-    if (stepBtn)    stepBtn.disabled    = !this._hijackedByMe;
-    if (releaseBtn) releaseBtn.disabled = !this._hijackedByMe;
+    const isOpen = this._inputMode === 'open';
+    if (hijackBtn)  hijackBtn.disabled  = isOpen || this._hijacked || !this._workerOnline;
+    if (stepBtn)    stepBtn.disabled    = isOpen || !this._hijackedByMe;
+    if (releaseBtn) releaseBtn.disabled = isOpen || !this._hijackedByMe;
     if (resyncBtn)  resyncBtn.disabled  = !this._workerOnline;
-    if (analyzeBtn) analyzeBtn.disabled = !this._hijackedByMe;
+    if (analyzeBtn) analyzeBtn.disabled = isOpen || !this._hijackedByMe;
+    // Hide hijack controls entirely in open mode
+    if (hijackBtn)  hijackBtn.style.display  = isOpen ? 'none' : '';
+    if (stepBtn)    stepBtn.style.display    = isOpen ? 'none' : '';
+    if (releaseBtn) releaseBtn.style.display = isOpen ? 'none' : '';
   }
 
   _setPromptId(id) {
@@ -541,7 +559,7 @@ class ProvideHijack {
     if (inputField) {
       const doSend = () => {
         const raw = inputField.value;
-        if (!raw || !this._hijackedByMe) return;
+        if (!raw || (this._inputMode !== 'open' && !this._hijackedByMe)) return;
         if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
         // Unescape \\r → \r, \\n → \n, \\t → \t, \\e → ESC
         const data = raw

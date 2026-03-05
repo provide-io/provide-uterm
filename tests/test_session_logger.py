@@ -258,12 +258,9 @@ class TestSessionLoggerRunningLoopRegression:
             await log.log_event("warn_check", {})
 
         event_loop_warnings = [
-            w for w in caught
-            if issubclass(w.category, DeprecationWarning) and "event_loop" in str(w.message).lower()
+            w for w in caught if issubclass(w.category, DeprecationWarning) and "event_loop" in str(w.message).lower()
         ]
-        assert not event_loop_warnings, (
-            f"Unexpected DeprecationWarning for get_event_loop: {event_loop_warnings}"
-        )
+        assert not event_loop_warnings, f"Unexpected DeprecationWarning for get_event_loop: {event_loop_warnings}"
         await log.stop()
 
 
