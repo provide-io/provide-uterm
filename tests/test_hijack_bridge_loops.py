@@ -12,7 +12,7 @@ import asyncio
 import contextlib
 import json
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from provide.terminal.hijack.bridge import TermBridge
 
@@ -274,6 +274,7 @@ class TestRunLoop:
 
     async def test_send_snapshot_exception_suppressed(self) -> None:
         """_send_snapshot catches exceptions from ws.send() silently."""
+
         class _FakeSession:
             emulator = None
 
@@ -289,6 +290,58 @@ class TestRunLoop:
 
         # Should not raise
         await bridge._send_snapshot(_BrokenWs())
+
+    async def test_stop_cancels_child_tasks(self) -> None:
+        """stop() must not return until the per-connection pump tasks are cancelled."""
+        send_started = asyncio.Event()
+        recv_started = asyncio.Event()
+        send_cancelled = asyncio.Event()
+        recv_cancelled = asyncio.Event()
+
+        class _FakeBot:
+            session = None
+
+            async def set_hijacked(self, enabled: bool) -> None:
+                pass
+
+            async def request_step(self) -> None:
+                pass
+
+        class _FakeConnect:
+            async def __aenter__(self) -> object:
+                return object()
+
+            async def __aexit__(self, exc_type, exc, tb) -> None:
+                return None
+
+        async def _fake_send_loop(_ws: object) -> None:
+            send_started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                send_cancelled.set()
+                raise
+
+        async def _fake_recv_loop(_ws: object) -> None:
+            recv_started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                recv_cancelled.set()
+                raise
+
+        bridge = TermBridge(_FakeBot(), "bot1", "http://localhost:8000")
+        bridge._send_loop = _fake_send_loop  # type: ignore[method-assign]
+        bridge._recv_loop = _fake_recv_loop  # type: ignore[method-assign]
+
+        with patch("websockets.connect", return_value=_FakeConnect()):
+            await bridge.start()
+            await asyncio.wait_for(send_started.wait(), timeout=0.5)
+            await asyncio.wait_for(recv_started.wait(), timeout=0.5)
+            await bridge.stop()
+
+        assert send_cancelled.is_set()
+        assert recv_cancelled.is_set()
 
 
 # ---------------------------------------------------------------------------
@@ -322,8 +375,8 @@ class TestSendLoopTaskDone:
         # queue.join() must complete immediately — task_done() was called.
         try:
             await asyncio.wait_for(bridge._send_q.join(), timeout=0.5)
-        except asyncio.TimeoutError:
-            raise AssertionError("task_done() was not called — queue.join() timed out")
+        except TimeoutError as exc:
+            raise AssertionError("task_done() was not called — queue.join() timed out") from exc
 
     async def test_task_done_called_even_on_send_exception(self) -> None:
         """task_done() must be called even when ws.send() raises, so
@@ -357,11 +410,12 @@ class TestSendLoopTaskDone:
 
         # The loop will raise internally; the task itself propagates the OSError.
         import contextlib as _contextlib
+
         with _contextlib.suppress(OSError):
             await bridge._send_loop(broken_ws)
 
         # queue.join() must complete immediately — task_done() was called despite the exception.
         try:
             await asyncio.wait_for(bridge._send_q.join(), timeout=0.5)
-        except asyncio.TimeoutError:
-            raise AssertionError("task_done() not called after send exception — queue.join() timed out")
+        except TimeoutError as exc:
+            raise AssertionError("task_done() not called after send exception — queue.join() timed out") from exc

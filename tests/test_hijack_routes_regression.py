@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import WorkerTermState, HijackSession
+from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
 
 def make_app() -> tuple[FastAPI, TermHub]:
@@ -61,6 +61,7 @@ def test_acquire_pause_message_contains_hijack_id() -> None:
     # The pause message sent to the worker must include hijack_id
     mock_ws.send_text.assert_awaited()
     import json as _json
+
     sent_calls = [_json.loads(call.args[0]) for call in mock_ws.send_text.await_args_list]
     pause_msgs = [m for m in sent_calls if m.get("type") == "control" and m.get("action") == "pause"]
     assert pause_msgs, "No pause control message sent to worker"
@@ -145,9 +146,11 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
     async def _raise(*args: object, **kwargs: object) -> None:
         raise RuntimeError("simulated error after pause")
 
-    with patch.object(hub, "_try_acquire_rest_hijack", side_effect=_raise):
-        with TestClient(app, raise_server_exceptions=False) as client:
-            r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
+    with (
+        patch.object(hub, "_try_acquire_rest_hijack", side_effect=_raise),
+        TestClient(app, raise_server_exceptions=False) as client,
+    ):
+        r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
 
     assert r.status_code == 500
 
@@ -175,9 +178,11 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
     async def _cancel(*args: object, **kwargs: object) -> None:
         raise _asyncio.CancelledError()
 
-    with patch.object(hub, "_try_acquire_rest_hijack", side_effect=_cancel):
-        with TestClient(app, raise_server_exceptions=False) as client:
-            client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
+    with (
+        patch.object(hub, "_try_acquire_rest_hijack", side_effect=_cancel),
+        TestClient(app, raise_server_exceptions=False) as client,
+    ):
+        client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
 
     sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
@@ -254,9 +259,8 @@ def test_snapshot_returns_fresh_lease_after_concurrent_heartbeat() -> None:
             st.hijack_session.lease_expires_at = extended_expires
         return {"screen": "hello", "cols": 80, "rows": 25}
 
-    with patch.object(hub, "_wait_for_snapshot", side_effect=_extend_and_return):
-        with TestClient(app) as client:
-            r = client.get(f"/worker/bot1/hijack/{hijack_id}/snapshot?wait_ms=100")
+    with patch.object(hub, "_wait_for_snapshot", side_effect=_extend_and_return), TestClient(app) as client:
+        r = client.get(f"/worker/bot1/hijack/{hijack_id}/snapshot?wait_ms=100")
 
     assert r.status_code == 200
     data = r.json()
@@ -287,9 +291,8 @@ def test_snapshot_falls_back_to_original_lease_if_session_gone() -> None:
             st.hijack_session = None
         return {"screen": "bye"}
 
-    with patch.object(hub, "_wait_for_snapshot", side_effect=_release_and_return):
-        with TestClient(app) as client:
-            r = client.get(f"/worker/bot1/hijack/{hijack_id}/snapshot?wait_ms=100")
+    with patch.object(hub, "_wait_for_snapshot", side_effect=_release_and_return), TestClient(app) as client:
+        r = client.get(f"/worker/bot1/hijack/{hijack_id}/snapshot?wait_ms=100")
 
     assert r.status_code == 200
     data = r.json()
@@ -316,7 +319,7 @@ async def test_acquire_succeeds_when_worker_connects_after_cleanup() -> None:
     from unittest.mock import patch
 
     app, hub = make_app()
-    hijack_id = str(uuid.uuid4())
+    str(uuid.uuid4())
 
     # Patch _send_worker to always succeed (simulates worker present at send time)
     # and _try_acquire_rest_hijack to grant the lock.
@@ -326,10 +329,12 @@ async def test_acquire_succeeds_when_worker_connects_after_cleanup() -> None:
     async def _fake_acquire(bot_id: str, **kw):  # type: ignore[override]
         return True, None
 
-    with patch.object(hub, "_send_worker", side_effect=_fake_send):
-        with patch.object(hub, "_try_acquire_rest_hijack", side_effect=_fake_acquire):
-            with TestClient(app) as client:
-                r = client.post("/worker/bot1/hijack/acquire", json={"owner": "tester"})
+    with (
+        patch.object(hub, "_send_worker", side_effect=_fake_send),
+        patch.object(hub, "_try_acquire_rest_hijack", side_effect=_fake_acquire),
+        TestClient(app) as client,
+    ):
+        r = client.post("/worker/bot1/hijack/acquire", json={"owner": "tester"})
 
     assert r.status_code == 200
     assert r.json()["ok"] is True
@@ -361,14 +366,11 @@ def test_acquire_no_worker_race_sends_exactly_one_resume() -> None:
     async def _no_worker(worker_id: str, **kw: object) -> tuple[bool, str | None]:
         return False, "no_worker"
 
-    with patch.object(hub, "_try_acquire_rest_hijack", side_effect=_no_worker):
-        with TestClient(app) as client:
-            r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
+    with patch.object(hub, "_try_acquire_rest_hijack", side_effect=_no_worker), TestClient(app) as client:
+        r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
 
     assert r.status_code == 409
 
     sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
     resumes = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
-    assert len(resumes) == 1, (
-        f"exactly one resume expected when no_worker returned, got {len(resumes)}"
-    )
+    assert len(resumes) == 1, f"exactly one resume expected when no_worker returned, got {len(resumes)}"

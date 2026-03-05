@@ -88,6 +88,7 @@ class TestEncodeCp437:
 class TestExtractActionTagsEmptyTag:
     def test_empty_raw_tag_skipped(self) -> None:
         from unittest.mock import patch
+
         from provide.terminal.screen import extract_action_tags
 
         # The findall returns empty string which should be skipped

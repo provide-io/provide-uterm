@@ -17,7 +17,7 @@ import time
 from unittest.mock import AsyncMock
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import WorkerTermState, HijackSession
+from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
 # ---------------------------------------------------------------------------
 # Fix 3 regression — _try_release_ws_hijack atomic check-and-clear
@@ -414,7 +414,7 @@ async def test_append_event_after_prune_does_not_resurrect_worker() -> None:
     until the next explicit prune call.
     """
     hub = TermHub()
-    st = await hub._get("bot1")
+    await hub._get("bot1")
     assert "bot1" in hub._workers
 
     # Prune immediately (no connections, no leases)

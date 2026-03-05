@@ -247,8 +247,8 @@ class TestSSHPerInstanceIsolation:
         """Regression: per-IP limit is scoped to each server instance."""
         from provide.terminal.transports.ssh import _make_ssh_server_factory
 
-        ip_a: dict = {"10.0.0.1": 3}   # 3 connections in server A
-        ip_b: dict = {}                  # 0 connections in server B
+        ip_a: dict = {"10.0.0.1": 3}  # 3 connections in server A
+        ip_b: dict = {}  # 0 connections in server B
         factory_a = _make_ssh_server_factory(ip_a, max_connections_per_ip=3)
         factory_b = _make_ssh_server_factory(ip_b, max_connections_per_ip=3)
 
@@ -277,6 +277,7 @@ class TestGetOrCreateHostKey:
 
     def test_loads_existing_key(self, tmp_path) -> None:
         import asyncssh
+
         from provide.terminal.transports.ssh import _get_or_create_host_key
 
         existing_key = asyncssh.generate_private_key("ssh-ed25519")
@@ -308,11 +309,11 @@ class TestStartSshServer:
             await server.wait_closed()
 
 
-
 class TestGetOrCreateHostKeySaveFailure:
     def test_save_failure_logs_error_and_returns_key(self, tmp_path) -> None:
         """When saving the generated key fails, the key is still returned."""
         import stat
+
         from provide.terminal.transports.ssh import _get_or_create_host_key
 
         # Make the directory read-only so key_path.write_bytes() fails

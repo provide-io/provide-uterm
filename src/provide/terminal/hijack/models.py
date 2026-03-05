@@ -46,6 +46,7 @@ class WorkerTermState:
     hijack_owner: WebSocket | None = None  # dashboard WS that holds the lease
     hijack_owner_expires_at: float | None = None
     hijack_session: HijackSession | None = None  # REST lease
+    input_mode: str = "hijack"  # "hijack" | "open"
     last_snapshot: dict[str, Any] | None = None
     events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=2000))
     event_seq: int = 0
@@ -63,6 +64,10 @@ class HijackAcquireRequest(BaseModel):
 
 class HijackHeartbeatRequest(BaseModel):
     lease_s: int = Field(90, ge=1, le=3600)
+
+
+class InputModeRequest(BaseModel):
+    input_mode: str = Field(..., pattern=r"^(hijack|open)$")
 
 
 class HijackSendRequest(BaseModel):

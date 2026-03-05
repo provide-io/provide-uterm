@@ -52,6 +52,7 @@ async def _read_until(
 
 async def _make_server_that_sends(data: bytes) -> tuple[asyncio.Server, int]:
     """Start a bare TCP server that sends *data* immediately after connect."""
+
     async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         writer.write(data)
         await writer.drain()
@@ -170,6 +171,7 @@ class TestTelnetTransportNAWS:
 class TestTelnetTransportReceiveEdgeCases:
     async def test_receive_timeout_returns_empty(self) -> None:
         """Receive with very short timeout returns empty bytes."""
+
         async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             await asyncio.sleep(10)
 
@@ -221,7 +223,7 @@ class TestTelnetServerHandshakeReset:
 class TestTelnetClient:
     async def test_wont_and_dont_builders(self) -> None:
         """TelnetClient.wont() and dont() build correct IAC sequences."""
-        from provide.terminal.transports.telnet import IAC, WONT, DONT, TelnetClient
+        from provide.terminal.transports.telnet import DONT, IAC, WONT, TelnetClient
 
         c = TelnetClient("127.0.0.1", 9)  # don't connect
         assert c.wont(1) == bytes([IAC, WONT, 1])
@@ -229,7 +231,7 @@ class TestTelnetClient:
 
     async def test_will_and_do_builders(self) -> None:
         """TelnetClient.will() and do() build correct IAC sequences."""
-        from provide.terminal.transports.telnet import IAC, WILL, DO, TelnetClient
+        from provide.terminal.transports.telnet import DO, IAC, WILL, TelnetClient
 
         c = TelnetClient("127.0.0.1", 9)
         assert c.will(3) == bytes([IAC, WILL, 3])
@@ -316,6 +318,7 @@ class TestTelnetTransportConnectBranches:
 
     async def test_connect_when_already_connected_disconnects_first(self) -> None:
         """A second connect() call disconnects the previous connection first."""
+
         async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             await asyncio.sleep(5)
 

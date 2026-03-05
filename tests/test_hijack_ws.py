@@ -31,7 +31,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import WorkerTermState, HijackSession
+from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -274,7 +274,6 @@ def test_browser_snapshot_req_forwarded_to_worker() -> None:
             # Worker receives a second snapshot_req from the browser's request
             msg = worker.receive_json()
             assert msg["type"] == "snapshot_req"
-
 
 
 def test_browser_hijack_request_no_worker() -> None:

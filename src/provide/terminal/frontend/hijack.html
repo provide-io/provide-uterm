@@ -19,10 +19,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/lib/addon-fit.js"></script>
   <script src="hijack.js"></script>
   <script>
-    // Read botId from query string: /hijack.html?bot=mybot
+    // Read workerId from query string: /hijack.html?worker=mybot (legacy: ?bot=mybot)
     const params = new URLSearchParams(location.search);
-    const botId = params.get('bot') || 'default';
-    new ProvideHijack(document.getElementById('app'), { botId });
+    const workerId = params.get('worker') || params.get('bot') || 'default';
+    new ProvideHijack(document.getElementById('app'), { workerId });
   </script>
 </body>
 </html>

@@ -133,6 +133,7 @@ class TestHijackableMixinWatchdog:
 class TestWatchdogBranches:
     async def test_watchdog_idempotent(self) -> None:
         """start_watchdog called twice should not start a second task."""
+
         class Bot2(HijackableMixin):
             pass
 
@@ -148,6 +149,7 @@ class TestWatchdogBranches:
 
     async def test_watchdog_hijacked_branch(self) -> None:
         """While hijacked, watchdog calls note_progress (resets timer)."""
+
         class Bot2(HijackableMixin):
             pass
 
@@ -189,6 +191,7 @@ class TestWatchdogBranches:
 
     async def test_watchdog_exception_in_loop_continues(self) -> None:
         """Exception inside watchdog loop body is swallowed and loop continues."""
+
         class Bot2(HijackableMixin):
             pass
 

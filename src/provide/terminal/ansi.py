@@ -312,6 +312,7 @@ def _handle_extended_tokens(text: str) -> str:
             base = idx % 8
             code = (90 + base if bright else 30 + base) if kind == "P" else (100 + base if bright else 40 + base)
             return f"\x1b[{code}m"
+        return m.group(0)  # pragma: no cover — regex excludes non-FBPT kinds
 
     return _EXT_TOKEN_RE.sub(repl, text)
 

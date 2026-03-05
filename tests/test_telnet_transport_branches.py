@@ -9,6 +9,7 @@ branches exercised via receive(), plus deduplication and no-writer guard tests."
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 import pytest
 
@@ -17,6 +18,7 @@ from provide.terminal.transports.telnet import IAC, TelnetTransport
 
 async def _make_server_that_sends(data: bytes) -> tuple[asyncio.Server, int]:
     """Start a bare TCP server that sends *data* immediately after connect."""
+
     async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         writer.write(data)
         await writer.drain()
@@ -39,10 +41,8 @@ class TestTelnetNegotiateBranches:
         try:
             t = TelnetTransport()
             await t.connect("127.0.0.1", port)
-            try:
+            with contextlib.suppress(ConnectionError, TimeoutError):
                 await asyncio.wait_for(t.receive(256, 200), timeout=1.0)
-            except (ConnectionError, TimeoutError):
-                pass
             # Give background tasks a moment to complete
             await asyncio.sleep(0.05)
             await t.disconnect()
@@ -52,49 +52,49 @@ class TestTelnetNegotiateBranches:
 
     async def test_negotiate_dont_branch(self) -> None:
         """DONT branch records in negotiated['dont'] and calls _send_wont."""
-        from provide.terminal.transports.telnet import IAC, DONT
+        from provide.terminal.transports.telnet import DONT
 
         await self._negotiate_with(bytes([IAC, DONT, 1]))
 
     async def test_negotiate_will_branch_known(self) -> None:
         """WILL ECHO branch calls _send_do."""
-        from provide.terminal.transports.telnet import IAC, WILL, OPT_ECHO
+        from provide.terminal.transports.telnet import OPT_ECHO, WILL
 
         await self._negotiate_with(bytes([IAC, WILL, OPT_ECHO]))
 
     async def test_negotiate_will_branch_unknown(self) -> None:
         """WILL <unknown> branch calls _send_dont."""
-        from provide.terminal.transports.telnet import IAC, WILL
+        from provide.terminal.transports.telnet import WILL
 
         await self._negotiate_with(bytes([IAC, WILL, 77]))
 
     async def test_negotiate_wont_branch(self) -> None:
         """WONT branch calls _send_dont."""
-        from provide.terminal.transports.telnet import IAC, WONT
+        from provide.terminal.transports.telnet import WONT
 
         await self._negotiate_with(bytes([IAC, WONT, 1]))
 
     async def test_negotiate_do_binary_branch(self) -> None:
         """DO BINARY branch calls _send_will."""
-        from provide.terminal.transports.telnet import IAC, DO, OPT_BINARY
+        from provide.terminal.transports.telnet import DO, OPT_BINARY
 
         await self._negotiate_with(bytes([IAC, DO, OPT_BINARY]))
 
     async def test_negotiate_do_naws_branch(self) -> None:
         """DO NAWS branch calls _send_will + _send_naws."""
-        from provide.terminal.transports.telnet import IAC, DO, OPT_NAWS
+        from provide.terminal.transports.telnet import DO, OPT_NAWS
 
         await self._negotiate_with(bytes([IAC, DO, OPT_NAWS]))
 
     async def test_negotiate_do_ttype_branch(self) -> None:
         """DO TTYPE branch calls _send_will + _send_ttype."""
-        from provide.terminal.transports.telnet import IAC, DO, OPT_TTYPE
+        from provide.terminal.transports.telnet import DO, OPT_TTYPE
 
         await self._negotiate_with(bytes([IAC, DO, OPT_TTYPE]))
 
     async def test_negotiate_do_unknown_branch(self) -> None:
         """DO <unknown> branch calls _send_wont."""
-        from provide.terminal.transports.telnet import IAC, DO
+        from provide.terminal.transports.telnet import DO
 
         await self._negotiate_with(bytes([IAC, DO, 99]))
 
@@ -172,6 +172,7 @@ class TestTelnetNegotiateBranches:
 
     async def test_receive_connection_closed_raises(self) -> None:
         """Receive raises ConnectionError when remote closes connection."""
+
         async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.close()  # Close immediately after connect
 

@@ -12,14 +12,10 @@ Fix 5: asyncio.wait uses FIRST_COMPLETED so a recv-loop normal return cancels
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from provide.terminal.hijack.bridge import TermBridge
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -91,9 +87,7 @@ class TestFirstCompleted:
         send_task = asyncio.create_task(bridge._send_loop(ws_mock))
         recv_task = asyncio.create_task(bridge._recv_loop(ws_mock))
 
-        done, pending = await asyncio.wait(
-            {send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED
-        )
+        done, pending = await asyncio.wait({send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
         # Capture membership before cancellation mutates task state.
         recv_completed_first = recv_task in done
         send_was_pending = send_task in pending
@@ -133,9 +127,7 @@ class TestFirstCompleted:
         send_task = asyncio.create_task(bridge._send_loop(ws_mock))
         recv_task = asyncio.create_task(bridge._recv_loop(ws_mock))
 
-        done, pending = await asyncio.wait(
-            {send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED
-        )
+        done, pending = await asyncio.wait({send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
             t.cancel()
             recv_unblocked.set()
@@ -182,27 +174,17 @@ class TestReconnectLoop:
                 # After second connection, stop the bridge to exit the loop.
                 bridge._running = False
 
-        import provide.terminal.hijack.bridge as bridge_mod
-
-        original_connect = None
-
         def _fake_connect(url: str, **kw: Any) -> _FailOnce:
             return _FailOnce()
 
-        import websockets  # type: ignore[import]
-
-        original_connect = websockets.connect
-
         # Patch at module level so bridge._run picks it up.
-        bridge_mod_ws = __import__("websockets")
+        __import__("websockets")
 
         async def _run_with_zero_backoff() -> None:
             """Run _run() but patch the backoff to 0 so the test is fast."""
             original_backoff = TermBridge._RECONNECT_BACKOFF
             TermBridge._RECONNECT_BACKOFF = (0, 0, 0, 0, 0)  # type: ignore[misc]
             try:
-                import provide.terminal.hijack.bridge as _bmod
-
                 real_ws_connect = None
                 try:
                     import websockets as _ws
@@ -219,9 +201,7 @@ class TestReconnectLoop:
 
         await asyncio.wait_for(_run_with_zero_backoff(), timeout=5.0)
 
-        assert len(connect_attempts) >= 2, (
-            f"expected at least 2 connection attempts, got {connect_attempts}"
-        )
+        assert len(connect_attempts) >= 2, f"expected at least 2 connection attempts, got {connect_attempts}"
 
     async def test_run_stops_when_running_false(self) -> None:
         """_run() exits the retry loop when self._running becomes False."""

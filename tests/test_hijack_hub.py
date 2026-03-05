@@ -17,7 +17,7 @@ import time
 from unittest.mock import AsyncMock
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import WorkerTermState, HijackSession
+from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
 # ---------------------------------------------------------------------------
 # State creation
@@ -349,20 +349,27 @@ async def test_touch_hijack_owner_returns_none_when_no_bot() -> None:
 
 
 async def test_create_router_returns_router() -> None:
-    from fastapi import APIRouter
     hub = TermHub()
     router = hub.create_router()
     assert router is not None
 
 
-async def test_wait_for_snapshot_returns_immediately_if_available() -> None:
-    """_wait_for_snapshot returns early when last_snapshot is already set (line 177)."""
+async def test_wait_for_snapshot_returns_fresh_snapshot() -> None:
+    """_wait_for_snapshot returns early when a fresh snapshot (ts > req_ts) is available."""
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {"screen": "cached", "cols": 80, "rows": 25}
+    # A snapshot with ts=0 predates req_ts and must NOT be returned (stale).
+    hub._workers["bot1"].last_snapshot = {"screen": "stale", "cols": 80, "rows": 25, "ts": 0}
     result = await hub._wait_for_snapshot("bot1", timeout_ms=50)
-    assert result is not None
-    assert result["screen"] == "cached"
+    assert result is None, "stale cached snapshot (ts=0) must not be returned on timeout"
+
+
+async def test_wait_for_snapshot_returns_none_on_timeout_no_worker() -> None:
+    """_wait_for_snapshot returns None when the worker never sends a snapshot."""
+    hub = TermHub()
+    await hub._get("bot1")
+    result = await hub._wait_for_snapshot("bot1", timeout_ms=50)
+    assert result is None
 
 
 async def test_hijack_state_msg_owner_is_me() -> None:

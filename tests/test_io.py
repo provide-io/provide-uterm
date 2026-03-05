@@ -236,7 +236,7 @@ class TestPromptWaiterCallbacks:
 
         session = MockSession(snapshots=[snap_reject, snap_accept])
         waiter = PromptWaiter(session)
-        result = await waiter.wait_for_prompt(
+        await waiter.wait_for_prompt(
             timeout_ms=1000,
             on_prompt_detected=detector,
             on_prompt_rejected=lambda d, r: rejected.append((d, r)),
