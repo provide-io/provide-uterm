@@ -9,16 +9,13 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 try:
     from fastapi import WebSocket  # noqa: TC002
     from pydantic import BaseModel, Field
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for hijack hub/routes: pip install 'provide-terminal[websocket]'") from _e
-
-if TYPE_CHECKING:
-    pass
 
 
 # ---------------------------------------------------------------------------
@@ -37,12 +34,15 @@ class HijackSession:
     last_heartbeat: float
 
 
+VALID_ROLES = frozenset({"viewer", "operator", "admin"})
+
+
 @dataclass
 class WorkerTermState:
     """Per-worker connection state held by :class:`~provide.terminal.hijack.hub.TermHub`."""
 
     worker_ws: WebSocket | None = None
-    browsers: set[WebSocket] = field(default_factory=set)
+    browsers: dict[WebSocket, str] = field(default_factory=dict)  # ws → role
     hijack_owner: WebSocket | None = None  # dashboard WS that holds the lease
     hijack_owner_expires_at: float | None = None
     hijack_session: HijackSession | None = None  # REST lease

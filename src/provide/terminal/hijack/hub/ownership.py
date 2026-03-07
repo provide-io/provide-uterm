@@ -10,12 +10,11 @@ Extracted from ``hub.py`` to keep file sizes under 500 LOC.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING
 
 try:
-    from fastapi import WebSocket
+    pass
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for TermHub: pip install 'provide-terminal[websocket]'") from _e
 
@@ -24,6 +23,10 @@ import logging
 from provide.terminal.hijack.models import HijackSession
 
 if TYPE_CHECKING:
+    import asyncio
+
+    from fastapi import WebSocket
+
     from provide.terminal.hijack.models import WorkerTermState
 
 logger = logging.getLogger(__name__)

@@ -119,7 +119,9 @@ class TestWebSocketStreamWriter:
             async def send_text(self, text: str) -> None:
                 raise WebSocketDisconnect(code=1000)
 
-        writer = WebSocketStreamWriter(_DisconnectingWs())
+        from typing import Any, cast
+
+        writer = WebSocketStreamWriter(cast("Any", _DisconnectingWs()))
         writer.write(b"data")
         await writer.drain()
         assert writer._closed

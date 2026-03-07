@@ -31,8 +31,9 @@ from provide.terminal.hijack.models import HijackSession, WorkerTermState
 # ---------------------------------------------------------------------------
 
 
-def make_app() -> tuple[FastAPI, TermHub]:
-    hub = TermHub()
+def make_app(role: str | None = None) -> tuple[FastAPI, TermHub]:
+    resolver = (lambda _ws, _worker_id: role) if role is not None else None
+    hub = TermHub(resolve_browser_role=resolver)
     app = FastAPI()
     app.include_router(hub.create_router())
     return app, hub
@@ -205,7 +206,7 @@ def test_rest_acquire_rejects_concurrent_duplicate() -> None:
 
 def test_ws_hijack_request_no_worker_returns_error() -> None:
     """hijack_request with no worker connected returns error (no_worker path)."""
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/nobot/term") as browser:
         # Drain hello + hijack_state
         browser.receive_json()
@@ -230,7 +231,7 @@ def test_disconnect_as_owner_sends_resume_and_clears_owner() -> None:
     1. worker receives exactly one resume control message
     2. hub.hijack_owner is None
     """
-    app, hub = make_app()
+    app, hub = make_app("admin")
 
     with TestClient(app) as client, client.websocket_connect("/ws/worker/bot3/term") as worker:
         # snapshot_req on worker connect

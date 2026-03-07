@@ -230,13 +230,13 @@ def test_upgrade_to_truecolor_noncolor_code_passthrough() -> None:
     assert result == "\x1b[1m"
 
 
-def test_upgrade_to_truecolor_T_token() -> None:
+def test_upgrade_to_truecolor_t_token() -> None:
     # {T3} is a background token → "48;2;" truecolor
     result = upgrade_to_truecolor("{T3}")
     assert "48;2;" in result
 
 
-def test_upgrade_to_truecolor_P_token() -> None:
+def test_upgrade_to_truecolor_p_token() -> None:
     # {P3} is a foreground token → "38;2;" truecolor
     result = upgrade_to_truecolor("{P3}")
     assert "38;2;" in result

@@ -176,7 +176,7 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
     hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     async def _cancel(*args: object, **kwargs: object) -> None:
-        raise _asyncio.CancelledError()
+        raise _asyncio.CancelledError
 
     with (
         patch.object(hub, "_try_acquire_rest_hijack", side_effect=_cancel),
@@ -326,7 +326,7 @@ async def test_acquire_succeeds_when_worker_connects_after_cleanup() -> None:
     async def _fake_send(bot_id: str, msg: dict) -> bool:
         return True
 
-    async def _fake_acquire(bot_id: str, **kw):  # type: ignore[override]
+    async def _fake_acquire(bot_id: str, **kw):
         return True, None
 
     with (

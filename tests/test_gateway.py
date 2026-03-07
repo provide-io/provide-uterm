@@ -70,7 +70,9 @@ class TestWsToTcp:
             async def drain(self) -> None:
                 drained.append(True)
 
-        await _ws_to_tcp(_async_iter(["world"]), MockWriter())
+        from asyncio import StreamWriter
+        from typing import cast
+        await _ws_to_tcp(_async_iter(["world"]), cast("StreamWriter", MockWriter()))
         assert written == [b"world"]
         assert drained
 
@@ -84,7 +86,9 @@ class TestWsToTcp:
             async def drain(self) -> None:
                 pass
 
-        await _ws_to_tcp(_async_iter([b"\xff\xfe"]), MockWriter())
+        from asyncio import StreamWriter
+        from typing import cast
+        await _ws_to_tcp(_async_iter([b"\xff\xfe"]), cast("StreamWriter", MockWriter()))
         assert written == [b"\xff\xfe"]
 
 
@@ -93,7 +97,10 @@ class TestWsToTcp:
 # ---------------------------------------------------------------------------
 
 
-async def _start_ws_echo_server(banner: bytes = b"") -> tuple[websockets.server.WebSocketServer, int]:
+from typing import Any
+
+
+async def _start_ws_echo_server(banner: bytes = b"") -> tuple[Any, int]:
     """Start a local WebSocket server that optionally sends a banner then echoes."""
 
     async def handler(ws: websockets.ServerConnection) -> None:
@@ -125,6 +132,9 @@ class TestTelnetWsGateway:
         try:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
+            from asyncio import Server
+            assert isinstance(tcp_srv, Server)
+            assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
@@ -142,6 +152,9 @@ class TestTelnetWsGateway:
         try:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
+            from asyncio import Server
+            assert isinstance(tcp_srv, Server)
+            assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
@@ -161,6 +174,9 @@ class TestTelnetWsGateway:
         try:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
+            from asyncio import Server
+            assert isinstance(tcp_srv, Server)
+            assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
@@ -213,8 +229,10 @@ class TestPipeWs:
                     pass
 
             # Should complete without hanging
+            from asyncio import StreamWriter
+            from typing import cast
             await asyncio.wait_for(
-                _pipe_ws(reader, MockWriter(), f"ws://127.0.0.1:{ws_port}"),
+                _pipe_ws(reader, cast("StreamWriter", MockWriter()), f"ws://127.0.0.1:{ws_port}"),
                 timeout=3.0,
             )
         finally:
@@ -244,14 +262,15 @@ class TestSshWsGatewayInit:
 class TestSshWsGatewayStart:
     async def test_start_ephemeral_key(self) -> None:
         """SshWsGateway.start() creates an asyncssh server with ephemeral key."""
-        import asyncssh  # noqa: F401
+        import asyncssh
 
         from provide.terminal.gateway import SshWsGateway
 
         gw = SshWsGateway("wss://example.com/ws")
         srv = await gw.start("127.0.0.1", 0)
+        assert isinstance(srv, asyncssh.SSHAcceptor)
         try:
-            assert srv is not None
+            pass
         finally:
             srv.close()
             await srv.wait_closed()
@@ -268,8 +287,10 @@ class TestSshWsGatewayStart:
 
         gw = SshWsGateway("wss://example.com/ws", server_key=str(key_path))
         srv = await gw.start("127.0.0.1", 0)
+        import asyncssh
+        assert isinstance(srv, asyncssh.SSHAcceptor)
         try:
-            assert srv is not None
+            pass
         finally:
             srv.close()
             await srv.wait_closed()

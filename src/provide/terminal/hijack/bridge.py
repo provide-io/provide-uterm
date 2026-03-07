@@ -55,7 +55,7 @@ def _to_ws_url(manager_url: str, path: str) -> str:
 
 @runtime_checkable
 class WorkerSession(Protocol):
-    """Minimal interface that a bot session must provide for TermBridge."""
+    """Minimal interface that a worker session must provide for TermBridge."""
 
     def add_watch(self, fn: Any, *, interval_s: float) -> None:
         """Register a callback invoked on each screen update."""
@@ -97,7 +97,7 @@ class TermBridge:
     """Worker-side WebSocket bridge to the Swarm Manager terminal hub.
 
     Args:
-        bot: Object implementing :class:`Worker` (duck-typed).
+        worker: Object implementing :class:`Worker` (duck-typed).
         worker_id: Unique worker identifier used in the WebSocket URL.
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
@@ -113,7 +113,7 @@ class TermBridge:
         self._attached_session: Any | None = None
 
     def attach_session(self) -> None:
-        """Attach a watcher to the bot's current session to forward terminal output."""
+        """Attach a watcher to the worker's current session to forward terminal output."""
         session = getattr(self._bot, "session", None)
         if session is None or self._attached_session is session:
             return
@@ -242,7 +242,7 @@ class TermBridge:
                     return
                 try:
                     msg = json.loads(raw)
-                except Exception:  # noqa: S112  # nosec B112
+                except Exception:  # nosec B112
                     continue
                 mtype = msg.get("type")
                 if mtype == "snapshot_req":
@@ -262,7 +262,7 @@ class TermBridge:
                 elif mtype == "resize":
                     await self._set_size(_safe_int(msg.get("cols"), 80), _safe_int(msg.get("rows"), 25))
         finally:
-            # Ensure the bot is never left permanently paused if the connection
+            # Ensure the worker is never left permanently paused if the connection
             # drops while a hijack was active.  The hub clears its own hijack
             # state in ws_worker_term's finally block, but it cannot send a
             # resume over a closed socket — so the bridge must self-clear here.

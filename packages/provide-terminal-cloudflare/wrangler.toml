@@ -1,0 +1,16 @@
+name = "provide-terminal-cloudflare"
+main = "src/provide_terminal_cloudflare/entry.py"
+compatibility_date = "2026-03-04"
+compatibility_flags = ["python_workers"]
+
+[[durable_objects.bindings]]
+name = "SESSION_RUNTIME"
+class_name = "SessionRuntime"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionRuntime"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1.0

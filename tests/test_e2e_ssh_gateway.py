@@ -16,7 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+from typing import Any, cast
 
 import asyncssh
 import websockets
@@ -24,12 +28,8 @@ import websockets.server
 
 from provide.terminal.gateway import _ssh_to_ws, _ws_to_ssh
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
-
-async def _start_ws_echo_server(banner: str = "") -> tuple[websockets.server.WebSocketServer, int]:
+async def _start_ws_echo_server(banner: str = "") -> tuple[Any, int]:
     """Start a localhost WS server that echoes every message (optionally with a banner)."""
 
     async def _handler(ws: Any) -> None:
@@ -53,16 +53,16 @@ async def _make_ssh_server(
     ``_ws_to_ssh`` from ``provide.terminal.gateway`` directly.
     """
 
-    class _TestSSHServer(asyncssh.SSHServer):  # type: ignore[misc]
+    class _TestSSHServer(asyncssh.SSHServer):
         def password_auth_supported(self) -> bool:
             return True
 
-        def validate_password(self, username: str, password: str) -> bool:  # noqa: ARG002
+        def validate_password(self, username: str, password: str) -> bool:
             return True  # accept any credentials
 
     host_key = asyncssh.generate_private_key("ssh-ed25519")
 
-    async def _process_handler(process: asyncssh.SSHServerProcess) -> None:  # type: ignore[type-arg]
+    async def _process_handler(process: asyncssh.SSHServerProcess[bytes]) -> None:
         try:
             async with websockets.connect(f"ws://127.0.0.1:{ws_port}") as ws:
                 t1 = asyncio.create_task(_ssh_to_ws(process, ws))
@@ -127,7 +127,7 @@ class TestSshToWsPumpUnit:
         class _MockProcess:
             stdin = _MockStdin()
 
-        await _ssh_to_ws(_MockProcess(), _MockWs())  # type: ignore[arg-type]
+        await _ssh_to_ws(cast("Any", _MockProcess()), cast("Any", _MockWs()))
         assert sent == ["hello ssh"]
 
     async def test_bytes_data_decoded_latin1(self) -> None:
@@ -146,7 +146,7 @@ class TestSshToWsPumpUnit:
         class _MockProcess:
             stdin = _MockStdin()
 
-        await _ssh_to_ws(_MockProcess(), _MockWs())  # type: ignore[arg-type]
+        await _ssh_to_ws(cast("Any", _MockProcess()), cast("Any", _MockWs()))
         assert sent == [b"\xc0\xc1".decode("latin-1", errors="replace")]
 
     async def test_read_exception_exits_cleanly(self) -> None:
@@ -161,7 +161,7 @@ class TestSshToWsPumpUnit:
         class _MockProcess:
             stdin = _MockStdin()
 
-        await _ssh_to_ws(_MockProcess(), _MockWs())  # type: ignore[arg-type]
+        await _ssh_to_ws(cast("Any", _MockProcess()), cast("Any", _MockWs()))
         # Must return without raising
 
 
@@ -181,7 +181,7 @@ class TestWsToSshPumpUnit:
         async def _gen() -> Any:
             yield "from ws"
 
-        await _ws_to_ssh(_gen(), _MockProcess())  # type: ignore[arg-type]
+        await _ws_to_ssh(_gen(), cast("Any", _MockProcess()))
         assert "from ws" in written
 
     async def test_bytes_message_decoded_latin1(self) -> None:
@@ -197,7 +197,7 @@ class TestWsToSshPumpUnit:
         async def _gen() -> Any:
             yield b"\xff\xfe"
 
-        await _ws_to_ssh(_gen(), _MockProcess())  # type: ignore[arg-type]
+        await _ws_to_ssh(_gen(), cast("Any", _MockProcess()))
         assert b"\xff\xfe".decode("latin-1", errors="replace") in written
 
 
@@ -307,13 +307,18 @@ class TestSshWsGatewayStart:
 
         gw = SshWsGateway("wss://unreachable.invalid/ws")
         srv = await gw.start("127.0.0.1", 0)
+        import asyncssh
+
+        assert isinstance(srv, asyncssh.SSHAcceptor)
         try:
-            assert srv is not None
+            pass
         finally:
             srv.close()
             await srv.wait_closed()
 
     async def test_start_with_file_key(self, tmp_path: Any) -> None:
+        import asyncssh
+
         from provide.terminal.gateway import SshWsGateway
 
         key = asyncssh.generate_private_key("ssh-ed25519")
@@ -322,8 +327,9 @@ class TestSshWsGatewayStart:
 
         gw = SshWsGateway("wss://unreachable.invalid/ws", server_key=str(key_path))
         srv = await gw.start("127.0.0.1", 0)
+        assert isinstance(srv, asyncssh.SSHAcceptor)
         try:
-            assert srv is not None
+            pass
         finally:
             srv.close()
             await srv.wait_closed()

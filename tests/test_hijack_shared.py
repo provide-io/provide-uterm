@@ -17,8 +17,9 @@ from provide.terminal.hijack.hub import TermHub
 # ---------------------------------------------------------------------------
 
 
-def _make_app() -> tuple[FastAPI, TermHub]:
-    hub = TermHub()
+def _make_app(role: str | None = None) -> tuple[FastAPI, TermHub]:
+    resolver = (lambda _ws, _worker_id: role) if role is not None else None
+    hub = TermHub(resolve_browser_role=resolver)
     app = FastAPI()
     app.include_router(hub.create_router())
     return app, hub
@@ -45,7 +46,7 @@ def _read_worker_snapshot_req(worker) -> dict:
 
 class TestWorkerHello:
     def test_worker_hello_sets_open_mode(self) -> None:
-        app, _hub = _make_app()
+        app, _hub = _make_app("operator")
         with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "open"})
@@ -55,7 +56,7 @@ class TestWorkerHello:
                 assert hs["input_mode"] == "open"
 
     def test_worker_hello_hijack_mode(self) -> None:
-        app, _hub = _make_app()
+        app, _hub = _make_app("admin")
         with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "hijack"})
@@ -65,7 +66,7 @@ class TestWorkerHello:
                 assert hs["input_mode"] == "hijack"
 
     def test_no_worker_hello_defaults_hijack(self) -> None:
-        app, _hub = _make_app()
+        app, _hub = _make_app("operator")
         with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "term", "data": "hello world"})
@@ -75,7 +76,7 @@ class TestWorkerHello:
                 assert hs["input_mode"] == "hijack"
 
     def test_worker_hello_invalid_mode_ignored(self) -> None:
-        app, _hub = _make_app()
+        app, _hub = _make_app("admin")
         with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "bad_value"})
@@ -85,14 +86,14 @@ class TestWorkerHello:
 
 
 # ---------------------------------------------------------------------------
-# Open mode: any browser can send input
+# Open mode: operator/admin browsers can send input
 # ---------------------------------------------------------------------------
 
 
 class TestOpenModeInput:
     def test_browser_sends_input_open_mode(self) -> None:
-        """In open mode, a browser can send input without hijacking."""
-        app, _hub = _make_app()
+        """In open mode, an operator browser can send input without hijacking."""
+        app, _hub = _make_app("operator")
         with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             # Set open mode via REST
@@ -146,7 +147,7 @@ class TestOpenModeInput:
 
 class TestHijackRejectedInOpenMode:
     def test_hijack_request_rejected_open_mode(self) -> None:
-        app, _hub = _make_app()
+        app, _hub = _make_app("admin")
         with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "open"})
@@ -223,9 +224,7 @@ class TestRestInputMode:
                 assert resp.status_code == 200
 
                 # Browser should receive input_mode_changed + hijack_state
-                msgs = []
-                for _ in range(2):
-                    msgs.append(browser.receive_json())
+                msgs = [browser.receive_json() for _ in range(2)]
                 types = [m["type"] for m in msgs]
                 assert "input_mode_changed" in types
                 mode_msg = next(m for m in msgs if m["type"] == "input_mode_changed")

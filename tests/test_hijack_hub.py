@@ -305,7 +305,7 @@ async def test_broadcast_removes_dead_socket() -> None:
 
     dead_ws = AsyncMock()
     dead_ws.send_text = AsyncMock(side_effect=RuntimeError("disconnected"))
-    hub._workers["bot1"].browsers.add(dead_ws)
+    hub._workers["bot1"].browsers[dead_ws] = "operator"
 
     await hub._broadcast("bot1", {"type": "test"})
     # Dead socket should be removed
@@ -317,7 +317,7 @@ async def test_broadcast_hijack_state_rest_session_active() -> None:
     hub = TermHub()
     await hub._get("bot1")
     mock_ws = AsyncMock()
-    hub._workers["bot1"].browsers.add(mock_ws)
+    hub._workers["bot1"].browsers[mock_ws] = "operator"
     hub._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
@@ -336,7 +336,7 @@ async def test_broadcast_hijack_state_removes_dead_socket() -> None:
     await hub._get("bot1")
     dead_ws = AsyncMock()
     dead_ws.send_text = AsyncMock(side_effect=RuntimeError("gone"))
-    hub._workers["bot1"].browsers.add(dead_ws)
+    hub._workers["bot1"].browsers[dead_ws] = "operator"
 
     await hub._broadcast_hijack_state("bot1")
     assert dead_ws not in hub._workers["bot1"].browsers
@@ -416,7 +416,7 @@ async def test_broadcast_hijack_state_owner_gets_me_others_get_other() -> None:
 
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.browsers = {ws_owner, ws_other}
+        st.browsers = {ws_owner: "admin", ws_other: "operator"}
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = time.time() + 60
 
@@ -440,7 +440,7 @@ async def test_broadcast_hijack_state_no_hijack_owner_is_none() -> None:
 
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.browsers = {ws1, ws2}
+        st.browsers = {ws1: "operator", ws2: "operator"}
 
     await hub._broadcast_hijack_state("bot1")
 

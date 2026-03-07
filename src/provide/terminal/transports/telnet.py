@@ -249,7 +249,7 @@ class TelnetTransport:
         rows: int = 25,
         term: str = "ANSI",
         timeout: float = _DEFAULT_CONNECT_TIMEOUT_S,
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> None:
         """Open a telnet connection.
 

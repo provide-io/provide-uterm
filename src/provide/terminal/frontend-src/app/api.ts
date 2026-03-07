@@ -1,0 +1,118 @@
+import type {
+  AnalysisResponse,
+  RecordingEntry,
+  SessionStatus,
+  SnapshotPayload,
+} from "../server-common.js";
+import type {
+  RecordingEntryView,
+  SessionDetails,
+  SessionSummary,
+  SessionSurface,
+} from "./types.js";
+
+async function apiJson<T>(path: string, method: "GET" | "POST" = "GET", body: unknown = null): Promise<T> {
+  const init: RequestInit = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  };
+  if (body !== null) {
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetch(path, init);
+  if (!response.ok) {
+    throw new Error(`${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
+function normalizeMode(value: string): "open" | "hijack" {
+  return value === "hijack" ? "hijack" : "open";
+}
+
+export function normalizeSessionStatus(raw: SessionStatus): SessionSummary {
+  return {
+    sessionId: raw.session_id,
+    displayName: raw.display_name,
+    connectorType: raw.connector_type,
+    lifecycleState: raw.lifecycle_state,
+    inputMode: normalizeMode(raw.input_mode),
+    connected: raw.connected,
+    autoStart: raw.auto_start,
+    tags: [...raw.tags],
+    recordingEnabled: raw.recording_enabled,
+    recordingPath: raw.recording_path,
+    lastError: raw.last_error,
+  };
+}
+
+export function normalizeRecordingEntries(entries: RecordingEntry[]): RecordingEntryView[] {
+  return entries.map((entry) => {
+    const payload = (entry.data ?? {}) as Record<string, unknown>;
+    return {
+      ts: typeof entry.ts === "number" ? entry.ts : null,
+      event: typeof entry.event === "string" ? entry.event : "unknown",
+      payload,
+      screen: typeof payload.screen === "string" ? payload.screen : "",
+    };
+  });
+}
+
+export async function fetchSessions(): Promise<SessionSummary[]> {
+  const payload = await apiJson<SessionStatus[]>("/api/sessions");
+  return payload.map(normalizeSessionStatus);
+}
+
+export async function fetchSessionSummary(sessionId: string): Promise<SessionSummary> {
+  return normalizeSessionStatus(await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}`));
+}
+
+export async function fetchSessionDetails(sessionId: string): Promise<SessionDetails> {
+  const [summary, snapshot] = await Promise.all([
+    fetchSessionSummary(sessionId),
+    apiJson<SnapshotPayload | null>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`),
+  ]);
+  return {
+    summary,
+    snapshotPromptId: snapshot?.prompt_detected?.prompt_id ?? null,
+  };
+}
+
+export async function setSessionMode(sessionId: string, inputMode: "open" | "hijack"): Promise<SessionSummary> {
+  return normalizeSessionStatus(
+    await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/mode`, "POST", { input_mode: inputMode }),
+  );
+}
+
+export async function clearSession(sessionId: string): Promise<SessionSummary> {
+  return normalizeSessionStatus(await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/clear`, "POST"));
+}
+
+export async function analyzeSession(sessionId: string): Promise<string> {
+  const result = await apiJson<AnalysisResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/analyze`, "POST");
+  return result.analysis;
+}
+
+export async function fetchRecordingEntries(
+  sessionId: string,
+  filter: string,
+  limit: number,
+): Promise<RecordingEntryView[]> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (filter) params.set("event", filter);
+  const result = await apiJson<RecordingEntry[]>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/recording/entries?${params.toString()}`,
+  );
+  return normalizeRecordingEntries(result);
+}
+
+export function widgetSurface(surface: SessionSurface | undefined): { showAnalysis: boolean; mobileKeys: boolean } {
+  const isOperator = surface === "operator";
+  return {
+    showAnalysis: isOperator,
+    mobileKeys: isOperator,
+  };
+}

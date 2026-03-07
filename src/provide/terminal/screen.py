@@ -53,7 +53,7 @@ def decode_cp437(data: bytes) -> str:
     """Decode bytes from CP437 (DOS OEM) encoding to a Unicode string.
 
     CP437 is the character encoding used by most BBS systems and DOS-era
-    software. It maps bytes 0x80–0xFF to box-drawing and special characters.
+    software. It maps bytes 0x80-0xFF to box-drawing and special characters.
 
     Args:
         data: Raw bytes in CP437 encoding.

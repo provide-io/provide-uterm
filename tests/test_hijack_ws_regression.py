@@ -27,8 +27,9 @@ from provide.terminal.hijack.models import HijackSession, WorkerTermState
 # ---------------------------------------------------------------------------
 
 
-def make_app() -> tuple[FastAPI, TermHub]:
-    hub = TermHub()
+def make_app(role: str | None = None) -> tuple[FastAPI, TermHub]:
+    resolver = (lambda _ws, _worker_id: role) if role is not None else None
+    hub = TermHub(resolve_browser_role=resolver)
     app = FastAPI()
     app.include_router(hub.create_router())
     return app, hub
@@ -75,7 +76,7 @@ def test_browser_hello_reflects_hijacked_state_at_connect() -> None:
     the hijack at browser connect time.  Previously the hub re-read state after
     dropping the lock, creating a window where the hello could be stale.
     """
-    app, hub = make_app()
+    app, hub = make_app("admin")
 
     # Pre-install an active REST hijack session so the hub considers this bot hijacked.
     session_id = str(uuid.uuid4())
@@ -92,7 +93,7 @@ def test_browser_hello_reflects_hijacked_state_at_connect() -> None:
 
 def test_browser_hello_reflects_not_hijacked_when_no_session() -> None:
     """Regression counter-case: hello.hijacked is False when no session exists."""
-    app, hub = make_app()
+    app, hub = make_app("admin")
 
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot99/term") as browser:
         hello = browser.receive_json()
@@ -195,7 +196,7 @@ def test_hijack_request_send_fail_no_notify_no_owner() -> None:
     def on_changed(bot_id: str, enabled: bool, owner: object) -> None:
         callbacks.append((bot_id, enabled, owner))
 
-    hub = TermHub(on_hijack_changed=on_changed)
+    hub = TermHub(on_hijack_changed=on_changed, resolve_browser_role=lambda _ws, _worker_id: "admin")
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
@@ -211,7 +212,7 @@ def test_hijack_request_send_fail_no_notify_no_owner() -> None:
             async def _fail_pause(bot_id: str, msg: dict) -> bool:
                 if msg.get("action") == "pause":
                     return False
-                return await orig_send(bot_id, msg)  # type: ignore[arg-type]
+                return await orig_send(bot_id, msg)
 
             with patch.object(hub, "_send_worker", side_effect=_fail_pause):
                 browser.send_json({"type": "hijack_request"})
@@ -248,6 +249,145 @@ def test_ping_is_silently_ignored() -> None:
             assert msg["type"] == "snapshot_req", f"Expected snapshot_req after ping but got: {msg}"
 
 
+def test_browser_rate_limit_does_not_drop_control_frames() -> None:
+    """Regression: throttle bulk input, but still honor heartbeat/release."""
+    hub = TermHub(browser_rate_limit_per_sec=2, resolve_browser_role=lambda _ws, _worker_id: "admin")
+    app = FastAPI()
+    app.include_router(hub.create_router())
+
+    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+        _read_worker_snapshot_req(worker)
+
+        with client.websocket_connect("/ws/browser/bot1/term") as browser:
+            _read_initial_browser_messages(browser)
+            _read_worker_snapshot_req(worker)
+
+            browser.send_json({"type": "hijack_request"})
+            pause = worker.receive_json()
+            assert pause["type"] == "control"
+            assert pause["action"] == "pause"
+
+            state = browser.receive_json()
+            assert state["type"] == "hijack_state"
+            assert state["hijacked"] is True
+
+            browser.send_json({"type": "heartbeat"})
+            ack = browser.receive_json()
+            assert ack["type"] == "heartbeat_ack"
+            browser.receive_json()  # refreshed hijack_state
+
+            browser.send_json({"type": "hijack_release"})
+            resume = worker.receive_json()
+            assert resume["type"] == "control"
+            assert resume["action"] == "resume"
+
+            released = browser.receive_json()
+            assert released["type"] == "hijack_state"
+            assert released["hijacked"] is False
+
+
+def test_stale_worker_disconnect_does_not_broadcast_offline() -> None:
+    """Regression: closing an old worker socket must not mark the new one offline."""
+    app, _hub = make_app()
+
+    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+        _read_initial_browser_messages(browser)
+
+        worker1 = client.websocket_connect("/ws/worker/bot1/term")
+        worker1.__enter__()
+        _read_worker_snapshot_req(worker1)
+        _read_worker_connected(browser)
+
+        worker2 = client.websocket_connect("/ws/worker/bot1/term")
+        worker2.__enter__()
+        try:
+            _read_worker_snapshot_req(worker2)
+            _read_worker_connected(browser)
+
+            worker1.__exit__(None, None, None)
+
+            worker2.send_json({"type": "term", "data": "still-live", "ts": 0.0})
+            msg = browser.receive_json()
+            assert msg["type"] == "term"
+            assert msg["data"] == "still-live"
+        finally:
+            worker2.__exit__(None, None, None)
+
+
+def test_stale_worker_output_is_ignored_after_reconnect() -> None:
+    """Regression: a superseded worker socket cannot publish term/snapshot output."""
+    app, hub = make_app()
+
+    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+        _read_initial_browser_messages(browser)
+
+        worker1 = client.websocket_connect("/ws/worker/bot1/term")
+        worker1.__enter__()
+        _read_worker_snapshot_req(worker1)
+        _read_worker_connected(browser)
+
+        worker2 = client.websocket_connect("/ws/worker/bot1/term")
+        worker2.__enter__()
+        try:
+            _read_worker_snapshot_req(worker2)
+            _read_worker_connected(browser)
+
+            worker1.send_json({"type": "snapshot", "screen": "stale", "ts": 1.0})
+            worker1.send_json({"type": "term", "data": "stale-data", "ts": 1.0})
+
+            worker2.send_json({"type": "snapshot", "screen": "fresh", "ts": 2.0})
+            msg = browser.receive_json()
+            assert msg["type"] == "snapshot"
+            assert msg["screen"] == "fresh"
+            assert hub._workers["bot1"].last_snapshot is not None
+            assert hub._workers["bot1"].last_snapshot["screen"] == "fresh"
+
+            worker2.send_json({"type": "term", "data": "live", "ts": 2.0})
+            msg = browser.receive_json()
+            assert msg["type"] == "term"
+            assert msg["data"] == "live"
+        finally:
+            worker1.__exit__(None, None, None)
+            worker2.__exit__(None, None, None)
+
+
+def test_idle_loops_still_cleanup_expired_hijack() -> None:
+    """Regression: idle sockets must still wake up and expire dashboard hijacks."""
+    with (
+        patch("provide.terminal.hijack.routes.websockets._WORKER_HIJACK_CLEANUP_INTERVAL_S", 0.05),
+        patch("provide.terminal.hijack.routes.websockets._BROWSER_HIJACK_CLEANUP_INTERVAL_S", 0.05),
+    ):
+        hub = TermHub(dashboard_hijack_lease_s=1, resolve_browser_role=lambda _ws, _worker_id: "admin")
+        app = FastAPI()
+        app.include_router(hub.create_router())
+
+        with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+            _read_worker_snapshot_req(worker)
+
+            with client.websocket_connect("/ws/browser/bot1/term") as browser:
+                _read_initial_browser_messages(browser)
+                _read_worker_snapshot_req(worker)
+
+                browser.send_json({"type": "hijack_request"})
+                pause = worker.receive_json()
+                assert pause["type"] == "control"
+                assert pause["action"] == "pause"
+
+                acquired = browser.receive_json()
+                assert acquired["type"] == "hijack_state"
+                assert acquired["hijacked"] is True
+
+                time.sleep(1.2)
+
+                resume = worker.receive_json()
+                assert resume["type"] == "control"
+                assert resume["action"] == "resume"
+
+                expired = browser.receive_json()
+                assert expired["type"] == "hijack_state"
+                assert expired["hijacked"] is False
+
+
 def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
     """Round-8 fix 2: when _send_worker fails but a REST session is still active,
     on_hijack_changed(enabled=False) must NOT fire — the bot is still hijacked."""
@@ -256,7 +396,7 @@ def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
     def on_changed(bot_id: str, enabled: bool, owner: object) -> None:
         callbacks.append((bot_id, enabled, owner))
 
-    hub = TermHub(on_hijack_changed=on_changed)
+    hub = TermHub(on_hijack_changed=on_changed, resolve_browser_role=lambda _ws, _worker_id: "admin")
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
@@ -277,7 +417,7 @@ def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
             async def _fail_pause(bot_id: str, msg: dict) -> bool:
                 if msg.get("action") == "pause":
                     return False
-                return await orig_send(bot_id, msg)  # type: ignore[arg-type]
+                return await orig_send(bot_id, msg)
 
             with patch.object(hub, "_send_worker", side_effect=_fail_pause):
                 browser.send_json({"type": "hijack_request"})
@@ -306,7 +446,7 @@ def test_worker_disconnect_broadcasts_worker_disconnected_to_browsers() -> None:
 
     Browser is in the outer with-block so it remains open after the worker exits.
     """
-    app, hub = make_app()
+    app, hub = make_app("admin")
 
     # Browser outer → stays alive when worker (inner) exits.
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
@@ -356,7 +496,7 @@ def test_worker_disconnect_clears_ws_hijack_owner() -> None:
 
     Browser is in the outer with-block so state can be inspected after worker exits.
     """
-    app, hub = make_app()
+    app, hub = make_app("admin")
 
     # Browser outer — stays alive when worker (inner) exits.
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
@@ -396,7 +536,7 @@ def test_worker_disconnect_fires_notify_when_ws_hijack_active() -> None:
     def on_changed(bot_id: str, enabled: bool, owner: object) -> None:
         callbacks.append((bot_id, enabled, owner))
 
-    hub = TermHub(on_hijack_changed=on_changed)
+    hub = TermHub(on_hijack_changed=on_changed, resolve_browser_role=lambda _ws, _worker_id: "admin")
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 

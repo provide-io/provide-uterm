@@ -28,4 +28,4 @@ from __future__ import annotations
 from provide.terminal.hijack.routes.rest import register_rest_routes as register_rest_routes
 from provide.terminal.hijack.routes.websockets import register_ws_routes as register_ws_routes
 
-__all__ = ["register_ws_routes", "register_rest_routes"]
+__all__ = ["register_rest_routes", "register_ws_routes"]

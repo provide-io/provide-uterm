@@ -101,3 +101,63 @@ class TestBridgeErrorHandlers:
         bridge._worker_id = "test"
 
         await bridge._set_size(80, 25)
+
+
+class TestRecvLoopCleanReturn:
+    """bridge.py:178 — when recv_loop returns cleanly inside _run(),
+    the send_loop (still blocked on queue.get()) is cancelled via the
+    pending-set in the FIRST_COMPLETED handler."""
+
+    async def test_recv_clean_return_cancels_send_in_run(self) -> None:
+        """Run _run() with a mock websockets.connect where recv_loop
+        returns cleanly, triggering the pending-task cancel at line 178."""
+        from unittest.mock import patch as _patch
+
+        recv_call_count = 0
+
+        class FakeWS:
+            async def recv(self):
+                nonlocal recv_call_count
+                recv_call_count += 1
+                if recv_call_count == 1:
+                    return json.dumps({"type": "snapshot_req"})
+                # Clean close triggers recv_loop to return normally
+                from websockets.exceptions import ConnectionClosedOK
+                from websockets.frames import Close
+
+                raise ConnectionClosedOK(Close(1000, ""), Close(1000, ""))
+
+            async def send(self, data):
+                pass
+
+        class FakeConnect:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def __aenter__(self):
+                return FakeWS()
+
+            async def __aexit__(self, *a):
+                pass
+
+        bot = MagicMock()
+        bot.session = None
+
+        async def _noop_hijack(enabled):
+            pass
+
+        bot.set_hijacked = _noop_hijack
+
+        bridge = TermBridge(bot, "test-bridge", "http://localhost:9999")
+        bridge._running = True
+
+        with _patch("websockets.connect", FakeConnect):
+            # _run will: connect → recv_loop returns → cancel send_loop (line 178) → break
+            # Set _running=False after a short delay so it doesn't reconnect
+            async def _stop_soon():
+                await asyncio.sleep(0.2)
+                bridge._running = False
+
+            await asyncio.gather(bridge._run(), _stop_soon())
+
+        assert recv_call_count >= 2

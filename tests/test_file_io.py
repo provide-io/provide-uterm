@@ -8,12 +8,15 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from provide.terminal.ansi import DEFAULT_PALETTE
 from provide.terminal.file_io import load_ans, load_palette, load_txt
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_load_ans_latin1(tmp_path: Path) -> None:

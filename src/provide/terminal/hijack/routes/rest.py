@@ -90,7 +90,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         request: HijackAcquireRequest | None = None,
     ) -> Any:
         if request is None:
-            request = HijackAcquireRequest()  # type: ignore[call-arg]
+            request = HijackAcquireRequest.model_validate({})
         await hub._cleanup_expired_hijack(worker_id)
 
         # No pre-flight worker check here — _send_worker is the authoritative
@@ -191,7 +191,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         request: HijackHeartbeatRequest | None = None,
     ) -> Any:
         if request is None:
-            request = HijackHeartbeatRequest()  # type: ignore[call-arg]
+            request = HijackHeartbeatRequest.model_validate({})
         hs = await hub._get_rest_session(worker_id, hijack_id)
         if hs is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
@@ -420,7 +420,9 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         ok, err = await hub._set_input_mode(worker_id, request.input_mode)
         if not ok:
             status = 404 if err == "not_found" else 409
-            error_msg = "No worker registered." if err == "not_found" else "Cannot switch to open while hijack is active."
+            error_msg = (
+                "No worker registered." if err == "not_found" else "Cannot switch to open while hijack is active."
+            )
             return JSONResponse({"error": error_msg}, status_code=status)
         return {"ok": True, "input_mode": request.input_mode, "worker_id": worker_id}
 

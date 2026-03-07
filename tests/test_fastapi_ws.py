@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -180,7 +181,7 @@ class TestWsTerminalProxyUnit:
         router = proxy.create_router("/ws/bbs")
         assert isinstance(router, APIRouter)
 
-    async def test_browser_to_remote_sends_data(self) -> None:
+    def test_browser_to_remote_sends_data(self) -> None:
         """_browser_to_remote reads from reader and forwards to transport."""
         transport = MockTransport()
         transport._connected = True
@@ -191,10 +192,10 @@ class TestWsTerminalProxyUnit:
             async def read(self, n: int) -> bytes:
                 return next(reads)
 
-        await WsTerminalProxy._browser_to_remote(MockReader(), transport)  # type: ignore[arg-type]
+        asyncio.run(WsTerminalProxy._browser_to_remote(MockReader(), transport))  # type: ignore[arg-type]
         assert transport.sent == [b"hello"]
 
-    async def test_remote_to_browser_sends_data(self) -> None:
+    def test_remote_to_browser_sends_data(self) -> None:
         """_remote_to_browser reads from transport and forwards to writer."""
         transport = MockTransport(recv_data=b"from remote", max_calls=1)
 
@@ -208,11 +209,11 @@ class TestWsTerminalProxyUnit:
             async def drain(self) -> None:
                 drained.append(True)
 
-        await WsTerminalProxy._remote_to_browser(transport, MockWriter())  # type: ignore[arg-type]
+        asyncio.run(WsTerminalProxy._remote_to_browser(transport, MockWriter()))  # type: ignore[arg-type]
         assert b"from remote" in written
         assert drained
 
-    async def test_handle_connects_transport(self) -> None:
+    def test_handle_connects_transport(self) -> None:
         """_handle connects the transport to host/port."""
         transport = MockTransport(max_calls=0)
         transport._connected = False  # disconnect immediately
@@ -222,12 +223,12 @@ class TestWsTerminalProxyUnit:
         mock_reader.read = AsyncMock(return_value=b"")
         mock_ws = MagicMock(spec=WebSocket)
 
-        await proxy._handle(mock_reader, MagicMock(), mock_ws)
+        asyncio.run(proxy._handle(mock_reader, MagicMock(), mock_ws))
 
         assert transport.connected_host == "bbs.example.com"
         assert transport.connected_port == 23
 
-    async def test_handle_disconnects_transport_on_exit(self) -> None:
+    def test_handle_disconnects_transport_on_exit(self) -> None:
         """transport.disconnect() is always called in the finally block."""
         transport = MockTransport(max_calls=0)
         transport._connected = False
@@ -237,7 +238,7 @@ class TestWsTerminalProxyUnit:
         mock_reader.read = AsyncMock(return_value=b"")
         mock_ws = MagicMock(spec=WebSocket)
 
-        await proxy._handle(mock_reader, MagicMock(), mock_ws)
+        asyncio.run(proxy._handle(mock_reader, MagicMock(), mock_ws))
         assert not transport._connected  # disconnect() set this False
 
 
@@ -285,7 +286,7 @@ class TestWsTerminalProxyIntegration:
 
 
 class TestWsTerminalProxyConnectionError:
-    async def test_remote_to_browser_connection_error(self) -> None:
+    def test_remote_to_browser_connection_error(self) -> None:
         """ConnectionError from transport.receive() is caught and ignored."""
 
         class _ErrorTransport:
@@ -309,7 +310,7 @@ class TestWsTerminalProxyConnectionError:
                 pass
 
         # Should not raise — ConnectionError in _remote_to_browser is suppressed
-        await WsTerminalProxy._remote_to_browser(_ErrorTransport(), _MockWriter())  # type: ignore[arg-type]
+        asyncio.run(WsTerminalProxy._remote_to_browser(_ErrorTransport(), _MockWriter()))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

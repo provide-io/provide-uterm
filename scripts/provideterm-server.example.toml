@@ -1,0 +1,57 @@
+[server]
+host = "127.0.0.1"
+port = 8780
+public_base_url = "http://127.0.0.1:8780"
+title = "provide-terminal-server"
+
+[auth]
+# Local/dev profile (header-compatible and no JWT requirements).
+mode = "dev"
+principal_header = "x-uterm-principal"
+role_header = "x-uterm-role"
+# For production, prefer scripts/provideterm-server.jwt.example.toml
+
+[ui]
+app_path = "/app"
+assets_path = "/_terminal"
+
+[recording]
+enabled_by_default = false
+directory = ".uterm-recordings"
+
+[[sessions]]
+session_id = "demo-session"
+display_name = "Interactive Demo Session"
+connector_type = "demo"
+input_mode = "open"
+auto_start = true
+tags = ["demo", "reference"]
+
+[[sessions]]
+session_id = "public-bbs"
+display_name = "Public Telnet BBS"
+connector_type = "telnet"
+input_mode = "hijack"
+auto_start = false
+host = "bbs.example.com"
+port = 23
+tags = ["telnet", "public"]
+
+[[sessions]]
+session_id = "ops-shell"
+display_name = "Operations SSH Shell"
+connector_type = "ssh"
+input_mode = "hijack"
+auto_start = false
+host = "shell.example.com"
+port = 22
+username = "operator"
+# Choose one auth method:
+# password = "replace-me"
+# client_key_path = "/abs/path/to/id_ed25519"
+# client_key_data = \"\"\"-----BEGIN OPENSSH PRIVATE KEY-----
+# ...
+# -----END OPENSSH PRIVATE KEY-----\"\"\"
+# Set this to a known_hosts file path in production. Omit it to disable checks in local/dev use.
+# known_hosts = "/abs/path/to/known_hosts"
+tags = ["ssh", "ops"]

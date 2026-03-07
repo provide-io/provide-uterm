@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""Hijack/watchdog mixin for worker bots.
+"""Hijack/watchdog mixin for worker processes.
 
 No optional dependencies required.
 """
@@ -14,7 +14,10 @@ import asyncio
 import contextlib
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +26,7 @@ class HijackableMixin:
     """Mixin that makes an async worker class hijackable by a human operator.
 
     Adds pause/resume/step/watchdog primitives. Intended usage — add as a base
-    class to your worker/bot class, then call :meth:`await_if_hijacked` at
+    class to your worker class, then call :meth:`await_if_hijacked` at
     checkpoints in your automation loop::
 
         class MyBot(HijackableMixin):
@@ -53,7 +56,7 @@ class HijackableMixin:
     # ------------------------------------------------------------------
 
     async def await_if_hijacked(self) -> None:
-        """Block automation while a human is hijacking this bot.
+        """Block automation while a human is hijacking this worker.
 
         Call this at every checkpoint in the automation loop (e.g. top-of-loop
         and pre-action). Returns immediately when not hijacked; blocks until
@@ -98,7 +101,7 @@ class HijackableMixin:
     # ------------------------------------------------------------------
 
     def note_progress(self) -> None:
-        """Signal that the bot is making progress (resets the watchdog timer).
+        """Signal that the worker is making progress (resets the watchdog timer).
 
         Call this whenever meaningful work occurs (e.g. after each turn, screen change,
         or successful action) to prevent the watchdog from firing.
@@ -116,7 +119,7 @@ class HijackableMixin:
         check_interval_s: float = 5.0,
         on_stuck: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
-        """Start a background task that triggers *on_stuck* if the bot stops progressing.
+        """Start a background task that triggers *on_stuck* if the worker stops progressing.
 
         The watchdog fires when no call to :meth:`note_progress` has been seen for
         *stuck_timeout_s* seconds. While hijacked, the timer is suppressed.
@@ -164,6 +167,6 @@ class HijackableMixin:
             self._watchdog_task = None
 
     async def cleanup_hijack(self) -> None:
-        """Release hijack and stop watchdog. Call from your bot's cleanup/shutdown."""
+        """Release hijack and stop watchdog. Call from your worker's cleanup/shutdown."""
         await self.set_hijacked(False)
         await self.stop_watchdog()

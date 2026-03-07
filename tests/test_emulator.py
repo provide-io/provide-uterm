@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("pyte", reason="pyte not installed; skip emulator tests")
 
-from provide.terminal.emulator import TerminalEmulator  # noqa: E402
+from provide.terminal.emulator import TerminalEmulator
 
 
 class TestTerminalEmulator:

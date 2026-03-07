@@ -41,10 +41,10 @@ def load_txt(path: Path | str, encoding: str = "utf-8") -> str:
 
 
 def load_palette(path: Path | str | None) -> list[int]:
-    """Load a JSON 256-color palette (list of 16 ints 0–255).
+    """Load a JSON 256-color palette (list of 16 ints 0-255).
 
     Args:
-        path: Path to a JSON file containing a list of 16 integers (0–255),
+        path: Path to a JSON file containing a list of 16 integers (0-255),
             or ``None`` to use the default palette.
 
     Returns:
@@ -52,7 +52,7 @@ def load_palette(path: Path | str | None) -> list[int]:
 
     Raises:
         ValueError: If the file does not contain a list of exactly 16 integers
-            in the range 0–255.
+            in the range 0-255.
     """
     if path is None:
         return DEFAULT_PALETTE[:]
