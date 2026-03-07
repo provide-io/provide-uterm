@@ -1,0 +1,11 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: undef-terminal
+Source: https://github.com/undef-games/undef-terminal
+
+Files: *
+Copyright: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+License: AGPL-3.0-or-later
+
+Files: .tmp-*/* test-results/* .playwright-mcp/* .uterm-recordings*/**
+Copyright: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+License: AGPL-3.0-or-later

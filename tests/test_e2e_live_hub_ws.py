@@ -411,3 +411,49 @@ class TestWsHijack:
                 assert hijack_state is not None
                 assert hijack_state["hijacked"] is True
                 assert hijack_state["owner"] == "other"
+
+    async def test_hijack_handoff_between_two_browsers(self, live_hub: Any) -> None:
+        """After browser 1 releases, browser 2 can acquire hijack and browser 1 sees owner='other'."""
+        _, base_url = live_hub
+        async with (
+            websockets.connect(_ws_url(base_url, "/ws/worker/ws5/term")) as worker,
+            websockets.connect(_ws_url(base_url, "/ws/browser/ws5/term")) as b1,
+            websockets.connect(_ws_url(base_url, "/ws/browser/ws5/term")) as b2,
+        ):
+            await _drain(b1, count=3)
+            await _drain(b2, count=3)
+            await _drain_until(worker, "snapshot_req")
+
+            await b1.send(json.dumps({"type": "hijack_request"}))
+            pause = await _drain_until(worker, "control")
+            assert pause is not None
+            assert pause["action"] == "pause"
+
+            b1_state = await _drain_until(b1, "hijack_state")
+            assert b1_state is not None
+            assert b1_state["owner"] == "me"
+
+            b2_state = await _drain_until(b2, "hijack_state")
+            assert b2_state is not None
+            assert b2_state["owner"] == "other"
+
+            await b1.send(json.dumps({"type": "hijack_release"}))
+            resume = await _drain_until(worker, "control")
+            assert resume is not None
+            assert resume["action"] == "resume"
+
+            await _drain_until(b1, "hijack_state")
+            await _drain_until(b2, "hijack_state")
+
+            await b2.send(json.dumps({"type": "hijack_request"}))
+            pause2 = await _drain_until(worker, "control")
+            assert pause2 is not None
+            assert pause2["action"] == "pause"
+
+            b2_state2 = await _drain_until(b2, "hijack_state")
+            assert b2_state2 is not None
+            assert b2_state2["owner"] == "me"
+
+            b1_state2 = await _drain_until(b1, "hijack_state")
+            assert b1_state2 is not None
+            assert b1_state2["owner"] == "other"

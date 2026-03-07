@@ -20,8 +20,9 @@ from provide.terminal.hijack.hub import TermHub
 # ---------------------------------------------------------------------------
 
 
-def make_app() -> tuple[FastAPI, TermHub]:
-    hub = TermHub()
+def make_app(role: str | None = None) -> tuple[FastAPI, TermHub]:
+    resolver = (lambda _ws, _worker_id: role) if role is not None else None
+    hub = TermHub(resolve_browser_role=resolver)
     app = FastAPI()
     app.include_router(hub.create_router())
     return app, hub
@@ -87,7 +88,7 @@ def test_browser_sees_worker_come_online_after_connect() -> None:
 
 def test_browser_snapshot_req_as_owner_touches_lease() -> None:
     """snapshot_req from owner calls _touch_hijack_owner."""
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -108,7 +109,7 @@ def test_browser_snapshot_req_as_owner_touches_lease() -> None:
 
 def test_browser_analyze_req_as_owner_touches_lease() -> None:
     """analyze_req from owner calls _touch_hijack_owner."""
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -134,7 +135,7 @@ def test_browser_loses_ownership_on_worker_disconnect() -> None:
     an error response.  Now the finally block revokes ownership atomically so
     hijack_step from a non-owner is silently ignored.
     """
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -158,7 +159,7 @@ def test_browser_loses_ownership_on_worker_disconnect() -> None:
 
 def test_browser_input_no_worker() -> None:
     """Input as owner with no worker: ownership is revoked at disconnect, input is ignored."""
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 

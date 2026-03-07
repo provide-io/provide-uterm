@@ -237,7 +237,6 @@ class TestRecvLoop:
 class TestRunLoop:
     async def test_run_connects_to_ws_server(self) -> None:
         """_run opens a WebSocket to the manager URL and pumps messages."""
-        import websockets.server as _ws_srv
 
         received_from_bridge: list[dict] = []
 
@@ -251,7 +250,8 @@ class TestRunLoop:
             except Exception:
                 pass
 
-        async with _ws_srv.serve(_ws_handler, "127.0.0.1", 0) as server:
+        import websockets
+        async with websockets.serve(_ws_handler, "127.0.0.1", 0) as server:
             port = server.sockets[0].getsockname()[1]
 
             class _FakeBot:

@@ -53,19 +53,19 @@ def _status_text(page: Page) -> str:
     return page.locator("[id$='-statustext']").text_content() or ""
 
 
-def _hijack_btn(page: Page):  # type: ignore[return]
+def _hijack_btn(page: Page):
     return page.get_by_role("button", name="Hijack")
 
 
-def _step_btn(page: Page):  # type: ignore[return]
+def _step_btn(page: Page):
     return page.get_by_role("button", name="Step")
 
 
-def _release_btn(page: Page):  # type: ignore[return]
+def _release_btn(page: Page):
     return page.get_by_role("button", name="Release")
 
 
-def _resync_btn(page: Page):  # type: ignore[return]
+def _resync_btn(page: Page):
     return page.get_by_role("button", name="⟳ Resync")
 
 
@@ -434,6 +434,45 @@ class TestTwoBrowsers:
 
                 # Browser 2 should now be able to hijack
                 expect(page2.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
+            finally:
+                page2.close()
+                ctx2.close()
+        finally:
+            ctrl.stop()
+
+    def test_second_browser_can_take_over_after_release(
+        self, page: Page, browser: object, hijack_server: tuple[str, object]
+    ) -> None:
+        """Browser 2 can hijack after browser 1 releases, and browser 1 updates to 'Hijacked (other)'."""
+        base_url, _ = hijack_server
+        worker_id = f"2br-xfer-{_uid()}"
+        ctrl = WorkerController(base_url, worker_id).start()
+        try:
+            _navigate(page, base_url, worker_id)
+            expect(_hijack_btn(page)).to_be_enabled(timeout=5000)
+            _hijack_btn(page).click()
+            page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (you)'")
+
+            ctx2 = browser.new_context()  # type: ignore[attr-defined]
+            page2 = ctx2.new_page()
+            try:
+                page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
+                page2.wait_for_function(
+                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (other)'"
+                )
+
+                _release_btn(page).click()
+                expect(page2.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
+                page2.get_by_role("button", name="Hijack").click()
+
+                page2.wait_for_function(
+                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (you)'"
+                )
+                page.wait_for_function(
+                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (other)'"
+                )
+                assert _status_text(page) == "Hijacked (other)"
+                assert page2.locator("[id$='-statustext']").text_content() == "Hijacked (you)"
             finally:
                 page2.close()
                 ctx2.close()

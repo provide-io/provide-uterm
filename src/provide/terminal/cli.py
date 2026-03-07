@@ -35,6 +35,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from provide.terminal.transports.base import ConnectionTransport
 
 # ---------------------------------------------------------------------------
 # Subcommand: proxy  (WS server → outbound telnet/SSH)
@@ -48,15 +54,12 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
         from fastapi import FastAPI
 
         from provide.terminal.fastapi import WsTerminalProxy
-        from provide.terminal.transports.base import ConnectionTransport
     except ImportError as exc:
-        print(  # noqa: T201
+        print(
             f"error: missing dependency — {exc}\ninstall the cli extra: pip install 'provide-terminal[cli]'",
             file=sys.stderr,
         )
         sys.exit(1)
-
-    from collections.abc import Callable
 
     transport_factory: Callable[[], ConnectionTransport] | None = None
     if args.transport == "ssh":
@@ -64,9 +67,12 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
             import importlib
 
             _ssh_mod = importlib.import_module("provide.terminal.transports.ssh")
-            transport_factory = _ssh_mod.SSHTransport  # type: ignore[assignment]
+            ssh_transport_cls = getattr(_ssh_mod, "SSHTransport", None)
+            if ssh_transport_cls is None:
+                raise AttributeError("SSHTransport")
+            transport_factory = cast("Callable[[], ConnectionTransport]", ssh_transport_cls)
         except (ImportError, AttributeError):
-            print(  # noqa: T201
+            print(
                 "error: SSH transport requires asyncssh: pip install 'provide-terminal[ssh]'",
                 file=sys.stderr,
             )
@@ -74,7 +80,7 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
     else:
         from provide.terminal.transports.telnet import TelnetTransport
 
-        transport_factory = TelnetTransport  # type: ignore[assignment]
+        transport_factory = cast("Callable[[], ConnectionTransport]", TelnetTransport)
 
     proxy = WsTerminalProxy(
         args.host,
@@ -85,7 +91,7 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
     app = FastAPI(title="provideterm proxy", docs_url=None, redoc_url=None)
     app.include_router(proxy.create_router(args.path))
 
-    print(  # noqa: T201
+    print(
         f"provideterm proxy  {args.transport}://{args.host}:{args.bbs_port}  →  ws://{args.bind}:{args.port}{args.path}"
     )
 
@@ -102,7 +108,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
     try:
         from provide.terminal.gateway import SshWsGateway, TelnetWsGateway
     except ImportError as exc:  # pragma: no cover
-        print(  # noqa: T201
+        print(
             f"error: missing dependency — {exc}\ninstall the cli extra: pip install 'provide-terminal[cli]'",
             file=sys.stderr,
         )
@@ -112,7 +118,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
     ssh_port: int = args.ssh_port
 
     if telnet_port == 0 and ssh_port == 0:
-        print("error: at least one of --port or --ssh-port must be non-zero", file=sys.stderr)  # noqa: T201
+        print("error: at least one of --port or --ssh-port must be non-zero", file=sys.stderr)
         sys.exit(1)
 
     asyncio.run(  # pragma: no cover
@@ -135,19 +141,19 @@ async def _run_listen(
         gw = TelnetWsGateway(ws_url)
         srv = await gw.start(bind, telnet_port)
         servers.append(srv)
-        print(f"provideterm listen  telnet://{bind}:{telnet_port}  →  {ws_url}")  # noqa: T201
+        print(f"provideterm listen  telnet://{bind}:{telnet_port}  →  {ws_url}")
 
     if ssh_port:
         try:
             gw_ssh = SshWsGateway(ws_url, server_key=server_key)
             srv_ssh = await gw_ssh.start(bind, ssh_port)
             servers.append(srv_ssh)
-            print(f"provideterm listen  ssh://{bind}:{ssh_port}     →  {ws_url}")  # noqa: T201
+            print(f"provideterm listen  ssh://{bind}:{ssh_port}     →  {ws_url}")
         except ImportError as exc:
-            print(f"warning: SSH gateway disabled — {exc}", file=sys.stderr)  # noqa: T201
+            print(f"warning: SSH gateway disabled — {exc}", file=sys.stderr)
 
     if not servers:
-        print("error: no servers started", file=sys.stderr)  # noqa: T201
+        print("error: no servers started", file=sys.stderr)
         return
 
     try:
@@ -191,7 +197,7 @@ def _build_parser() -> argparse.ArgumentParser:
     proxy_p.add_argument(
         "--bind",
         metavar="ADDR",
-        default="0.0.0.0",  # noqa: S104  # nosec B104
+        default="0.0.0.0",  # nosec B104
         help="bind address (default: 0.0.0.0)",
     )
     proxy_p.add_argument(
@@ -235,7 +241,7 @@ def _build_parser() -> argparse.ArgumentParser:
     listen_p.add_argument(
         "--bind",
         metavar="ADDR",
-        default="0.0.0.0",  # noqa: S104  # nosec B104
+        default="0.0.0.0",  # nosec B104
         help="bind address (default: 0.0.0.0)",
     )
     listen_p.add_argument(

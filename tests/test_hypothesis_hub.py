@@ -91,7 +91,7 @@ class TermHubStateMachine(RuleBasedStateMachine):
     def add_browser(self, wid: str) -> tuple[str, AsyncMock]:
         ws = _mock_ws()
         st = self._run(self.hub._get(wid))
-        st.browsers.add(ws)
+        st.browsers[ws] = "operator"
         self._browsers.setdefault(wid, []).append(ws)
         return (wid, ws)
 
@@ -102,7 +102,7 @@ class TermHubStateMachine(RuleBasedStateMachine):
         self._run(self.hub._try_release_ws_hijack(wid, ws))
         if wid in self.hub._workers:
             st = self.hub._workers[wid]
-            st.browsers.discard(ws)
+            st.browsers.pop(ws, None)
             if wid in self._browsers and ws in self._browsers[wid]:
                 self._browsers[wid].remove(ws)
         self._run(self.hub._prune_if_idle(wid))
@@ -295,9 +295,7 @@ class TestRESTFuzz:
             assert acq.status_code == 200
             hijack_id = acq.json()["hijack_id"]
 
-            resp = client.post(
-                f"/worker/fuzz1/hijack/{hijack_id}/heartbeat", json={"lease_s": lease}
-            )
+            resp = client.post(f"/worker/fuzz1/hijack/{hijack_id}/heartbeat", json={"lease_s": lease})
             if 1 <= lease <= 3600:
                 assert resp.status_code == 200
             else:
@@ -323,7 +321,7 @@ class TestConcurrentStress:
 
         browsers = [_mock_ws() for _ in range(n)]
         for ws in browsers:
-            st.browsers.add(ws)
+            st.browsers[ws] = "operator"
 
         async def _race(ws: AsyncMock) -> None:
             await hub._try_acquire_ws_hijack("w1", ws)
@@ -369,7 +367,7 @@ class TestConcurrentStress:
 
         browsers = [_mock_ws() for _ in range(n)]
         for ws in browsers:
-            st.browsers.add(ws)
+            st.browsers[ws] = "operator"
 
         async def _acquire_release(ws: AsyncMock) -> None:
             await hub._try_acquire_ws_hijack("w1", ws)

@@ -65,13 +65,13 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for WebSocket support: pip install 'provide-terminal[websocket]'") from _e
 
-from provide.terminal.transports.base import ConnectionTransport
 from provide.terminal.transports.websocket import WebSocketStreamReader, WebSocketStreamWriter
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
     from provide.terminal.protocols import TerminalReader, TerminalWriter
+    from provide.terminal.transports.base import ConnectionTransport
 
 # ---------------------------------------------------------------------------
 # Type alias
@@ -197,7 +197,7 @@ class WsTerminalProxy:
         from provide.terminal.transports.telnet import TelnetTransport
 
         factory: Callable[[], ConnectionTransport] = self._transport_factory or cast(
-            Callable[[], ConnectionTransport], TelnetTransport
+            "Callable[[], ConnectionTransport]", TelnetTransport
         )
         transport = factory()
         await transport.connect(self._host, self._port)
@@ -221,7 +221,10 @@ class WsTerminalProxy:
     ) -> None:
         """Read from browser WebSocket and forward to remote transport."""
         while transport.is_connected():
-            data = await reader.read(256)
+            # WebSocketStreamReader.read(n) blocks until it has collected *n*
+            # bytes or the socket closes. Terminal input is latency-sensitive,
+            # so read one byte at a time here instead of buffering for 256.
+            data = await reader.read(1)
             if not data:
                 break
             await transport.send(data)

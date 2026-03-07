@@ -3,15 +3,36 @@ repos:
     rev: v0.15.2
     hooks:
       - id: ruff
-        args: [--fix, --unsafe-fixes]
+        args: [--fix]
       - id: ruff-format
+
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        additional_dependencies: ["tomli"]
 
   - repo: local
     hooks:
       - id: mypy
-        name: mypy
+        name: mypy strict
         entry: mypy src/
-        language: system
+        language: python
+        language_version: python3.11
+        additional_dependencies:
+          - mypy==1.19.1
+          - fastapi>=0.110
+          - pydantic>=2.0
+          - uvicorn>=0.24
+          - websockets>=16.0
+          - asyncssh>=2.22.0
+          - pyte>=0.8.2
+          - pyjwt>=2.9
         pass_filenames: false
         always_run: true
         types: [python]
@@ -19,7 +40,17 @@ repos:
       - id: ty
         name: ty check
         entry: ty check src/
-        language: system
+        language: python
+        language_version: python3.11
+        additional_dependencies:
+          - ty==0.0.19
+          - fastapi>=0.110
+          - pydantic>=2.0
+          - uvicorn>=0.24
+          - websockets>=16.0
+          - asyncssh>=2.22.0
+          - pyte>=0.8.2
+          - pyjwt>=2.9
         pass_filenames: false
         always_run: true
         types: [python]
@@ -27,7 +58,10 @@ repos:
       - id: bandit
         name: bandit
         entry: bandit -r src/ -ll
-        language: system
+        language: python
+        language_version: python3.11
+        additional_dependencies:
+          - bandit==1.9.4
         pass_filenames: false
         always_run: true
         types: [python]

@@ -143,6 +143,7 @@ class TestWatchdogBranches:
         bot.start_watchdog(stuck_timeout_s=999, check_interval_s=999)
         task2 = bot._watchdog_task
         assert task1 is task2
+        assert task1 is not None
         task1.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task1
@@ -160,6 +161,7 @@ class TestWatchdogBranches:
         # Note: watchdog sleeps max(0.5, check_interval_s) so need > 0.5s
         bot.start_watchdog(stuck_timeout_s=0.01, check_interval_s=0.01)
         await asyncio.sleep(0.7)
+        assert bot._watchdog_task is not None
         bot._watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await bot._watchdog_task
@@ -183,6 +185,7 @@ class TestWatchdogBranches:
         # stuck_timeout_s=9999 ensures we never fire even after the 0.5s sleep
         bot.start_watchdog(stuck_timeout_s=9999, check_interval_s=0.01, on_stuck=on_stuck)
         await asyncio.sleep(0.7)
+        assert bot._watchdog_task is not None
         bot._watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await bot._watchdog_task
@@ -207,6 +210,7 @@ class TestWatchdogBranches:
         # Note: watchdog sleeps max(0.5, check_interval_s) so we need to wait > 0.5s
         bot.start_watchdog(stuck_timeout_s=0.001, check_interval_s=0.01, on_stuck=exploding_stuck)
         await asyncio.sleep(0.7)
+        assert bot._watchdog_task is not None
         bot._watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await bot._watchdog_task

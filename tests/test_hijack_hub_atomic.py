@@ -310,16 +310,16 @@ async def test_broadcast_does_not_iterate_live_set() -> None:
 
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.browsers.add(ws1)
-        st.browsers.add(ws2)
+        st.browsers[ws1] = "operator"
+        st.browsers[ws2] = "operator"
 
-    # Make ws1.send_text remove ws2 from the live set mid-iteration to simulate
+    # Make ws1.send_text remove ws2 from the live dict mid-iteration to simulate
     # a concurrent disconnect happening between sends.
     async def _send_and_remove(payload: str) -> None:
         async with hub._lock:
             st2 = hub._workers.get("bot1")
             if st2 is not None:
-                st2.browsers.discard(ws2)
+                st2.browsers.pop(ws2, None)
 
     ws1.send_text = AsyncMock(side_effect=_send_and_remove)
 
@@ -358,7 +358,7 @@ async def test_prune_if_idle_keeps_bot_with_browser() -> None:
     hub = TermHub()
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.browsers.add(AsyncMock())
+        st.browsers[AsyncMock()] = "operator"
 
     await hub._prune_if_idle("bot1")
 

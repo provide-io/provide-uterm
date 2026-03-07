@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import base64
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from provide.terminal.replay.raw import rebuild_raw_stream
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _make_log(tmp_path: Path, records: list[dict]) -> Path:

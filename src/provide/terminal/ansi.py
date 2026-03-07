@@ -167,7 +167,7 @@ def _map_index(code: int) -> int | None:
     return None
 
 
-def _convert_sgr_256(match: re.Match, palette: list[int]) -> str:
+def _convert_sgr_256(match: re.Match[str], palette: list[int]) -> str:
     seq = match.group(1)
     if seq == "":
         return match.group(0)
@@ -194,7 +194,7 @@ def _convert_sgr_256(match: re.Match, palette: list[int]) -> str:
 
 
 def _convert_tokens_256(text: str, palette: list[int]) -> str:
-    def repl(m: re.Match) -> str:
+    def repl(m: re.Match[str]) -> str:
         kind = m.group(1)
         raw = int(m.group(2))
         idx = raw % 16
@@ -204,7 +204,7 @@ def _convert_tokens_256(text: str, palette: list[int]) -> str:
     return _TOKEN_RE.sub(repl, text)
 
 
-def _convert_sgr_tc(match: re.Match, rgb_palette: list[tuple[int, int, int]]) -> str:
+def _convert_sgr_tc(match: re.Match[str], rgb_palette: list[tuple[int, int, int]]) -> str:
     seq = match.group(1)
     if seq == "":
         return match.group(0)
@@ -231,7 +231,7 @@ def _convert_sgr_tc(match: re.Match, rgb_palette: list[tuple[int, int, int]]) ->
 
 
 def _convert_tokens_tc(text: str, rgb_palette: list[tuple[int, int, int]]) -> str:
-    def repl(m: re.Match) -> str:
+    def repl(m: re.Match[str]) -> str:
         kind = m.group(1)
         raw = int(m.group(2))
         idx = raw % 16
@@ -299,7 +299,7 @@ def _emit_color(polarity: str, color_char: str) -> str:
 
 
 def _handle_extended_tokens(text: str) -> str:
-    def repl(m: re.Match) -> str:
+    def repl(m: re.Match[str]) -> str:
         kind = m.group(1)
         val = int(m.group(2))
         if kind == "F":
@@ -408,5 +408,4 @@ def preview_ansi(text: str) -> str:
     """
     text = _handle_extended_tokens(text)
     text = _handle_tilde_codes(text)
-    text = _handle_twgs_tokens(text)
-    return text
+    return _handle_twgs_tokens(text)

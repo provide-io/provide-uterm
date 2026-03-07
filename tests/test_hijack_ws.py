@@ -38,8 +38,9 @@ from provide.terminal.hijack.models import HijackSession, WorkerTermState
 # ---------------------------------------------------------------------------
 
 
-def make_app() -> tuple[FastAPI, TermHub]:
-    hub = TermHub()
+def make_app(role: str | None = None) -> tuple[FastAPI, TermHub]:
+    resolver = (lambda _ws, _worker_id: role) if role is not None else None
+    hub = TermHub(resolve_browser_role=resolver)
     app = FastAPI()
     app.include_router(hub.create_router())
     return app, hub
@@ -243,7 +244,9 @@ def test_browser_connect_receives_hello_and_hijack_state() -> None:
         hello = browser.receive_json()
         assert hello["type"] == "hello"
         assert hello["worker_id"] == "bot1"
-        assert hello["can_hijack"] is True
+        # Default role is "viewer" when no resolver is configured.
+        assert hello["can_hijack"] is False
+        assert hello["role"] == "viewer"
         assert "hijacked" in hello
 
         hijack_state = browser.receive_json()
@@ -277,7 +280,7 @@ def test_browser_snapshot_req_forwarded_to_worker() -> None:
 
 
 def test_browser_hijack_request_no_worker() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -293,7 +296,7 @@ def test_browser_hijack_request_no_worker() -> None:
 
 
 def test_browser_hijack_request_already_held() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     hub._workers["bot1"] = WorkerTermState(
         worker_ws=AsyncMock(),
         hijack_session=_active_session(str(uuid.uuid4()), "other"),
@@ -310,7 +313,7 @@ def test_browser_hijack_request_already_held() -> None:
 
 
 def test_browser_hijack_request_with_worker() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -333,7 +336,7 @@ def test_browser_hijack_request_with_worker() -> None:
 
 
 def test_browser_heartbeat_as_owner() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -359,7 +362,7 @@ def test_browser_heartbeat_as_owner() -> None:
 
 
 def test_browser_input_as_owner() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -399,7 +402,7 @@ def test_browser_input_not_owner_ignored() -> None:
 
 
 def test_browser_hijack_step() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -420,7 +423,7 @@ def test_browser_hijack_step() -> None:
 
 
 def test_browser_hijack_release() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
@@ -451,7 +454,7 @@ def test_browser_hijack_release() -> None:
 
 
 def test_browser_disconnect_as_owner_sends_resume() -> None:
-    app, hub = make_app()
+    app, hub = make_app("admin")
     with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)  # snapshot_req from worker connect
 

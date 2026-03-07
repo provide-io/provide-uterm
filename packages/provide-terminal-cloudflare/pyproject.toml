@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "provide-terminal-cloudflare"
+version = "0.1.0"
+description = "Cloudflare Workers runtime for provide-terminal control plane"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pyjwt>=2.9",
+]
+
+[project.optional-dependencies]
+ui = [
+  "provide-terminal",
+]
+dev = [
+  "pytest>=9.0",
+  "pytest-asyncio>=1.3",
+  "ruff>=0.15",
+  "mypy>=1.19",
+  "workers-py>=0.4.0",
+  "websockets>=16.0",
+]
+
+[project.scripts]
+provideterm-cf = "provide_terminal_cloudflare.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/provide_terminal_cloudflare"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

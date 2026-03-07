@@ -1,0 +1,12 @@
+{
+  "name": "provide-terminal-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:frontend": "tsc -p tsconfig.frontend.json",
+    "typecheck:frontend": "tsc -p tsconfig.frontend.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

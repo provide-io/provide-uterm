@@ -268,7 +268,7 @@ class TestBroadcastDeadSocketHijackOwner:
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
-            st.browsers.add(dead_browser)
+            st.browsers[dead_browser] = "operator"
             st.hijack_owner = dead_browser
             st.hijack_owner_expires_at = time.time() + 600
 
@@ -313,7 +313,7 @@ class TestBroadcastHijackStateDeadSocketOwner:
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
-            st.browsers.add(dead_browser)
+            st.browsers[dead_browser] = "operator"
             st.hijack_owner = dead_browser
             st.hijack_owner_expires_at = time.time() + 600
 
@@ -379,11 +379,86 @@ class TestTouchHijackOwnerWithLease:
 # ---------------------------------------------------------------------------
 
 
-class TestRestSendToctouRecheck:
-    """The send endpoint re-validates the session under lock; if it expired
-    between _get_rest_session and the re-check, it returns 404."""
+# ---------------------------------------------------------------------------
+# hub._disconnect_worker: ws.close() raises (lines 382-383)
+# ---------------------------------------------------------------------------
 
-    async def test_send_returns_404_when_session_expires_between_checks(self) -> None:
+
+class TestDisconnectWorkerCloseError:
+    """hub:382-383 — ws.close() raises an exception inside _disconnect_worker."""
+
+    async def test_ws_close_error_handled(self) -> None:
+        from provide.terminal.hijack.models import WorkerTermState
+
+        hub, app = _make_app()
+        mock_ws = AsyncMock()
+        mock_ws.close = AsyncMock(side_effect=RuntimeError("already closed"))
+        mock_ws.send_text = AsyncMock()
+
+        async with hub._lock:
+            st = hub._workers.setdefault("w1", WorkerTermState())
+            st.worker_ws = mock_ws
+
+        ok = await hub._disconnect_worker("w1")
+        assert ok is True
+        mock_ws.close.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# hub._disconnect_worker: was_hijacked=True path (lines 389-390)
+# ---------------------------------------------------------------------------
+
+
+class TestDisconnectWorkerWasHijacked:
+    """hub:389-390 — was_hijacked=True fires _notify_hijack_changed + broadcast."""
+
+    async def test_disconnect_with_active_hijack_notifies(self) -> None:
+        from provide.terminal.hijack.models import HijackSession, WorkerTermState
+
+        hijack_calls: list[dict[str, Any]] = []
+
+        def _on_change(wid: str, enabled: bool, owner: str | None) -> None:
+            hijack_calls.append({"worker_id": wid, "enabled": enabled, "owner": owner})
+
+        hub = TermHub(on_hijack_changed=_on_change)
+        app = FastAPI()
+        app.include_router(hub.create_router())
+
+        mock_ws = AsyncMock()
+        mock_ws.close = AsyncMock()
+        mock_ws.send_text = AsyncMock()
+
+        now = time.time()
+        async with hub._lock:
+            st = hub._workers.setdefault("w1", WorkerTermState())
+            st.worker_ws = mock_ws
+            st.hijack_session = HijackSession(
+                hijack_id="test-hid",
+                owner="tester",
+                acquired_at=now,
+                lease_expires_at=now + 300,
+                last_heartbeat=now,
+            )
+
+        ok = await hub._disconnect_worker("w1")
+        assert ok is True
+        # was_hijacked=True → _notify_hijack_changed fired
+        assert len(hijack_calls) == 1
+        assert hijack_calls[0]["enabled"] is False
+
+
+# ---------------------------------------------------------------------------
+# routes_rest: send TOCTOU re-check path (line 312)
+# ---------------------------------------------------------------------------
+
+
+class TestRestSendToctouRecheck:
+    """The send endpoint re-validates the session under lock (line 312);
+    if it expired between _wait_for_guard and the re-check, it returns 404."""
+
+    async def test_send_returns_404_when_session_expires_during_guard(self) -> None:
+        from unittest.mock import patch
+
         from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
         hub, app = _make_app()
@@ -394,21 +469,28 @@ class TestRestSendToctouRecheck:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
-            # Session that will expire in ~0.05s
             st.hijack_session = HijackSession(
                 hijack_id=hid,
                 owner="tester",
                 acquired_at=now,
-                lease_expires_at=now + 0.05,
+                lease_expires_at=now + 600,
                 last_heartbeat=now,
             )
 
-        # Wait for the session to expire
-        await asyncio.sleep(0.1)
+        # Monkey-patch _wait_for_guard to expire the session before returning success
+        _original_guard = hub._wait_for_guard
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.post(f"/worker/w1/hijack/{hid}/send", json={"keys": "x"})
-        # _get_rest_session sees expired → 404
+        async def _guard_that_expires(*args, **kwargs):
+            async with hub._lock:
+                st2 = hub._workers.get("w1")
+                if st2 is not None:
+                    st2.hijack_session = None  # simulate expiry
+            return True, {"screen": ""}, None
+
+        with patch.object(hub, "_wait_for_guard", side_effect=_guard_that_expires):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(f"/worker/w1/hijack/{hid}/send", json={"keys": "x"})
+        # Re-validate finds expired → 404 at line 312
         assert r.status_code == 404
 
 
@@ -418,9 +500,12 @@ class TestRestSendToctouRecheck:
 
 
 class TestRestStepToctouRecheck:
-    """Same as send, but for the step endpoint."""
+    """Step re-validates the session under lock (line 368);
+    if it expired between _get_rest_session and the re-check, it returns 404."""
 
     async def test_step_returns_404_when_session_expires_between_checks(self) -> None:
+        from unittest.mock import patch
+
         from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
         hub, app = _make_app()
@@ -435,12 +520,24 @@ class TestRestStepToctouRecheck:
                 hijack_id=hid,
                 owner="tester",
                 acquired_at=now,
-                lease_expires_at=now + 0.05,
+                lease_expires_at=now + 600,
                 last_heartbeat=now,
             )
 
-        await asyncio.sleep(0.1)
+        # Monkey-patch _get_rest_session to return valid session but expire state
+        _original = hub._get_rest_session
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            r = await c.post(f"/worker/w1/hijack/{hid}/step")
+        async def _get_then_expire(worker_id, hijack_id):
+            result = await _original(worker_id, hijack_id)
+            if result is not None:
+                async with hub._lock:
+                    st2 = hub._workers.get(worker_id)
+                    if st2 is not None:
+                        st2.hijack_session = None
+            return result
+
+        with patch.object(hub, "_get_rest_session", side_effect=_get_then_expire):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                r = await c.post(f"/worker/w1/hijack/{hid}/step")
+        # Re-validate finds expired → 404 at line 368
         assert r.status_code == 404

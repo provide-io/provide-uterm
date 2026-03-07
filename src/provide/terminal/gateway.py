@@ -46,7 +46,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def _require_websockets():
+def _require_websockets() -> None:
     try:
         import websockets  # noqa: F401
     except ImportError as exc:
@@ -117,7 +117,7 @@ class TelnetWsGateway:
         _require_websockets()
         self._ws_url = ws_url
 
-    async def start(self, host: str = "0.0.0.0", port: int = 2112) -> asyncio.AbstractServer:  # noqa: S104  # nosec B104
+    async def start(self, host: str = "0.0.0.0", port: int = 2112) -> asyncio.AbstractServer:  # nosec B104
         """Start the TCP listener and return the server object.
 
         Args:
@@ -180,7 +180,7 @@ class SshWsGateway:
         self._ws_url = ws_url
         self._server_key = server_key
 
-    async def start(self, host: str = "0.0.0.0", port: int = 2222) -> object:  # noqa: S104  # nosec B104
+    async def start(self, host: str = "0.0.0.0", port: int = 2222) -> object:  # nosec B104
         """Start the SSH server and return the server object.
 
         Args:
@@ -195,6 +195,10 @@ class SshWsGateway:
 
         ws_url = self._ws_url
 
+        class _NoAuthServer(asyncssh.SSHServer):
+            def begin_auth(self, username: str) -> bool:  # noqa: ARG002
+                return False
+
         if self._server_key:
             key_path = Path(self._server_key)
             if not key_path.exists():
@@ -205,7 +209,7 @@ class SshWsGateway:
         else:
             host_keys = [asyncssh.generate_private_key("ssh-ed25519")]
 
-        async def _process_handler(process: asyncssh.SSHServerProcess) -> None:  # pragma: no cover
+        async def _process_handler(process: asyncssh.SSHServerProcess[bytes]) -> None:  # pragma: no cover
             try:
                 import websockets
 
@@ -223,7 +227,7 @@ class SshWsGateway:
                     process.exit(0)
 
         return await asyncssh.create_server(
-            asyncssh.SSHServer,
+            _NoAuthServer,
             host,
             port,
             server_host_keys=host_keys,

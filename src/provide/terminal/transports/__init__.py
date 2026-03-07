@@ -12,8 +12,8 @@ from provide.terminal.transports.chaos import ChaosTransport
 from provide.terminal.transports.telnet import TelnetClient, TelnetTransport, start_telnet_server
 
 __all__ = [
-    "ConnectionTransport",
     "ChaosTransport",
+    "ConnectionTransport",
     "TelnetClient",
     "TelnetTransport",
     "start_telnet_server",

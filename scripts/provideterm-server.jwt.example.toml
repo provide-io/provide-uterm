@@ -1,0 +1,74 @@
+[server]
+host = "127.0.0.1"
+port = 8780
+public_base_url = "http://127.0.0.1:8780"
+title = "provide-terminal-server"
+
+[auth]
+mode = "jwt"
+# Required in jwt mode.
+jwt_issuer = "https://issuer.example.com"
+jwt_audience = "provide-terminal-server"
+# Use exactly one of these in production:
+# jwt_jwks_url = "https://issuer.example.com/.well-known/jwks.json"
+jwt_public_key_pem = """
+-----BEGIN PUBLIC KEY-----
+REPLACE_WITH_REAL_PUBLIC_KEY
+-----END PUBLIC KEY-----
+"""
+jwt_algorithms = ["RS256"]
+clock_skew_seconds = 15
+jwt_roles_claim = "roles"
+jwt_scopes_claim = "scope"
+# Required for hosted runtime workers so /ws/worker/... can authenticate.
+# Generate a dedicated service token with admin role for the runtime process.
+worker_bearer_token = "REPLACE_WITH_RUNTIME_WORKER_JWT"
+
+[ui]
+app_path = "/app"
+assets_path = "/_terminal"
+
+[recording]
+enabled_by_default = false
+directory = ".uterm-recordings"
+
+[[sessions]]
+session_id = "demo-session"
+display_name = "Interactive Demo Session"
+connector_type = "demo"
+input_mode = "open"
+auto_start = true
+owner = "ops@example.com"
+visibility = "operator"
+tags = ["demo", "reference"]
+
+[[sessions]]
+session_id = "public-bbs"
+display_name = "Public Telnet BBS"
+connector_type = "telnet"
+input_mode = "hijack"
+auto_start = false
+host = "bbs.example.com"
+port = 23
+visibility = "public"
+tags = ["telnet", "public"]
+
+[[sessions]]
+session_id = "ops-shell"
+display_name = "Operations SSH Shell"
+connector_type = "ssh"
+input_mode = "hijack"
+auto_start = false
+host = "shell.example.com"
+port = 22
+username = "operator"
+owner = "ops@example.com"
+visibility = "private"
+# Choose one auth method:
+# password = "replace-me"
+# client_key_path = "/abs/path/to/id_ed25519"
+# client_key_data = """-----BEGIN OPENSSH PRIVATE KEY-----
+# ...
+# -----END OPENSSH PRIVATE KEY-----"""
+# known_hosts = "/abs/path/to/known_hosts"
+tags = ["ssh", "ops"]

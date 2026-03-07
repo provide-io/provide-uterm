@@ -74,7 +74,7 @@ app.include_router(create_ws_terminal_router(my_handler))
 
 ## Hijack Widget
 
-The hijack system lets a human operator observe and take over a bot's terminal
+The hijack system lets a human operator observe and take over a worker's terminal
 session in real time.
 
 ### Backend — TermHub
@@ -82,14 +82,32 @@ session in real time.
 ```python
 from provide.terminal.hijack.hub import TermHub
 
-hub = TermHub(on_hijack_changed=lambda bot_id, enabled, owner: print(bot_id, enabled))
+def resolve_browser_role(ws, worker_id):
+    user = getattr(ws.state, "user", None)
+    if getattr(user, "is_admin", False):
+        return "admin"
+    if getattr(user, "can_operate_terminals", False):
+        return "operator"
+    return "viewer"
+
+hub = TermHub(
+    on_hijack_changed=lambda worker_id, enabled, owner: print(worker_id, enabled),
+    resolve_browser_role=resolve_browser_role,
+)
 app.include_router(hub.create_router())
 ```
 
 This adds:
-- `GET  /ws/bot/{bot_id}/term` — browser observer/hijack WebSocket
-- `GET  /ws/worker/{bot_id}/term` — bot worker WebSocket
+- `GET  /ws/browser/{worker_id}/term` — browser observer/hijack WebSocket
+- `GET  /ws/worker/{worker_id}/term` — worker WebSocket
 - REST endpoints for session management
+
+Browser roles are resolved on the server. The browser WebSocket does not accept
+a client-selected role parameter; without a resolver, browser sessions default
+to read-only (`viewer`).
+
+If `resolve_browser_role` raises an exception, the browser WebSocket is rejected
+and closed. Resolver failures do not fall back to `viewer`.
 
 ### Frontend — ProvideHijack
 
@@ -100,7 +118,7 @@ Embed the hijack control widget in any HTML page:
 <script src="/static/hijack.js"></script>
 <script>
   new ProvideHijack(document.getElementById('hijack-container'), {
-    botId: 'mybot',           // connects to /ws/bot/mybot/term
+    workerId: 'myworker',     // connects to /ws/browser/myworker/term
     mobileKeys: true,         // show collapsible special-key toolbar when hijacked
     heartbeatInterval: 5000,  // ms between heartbeats while owner
   });
@@ -109,6 +127,123 @@ Embed the hijack control widget in any HTML page:
 
 Mount the bundled frontend files via FastAPI's `StaticFiles` or use
 `mount_terminal_ui()` which includes `hijack.html`, `hijack.js`, and `hijack.css`.
+
+### Interactive Demo Server
+
+The repo also includes an interactive demo server for manual testing:
+
+```bash
+uv run python scripts/demo_server.py
+```
+
+Then open:
+
+- `http://127.0.0.1:8742/hijack/hijack.html?worker=demo-session`
+
+The built-in demo session is a general-purpose interactive worker rather than a
+static screen. It supports:
+
+- exclusive hijack mode (one browser owns input)
+- shared input mode (multiple browsers can type)
+- free-form text that appends to a live transcript
+- built-in commands: `/help`, `/mode open`, `/mode hijack`, `/clear`, `/status`, `/nick <name>`, `/say <text>`, `/demo`, `/reset`
+
+The demo page includes mode and reset controls backed by example-only HTTP
+endpoints:
+
+- `GET /demo/session/{worker_id}`
+- `POST /demo/session/{worker_id}/mode`
+- `POST /demo/session/{worker_id}/reset`
+
+These demo endpoints exist only for the example server and are not part of the
+library's public API.
+
+### Reference Server
+
+The repo now also includes a standalone reference server application:
+
+```bash
+provideterm-server --config scripts/provideterm-server.example.toml
+```
+
+This is the canonical hosted-app example for the library. It demonstrates:
+
+- named sessions above `TermHub`
+- browser session pages and operator pages
+- server-side role resolution and policy
+- hosted connectors (`demo`, `telnet`, `ssh`)
+- session APIs, mode switching, and optional file-backed recording
+
+Key endpoints:
+
+- `GET /api/health`
+- `GET /api/sessions`
+- `GET /app/` (operator dashboard)
+- `GET /app/session/{session_id}` (end-user page)
+- `GET /app/operator/{session_id}` (operator console)
+
+The example TOML config in [scripts/provideterm-server.example.toml](/REDACTED_ABS_PATH)
+shows the intended reference-implementation structure for server config.
+For production JWT deployments, start from
+[scripts/provideterm-server.jwt.example.toml](/REDACTED_ABS_PATH).
+
+### Auth Runtime Posture
+
+- `default_server_config()` is intentionally local-friendly and uses `auth.mode = "dev"`.
+- Production should run `auth.mode = "jwt"` with:
+  - `jwt_issuer`, `jwt_audience`
+  - `jwt_public_key_pem` or `jwt_jwks_url`
+  - `jwt_algorithms` (for example `["RS256"]`)
+  - `worker_bearer_token` for hosted runtime worker WebSocket authentication
+
+When `auth.mode = "jwt"`, the server fails fast at startup unless:
+- `worker_bearer_token` is set
+- `jwt_algorithms` is non-empty
+- at least one key source is configured (`jwt_public_key_pem` or `jwt_jwks_url`)
+
+### JWT Deployment Runbook
+
+1. Configure JWT trust:
+   - set `jwt_issuer`, `jwt_audience`, `jwt_algorithms`
+   - prefer `jwt_jwks_url` for key rotation without restarts
+2. Configure runtime worker auth:
+   - mint a dedicated service JWT (admin role) for `worker_bearer_token`
+   - scope/TTL this token to server runtime usage only
+3. Set session ownership/visibility:
+   - use `owner` + `visibility` to enforce role + ownership constraints
+4. Validate startup:
+   - `provideterm-server --config scripts/provideterm-server.jwt.example.toml`
+   - run smoke tests against `/api/health`, `/api/sessions`, and browser WS connect
+
+### Key Rotation
+
+- `jwt_jwks_url` mode: rotate signing keys at the IdP, publish new JWKs, then retire old keys after token TTL.
+- `jwt_public_key_pem` mode: deploy new config and restart server(s) in rolling fashion.
+- Rotate `worker_bearer_token` independently from user-facing tokens; keep overlap window short.
+
+### Failure Behavior
+
+- Missing/invalid/expired JWT:
+  - HTTP routes: `401`
+  - WebSocket routes: close with policy violation (`1008`)
+- Authenticated but unauthorized action:
+  - HTTP routes: `403`
+  - Browser WS hijack attempts: explicit error event; no privilege escalation
+- Invalid JWT runtime config:
+  - app startup raises `ValueError` (fail-fast)
+
+For `connector_type = "ssh"`, the session entry can use these auth fields:
+
+- `password` for password authentication
+- `client_key_path` for a private key file path
+- `client_key_data` for inline PEM private key text
+- `client_key` for a single AsyncSSH-compatible key value
+- `client_keys` for multiple keys
+- `known_hosts` to override host-key verification behavior (`null` disables checks for local/dev use)
+
+The SSH connector intentionally skips user SSH config discovery so startup stays
+predictable and fast in the hosted server. If you need key-based auth in config
+without a file path, prefer `client_key_data`.
 
 ### Frontend — ProvideTerminal
 

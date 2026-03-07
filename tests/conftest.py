@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import importlib.resources
+import importlib.util
 import json
 import socket
 import threading
 import time
-from collections.abc import AsyncGenerator, Generator
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
@@ -22,10 +23,32 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from provide.terminal.hijack.hub import TermHub
+from provide.terminal.server import create_server_app, default_server_config
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Generator
 
 # ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
+
+
+def load_demo_server_module() -> Any:
+    """Load scripts/demo_server.py directly so tests do not depend on sys.path packaging."""
+    module_name = "_codex_demo_server_test_module"
+    import sys
+
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "demo_server.py"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load demo server module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture()
@@ -56,7 +79,7 @@ async def live_hub() -> AsyncGenerator[tuple[TermHub, str], None]:
     The server runs as an asyncio task inside the test's event loop so that
     fixtures and tests share the same loop (important for asyncio.Lock sanity).
     """
-    hub = TermHub()
+    hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())
 
@@ -98,7 +121,7 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
     """
     from starlette.staticfiles import StaticFiles
 
-    hub = TermHub()
+    hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
     app = FastAPI()
     app.include_router(hub.create_router())
 
@@ -134,6 +157,74 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
     port: int = server.servers[0].sockets[0].getsockname()[1]
     base_url = f"http://127.0.0.1:{port}"
     yield base_url, hub
+
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
+@pytest.fixture(scope="session")
+def demo_server() -> Generator[str, None, None]:
+    """Session-scoped sync fixture: run the real interactive demo server via uvicorn."""
+    demo_server_module = load_demo_server_module()
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    base_url = f"http://127.0.0.1:{port}"
+    demo_server_module._runtime_base_url = base_url
+    demo_server_module._reset_all_sessions()
+
+    config = uvicorn.Config(demo_server_module.app, host="127.0.0.1", port=port, log_level="critical")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + 10.0
+    while not server.started:
+        if time.monotonic() > deadline:
+            raise RuntimeError("demo_server: uvicorn failed to start within 10 s")
+        time.sleep(0.05)
+
+    worker_deadline = time.monotonic() + 10.0
+    while not demo_server_module._get_or_create_session(demo_server_module._DEFAULT_WORKER_ID).connected:
+        if time.monotonic() > worker_deadline:
+            raise RuntimeError("demo_server: demo worker failed to connect within 10 s")
+        time.sleep(0.05)
+
+    yield base_url
+
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
+@pytest.fixture(scope="session")
+def reference_server() -> Generator[str, None, None]:
+    """Session-scoped sync fixture: run the hosted reference server app."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    base_url = f"http://127.0.0.1:{port}"
+    config = default_server_config()
+    config.auth.mode = "dev"
+    config.server.host = "127.0.0.1"
+    config.server.port = port
+    config.server.public_base_url = base_url
+    config.recording.enabled_by_default = True
+    app = create_server_app(config)
+
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="critical"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + 10.0
+    while not server.started:
+        if time.monotonic() > deadline:
+            raise RuntimeError("reference_server: uvicorn failed to start within 10 s")
+        time.sleep(0.05)
+
+    yield base_url
 
     server.should_exit = True
     thread.join(timeout=5)
