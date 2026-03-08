@@ -12,6 +12,8 @@ import importlib.resources
 import importlib.util
 import json
 import socket
+import socketserver
+import sys
 import threading
 import time
 from pathlib import Path
@@ -21,6 +23,20 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+
+# Ensure this repo's src/provide package wins over sibling workspaces on sys.path.
+_PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
+_PROJECT_SRC_STR = str(_PROJECT_SRC)
+if _PROJECT_SRC_STR in sys.path:
+    sys.path.remove(_PROJECT_SRC_STR)
+sys.path.insert(0, _PROJECT_SRC_STR)
+_loaded_provide = sys.modules.get("provide")
+if _loaded_provide is not None:
+    loaded_path = str(getattr(_loaded_provide, "__file__", ""))
+    if "/provide-terminal/src/provide/" not in loaded_path:
+        for name in list(sys.modules):
+            if name == "provide" or name.startswith("provide."):
+                del sys.modules[name]
 
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.server import create_server_app, default_server_config
@@ -320,3 +336,64 @@ class WorkerController:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=3.0)
+
+
+class _ThreadedEchoServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+
+    def __init__(self, server_address: tuple[str, int], received_chunks: list[bytes]) -> None:
+        self.received_chunks = received_chunks
+        super().__init__(server_address, _EchoTelnetHandler)
+
+
+class _EchoTelnetHandler(socketserver.BaseRequestHandler):
+    def handle(self) -> None:
+        from provide.terminal.transports.telnet_server import _build_telnet_handshake
+
+        server = self.server
+        assert isinstance(server, _ThreadedEchoServer)
+        self.request.sendall(_build_telnet_handshake())
+        self.request.sendall(b"WELCOME FROM TELNET\r\n")
+        while True:
+            data = self.request.recv(4096)
+            if not data:
+                return
+            server.received_chunks.append(data)
+            self.request.sendall(data)
+
+
+@pytest.fixture(scope="session")
+def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
+    """Session-scoped fixture: terminal UI + WS/telnet echo proxy for browser tests."""
+    from provide.terminal.fastapi import WsTerminalProxy, mount_terminal_ui
+
+    received_chunks: list[bytes] = []
+    telnet_server = _ThreadedEchoServer(("127.0.0.1", 0), received_chunks)
+    telnet_thread = threading.Thread(target=telnet_server.serve_forever, daemon=True)
+    telnet_thread.start()
+
+    telnet_port = telnet_server.server_address[1]
+    app = FastAPI()
+    mount_terminal_ui(app)
+    app.include_router(WsTerminalProxy("127.0.0.1", telnet_port).create_router("/ws/raw/demo/term"))
+
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + 10.0
+    while not server.started:
+        if time.monotonic() > deadline:
+            telnet_server.shutdown()
+            telnet_server.server_close()
+            raise RuntimeError("terminal_proxy_server: uvicorn failed to start within 10 s")
+        time.sleep(0.05)
+
+    port = server.servers[0].sockets[0].getsockname()[1]
+    yield f"http://127.0.0.1:{port}", received_chunks
+
+    server.should_exit = True
+    thread.join(timeout=5)
+    telnet_server.shutdown()
+    telnet_server.server_close()
+    telnet_thread.join(timeout=5)

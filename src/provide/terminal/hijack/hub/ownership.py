@@ -10,15 +10,9 @@ Extracted from ``hub.py`` to keep file sizes under 500 LOC.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import TYPE_CHECKING
-
-try:
-    pass
-except ImportError as _e:  # pragma: no cover
-    raise ImportError("fastapi is required for TermHub: pip install 'provide-terminal[websocket]'") from _e
-
-import logging
 
 from provide.terminal.hijack.models import HijackSession
 
@@ -56,6 +50,9 @@ class _HijackOwnershipMixin:
             st = self._workers.get(worker_id)
             if st is None:
                 return False
+            # Fast path: nothing to expire — avoids the time comparisons below.
+            if st.hijack_session is None and st.hijack_owner is None:
+                return False
 
             if st.hijack_session is not None and st.hijack_session.lease_expires_at <= now:
                 st.hijack_session = None
@@ -76,6 +73,9 @@ class _HijackOwnershipMixin:
 
         if not rest_expired and not dashboard_expired:
             return False
+
+        if rest_expired or dashboard_expired:
+            self._metric("hijack_lease_expiries_total")  # type: ignore[attr-defined]
 
         if should_resume:
             # Re-check under lock: a concurrent hijack_acquire may have written a
@@ -178,13 +178,6 @@ class _HijackOwnershipMixin:
             st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
             return st.hijack_owner_expires_at
 
-    async def _is_owner(self, worker_id: str, ws: WebSocket) -> bool:
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None:
-                return False
-            return self._is_dashboard_hijack_active(st) and st.hijack_owner is ws  # type: ignore[attr-defined]
-
     async def _try_release_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
         """Atomically verify ownership and clear it in a single lock block.
 
@@ -201,3 +194,37 @@ class _HijackOwnershipMixin:
             st.hijack_owner_expires_at = None
             rest_active = self._is_rest_session_active(st)  # type: ignore[attr-defined]
         return True, rest_active
+
+    async def _remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
+        """Remove *dead* browser sockets from worker state under lock.
+
+        If the dashboard hijack owner was among the dead sockets, clears the
+        lease and sends a resume control frame (unless a REST session is still
+        active).
+
+        Returns ``True`` if the hijack state changed (owner cleared and resumed).
+        """
+        notify_hijack_off = False
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is not None:
+                for ws in dead:
+                    st.browsers.pop(ws, None)
+                    if self._is_dashboard_hijack_active(st) and st.hijack_owner is ws:  # type: ignore[attr-defined]
+                        st.hijack_owner = None
+                        st.hijack_owner_expires_at = None
+                        notify_hijack_off = not self._is_rest_session_active(st)  # type: ignore[attr-defined]
+        if notify_hijack_off:
+            # Re-check: a concurrent acquire may have written a new session
+            # between the lock release above and _send_worker below.
+            async with self._lock:
+                _st2 = self._workers.get(worker_id)
+                if _st2 is not None and self._is_hijacked(_st2):  # type: ignore[attr-defined]
+                    notify_hijack_off = False
+        if notify_hijack_off:
+            await self._send_worker(  # type: ignore[attr-defined]
+                worker_id,
+                {"type": "control", "action": "resume", "owner": "dead-socket", "lease_s": 0, "ts": time.time()},
+            )
+            self._notify_hijack_changed(worker_id, enabled=False, owner=None)  # type: ignore[attr-defined]
+        return notify_hijack_off

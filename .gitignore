@@ -9,6 +9,10 @@ __pycache__/
 htmlcov/
 coverage.xml
 .tmp-frontend-coverage/
+.tmp-proof-reel/
+.tmp-playwright-videos/
+.uterm-recordings/
+.uterm-recordings-proof/
 
 .hypothesis/
 .worktrees/

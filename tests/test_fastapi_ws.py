@@ -324,29 +324,29 @@ class TestPackageGetattr:
     def test_mount_terminal_ui_accessible(self) -> None:
         import provide.terminal as pkg
 
-        fn = pkg.mount_terminal_ui  # type: ignore[attr-defined]
+        fn = pkg.mount_terminal_ui
         assert callable(fn)
 
     def test_create_ws_terminal_router_accessible(self) -> None:
         import provide.terminal as pkg
 
-        fn = pkg.create_ws_terminal_router  # type: ignore[attr-defined]
+        fn = pkg.create_ws_terminal_router
         assert callable(fn)
 
     def test_ws_terminal_proxy_accessible(self) -> None:
         import provide.terminal as pkg
 
-        cls = pkg.WsTerminalProxy  # type: ignore[attr-defined]
+        cls = pkg.WsTerminalProxy
         assert isinstance(cls, type)
 
     def test_telnet_ws_gateway_accessible(self) -> None:
         import provide.terminal as pkg
 
-        cls = pkg.TelnetWsGateway  # type: ignore[attr-defined]
+        cls = pkg.TelnetWsGateway
         assert isinstance(cls, type)
 
     def test_unknown_attribute_raises(self) -> None:
         import provide.terminal as pkg
 
         with pytest.raises(AttributeError, match="no attribute"):
-            _ = pkg.nonexistent_symbol  # type: ignore[attr-defined]
+            _ = pkg.nonexistent_symbol

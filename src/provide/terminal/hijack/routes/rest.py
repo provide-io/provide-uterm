@@ -130,6 +130,8 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 now=now,
             )
             if not acquired:
+                if err == "already_hijacked":
+                    hub._metric("hijack_conflicts_total")
                 # session_committed=True prevents the finally block from
                 # sending a second resume.  If err=="no_worker" (worker
                 # disconnected between _send_worker and the lock), _send_worker
@@ -154,6 +156,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 error_msg = "No worker connected." if err == "no_worker" else "Worker is already hijacked."
                 return JSONResponse({"error": error_msg}, status_code=409)
             session_committed = True
+            hub._metric("hijack_acquires_total")
             hub._notify_hijack_changed(worker_id, enabled=True, owner=request.owner)
             await hub._append_event(
                 worker_id, "hijack_acquired", {"hijack_id": hijack_id, "owner": request.owner, "lease_s": lease_s}
@@ -372,6 +375,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         if not ok:
             return JSONResponse({"error": "No worker connected for this worker."}, status_code=409)
         await hub._append_event(worker_id, "hijack_step", {"hijack_id": hijack_id})
+        hub._metric("hijack_steps_total")
         async with hub._lock:
             st = hub._workers.get(worker_id)
             fresh_expires = (
@@ -407,6 +411,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 worker_id, {"type": "control", "action": "resume", "owner": hs.owner, "lease_s": 0, "ts": time.time()}
             )
             hub._notify_hijack_changed(worker_id, enabled=False, owner=None)
+        hub._metric("hijack_releases_total")
         await hub._append_event(worker_id, "hijack_released", {"hijack_id": hijack_id, "owner": hs.owner})
         await hub._broadcast_hijack_state(worker_id)
         await hub._prune_if_idle(worker_id)

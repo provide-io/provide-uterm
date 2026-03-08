@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,7 +39,7 @@ class DemoSessionConnector(SessionConnector):
         self._nickname = "user"
         self._last_command: str | None = None
         self._banner = "Ready. Type /help for commands."
-        self._transcript: list[_Entry] = []
+        self._transcript: deque[_Entry] = deque(maxlen=10)
         self._reset_state()
 
     def _reset_state(self) -> None:
@@ -47,10 +48,13 @@ class DemoSessionConnector(SessionConnector):
         self._nickname = "user"
         self._last_command = None
         self._banner = "Ready. Type /help for commands."
-        self._transcript = [
-            _Entry("system", "Session online.", time.time()),
-            _Entry("session", "Use /help, /mode open, /mode hijack, /clear, /status, /reset.", time.time()),
-        ]
+        self._transcript = deque(
+            [
+                _Entry("system", "Session online.", time.time()),
+                _Entry("session", "Use /help, /mode open, /mode hijack, /clear, /status, /reset.", time.time()),
+            ],
+            maxlen=10,
+        )
 
     @staticmethod
     def _normalize_input(data: str) -> str:
@@ -58,7 +62,6 @@ class DemoSessionConnector(SessionConnector):
 
     def _append(self, speaker: str, text: str) -> None:
         self._transcript.append(_Entry(speaker, text, time.time()))
-        self._transcript = self._transcript[-10:]
 
     def _mode_label(self) -> str:
         return "Shared input" if self._input_mode == "open" else "Exclusive hijack"
@@ -80,7 +83,7 @@ class DemoSessionConnector(SessionConnector):
             "",
             "\x1b[1mTranscript\x1b[0m",
         ]
-        lines.extend(f"{entry.speaker:>7}: {entry.text}" for entry in self._transcript[-10:])
+        lines.extend(f"{entry.speaker:>7}: {entry.text}" for entry in self._transcript)
         lines.append("")
         lines.append(self._prompt())
         return "\n".join(lines[-_ROWS:])
@@ -136,7 +139,7 @@ class DemoSessionConnector(SessionConnector):
                 )
                 return [self._snapshot()]
             if command == "/clear":
-                self._transcript = []
+                self._transcript = deque(maxlen=10)
                 self._banner = "Transcript cleared."
                 return [self._snapshot()]
             if command == "/mode":

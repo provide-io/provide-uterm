@@ -1,0 +1,45 @@
+name: Release Governance
+
+on:
+  push:
+    branches:
+      - main
+      - "rc/**"
+  pull_request:
+    branches:
+      - main
+      - "rc/**"
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Install governance tools
+        run: uv pip install pip-audit cyclonedx-bom
+
+      - name: Run release governance checks
+        run: ./scripts/release_governance_check.sh artifacts/release-governance
+
+      - name: Upload governance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-governance
+          path: artifacts/release-governance

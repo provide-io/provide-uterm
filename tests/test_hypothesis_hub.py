@@ -61,8 +61,7 @@ class TermHubStateMachine(RuleBasedStateMachine):
         self._worker_ws: dict[str, AsyncMock] = {}
 
     def _run(self, coro: Any) -> Any:
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(coro)
+        return asyncio.run(coro)
 
     # -- Rules ---------------------------------------------------------------
 

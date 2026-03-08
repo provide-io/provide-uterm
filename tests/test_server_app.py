@@ -90,6 +90,11 @@ class TestReferenceServerApp:
             health = await http.get("/api/health")
             assert health.status_code == 200
             assert health.json()["ok"] is True
+            assert health.headers.get("x-request-id")
+
+            metrics = await http.get("/api/metrics")
+            assert metrics.status_code == 200
+            assert metrics.json()["metrics"]["http_requests_total"] >= 1
 
             sessions = await http.get("/api/sessions")
             assert sessions.status_code == 200
@@ -131,6 +136,35 @@ class TestReferenceServerApp:
             assert hello is not None
             assert hello["worker_online"] is True
             assert hello["input_mode"] == "open"
+
+    async def test_metrics_include_ws_disconnect_and_hijack_counters(self, live_reference_server: str) -> None:
+        await self._wait_for_connected(live_reference_server, "demo-session")
+        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            before = (await http.get("/api/metrics")).json()["metrics"]
+            base_disconnect = int(before.get("ws_disconnect_browser_total", 0))
+            assert "hijack_conflicts_total" in before
+            assert "hijack_lease_expiries_total" in before
+        async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/demo-session/term")) as browser:
+            assert await _drain_until(browser, "hello", timeout=5.0) is not None
+        await asyncio.sleep(0.15)
+        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            after = (await http.get("/api/metrics")).json()["metrics"]
+            assert int(after.get("ws_disconnect_browser_total", 0)) >= base_disconnect + 1
+
+    async def test_hijack_conflict_counter_increments_on_second_acquire(self, live_reference_server: str) -> None:
+        await self._wait_for_connected(live_reference_server, "demo-session")
+        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            before = (await http.get("/api/metrics")).json()["metrics"]
+            base_conflicts = int(before.get("hijack_conflicts_total", 0))
+            first = await http.post("/worker/demo-session/hijack/acquire", json={"owner": "test-a", "lease_s": 60})
+            assert first.status_code == 200
+            second = await http.post("/worker/demo-session/hijack/acquire", json={"owner": "test-b", "lease_s": 60})
+            assert second.status_code == 409
+            hid = first.json()["hijack_id"]
+            release = await http.post(f"/worker/demo-session/hijack/{hid}/release")
+            assert release.status_code == 200
+            after = (await http.get("/api/metrics")).json()["metrics"]
+            assert int(after.get("hijack_conflicts_total", 0)) >= base_conflicts + 1
 
     async def test_mode_changes_and_create_session_flow(self, live_reference_server: str) -> None:
         async with httpx.AsyncClient(base_url=live_reference_server) as http:

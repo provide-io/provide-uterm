@@ -53,19 +53,22 @@ def _status_text(page: Page) -> str:
     return page.locator("[id$='-statustext']").text_content() or ""
 
 
-def _hijack_btn(page: Page):
+from playwright.sync_api import Locator
+
+
+def _hijack_btn(page: Page) -> Locator:
     return page.get_by_role("button", name="Hijack")
 
 
-def _step_btn(page: Page):
+def _step_btn(page: Page) -> Locator:
     return page.get_by_role("button", name="Step")
 
 
-def _release_btn(page: Page):
+def _release_btn(page: Page) -> Locator:
     return page.get_by_role("button", name="Release")
 
 
-def _resync_btn(page: Page):
+def _resync_btn(page: Page) -> Locator:
     return page.get_by_role("button", name="⟳ Resync")
 
 

@@ -72,6 +72,7 @@ class TestWsToTcp:
 
         from asyncio import StreamWriter
         from typing import cast
+
         await _ws_to_tcp(_async_iter(["world"]), cast("StreamWriter", MockWriter()))
         assert written == [b"world"]
         assert drained
@@ -88,6 +89,7 @@ class TestWsToTcp:
 
         from asyncio import StreamWriter
         from typing import cast
+
         await _ws_to_tcp(_async_iter([b"\xff\xfe"]), cast("StreamWriter", MockWriter()))
         assert written == [b"\xff\xfe"]
 
@@ -133,6 +135,7 @@ class TestTelnetWsGateway:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
+
             assert isinstance(tcp_srv, Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
@@ -153,6 +156,7 @@ class TestTelnetWsGateway:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
+
             assert isinstance(tcp_srv, Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
@@ -175,6 +179,7 @@ class TestTelnetWsGateway:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
+
             assert isinstance(tcp_srv, Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
@@ -231,6 +236,7 @@ class TestPipeWs:
             # Should complete without hanging
             from asyncio import StreamWriter
             from typing import cast
+
             await asyncio.wait_for(
                 _pipe_ws(reader, cast("StreamWriter", MockWriter()), f"ws://127.0.0.1:{ws_port}"),
                 timeout=3.0,
@@ -288,6 +294,7 @@ class TestSshWsGatewayStart:
         gw = SshWsGateway("wss://example.com/ws", server_key=str(key_path))
         srv = await gw.start("127.0.0.1", 0)
         import asyncssh
+
         assert isinstance(srv, asyncssh.SSHAcceptor)
         try:
             pass

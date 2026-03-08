@@ -424,6 +424,10 @@ class TelnetTransport:
             await self._writer.drain()
 
     async def _send_will(self, opt: int) -> None:
+        # NOTE: _negotiate tasks run concurrently; two tasks could both pass the
+        # `not in` check before either adds to the set (TOCTOU).  In practice
+        # this only occurs if the server sends duplicate DO/WILL for the same
+        # option, which is a protocol violation.  A duplicate WILL is harmless.
         if opt not in self._negotiated["will"]:
             await self._send_cmd(WILL, opt)
             self._negotiated["will"].add(opt)

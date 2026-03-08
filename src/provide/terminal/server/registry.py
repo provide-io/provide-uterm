@@ -55,29 +55,7 @@ class SessionRegistry:
         return runtime
 
     async def _force_release_hijack(self, session_id: str) -> bool:
-        owner = "server-mode-switch"
-        had_hijack = False
-        async with self._hub._lock:
-            st = self._hub._workers.get(session_id)
-            if st is None:
-                return False
-            if st.hijack_session is not None:
-                owner = st.hijack_session.owner
-                st.hijack_session = None
-                had_hijack = True
-            if self._hub._is_dashboard_hijack_active(st):
-                st.hijack_owner = None
-                st.hijack_owner_expires_at = None
-                had_hijack = True
-        if not had_hijack:
-            return False
-        await self._hub._send_worker(
-            session_id,
-            {"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": time.time()},
-        )
-        self._hub._notify_hijack_changed(session_id, enabled=False, owner=None)
-        await self._hub._broadcast_hijack_state(session_id)
-        return True
+        return await self._hub.force_release_hijack(session_id)
 
     async def start_auto_start_sessions(self) -> None:
         for session in list(self._sessions.values()):
@@ -92,6 +70,12 @@ class SessionRegistry:
         async with self._lock:
             sessions = list(self._sessions.values())
         return [self._runtime_for(session).status() for session in sessions]
+
+    async def list_sessions_with_definitions(self) -> list[tuple[SessionRuntimeStatus, SessionDefinition]]:
+        """Return (status, definition) pairs in a single lock acquisition."""
+        async with self._lock:
+            sessions = list(self._sessions.values())
+        return [(self._runtime_for(session).status(), session) for session in sessions]
 
     async def get_session(self, session_id: str) -> SessionRuntimeStatus:
         async with self._lock:
@@ -116,7 +100,6 @@ class SessionRegistry:
             ),
             owner=(None if payload.get("owner") is None else str(payload.get("owner"))),
             visibility=str(payload.get("visibility", "public")),  # type: ignore[arg-type]
-            created_at=time.time(),
             last_active_at=time.time(),
         )
         async with self._lock:
@@ -247,19 +230,45 @@ class SessionRegistry:
         path = await self.recording_path(session_id)
         if path is None or not path.exists():
             return []
-        entries: list[dict[str, Any]] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
         normalized_limit = max(1, min(limit, 500))
         normalized_event = None if event is None else str(event).strip()
-        if normalized_event:
-            entries = [entry for entry in entries if str(entry.get("event", "")) == normalized_event]
-        if offset is None:
-            return entries[-normalized_limit:]
-        normalized_offset = max(0, offset)
-        return entries[normalized_offset : normalized_offset + normalized_limit]
+        normalized_offset = max(0, offset) if offset is not None else None
+        # Stream line-by-line to avoid loading the entire file into memory.
+        # When offset is given, skip accepted entries until the offset is reached,
+        # then collect up to limit — avoiding O(N) in-memory accumulation.
+        if normalized_offset is not None:
+            entries: list[dict[str, Any]] = []
+            skipped = 0
+            with path.open(encoding="utf-8") as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if normalized_event and str(entry.get("event", "")) != normalized_event:
+                        continue
+                    if skipped < normalized_offset:
+                        skipped += 1
+                        continue
+                    entries.append(entry)
+                    if len(entries) >= normalized_limit:
+                        break
+            return entries
+        # No offset: collect last `limit` entries efficiently with a fixed-size buffer.
+        from collections import deque as _deque
+
+        tail: _deque[dict[str, Any]] = _deque(maxlen=normalized_limit)
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if normalized_event and str(entry.get("event", "")) != normalized_event:
+                    continue
+                tail.append(entry)
+        return list(tail)

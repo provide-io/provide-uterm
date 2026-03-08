@@ -22,8 +22,9 @@ class LeaseRecord:
 class SqliteStateStore:
     """Durable Object SQLite-backed store for session state."""
 
-    def __init__(self, exec_sql: SqlExecutor):
+    def __init__(self, exec_sql: SqlExecutor, max_events_per_worker: int = 2000):
         self._exec = exec_sql
+        self._max_events = max(1, max_events_per_worker)
 
     def _run(self, sql: str, *params: object) -> Any:
         if not params:
@@ -158,6 +159,16 @@ class SqliteStateStore:
             seq,
             ts,
         )
+        # Prune oldest rows so the table never exceeds max_events_per_worker.
+        self._run(
+            """
+            DELETE FROM session_events
+            WHERE worker_id = ? AND seq <= ? - ?
+            """,
+            worker_id,
+            seq,
+            self._max_events,
+        )
         return {"seq": seq, "ts": ts, "type": event_type, "data": payload}
 
     def current_event_seq(self, worker_id: str) -> int:
@@ -242,9 +253,12 @@ class SqliteStateStore:
     @staticmethod
     def _get(row: Any, idx: int) -> Any:
         if isinstance(row, dict):
-            return list(row.values())[idx]
+            values = list(row.values())
+            return values[idx] if idx < len(values) else None
         if hasattr(row, "keys") and hasattr(row, "__getitem__"):
             keys = list(row.keys())
+            if idx >= len(keys):
+                return None
             return row[keys[idx]]
         if hasattr(row, "to_py"):
             try:

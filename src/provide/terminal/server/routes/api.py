@@ -50,19 +50,19 @@ def create_api_router() -> APIRouter:
     async def health() -> dict[str, object]:
         return {"ok": True, "service": "provideterm-server"}
 
+    @router.get("/metrics")
+    async def metrics(request: Request) -> dict[str, object]:
+        payload = getattr(request.app.state, "uterm_metrics", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        return {"metrics": payload}
+
     @router.get("/sessions")
     async def list_sessions(request: Request) -> list[dict[str, Any]]:
         principal = _principal(request)
         authz = _authz(request)
-        sessions = await _registry(request).list_sessions()
-        visible: list[dict[str, Any]] = []
-        for status in sessions:
-            definition = await _registry(request).get_definition(status.session_id)
-            if definition is None:
-                continue
-            if authz.can_read_session(principal, definition):
-                visible.append(model_dump(status))
-        return visible
+        pairs = await _registry(request).list_sessions_with_definitions()
+        return [model_dump(status) for status, definition in pairs if authz.can_read_session(principal, definition)]
 
     @router.post("/sessions")
     async def create_session(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
@@ -129,6 +129,8 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
+        # Disconnect is intentionally gated on "connect" so operators who can
+        # start sessions can also stop them (symmetric lifecycle control).
         if not authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         session = await _registry(request).stop_session(session_id)
@@ -139,6 +141,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
+        # Same lifecycle symmetry as disconnect above.
         if not authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         session = await _registry(request).restart_session(session_id)

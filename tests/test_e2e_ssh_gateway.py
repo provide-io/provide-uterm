@@ -303,12 +303,12 @@ class TestSshWsGatewayRealConnections:
 
 class TestSshWsGatewayStart:
     async def test_start_ephemeral_host_key(self) -> None:
+        import asyncssh
+
         from provide.terminal.gateway import SshWsGateway
 
         gw = SshWsGateway("wss://unreachable.invalid/ws")
         srv = await gw.start("127.0.0.1", 0)
-        import asyncssh
-
         assert isinstance(srv, asyncssh.SSHAcceptor)
         try:
             pass

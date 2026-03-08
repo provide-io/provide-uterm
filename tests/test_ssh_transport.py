@@ -37,8 +37,7 @@ class MockStdout:
 
 from typing import TYPE_CHECKING, cast
 
-if TYPE_CHECKING:
-    import asyncssh
+import asyncssh
 
 
 class MockProcess:

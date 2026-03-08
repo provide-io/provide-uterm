@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "rc/**"
+  pull_request:
+    branches:
+      - main
+      - "rc/**"
+
+jobs:
+  quality-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Install Playwright browser
+        run: uv run playwright install chromium
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy
+        run: uv run mypy src/
+
+      - name: Ty
+        run: uv run ty check src/
+
+      - name: Bandit
+        run: uv run bandit -r src/ -ll
+
+      - name: Tests (repo)
+        run: uv run pytest -q
+
+      - name: Tests (cloudflare package)
+        run: uv run pytest -q packages/provide-terminal-cloudflare/tests
+
+      - name: Verify package artifacts
+        run: uv run python scripts/verify_package_artifacts.py

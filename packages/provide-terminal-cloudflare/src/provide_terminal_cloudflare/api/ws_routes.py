@@ -1,3 +1,17 @@
+"""Browser and worker WebSocket message dispatch for the Cloudflare backend.
+
+Protocol note — CF vs FastAPI divergence
+-----------------------------------------
+The main FastAPI package (TermHub) supports the full protocol: open input mode,
+viewer/operator/admin roles, browser-WS hijack negotiation, prompt guards, and
+per-browser rate limiting.
+
+This CF package is a subset: hijack control is REST-only
+(`acquire`/`heartbeat`/`release`/`step`/`send`) and advertised via the WS
+`hello.capabilities` handshake (`hijack_control="rest"`). WS-level hijack
+frames are rejected with `use_rest_hijack_api`.
+"""
+
 from __future__ import annotations
 
 try:
@@ -27,7 +41,9 @@ async def handle_socket_message(runtime: object, ws: object, raw: str, *, is_wor
         await runtime.broadcast_worker_frame(frame)
         return
 
-    if frame.get("type") == "input":
+    frame_type = frame.get("type")
+
+    if frame_type == "input":
         active = runtime.hijack.session
         if active is None:
             await runtime.send_ws(ws, {"type": "error", "message": "not_hijacked"})
@@ -36,3 +52,7 @@ async def handle_socket_message(runtime: object, ws: object, raw: str, *, is_wor
             await runtime.send_ws(ws, {"type": "error", "message": "not_owner"})
             return
         await runtime.push_worker_input(str(frame.get("data", "")))
+    elif frame_type in {"hijack_request", "hijack_release", "hijack_step"}:
+        # CF backend: hijack is REST-only. Inform the client rather than silently dropping.
+        await runtime.send_ws(ws, {"type": "error", "message": "use_rest_hijack_api"})
+    # heartbeat / ping: keep-alive frames, no response required.

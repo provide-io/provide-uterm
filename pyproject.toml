@@ -32,7 +32,12 @@ provideterm-server = "provide.terminal.server.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"provide.terminal" = ["frontend/*"]
+"provide.terminal" = [
+    "frontend/*",
+    "frontend/app/*.js",
+    "frontend/app/views/*.js",
+    "frontend/app/widgets/*.js",
+]
 
 [dependency-groups]
 dev = [
@@ -72,6 +77,12 @@ addopts = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "packages/provide-terminal-cloudflare/python_modules",
+]
 
 [tool.ruff.lint]
 select = [
@@ -102,7 +113,8 @@ ignore = ["E501", "S104", "S112", "S311"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "RUF022"]
-"tests/**/*.py" = ["E402", "B905", "S101", "S110", "ARG", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+"tests/**/*.py" = ["E402", "B905", "S101", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+"packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.coverage.run]
 source = ["provide"]
@@ -136,6 +148,13 @@ python-version = "3.11"
 [tool.codespell]
 skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans"
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "packages/provide-terminal-cloudflare/python_modules",
+    "packages/provide-terminal-cloudflare/node_modules",
+]
 
 [tool.uv.workspace]
 members = [

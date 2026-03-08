@@ -126,6 +126,8 @@ def test_jwt_mode_ignores_cookie_and_role_header_escalation_for_ws() -> None:
             assert hello["type"] == "hello"
             assert hello["role"] == "viewer"
             assert hello["can_hijack"] is False
+            assert hello["hijack_control"] == "ws"
+            assert hello["hijack_step_supported"] is True
 
 
 def test_jwt_api_enforces_role_and_ownership() -> None:
@@ -193,6 +195,20 @@ def test_replay_page_honors_custom_app_path() -> None:
 
     assert replay.status_code == 200
     assert '"app_path": "/ops"' in replay.text
+
+
+def test_page_routes_set_explicit_cookie_security_flags() -> None:
+    config = default_server_config()
+    app = create_server_app(config)
+
+    with TestClient(app) as client:
+        response = client.get("/app/", headers={"X-Forwarded-Proto": "https"})
+
+    assert response.status_code == 200
+    set_cookie = ",".join(response.headers.get_list("set-cookie")).lower()
+    assert "httponly" in set_cookie
+    assert "samesite=lax" in set_cookie
+    assert "secure" in set_cookie
 
 
 def test_compiled_frontend_views_escape_dynamic_values() -> None:

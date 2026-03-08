@@ -22,11 +22,19 @@ _WORKER_ROUTE_PATTERNS = (
     re.compile(r"^/ws/raw/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$"),
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/hijack(?:/.*)?$"),
 )
+_STATIC_ASSET_PATH = re.compile(r"^/[a-zA-Z0-9._/-]+\.(?:html|css|js)$")
 
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        config = CloudflareConfig.from_env(self.env)
+        if not hasattr(self, "_config"):
+            # `Default` is a stateless Worker (not a Durable Object), so each
+            # isolate instance is reused across multiple requests within the same
+            # V8 isolate lifetime.  This guard caches config per-isolate to avoid
+            # re-reading env vars on every request; it does NOT persist across
+            # isolate restarts or across different Workers instances.
+            self._config = CloudflareConfig.from_env(self.env)
+        config = self._config
         path = urlparse(str(request.url)).path
 
         if path == "/api/health":
@@ -40,10 +48,14 @@ class Default(WorkerEntrypoint):
 
         if path.startswith("/assets/"):
             return serve_asset(path.removeprefix("/assets/"))
+        if _STATIC_ASSET_PATH.match(path):
+            return serve_asset(path.removeprefix("/"))
 
         worker_id = _extract_worker_id(path)
         if worker_id is None:
-            if path in {"/", "/app", "/app/"}:
+            if path in {"/app", "/app/"}:
+                return serve_asset("terminal.html")
+            if path == "/":
                 return serve_asset("hijack.html")
             return json_response({"error": "not_found", "path": path}, status=404)
 

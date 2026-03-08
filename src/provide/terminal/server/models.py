@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TypeAlias
@@ -73,7 +74,7 @@ class SessionDefinition:
     auto_start: bool = True
     tags: list[str] = field(default_factory=list)
     recording_enabled: bool | None = None
-    created_at: float | None = None
+    created_at: float = field(default_factory=time.time)
     last_active_at: float | None = None
     owner: str | None = None
     visibility: Literal["public", "operator", "private"] = "public"

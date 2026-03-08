@@ -16,6 +16,18 @@ _MIME = {
 
 def serve_asset(path: str) -> Response:
     rel = path.lstrip("/")
+    if ".." in rel.split("/"):
+        return Response("forbidden", status=403, headers={"content-type": "text/plain"})
+    try:
+        local_root = importlib.resources.files("provide_terminal_cloudflare.ui") / "static"
+        local_target = local_root / rel
+        if local_target.is_file():
+            suffix = local_target.suffix.lower()
+            mime = _MIME.get(suffix, "application/octet-stream")
+            return Response(local_target.read_text(encoding="utf-8"), status=200, headers={"content-type": mime})
+    except ModuleNotFoundError:
+        pass
+
     try:
         frontend_root = importlib.resources.files("provide.terminal") / "frontend"
     except ModuleNotFoundError:

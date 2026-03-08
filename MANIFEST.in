@@ -1,0 +1,8 @@
+recursive-include src/undef/terminal/frontend *
+recursive-include src/undef/terminal/frontend-src *
+prune .uterm-recordings
+prune .uterm-recordings-proof
+prune .tmp-proof-reel
+prune .tmp-playwright-videos
+prune .tmp-frontend-coverage
+global-exclude *.jsonl

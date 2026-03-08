@@ -90,6 +90,9 @@ class AuthorizationService:
             return False
         if self.is_admin(principal):
             return True
+        # Sessions without an explicit owner are system-managed and treated as
+        # admin-only for mutation.  Non-admin principals can only mutate sessions
+        # they own (i.e. sessions they created with their subject_id as owner).
         if session.owner is None:
             return False
         return self.is_owner(principal, session)

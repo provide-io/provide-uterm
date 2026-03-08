@@ -39,6 +39,12 @@ class HijackCoordinator:
         return self._active_session(time.time())
 
     def acquire(self, owner: str, lease_s: int, *, now: float | None = None) -> AcquireResult:
+        """Acquire or renew a hijack lease.
+
+        If the same *owner* already holds the lease, the lease is renewed in-place
+        (keeping the existing ``hijack_id``) rather than creating a new session.
+        A different owner while a lease is active returns ``ok=False``.
+        """
         now_ts = time.time() if now is None else now
         active = self._active_session(now_ts)
         if active is not None and active.owner != owner:

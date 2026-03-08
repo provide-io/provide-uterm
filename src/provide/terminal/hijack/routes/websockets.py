@@ -24,8 +24,9 @@ except ImportError as _e:  # pragma: no cover
 
 import logging
 
-from provide.terminal.hijack.models import VALID_ROLES, WorkerTermState, extract_prompt_id
+from provide.terminal.hijack.models import VALID_ROLES, WorkerTermState, _safe_int, extract_prompt_id
 from provide.terminal.hijack.ratelimit import TokenBucket
+from provide.terminal.hijack.routes.browser_handlers import handle_browser_message
 
 if TYPE_CHECKING:
     from provide.terminal.hijack.hub import BrowserRoleResolutionError, TermHub
@@ -36,13 +37,6 @@ logger = logging.getLogger(__name__)
 
 _WORKER_HIJACK_CLEANUP_INTERVAL_S = 1.0
 _BROWSER_HIJACK_CLEANUP_INTERVAL_S = 1.0
-
-
-def _safe_int(val: Any, default: int) -> int:
-    try:
-        return int(default if val is None else val)
-    except (ValueError, TypeError):
-        return default
 
 
 async def _periodic_hijack_cleanup(hub: TermHub, worker_id: str, interval_s: float) -> None:
@@ -177,6 +171,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     st3.hijack_owner = None
                     st3.hijack_owner_expires_at = None
             if should_broadcast_disconnect:
+                hub._metric("ws_disconnect_total")
+                hub._metric("ws_disconnect_worker_total")
                 logger.info("term_worker_disconnected worker_id=%s", worker_id)
                 _broadcast_task = asyncio.create_task(
                     hub._broadcast(
@@ -227,6 +223,12 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     "worker_online": worker_online,
                     "input_mode": input_mode,
                     "role": role,
+                    "hijack_control": "ws",
+                    "hijack_step_supported": True,
+                    "capabilities": {
+                        "hijack_control": "ws",
+                        "hijack_step_supported": True,
+                    },
                 },
                 ensure_ascii=True,
             )
@@ -256,205 +258,15 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     logger.warning("ws_browser_rate_limited worker_id=%s", worker_id)
                     continue
 
-                if mtype == "snapshot_req":
-                    # Touch the lease if this browser is the owner (extends it).
-                    is_owner = await hub._touch_if_owner(worker_id, websocket) is not None
-                    if is_owner:
-                        await hub._request_snapshot(worker_id)
-                    else:
-                        # Non-owner viewers may request snapshots only when no
-                        # hijack is active — forwarding during an active hijack
-                        # disrupts the owner's _wait_for_guard prompt detection.
-                        async with hub._lock:
-                            _st = hub._workers.get(worker_id)
-                            _hijack_active = _st is not None and hub._is_hijacked(_st)
-                        if not _hijack_active:
-                            await hub._request_snapshot(worker_id)
-
-                elif mtype == "analyze_req":
-                    if await hub._touch_if_owner(worker_id, websocket) is not None:
-                        await hub._request_analysis(worker_id)
-
-                elif mtype == "heartbeat":
-                    lease_expires_at = await hub._touch_if_owner(worker_id, websocket)
-                    if lease_expires_at is not None:
-                        await websocket.send_text(
-                            json.dumps(
-                                {"type": "heartbeat_ack", "lease_expires_at": lease_expires_at, "ts": time.time()},
-                                ensure_ascii=True,
-                            )
-                        )
-                        await hub._broadcast_hijack_state(worker_id)
-
-                elif mtype == "hijack_request":
-                    # Only admins can hijack.
-                    if role != "admin":
-                        await websocket.send_text(
-                            json.dumps(
-                                {"type": "error", "message": "Hijack requires admin role."},
-                                ensure_ascii=True,
-                            )
-                        )
-                        continue
-                    # Reject in open mode — no exclusive ownership.
-                    async with hub._lock:
-                        _st_mode = hub._workers.get(worker_id)
-                        _is_open = _st_mode is not None and _st_mode.input_mode == "open"
-                    if _is_open:
-                        await websocket.send_text(
-                            json.dumps(
-                                {"type": "error", "message": "Hijack not available in open input mode."},
-                                ensure_ascii=True,
-                            )
-                        )
-                        continue
-                    # Send pause to the worker *before* writing ownership — mirrors
-                    # REST hijack_acquire so that concurrent acquires see the worker
-                    # as free while the network send is in flight.
-                    pause_sent = await hub._send_worker(
-                        worker_id,
-                        {
-                            "type": "control",
-                            "action": "pause",
-                            "owner": "dashboard",
-                            "lease_s": 0,
-                            "ts": time.time(),
-                        },
-                    )
-                    if not pause_sent:
-                        await websocket.send_text(
-                            json.dumps(
-                                {"type": "error", "message": "No worker connected for this worker."},
-                                ensure_ascii=True,
-                            )
-                        )
-                        await websocket.send_text(
-                            json.dumps(await hub._hijack_state_msg_for(worker_id, websocket), ensure_ascii=True)
-                        )
-                        continue
-                    # Worker is paused — now atomically check-and-set ownership.
-                    acquired, err = await hub._try_acquire_ws_hijack(worker_id, websocket)
-                    if not acquired:
-                        # Compensating resume. Skip for "already_hijacked": set_hijacked
-                        # is a boolean; sending resume would unpause the legitimate
-                        # owner's session (same reasoning as REST hijack_acquire).
-                        if err != "already_hijacked":
-                            await hub._send_worker(
-                                worker_id,
-                                {
-                                    "type": "control",
-                                    "action": "resume",
-                                    "owner": "dashboard",
-                                    "lease_s": 0,
-                                    "ts": time.time(),
-                                },
-                            )
-                        msg_text = (
-                            "No worker connected for this worker."
-                            if err == "no_worker"
-                            else "Already hijacked by another client."
-                        )
-                        await websocket.send_text(json.dumps({"type": "error", "message": msg_text}, ensure_ascii=True))
-                        await websocket.send_text(
-                            json.dumps(await hub._hijack_state_msg_for(worker_id, websocket), ensure_ascii=True)
-                        )
-                        continue
-                    owned_hijack = True
-                    await hub._broadcast_hijack_state(worker_id)
-                    hub._notify_hijack_changed(worker_id, enabled=True, owner="dashboard")
-                    await hub._append_event(worker_id, "hijack_acquired", {"owner": "dashboard_ws"})
-
-                elif mtype == "hijack_step":
-                    if await hub._touch_if_owner(worker_id, websocket) is not None:
-                        ok = await hub._send_worker(
-                            worker_id,
-                            {
-                                "type": "control",
-                                "action": "step",
-                                "owner": "dashboard",
-                                "lease_s": 0,
-                                "ts": time.time(),
-                            },
-                        )
-                        if not ok:
-                            await websocket.send_text(
-                                json.dumps(
-                                    {"type": "error", "message": "No worker connected for this worker."},
-                                    ensure_ascii=True,
-                                )
-                            )
-                        else:
-                            await hub._append_event(worker_id, "hijack_step", {"owner": "dashboard_ws"})
-
-                elif mtype == "hijack_release":
-                    # Atomically check ownership and clear in one lock block to
-                    # prevent a concurrent hijack_request stealing ownership.
-                    # rest_active is captured inside the same lock block to
-                    # avoid a post-release TOCTOU on _is_rest_session_active.
-                    released, rest_active = await hub._try_release_ws_hijack(worker_id, websocket)
-                    if released:
-                        owned_hijack = False
-                        _do_resume = not rest_active
-                        if _do_resume:
-                            # Re-check: a concurrent hijack_acquire may have written
-                            # a new session between _try_release_ws_hijack and here.
-                            async with hub._lock:
-                                _st = hub._workers.get(worker_id)
-                                if _st is not None and hub._is_hijacked(_st):
-                                    _do_resume = False
-                        if _do_resume:
-                            await hub._send_worker(
-                                worker_id,
-                                {
-                                    "type": "control",
-                                    "action": "resume",
-                                    "owner": "dashboard",
-                                    "lease_s": 0,
-                                    "ts": time.time(),
-                                },
-                            )
-                        await hub._broadcast_hijack_state(worker_id)
-                        if _do_resume:
-                            hub._notify_hijack_changed(worker_id, enabled=False, owner=None)
-                        await hub._append_event(worker_id, "hijack_released", {"owner": "dashboard_ws"})
-
-                elif mtype == "ping":
-                    pass  # keepalive — TCP ACK is sufficient, no response needed
-
-                elif mtype == "input":
-                    # In open mode any browser can send; in hijack mode only the owner.
-                    can_send = False
-                    async with hub._lock:
-                        _st_input = hub._workers.get(worker_id)
-                        if _st_input is not None:
-                            can_send = hub._can_send_input(_st_input, websocket)
-                            # Extend hijack lease if this browser is the owner
-                            if hub._is_dashboard_hijack_active(_st_input) and _st_input.hijack_owner is websocket:
-                                _st_input.hijack_owner_expires_at = time.time() + hub._dashboard_hijack_lease_s
-                    if can_send:
-                        data = msg_b.get("data", "")
-                        if data and len(data) > hub.max_input_chars:
-                            await websocket.send_text(
-                                json.dumps({"type": "error", "message": "Input too long."}, ensure_ascii=True)
-                            )
-                        elif data:
-                            ok = await hub._send_worker(worker_id, {"type": "input", "data": data, "ts": time.time()})
-                            if not ok:
-                                await websocket.send_text(
-                                    json.dumps(
-                                        {"type": "error", "message": "Worker connection lost."}, ensure_ascii=True
-                                    )
-                                )
-                            else:
-                                await hub._append_event(
-                                    worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]}
-                                )
+                owned_hijack = await handle_browser_message(hub, websocket, worker_id, role, msg_b, owned_hijack)
 
         except WebSocketDisconnect:
             pass
         except Exception as exc:  # pragma: no cover
             logger.warning("term_browser_ws_error worker_id=%s error=%s", worker_id, exc)
         finally:
+            hub._metric("ws_disconnect_total")
+            hub._metric("ws_disconnect_browser_total")
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
