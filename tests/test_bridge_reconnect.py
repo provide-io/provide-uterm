@@ -183,7 +183,7 @@ class TestReconnectLoop:
         async def _run_with_zero_backoff() -> None:
             """Run _run() but patch the backoff to 0 so the test is fast."""
             original_backoff = TermBridge._RECONNECT_BACKOFF
-            TermBridge._RECONNECT_BACKOFF = (0, 0, 0, 0, 0)  # type: ignore[misc]
+            TermBridge._RECONNECT_BACKOFF = (0, 0, 0, 0, 0)
             try:
                 real_ws_connect = None
                 try:
@@ -195,9 +195,9 @@ class TestReconnectLoop:
                     await bridge._run()
                 finally:
                     if real_ws_connect is not None:
-                        _ws.connect = real_ws_connect  # type: ignore[assignment]
+                        _ws.connect = real_ws_connect
             finally:
-                TermBridge._RECONNECT_BACKOFF = original_backoff  # type: ignore[misc]
+                TermBridge._RECONNECT_BACKOFF = original_backoff
 
         await asyncio.wait_for(_run_with_zero_backoff(), timeout=5.0)
 
@@ -225,14 +225,14 @@ class TestReconnectLoop:
             return _CM()
 
         original_backoff = TermBridge._RECONNECT_BACKOFF
-        TermBridge._RECONNECT_BACKOFF = (0,)  # type: ignore[misc]
+        TermBridge._RECONNECT_BACKOFF = (0,)
         try:
             _ws.connect = _immediate_fail  # type: ignore[assignment]
             bridge._running = True
             await asyncio.wait_for(bridge._run(), timeout=3.0)
         finally:
-            _ws.connect = real_connect  # type: ignore[assignment]
-            TermBridge._RECONNECT_BACKOFF = original_backoff  # type: ignore[misc]
+            _ws.connect = real_connect
+            TermBridge._RECONNECT_BACKOFF = original_backoff
 
         assert not bridge._running
 

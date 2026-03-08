@@ -22,15 +22,18 @@ except Exception:  # pragma: no cover
     class WorkerEntrypoint:  # pragma: no cover
         def __init__(self, *args: Any, **kwargs: Any):
             env = kwargs.get("env")
-            if len(args) >= 1:
-                env = args[-1]
+            if len(args) >= 2:
+                env = args[1]
+            elif len(args) == 1:
+                env = args[0]
             self.env = env
 
     @dataclass(slots=True)
     class Response:  # pragma: no cover
-        body: str
+        body: str | None
         status: int = 200
         headers: dict[str, str] | None = None
+        web_socket: Any | None = None
 
         @classmethod
         def json(cls, data: Any, *, status: int = 200, headers: dict[str, str] | None = None) -> Response:

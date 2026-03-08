@@ -77,6 +77,9 @@ class ProvideHijack {
     this._canHijack = false;
     this._workerOnline = false;
     this._inputMode = 'hijack'; // "hijack" | "open"
+    this._hijackControl = 'ws'; // "ws" | "rest"
+    this._hijackStepSupported = true;
+    this._restHijackId = null;
     this._mobileKeysVisible = false;
     this._root = null;
 
@@ -149,6 +152,36 @@ class ProvideHijack {
     const workerId = encodeURIComponent(this._config.workerId || 'default');
     const prefix = this._config.wsPathPrefix || '/ws/browser';
     return `${proto}//${location.host}${prefix}/${workerId}/term`;
+  }
+
+  _resolveHijackApiBase() {
+    const workerId = encodeURIComponent(this._config.workerId || 'default');
+    return `/worker/${workerId}/hijack`;
+  }
+
+  /**
+   * @param {'acquire'|'heartbeat'|'release'|'step'|'send'} action
+   * @param {Record<string, unknown>} payload
+   * @returns {Promise<Record<string, unknown>|null>}
+   */
+  async _restHijack(action, payload = {}) {
+    const headers = { 'content-type': 'application/json' };
+    const base = this._resolveHijackApiBase();
+    let path = '';
+    if (action === 'acquire') {
+      path = `${base}/acquire`;
+    } else {
+      if (!this._restHijackId) return null;
+      path = `${base}/${encodeURIComponent(this._restHijackId)}/${action}`;
+    }
+    const resp = await fetch(path, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) return null;
+    return /** @type {Record<string, unknown>} */ (await resp.json());
   }
 
   // ── DOM Construction ────────────────────────────────────────────────────────
@@ -258,8 +291,12 @@ class ProvideHijack {
   _startHeartbeat() {
     this._clearHeartbeat();
     this._heartbeatTimer = setInterval(() => {
-      if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
       if (!this._hijackedByMe) return;
+      if (this._hijackControl === 'rest') {
+        this._restHijack('heartbeat', { lease_s: 60 }).catch(() => {});
+        return;
+      }
+      if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
       this._wsSend({ type: 'heartbeat' });
     }, this._config.heartbeatInterval || 5000);
   }
@@ -310,6 +347,9 @@ class ProvideHijack {
       this._canHijack = false;
       this._workerOnline = false;
       this._inputMode = 'hijack';
+      this._hijackControl = 'ws';
+      this._hijackStepSupported = true;
+      this._restHijackId = null;
       this._updateStatus();
       this._updateButtons();
       this._ws = null;
@@ -405,6 +445,9 @@ class ProvideHijack {
         this._hijackedByMe = !!msg.hijacked_by_me;
         this._workerOnline = !!msg.worker_online;
         if (msg.input_mode) this._inputMode = msg.input_mode;
+        this._hijackControl = msg.hijack_control || (msg.capabilities && msg.capabilities.hijack_control) || 'ws';
+        const stepSupported = msg.hijack_step_supported ?? (msg.capabilities && msg.capabilities.hijack_step_supported);
+        this._hijackStepSupported = stepSupported !== false;
         this._updateStatus();
         this._updateButtons();
         break;
@@ -419,6 +462,7 @@ class ProvideHijack {
         // {type, hijacked, owner: "me"|"other"|null, lease_expires_at, input_mode}
         this._hijacked = !!msg.hijacked;
         this._hijackedByMe = msg.owner === 'me';
+        if (!this._hijackedByMe) this._restHijackId = null;
         if (msg.input_mode) this._inputMode = msg.input_mode;
         // Keep the heartbeat interval in sync with ownership.
         if (this._hijackedByMe) {
@@ -515,7 +559,7 @@ class ProvideHijack {
     const isOpen = this._inputMode === 'open';
     const hideHijack = isOpen || !this._canHijack;
     if (hijackBtn)  hijackBtn.disabled  = hideHijack || this._hijacked || !this._workerOnline;
-    if (stepBtn)    stepBtn.disabled    = hideHijack || !this._hijackedByMe;
+    if (stepBtn)    stepBtn.disabled    = hideHijack || !this._hijackedByMe || !this._hijackStepSupported;
     if (releaseBtn) releaseBtn.disabled = hideHijack || !this._hijackedByMe;
     if (resyncBtn)  resyncBtn.disabled  = !this._workerOnline;
     if (analyzeBtn) analyzeBtn.disabled = hideHijack || !this._hijackedByMe;
@@ -538,13 +582,25 @@ class ProvideHijack {
   _bindEvents() {
     this._q('hijack').addEventListener('click', () => {
       if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+      if (this._hijackControl === 'rest') {
+        this._restHijack('acquire', { owner: 'dashboard', lease_s: 60 })
+          .then((data) => {
+            if (data && typeof data.hijack_id === 'string') this._restHijackId = data.hijack_id;
+          })
+          .finally(() => this._wsSend({ type: 'snapshot_req' }));
+        return;
+      }
       this._wsSend({ type: 'hijack_request' });
     });
 
     this._q('step').addEventListener('click', () => {
       if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
       if (!this._hijackedByMe) return;
-      this._wsSend({ type: 'hijack_step' });
+      if (this._hijackControl === 'rest') {
+        this._restHijack('step').catch(() => {});
+      } else {
+        this._wsSend({ type: 'hijack_step' });
+      }
       // Request snapshot + analysis shortly after the worker acts
       for (const ms of [250, 1000]) {
         setTimeout(() => {
@@ -562,6 +618,12 @@ class ProvideHijack {
 
     this._q('release').addEventListener('click', () => {
       if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+      if (this._hijackControl === 'rest') {
+        this._restHijack('release')
+          .then(() => { this._restHijackId = null; })
+          .finally(() => this._wsSend({ type: 'snapshot_req' }));
+        return;
+      }
       this._wsSend({ type: 'hijack_release' });
     });
 

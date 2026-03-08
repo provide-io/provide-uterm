@@ -56,7 +56,8 @@ def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
     telnet_port = telnet_server.server_address[1]
     app = FastAPI()
     mount_terminal_ui(app)
-    app.include_router(WsTerminalProxy("127.0.0.1", telnet_port).create_router("/ws/terminal"))
+    # terminal-page.js resolves to /ws/raw/{workerId}/term (default workerId="demo")
+    app.include_router(WsTerminalProxy("127.0.0.1", telnet_port).create_router("/ws/raw/demo/term"))
 
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical"))
     thread = threading.Thread(target=server.run, daemon=True)

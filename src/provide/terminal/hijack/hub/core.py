@@ -19,6 +19,7 @@ import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from typing import Any
 
 try:
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Callback: (worker_id, is_hijacked, owner_or_None)
 HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
 BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]
+MetricCallback = Callable[[str, int], None]
 
 
 class BrowserRoleResolutionError(RuntimeError):
@@ -56,6 +58,7 @@ class TermHub(_HijackOwnershipMixin):
     def __init__(
         self,
         on_hijack_changed: HijackStateCallback | None = None,
+        on_metric: MetricCallback | None = None,
         dashboard_hijack_lease_s: int = 45,
         *,
         resolve_browser_role: BrowserRoleResolver | None = None,
@@ -66,11 +69,21 @@ class TermHub(_HijackOwnershipMixin):
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
         self._on_hijack_changed = on_hijack_changed
+        self._on_metric = on_metric
         self._resolve_browser_role = resolve_browser_role
         self._dashboard_hijack_lease_s = max(1, min(int(dashboard_hijack_lease_s), 600))
         self.max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self.max_input_chars = max(100, int(max_input_chars))
         self.browser_rate_limit_per_sec = float(browser_rate_limit_per_sec)
+
+    def _metric(self, name: str, value: int = 1) -> None:
+        callback = self._on_metric
+        if callback is None:
+            return
+        try:
+            callback(name, int(value))
+        except Exception as exc:  # pragma: no cover - defensive only
+            logger.debug("metric_callback_failed metric=%s error=%s", name, exc)
 
     @staticmethod
     def _clamp_lease(lease_s: int) -> int:
@@ -226,28 +239,9 @@ class TermHub(_HijackOwnershipMixin):
                 logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, exc)
                 dead.add(ws)
         if dead:
-            notify_hijack_off = False
-            async with self._lock:
-                st2 = self._workers.get(worker_id)
-                if st2 is not None:
-                    for ws in dead:
-                        st2.browsers.pop(ws, None)
-                        if self._is_dashboard_hijack_active(st2) and st2.hijack_owner is ws:
-                            st2.hijack_owner = None
-                            st2.hijack_owner_expires_at = None
-                            notify_hijack_off = not self._is_rest_session_active(st2)
-            if notify_hijack_off:
-                async with self._lock:
-                    _st3 = self._workers.get(worker_id)
-                    if _st3 is not None and self._is_hijacked(_st3):
-                        notify_hijack_off = False
-            if notify_hijack_off:
-                await self._send_worker(
-                    worker_id,
-                    {"type": "control", "action": "resume", "owner": "dead-socket", "lease_s": 0, "ts": time.time()},
-                )
-                self._notify_hijack_changed(worker_id, enabled=False, owner=None)
-            await self._broadcast_hijack_state(worker_id)
+            changed = await self._remove_dead_browsers(worker_id, dead)
+            if changed:
+                await self._broadcast_hijack_state(worker_id)
 
     async def _broadcast_hijack_state(self, worker_id: str) -> None:
         async with self._lock:
@@ -291,28 +285,44 @@ class TermHub(_HijackOwnershipMixin):
                 logger.debug("broadcast_hijack_state_send_failed worker_id=%s: %s", worker_id, exc)
                 dead.add(ws)
         if dead:
-            notify_hijack_off = False
+            await self._remove_dead_browsers(worker_id, dead)
+            # Re-read updated state and send to survivors directly — avoids recursion
+            # when multiple browsers die simultaneously.
             async with self._lock:
                 st2 = self._workers.get(worker_id)
-                if st2 is not None:
-                    for ws in dead:
-                        st2.browsers.pop(ws, None)
-                        if self._is_dashboard_hijack_active(st2) and st2.hijack_owner is ws:
-                            st2.hijack_owner = None
-                            st2.hijack_owner_expires_at = None
-                            notify_hijack_off = not self._is_rest_session_active(st2)
-            if notify_hijack_off:
-                async with self._lock:
-                    _st3 = self._workers.get(worker_id)
-                    if _st3 is not None and self._is_hijacked(_st3):
-                        notify_hijack_off = False
-            if notify_hijack_off:
-                await self._send_worker(
-                    worker_id,
-                    {"type": "control", "action": "resume", "owner": "dead-socket", "lease_s": 0, "ts": time.time()},
+                if st2 is None:
+                    return
+                survivors = list(st2.browsers.keys())
+                is_h2 = self._is_hijacked(st2)
+                is_dashboard2 = self._is_dashboard_hijack_active(st2)
+                is_rest2 = self._is_rest_session_active(st2)
+                hijack_owner2 = st2.hijack_owner
+                input_mode2 = st2.input_mode
+                lease2 = (
+                    st2.hijack_session.lease_expires_at
+                    if is_rest2 and st2.hijack_session is not None
+                    else st2.hijack_owner_expires_at
                 )
-                self._notify_hijack_changed(worker_id, enabled=False, owner=None)
-            await self._broadcast_hijack_state(worker_id)
+            for ws in survivors:
+                if is_dashboard2 and hijack_owner2 is ws:
+                    owner2: str | None = "me"
+                elif is_dashboard2 or is_rest2:
+                    owner2 = "other"
+                else:
+                    owner2 = None
+                with suppress(Exception):
+                    await ws.send_text(
+                        json.dumps(
+                            {
+                                "type": "hijack_state",
+                                "hijacked": is_h2,
+                                "owner": owner2,
+                                "lease_expires_at": lease2,
+                                "input_mode": input_mode2,
+                            },
+                            ensure_ascii=True,
+                        )
+                    )
 
     async def _send_worker(self, worker_id: str, msg: dict[str, Any]) -> bool:
         async with self._lock:
@@ -441,6 +451,36 @@ class TermHub(_HijackOwnershipMixin):
 
     async def _request_analysis(self, worker_id: str) -> None:
         await self._send_worker(worker_id, {"type": "analyze_req", "req_id": str(uuid.uuid4()), "ts": time.time()})
+
+    async def force_release_hijack(self, worker_id: str) -> bool:
+        """Forcibly clear any active hijack for *worker_id* and send a resume control frame.
+
+        Returns ``True`` if a hijack was active and was cleared, ``False`` otherwise.
+        Typically called before switching input mode to ``"open"`` or on session teardown.
+        """
+        owner = "server-forced"
+        had_hijack = False
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is None:
+                return False
+            if st.hijack_session is not None:
+                owner = st.hijack_session.owner
+                st.hijack_session = None
+                had_hijack = True
+            if self._is_dashboard_hijack_active(st):
+                st.hijack_owner = None
+                st.hijack_owner_expires_at = None
+                had_hijack = True
+        if not had_hijack:
+            return False
+        await self._send_worker(
+            worker_id,
+            {"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": time.time()},
+        )
+        self._notify_hijack_changed(worker_id, enabled=False, owner=None)
+        await self._broadcast_hijack_state(worker_id)
+        return True
 
     def create_router(self) -> Any:
         """Create and return a FastAPI ``APIRouter`` with all terminal routes registered."""

@@ -36,7 +36,7 @@ class TestSendLoopSerializationError:
         bridge = TermBridge.__new__(TermBridge)
         bridge._worker_id = "test-w"
         bridge._running = True
-        bridge._send_q = asyncio.Queue()  # type: ignore[assignment]
+        bridge._send_q = asyncio.Queue()
 
         ws = AsyncMock()
         sent_payloads: list[str] = []

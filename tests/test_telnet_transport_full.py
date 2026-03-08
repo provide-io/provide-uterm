@@ -59,6 +59,7 @@ async def _make_server_that_sends(data: bytes) -> tuple[asyncio.Server, int]:
         await asyncio.sleep(2)
 
     server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+    assert server.sockets is not None
     port = server.sockets[0].getsockname()[1]
     return server, port
 
@@ -96,6 +97,10 @@ class TestTelnetTransportSend:
             ready.set()
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
+
+
+
         port = server.sockets[0].getsockname()[1]
         try:
             t = TelnetTransport()
@@ -120,6 +125,7 @@ class TestTelnetTransportSend:
             ready.set()
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             t = TelnetTransport()
@@ -153,6 +159,7 @@ class TestTelnetTransportNAWS:
             ready.set()
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             t = TelnetTransport()
@@ -176,6 +183,7 @@ class TestTelnetTransportReceiveEdgeCases:
             await asyncio.sleep(10)
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             t = TelnetTransport()
@@ -245,6 +253,7 @@ class TestTelnetClient:
             await asyncio.sleep(2)
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             async with TelnetClient("127.0.0.1", port) as c:
@@ -263,6 +272,7 @@ class TestTelnetClient:
             await asyncio.sleep(2)
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             c = TelnetClient("127.0.0.1", port)
@@ -288,6 +298,7 @@ class TestTelnetClient:
             writer.close()
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             c = TelnetClient("127.0.0.1", port)
@@ -323,6 +334,7 @@ class TestTelnetTransportConnectBranches:
             await asyncio.sleep(5)
 
         server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        assert server.sockets is not None
         port = server.sockets[0].getsockname()[1]
         try:
             t = TelnetTransport()

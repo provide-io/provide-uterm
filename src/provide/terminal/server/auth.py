@@ -17,6 +17,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Module-level cache: jwks_url → PyJWKClient instance.
+# PyJWKClient fetches and caches the JWKS document internally; sharing one
+# instance per URL avoids a redundant HTTP round-trip on every token validation.
+# Capped at 16 entries — in practice this is always 1 (one issuer per deployment).
+_JWKS_CLIENT_CACHE: dict[str, Any] = {}
+_JWKS_CLIENT_CACHE_MAX = 16
+
 
 @dataclass(slots=True)
 class Principal:
@@ -81,7 +88,14 @@ def _resolve_jwt_key(token: str, auth: AuthConfig) -> Any:
     if auth.jwt_jwks_url:
         import jwt
 
-        return jwt.PyJWKClient(auth.jwt_jwks_url).get_signing_key_from_jwt(token).key
+        url = auth.jwt_jwks_url
+        client = _JWKS_CLIENT_CACHE.get(url)
+        if client is None:
+            if len(_JWKS_CLIENT_CACHE) >= _JWKS_CLIENT_CACHE_MAX:
+                _JWKS_CLIENT_CACHE.clear()
+            client = jwt.PyJWKClient(url)
+            _JWKS_CLIENT_CACHE[url] = client
+        return client.get_signing_key_from_jwt(token).key
     if auth.jwt_public_key_pem:
         return auth.jwt_public_key_pem
     raise ValueError("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode")

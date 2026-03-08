@@ -253,15 +253,8 @@ class HostedSessionRuntime:
             try:
                 self._connector = await self._start_connector()
                 worker_url = self._ws_url() + f"/ws/worker/{self.definition.session_id}/term"
-                if self._worker_bearer_token:
-                    async with websockets.connect(
-                        worker_url,
-                        additional_headers={"Authorization": f"Bearer {self._worker_bearer_token}"},
-                    ) as ws:
-                        attempt = 0
-                        await self._bridge_session(ws)
-                    continue
-                async with websockets.connect(worker_url) as ws:
+                headers = {"Authorization": f"Bearer {self._worker_bearer_token}"} if self._worker_bearer_token else {}
+                async with websockets.connect(worker_url, additional_headers=headers) as ws:
                     attempt = 0
                     await self._bridge_session(ws)
             except asyncio.CancelledError:

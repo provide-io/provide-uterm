@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: S101
 from provide_terminal_cloudflare.entry import _extract_worker_id
 
 

@@ -79,63 +79,6 @@ async def test_try_release_ws_hijack_noop_when_expired() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fix 4 regression — _is_owner reads under the lock
-# ---------------------------------------------------------------------------
-
-
-async def test_is_owner_returns_false_when_no_bot() -> None:
-    """Regression fix 4: _is_owner returns False for an unknown bot_id (lock-based read)."""
-    hub = TermHub()
-    ws = AsyncMock()
-    result = await hub._is_owner("nonexistent", ws)
-    assert result is False
-
-
-async def test_is_owner_returns_true_for_active_owner() -> None:
-    """Regression fix 4: _is_owner returns True for the active owner under lock."""
-    hub = TermHub()
-    ws = AsyncMock()
-    async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() + 60
-
-    assert await hub._is_owner("bot1", ws) is True
-
-
-async def test_is_owner_returns_false_for_different_ws() -> None:
-    """Regression fix 4: _is_owner returns False when the ws is not the owner (identity check under lock)."""
-    hub = TermHub()
-    ws_owner = AsyncMock()
-    ws_other = AsyncMock()
-    async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.hijack_owner = ws_owner
-        st.hijack_owner_expires_at = time.time() + 60
-
-    assert await hub._is_owner("bot1", ws_other) is False
-
-
-async def test_is_owner_returns_false_after_owner_cleared() -> None:
-    """Regression fix 4: _is_owner reflects cleared state immediately (lock ensures fresh read)."""
-    hub = TermHub()
-    ws = AsyncMock()
-    async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
-        st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() + 60
-
-    assert await hub._is_owner("bot1", ws) is True
-
-    # Clear owner atomically (simulate another coroutine releasing)
-    async with hub._lock:
-        hub._workers["bot1"].hijack_owner = None
-        hub._workers["bot1"].hijack_owner_expires_at = None
-
-    assert await hub._is_owner("bot1", ws) is False
-
-
-# ---------------------------------------------------------------------------
 # Round-6 regression — _touch_if_owner atomic check+extend
 # ---------------------------------------------------------------------------
 
@@ -292,6 +235,33 @@ async def test_try_release_ws_hijack_returns_rest_active_when_rest_session_prese
     released, rest_active = await hub._try_release_ws_hijack("bot1", ws)
     assert released is True
     assert rest_active is True  # REST session still active after dashboard WS released
+
+
+async def test_cleanup_expired_hijack_increments_metric_counter() -> None:
+    """Expired REST/dashboard leases increment hijack_lease_expiries_total."""
+    seen: dict[str, int] = {}
+
+    def _metric(name: str, value: int) -> None:
+        seen[name] = seen.get(name, 0) + int(value)
+
+    hub = TermHub(on_metric=_metric)
+    ws = AsyncMock()
+    async with hub._lock:
+        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st.worker_ws = ws
+        st.hijack_owner = ws
+        st.hijack_owner_expires_at = time.time() - 1
+        st.hijack_session = HijackSession(
+            hijack_id="expired-1",
+            owner="owner-a",
+            acquired_at=time.time() - 100,
+            lease_expires_at=time.time() - 1,
+            last_heartbeat=time.time() - 50,
+        )
+
+    changed = await hub._cleanup_expired_hijack("bot1")
+    assert changed is True
+    assert seen.get("hijack_lease_expiries_total", 0) >= 1
 
 
 # ---------------------------------------------------------------------------

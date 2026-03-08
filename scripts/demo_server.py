@@ -258,7 +258,7 @@ def _set_input_mode(session: DemoSessionState, mode: str, *, source: str) -> lis
 def _status_summary(session: DemoSessionState) -> str:
     observer_count = 0
     with contextlib.suppress(Exception):
-        st = _hub._workers.get(session.worker_id)  # type: ignore[attr-defined]
+        st = _hub._workers.get(session.worker_id)
         if st is not None:
             observer_count = len(st.browsers)
     return f"mode={session.input_mode} paused={session.paused} turns={session.turn_counter} observers={observer_count}"
@@ -389,7 +389,7 @@ def _enqueue_worker_messages(session: DemoSessionState, messages: list[dict[str,
 
 async def _sync_hub_input_mode(worker_id: str, mode: str) -> None:
     """Keep the hub's browser-facing input mode aligned with the demo worker."""
-    ok, err = await _hub._set_input_mode(worker_id, mode)  # type: ignore[attr-defined]
+    ok, err = await _hub._set_input_mode(worker_id, mode)
     if not ok and err != "not_found":
         logger.debug("demo_sync_input_mode_failed worker_id=%s mode=%s err=%s", worker_id, mode, err)
 
@@ -398,26 +398,26 @@ async def _force_release_hijack_for_shared_mode(worker_id: str) -> bool:
     """Clear any active hijack so the demo can switch into shared-input mode immediately."""
     owner = "demo-server"
     had_hijack = False
-    async with _hub._lock:  # type: ignore[attr-defined]
-        st = _hub._workers.get(worker_id)  # type: ignore[attr-defined]
+    async with _hub._lock:
+        st = _hub._workers.get(worker_id)
         if st is None:
             return False
         if st.hijack_session is not None:
             owner = st.hijack_session.owner
             had_hijack = True
             st.hijack_session = None
-        if _hub._is_dashboard_hijack_active(st):  # type: ignore[attr-defined]
+        if _hub._is_dashboard_hijack_active(st):
             had_hijack = True
             st.hijack_owner = None
             st.hijack_owner_expires_at = None
     if not had_hijack:
         return False
-    await _hub._send_worker(  # type: ignore[attr-defined]
+    await _hub._send_worker(
         worker_id,
         {"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": time.time()},
     )
-    _hub._notify_hijack_changed(worker_id, enabled=False, owner=None)  # type: ignore[attr-defined]
-    await _hub._broadcast_hijack_state(worker_id)  # type: ignore[attr-defined]
+    _hub._notify_hijack_changed(worker_id, enabled=False, owner=None)
+    await _hub._broadcast_hijack_state(worker_id)
     return True
 
 

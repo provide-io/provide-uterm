@@ -11,6 +11,15 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+
+def _safe_int(val: Any, default: int) -> int:
+    """Coerce *val* to ``int``, returning *default* on failure or ``None``."""
+    try:
+        return int(default if val is None else val)
+    except (ValueError, TypeError):
+        return default
+
+
 try:
     from fastapi import WebSocket  # noqa: TC002
     from pydantic import BaseModel, Field
