@@ -30,9 +30,16 @@ class SqliteStateStore:
         if not params:
             return self._exec(sql)
         try:
+            # CF Workers sql.exec API: exec(sql, *params) — variadic positional args.
             return self._exec(sql, *params)
-        except Exception:
-            return self._exec(sql, params)
+        except Exception as first_exc:
+            # Fallback for DB-API executors (e.g. sqlite3 in tests) that expect a
+            # params tuple rather than variadic args.  If the fallback also fails,
+            # re-raise the *original* error so that real SQL errors are not masked.
+            try:
+                return self._exec(sql, params)
+            except Exception:
+                raise first_exc from None
 
     def migrate(self) -> None:
         self._run(

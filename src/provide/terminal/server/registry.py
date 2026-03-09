@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
+import re
+from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
 from provide.terminal.server.models import RecordingConfig, SessionDefinition, SessionRuntimeStatus
 from provide.terminal.server.runtime import HostedSessionRuntime
 
@@ -20,6 +22,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from provide.terminal.hijack.hub import TermHub
+
+
+class SessionValidationError(ValueError):
+    """Raised when session creation/update data fails format validation."""
 
 
 class SessionRegistry:
@@ -41,6 +47,13 @@ class SessionRegistry:
         self._lock = asyncio.Lock()
         self._sessions: dict[str, SessionDefinition] = {session.session_id: session for session in sessions}
         self._runtimes: dict[str, HostedSessionRuntime] = {}
+
+    def _require_session(self, session_id: str) -> SessionDefinition:
+        """Return the session definition or raise ``KeyError``.  Caller must hold ``self._lock``."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            raise KeyError(f"unknown session: {session_id!r}")
+        return session
 
     def _runtime_for(self, session: SessionDefinition) -> HostedSessionRuntime:
         runtime = self._runtimes.get(session.session_id)
@@ -68,58 +81,80 @@ class SessionRegistry:
 
     async def list_sessions(self) -> list[SessionRuntimeStatus]:
         async with self._lock:
-            sessions = list(self._sessions.values())
-        return [self._runtime_for(session).status() for session in sessions]
+            runtimes = [self._runtime_for(s) for s in self._sessions.values()]
+        return [r.status() for r in runtimes]
 
     async def list_sessions_with_definitions(self) -> list[tuple[SessionRuntimeStatus, SessionDefinition]]:
         """Return (status, definition) pairs in a single lock acquisition."""
         async with self._lock:
-            sessions = list(self._sessions.values())
-        return [(self._runtime_for(session).status(), session) for session in sessions]
+            pairs = [(self._runtime_for(s), s) for s in self._sessions.values()]
+        return [(r.status(), s) for r, s in pairs]
 
     async def get_session(self, session_id: str) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
-        return self._runtime_for(session).status()
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
+        return runtime.status()
 
     async def get_definition(self, session_id: str) -> SessionDefinition | None:
         async with self._lock:
             return self._sessions.get(session_id)
 
     async def create_session(self, payload: dict[str, Any]) -> SessionRuntimeStatus:
+        session_id = str(payload["session_id"])
+        if not re.match(r"^[\w\-]+$", session_id):
+            raise SessionValidationError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
+        connector_type_raw = str(payload.get("connector_type", "demo"))
+        if connector_type_raw not in KNOWN_CONNECTOR_TYPES:
+            raise SessionValidationError(
+                f"connector_type must be one of {sorted(KNOWN_CONNECTOR_TYPES)}, got: {connector_type_raw!r}"
+            )
+        input_mode_raw = str(payload.get("input_mode", "open"))
+        if input_mode_raw not in {"open", "hijack"}:
+            raise SessionValidationError(f"input_mode must be 'open' or 'hijack', got: {input_mode_raw!r}")
+        visibility_raw = str(payload.get("visibility", "public"))
+        if visibility_raw not in {"public", "operator", "private"}:
+            raise SessionValidationError(
+                f"visibility must be 'public', 'operator', or 'private', got: {visibility_raw!r}"
+            )
         session = SessionDefinition(
-            session_id=str(payload["session_id"]),
-            display_name=str(payload.get("display_name", payload["session_id"])),
-            connector_type=str(payload.get("connector_type", "demo")),
+            session_id=session_id,
+            display_name=str(payload.get("display_name", session_id)),
+            connector_type=connector_type_raw,
             connector_config=dict(payload.get("connector_config", {})),
-            input_mode=str(payload.get("input_mode", "open")),  # type: ignore[arg-type]
+            input_mode=input_mode_raw,  # type: ignore[arg-type]
             auto_start=bool(payload.get("auto_start", False)),
             tags=[str(v) for v in payload.get("tags", [])],
             recording_enabled=(
                 None if payload.get("recording_enabled") is None else bool(payload.get("recording_enabled"))
             ),
             owner=(None if payload.get("owner") is None else str(payload.get("owner"))),
-            visibility=str(payload.get("visibility", "public")),  # type: ignore[arg-type]
-            last_active_at=time.time(),
+            visibility=visibility_raw,  # type: ignore[arg-type]
         )
         async with self._lock:
             if session.session_id in self._sessions:
                 raise ValueError(f"session already exists: {session.session_id}")
             self._sessions[session.session_id] = session
-        runtime = self._runtime_for(session)
+            runtime = self._runtime_for(session)
         if session.auto_start:
             await runtime.start()
         return runtime.status()
 
     async def update_session(self, session_id: str, payload: dict[str, Any]) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
+            session = self._require_session(session_id)
             if "display_name" in payload:
                 session.display_name = str(payload["display_name"])
             if "input_mode" in payload:
                 mode = str(payload["input_mode"])
-                if mode in {"open", "hijack"}:
-                    session.input_mode = mode  # type: ignore[assignment]
+                if mode not in {"open", "hijack"}:
+                    raise SessionValidationError(f"input_mode must be 'open' or 'hijack', got: {mode!r}")
+                session.input_mode = mode  # type: ignore[assignment]
+            if "visibility" in payload:
+                vis = str(payload["visibility"])
+                if vis not in {"public", "operator", "private"}:
+                    raise SessionValidationError(f"visibility must be 'public', 'operator', or 'private', got: {vis!r}")
+                session.visibility = vis  # type: ignore[assignment]
             if "auto_start" in payload:
                 session.auto_start = bool(payload["auto_start"])
             if "tags" in payload:
@@ -128,84 +163,72 @@ class SessionRegistry:
                 session.recording_enabled = bool(payload["recording_enabled"])
             if "connector_config" in payload:
                 session.connector_config = dict(payload["connector_config"])
-            session.last_active_at = time.time()
-        runtime = self._runtime_for(session)
+            runtime = self._runtime_for(session)
         if "input_mode" in payload:
             await runtime.set_mode(session.input_mode)
         return runtime.status()
 
     async def delete_session(self, session_id: str) -> None:
         async with self._lock:
-            self._sessions.pop(session_id)
-        runtime = self._runtimes.pop(session_id, None)
+            self._sessions.pop(session_id, None)
+            runtime = self._runtimes.pop(session_id, None)
         if runtime is not None:
             await runtime.stop()
 
     async def start_session(self, session_id: str) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
-            session.last_active_at = time.time()
-        runtime = self._runtime_for(session)
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
         await runtime.start()
         return runtime.status()
 
     async def stop_session(self, session_id: str) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
-            session.last_active_at = time.time()
-        runtime = self._runtime_for(session)
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
         await runtime.stop()
         return runtime.status()
 
     async def restart_session(self, session_id: str) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
-            session.last_active_at = time.time()
-        runtime = self._runtime_for(session)
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
         await runtime.restart()
         return runtime.status()
 
     async def set_mode(self, session_id: str, mode: str) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
+            session = self._require_session(session_id)
             session.input_mode = mode  # type: ignore[assignment]
-            session.last_active_at = time.time()
+            runtime = self._runtime_for(session)
         if mode == "open":
             await self._force_release_hijack(session_id)
-        runtime = self._runtime_for(session)
         await runtime.set_mode(mode)
         return runtime.status()
 
     async def clear_session(self, session_id: str) -> SessionRuntimeStatus:
         async with self._lock:
-            session = self._sessions[session_id]
-            session.last_active_at = time.time()
-        runtime = self._runtime_for(session)
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
         await runtime.clear()
         return runtime.status()
 
     async def analyze_session(self, session_id: str) -> str:
         async with self._lock:
-            session = self._sessions[session_id]
-            session.last_active_at = time.time()
-        return await self._runtime_for(session).analyze()
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
+        return await runtime.analyze()
 
     async def last_snapshot(self, session_id: str) -> dict[str, Any] | None:
-        async with self._hub._lock:
-            st = self._hub._workers.get(session_id)
-            return None if st is None else st.last_snapshot
+        return await self._hub.get_last_snapshot(session_id)
 
     async def events(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
-        async with self._hub._lock:
-            st = self._hub._workers.get(session_id)
-            if st is None:
-                return []
-            return list(st.events)[-max(1, min(limit, 500)) :]
+        return await self._hub.get_recent_events(session_id, limit)
 
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
         async with self._lock:
-            session = self._sessions[session_id]
-        runtime = self._runtime_for(session)
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
         path = runtime.recording_path
         return {
             "session_id": session_id,
@@ -216,8 +239,9 @@ class SessionRegistry:
 
     async def recording_path(self, session_id: str) -> Path | None:
         async with self._lock:
-            session = self._sessions[session_id]
-        return self._runtime_for(session).recording_path
+            session = self._require_session(session_id)
+            runtime = self._runtime_for(session)
+        return runtime.recording_path
 
     async def recording_entries(
         self,
@@ -227,6 +251,13 @@ class SessionRegistry:
         offset: int | None = None,
         event: str | None = None,
     ) -> list[dict[str, Any]]:
+        """Return recording entries for *session_id*.
+
+        Offset semantics:
+        - ``offset=None`` (default): return the **last** *limit* entries (tail).
+        - ``offset=0`` or positive integer: skip that many accepted entries from
+          the beginning of the file, then return up to *limit* (head + skip).
+        """
         path = await self.recording_path(session_id)
         if path is None or not path.exists():
             return []
@@ -257,9 +288,7 @@ class SessionRegistry:
                         break
             return entries
         # No offset: collect last `limit` entries efficiently with a fixed-size buffer.
-        from collections import deque as _deque
-
-        tail: _deque[dict[str, Any]] = _deque(maxlen=normalized_limit)
+        tail: deque[dict[str, Any]] = deque(maxlen=normalized_limit)
         with path.open(encoding="utf-8") as fh:
             for line in fh:
                 if not line.strip():

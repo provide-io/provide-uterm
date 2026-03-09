@@ -7,12 +7,14 @@ try:
     from provide_terminal_cloudflare.cf_types import WorkerEntrypoint, json_response
     from provide_terminal_cloudflare.config import CloudflareConfig
     from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+    from provide_terminal_cloudflare.state.registry import list_kv_sessions
     from provide_terminal_cloudflare.ui.assets import serve_asset
 except Exception:
-    from cf_types import WorkerEntrypoint, json_response
-    from config import CloudflareConfig
-    from do.session_runtime import SessionRuntime
-    from ui.assets import serve_asset
+    from cf_types import WorkerEntrypoint, json_response  # type: ignore[import-not-found]
+    from config import CloudflareConfig  # type: ignore[import-not-found]
+    from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]
+    from state.registry import list_kv_sessions  # type: ignore[import-not-found]
+    from ui.assets import serve_asset  # type: ignore[import-not-found]
 
 __all__ = ["Default", "SessionRuntime", "ProvideTerminalCloudflareWorker"]
 
@@ -45,6 +47,13 @@ class Default(WorkerEntrypoint):
                     "environment": config.environment,
                 }
             )
+
+        if path == "/api/sessions":
+            # Fleet-wide list: query KV registry populated by each DO on connect/disconnect.
+            # Falls back to empty list when SESSION_REGISTRY KV binding is not configured.
+            sessions = await list_kv_sessions(self.env)
+            scope = "fleet" if sessions else "local"
+            return json_response(sessions, headers={"X-Sessions-Scope": scope})
 
         if path.startswith("/assets/"):
             return serve_asset(path.removeprefix("/assets/"))

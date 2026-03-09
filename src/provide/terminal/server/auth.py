@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -21,8 +22,10 @@ logger = logging.getLogger(__name__)
 # PyJWKClient fetches and caches the JWKS document internally; sharing one
 # instance per URL avoids a redundant HTTP round-trip on every token validation.
 # Capped at 16 entries — in practice this is always 1 (one issuer per deployment).
+# Protected by a threading.Lock because _resolve_jwt_key runs inside asyncio.to_thread.
 _JWKS_CLIENT_CACHE: dict[str, Any] = {}
 _JWKS_CLIENT_CACHE_MAX = 16
+_JWKS_CLIENT_CACHE_LOCK = threading.Lock()
 
 
 @dataclass(slots=True)
@@ -89,12 +92,13 @@ def _resolve_jwt_key(token: str, auth: AuthConfig) -> Any:
         import jwt
 
         url = auth.jwt_jwks_url
-        client = _JWKS_CLIENT_CACHE.get(url)
-        if client is None:
-            if len(_JWKS_CLIENT_CACHE) >= _JWKS_CLIENT_CACHE_MAX:
-                _JWKS_CLIENT_CACHE.clear()
-            client = jwt.PyJWKClient(url)
-            _JWKS_CLIENT_CACHE[url] = client
+        with _JWKS_CLIENT_CACHE_LOCK:
+            client = _JWKS_CLIENT_CACHE.get(url)
+            if client is None:
+                if len(_JWKS_CLIENT_CACHE) >= _JWKS_CLIENT_CACHE_MAX:
+                    _JWKS_CLIENT_CACHE.clear()
+                client = jwt.PyJWKClient(url)
+                _JWKS_CLIENT_CACHE[url] = client
         return client.get_signing_key_from_jwt(token).key
     if auth.jwt_public_key_pem:
         return auth.jwt_public_key_pem
@@ -112,7 +116,7 @@ def _principal_from_jwt_token(token: str, auth: AuthConfig) -> Principal:
         issuer=auth.jwt_issuer,
         audience=auth.jwt_audience,
         leeway=max(0, int(auth.clock_skew_seconds)),
-        options={"require": ["sub", "exp", "iat", "nbf"]},
+        options={"require": ["sub", "exp"]},
     )
     subject = str(claims.get("sub", "")).strip()
     if not subject:

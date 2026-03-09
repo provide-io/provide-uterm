@@ -4,9 +4,9 @@ Cloudflare Workers package for running the `provide-terminal` hosted control pla
 
 ## Commands
 
-- `provideterm-cf build`
-- `provideterm-cf dev`
-- `provideterm-cf deploy --env production`
+- `uterm-cf build`
+- `uterm-cf dev`
+- `uterm-cf deploy --env production`
 
 ## Runtime model
 
@@ -19,4 +19,4 @@ Cloudflare Workers package for running the `provide-terminal` hosted control pla
 
 - `/ws/worker/{worker_id}/term` - runtime worker protocol (JSON frames)
 - `/ws/browser/{worker_id}/term` - browser/operator protocol (JSON frames)
-- `/ws/raw/{worker_id}/term` - raw stream mode for `provideterm listen` telnet/SSH gateways
+- `/ws/raw/{worker_id}/term` - raw stream mode for `uterm listen` telnet/SSH gateways

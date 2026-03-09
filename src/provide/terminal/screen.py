@@ -133,11 +133,14 @@ def extract_menu_options(screen: str, pattern: str | None = None) -> list[tuple[
         pattern = r"[<\[\(]([A-Z0-9])[>\]\)]\s+([^<\[\(\n]+?)(?=\s*[<\[\(]|$)"
 
     options = []
-    for match in re.finditer(pattern, screen):
-        key = match.group(1)
-        description = match.group(2).strip()
-        if description:
-            options.append((key, description))
+    try:
+        for match in re.finditer(pattern, screen):
+            key = match.group(1)
+            description = match.group(2).strip()
+            if description:
+                options.append((key, description))
+    except re.error:
+        return options
     return options
 
 
@@ -157,13 +160,16 @@ def extract_numbered_list(screen: str, pattern: str | None = None) -> list[tuple
         pattern = r"^\s*(\d+)[\.\)]\s+(.+)$"
 
     options = []
-    for line in screen.splitlines():
-        match = re.search(pattern, line)
-        if match:
-            number = match.group(1)
-            description = match.group(2).strip()
-            if description:
-                options.append((number, description))
+    try:
+        for line in screen.splitlines():
+            match = re.search(pattern, line)
+            if match:
+                number = match.group(1)
+                description = match.group(2).strip()
+                if description:
+                    options.append((number, description))
+    except re.error:
+        return options
     return options
 
 
@@ -186,7 +192,10 @@ def extract_key_value_pairs(screen: str, patterns: dict[str, str]) -> dict[str, 
     """
     data: dict[str, str] = {}
     for field, pat in patterns.items():
-        match = re.search(pat, screen, re.IGNORECASE)
+        try:
+            match = re.search(pat, screen, re.IGNORECASE)
+        except re.error:
+            continue
         if match:
             data[field] = match.group(1)
     return data

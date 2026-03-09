@@ -9,7 +9,7 @@ title = "provide-terminal-server"
 mode = "dev"
 principal_header = "x-uterm-principal"
 role_header = "x-uterm-role"
-# For production, prefer scripts/provideterm-server.jwt.example.toml
+# For production, prefer scripts/uterm-server.jwt.example.toml
 
 [ui]
 app_path = "/app"

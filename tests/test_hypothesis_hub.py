@@ -98,41 +98,41 @@ class TermHubStateMachine(RuleBasedStateMachine):
     def remove_browser(self, browser: tuple[str, AsyncMock]) -> None:
         wid, ws = browser
         # Mirror real WS disconnect: release hijack if owner, then discard
-        self._run(self.hub._try_release_ws_hijack(wid, ws))
+        self._run(self.hub.try_release_ws_hijack(wid, ws))
         if wid in self.hub._workers:
             st = self.hub._workers[wid]
             st.browsers.pop(ws, None)
             if wid in self._browsers and ws in self._browsers[wid]:
                 self._browsers[wid].remove(ws)
-        self._run(self.hub._prune_if_idle(wid))
+        self._run(self.hub.prune_if_idle(wid))
 
     @rule(wid=workers, mode=input_modes)
     def set_input_mode(self, wid: str, mode: str) -> None:
-        self._run(self.hub._set_input_mode(wid, mode))
+        self._run(self.hub.set_input_mode(wid, mode))
 
     @rule(browser=browsers)
     def acquire_ws_hijack(self, browser: tuple[str, AsyncMock]) -> None:
         wid, ws = browser
-        self._run(self.hub._try_acquire_ws_hijack(wid, ws))
+        self._run(self.hub.try_acquire_ws_hijack(wid, ws))
 
     @rule(browser=browsers)
     def release_ws_hijack(self, browser: tuple[str, AsyncMock]) -> None:
         wid, ws = browser
-        self._run(self.hub._try_release_ws_hijack(wid, ws))
+        self._run(self.hub.try_release_ws_hijack(wid, ws))
 
     @rule(wid=workers, owner=owner_names, lease=lease_values)
     def acquire_rest_hijack(self, wid: str, owner: str, lease: int) -> None:
         import uuid
 
         self._run(
-            self.hub._try_acquire_rest_hijack(
+            self.hub.try_acquire_rest_hijack(
                 wid, owner=owner, lease_s=lease, hijack_id=str(uuid.uuid4()), now=time.time()
             )
         )
 
     @rule(wid=workers)
     def disconnect_worker(self, wid: str) -> None:
-        self._run(self.hub._disconnect_worker(wid))
+        self._run(self.hub.disconnect_worker(wid))
 
     # -- Invariants checked after every step ---------------------------------
 
@@ -150,19 +150,19 @@ class TermHubStateMachine(RuleBasedStateMachine):
             # 3. open mode: _can_send_input True for all browsers
             if st.input_mode == "open":
                 for ws in st.browsers:
-                    assert self.hub._can_send_input(st, ws), "open mode: browser should be able to send"
+                    assert self.hub.can_send_input(st, ws), "open mode: browser should be able to send"
 
             # 4. hijack mode with owner: only owner can send
-            if st.input_mode == "hijack" and self.hub._is_dashboard_hijack_active(st):
+            if st.input_mode == "hijack" and self.hub.is_dashboard_hijack_active(st):
                 for ws in st.browsers:
                     if ws is st.hijack_owner:
-                        assert self.hub._can_send_input(st, ws), "owner should be able to send"
+                        assert self.hub.can_send_input(st, ws), "owner should be able to send"
                     else:
-                        assert not self.hub._can_send_input(st, ws), "non-owner should not send in hijack"
+                        assert not self.hub.can_send_input(st, ws), "non-owner should not send in hijack"
 
             # 5. set_input_mode("open") fails when hijacked
-            if self.hub._is_hijacked(st):
-                ok, reason = self._run(self.hub._set_input_mode(wid, "open"))
+            if self.hub.is_hijacked(st):
+                ok, reason = self._run(self.hub.set_input_mode(wid, "open"))
                 assert not ok, "switching to open should fail while hijacked"
                 assert reason == "active_hijack"
 
@@ -178,7 +178,7 @@ class TermHubStateMachine(RuleBasedStateMachine):
             has_leases = st.hijack_owner is not None or st.hijack_session is not None
             if not has_connections and not has_leases:
                 # Prune should have removed this — call it now and verify
-                self._run(self.hub._prune_if_idle(wid))
+                self._run(self.hub.prune_if_idle(wid))
                 assert wid not in self.hub._workers, f"Idle worker {wid} not pruned"
 
 
@@ -323,9 +323,9 @@ class TestConcurrentStress:
             st.browsers[ws] = "operator"
 
         async def _race(ws: AsyncMock) -> None:
-            await hub._try_acquire_ws_hijack("w1", ws)
+            await hub.try_acquire_ws_hijack("w1", ws)
             await asyncio.sleep(0)  # yield
-            await hub._try_release_ws_hijack("w1", ws)
+            await hub.try_release_ws_hijack("w1", ws)
 
         await asyncio.gather(*[_race(ws) for ws in browsers])
 
@@ -346,7 +346,7 @@ class TestConcurrentStress:
         modes = ["hijack", "open"] * (n // 2) + ["hijack"] * (n % 2)
 
         async def _switch(mode: str) -> None:
-            await hub._set_input_mode("w1", mode)
+            await hub.set_input_mode("w1", mode)
             await asyncio.sleep(0)
 
         await asyncio.gather(*[_switch(m) for m in modes])
@@ -369,13 +369,13 @@ class TestConcurrentStress:
             st.browsers[ws] = "operator"
 
         async def _acquire_release(ws: AsyncMock) -> None:
-            await hub._try_acquire_ws_hijack("w1", ws)
+            await hub.try_acquire_ws_hijack("w1", ws)
             await asyncio.sleep(0)
-            await hub._try_release_ws_hijack("w1", ws)
+            await hub.try_release_ws_hijack("w1", ws)
 
         async def _disconnect() -> None:
             await asyncio.sleep(0)  # let acquires start
-            await hub._disconnect_worker("w1")
+            await hub.disconnect_worker("w1")
 
         tasks = [_acquire_release(ws) for ws in browsers] + [_disconnect()]
         await asyncio.gather(*tasks)
@@ -402,7 +402,7 @@ class TestConcurrentStress:
         lock = asyncio.Lock()
 
         async def _append(i: int) -> None:
-            evt = await hub._append_event("w1", "test", {"i": i})
+            evt = await hub.append_event("w1", "test", {"i": i})
             async with lock:
                 results.append(evt)
 

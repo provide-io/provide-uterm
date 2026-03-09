@@ -33,7 +33,7 @@ async def test_try_release_ws_hijack_clears_owner() -> None:
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.time() + 60
 
-    released, rest_active = await hub._try_release_ws_hijack("bot1", ws)
+    released, rest_active = await hub.try_release_ws_hijack("bot1", ws)
     assert released is True
     assert rest_active is False
     assert hub._workers["bot1"].hijack_owner is None
@@ -50,7 +50,7 @@ async def test_try_release_ws_hijack_rejects_non_owner() -> None:
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = time.time() + 60
 
-    released, rest_active = await hub._try_release_ws_hijack("bot1", ws_other)
+    released, rest_active = await hub.try_release_ws_hijack("bot1", ws_other)
     assert released is False
     # Owner must be untouched
     assert hub._workers["bot1"].hijack_owner is ws_owner
@@ -60,7 +60,7 @@ async def test_try_release_ws_hijack_noop_when_no_bot() -> None:
     """Regression fix 3: _try_release_ws_hijack returns (False, False) gracefully for an unknown bot_id."""
     hub = TermHub()
     ws = AsyncMock()
-    released, rest_active = await hub._try_release_ws_hijack("nonexistent", ws)
+    released, rest_active = await hub.try_release_ws_hijack("nonexistent", ws)
     assert released is False
     assert rest_active is False
 
@@ -74,7 +74,7 @@ async def test_try_release_ws_hijack_noop_when_expired() -> None:
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.time() - 1  # already expired
 
-    released, _rest = await hub._try_release_ws_hijack("bot1", ws)
+    released, _rest = await hub.try_release_ws_hijack("bot1", ws)
     assert released is False
 
 
@@ -92,7 +92,7 @@ async def test_touch_if_owner_returns_expiry_for_active_owner() -> None:
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.time() + 60
 
-    result = await hub._touch_if_owner("bot1", ws)
+    result = await hub.touch_if_owner("bot1", ws)
     assert result is not None
     assert result > time.time()
 
@@ -107,7 +107,7 @@ async def test_touch_if_owner_returns_none_for_non_owner() -> None:
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = time.time() + 60
 
-    result = await hub._touch_if_owner("bot1", ws_other)
+    result = await hub.touch_if_owner("bot1", ws_other)
     assert result is None
 
 
@@ -115,7 +115,7 @@ async def test_touch_if_owner_returns_none_when_no_bot() -> None:
     """Round-6 fix: _touch_if_owner returns None for an unknown bot_id."""
     hub = TermHub()
     ws = AsyncMock()
-    result = await hub._touch_if_owner("nonexistent", ws)
+    result = await hub.touch_if_owner("nonexistent", ws)
     assert result is None
 
 
@@ -128,12 +128,12 @@ async def test_touch_if_owner_returns_none_after_owner_cleared() -> None:
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.time() + 60
 
-    assert await hub._touch_if_owner("bot1", ws) is not None
+    assert await hub.touch_if_owner("bot1", ws) is not None
 
     async with hub._lock:
         hub._workers["bot1"].hijack_owner = None
 
-    assert await hub._touch_if_owner("bot1", ws) is None
+    assert await hub.touch_if_owner("bot1", ws) is None
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ async def test_get_rest_session_returns_session_when_valid() -> None:
             last_heartbeat=time.time(),
         )
 
-    result = await hub._get_rest_session("bot1", "abc123")
+    result = await hub.get_rest_session("bot1", "abc123")
     assert result is not None
     assert result.hijack_id == "abc123"
 
@@ -172,14 +172,14 @@ async def test_get_rest_session_returns_none_for_wrong_hijack_id() -> None:
             last_heartbeat=time.time(),
         )
 
-    result = await hub._get_rest_session("bot1", "wrong-id")
+    result = await hub.get_rest_session("bot1", "wrong-id")
     assert result is None
 
 
 async def test_get_rest_session_returns_none_for_missing_bot() -> None:
     """Round-6 fix: _get_rest_session returns None for an unknown bot_id (lock-safe)."""
     hub = TermHub()
-    result = await hub._get_rest_session("nonexistent", "any-id")
+    result = await hub.get_rest_session("nonexistent", "any-id")
     assert result is None
 
 
@@ -192,7 +192,7 @@ async def test_hijack_state_msg_for_no_bot_returns_not_hijacked() -> None:
     """Round-6 fix: _hijack_state_msg_for returns unhijacked state for an unknown bot_id."""
     hub = TermHub()
     ws = AsyncMock()
-    msg = await hub._hijack_state_msg_for("nonexistent", ws)
+    msg = await hub.hijack_state_msg_for("nonexistent", ws)
     assert msg["hijacked"] is False
     assert msg["owner"] is None
 
@@ -211,7 +211,7 @@ async def test_hijack_state_msg_for_rest_session_returns_other() -> None:
             last_heartbeat=time.time(),
         )
 
-    msg = await hub._hijack_state_msg_for("bot1", ws)
+    msg = await hub.hijack_state_msg_for("bot1", ws)
     assert msg["hijacked"] is True
     assert msg["owner"] == "other"
 
@@ -232,7 +232,7 @@ async def test_try_release_ws_hijack_returns_rest_active_when_rest_session_prese
             last_heartbeat=time.time(),
         )
 
-    released, rest_active = await hub._try_release_ws_hijack("bot1", ws)
+    released, rest_active = await hub.try_release_ws_hijack("bot1", ws)
     assert released is True
     assert rest_active is True  # REST session still active after dashboard WS released
 
@@ -259,7 +259,7 @@ async def test_cleanup_expired_hijack_increments_metric_counter() -> None:
             last_heartbeat=time.time() - 50,
         )
 
-    changed = await hub._cleanup_expired_hijack("bot1")
+    changed = await hub.cleanup_expired_hijack("bot1")
     assert changed is True
     assert seen.get("hijack_lease_expiries_total", 0) >= 1
 
@@ -294,7 +294,7 @@ async def test_broadcast_does_not_iterate_live_set() -> None:
     ws1.send_text = AsyncMock(side_effect=_send_and_remove)
 
     # Must not raise RuntimeError about set-changed-size during iteration.
-    await hub._broadcast("bot1", {"type": "ping"})
+    await hub.broadcast("bot1", {"type": "ping"})
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +308,7 @@ async def test_prune_if_idle_removes_fully_disconnected_bot() -> None:
     await hub._get("bot1")
     assert "bot1" in hub._workers
 
-    await hub._prune_if_idle("bot1")
+    await hub.prune_if_idle("bot1")
 
     assert "bot1" not in hub._workers
 
@@ -319,7 +319,7 @@ async def test_prune_if_idle_keeps_bot_with_active_worker() -> None:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.worker_ws = AsyncMock()
 
-    await hub._prune_if_idle("bot1")
+    await hub.prune_if_idle("bot1")
 
     assert "bot1" in hub._workers
 
@@ -330,7 +330,7 @@ async def test_prune_if_idle_keeps_bot_with_browser() -> None:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.browsers[AsyncMock()] = "operator"
 
-    await hub._prune_if_idle("bot1")
+    await hub.prune_if_idle("bot1")
 
     assert "bot1" in hub._workers
 
@@ -347,7 +347,7 @@ async def test_prune_if_idle_keeps_bot_with_active_rest_session() -> None:
             last_heartbeat=time.time(),
         )
 
-    await hub._prune_if_idle("bot1")
+    await hub.prune_if_idle("bot1")
 
     assert "bot1" in hub._workers
 
@@ -358,7 +358,7 @@ async def test_prune_if_idle_keeps_bot_with_dashboard_owner() -> None:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = AsyncMock()
 
-    await hub._prune_if_idle("bot1")
+    await hub.prune_if_idle("bot1")
 
     assert "bot1" in hub._workers
 
@@ -366,7 +366,7 @@ async def test_prune_if_idle_keeps_bot_with_dashboard_owner() -> None:
 async def test_prune_if_idle_noop_for_unknown_bot() -> None:
     """Calling _prune_if_idle for a bot that doesn't exist is a no-op."""
     hub = TermHub()
-    await hub._prune_if_idle("no-such-bot")  # must not raise
+    await hub.prune_if_idle("no-such-bot")  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -388,10 +388,10 @@ async def test_append_event_after_prune_does_not_resurrect_worker() -> None:
     assert "bot1" in hub._workers
 
     # Prune immediately (no connections, no leases)
-    await hub._prune_if_idle("bot1")
+    await hub.prune_if_idle("bot1")
     assert "bot1" not in hub._workers, "worker should have been pruned"
 
     # Appending an event must not resurrect the entry
-    evt = await hub._append_event("bot1", "test_event", {"x": 1})
+    evt = await hub.append_event("bot1", "test_event", {"x": 1})
     assert "bot1" not in hub._workers, "worker must not be resurrected by _append_event"
     assert evt["seq"] == 0, "dropped event must return seq=0 sentinel"

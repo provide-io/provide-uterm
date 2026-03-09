@@ -24,13 +24,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _session_num(session_id: str) -> int:
-    total = 0
-    for idx, ch in enumerate(session_id):
-        total += (idx + 1) * ord(ch)
-    return total or 1
-
-
 async def _cancel_and_wait(tasks: set[asyncio.Task[object]]) -> None:
     for task in tasks:
         task.cancel()
@@ -84,7 +77,9 @@ class HostedSessionRuntime:
             auto_start=self.definition.auto_start,
             tags=list(self.definition.tags),
             recording_enabled=self._recording_enabled(),
-            recording_path=(str(self._recording_path) if self._recording_path is not None else None),
+            recording_available=(self._recording_path is not None and self._recording_path.exists()),
+            owner=self.definition.owner,
+            visibility=self.definition.visibility,
             last_error=self._last_error,
         )
 
@@ -154,8 +149,8 @@ class HostedSessionRuntime:
             self._connected = True
         if self._recording_enabled():
             self._recording_path = self._recording_cfg.directory / f"{self.definition.session_id}.jsonl"
-            self._logger = SessionLogger(self._recording_path)
-            await self._logger.start(_session_num(self.definition.session_id))
+            self._logger = SessionLogger(self._recording_path, max_bytes=self._recording_cfg.max_bytes)
+            await self._logger.start(self.definition.session_id)
         return connector
 
     async def _stop_connector(self) -> None:
@@ -254,10 +249,25 @@ class HostedSessionRuntime:
                 self._connector = await self._start_connector()
                 worker_url = self._ws_url() + f"/ws/worker/{self.definition.session_id}/term"
                 headers = {"Authorization": f"Bearer {self._worker_bearer_token}"} if self._worker_bearer_token else {}
-                async with websockets.connect(worker_url, additional_headers=headers) as ws:
-                    attempt = 0
+                async with websockets.connect(worker_url, additional_headers=headers, open_timeout=10) as ws:
                     await self._bridge_session(ws)
+                    # Reset backoff only after a session completes normally,
+                    # not on bare TCP connect — prevents tight loops on auth errors.
+                    attempt = 0
             except asyncio.CancelledError:
+                break
+            except ValueError as exc:
+                # Permanent configuration error (e.g. unsupported connector_type,
+                # missing known_hosts) — retrying will never succeed.
+                self._state = "error"
+                self._connected = False
+                self._last_error = str(exc)
+                logger.error(
+                    "hosted_session_runtime_permanent_failure session_id=%s error=%s",
+                    self.definition.session_id,
+                    exc,
+                )
+                await self._log_event("runtime_error", {"error": str(exc), "permanent": True})
                 break
             except Exception as exc:
                 self._state = "error"
@@ -265,6 +275,18 @@ class HostedSessionRuntime:
                 self._last_error = str(exc)
                 logger.warning("hosted_session_runtime_failed session_id=%s error=%s", self.definition.session_id, exc)
                 await self._log_event("runtime_error", {"error": str(exc)})
+                # Permanent HTTP failures (auth rejected, wrong endpoint) will
+                # never resolve on their own — stop retrying immediately.
+                _status = getattr(exc, "status_code", None) or getattr(
+                    getattr(exc, "response", None), "status_code", None
+                )
+                if _status in (401, 403, 404):
+                    logger.error(
+                        "hosted_session_runtime_permanent_http_error session_id=%s status=%s — stopping",
+                        self.definition.session_id,
+                        _status,
+                    )
+                    break
                 delay = backoff_s[min(attempt, len(backoff_s) - 1)]
                 attempt += 1
                 await asyncio.sleep(delay)

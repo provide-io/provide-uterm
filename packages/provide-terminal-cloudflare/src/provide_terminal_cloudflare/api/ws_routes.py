@@ -15,12 +15,12 @@ frames are rejected with `use_rest_hijack_api`.
 from __future__ import annotations
 
 try:
-    from provide_terminal_cloudflare.contracts import MessageLimits, ProtocolError, parse_frame
+    from provide_terminal_cloudflare.contracts import MessageLimits, ProtocolError, RuntimeProtocol, parse_frame
 except Exception:
-    from contracts import MessageLimits, ProtocolError, parse_frame
+    from contracts import MessageLimits, ProtocolError, RuntimeProtocol, parse_frame  # type: ignore[import-not-found]
 
 
-async def handle_socket_message(runtime: object, ws: object, raw: str, *, is_worker: bool) -> None:
+async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, *, is_worker: bool) -> None:
     try:
         frame = parse_frame(
             raw,

@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
 
@@ -38,6 +39,10 @@ if TYPE_CHECKING:
     from provide.terminal.server.models import ServerConfig
 
 logger = logging.getLogger(__name__)
+
+# Delay between FastAPI startup completing and the auto-start session loop
+# beginning.  Gives the event loop time to finish route/middleware init.
+_AUTO_START_DELAY_S = 0.15
 
 
 def _validate_frontend_assets() -> None:
@@ -72,6 +77,8 @@ def _validate_auth_config(config: ServerConfig) -> None:
         return
     if not config.auth.jwt_algorithms:
         raise ValueError("auth.jwt_algorithms must not be empty when auth.mode='jwt'")
+    if any(a.strip().lower() == "none" for a in config.auth.jwt_algorithms):
+        raise ValueError("'none' is not permitted in auth.jwt_algorithms")
     if not config.auth.jwt_public_key_pem and not config.auth.jwt_jwks_url:
         raise ValueError("configure auth.jwt_public_key_pem or auth.jwt_jwks_url when auth.mode='jwt'")
 
@@ -104,15 +111,37 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         metrics[name] = metrics.get(name, 0) + value
 
     async def _require_authenticated(connection: HTTPConnection) -> None:
+        # Workers authenticate with a raw bearer token, not a JWT.  Check it
+        # before JWT resolution so a valid worker token is never mis-rejected as
+        # anonymous when auth.mode='jwt'.
+        if config.auth.worker_bearer_token:
+            from provide.terminal.server.auth import _extract_bearer_token
+
+            token = _extract_bearer_token(connection.headers)
+            if token == config.auth.worker_bearer_token:
+                from provide.terminal.server.auth import Principal
+
+                connection.state.uterm_principal = Principal(
+                    subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"})
+                )
+                return
         if connection.scope.get("type") == "websocket":
-            principal = resolve_ws_principal(connection, config.auth)
+            # JWT mode: JWKS key fetch may make a blocking HTTP call; offload to
+            # a thread pool to avoid stalling the event loop.
+            if config.auth.mode == "jwt":
+                principal = await asyncio.to_thread(resolve_ws_principal, connection, config.auth)
+            else:
+                principal = resolve_ws_principal(connection, config.auth)
             connection.state.uterm_principal = principal
             if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
                 _inc_metric("auth_failures_ws_total")
                 logger.info("authn_denied surface=websocket")
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="authentication required")
             return
-        principal = resolve_http_principal(connection, config.auth)
+        if config.auth.mode == "jwt":
+            principal = await asyncio.to_thread(resolve_http_principal, connection, config.auth)
+        else:
+            principal = resolve_http_principal(connection, config.auth)
         connection.state.uterm_principal = principal
         if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
             _inc_metric("auth_failures_http_total")
@@ -130,7 +159,11 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return policy.role_for(principal, session)
 
-    hub = TermHub(resolve_browser_role=_resolve_browser_role, on_metric=_inc_metric)
+    hub = TermHub(
+        resolve_browser_role=_resolve_browser_role,
+        on_metric=_inc_metric,
+        worker_token=config.auth.worker_bearer_token,
+    )
     registry = SessionRegistry(
         config.sessions,
         hub=hub,
@@ -144,7 +177,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         async def _delayed_boot() -> None:
             # Yield to the event loop so FastAPI finishes its own startup tasks
             # (route registration, middleware init) before we connect sessions.
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(_AUTO_START_DELAY_S)
             await registry.start_auto_start_sessions()
 
         boot_task = asyncio.create_task(_delayed_boot())
@@ -206,7 +239,16 @@ def create_server_app(config: ServerConfig) -> FastAPI:
 
     app.include_router(hub.create_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
-    app.include_router(create_page_router(), prefix=config.ui.app_path)
+    app.include_router(create_page_router(), prefix=config.ui.app_path, dependencies=[Depends(_require_authenticated)])
+
+    if config.server.allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.server.allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["*"],
+        )
 
     frontend_path = importlib.resources.files("provide.terminal") / "frontend"
     app.mount(config.ui.assets_path, StaticFiles(directory=str(frontend_path), html=False), name="uterm-assets")

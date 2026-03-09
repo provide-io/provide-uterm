@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
 
+from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
 from provide.terminal.server.models import (
     AuthConfig,
     RecordingConfig,
@@ -72,6 +74,7 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
         port=int(server_data.get("port", base.server.port)),
         public_base_url=str(server_data.get("public_base_url", base.server.public_base_url)),
         title=str(server_data.get("title", base.server.title)),
+        allowed_origins=[str(v) for v in server_data.get("allowed_origins", base.server.allowed_origins)],
     )
     auth = AuthConfig(
         mode=str(auth_data.get("mode", base.auth.mode)),
@@ -97,10 +100,16 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
     ui = UiConfig(
         app_path=_clean_path(str(ui_data.get("app_path", base.ui.app_path)), base.ui.app_path),
         assets_path=_clean_path(str(ui_data.get("assets_path", base.ui.assets_path)), base.ui.assets_path),
+        xterm_cdn=str(ui_data.get("xterm_cdn", base.ui.xterm_cdn)),
+        fonts_cdn=str(ui_data.get("fonts_cdn", base.ui.fonts_cdn)),
     )
+    max_bytes = int(recording_data.get("max_bytes", base.recording.max_bytes))
+    if max_bytes < 0:
+        raise ValueError(f"recording.max_bytes must be >= 0 (0 = unlimited), got: {max_bytes}")
     recording = RecordingConfig(
         enabled_by_default=bool(recording_data.get("enabled_by_default", base.recording.enabled_by_default)),
         directory=Path(recording_data.get("directory", base.recording.directory)),
+        max_bytes=max_bytes,
     )
 
     sessions: list[SessionDefinition] = []
@@ -110,7 +119,14 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
         session_id = str(raw.get("session_id", "")).strip()
         if not session_id:
             raise ValueError("session_id is required for each [[sessions]] entry")
+        if not re.match(r"^[\w\-]+$", session_id):
+            raise ValueError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
         connector_type = str(raw.get("connector_type", "demo")).strip() or "demo"
+        if connector_type not in KNOWN_CONNECTOR_TYPES:
+            raise ValueError(
+                f"invalid connector_type for {session_id!r}: {connector_type!r} — "
+                f"must be one of {sorted(KNOWN_CONNECTOR_TYPES)}"
+            )
         input_mode = str(raw.get("input_mode", "open")).strip() or "open"
         if input_mode not in {"hijack", "open"}:
             raise ValueError(f"invalid input_mode for {session_id}: {input_mode}")
@@ -125,6 +141,9 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
             "owner",
             "visibility",
         }
+        visibility = str(raw.get("visibility", "public")).strip() or "public"
+        if visibility not in {"public", "operator", "private"}:
+            raise ValueError(f"invalid visibility for {session_id}: {visibility!r}")
         connector_config = {k: v for k, v in raw.items() if k not in known_fields}
         sessions.append(
             SessionDefinition(
@@ -139,7 +158,7 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
                     None if raw.get("recording_enabled") is None else bool(raw.get("recording_enabled"))
                 ),
                 owner=(None if raw.get("owner") is None else str(raw.get("owner"))),
-                visibility=str(raw.get("visibility", "public")),  # type: ignore[arg-type]
+                visibility=visibility,  # type: ignore[arg-type]
             )
         )
 

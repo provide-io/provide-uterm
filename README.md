@@ -12,10 +12,11 @@ pip install provide-terminal
 
 | Extra | Installs | Required for |
 |---|---|---|
-| `[websocket]` | `fastapi` | `WsTerminalProxy`, `create_ws_terminal_router`, hijack hub |
+| `[websocket]` | `fastapi`, `websockets` | `WsTerminalProxy`, `create_ws_terminal_router`, hijack hub |
 | `[emulator]` | `pyte` | `TerminalEmulator` (screen state tracking) |
-| `[ssh]` | `asyncssh` | SSH transport, `provideterm proxy --transport ssh` |
-| `[cli]` | `fastapi`, `uvicorn`, `websockets` | `provideterm` command-line tool |
+| `[ssh]` | `asyncssh` | SSH transport, `uterm proxy --transport ssh` |
+| `[server]` | `fastapi`, `uvicorn`, `pyjwt` | `uterm-server` hosted reference server |
+| `[cli]` | `fastapi`, `uvicorn`, `websockets` | `uterm` command-line tool |
 | `[all]` | everything above | Full feature set |
 
 ```bash
@@ -163,7 +164,7 @@ library's public API.
 The repo now also includes a standalone reference server application:
 
 ```bash
-provideterm-server --config scripts/provideterm-server.example.toml
+uterm-server --config scripts/uterm-server.example.toml
 ```
 
 This is the canonical hosted-app example for the library. It demonstrates:
@@ -182,10 +183,10 @@ Key endpoints:
 - `GET /app/session/{session_id}` (end-user page)
 - `GET /app/operator/{session_id}` (operator console)
 
-The example TOML config in [scripts/provideterm-server.example.toml](/REDACTED_ABS_PATH)
+The example TOML config in [scripts/uterm-server.example.toml](/REDACTED_ABS_PATH)
 shows the intended reference-implementation structure for server config.
 For production JWT deployments, start from
-[scripts/provideterm-server.jwt.example.toml](/REDACTED_ABS_PATH).
+[scripts/uterm-server.jwt.example.toml](/REDACTED_ABS_PATH).
 
 ### Auth Runtime Posture
 
@@ -212,7 +213,7 @@ When `auth.mode = "jwt"`, the server fails fast at startup unless:
 3. Set session ownership/visibility:
    - use `owner` + `visibility` to enforce role + ownership constraints
 4. Validate startup:
-   - `provideterm-server --config scripts/provideterm-server.jwt.example.toml`
+   - `uterm-server --config scripts/uterm-server.jwt.example.toml`
    - run smoke tests against `/api/health`, `/api/sessions`, and browser WS connect
 
 ### Key Rotation
@@ -267,35 +268,35 @@ Standalone terminal widget (no hijack controls):
 
 Install the `[cli]` extra, then:
 
-### `provideterm proxy` — browser WS → telnet/SSH
+### `uterm proxy` — browser WS → telnet/SSH
 
 Accepts browser WebSocket connections and proxies to a remote BBS.
 
 ```bash
 # Basic telnet proxy
-provideterm proxy bbs.example.com 23
+uterm proxy bbs.example.com 23
 
 # Custom port and WS path
-provideterm proxy bbs.example.com 23 --port 9000 --path /ws/term
+uterm proxy bbs.example.com 23 --port 9000 --path /ws/term
 
 # SSH proxy (requires [ssh] extra)
-provideterm proxy bbs.example.com 22 --transport ssh
+uterm proxy bbs.example.com 22 --transport ssh
 ```
 
-### `provideterm listen` — telnet/SSH client → WebSocket server
+### `uterm listen` — telnet/SSH client → WebSocket server
 
 Accepts traditional telnet and/or SSH clients and proxies to a remote WebSocket
 terminal endpoint.
 
 ```bash
 # Telnet listener
-provideterm listen wss://warp.provide.io/ws/terminal
+uterm listen wss://warp.provide.io/ws/terminal
 
 # With custom ports
-provideterm listen wss://warp.provide.io/ws/terminal --port 2112 --ssh-port 2222
+uterm listen wss://warp.provide.io/ws/terminal --port 2112 --ssh-port 2222
 
 # With host key (SSH)
-provideterm listen wss://warp.provide.io/ws/terminal --server-key /etc/host_key
+uterm listen wss://warp.provide.io/ws/terminal --server-key /etc/host_key
 ```
 
 ---

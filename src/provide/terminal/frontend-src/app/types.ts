@@ -31,7 +31,9 @@ export interface SessionSummary {
   autoStart: boolean;
   tags: string[];
   recordingEnabled: boolean;
-  recordingPath: string | null;
+  recordingAvailable: boolean;
+  owner: string | null;
+  visibility: string;
   lastError: string | null;
 }
 

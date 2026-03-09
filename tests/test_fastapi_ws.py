@@ -350,3 +350,16 @@ class TestPackageGetattr:
 
         with pytest.raises(AttributeError, match="no attribute"):
             _ = pkg.nonexistent_symbol
+
+    def test_mount_terminal_ui_raises_when_assets_missing(self) -> None:
+        """mount_terminal_ui() must raise RuntimeError immediately if assets dir is absent."""
+        from unittest.mock import patch
+
+        from fastapi import FastAPI
+
+        from provide.terminal.fastapi import mount_terminal_ui
+
+        app = FastAPI()
+        with patch("provide.terminal.fastapi.Path.is_dir", return_value=False):  # noqa: SIM117
+            with pytest.raises(RuntimeError, match="terminal UI assets not found"):
+                mount_terminal_ui(app)

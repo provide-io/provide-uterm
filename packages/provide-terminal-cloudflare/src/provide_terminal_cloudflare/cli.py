@@ -51,7 +51,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="provideterm-cf")
+    parser = argparse.ArgumentParser(prog="uterm-cf")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_build = sub.add_parser("build", help="validate package layout and worker entry")

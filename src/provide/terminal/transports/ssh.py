@@ -51,7 +51,7 @@ class SSHStreamReader:
         except (asyncssh.Error, EOFError, asyncio.CancelledError):
             return b""
         if isinstance(data, str):
-            return data.encode("latin-1", errors="replace")
+            return data.encode("utf-8", errors="replace")
         if isinstance(data, (bytes, bytearray)):
             return bytes(data)
         return b""

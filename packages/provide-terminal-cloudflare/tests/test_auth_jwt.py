@@ -8,14 +8,14 @@ from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt,
 from provide_terminal_cloudflare.config import JwtConfig
 
 
-def test_decode_jwt_hs256_ok() -> None:
+async def test_decode_jwt_hs256_ok() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "roles": ["operator"], "iat": now, "nbf": now, "exp": now + 600},
         "secret",
         algorithm="HS256",
     )
-    principal = decode_jwt(
+    principal = await decode_jwt(
         token,
         JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",), issuer=None, audience=None),
     )
@@ -23,7 +23,7 @@ def test_decode_jwt_hs256_ok() -> None:
     assert resolve_role(principal) == "operator"
 
 
-def test_decode_jwt_missing_sub() -> None:
+async def test_decode_jwt_missing_sub() -> None:
     token = jwt.encode({"roles": ["admin"]}, "secret", algorithm="HS256")
     with pytest.raises(JwtValidationError):
-        decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",)))
+        await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",)))

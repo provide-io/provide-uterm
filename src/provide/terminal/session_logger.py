@@ -11,9 +11,12 @@ import asyncio
 import base64
 import contextlib
 import json
+import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
@@ -33,20 +36,28 @@ class SessionLogger:
         await logger.stop()
     """
 
-    def __init__(self, log_path: str | Path) -> None:
+    def __init__(self, log_path: str | Path, max_bytes: int = 0) -> None:
         self._log_path = Path(log_path)
         self._file: TextIOWrapper | None = None
         self._lock = asyncio.Lock()
-        self._session_id: int | None = None
+        self._session_id: str | None = None
         self._context: dict[str, str] = {}
+        self._max_bytes = max_bytes  # 0 = unlimited
+        self._bytes_written = 0
+        self._quota_warned = False
 
-    async def start(self, session_id: int) -> None:
+    async def start(self, session_id: str) -> None:
         """Open log file and write a ``log_start`` header entry."""
         async with self._lock:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
             self._file = self._log_path.open("a", encoding="utf-8")
             self._session_id = session_id
-            self._write_event_unlocked("log_start", {"path": str(self._log_path), "started_at": time.time()})
+            try:
+                self._write_event_unlocked("log_start", {"path": str(self._log_path), "started_at": time.time()})
+            except Exception:
+                self._file.close()
+                self._file = None
+                raise
             file_to_flush = self._file
         await self._flush(file_to_flush)
 
@@ -120,17 +131,23 @@ class SessionLogger:
         """Synchronously write one record.  Caller **must** hold ``self._lock``."""
         if not self._file:
             return
+        if self._max_bytes > 0 and self._bytes_written >= self._max_bytes:
+            if not self._quota_warned:
+                self._quota_warned = True
+                logger.warning(
+                    "session_logger_quota_reached path=%s max_bytes=%d — further writes suppressed",
+                    self._log_path,
+                    self._max_bytes,
+                )
+            return
         record: dict[str, Any] = {"ts": time.time(), "event": event, "data": data}
         if self._session_id is not None:
             record["session_id"] = self._session_id
         if self._context:
-            ctx = dict(self._context)
-            record["ctx"] = ctx
-            if "menu" in ctx:
-                record["menu"] = ctx["menu"]
-            if "action" in ctx:
-                record["action"] = ctx["action"]
-        self._file.write(json.dumps(record, ensure_ascii=True) + "\n")
+            record["ctx"] = dict(self._context)
+        line = json.dumps(record, ensure_ascii=True) + "\n"
+        self._file.write(line)
+        self._bytes_written += len(line)  # ensure_ascii=True guarantees 1 byte per char
 
     @staticmethod
     async def _flush(file: TextIOWrapper | None) -> None:

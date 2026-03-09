@@ -147,7 +147,7 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
         raise RuntimeError("simulated error after pause")
 
     with (
-        patch.object(hub, "_try_acquire_rest_hijack", side_effect=_raise),
+        patch.object(hub, "try_acquire_rest_hijack", side_effect=_raise),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
@@ -179,7 +179,7 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
         raise _asyncio.CancelledError
 
     with (
-        patch.object(hub, "_try_acquire_rest_hijack", side_effect=_cancel),
+        patch.object(hub, "try_acquire_rest_hijack", side_effect=_cancel),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
@@ -259,7 +259,7 @@ def test_snapshot_returns_fresh_lease_after_concurrent_heartbeat() -> None:
             st.hijack_session.lease_expires_at = extended_expires
         return {"screen": "hello", "cols": 80, "rows": 25}
 
-    with patch.object(hub, "_wait_for_snapshot", side_effect=_extend_and_return), TestClient(app) as client:
+    with patch.object(hub, "wait_for_snapshot", side_effect=_extend_and_return), TestClient(app) as client:
         r = client.get(f"/worker/bot1/hijack/{hijack_id}/snapshot?wait_ms=100")
 
     assert r.status_code == 200
@@ -291,7 +291,7 @@ def test_snapshot_falls_back_to_original_lease_if_session_gone() -> None:
             st.hijack_session = None
         return {"screen": "bye"}
 
-    with patch.object(hub, "_wait_for_snapshot", side_effect=_release_and_return), TestClient(app) as client:
+    with patch.object(hub, "wait_for_snapshot", side_effect=_release_and_return), TestClient(app) as client:
         r = client.get(f"/worker/bot1/hijack/{hijack_id}/snapshot?wait_ms=100")
 
     assert r.status_code == 200
@@ -330,8 +330,8 @@ async def test_acquire_succeeds_when_worker_connects_after_cleanup() -> None:
         return True, None
 
     with (
-        patch.object(hub, "_send_worker", side_effect=_fake_send),
-        patch.object(hub, "_try_acquire_rest_hijack", side_effect=_fake_acquire),
+        patch.object(hub, "send_worker", side_effect=_fake_send),
+        patch.object(hub, "try_acquire_rest_hijack", side_effect=_fake_acquire),
         TestClient(app) as client,
     ):
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "tester"})
@@ -366,7 +366,7 @@ def test_acquire_no_worker_race_sends_exactly_one_resume() -> None:
     async def _no_worker(worker_id: str, **kw: object) -> tuple[bool, str | None]:
         return False, "no_worker"
 
-    with patch.object(hub, "_try_acquire_rest_hijack", side_effect=_no_worker), TestClient(app) as client:
+    with patch.object(hub, "try_acquire_rest_hijack", side_effect=_no_worker), TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
 
     assert r.status_code == 409

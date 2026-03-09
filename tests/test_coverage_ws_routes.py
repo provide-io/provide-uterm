@@ -105,7 +105,7 @@ class TestCompensatingResumeNoWorker:
 
                 # Patch _try_acquire_ws_hijack to return no_worker
                 # and track _send_worker calls for the resume
-                _orig_send = hub._send_worker
+                _orig_send = hub.send_worker
 
                 async def _track_send(wid, msg):
                     if msg.get("action") == "resume":
@@ -115,10 +115,10 @@ class TestCompensatingResumeNoWorker:
                 with (
                     patch.object(
                         hub,
-                        "_try_acquire_ws_hijack",
+                        "try_acquire_ws_hijack",
                         return_value=(False, "no_worker"),
                     ),
-                    patch.object(hub, "_send_worker", side_effect=_track_send),
+                    patch.object(hub, "send_worker", side_effect=_track_send),
                 ):
                     browser.send_json({"type": "hijack_request"})
                     # Browser gets error
@@ -165,7 +165,7 @@ class TestHijackStepSendFailure:
                 async def _fail_step(wid, msg):
                     return msg.get("action") != "step"
 
-                with patch.object(hub, "_send_worker", side_effect=_fail_step):
+                with patch.object(hub, "send_worker", side_effect=_fail_step):
                     browser.send_json({"type": "hijack_step"})
                     error = browser.receive_json()
                     assert error["type"] == "error"
@@ -197,8 +197,70 @@ class TestInputSendFailureOpenMode:
                 async def _fail_input(wid, msg):
                     return msg.get("type") != "input"
 
-                with patch.object(hub, "_send_worker", side_effect=_fail_input):
+                with patch.object(hub, "send_worker", side_effect=_fail_input):
                     browser.send_json({"type": "input", "data": "test-data"})
                     error = browser.receive_json()
                     assert error["type"] == "error"
                     assert "worker" in error["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Snapshot field safety: ts=None / negative cols / negative rows
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotFieldSafety:
+    """Worker snapshot messages with invalid ts / cols / rows are stored safely."""
+
+    def _make_app_and_register(self) -> tuple[TestClient, TermHub, object]:
+        app, hub = _make_app()
+        client = TestClient(app, raise_server_exceptions=False)
+        worker = client.websocket_connect("/ws/worker/w1/term?token=x")
+        worker.__enter__()
+        _read_worker_snapshot_req(worker)
+        return client, hub, worker
+
+    def test_ts_none_stored_as_float(self) -> None:
+        """ts=None from worker is coerced to a float; wait_for_snapshot() must not TypeError."""
+        import asyncio
+
+        app, hub = _make_app()
+        with (
+            TestClient(app, raise_server_exceptions=False) as client,
+            client.websocket_connect("/ws/worker/w1/term?token=x") as worker,
+        ):
+            _read_worker_snapshot_req(worker)
+            worker.send_json({"type": "snapshot", "screen": "hi", "cols": 80, "rows": 25, "ts": None})
+            snap = asyncio.get_event_loop().run_until_complete(hub.get_last_snapshot("w1"))
+            if snap is not None:
+                assert isinstance(snap.get("ts"), float), "ts must be float, not None"
+
+    def test_negative_cols_falls_back_to_default(self) -> None:
+        """cols=-10 is invalid; stored snapshot must use the safe default (80)."""
+        import asyncio
+
+        app, hub = _make_app()
+        with (
+            TestClient(app, raise_server_exceptions=False) as client,
+            client.websocket_connect("/ws/worker/w1/term?token=x") as worker,
+        ):
+            _read_worker_snapshot_req(worker)
+            worker.send_json({"type": "snapshot", "screen": "hi", "cols": -10, "rows": 25, "ts": time.time()})
+            snap = asyncio.get_event_loop().run_until_complete(hub.get_last_snapshot("w1"))
+            if snap is not None:
+                assert snap.get("cols", 80) >= 1, "cols must be ≥ 1"
+
+    def test_zero_rows_falls_back_to_default(self) -> None:
+        """rows=0 is invalid; stored snapshot must use the safe default (25)."""
+        import asyncio
+
+        app, hub = _make_app()
+        with (
+            TestClient(app, raise_server_exceptions=False) as client,
+            client.websocket_connect("/ws/worker/w1/term?token=x") as worker,
+        ):
+            _read_worker_snapshot_req(worker)
+            worker.send_json({"type": "snapshot", "screen": "hi", "cols": 80, "rows": 0, "ts": time.time()})
+            snap = asyncio.get_event_loop().run_until_complete(hub.get_last_snapshot("w1"))
+            if snap is not None:
+                assert snap.get("rows", 25) >= 1, "rows must be ≥ 1"

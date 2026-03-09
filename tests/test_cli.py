@@ -236,6 +236,7 @@ class TestCmdListen:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
+
             assert isinstance(tcp_srv, Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]

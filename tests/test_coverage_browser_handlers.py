@@ -45,19 +45,25 @@ async def _register(hub: TermHub, worker_id: str, browser_ws: Any, role: str, wo
             st.worker_ws = worker_ws
 
 
-class TestPingNoop:
-    async def test_ping_returns_owned_hijack_unchanged(self) -> None:
+class TestPingPong:
+    async def test_ping_sends_pong_and_returns_owned_hijack_unchanged(self) -> None:
         hub = _make_hub()
         ws = _make_ws()
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "ping"}, False)
         assert result is False
-        ws.send_text.assert_not_called()
+        ws.send_text.assert_called_once()
+        sent = json.loads(ws.send_text.call_args[0][0])
+        assert sent["type"] == "pong"
+        assert "ts" in sent
 
     async def test_ping_preserves_owned_hijack_true(self) -> None:
         hub = _make_hub()
         ws = _make_ws()
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "ping"}, True)
         assert result is True
+        ws.send_text.assert_called_once()
+        sent = json.loads(ws.send_text.call_args[0][0])
+        assert sent["type"] == "pong"
 
 
 class TestSnapshotReq:

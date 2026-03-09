@@ -9,10 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
-from fastapi import APIRouter, Body, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Body, HTTPException, Path, Query, Request, Response
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from provide.terminal.server.models import model_dump
+from provide.terminal.server.registry import SessionValidationError
+
+# Validated session_id path parameter — rejects path-unsafe characters.
+_SessionId = Annotated[str, Path(pattern=r"^[\w\-]+$")]
 
 if TYPE_CHECKING:
     from provide.terminal.server.auth import Principal
@@ -47,8 +51,12 @@ def create_api_router() -> APIRouter:
     router = APIRouter(prefix="/api")
 
     @router.get("/health")
-    async def health() -> dict[str, object]:
-        return {"ok": True, "service": "provideterm-server"}
+    async def health(request: Request, response: Response) -> dict[str, object]:
+        ready = getattr(request.app.state, "uterm_registry", None) is not None
+        if not ready:
+            response.status_code = 503
+            return {"ok": False, "ready": False, "service": "uterm-server"}
+        return {"ok": True, "ready": True, "service": "uterm-server"}
 
     @router.get("/metrics")
     async def metrics(request: Request) -> dict[str, object]:
@@ -56,6 +64,18 @@ def create_api_router() -> APIRouter:
         if not isinstance(payload, dict):
             payload = {}
         return {"metrics": payload}
+
+    @router.get("/metrics/prometheus")
+    async def metrics_prometheus(request: Request) -> PlainTextResponse:
+        payload = getattr(request.app.state, "uterm_metrics", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        lines: list[str] = []
+        for name in sorted(payload):
+            lines.append(f"# TYPE {name} counter")
+            lines.append(f"{name} {payload[name]}")
+        body = "\n".join(lines) + ("\n" if lines else "")
+        return PlainTextResponse(body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
     @router.get("/sessions")
     async def list_sessions(request: Request) -> list[dict[str, Any]]:
@@ -78,34 +98,51 @@ def create_api_router() -> APIRouter:
             mutable_payload["owner"] = principal.subject_id
         try:
             session = await _registry(request).create_session(mutable_payload)
+        except SessionValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return model_dump(session)
 
+    def _sid_not_found(session_id: str) -> HTTPException:
+        return HTTPException(status_code=404, detail=f"unknown session: {session_id}")
+
     @router.get("/sessions/{session_id}")
-    async def get_session(request: Request, session_id: str) -> dict[str, Any]:
+    async def get_session(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        session = await _registry(request).get_session(session_id)
+        try:
+            session = await _registry(request).get_session(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.patch("/sessions/{session_id}")
     async def patch_session(
-        request: Request, session_id: str, payload: Annotated[dict[str, Any], Body(...)]
+        request: Request,
+        session_id: _SessionId,
+        payload: Annotated[dict[str, Any], Body(...)],
     ) -> dict[str, Any]:
+        # connector_config is replaced entirely when present in the payload.
+        # Callers must send the full desired config, not just changed keys.
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_mutate_session(principal, definition, "session.control.update"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        session = await _registry(request).update_session(session_id, payload)
+        try:
+            session = await _registry(request).update_session(session_id, payload)
+        except SessionValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.delete("/sessions/{session_id}")
-    async def delete_session(request: Request, session_id: str) -> dict[str, bool]:
+    async def delete_session(request: Request, session_id: _SessionId) -> dict[str, bool]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
@@ -115,17 +152,20 @@ def create_api_router() -> APIRouter:
         return {"ok": True}
 
     @router.post("/sessions/{session_id}/connect")
-    async def connect_session(request: Request, session_id: str) -> dict[str, Any]:
+    async def connect_session(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        session = await _registry(request).start_session(session_id)
+        try:
+            session = await _registry(request).start_session(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.post("/sessions/{session_id}/disconnect")
-    async def disconnect_session(request: Request, session_id: str) -> dict[str, Any]:
+    async def disconnect_session(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
@@ -133,23 +173,31 @@ def create_api_router() -> APIRouter:
         # start sessions can also stop them (symmetric lifecycle control).
         if not authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        session = await _registry(request).stop_session(session_id)
+        try:
+            session = await _registry(request).stop_session(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.post("/sessions/{session_id}/restart")
-    async def restart_session(request: Request, session_id: str) -> dict[str, Any]:
+    async def restart_session(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         # Same lifecycle symmetry as disconnect above.
         if not authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        session = await _registry(request).restart_session(session_id)
+        try:
+            session = await _registry(request).restart_session(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.post("/sessions/{session_id}/mode")
     async def set_mode(
-        request: Request, session_id: str, payload: Annotated[dict[str, str], Body(...)]
+        request: Request,
+        session_id: _SessionId,
+        payload: Annotated[dict[str, str], Body(...)],
     ) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
@@ -158,32 +206,41 @@ def create_api_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="insufficient privileges")
         mode = str(payload.get("input_mode", "")).strip()
         if mode not in {"open", "hijack"}:
-            raise HTTPException(status_code=400, detail="input_mode must be 'open' or 'hijack'")
-        session = await _registry(request).set_mode(session_id, mode)
+            raise HTTPException(status_code=422, detail="input_mode must be 'open' or 'hijack'")
+        try:
+            session = await _registry(request).set_mode(session_id, mode)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.post("/sessions/{session_id}/clear")
-    async def clear_session(request: Request, session_id: str) -> dict[str, Any]:
+    async def clear_session(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_mutate_session(principal, definition, "session.control.clear"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        session = await _registry(request).clear_session(session_id)
+        try:
+            session = await _registry(request).clear_session(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return model_dump(session)
 
     @router.post("/sessions/{session_id}/analyze")
-    async def analyze_session(request: Request, session_id: str) -> dict[str, Any]:
+    async def analyze_session(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        analysis = await _registry(request).analyze_session(session_id)
+        try:
+            analysis = await _registry(request).analyze_session(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         return {"session_id": session_id, "analysis": analysis}
 
     @router.get("/sessions/{session_id}/snapshot")
-    async def snapshot(request: Request, session_id: str) -> dict[str, Any] | None:
+    async def snapshot(request: Request, session_id: _SessionId) -> dict[str, Any] | None:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
@@ -192,7 +249,11 @@ def create_api_router() -> APIRouter:
         return await _registry(request).last_snapshot(session_id)
 
     @router.get("/sessions/{session_id}/events")
-    async def events(request: Request, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    async def events(
+        request: Request,
+        session_id: _SessionId,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[dict[str, Any]]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
@@ -201,38 +262,50 @@ def create_api_router() -> APIRouter:
         return await _registry(request).events(session_id, limit=limit)
 
     @router.get("/sessions/{session_id}/recording")
-    async def recording(request: Request, session_id: str) -> dict[str, Any]:
+    async def recording(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_read_recording(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        return await _registry(request).recording_meta(session_id)
+        try:
+            return await _registry(request).recording_meta(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
 
     @router.get("/sessions/{session_id}/recording/entries")
     async def recording_entries(
         request: Request,
-        session_id: str,
-        limit: int = 200,
-        offset: int | None = None,
-        event: str | None = None,
+        session_id: _SessionId,
+        limit: Annotated[int, Query(ge=1, le=500)] = 200,
+        offset: Annotated[int | None, Query(ge=0)] = None,
+        event: Annotated[str | None, Query(max_length=100)] = None,
     ) -> list[dict[str, Any]]:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_read_recording(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        return await _registry(request).recording_entries(session_id, limit=limit, offset=offset, event=event)
+        try:
+            return await _registry(request).recording_entries(session_id, limit=limit, offset=offset, event=event)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
 
     @router.get("/sessions/{session_id}/recording/download")
-    async def recording_download(request: Request, session_id: str) -> FileResponse:
+    async def recording_download(request: Request, session_id: _SessionId) -> FileResponse:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         if not authz.can_read_recording(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        path = await _registry(request).recording_path(session_id)
+        try:
+            path = await _registry(request).recording_path(session_id)
+        except KeyError:
+            raise _sid_not_found(session_id) from None
         if path is None or not path.exists():
+            raise HTTPException(status_code=404, detail="recording not available")
+        recording_cfg = getattr(getattr(request.app.state, "uterm_config", None), "recording", None)
+        if recording_cfg is None or not path.resolve().is_relative_to(recording_cfg.directory.resolve()):
             raise HTTPException(status_code=404, detail="recording not available")
         return FileResponse(path, filename=path.name, media_type="application/json")
 
