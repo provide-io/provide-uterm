@@ -43,7 +43,9 @@ export function normalizeSessionStatus(raw: SessionStatus): SessionSummary {
     autoStart: raw.auto_start,
     tags: [...raw.tags],
     recordingEnabled: raw.recording_enabled,
-    recordingPath: raw.recording_path,
+    recordingAvailable: raw.recording_available,
+    owner: raw.owner ?? null,
+    visibility: raw.visibility ?? "public",
     lastError: raw.last_error,
   };
 }

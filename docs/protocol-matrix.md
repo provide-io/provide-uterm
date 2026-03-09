@@ -14,6 +14,8 @@ This matrix defines the backend capability contract consumed by `hijack.js`.
 | REST `/hijack/{id}/release` | supported | supported |
 | REST `/hijack/{id}/step` | supported | supported |
 | REST `/hijack/{id}/send` | supported | supported |
+| REST `/hijack/{id}/snapshot` | supported | **not implemented** |
+| REST `/hijack/{id}/events` | supported | supported |
 
 ## Client behavior contract
 

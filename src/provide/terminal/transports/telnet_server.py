@@ -86,6 +86,8 @@ async def start_telnet_server(
     handler: ConnectionHandler,
     host: str = "0.0.0.0",  # nosec B104
     port: int = 2102,
+    *,
+    negotiation_delay_s: float = 0.1,
 ) -> asyncio.Server:
     """Create and start an asyncio TCP server with basic telnet negotiation.
 
@@ -96,6 +98,9 @@ async def start_telnet_server(
         handler: Async callback ``(reader, writer) -> None`` called per connection.
         host: Network interface to bind to (default ``0.0.0.0``).
         port: TCP port number (default ``2102``).
+        negotiation_delay_s: Seconds to pause after sending the IAC negotiation
+            preamble before handing off to *handler*.  Gives slow clients time to
+            process the negotiation options.  Defaults to ``0.1`` (100 ms).
 
     Returns:
         The running :class:`asyncio.Server` instance.
@@ -114,8 +119,8 @@ async def start_telnet_server(
             writer.close()
             return
 
-        # Brief pause for the client to process negotiation
-        await asyncio.sleep(0.1)
+        # Brief pause for the client to process negotiation options.
+        await asyncio.sleep(negotiation_delay_s)
         try:
             await handler(reader, writer)
         finally:

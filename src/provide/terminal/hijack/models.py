@@ -12,10 +12,21 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-def _safe_int(val: Any, default: int) -> int:
-    """Coerce *val* to ``int``, returning *default* on failure or ``None``."""
+def _safe_int(val: Any, default: int, *, min_val: int | None = None) -> int:
+    """Coerce *val* to ``int``, returning *default* on failure, ``None``, or out-of-range."""
     try:
-        return int(default if val is None else val)
+        result = int(default if val is None else val)
+    except (ValueError, TypeError):
+        return default
+    if min_val is not None and result < min_val:
+        return default
+    return result
+
+
+def _safe_float(val: Any, default: float) -> float:
+    """Coerce *val* to ``float``, returning *default* on failure or ``None``."""
+    try:
+        return float(default if val is None else val)
     except (ValueError, TypeError):
         return default
 
@@ -59,6 +70,7 @@ class WorkerTermState:
     last_snapshot: dict[str, Any] | None = None
     events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=2000))
     event_seq: int = 0
+    min_event_seq: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +79,7 @@ class WorkerTermState:
 
 
 class HijackAcquireRequest(BaseModel):
-    owner: str = Field("mcp", max_length=200)
+    owner: str = Field("operator", min_length=1, max_length=200)
     lease_s: int = Field(90, ge=1, le=3600)
 
 
@@ -82,7 +94,7 @@ class InputModeRequest(BaseModel):
 class HijackSendRequest(BaseModel):
     keys: str = Field(..., max_length=10_000)
     expect_prompt_id: str | None = Field(None, max_length=200)
-    expect_regex: str | None = Field(None, max_length=1_000)
+    expect_regex: str | None = Field(None, max_length=200)
     timeout_ms: int = Field(2000, ge=100, le=30_000)
     poll_interval_ms: int = Field(120, ge=50, le=5_000)
 

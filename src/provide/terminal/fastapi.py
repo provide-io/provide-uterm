@@ -58,6 +58,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 try:
@@ -265,9 +266,12 @@ def mount_terminal_ui(
         app: The FastAPI application to mount on.
         path: URL prefix. Defaults to ``"/terminal"``.
     """
-    from pathlib import Path
-
     from starlette.staticfiles import StaticFiles
 
     frontend_path = Path(__file__).parent / "frontend"
+    if not frontend_path.is_dir():
+        raise RuntimeError(
+            f"terminal UI assets not found at {frontend_path} — "
+            "is the package installed correctly? (try: pip install 'provide-terminal[websocket]')"
+        )
     app.mount(path, StaticFiles(directory=frontend_path, html=True), name="terminal-ui")

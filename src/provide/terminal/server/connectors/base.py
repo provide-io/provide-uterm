@@ -50,6 +50,6 @@ class SessionConnector(ABC):
     async def set_mode(self, mode: str) -> list[dict[str, Any]]:
         """Apply an input mode change and return worker-protocol messages."""
 
+    @abstractmethod
     async def clear(self) -> list[dict[str, Any]]:
-        """Clear/reset the session if supported."""
-        return await self.handle_input("/clear")
+        """Clear/reset the session state."""

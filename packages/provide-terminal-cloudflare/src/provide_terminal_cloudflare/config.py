@@ -14,6 +14,10 @@ class JwtConfig:
     jwks_url: str | None = None
     clock_skew_seconds: int = 30
     allow_query_token: bool = True
+    # Parity with provide-terminal AuthConfig: configurable claim keys so that
+    # IdP-specific tokens (Auth0, Okta, Azure AD) work without token transforms.
+    jwt_roles_claim: str = "roles"
+    jwt_scopes_claim: str = "scope"
 
 
 @dataclass(slots=True)
@@ -87,6 +91,8 @@ class CloudflareConfig:
             jwks_url=_get("JWT_JWKS_URL") or None,
             clock_skew_seconds=max(0, int(_get("JWT_CLOCK_SKEW_SECONDS", "30"))),
             allow_query_token=_get_bool("AUTH_ALLOW_QUERY_TOKEN", default=not is_production),
+            jwt_roles_claim=_get("JWT_ROLES_CLAIM", "roles") or "roles",
+            jwt_scopes_claim=_get("JWT_SCOPES_CLAIM", "scope") or "scope",
         )
         return cls(
             environment=environment,

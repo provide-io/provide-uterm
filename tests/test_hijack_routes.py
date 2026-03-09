@@ -95,7 +95,7 @@ def test_acquire_default_owner() -> None:
         r = client.post("/worker/bot1/hijack/acquire")
 
     assert r.status_code == 200
-    assert r.json()["owner"] == "mcp"  # default from HijackAcquireRequest
+    assert r.json()["owner"] == "operator"  # default from HijackAcquireRequest
 
 
 def test_acquire_send_worker_fails() -> None:

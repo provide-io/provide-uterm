@@ -12,6 +12,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 from provide.terminal.hijack.bridge import TermBridge, _safe_int
+from provide.terminal.hijack.models import _safe_float
 
 
 class TestSafeInt:
@@ -26,6 +27,32 @@ class TestSafeInt:
 
     def test_valid_int_string(self) -> None:
         assert _safe_int("123", 0) == 123
+
+    def test_min_val_rejects_negative(self) -> None:
+        assert _safe_int(-1, 80, min_val=1) == 80
+
+    def test_min_val_rejects_zero(self) -> None:
+        assert _safe_int(0, 25, min_val=1) == 25
+
+    def test_min_val_allows_valid(self) -> None:
+        assert _safe_int(40, 80, min_val=1) == 40
+
+
+class TestSafeFloat:
+    def test_none_returns_default(self) -> None:
+        assert _safe_float(None, 1.5) == 1.5
+
+    def test_string_returns_default(self) -> None:
+        assert _safe_float("bad", 2.0) == 2.0
+
+    def test_valid_int_coerced(self) -> None:
+        assert _safe_float(5, 0.0) == 5.0
+
+    def test_valid_float_returned(self) -> None:
+        assert _safe_float(3.14, 0.0) == 3.14
+
+    def test_list_returns_default(self) -> None:
+        assert _safe_float([1], 9.9) == 9.9
 
 
 class TestSendLoopSerializationError:
@@ -161,3 +188,49 @@ class TestRecvLoopCleanReturn:
             await asyncio.gather(bridge._run(), _stop_soon())
 
         assert recv_call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# attach_session watcher: CP437 decode
+# ---------------------------------------------------------------------------
+
+
+class TestAttachSessionCp437Decode:
+    """bridge.py — watcher must decode raw bytes using CP437, not latin-1."""
+
+    def test_watcher_decodes_cp437_box_drawing(self) -> None:
+        """Box-drawing bytes (e.g. 0xC4 = ─) must survive the decode round-trip."""
+        import asyncio
+        from unittest.mock import MagicMock
+
+        from provide.terminal.hijack.bridge import TermBridge
+
+        bot = MagicMock()
+        watcher_cb: list = []
+        session = MagicMock()
+
+        def _capture_watcher(cb, **_kw):
+            watcher_cb.append(cb)
+
+        session.add_watch = _capture_watcher
+        bot.session = session
+
+        bridge = TermBridge.__new__(TermBridge)
+        bridge._bot = bot
+        bridge._worker_id = "test"
+        bridge._latest_snapshot = {}
+        bridge._send_q = asyncio.Queue()
+        bridge._attached_session = None
+
+        bridge.attach_session()
+        assert watcher_cb, "add_watch was not called"
+
+        # 0xC4 in CP437 is the horizontal box-drawing character ─ (U+2500).
+        # In latin-1 it decodes to Ä (U+00C4) — a different character.
+        raw = bytes([0xC4, 0xC4, 0xC4])
+        watcher_cb[0]({}, raw)
+
+        queued = bridge._send_q.get_nowait()
+        assert queued["data"] == "─" * 3, (
+            f"expected CP437 box-drawing '─', got {queued['data']!r} — bridge watcher is not using CP437 decode"
+        )

@@ -3,7 +3,104 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, Protocol, TypedDict
+
+# ---------------------------------------------------------------------------
+# REST API response contracts
+#
+# These TypedDicts are the canonical schema for CF REST responses and must
+# stay in sync with the FastAPI backend (provide-terminal SessionRuntimeStatus
+# and hijack route responses).  Any field added to the FastAPI schema must
+# also be added here, with an appropriate CF default documented inline.
+# ---------------------------------------------------------------------------
+
+
+class SessionStatusItem(TypedDict):
+    """Shape of each item in GET /api/sessions.
+
+    Mirrors ``provide-terminal`` ``SessionRuntimeStatus``/``SessionStatus`` (TS).
+    CF-only fields: ``hijacked``.
+    CF fields with synthetic defaults: ``display_name`` (= worker_id),
+    ``connector_type`` ("unknown"), ``lifecycle_state`` ("running"/"idle"),
+    ``auto_start`` (False), ``tags`` ([]), ``recording_enabled`` (False),
+    ``recording_available`` (False), ``owner`` (None), ``visibility`` ("public"),
+    ``last_error`` (None).
+    """
+
+    session_id: str
+    display_name: str
+    connector_type: str
+    lifecycle_state: str
+    input_mode: str
+    connected: bool
+    auto_start: bool
+    tags: list
+    recording_enabled: bool
+    recording_available: bool
+    owner: str | None
+    visibility: str
+    last_error: str | None
+    # CF-specific extras (not in FastAPI schema; clients must tolerate them)
+    hijacked: bool
+
+
+class HijackAcquireResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+    lease_expires_at: float
+    owner: str
+
+
+class HijackHeartbeatResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+    lease_expires_at: float
+
+
+class HijackStepResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+    lease_expires_at: float | None
+
+
+class HijackReleaseResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+
+
+class HijackSnapshotResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+    snapshot: dict[str, object] | None
+    prompt_id: str | None
+    lease_expires_at: float | None
+
+
+class HijackSendResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+    sent: str
+    matched_prompt_id: str | None
+    lease_expires_at: float | None
+
+
+class HijackEventsResponse(TypedDict):
+    ok: bool
+    worker_id: str
+    hijack_id: str
+    after_seq: int
+    latest_seq: int
+    min_event_seq: int
+    has_more: bool
+    events: list
+    lease_expires_at: float | None
+
 
 FrameType = Literal[
     "snapshot_req",
@@ -16,7 +113,7 @@ FrameType = Literal[
     "error",
     "worker_connected",
     "worker_disconnected",
-    # Browser-originated frames (heartbeat/ping keep-alives, WS-level hijack requests).
+    # Browser-originated frames (heartbeat/ping keepalives, WS-level hijack requests).
     # The CF backend routes hijack through REST; these arrive via WS from hijack.js.
     "heartbeat",
     "ping",
@@ -107,3 +204,35 @@ def parse_frame(raw: str, *, limits: MessageLimits | None = None) -> Frame:
 def frame_json(frame_type: FrameType, **kwargs: Any) -> str:
     payload = {"type": frame_type, "ts": time.time(), **kwargs}
     return json.dumps(payload, ensure_ascii=True)
+
+
+# ---------------------------------------------------------------------------
+# Runtime Protocol
+#
+# Structural interface implemented by SessionRuntime (CF DO) and the mock
+# _Runtime used in tests.  Using a Protocol avoids importing the concrete DO
+# class into the route modules, which would create circular imports and bring
+# heavy CF-specific dependencies into unit tests.
+# ---------------------------------------------------------------------------
+
+
+class RuntimeProtocol(Protocol):
+    worker_ws: Any
+    worker_id: str
+    input_mode: str
+    hijack: Any  # HijackCoordinator
+    config: Any  # CloudflareConfig
+    store: Any  # SqliteStateStore
+    last_snapshot: Any
+    browser_hijack_owner: dict[str, str]
+
+    async def browser_role_for_request(self, request: object) -> str: ...
+    async def request_json(self, request: object) -> dict[str, object]: ...
+    def persist_lease(self, session: object) -> None: ...
+    def clear_lease(self) -> None: ...
+    async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool: ...
+    async def broadcast_hijack_state(self) -> None: ...
+    async def push_worker_input(self, data: str) -> bool: ...
+    async def send_ws(self, ws: object, frame: dict[str, object]) -> None: ...
+    async def broadcast_worker_frame(self, frame: object) -> None: ...
+    def _ws_key(self, ws: object) -> str: ...

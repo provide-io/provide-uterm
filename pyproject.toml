@@ -13,26 +13,39 @@ version = "0.1.0"
 description = "Shared terminal I/O primitives for the provide ecosystem"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "pyjwt>=2.9",
+license = {text = "AGPL-3.0-or-later"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+    "Topic :: Terminals",
+    "Framework :: FastAPI",
 ]
+dependencies = []
 
 [project.optional-dependencies]
-websocket = ["fastapi>=0.110"]
+websocket = ["fastapi>=0.110", "websockets>=12.0"]
 ssh       = ["asyncssh>=2.14"]
 emulator  = ["pyte>=0.8"]
+server    = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9"]
 cli       = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0"]
-all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0"]
+all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0", "pyjwt>=2.9"]
 
 [project.scripts]
-provideterm = "provide.terminal.cli:main"
-provideterm-server = "provide.terminal.server.cli:main"
+uterm = "provide.terminal.cli:main"
+uterm-server = "provide.terminal.server.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "provide.terminal" = [
+    "py.typed",
     "frontend/*",
     "frontend/app/*.js",
     "frontend/app/views/*.js",
@@ -144,6 +157,14 @@ mypy_path = ["src"]
 
 [tool.ty.environment]
 python-version = "3.11"
+
+[tool.ty.rules]
+# FastAPI/Starlette add_middleware(CORSMiddleware, ...) is the documented
+# pattern; ty incorrectly rejects it due to incomplete starlette stubs.
+invalid-argument-type = "ignore"
+# asyncio.create_task(Awaitable[T]) requires a type: ignore[arg-type] for mypy;
+# ty does not see the same error and reports the suppression as unused.
+unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
 skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd"

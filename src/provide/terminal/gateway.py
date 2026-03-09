@@ -43,6 +43,8 @@ import contextlib
 import logging
 from pathlib import Path
 
+from provide.terminal.defaults import TerminalDefaults
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,7 +119,11 @@ class TelnetWsGateway:
         _require_websockets()
         self._ws_url = ws_url
 
-    async def start(self, host: str = "0.0.0.0", port: int = 2112) -> asyncio.AbstractServer:  # nosec B104
+    async def start(
+        self,
+        host: str = "0.0.0.0",
+        port: int = TerminalDefaults.GATEWAY_TELNET_PORT,  # nosec B104
+    ) -> asyncio.AbstractServer:
         """Start the TCP listener and return the server object.
 
         Args:
@@ -180,7 +186,7 @@ class SshWsGateway:
         self._ws_url = ws_url
         self._server_key = server_key
 
-    async def start(self, host: str = "0.0.0.0", port: int = 2222) -> object:  # nosec B104
+    async def start(self, host: str = "0.0.0.0", port: int = TerminalDefaults.GATEWAY_SSH_PORT) -> object:  # nosec B104
         """Start the SSH server and return the server object.
 
         Args:

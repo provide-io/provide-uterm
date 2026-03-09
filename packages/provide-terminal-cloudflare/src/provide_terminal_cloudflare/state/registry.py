@@ -1,0 +1,94 @@
+"""Fleet-wide session registry backed by Cloudflare KV.
+
+Each Durable Object instance writes its session status to KV under the key
+``session:{worker_id}``.  The Default Worker reads the full list from KV to
+serve ``GET /api/sessions`` with fleet-wide scope.
+
+KV is eventually consistent; the data returned by list/get may be up to ~60s
+stale for the global network, but <1s for requests routed to the same colo.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_KV_PREFIX = "session:"
+_KV_EXPIRATION_TTL = 300  # 5 min safety-net TTL; alarm() heartbeat keeps it fresh during active leases
+KV_REFRESH_S = 60  # alarm reschedule interval for KV heartbeat (exported)
+
+
+async def update_kv_session(
+    env: Any,
+    worker_id: str,
+    *,
+    connected: bool,
+    hijacked: bool = False,
+) -> None:
+    """Write (or delete) this DO's session entry in the KV registry.
+
+    Safe to call from a DO — does nothing if the KV binding is absent (e.g.
+    in unit tests or when the registry feature is not configured).
+    """
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return
+    key = f"{_KV_PREFIX}{worker_id}"
+    if not connected:
+        try:
+            await kv.delete(key)
+        except Exception as exc:
+            logger.debug("kv delete %s failed: %s", key, exc)
+        return
+    status: dict[str, Any] = {
+        "session_id": worker_id,
+        "display_name": worker_id,
+        "connector_type": "unknown",
+        "lifecycle_state": "running",
+        "input_mode": "hijack",
+        "connected": True,
+        "auto_start": False,
+        "tags": [],
+        "recording_enabled": False,
+        "recording_available": False,
+        "owner": None,
+        "visibility": "public",
+        "last_error": None,
+        "hijacked": hijacked,
+    }
+    try:
+        await kv.put(key, json.dumps(status, ensure_ascii=True), expirationTtl=_KV_EXPIRATION_TTL)
+    except Exception as exc:
+        logger.debug("kv put %s failed: %s", key, exc)
+
+
+async def list_kv_sessions(env: Any) -> list[dict[str, Any]]:
+    """Return all session entries from the KV registry.
+
+    Returns an empty list if the KV binding is not configured.
+    """
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return []
+    try:
+        result = await kv.list(prefix=_KV_PREFIX)
+        keys: list[dict[str, Any]] = result.keys if hasattr(result, "keys") else result.get("keys", [])
+    except Exception as exc:
+        logger.warning("kv list failed: %s", exc)
+        return []
+
+    sessions: list[dict[str, Any]] = []
+    for key_info in keys:
+        key_name = key_info.get("name") if isinstance(key_info, dict) else getattr(key_info, "name", None)
+        if not key_name:
+            continue
+        try:
+            raw = await kv.get(key_name)
+            if raw:
+                sessions.append(json.loads(raw))
+        except Exception as exc:
+            logger.debug("kv get %s failed: %s", key_name, exc)
+    return sessions

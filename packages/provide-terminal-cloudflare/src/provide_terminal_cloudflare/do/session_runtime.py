@@ -17,16 +17,18 @@ try:
     from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
     from provide_terminal_cloudflare.cf_types import DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
+    from provide_terminal_cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
 except Exception:
-    from api.http_routes import route_http
-    from api.ws_routes import handle_socket_message
-    from auth.jwt import JwtValidationError, decode_jwt
-    from auth.jwt import resolve_role as _resolve_jwt_role
-    from bridge.hijack import HijackCoordinator, HijackSession
-    from cf_types import DurableObject, Response
-    from config import CloudflareConfig
-    from state.store import LeaseRecord, SqliteStateStore
+    from api.http_routes import route_http  # type: ignore[import-not-found]
+    from api.ws_routes import handle_socket_message  # type: ignore[import-not-found]
+    from auth.jwt import JwtValidationError, decode_jwt  # type: ignore[import-not-found]
+    from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[import-not-found]
+    from bridge.hijack import HijackCoordinator, HijackSession  # type: ignore[import-not-found]
+    from cf_types import DurableObject, Response  # type: ignore[import-not-found]
+    from config import CloudflareConfig  # type: ignore[import-not-found]
+    from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found]
+    from state.store import LeaseRecord, SqliteStateStore  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ class SessionRuntime(DurableObject):
         self.raw_sockets: dict[str, Any] = {}
         self.browser_hijack_owner: dict[str, str] = {}
         self.last_snapshot: dict[str, Any] | None = None
+        self.input_mode: str = "hijack"
 
         self._restore_state()
 
@@ -126,7 +129,7 @@ class SessionRuntime(DurableObject):
             logger.debug("failed to parse query token: %s", exc)
         return None
 
-    def _resolve_principal(self, request: object) -> tuple[Any, Response | None]:
+    async def _resolve_principal(self, request: object) -> tuple[Any, Response | None]:
         """Validate JWT auth.
 
         Returns ``(principal, None)`` when auth succeeds or is not required
@@ -142,7 +145,7 @@ class SessionRuntime(DurableObject):
                 headers={"content-type": "application/json"},
             )
         try:
-            principal = decode_jwt(token, self.config.jwt)
+            principal = await decode_jwt(token, self.config.jwt)
             return principal, None
         except JwtValidationError as exc:
             return None, Response(
@@ -151,7 +154,7 @@ class SessionRuntime(DurableObject):
                 headers={"content-type": "application/json"},
             )
 
-    def browser_role_for_request(self, request: object) -> str:
+    async def browser_role_for_request(self, request: object) -> str:
         """Return the caller's role string based on JWT or auth mode.
 
         Returns ``"admin"`` in ``none``/``dev`` mode (open access). In ``jwt`` mode,
@@ -165,7 +168,7 @@ class SessionRuntime(DurableObject):
         if not token:
             return "viewer"
         try:
-            principal = decode_jwt(token, self.config.jwt)
+            principal = await decode_jwt(token, self.config.jwt)
             return _resolve_jwt_role(principal)
         except Exception:
             return "viewer"
@@ -245,13 +248,13 @@ class SessionRuntime(DurableObject):
 
     async def fetch(self, request: object) -> Response:
         # Validate JWT before processing any request.
-        principal, auth_error = self._resolve_principal(request)
+        principal, auth_error = await self._resolve_principal(request)
         if auth_error is not None:
             return auth_error
 
         upgrade_header = str(request.headers.get("Upgrade") or "").lower()  # type: ignore[attr-defined]
         if upgrade_header == "websocket":
-            from js import WebSocketPair
+            from js import WebSocketPair  # type: ignore[import-not-found]
 
             path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
             socket_role = "browser"
@@ -287,6 +290,7 @@ class SessionRuntime(DurableObject):
             await self.broadcast_worker_frame(
                 {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}
             )
+            await update_kv_session(self.env, self.worker_id, connected=True, hijacked=self.hijack.session is not None)
         elif role == "raw":
             self.raw_sockets[ws_id] = ws
             if self.last_snapshot is not None and isinstance(self.last_snapshot.get("screen"), str):
@@ -302,7 +306,7 @@ class SessionRuntime(DurableObject):
                     "worker_online": self.worker_ws is not None,
                     # can_hijack and role reflect the JWT-resolved browser role.
                     "can_hijack": browser_role == "admin",
-                    "input_mode": "hijack",
+                    "input_mode": self.input_mode,
                     "role": browser_role,
                     "hijack_control": "rest",
                     "hijack_step_supported": True,
@@ -347,14 +351,9 @@ class SessionRuntime(DurableObject):
             await self.broadcast_worker_frame(
                 {"type": "worker_disconnected", "worker_id": self.worker_id, "ts": time.time()}
             )
+            await update_kv_session(self.env, self.worker_id, connected=False)
 
     async def webSocketError(self, ws: Any, error: Any) -> None:  # noqa: N802
-        """Handle a network-level error on a hibernated socket.
-
-        Called by the Cloudflare DO runtime when a socket experiences an error
-        during hibernation. Cleans up the socket from all registries so stale
-        handles don't block future connections.
-        """
         logger.warning("ws_error worker_id=%s error=%s", self.worker_id, error)
         was_worker = ws is self.worker_ws
         self._remove_ws(ws)
@@ -387,6 +386,8 @@ class SessionRuntime(DurableObject):
                 lease_expires_at=session.lease_expires_at,
             )
         )
+        if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
+            _s.setAlarm(int(session.lease_expires_at * 1000))
 
     def clear_lease(self) -> None:
         self.store.clear_lease(self.worker_id)
@@ -479,3 +480,21 @@ class SessionRuntime(DurableObject):
                 await self._send_text(ws, text_payload)
             except Exception:
                 self.raw_sockets.pop(ws_id, None)
+
+    async def alarm(self) -> None:
+        now = time.time()
+        session = self.hijack.session
+        if session is not None and session.lease_expires_at <= now:
+            logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
+            self.hijack.release(session.hijack_id)
+            self.clear_lease()
+            with contextlib.suppress(Exception):
+                await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
+            await self.broadcast_hijack_state()
+        if self.worker_ws is not None:
+            await update_kv_session(self.env, self.worker_id, connected=True, hijacked=self.hijack.session is not None)
+            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
+                _s.setAlarm(int((now + KV_REFRESH_S) * 1000))
+        elif self.hijack.session is not None:
+            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
+                _s.setAlarm(int(self.hijack.session.lease_expires_at * 1000))

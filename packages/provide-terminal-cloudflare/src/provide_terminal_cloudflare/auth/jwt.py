@@ -22,27 +22,54 @@ class Principal:
     roles: tuple[str, ...]
 
 
-def _resolve_signing_key(token: str, config: JwtConfig) -> Any:
+async def _fetch_jwks(url: str) -> dict[str, Any]:
+    """Fetch JWKS data using the runtime's async HTTP client.
+
+    In Cloudflare Workers, uses the native ``js.fetch`` (async, non-blocking).
+    Outside CF (tests / local dev), falls back to ``urllib`` as a last resort.
+    """
+    try:
+        from js import fetch as _js_fetch  # type: ignore[import-not-found]  # CF Workers native async fetch
+
+        response = await _js_fetch(url)
+        return (await response.json()).to_py()  # type: ignore[no-any-return]
+    except ImportError:
+        pass
+    import json
+    import urllib.request
+
+    with urllib.request.urlopen(url) as resp:  # noqa: S310
+        return json.loads(resp.read())  # type: ignore[no-any-return]
+
+
+async def _resolve_signing_key(token: str, config: JwtConfig) -> Any:
     """Return the signing key to use for *token* based on *config*.
 
     Supports both static PEM keys and JWKS URLs (key rotation / RS256 / ES256).
+    Uses async HTTP for JWKS so the V8 isolate is never blocked.
     """
     if config.jwks_url:
-        client = jwt.PyJWKClient(config.jwks_url)
-        return client.get_signing_key_from_jwt(token).key
+        jwks_data = await _fetch_jwks(config.jwks_url)
+        jwks = jwt.PyJWKSet.from_dict(jwks_data)
+        headers = jwt.get_unverified_header(token)
+        kid = headers.get("kid")
+        for key in jwks.keys:
+            if kid is None or key.key_id == kid:
+                return key.key
+        raise JwtValidationError("no matching key found in JWKS")
     if config.public_key_pem:
         return config.public_key_pem
     raise JwtValidationError("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode")
 
 
-def decode_jwt(token: str, config: JwtConfig) -> Principal:
+async def decode_jwt(token: str, config: JwtConfig) -> Principal:
     if config.mode in {"none", "dev"}:
         return Principal(subject_id="dev", roles=("admin",))
     if not config.public_key_pem and not config.jwks_url:
         raise JwtValidationError("missing jwt public key")
 
     try:
-        key = _resolve_signing_key(token, config)
+        key = await _resolve_signing_key(token, config)
     except JwtValidationError:
         raise
     except Exception as exc:
@@ -51,7 +78,9 @@ def decode_jwt(token: str, config: JwtConfig) -> Principal:
     options = {
         "verify_aud": bool(config.audience),
         "verify_iss": bool(config.issuer),
-        "require": ["sub", "exp", "iat", "nbf"],
+        # Match FastAPI: only sub+exp required so Auth0/Google/Azure AD tokens
+        # that omit iat/nbf are accepted without config changes.
+        "require": ["sub", "exp"],
     }
     try:
         claims: dict[str, Any] = jwt.decode(
@@ -70,13 +99,22 @@ def decode_jwt(token: str, config: JwtConfig) -> Principal:
     if not sub:
         raise JwtValidationError("missing sub")
 
-    raw_roles = claims.get("roles", [])
+    roles_claim = getattr(config, "jwt_roles_claim", "roles")
+    scopes_claim = getattr(config, "jwt_scopes_claim", "scope")
+
+    raw_roles = claims.get(roles_claim, [])
     if isinstance(raw_roles, str):
         roles = tuple(part.strip() for part in raw_roles.split(",") if part.strip())
     elif isinstance(raw_roles, list):
         roles = tuple(str(role) for role in raw_roles)
     else:
         roles = ()
+
+    # Fall back to scope claim when no roles are present (e.g. Auth0 machine-to-machine tokens).
+    if not roles:
+        raw_scope = claims.get(scopes_claim, "")
+        if isinstance(raw_scope, str) and raw_scope:
+            roles = tuple(part.strip() for part in raw_scope.split() if part.strip())
     return Principal(subject_id=sub, roles=roles)
 
 

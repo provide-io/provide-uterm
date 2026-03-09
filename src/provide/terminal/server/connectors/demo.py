@@ -17,6 +17,7 @@ from provide.terminal.server.connectors.base import SessionConnector
 
 _COLS = 80
 _ROWS = 25
+_VALID_CONFIG_KEYS: frozenset[str] = frozenset({"input_mode"})
 
 
 @dataclass(slots=True)
@@ -29,17 +30,22 @@ class _Entry:
 class DemoSessionConnector(SessionConnector):
     """Reference connector that behaves like a lightweight interactive session."""
 
-    def __init__(self, session_id: str, display_name: str) -> None:
+    def __init__(self, session_id: str, display_name: str, config: dict[str, Any] | None = None) -> None:
+        cfg = config or {}
+        unknown = set(cfg) - _VALID_CONFIG_KEYS
+        if unknown:
+            raise ValueError(f"unknown demo connector_config keys: {sorted(unknown)}")
         self._session_id = session_id
         self._display_name = display_name
         self._connected = False
-        self._input_mode = "open"
-        self._paused = False
-        self._turns = 0
-        self._nickname = "user"
-        self._last_command: str | None = None
-        self._banner = "Ready. Type /help for commands."
-        self._transcript: deque[_Entry] = deque(maxlen=10)
+        self._input_mode = str(cfg.get("input_mode", "open"))
+        # Fields below are initialised by _reset_state(); declared here for type checkers.
+        self._paused: bool
+        self._turns: int
+        self._nickname: str
+        self._last_command: str | None
+        self._banner: str
+        self._transcript: deque[_Entry]
         self._reset_state()
 
     def _reset_state(self) -> None:
@@ -219,6 +225,11 @@ class DemoSessionConnector(SessionConnector):
                 f"prompt_visible: {bool(self._prompt().strip())}",
             ]
         )
+
+    async def clear(self) -> list[dict[str, Any]]:
+        self._transcript = deque(maxlen=10)
+        self._banner = "Transcript cleared."
+        return [self._snapshot()]
 
     async def set_mode(self, mode: str) -> list[dict[str, Any]]:
         if mode not in {"open", "hijack"}:

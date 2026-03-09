@@ -32,6 +32,12 @@ from provide.terminal.hijack.models import _safe_int
 
 logger = logging.getLogger(__name__)
 
+# Optional: websockets.exceptions.InvalidURI — used to detect malformed URLs
+# as a permanent failure in the reconnect loop.  None when websockets < 10.
+_InvalidURI: type | None = None
+with contextlib.suppress(ImportError):
+    from websockets.exceptions import InvalidURI as _InvalidURI
+
 
 def _to_ws_url(manager_url: str, path: str) -> str:
     base = manager_url.rstrip("/")
@@ -96,10 +102,11 @@ class TermBridge:
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
 
-    def __init__(self, bot: Any, worker_id: str, manager_url: str) -> None:
+    def __init__(self, bot: Any, worker_id: str, manager_url: str, *, max_ws_message_bytes: int = 1_048_576) -> None:
         self._bot = bot
         self._worker_id = worker_id
         self._manager_url = manager_url
+        self._max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self._send_q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2000)
         self._latest_snapshot: dict[str, Any] | None = None
         self._running = False
@@ -120,7 +127,7 @@ class TermBridge:
             self._latest_snapshot = snapshot
             if not raw:
                 return
-            text = raw.decode("latin-1", errors="replace")
+            text = raw.decode("cp437", errors="replace")
             try:
                 self._send_q.put_nowait({"type": "term", "data": text, "ts": time.time()})
             except asyncio.QueueFull:
@@ -160,7 +167,7 @@ class TermBridge:
             send_task: asyncio.Task[None] | None = None
             recv_task: asyncio.Task[None] | None = None
             try:
-                async with websockets.connect(url, max_size=10 * 1024 * 1024) as ws:
+                async with websockets.connect(url, max_size=self._max_ws_message_bytes) as ws:
                     attempt = 0  # reset backoff on successful connect
                     send_task = asyncio.create_task(self._send_loop(ws))
                     recv_task = asyncio.create_task(self._recv_loop(ws))
@@ -190,6 +197,27 @@ class TermBridge:
                     exc,
                     attempt,
                 )
+                # Permanent failures (auth rejected, wrong URL) will never resolve
+                # on their own — stop retrying immediately rather than backing off.
+                _status = getattr(exc, "status_code", None) or getattr(
+                    getattr(exc, "response", None), "status_code", None
+                )
+                if _status in (401, 403, 404):
+                    logger.error(
+                        "term_bridge_permanent_error worker_id=%s status=%s — stopping reconnect",
+                        self._worker_id,
+                        _status,
+                    )
+                    self._running = False
+                    break
+                if _InvalidURI is not None and isinstance(exc, _InvalidURI):
+                    logger.error(
+                        "term_bridge_permanent_error worker_id=%s error=%s — malformed URL, stopping reconnect",
+                        self._worker_id,
+                        exc,
+                    )
+                    self._running = False
+                    break
 
             if not self._running:
                 break
@@ -254,7 +282,9 @@ class TermBridge:
                     if data:
                         await self._send_keys(data)
                 elif mtype == "resize":
-                    await self._set_size(_safe_int(msg.get("cols"), 80), _safe_int(msg.get("rows"), 25))
+                    await self._set_size(
+                        _safe_int(msg.get("cols"), 80, min_val=1), _safe_int(msg.get("rows"), 25, min_val=1)
+                    )
         finally:
             # Ensure the worker is never left permanently paused if the connection
             # drops while a hijack was active.  The hub clears its own hijack

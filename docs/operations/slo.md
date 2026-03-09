@@ -22,8 +22,10 @@ These SLO targets are the release baseline for hosted terminal control-plane dep
 ## Measurement
 
 - Run load/churn with `scripts/load_profile.py`.
-- Run restart-failure injection with `scripts/failure_injection.py`.
-- Run snapshot/input WS latency probe with `scripts/latency_probe.py`.
+- Run restart-failure injection with `scripts/failure_injection.py` (scenarios: `restart`, `ws_flap`, `lease_expiry`).
+- Run REST hijack latency probe with `scripts/latency_probe.py`.
+- Run true hub->browser WS broadcast delivery probe with `scripts/ws_delivery_probe.py`.
+  This measures the real worker-event->hub->WS delivery path via hijack-state broadcast frames.
 - Note: `scripts/latency_probe.py` measures REST-hijack command/send and snapshot-fetch timings;
   use it as a comparative release-over-release signal, not a direct substitute for browser WS snapshot-delivery SLOs.
 - Record results per release candidate in `artifacts/rc-baseline/`.

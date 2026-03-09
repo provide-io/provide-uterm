@@ -12,7 +12,7 @@
 1. Dependency vulnerability scan passes policy (no high/critical findings).
 2. SBOM generated for wheel and sdist artifacts.
 3. Artifacts are signed and provenance metadata is attached.
-4. Rollback drill is executed on staging and documented.
+4. Rollback drill is executed on staging and documented (`scripts/rollback_drill.py`; artifact in `artifacts/rollback-drill/`).
 
 ## Release checklist
 

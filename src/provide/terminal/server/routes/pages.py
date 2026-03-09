@@ -7,14 +7,23 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse
 
 from provide.terminal.server.auth import resolve_http_principal
 from provide.terminal.server.ui import operator_dashboard_html, replay_page_html, session_page_html
 
+_SessionId = Annotated[str, Path(pattern=r"^[\w\-]+$")]
+
 
 def _is_secure_request(request: Request) -> bool:
+    # Trust X-Forwarded-Proto only when the app is behind a known reverse proxy.
+    # If the app is deployed without a proxy, a client can forge this header to
+    # manipulate the Secure flag on auth cookies.  This is acceptable because:
+    # (a) cookies are also HttpOnly+SameSite=Lax, and (b) operators who run
+    # without a reverse proxy should use HTTPS directly (request.url.scheme).
     forwarded_proto = str(request.headers.get("x-forwarded-proto", "")).lower()
     if "https" in forwarded_proto:
         return True
@@ -38,22 +47,39 @@ def create_page_router() -> APIRouter:
     async def operator_dashboard(request: Request) -> HTMLResponse:
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        response = HTMLResponse(operator_dashboard_html(cfg.server.title, cfg.ui.app_path, cfg.ui.assets_path))
-        principal = resolve_http_principal(request, cfg.auth)
+        response = HTMLResponse(
+            operator_dashboard_html(
+                cfg.server.title,
+                cfg.ui.app_path,
+                cfg.ui.assets_path,
+                xterm_cdn=cfg.ui.xterm_cdn,
+                fonts_cdn=cfg.ui.fonts_cdn,
+            )
+        )
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
         _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
         _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
         return response
 
     @router.get("/session/{session_id}", response_class=HTMLResponse)
-    async def session_view(request: Request, session_id: str) -> HTMLResponse:
+    async def session_view(request: Request, session_id: _SessionId) -> HTMLResponse:
         session = await request.app.state.uterm_registry.get_definition(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        authz = request.app.state.uterm_authz
+        if not authz.can_read_session(principal, session):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
         html = session_page_html(
-            session.display_name, cfg.ui.assets_path, session_id, operator=False, app_path=cfg.ui.app_path
+            session.display_name,
+            cfg.ui.assets_path,
+            session_id,
+            operator=False,
+            app_path=cfg.ui.app_path,
+            xterm_cdn=cfg.ui.xterm_cdn,
+            fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
         _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
@@ -61,15 +87,24 @@ def create_page_router() -> APIRouter:
         return response
 
     @router.get("/operator/{session_id}", response_class=HTMLResponse)
-    async def operator_session(request: Request, session_id: str) -> HTMLResponse:
+    async def operator_session(request: Request, session_id: _SessionId) -> HTMLResponse:
         session = await request.app.state.uterm_registry.get_definition(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        authz = request.app.state.uterm_authz
+        if not authz.can_read_session(principal, session):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
         html = session_page_html(
-            session.display_name, cfg.ui.assets_path, session_id, operator=True, app_path=cfg.ui.app_path
+            session.display_name,
+            cfg.ui.assets_path,
+            session_id,
+            operator=True,
+            app_path=cfg.ui.app_path,
+            xterm_cdn=cfg.ui.xterm_cdn,
+            fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
         _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
@@ -77,14 +112,24 @@ def create_page_router() -> APIRouter:
         return response
 
     @router.get("/replay/{session_id}", response_class=HTMLResponse)
-    async def replay_view(request: Request, session_id: str) -> HTMLResponse:
+    async def replay_view(request: Request, session_id: _SessionId) -> HTMLResponse:
         session = await request.app.state.uterm_registry.get_definition(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = resolve_http_principal(request, cfg.auth)
-        html = replay_page_html(session.display_name, cfg.ui.assets_path, session_id, app_path=cfg.ui.app_path)
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        authz = request.app.state.uterm_authz
+        if not authz.can_read_session(principal, session):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+        html = replay_page_html(
+            session.display_name,
+            cfg.ui.assets_path,
+            session_id,
+            app_path=cfg.ui.app_path,
+            xterm_cdn=cfg.ui.xterm_cdn,
+            fonts_cdn=cfg.ui.fonts_cdn,
+        )
         response = HTMLResponse(html)
         _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
         _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)

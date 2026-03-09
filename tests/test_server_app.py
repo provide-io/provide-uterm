@@ -137,6 +137,23 @@ class TestReferenceServerApp:
             assert hello["worker_online"] is True
             assert hello["input_mode"] == "open"
 
+    async def test_metrics_prometheus_endpoint(self, live_reference_server: str) -> None:
+        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            resp = await http.get("/api/metrics/prometheus")
+        assert resp.status_code == 200
+        assert "text/plain" in resp.headers.get("content-type", "")
+        body = resp.text
+        assert "http_requests_total" in body
+        lines = body.splitlines()
+        type_lines = [ln for ln in lines if ln.startswith("# TYPE")]
+        assert len(type_lines) > 0
+        metric_lines = [ln for ln in lines if ln.strip() and not ln.startswith("#")]
+        assert len(metric_lines) > 0
+        for ln in metric_lines:
+            parts = ln.split()
+            assert len(parts) == 2, f"unexpected metric line: {ln!r}"
+            assert parts[1].lstrip("-").isdigit(), f"non-integer value in: {ln!r}"
+
     async def test_metrics_include_ws_disconnect_and_hijack_counters(self, live_reference_server: str) -> None:
         await self._wait_for_connected(live_reference_server, "demo-session")
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
@@ -249,6 +266,7 @@ class TestReferenceServerApp:
                             "port": free_port,
                             "username": "tester",
                             "password": "secret",
+                            "insecure_no_host_check": True,
                         },
                     },
                 )
@@ -308,6 +326,7 @@ class TestReferenceServerApp:
                             "port": free_port,
                             "username": "tester",
                             "client_key_path": str(key_path),
+                            "insecure_no_host_check": True,
                         },
                     },
                 )
@@ -365,6 +384,7 @@ class TestReferenceServerApp:
                             "port": free_port,
                             "username": "tester",
                             "client_key_data": key_data.decode("utf-8"),
+                            "insecure_no_host_check": True,
                         },
                     },
                 )

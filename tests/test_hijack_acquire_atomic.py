@@ -63,7 +63,7 @@ class TestTryAcquireRestHijack:
         results: list[tuple[bool, str | None]] = []
 
         async def _attempt() -> None:
-            r = await hub._try_acquire_rest_hijack(
+            r = await hub.try_acquire_rest_hijack(
                 "bot1",
                 owner="tester",
                 lease_s=60,
@@ -85,7 +85,7 @@ class TestTryAcquireRestHijack:
         mock_ws = AsyncMock()
         hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock(), hijack_owner=mock_ws)
 
-        ok, err = await hub._try_acquire_rest_hijack("bot1", owner="t", lease_s=60, hijack_id="x", now=time.time())
+        ok, err = await hub.try_acquire_rest_hijack("bot1", owner="t", lease_s=60, hijack_id="x", now=time.time())
         assert ok is False
         assert err == "already_hijacked"
 
@@ -93,7 +93,7 @@ class TestTryAcquireRestHijack:
         hub = TermHub()
         hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock(), hijack_session=_active_session())
 
-        ok, err = await hub._try_acquire_rest_hijack("bot1", owner="t", lease_s=60, hijack_id="x", now=time.time())
+        ok, err = await hub.try_acquire_rest_hijack("bot1", owner="t", lease_s=60, hijack_id="x", now=time.time())
         assert ok is False
         assert err == "already_hijacked"
 
@@ -103,7 +103,7 @@ class TestTryAcquireRestHijack:
         hid = str(uuid.uuid4())
         now = time.time()
 
-        ok, err = await hub._try_acquire_rest_hijack("bot1", owner="owner1", lease_s=30, hijack_id=hid, now=now)
+        ok, err = await hub.try_acquire_rest_hijack("bot1", owner="owner1", lease_s=30, hijack_id=hid, now=now)
 
         assert ok is True
         assert err is None
@@ -129,7 +129,7 @@ class TestTryAcquireWsHijack:
         results: list[tuple[bool, str | None]] = []
 
         async def _attempt(ws: object) -> None:
-            r = await hub._try_acquire_ws_hijack("bot1", ws)  # type: ignore[arg-type]
+            r = await hub.try_acquire_ws_hijack("bot1", ws)  # type: ignore[arg-type]
             results.append(r)
 
         await asyncio.gather(_attempt(ws_a), _attempt(ws_b))
@@ -144,20 +144,20 @@ class TestTryAcquireWsHijack:
         hub = TermHub()
         hub._workers["bot1"] = WorkerTermState(worker_ws=None)
 
-        ok, err = await hub._try_acquire_ws_hijack("bot1", AsyncMock())
+        ok, err = await hub.try_acquire_ws_hijack("bot1", AsyncMock())
         assert ok is False
         assert err == "no_worker"
 
     async def test_unknown_bot_returns_no_worker(self) -> None:
         hub = TermHub()
-        ok, err = await hub._try_acquire_ws_hijack("unknown", AsyncMock())
+        ok, err = await hub.try_acquire_ws_hijack("unknown", AsyncMock())
         assert ok is False
         assert err == "no_worker"
 
     async def test_rest_session_blocks_ws_acquire(self) -> None:
         hub = TermHub()
         hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock(), hijack_session=_active_session())
-        ok, err = await hub._try_acquire_ws_hijack("bot1", AsyncMock())
+        ok, err = await hub.try_acquire_ws_hijack("bot1", AsyncMock())
         assert ok is False
         assert err == "already_hijacked"
 
@@ -166,7 +166,7 @@ class TestTryAcquireWsHijack:
         ws = AsyncMock()
         hub._workers["bot1"] = WorkerTermState(worker_ws=AsyncMock())
 
-        ok, err = await hub._try_acquire_ws_hijack("bot1", ws)
+        ok, err = await hub.try_acquire_ws_hijack("bot1", ws)
 
         assert ok is True
         st = hub._workers["bot1"]

@@ -23,10 +23,22 @@ else
   exit 2
 fi
 
-echo "[4/4] artifact signature verification precheck"
+echo "[4/4] artifact signing (cosign keyless)"
 if ! command -v cosign >/dev/null 2>&1; then
   echo "cosign is not installed; signing gate cannot be completed" >&2
   exit 2
 fi
+
+# Sign each built wheel and sdist with a Sigstore keyless bundle.
+for artifact in dist/*.whl dist/*.tar.gz; do
+  [ -f "$artifact" ] || continue
+  bundle="${OUT_DIR}/$(basename "$artifact").bundle"
+  cosign sign-blob --yes "$artifact" --bundle "$bundle"
+  echo "signed: $artifact -> $bundle"
+done
+
+# Sign the SBOM.
+cosign sign-blob --yes "${OUT_DIR}/sbom.json" --bundle "${OUT_DIR}/sbom.json.bundle"
+echo "signed: ${OUT_DIR}/sbom.json -> ${OUT_DIR}/sbom.json.bundle"
 
 echo "release governance checks completed: ${OUT_DIR}"

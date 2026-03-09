@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
 from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
 
 
@@ -26,3 +27,18 @@ def test_store_migrate_idempotent_and_roundtrip() -> None:
     events = store.list_events_since("w1", 0)
     assert len(events) == 1
     assert events[0]["type"] == "snapshot"
+
+
+def test_store_run_propagates_sql_errors() -> None:
+    """SQL errors must surface from _run(), not be silently swallowed.
+
+    Regression for Bug C: the original _run() used a bare ``except Exception``
+    that caught real SQL errors and retried with a different calling convention,
+    making the original error invisible.  Now if both calling conventions fail,
+    the *original* exception is re-raised so callers see the real problem.
+    """
+    conn = sqlite3.connect(":memory:")
+    store = SqliteStateStore(conn.execute)
+    with pytest.raises((sqlite3.OperationalError, sqlite3.ProgrammingError)):
+        # Querying a nonexistent table must raise, not silently return None.
+        store._run("SELECT * FROM nonexistent_table_xyz WHERE id = ?", "val")

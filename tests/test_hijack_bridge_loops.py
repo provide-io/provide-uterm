@@ -251,6 +251,7 @@ class TestRunLoop:
                 pass
 
         import websockets
+
         async with websockets.serve(_ws_handler, "127.0.0.1", 0) as server:
             port = server.sockets[0].getsockname()[1]
 

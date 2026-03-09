@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import logging
 import time
 from typing import Any
 
@@ -21,6 +22,8 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("asyncssh is required for the SSH server connector: pip install 'provide-terminal[ssh]'") from _e
 
+logger = logging.getLogger(__name__)
+
 _COLS = 80
 _ROWS = 25
 
@@ -28,7 +31,26 @@ _ROWS = 25
 class SshSessionConnector(SessionConnector):
     """Connect a hosted session to a remote SSH shell."""
 
+    _VALID_CONFIG_KEYS: frozenset[str] = frozenset(
+        {
+            "host",
+            "port",
+            "username",
+            "password",
+            "client_keys",
+            "client_key_path",
+            "client_key",
+            "client_key_data",
+            "known_hosts",
+            "insecure_no_host_check",
+            "input_mode",
+        }
+    )
+
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
+        unknown = set(config) - self._VALID_CONFIG_KEYS
+        if unknown:
+            raise ValueError(f"unknown ssh connector_config keys: {sorted(unknown)}")
         raw_client_keys = config.get("client_keys")
         client_keys: list[Any] = []
         if raw_client_keys is not None:
@@ -55,6 +77,19 @@ class SshSessionConnector(SessionConnector):
         self._password = None if config.get("password") is None else str(config.get("password"))
         self._client_keys = client_keys
         self._known_hosts = None if config.get("known_hosts") is None else str(config.get("known_hosts"))
+        if self._known_hosts is None:
+            if not config.get("insecure_no_host_check"):
+                raise ValueError(
+                    f"ssh_connector requires known_hosts for session {session_id!r} connecting to {self._host}; "
+                    "set connector_config.known_hosts to a known_hosts file path, "
+                    "or set insecure_no_host_check=true to disable host key verification"
+                )
+            logger.warning(
+                "ssh_connector_no_known_hosts session_id=%s host=%s — "
+                "host key verification is disabled; set known_hosts in connector_config to enable it",
+                session_id,
+                self._host,
+            )
         self._input_mode = str(config.get("input_mode", "open"))
         self._paused = False
         self._connected = False
@@ -108,6 +143,7 @@ class SshSessionConnector(SessionConnector):
             config=[],
             client_keys=self._client_keys,
             encoding=None,
+            connect_timeout=30,
         )
         process = await conn.create_process(term_type="ansi", term_size=(_COLS, _ROWS), encoding=None)
         self._conn = conn
@@ -159,7 +195,7 @@ class SshSessionConnector(SessionConnector):
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         stdin = self._stdin
         if stdin is not None:
-            stdin.write(data.encode("latin-1", errors="replace"))
+            stdin.write(data.encode("utf-8", errors="replace"))
             await stdin.drain()
             self._banner = f"Sent {len(data)} characters upstream."
         return [self._snapshot()]
@@ -193,6 +229,11 @@ class SshSessionConnector(SessionConnector):
                 f"connected: {self.is_connected()}",
             ]
         )
+
+    async def clear(self) -> list[dict[str, Any]]:
+        self._screen_buffer = ""
+        self._banner = "Screen buffer cleared."
+        return [self._snapshot()]
 
     async def set_mode(self, mode: str) -> list[dict[str, Any]]:
         if mode not in {"open", "hijack"}:

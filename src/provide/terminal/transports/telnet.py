@@ -67,15 +67,23 @@ class TelnetClient:
             data = await client.read(1024)
     """
 
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int, *, connect_timeout: float = 30.0) -> None:
         self._host = host
         self._port = port
+        self._connect_timeout = connect_timeout
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
 
     async def connect(self) -> None:
-        """Open the TCP connection."""
-        self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
+        """Open the TCP connection.
+
+        Raises ``asyncio.TimeoutError`` if the host does not respond within
+        ``connect_timeout`` seconds (default 30 s).
+        """
+        self._reader, self._writer = await asyncio.wait_for(
+            asyncio.open_connection(self._host, self._port),
+            timeout=self._connect_timeout,
+        )
         logger.debug("telnet client connected host=%s port=%d", self._host, self._port)
 
     async def close(self) -> None:

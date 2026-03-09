@@ -10,7 +10,9 @@ export interface SessionStatus {
   auto_start: boolean;
   tags: string[];
   recording_enabled: boolean;
-  recording_path: string | null;
+  recording_available: boolean;
+  owner: string | null;
+  visibility: string;
   last_error: string | null;
 }
 

@@ -14,6 +14,14 @@ from typing import Any, Literal, TypeAlias
 
 SessionLifecycle = Literal["stopped", "starting", "running", "error"]
 
+# CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
+# These are fetched from third-party CDNs without Subresource Integrity (SRI)
+# hashes.  Operators who require supply-chain isolation should override these
+# via UIConfig.xterm_cdn / UIConfig.fonts_cdn to point to self-hosted copies,
+# or add SRI attributes by customising the UI template.
+XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
+FONTS_CDN_DEFAULT = "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap"
+
 
 @dataclass(slots=True)
 class AuthConfig:
@@ -42,6 +50,8 @@ class UiConfig:
 
     app_path: str = "/app"
     assets_path: str = "/_terminal"
+    xterm_cdn: str = XTERM_CDN_DEFAULT
+    fonts_cdn: str = FONTS_CDN_DEFAULT
 
 
 @dataclass(slots=True)
@@ -50,6 +60,7 @@ class RecordingConfig:
 
     enabled_by_default: bool = False
     directory: Path = Path(".uterm-recordings")
+    max_bytes: int = 0  # 0 = unlimited
 
 
 @dataclass(slots=True)
@@ -60,6 +71,7 @@ class ServerBindConfig:
     port: int = 8780
     public_base_url: str = "http://127.0.0.1:8780"
     title: str = "provide-terminal-server"
+    allowed_origins: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -75,7 +87,6 @@ class SessionDefinition:
     tags: list[str] = field(default_factory=list)
     recording_enabled: bool | None = None
     created_at: float = field(default_factory=time.time)
-    last_active_at: float | None = None
     owner: str | None = None
     visibility: Literal["public", "operator", "private"] = "public"
 
@@ -93,7 +104,9 @@ class SessionRuntimeStatus:
     auto_start: bool
     tags: list[str]
     recording_enabled: bool
-    recording_path: str | None = None
+    recording_available: bool = False
+    owner: str | None = None
+    visibility: str = "public"
     last_error: str | None = None
 
 
