@@ -28,7 +28,9 @@ export function normalizeSessionStatus(raw) {
         autoStart: raw.auto_start,
         tags: [...raw.tags],
         recordingEnabled: raw.recording_enabled,
-        recordingPath: raw.recording_path,
+        recordingAvailable: raw.recording_available,
+        owner: raw.owner ?? null,
+        visibility: raw.visibility ?? "public",
         lastError: raw.last_error,
     };
 }
@@ -61,7 +63,9 @@ export async function fetchSessionDetails(sessionId) {
     };
 }
 export async function setSessionMode(sessionId, inputMode) {
-    return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/mode`, "POST", { input_mode: inputMode }));
+    return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/mode`, "POST", {
+        input_mode: inputMode,
+    }));
 }
 export async function clearSession(sessionId) {
     return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/clear`, "POST"));

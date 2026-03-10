@@ -73,6 +73,7 @@ interface FitAddonGlobal {
   FitAddon: FitAddonCtor;
 }
 
+// biome-ignore lint/correctness/noUnusedVariables: script-mode global Window augmentation used throughout
 interface Window {
   Terminal?: XtermCtor;
   FitAddon?: FitAddonGlobal;
@@ -104,7 +105,9 @@ let cssInjected = false;
 let instanceCount = 0;
 
 const scriptEl =
-  typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement ? document.currentScript : null;
+  typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement
+    ? document.currentScript
+    : null;
 
 function injectCss(): void {
   if (cssInjected) return;
@@ -510,15 +513,31 @@ class ProvideTerminal {
       });
     };
 
-    bindRange("setCols", "valCols", (value) => {
-      this.settings.cols = Number(value);
-    }, (value) => value);
-    bindRange("setRows", "valRows", (value) => {
-      this.settings.rows = Number(value);
-    }, (value) => value);
-    bindRange("setFontSize", "valFontSize", (value) => {
-      this.settings.fontSize = Number(value);
-    }, (value) => `${value}px`, true);
+    bindRange(
+      "setCols",
+      "valCols",
+      (value) => {
+        this.settings.cols = Number(value);
+      },
+      (value) => value,
+    );
+    bindRange(
+      "setRows",
+      "valRows",
+      (value) => {
+        this.settings.rows = Number(value);
+      },
+      (value) => value,
+    );
+    bindRange(
+      "setFontSize",
+      "valFontSize",
+      (value) => {
+        this.settings.fontSize = Number(value);
+      },
+      (value) => `${value}px`,
+      true,
+    );
 
     const pageBgInput = this.q<HTMLInputElement>("setPageBg");
     pageBgInput.addEventListener("input", () => {

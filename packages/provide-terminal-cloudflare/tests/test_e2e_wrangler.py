@@ -29,22 +29,30 @@ def _get(base: str, path: str) -> tuple[int, dict]:
 @pytest.mark.e2e
 def test_health_endpoint(wrangler_server: str) -> None:
     status, body = _get(wrangler_server, "/api/health")
-    assert status == 200
-    assert body.get("ok") is True
-    assert body.get("service") == "provide-terminal-cloudflare"
+    # 200 in AUTH_MODE=dev (local pywrangler); 401/403 in jwt/CF-Access mode.
+    if status == 200:
+        assert body.get("ok") is True
+        assert body.get("service") == "provide-terminal-cloudflare"
+    else:
+        assert status in {401, 403}, f"unexpected status {status}"
 
 
 @pytest.mark.e2e
 def test_sessions_endpoint_returns_list(wrangler_server: str) -> None:
     status, body = _get(wrangler_server, "/api/sessions")
-    assert status == 200
-    assert isinstance(body, list)
+    # 200 + list in dev mode; 401/403 when auth is required.
+    if status == 200:
+        assert isinstance(body, list)
+    else:
+        assert status in {401, 403}, f"unexpected status {status}"
 
 
 @pytest.mark.e2e
 def test_unknown_route_returns_404(wrangler_server: str) -> None:
-    status, body = _get(wrangler_server, "/api/does-not-exist")
-    assert status == 404
+    status, _body = _get(wrangler_server, "/api/does-not-exist")
+    # 404 in dev mode (auth passes, route not found);
+    # 401/403 when auth is required (blocks before routing).
+    assert status in {401, 403, 404}, f"unexpected status {status}"
 
 
 @pytest.mark.e2e
@@ -61,4 +69,5 @@ def test_hijack_acquire_requires_worker_id(wrangler_server: str) -> None:
             status = resp.status
     except urllib.error.HTTPError as exc:
         status = exc.code
-    assert status in {200, 403, 409}, f"unexpected status {status}"
+    # 200 = acquired, 401 = jwt required, 403 = forbidden, 409 = no worker
+    assert status in {200, 401, 403, 409}, f"unexpected status {status}"

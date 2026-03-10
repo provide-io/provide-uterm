@@ -18,6 +18,10 @@ class JwtConfig:
     # IdP-specific tokens (Auth0, Okta, Azure AD) work without token transforms.
     jwt_roles_claim: str = "roles"
     jwt_scopes_claim: str = "scope"
+    # Role to assign when the JWT contains no roles/scope claims.
+    # Useful for Cloudflare Access JWTs which don't include roles by default.
+    # Set JWT_DEFAULT_ROLE=operator to grant all CF Access users operator access.
+    jwt_default_role: str = "viewer"
 
 
 @dataclass(slots=True)
@@ -93,6 +97,7 @@ class CloudflareConfig:
             allow_query_token=_get_bool("AUTH_ALLOW_QUERY_TOKEN", default=not is_production),
             jwt_roles_claim=_get("JWT_ROLES_CLAIM", "roles") or "roles",
             jwt_scopes_claim=_get("JWT_SCOPES_CLAIM", "scope") or "scope",
+            jwt_default_role=_get("JWT_DEFAULT_ROLE", "viewer") or "viewer",
         )
         return cls(
             environment=environment,

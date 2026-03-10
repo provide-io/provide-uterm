@@ -17,7 +17,7 @@ import inspect
 import json
 import re
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import suppress
 from typing import Any
 
@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
 BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]
 MetricCallback = Callable[[str, int], None]
+WorkerEmptyCallback = Callable[[str], Coroutine[Any, Any, None]]
 
 
 class BrowserRoleResolutionError(RuntimeError):
@@ -66,6 +67,7 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
         dashboard_hijack_lease_s: int = 45,
         *,
         resolve_browser_role: BrowserRoleResolver | None = None,
+        on_worker_empty: WorkerEmptyCallback | None = None,
         max_ws_message_bytes: int = 1_048_576,
         max_input_chars: int = 10_000,
         browser_rate_limit_per_sec: float = 30,
@@ -78,6 +80,7 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
         self._on_hijack_changed = on_hijack_changed
         self._on_metric = on_metric
         self._resolve_browser_role = resolve_browser_role
+        self.on_worker_empty: WorkerEmptyCallback | None = on_worker_empty
         self._worker_token = worker_token
         self._dashboard_hijack_lease_s = max(1, min(int(dashboard_hijack_lease_s), 600))
         self.max_ws_message_bytes = max(1024, int(max_ws_message_bytes))

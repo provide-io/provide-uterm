@@ -45,11 +45,12 @@ function updateReplayUi(root: HTMLElement, state: ReplayIndexState): void {
 
 export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   if (!bootstrap.session_id) throw new Error("replay bootstrap missing session_id");
+  const sessionId = bootstrap.session_id;
   root.innerHTML = `
     <div class="page">
       <section class="card stack">
         <div class="small">Replay</div>
-        <h1>${bootstrap.title} (${bootstrap.session_id})</h1>
+        <h1>${bootstrap.title} (${sessionId})</h1>
         <div class="toolbar">
           <button class="btn" id="btn-load">Reload</button>
           <button class="btn" id="btn-prev">Prev</button>
@@ -74,7 +75,7 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
               <option value="200" selected>200</option>
             </select>
           </label>
-          <a class="btn" href="/api/sessions/${encodeURIComponent(bootstrap.session_id)}/recording/download">Download JSONL</a>
+          <a class="btn" href="/api/sessions/${encodeURIComponent(sessionId)}/recording/download">Download JSONL</a>
         </div>
         <input id="replay-scrubber" type="range" min="0" max="0" value="0" disabled>
         <pre class="small" id="replay-meta">Loading recording…</pre>
@@ -93,11 +94,11 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
   const limit = root.querySelector<HTMLSelectElement>("#replay-limit");
   const scrubber = root.querySelector<HTMLInputElement>("#replay-scrubber");
   if (!filter || !limit || !scrubber) throw new Error("replay shell is incomplete");
-  let state = await loadReplayState(bootstrap.session_id, filter.value, Number(limit.value));
+  let state = await loadReplayState(sessionId, filter.value, Number(limit.value));
   updateReplayUi(root, state);
 
   const reload = async (): Promise<void> => {
-    state = await loadReplayState(bootstrap.session_id!, filter.value, Number(limit.value));
+    state = await loadReplayState(sessionId, filter.value, Number(limit.value));
     updateReplayUi(root, state);
   };
   const clampIndex = (nextIndex: number): void => {
@@ -109,7 +110,9 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
   root.querySelector<HTMLButtonElement>("#btn-prev")?.addEventListener("click", () => clampIndex(state.index - 1));
   root.querySelector<HTMLButtonElement>("#btn-next")?.addEventListener("click", () => clampIndex(state.index + 1));
   root.querySelector<HTMLButtonElement>("#btn-first")?.addEventListener("click", () => clampIndex(0));
-  root.querySelector<HTMLButtonElement>("#btn-last")?.addEventListener("click", () => clampIndex(state.entries.length - 1));
+  root
+    .querySelector<HTMLButtonElement>("#btn-last")
+    ?.addEventListener("click", () => clampIndex(state.entries.length - 1));
   filter.addEventListener("change", () => void reload());
   limit.addEventListener("change", () => void reload());
   scrubber.addEventListener("input", () => clampIndex(Number(scrubber.value)));

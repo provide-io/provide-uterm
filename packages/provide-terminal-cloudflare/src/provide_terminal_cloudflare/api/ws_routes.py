@@ -48,7 +48,7 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
         if active is None:
             await runtime.send_ws(ws, {"type": "error", "message": "not_hijacked"})
             return
-        if runtime.browser_hijack_owner.get(runtime._ws_key(ws)) != active.hijack_id:
+        if runtime.browser_hijack_owner.get(runtime.ws_key(ws)) != active.hijack_id:
             await runtime.send_ws(ws, {"type": "error", "message": "not_owner"})
             return
         await runtime.push_worker_input(str(frame.get("data", "")))

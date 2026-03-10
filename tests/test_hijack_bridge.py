@@ -275,8 +275,23 @@ class TestSendSnapshot:
 
         assert len(ws.sent) == 0
 
-    async def test_send_snapshot_uses_latest_snapshot(self) -> None:
+    async def test_send_snapshot_emulator_wins_over_cached(self) -> None:
+        """Live emulator snapshot takes priority over _latest_snapshot."""
+        session = MockSession()  # emulator.get_snapshot() returns {"screen": "test", ...}
+        bot = MockBot(session)
+        bridge = TermBridge(bot, "bot1", "http://localhost:8000")
+        bridge._latest_snapshot = {"screen": "cached screen", "cols": 80, "rows": 25}
+
+        ws = MockWS()
+        await bridge._send_snapshot(ws)
+
+        payload = json.loads(ws.sent[0])
+        assert payload["screen"] == "test"
+
+    async def test_send_snapshot_uses_latest_snapshot_when_no_emulator(self) -> None:
+        """_latest_snapshot is used as fallback when no emulator is available."""
         session = MockSession()
+        session.emulator = None
         bot = MockBot(session)
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._latest_snapshot = {"screen": "cached screen", "cols": 80, "rows": 25}

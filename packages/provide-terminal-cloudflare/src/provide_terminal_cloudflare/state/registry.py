@@ -27,6 +27,9 @@ async def update_kv_session(
     *,
     connected: bool,
     hijacked: bool = False,
+    input_mode: str = "hijack",
+    recording_enabled: bool = False,
+    recording_available: bool = False,
 ) -> None:
     """Write (or delete) this DO's session entry in the KV registry.
 
@@ -48,19 +51,22 @@ async def update_kv_session(
         "display_name": worker_id,
         "connector_type": "unknown",
         "lifecycle_state": "running",
-        "input_mode": "hijack",
+        "input_mode": input_mode,
         "connected": True,
         "auto_start": False,
         "tags": [],
-        "recording_enabled": False,
-        "recording_available": False,
+        "recording_enabled": recording_enabled,
+        "recording_available": recording_available,
         "owner": None,
         "visibility": "public",
         "last_error": None,
         "hijacked": hijacked,
     }
     try:
-        await kv.put(key, json.dumps(status, ensure_ascii=True), expirationTtl=_KV_EXPIRATION_TTL)
+        # Note: do NOT pass expirationTtl as a keyword argument — CF Python Workers
+        # (Pyodide) cannot map Python kwargs to the JS options object for KV.put().
+        # Entries are cleaned up explicitly on disconnect via kv.delete().
+        await kv.put(key, json.dumps(status, ensure_ascii=True))
     except Exception as exc:
         logger.debug("kv put %s failed: %s", key, exc)
 

@@ -190,7 +190,7 @@ class TestReferenceServerApp:
                 json={
                     "session_id": "scratch",
                     "display_name": "Scratch Demo",
-                    "connector_type": "demo",
+                    "connector_type": "shell",
                     "input_mode": "hijack",
                     "auto_start": True,
                     "recording_enabled": True,
@@ -206,7 +206,7 @@ class TestReferenceServerApp:
 
             analysis = await http.post("/api/sessions/scratch/analyze")
             assert analysis.status_code == 200
-            assert "interactive demo analysis" in analysis.json()["analysis"]
+            assert "interactive shell analysis" in analysis.json()["analysis"]
 
             recording = await http.get("/api/sessions/scratch/recording")
             assert recording.status_code == 200

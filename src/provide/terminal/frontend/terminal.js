@@ -19,7 +19,9 @@ const THEME_DEFAULTS = {
 };
 let cssInjected = false;
 let instanceCount = 0;
-const scriptEl = typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement ? document.currentScript : null;
+const scriptEl = typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement
+    ? document.currentScript
+    : null;
 function injectCss() {
     if (cssInjected)
         return;

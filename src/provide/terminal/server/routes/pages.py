@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse
 
 from provide.terminal.server.auth import resolve_http_principal
-from provide.terminal.server.ui import operator_dashboard_html, replay_page_html, session_page_html
+from provide.terminal.server.ui import connect_page_html, operator_dashboard_html, replay_page_html, session_page_html
 
 _SessionId = Annotated[str, Path(pattern=r"^[\w\-]+$")]
 
@@ -131,6 +131,24 @@ def create_page_router() -> APIRouter:
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
+        _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
+        _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
+        return response
+
+    @router.get("/connect", response_class=HTMLResponse)
+    async def connect_view(request: Request) -> HTMLResponse:
+        cfg = request.app.state.uterm_config
+        secure = _is_secure_request(request)
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        response = HTMLResponse(
+            connect_page_html(
+                cfg.server.title,
+                cfg.ui.assets_path,
+                cfg.ui.app_path,
+                xterm_cdn=cfg.ui.xterm_cdn,
+                fonts_cdn=cfg.ui.fonts_cdn,
+            )
+        )
         _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
         _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
         return response

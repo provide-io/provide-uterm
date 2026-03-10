@@ -15,7 +15,11 @@ function readBootstrap(): AppBootstrap {
   ) {
     throw new Error("Invalid page bootstrap");
   }
-  if (typeof parsed.title !== "string" || typeof parsed.app_path !== "string" || typeof parsed.assets_path !== "string") {
+  if (
+    typeof parsed.title !== "string" ||
+    typeof parsed.app_path !== "string" ||
+    typeof parsed.assets_path !== "string"
+  ) {
     throw new Error("Incomplete page bootstrap");
   }
   return parsed as AppBootstrap;

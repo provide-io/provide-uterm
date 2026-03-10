@@ -10,8 +10,8 @@ Provides:
 - :class:`TelnetTransport` — full RFC 854 client implementing
   :class:`~provide.terminal.transports.base.ConnectionTransport`.
 - Telnet protocol constants: ``IAC``, ``WILL``, ``WONT``, ``DO``, ``DONT``, ``SB``, ``SE``.
-- :func:`start_telnet_server` re-exported from
-  :mod:`~provide.terminal.transports.telnet_server` for backwards compatibility.
+- :func:`start_telnet_server` — asyncio TCP server (defined in
+  :mod:`~provide.terminal.transports.telnet_server`, re-exported here).
 """
 
 from __future__ import annotations

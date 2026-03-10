@@ -1,6 +1,6 @@
 import { clearRuntime, loadOperatorWorkspaceState, requestAnalysis, switchSessionMode } from "../state.js";
-import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
 import type { AppBootstrap, SessionMode } from "../types.js";
+import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -27,6 +27,7 @@ async function applyMode(sessionId: string, mode: SessionMode, status: HTMLEleme
 
 export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   if (!bootstrap.session_id) throw new Error("operator bootstrap missing session_id");
+  const sessionId = bootstrap.session_id;
   const safeTitle = escapeHtml(bootstrap.title);
   const safeAppPath = escapeHtml(bootstrap.app_path);
   root.innerHTML = `
@@ -40,7 +41,7 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
           <button class="btn" id="btn-hijack">Exclusive Mode</button>
           <button class="btn" id="btn-clear">Clear</button>
           <button class="btn" id="btn-analyze">Analyze</button>
-          <a class="btn" id="btn-replay" href="${safeAppPath}/replay/${encodeURIComponent(bootstrap.session_id)}">Replay</a>
+          <a class="btn" id="btn-replay" href="${safeAppPath}/replay/${encodeURIComponent(sessionId)}">Replay</a>
         </div>
         <div id="operator-status" class="status-chip info">Loading operator workspace…</div>
         <pre class="small" id="meta"></pre>
@@ -56,7 +57,7 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
   if (!status || !meta || !widget) throw new Error("operator shell is incomplete");
 
   const refresh = async (): Promise<void> => {
-    const state = await loadOperatorWorkspaceState(bootstrap.session_id!);
+    const state = await loadOperatorWorkspaceState(sessionId);
     status.className = `status-chip ${state.status.tone}`;
     status.textContent = state.status.text;
     meta.textContent = JSON.stringify(
@@ -71,7 +72,7 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
 
   try {
     await refresh();
-    const widgetState = mountHijackWidget(widget, bootstrap.session_id, "operator");
+    const widgetState = mountHijackWidget(widget, sessionId, "operator");
     if (!widgetState.mounted) {
       status.className = "status-chip error";
       status.textContent = widgetState.error ?? "Widget mount failed";
@@ -83,17 +84,21 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
 
   root.querySelector<HTMLButtonElement>("#btn-refresh")?.addEventListener("click", () => void refresh());
   root.querySelector<HTMLButtonElement>("#btn-open")?.addEventListener("click", () => {
-    void applyMode(bootstrap.session_id!, "open", status, meta);
+    void applyMode(sessionId, "open", status, meta);
   });
   root.querySelector<HTMLButtonElement>("#btn-hijack")?.addEventListener("click", () => {
-    void applyMode(bootstrap.session_id!, "hijack", status, meta);
+    void applyMode(sessionId, "hijack", status, meta);
   });
   root.querySelector<HTMLButtonElement>("#btn-clear")?.addEventListener("click", () => {
-    void clearRuntime(bootstrap.session_id!)
+    void clearRuntime(sessionId)
       .then((state) => {
         status.className = "status-chip ok";
         status.textContent = "Session cleared.";
-        meta.textContent = JSON.stringify({ session: state.summary, snapshot: { prompt_id: state.snapshotPromptId } }, null, 2);
+        meta.textContent = JSON.stringify(
+          { session: state.summary, snapshot: { prompt_id: state.snapshotPromptId } },
+          null,
+          2,
+        );
       })
       .catch((error) => {
         status.className = "status-chip error";
@@ -101,7 +106,7 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
       });
   });
   root.querySelector<HTMLButtonElement>("#btn-analyze")?.addEventListener("click", () => {
-    void requestAnalysis(bootstrap.session_id!)
+    void requestAnalysis(sessionId)
       .then((analysis) => {
         window.alert(analysis);
       })

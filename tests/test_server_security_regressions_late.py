@@ -203,7 +203,7 @@ async def test_runtime_stops_on_permanent_http_error() -> None:
     from provide.terminal.server.models import RecordingConfig, SessionDefinition
     from provide.terminal.server.runtime import HostedSessionRuntime
 
-    session = SessionDefinition(session_id="s1", display_name="S1", connector_type="demo", auto_start=False)
+    session = SessionDefinition(session_id="s1", display_name="S1", connector_type="shell", auto_start=False)
     runtime = HostedSessionRuntime(session, public_base_url="http://localhost:9999", recording=RecordingConfig())
 
     class FakeStatusError(Exception):
@@ -280,16 +280,16 @@ def test_pages_use_state_principal_not_double_resolved(monkeypatch: pytest.Monke
 class TestConnectorConfigValidation:
     """Unknown connector_config keys raise ValueError at connector __init__ time."""
 
-    def test_demo_rejects_unknown_keys(self) -> None:
-        from provide.terminal.server.connectors.demo import DemoSessionConnector
+    def test_shell_rejects_unknown_keys(self) -> None:
+        from provide.terminal.server.connectors.shell import ShellSessionConnector
 
-        with pytest.raises(ValueError, match="unknown demo connector_config keys"):
-            DemoSessionConnector("s1", "Demo", {"typo_key": "value"})
+        with pytest.raises(ValueError, match="unknown shell connector_config keys"):
+            ShellSessionConnector("s1", "Shell", {"typo_key": "value"})
 
-    def test_demo_accepts_input_mode(self) -> None:
-        from provide.terminal.server.connectors.demo import DemoSessionConnector
+    def test_shell_accepts_input_mode(self) -> None:
+        from provide.terminal.server.connectors.shell import ShellSessionConnector
 
-        connector = DemoSessionConnector("s1", "Demo", {"input_mode": "hijack"})
+        connector = ShellSessionConnector("s1", "Shell", {"input_mode": "hijack"})
         assert connector is not None
 
     def test_telnet_rejects_unknown_keys(self) -> None:

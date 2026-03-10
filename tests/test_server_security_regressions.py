@@ -72,7 +72,7 @@ def _jwt_config() -> AuthConfig:
 
 def test_policy_uses_trusted_roles_only() -> None:
     policy = SessionPolicyResolver(_jwt_config())
-    session = SessionDefinition(session_id="s1", display_name="Session", connector_type="demo")
+    session = SessionDefinition(session_id="s1", display_name="Session", connector_type="shell")
 
     role = policy.role_for(Principal(subject_id="user-1", roles=frozenset({"viewer"})), session)
 
@@ -147,7 +147,7 @@ def test_jwt_api_enforces_role_and_ownership() -> None:
         create_forbidden = client.post(
             "/api/sessions",
             headers=_jwt_headers(sub="viewer-1", roles=["viewer"]),
-            json={"session_id": "v1", "display_name": "viewer-created", "connector_type": "demo"},
+            json={"session_id": "v1", "display_name": "viewer-created", "connector_type": "shell"},
         )
         assert create_forbidden.status_code == 403
 
@@ -155,14 +155,19 @@ def test_jwt_api_enforces_role_and_ownership() -> None:
         created = client.post(
             "/api/sessions",
             headers=_jwt_headers(sub="op-1", roles=["operator"]),
-            json={"session_id": "owned-op", "display_name": "Owned", "connector_type": "demo", "owner": "someone-else"},
+            json={
+                "session_id": "owned-op",
+                "display_name": "Owned",
+                "connector_type": "shell",
+                "owner": "someone-else",
+            },
         )
         assert created.status_code == 403
 
         created_ok = client.post(
             "/api/sessions",
             headers=_jwt_headers(sub="op-1", roles=["operator"]),
-            json={"session_id": "owned-op", "display_name": "Owned", "connector_type": "demo"},
+            json={"session_id": "owned-op", "display_name": "Owned", "connector_type": "shell"},
         )
         assert created_ok.status_code == 200
 
@@ -465,7 +470,7 @@ def test_session_definition_has_no_last_active_at_field() -> None:
     """SessionDefinition must not expose last_active_at (field removed in fourth review)."""
     from provide.terminal.server.models import SessionDefinition
 
-    sd = SessionDefinition(session_id="s1", display_name="S1", connector_type="demo")
+    sd = SessionDefinition(session_id="s1", display_name="S1", connector_type="shell")
     assert not hasattr(sd, "last_active_at")
 
 

@@ -31,17 +31,17 @@ def _clean_path(value: str, fallback: str) -> str:
 
 
 def default_server_config() -> ServerConfig:
-    """Return a runnable default config with one auto-start demo session."""
+    """Return a runnable default config with one auto-start shell session."""
     return ServerConfig(
         auth=AuthConfig(mode="dev"),
         sessions=[
             SessionDefinition(
                 session_id="demo-session",
-                display_name="Interactive Demo Session",
-                connector_type="demo",
+                display_name="Interactive Shell Session",
+                connector_type="shell",
                 input_mode="open",
                 auto_start=True,
-                tags=["demo", "reference"],
+                tags=["shell", "reference"],
             )
         ],
     )
@@ -121,7 +121,7 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
             raise ValueError("session_id is required for each [[sessions]] entry")
         if not re.match(r"^[\w\-]+$", session_id):
             raise ValueError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
-        connector_type = str(raw.get("connector_type", "demo")).strip() or "demo"
+        connector_type = str(raw.get("connector_type", "shell")).strip() or "shell"
         if connector_type not in KNOWN_CONNECTOR_TYPES:
             raise ValueError(
                 f"invalid connector_type for {session_id!r}: {connector_type!r} — "

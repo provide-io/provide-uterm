@@ -98,6 +98,8 @@ class _Runtime:
             list_events_since=lambda *_args, **_kwargs: [],
             load_session=lambda *_args, **_kwargs: None,
             current_event_seq=lambda *_args, **_kwargs: 0,
+            min_event_seq=lambda *_args, **_kwargs: 0,
+            save_input_mode=lambda *_args, **_kwargs: None,
         )
 
 
@@ -340,6 +342,15 @@ async def test_events_response_has_contract_fields() -> None:
 # ---------------------------------------------------------------------------
 
 
+async def test_input_mode_requires_admin() -> None:
+    runtime = _Runtime()
+    runtime._role = "operator"
+    req = _Req("https://example.invalid/worker/test-worker/input_mode", method="POST")
+    req._body = json.dumps({"input_mode": "open"})
+    resp = await route_http(runtime, req)
+    assert resp.status == 403
+
+
 async def test_input_mode_switches_to_open() -> None:
     runtime = _Runtime()
     req = _Req("https://example.invalid/worker/test-worker/input_mode", method="POST")
@@ -372,6 +383,14 @@ async def test_input_mode_rejects_invalid_value() -> None:
 # ---------------------------------------------------------------------------
 # Contract: POST /worker/{id}/disconnect_worker
 # ---------------------------------------------------------------------------
+
+
+async def test_disconnect_worker_requires_admin() -> None:
+    runtime = _Runtime(worker_ws=object())
+    runtime._role = "operator"
+    req = _Req("https://example.invalid/worker/test-worker/disconnect_worker", method="POST")
+    resp = await route_http(runtime, req)
+    assert resp.status == 403
 
 
 async def test_disconnect_worker_returns_404_when_no_worker() -> None:

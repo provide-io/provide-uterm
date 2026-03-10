@@ -1,0 +1,12 @@
+# Local wrangler dev state (SQLite DO snapshots, KV data)
+.wrangler/state/
+
+# Secret vars (never commit credentials)
+.dev.vars
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

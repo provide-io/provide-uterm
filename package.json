@@ -4,9 +4,12 @@
   "type": "module",
   "scripts": {
     "build:frontend": "tsc -p tsconfig.frontend.json",
-    "typecheck:frontend": "tsc -p tsconfig.frontend.json --noEmit"
+    "typecheck:frontend": "tsc -p tsconfig.frontend.json --noEmit",
+    "lint:frontend": "biome ci src/provide/terminal/frontend-src/",
+    "fix:frontend": "biome check --write --unsafe src/provide/terminal/frontend-src/"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
     "typescript": "^5.9.2"
   }
 }

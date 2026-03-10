@@ -25,7 +25,7 @@ def test_default_server_config_has_demo_session() -> None:
     assert config.auth.mode == "dev"
     assert len(config.sessions) == 1
     assert config.sessions[0].session_id == "demo-session"
-    assert config.sessions[0].connector_type == "demo"
+    assert config.sessions[0].connector_type == "shell"
 
 
 def test_config_from_mapping_parses_sessions_and_paths() -> None:
@@ -61,7 +61,7 @@ def test_config_from_mapping_parses_sessions_and_paths() -> None:
 
 def test_policy_fails_closed_for_anonymous_in_non_dev_mode() -> None:
     policy = SessionPolicyResolver(AuthConfig(mode="jwt", jwt_public_key_pem="x", jwt_algorithms=["HS256"]))
-    session = SessionDefinition(session_id="s1", display_name="Session", connector_type="demo")
+    session = SessionDefinition(session_id="s1", display_name="Session", connector_type="shell")
 
     role = policy.role_for(Principal(subject_id="anonymous", roles=frozenset({"viewer"})), session)
 
@@ -79,7 +79,7 @@ def test_load_server_config_resolves_relative_recording_path(tmp_path: Path) -> 
                 "[[sessions]]",
                 'session_id = "demo-session"',
                 'display_name = "Demo"',
-                'connector_type = "demo"',
+                'connector_type = "shell"',
             ]
         ),
         encoding="utf-8",

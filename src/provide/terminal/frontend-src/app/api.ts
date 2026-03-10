@@ -1,15 +1,5 @@
-import type {
-  AnalysisResponse,
-  RecordingEntry,
-  SessionStatus,
-  SnapshotPayload,
-} from "../server-common.js";
-import type {
-  RecordingEntryView,
-  SessionDetails,
-  SessionSummary,
-  SessionSurface,
-} from "./types.js";
+import type { AnalysisResponse, RecordingEntry, SessionStatus, SnapshotPayload } from "../server-common.js";
+import type { RecordingEntryView, SessionDetails, SessionSummary, SessionSurface } from "./types.js";
 
 async function apiJson<T>(path: string, method: "GET" | "POST" = "GET", body: unknown = null): Promise<T> {
   const init: RequestInit = {
@@ -84,12 +74,16 @@ export async function fetchSessionDetails(sessionId: string): Promise<SessionDet
 
 export async function setSessionMode(sessionId: string, inputMode: "open" | "hijack"): Promise<SessionSummary> {
   return normalizeSessionStatus(
-    await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/mode`, "POST", { input_mode: inputMode }),
+    await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/mode`, "POST", {
+      input_mode: inputMode,
+    }),
   );
 }
 
 export async function clearSession(sessionId: string): Promise<SessionSummary> {
-  return normalizeSessionStatus(await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/clear`, "POST"));
+  return normalizeSessionStatus(
+    await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/clear`, "POST"),
+  );
 }
 
 export async function analyzeSession(sessionId: string): Promise<string> {

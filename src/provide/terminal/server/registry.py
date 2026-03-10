@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 from collections import deque
@@ -47,6 +48,16 @@ class SessionRegistry:
         self._lock = asyncio.Lock()
         self._sessions: dict[str, SessionDefinition] = {session.session_id: session for session in sessions}
         self._runtimes: dict[str, HostedSessionRuntime] = {}
+        hub.on_worker_empty = self._on_worker_empty
+
+    async def _on_worker_empty(self, session_id: str) -> None:
+        """Auto-delete an ephemeral session when the last browser disconnects."""
+        async with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None or not session.ephemeral:
+                return
+        with contextlib.suppress(KeyError):
+            await self.delete_session(session_id)
 
     def _require_session(self, session_id: str) -> SessionDefinition:
         """Return the session definition or raise ``KeyError``.  Caller must hold ``self._lock``."""
@@ -104,7 +115,7 @@ class SessionRegistry:
         session_id = str(payload["session_id"])
         if not re.match(r"^[\w\-]+$", session_id):
             raise SessionValidationError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
-        connector_type_raw = str(payload.get("connector_type", "demo"))
+        connector_type_raw = str(payload.get("connector_type", "shell"))
         if connector_type_raw not in KNOWN_CONNECTOR_TYPES:
             raise SessionValidationError(
                 f"connector_type must be one of {sorted(KNOWN_CONNECTOR_TYPES)}, got: {connector_type_raw!r}"
@@ -130,6 +141,7 @@ class SessionRegistry:
             ),
             owner=(None if payload.get("owner") is None else str(payload.get("owner"))),
             visibility=visibility_raw,  # type: ignore[arg-type]
+            ephemeral=bool(payload.get("ephemeral", False)),
         )
         async with self._lock:
             if session.session_id in self._sessions:

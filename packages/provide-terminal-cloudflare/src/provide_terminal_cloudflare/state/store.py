@@ -67,12 +67,15 @@ class SqliteStateStore:
             )
             """
         )
+        # Add input_mode column if it does not exist yet (idempotent migration).
+        with contextlib.suppress(Exception):
+            self._run("ALTER TABLE session_state ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'hijack'")
 
     def load_session(self, worker_id: str) -> dict[str, Any] | None:
         rows = self._rows(
             self._run(
                 """
-                SELECT worker_id, hijack_id, owner, lease_expires_at, last_snapshot_json, event_seq
+                SELECT worker_id, hijack_id, owner, lease_expires_at, last_snapshot_json, event_seq, input_mode
                 FROM session_state
                 WHERE worker_id = ?
                 """,
@@ -90,6 +93,7 @@ class SqliteStateStore:
             "lease_expires_at": self._row_value(row, "lease_expires_at", 3),
             "last_snapshot": json.loads(snapshot_raw) if snapshot_raw else None,
             "event_seq": int(self._row_value(row, "event_seq", 5) or 0),
+            "input_mode": str(self._row_value(row, "input_mode", 6) or "hijack"),
         }
 
     def save_lease(self, record: LeaseRecord) -> None:
@@ -121,6 +125,41 @@ class SqliteStateStore:
             time.time(),
             worker_id,
         )
+
+    def save_input_mode(self, worker_id: str, mode: str) -> None:
+        now = time.time()
+        self._run(
+            """
+            INSERT INTO session_state(worker_id, input_mode, updated_at)
+            VALUES(?, ?, ?)
+            ON CONFLICT(worker_id) DO UPDATE SET
+                input_mode = excluded.input_mode,
+                updated_at = excluded.updated_at
+            """,
+            worker_id,
+            mode,
+            now,
+        )
+
+    def min_event_seq(self, worker_id: str) -> int:
+        rows = self._rows(
+            self._run(
+                """
+                SELECT COALESCE(MIN(seq), 0) AS seq
+                FROM session_events
+                WHERE worker_id = ?
+                """,
+                worker_id,
+            )
+        )
+        if not rows:
+            return 0
+        row = rows[0]
+        if isinstance(row, dict):
+            return int(row.get("seq") or 0)
+        if hasattr(row, "keys") and hasattr(row, "__getitem__"):
+            return int(row["seq"] if "seq" in row else self._get(row, 0) or 0)
+        return int(self._get(row, 0) or 0)
 
     def save_snapshot(self, worker_id: str, snapshot: dict[str, Any]) -> None:
         payload = json.dumps(snapshot, ensure_ascii=True)

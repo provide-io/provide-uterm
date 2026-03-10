@@ -1,8 +1,26 @@
 repos:
+  - repo: local
+    hooks:
+      - id: tsc
+        name: TypeScript typecheck
+        entry: node_modules/.bin/tsc -p tsconfig.frontend.json --noEmit
+        language: system
+        pass_filenames: false
+        always_run: false
+        types_or: [ts, javascript]
+
+      - id: biome
+        name: biome lint+format
+        entry: node_modules/.bin/biome ci src/provide/terminal/frontend-src/
+        language: system
+        pass_filenames: false
+        always_run: false
+        types_or: [ts, javascript]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.2
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 

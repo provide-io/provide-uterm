@@ -81,7 +81,7 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
         if await runtime.browser_role_for_request(request) != "admin":
             return json_response({"error": "admin role required"}, status=403)
         payload = await runtime.request_json(request)
-        owner = str(payload.get("owner") or "unknown")
+        owner = str(payload.get("owner") or "operator")
         lease_s, lease_error = _parse_lease_s(payload)
         if lease_error is not None or lease_s is None:
             return json_response({"error": lease_error or "invalid lease_s"}, status=400)
@@ -169,6 +169,8 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
             return json_response({"error": "not_found", "path": path}, status=404)
         payload = await runtime.request_json(request)
         data = str(payload.get("keys") or "")
+        if not data:
+            return json_response({"error": "keys must be non-empty"}, status=400)
         if not runtime.hijack.can_send_input(hijack_id):
             return json_response({"error": "not_hijack_owner"}, status=403)
         ok = await runtime.push_worker_input(data)
@@ -221,7 +223,7 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
         limit = 100
         rows = runtime.store.list_events_since(runtime.worker_id, after_seq, limit)
         latest_seq = runtime.store.current_event_seq(runtime.worker_id)
-        min_event_seq = rows[0]["seq"] if rows else 0
+        min_event_seq = runtime.store.min_event_seq(runtime.worker_id)
         session = runtime.hijack.session
         return json_response(
             {
@@ -238,6 +240,8 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
         )
 
     if path.endswith("/input_mode") and method == "POST":
+        if await runtime.browser_role_for_request(request) != "admin":
+            return json_response({"error": "admin role required"}, status=403)
         payload = await runtime.request_json(request)
         mode = str(payload.get("input_mode") or "")
         if mode not in {"hijack", "open"}:
@@ -245,9 +249,12 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
         if mode == "open" and runtime.hijack.session is not None:
             return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
         runtime.input_mode = mode  # type: ignore[misc]
+        runtime.store.save_input_mode(runtime.worker_id, mode)
         return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 
     if path.endswith("/disconnect_worker") and method == "POST":
+        if await runtime.browser_role_for_request(request) != "admin":
+            return json_response({"error": "admin role required"}, status=403)
         if runtime.worker_ws is None:
             return json_response({"error": "No worker connected."}, status=404)
         with contextlib.suppress(Exception):
