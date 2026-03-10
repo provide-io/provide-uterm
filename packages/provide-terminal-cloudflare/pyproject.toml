@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "provide-terminal-cloudflare"
-version = "0.1.0"
+version = "0.3.0"
 description = "Cloudflare Workers runtime for provide-terminal control plane"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,7 @@ ui = [
 dev = [
   "pytest>=9.0",
   "pytest-asyncio>=1.3",
+  "pytest-playwright>=0.5",
   "ruff>=0.15",
   "mypy>=1.19",
   "workers-py>=0.4.0",
@@ -35,4 +36,7 @@ packages = ["src/provide_terminal_cloudflare"]
 asyncio_mode = "auto"
 markers = [
     "e2e: end-to-end tests against a live pywrangler dev server (skipped by default; use -m e2e or E2E=1)",
+    "real_cf: requires real Cloudflare deployment with live KV + full WS support (skipped unless REAL_CF=1)",
+    "slow: slow tests (>10s); skipped unless SLOW=1 or REAL_CF=1",
+    "playwright: Playwright browser UI tests",
 ]

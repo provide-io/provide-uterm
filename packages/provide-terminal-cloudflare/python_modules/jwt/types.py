@@ -1,5 +1,4 @@
-from collections.abc import Callable
-from typing import Any, TypedDict
+from typing import Any, Callable, TypedDict
 
 JWKDict = dict[str, Any]
 

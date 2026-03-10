@@ -69,7 +69,7 @@ class SessionRuntime(DurableObject):
         # session row — investigate the routing configuration.
         return "default"
 
-    def _ws_key(self, ws: Any) -> str:
+    def ws_key(self, ws: Any) -> str:
         try:
             existing = getattr(ws, "_ut_ws_key", None)
             if isinstance(existing, str) and existing:
@@ -103,6 +103,9 @@ class SessionRuntime(DurableObject):
         snapshot = row.get("last_snapshot")
         if isinstance(snapshot, dict):
             self.last_snapshot = snapshot
+        stored_mode = row.get("input_mode")
+        if stored_mode in {"hijack", "open"}:
+            self.input_mode = stored_mode
 
     # ------------------------------------------------------------------
     # Auth helpers
@@ -184,8 +187,8 @@ class SessionRuntime(DurableObject):
             if isinstance(attachment, str):
                 if attachment in {"browser", "worker", "raw"}:
                     return attachment  # legacy plain-string format
-                # New format: "type:browser_role" e.g. "browser:admin"
-                parts = attachment.split(":", 1)
+                # Format: "type:browser_role" or "type:browser_role:worker_id"
+                parts = attachment.split(":", 2)
                 if parts[0] in {"browser", "worker", "raw"}:
                     return parts[0]
             role = None
@@ -215,8 +218,10 @@ class SessionRuntime(DurableObject):
     def _socket_browser_role(self, ws: Any) -> str:
         """Return the JWT-resolved browser role from the socket attachment.
 
-        Defaults to ``"admin"`` when auth mode is ``none``/``dev`` or when the
-        attachment does not carry a role (legacy connections).
+        Defaults to ``"admin"`` in ``none``/``dev`` mode (open access).  In
+        ``jwt`` mode, falls back to ``"viewer"`` (fail-closed) when the
+        attachment cannot be read — e.g. after hibernation for a connection
+        whose ``serializeAttachment`` call raised at connect time.
         """
         try:
             attachment = ws.deserializeAttachment()
@@ -226,14 +231,33 @@ class SessionRuntime(DurableObject):
                     return parts[1]
         except Exception as exc:
             logger.debug("failed to deserialize browser role attachment: %s", exc)
-        # Instance-attribute fallback (set when serializeAttachment raises).
+        # Instance-attribute fallback (set in fetch() when serializeAttachment raises).
+        # This attribute is NOT preserved across hibernation, so it will be absent
+        # on hibernation-resume paths.
         role = getattr(ws, "_ut_browser_role", None)
         if isinstance(role, str) and role in {"admin", "operator", "viewer"}:
             return role
-        return "admin"
+        # Fail-closed: in jwt mode grant only viewer; in open-access modes grant admin.
+        return "admin" if self.config.jwt.mode in {"none", "dev"} else "viewer"
+
+    def _socket_worker_id(self, ws: Any) -> str:
+        """Return the worker_id from the socket attachment (stored at connect time).
+
+        Falls back to ``self.worker_id`` when not encoded in the attachment
+        (e.g. legacy connections, test sockets without serialized attachment).
+        """
+        try:
+            attachment = ws.deserializeAttachment()
+            if isinstance(attachment, str):
+                parts = attachment.split(":", 2)
+                if len(parts) >= 3 and parts[2]:
+                    return parts[2]
+        except Exception as exc:
+            logger.debug("failed to deserialize worker_id from attachment: %s", exc)
+        return self.worker_id
 
     def _register_socket(self, ws: Any, role: str) -> None:
-        ws_id = self._ws_key(ws)
+        ws_id = self.ws_key(ws)
         if role == "worker":
             self.worker_ws = ws
             return
@@ -246,7 +270,28 @@ class SessionRuntime(DurableObject):
     # Fetch / WS lifecycle
     # ------------------------------------------------------------------
 
+    def _lazy_init_worker_id(self, request: object) -> None:
+        """Update worker_id from the request URL when ctx.id.name() returned 'default'.
+
+        Called at the start of fetch() so KV writes and state operations use
+        the real worker_id extracted from the URL path.
+        """
+        if self.worker_id != "default":
+            return
+        try:
+            path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
+        except Exception:
+            return
+        for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/worker/"):
+            if path.startswith(prefix):
+                segment = path[len(prefix) :].split("/")[0]
+                if segment:
+                    self.worker_id = segment
+                    return
+
     async def fetch(self, request: object) -> Response:
+        # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
+        self._lazy_init_worker_id(request)
         # Validate JWT before processing any request.
         principal, auth_error = await self._resolve_principal(request)
         if auth_error is not None:
@@ -269,20 +314,62 @@ class SessionRuntime(DurableObject):
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)
             try:
-                # Encode socket type and browser role together for hibernation safety.
-                # Format: "browser:admin", "worker:", "raw:"
-                server.serializeAttachment(f"{socket_role}:{browser_role}")
+                # Encode socket type, browser role, and worker_id for hibernation safety.
+                # Format: "browser:admin:e2e-abc123", "worker:admin:e2e-abc123", "raw:admin:e2e-abc123"
+                # worker_id in the attachment lets webSocketClose recover the ID after hibernation.
+                server.serializeAttachment(f"{socket_role}:{browser_role}:{self.worker_id}")
             except Exception:
                 server._ut_role = socket_role
                 server._ut_browser_role = browser_role
             # Register here so the role is available if fetch() is re-entered
             # before webSocketOpen() fires (hibernation-restore path).
             self._register_socket(server, socket_role)
+
+            # For worker connections, write KV registration eagerly in fetch() before
+            # returning 101. In CF hibernation mode, async operations in webSocketOpen()
+            # may not complete if the DO hibernates before the handler finishes.
+            if socket_role == "worker":
+                try:
+                    await update_kv_session(
+                        self.env,
+                        self.worker_id,
+                        connected=True,
+                        hijacked=self.hijack.session is not None,
+                        input_mode=self.input_mode,
+                    )
+                except Exception as exc:
+                    logger.debug("kv register worker in fetch() failed: %s", exc)
+
+            # For browser connections, send the hello frame synchronously in fetch()
+            # before returning 101. In CF hibernation mode, messages sent from
+            # webSocketOpen() may be dropped if the DO hibernates before the handler
+            # runs. Sending here (inside fetch()) guarantees delivery.
+            if socket_role == "browser":
+                try:
+                    server.send(
+                        json.dumps(
+                            {
+                                "type": "hello",
+                                "worker_id": self.worker_id,
+                                "worker_online": self.worker_ws is not None,
+                                "can_hijack": browser_role == "admin",
+                                "input_mode": self.input_mode,
+                                "role": browser_role,
+                                "hijack_control": "rest",
+                                "hijack_step_supported": True,
+                                "ts": time.time(),
+                            },
+                            ensure_ascii=True,
+                        )
+                    )
+                except Exception as exc:
+                    logger.debug("failed to send hello from fetch(): %s", exc)
+
             return Response(None, status=101, web_socket=client)
         return await route_http(self, request)
 
     async def webSocketOpen(self, ws: Any) -> None:  # noqa: N802
-        ws_id = self._ws_key(ws)
+        ws_id = self.ws_key(ws)
         role = self._socket_role(ws)
         self._register_socket(ws, role)
         if role == "worker":
@@ -290,7 +377,13 @@ class SessionRuntime(DurableObject):
             await self.broadcast_worker_frame(
                 {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}
             )
-            await update_kv_session(self.env, self.worker_id, connected=True, hijacked=self.hijack.session is not None)
+            await update_kv_session(
+                self.env,
+                self.worker_id,
+                connected=True,
+                hijacked=self.hijack.session is not None,
+                input_mode=self.input_mode,
+            )
         elif role == "raw":
             self.raw_sockets[ws_id] = ws
             if self.last_snapshot is not None and isinstance(self.last_snapshot.get("screen"), str):
@@ -310,10 +403,6 @@ class SessionRuntime(DurableObject):
                     "role": browser_role,
                     "hijack_control": "rest",
                     "hijack_step_supported": True,
-                    "capabilities": {
-                        "hijack_control": "rest",
-                        "hijack_step_supported": True,
-                    },
                     "ts": time.time(),
                 },
             )
@@ -336,7 +425,7 @@ class SessionRuntime(DurableObject):
 
     def _remove_ws(self, ws: Any) -> None:
         """Remove *ws* from all socket registries (worker, browser, raw)."""
-        ws_id = self._ws_key(ws)
+        ws_id = self.ws_key(ws)
         if ws is self.worker_ws:
             self.worker_ws = None
         self.browser_sockets.pop(ws_id, None)
@@ -345,22 +434,23 @@ class SessionRuntime(DurableObject):
 
     async def webSocketClose(self, ws: Any, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
-        was_worker = ws is self.worker_ws
+        # Use _socket_role() instead of `ws is self.worker_ws` — after hibernation,
+        # self.worker_ws is None so the identity check would always be False.
+        role = self._socket_role(ws)
+        wid = self._socket_worker_id(ws)
         self._remove_ws(ws)
-        if was_worker:
-            await self.broadcast_worker_frame(
-                {"type": "worker_disconnected", "worker_id": self.worker_id, "ts": time.time()}
-            )
-            await update_kv_session(self.env, self.worker_id, connected=False)
+        if role == "worker":
+            await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
+            await update_kv_session(self.env, wid, connected=False)
 
     async def webSocketError(self, ws: Any, error: Any) -> None:  # noqa: N802
-        logger.warning("ws_error worker_id=%s error=%s", self.worker_id, error)
-        was_worker = ws is self.worker_ws
+        role = self._socket_role(ws)
+        wid = self._socket_worker_id(ws)
+        logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
         self._remove_ws(ws)
-        if was_worker:
-            await self.broadcast_worker_frame(
-                {"type": "worker_disconnected", "worker_id": self.worker_id, "ts": time.time()}
-            )
+        if role == "worker":
+            await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
+            await update_kv_session(self.env, wid, connected=False)
 
     # ------------------------------------------------------------------
     # Request helpers
@@ -405,7 +495,7 @@ class SessionRuntime(DurableObject):
             await result
 
     async def send_hijack_state(self, ws: Any) -> None:
-        ws_id = self._ws_key(ws)
+        ws_id = self.ws_key(ws)
         session = self.hijack.session
         owner = None
         if session is not None:
@@ -449,7 +539,16 @@ class SessionRuntime(DurableObject):
         return True
 
     async def broadcast_to_browsers(self, payload: dict[str, Any]) -> None:
-        for ws_id, ws in list(self.browser_sockets.items()):
+        # After CF hibernation, in-memory dicts are reset. Use ctx.getWebSockets()
+        # to enumerate all live sockets; fall back to the in-memory dict if unavailable.
+        try:
+            all_ws = list(self.ctx.getWebSockets())
+        except Exception:
+            all_ws = list(self.browser_sockets.values())
+        for ws in all_ws:
+            if self._socket_role(ws) != "browser":
+                continue
+            ws_id = self.ws_key(ws)
             try:
                 await self.send_ws(ws, payload)
             except Exception:
@@ -492,7 +591,13 @@ class SessionRuntime(DurableObject):
                 await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
             await self.broadcast_hijack_state()
         if self.worker_ws is not None:
-            await update_kv_session(self.env, self.worker_id, connected=True, hijacked=self.hijack.session is not None)
+            await update_kv_session(
+                self.env,
+                self.worker_id,
+                connected=True,
+                hijacked=self.hijack.session is not None,
+                input_mode=self.input_mode,
+            )
             if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
                 _s.setAlarm(int((now + KV_REFRESH_S) * 1000))
         elif self.hijack.session is not None:

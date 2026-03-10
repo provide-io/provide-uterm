@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Path, Query, Request, Response
@@ -308,5 +309,36 @@ def create_api_router() -> APIRouter:
         if recording_cfg is None or not path.resolve().is_relative_to(recording_cfg.directory.resolve()):
             raise HTTPException(status_code=404, detail="recording not available")
         return FileResponse(path, filename=path.name, media_type="application/json")
+
+    @router.post("/connect")
+    async def quick_connect(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
+        principal = _principal(request)
+        authz = _authz(request)
+        if not authz.can_create_session(principal):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+        connector_type = str(payload.get("connector_type", "ssh")).strip()
+        display_name = str(payload.get("display_name") or connector_type).strip() or connector_type
+        session_id = f"connect-{uuid.uuid4().hex[:12]}"
+        connector_config = {k: v for k, v in payload.items() if k not in {"connector_type", "display_name"}}
+        session_payload: dict[str, Any] = {
+            "session_id": session_id,
+            "display_name": display_name,
+            "connector_type": connector_type,
+            "connector_config": connector_config,
+            "input_mode": "open",
+            "auto_start": True,
+            "ephemeral": True,
+            "visibility": "private",
+            "owner": principal.subject_id,
+        }
+        try:
+            session = await _registry(request).create_session(session_payload)
+        except SessionValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        cfg = request.app.state.uterm_config
+        url = f"{cfg.ui.app_path}/session/{session_id}"
+        return {"session_id": session_id, "url": url, **model_dump(session)}
 
     return router

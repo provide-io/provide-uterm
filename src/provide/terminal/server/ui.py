@@ -101,6 +101,129 @@ def session_page_html(
     )
 
 
+def connect_page_html(title: str, assets_path: str, app_path: str, *, xterm_cdn: str = "", fonts_cdn: str = "") -> str:
+    """Return a self-contained quick-connect form page."""
+    safe_app = escape(app_path)
+    # NOTE: /api/connect is mounted at root (not under app_path) so use the
+    # absolute root path here, not f"{safe_app}/api/connect".
+    inline_script = """
+<script>
+(function () {
+  var form = document.getElementById('connect-form');
+  var typeSelect = document.getElementById('connect-type');
+  var errorBox = document.getElementById('connect-error');
+  var submitBtn = document.getElementById('connect-submit');
+
+  function updateFields() {
+    var t = typeSelect.value;
+    var sshFields = document.querySelectorAll('.field-ssh');
+    var hostFields = document.querySelectorAll('.field-host');
+    sshFields.forEach(function (el) { el.style.display = (t === 'ssh') ? '' : 'none'; });
+    hostFields.forEach(function (el) { el.style.display = (t === 'ssh' || t === 'telnet') ? '' : 'none'; });
+    var portEl = document.getElementById('connect-port');
+    if (portEl && !portEl.dataset.userEdited) {
+      portEl.value = t === 'telnet' ? '23' : '22';
+    }
+  }
+
+  typeSelect.addEventListener('change', updateFields);
+  document.getElementById('connect-port').addEventListener('input', function () {
+    this.dataset.userEdited = '1';
+  });
+  updateFields();
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    errorBox.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Connecting\u2026';
+    var t = typeSelect.value;
+    var payload = { connector_type: t };
+    var name = document.getElementById('connect-name').value.trim();
+    if (name) payload.display_name = name;
+    if (t === 'ssh' || t === 'telnet') {
+      payload.host = document.getElementById('connect-host').value.trim();
+      payload.port = parseInt(document.getElementById('connect-port').value, 10) || (t === 'telnet' ? 23 : 22);
+    }
+    if (t === 'ssh') {
+      var user = document.getElementById('connect-user').value.trim();
+      var pass = document.getElementById('connect-pass').value;
+      if (user) payload.username = user;
+      if (pass) payload.password = pass;
+    }
+    fetch('/api/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (r) {
+        if (!r.ok) { throw new Error(r.data.detail || 'Connection failed'); }
+        window.location.href = r.data.url;
+      })
+      .catch(function (err) {
+        errorBox.textContent = err.message;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Connect';
+      });
+  });
+})();
+</script>"""
+    field_css = (
+        "<style>"
+        ".field{margin-bottom:1rem}"
+        ".field label{display:block;font-size:13px;color:var(--muted,#8a9bb0);margin-bottom:4px}"
+        "</style>"
+    )
+    body = (
+        "<body>"
+        "<div class='page'>"
+        "<div class='card' style='max-width:480px;margin:2rem auto'>"
+        f"<div class='small' style='margin-bottom:.75rem'>"
+        f"<a href='{safe_app}/'>← Dashboard</a>"
+        "</div>"
+        "<h2 style='margin-bottom:1.25rem'>Quick Connect</h2>"
+        "<form id='connect-form'>"
+        "<div class='field'>"
+        "<label for='connect-type'>Connection type</label>"
+        "<select id='connect-type' name='connector_type'>"
+        "<option value='ssh'>SSH</option>"
+        "<option value='telnet'>Telnet</option>"
+        "<option value='shell'>Local Shell</option>"
+        "</select>"
+        "</div>"
+        "<div class='field'>"
+        "<label for='connect-name'>Display name (optional)</label>"
+        "<input id='connect-name' type='text' placeholder='My session'>"
+        "</div>"
+        "<div class='field field-host'>"
+        "<label for='connect-host'>Host</label>"
+        "<input id='connect-host' type='text' placeholder='hostname or IP'>"
+        "</div>"
+        "<div class='field field-host'>"
+        "<label for='connect-port'>Port</label>"
+        "<input id='connect-port' type='number' value='22' min='1' max='65535'>"
+        "</div>"
+        "<div class='field field-ssh'>"
+        "<label for='connect-user'>Username</label>"
+        "<input id='connect-user' type='text' placeholder='username'>"
+        "</div>"
+        "<div class='field field-ssh'>"
+        "<label for='connect-pass'>Password</label>"
+        "<input id='connect-pass' type='password' placeholder='password'>"
+        "</div>"
+        "<div id='connect-error' style='color:var(--danger,#f66);margin:.5rem 0;font-size:13px'></div>"
+        "<button id='connect-submit' class='btn primary' type='submit' style='width:100%'>Connect</button>"
+        "</form>"
+        "</div>"
+        "</div>"
+        f"{field_css}"
+        f"{inline_script}"
+        "</body>"
+    )
+    return _shell(title, assets_path, body, xterm_cdn=xterm_cdn, fonts_cdn=fonts_cdn)
+
+
 def replay_page_html(
     title: str, assets_path: str, session_id: str, *, app_path: str, xterm_cdn: str = "", fonts_cdn: str = ""
 ) -> str:

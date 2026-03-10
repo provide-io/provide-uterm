@@ -31,7 +31,11 @@ def info() -> dict[str, dict[str, str]]:
         implementation_version = platform.python_version()
     elif implementation == "PyPy":
         pypy_version_info = sys.pypy_version_info  # type: ignore[attr-defined]
-        implementation_version = f"{pypy_version_info.major}.{pypy_version_info.minor}.{pypy_version_info.micro}"
+        implementation_version = (
+            f"{pypy_version_info.major}."
+            f"{pypy_version_info.minor}."
+            f"{pypy_version_info.micro}"
+        )
         if pypy_version_info.releaselevel != "final":
             implementation_version = "".join(
                 [

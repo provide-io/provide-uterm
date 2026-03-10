@@ -5,8 +5,8 @@ import os
 import warnings
 from calendar import timegm
 from collections.abc import Container, Iterable, Sequence
-from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, Union, cast
 
 from .api_jws import PyJWS, _jws_global_obj
 from .exceptions import (
@@ -29,7 +29,7 @@ if TYPE_CHECKING or bool(os.getenv("SPHINX_BUILD", "")):
         from typing import TypeAlias
     else:
         # Python 3.9 and lower
-        from typing import TypeAlias
+        from typing_extensions import TypeAlias
 
     from .algorithms import has_crypto
     from .api_jwk import PyJWK
@@ -38,11 +38,11 @@ if TYPE_CHECKING or bool(os.getenv("SPHINX_BUILD", "")):
     if has_crypto:
         from .algorithms import AllowedPrivateKeys, AllowedPublicKeys
 
-        AllowedPrivateKeyTypes: TypeAlias = AllowedPrivateKeys | PyJWK | str | bytes
-        AllowedPublicKeyTypes: TypeAlias = AllowedPublicKeys | PyJWK | str | bytes
+        AllowedPrivateKeyTypes: TypeAlias = Union[AllowedPrivateKeys, PyJWK, str, bytes]
+        AllowedPublicKeyTypes: TypeAlias = Union[AllowedPublicKeys, PyJWK, str, bytes]
     else:
-        AllowedPrivateKeyTypes: TypeAlias = PyJWK | str | bytes  # type: ignore
-        AllowedPublicKeyTypes: TypeAlias = PyJWK | str | bytes  # type: ignore
+        AllowedPrivateKeyTypes: TypeAlias = Union[PyJWK, str, bytes]  # type: ignore
+        AllowedPublicKeyTypes: TypeAlias = Union[PyJWK, str, bytes]  # type: ignore
 
 
 class PyJWT:
@@ -73,7 +73,9 @@ class PyJWT:
     def _get_sig_options(self) -> SigOptions:
         return {
             "verify_signature": self.options["verify_signature"],
-            "enforce_minimum_key_length": self.options.get("enforce_minimum_key_length", False),
+            "enforce_minimum_key_length": self.options.get(
+                "enforce_minimum_key_length", False
+            ),
         }
 
     def _merge_options(self, options: Options | None = None) -> FullOptions:
@@ -126,7 +128,10 @@ class PyJWT:
         """
         # Check that we get a dict
         if not isinstance(payload, dict):
-            raise TypeError("Expecting a dict object, as JWT only supports JSON objects as payloads.")
+            raise TypeError(
+                "Expecting a dict object, as JWT only supports "
+                "JSON objects as payloads."
+            )
 
         # Payload
         payload = payload.copy()
@@ -375,7 +380,7 @@ class PyJWT:
             issuer=issuer,
             leeway=leeway,
         )
-        return cast("dict[str, Any]", decoded["payload"])
+        return cast(dict[str, Any], decoded["payload"])
 
     def _validate_claims(
         self,
@@ -394,7 +399,7 @@ class PyJWT:
 
         self._validate_required_claims(payload, options["require"])
 
-        now = datetime.now(tz=UTC).timestamp()
+        now = datetime.now(tz=timezone.utc).timestamp()
 
         if "iat" in payload and options["verify_iat"]:
             self._validate_iat(payload, now, leeway)
@@ -409,7 +414,9 @@ class PyJWT:
             self._validate_iss(payload, issuer)
 
         if options["verify_aud"]:
-            self._validate_aud(payload, audience, strict=options.get("strict_aud", False))
+            self._validate_aud(
+                payload, audience, strict=options.get("strict_aud", False)
+            )
 
         if options["verify_sub"]:
             self._validate_sub(payload, subject)
@@ -426,7 +433,9 @@ class PyJWT:
             if payload.get(claim) is None:
                 raise MissingRequiredClaimError(claim)
 
-    def _validate_sub(self, payload: dict[str, Any], subject: str | None = None) -> None:
+    def _validate_sub(
+        self, payload: dict[str, Any], subject: str | None = None
+    ) -> None:
         """
         Checks whether "sub" if in the payload is valid or not.
         This is an Optional claim
@@ -468,7 +477,9 @@ class PyJWT:
         try:
             iat = int(payload["iat"])
         except ValueError:
-            raise InvalidIssuedAtError("Issued At claim (iat) must be an integer.") from None
+            raise InvalidIssuedAtError(
+                "Issued At claim (iat) must be an integer."
+            ) from None
         if iat > (now + leeway):
             raise ImmatureSignatureError("The token is not yet valid (iat)")
 
@@ -495,7 +506,9 @@ class PyJWT:
         try:
             exp = int(payload["exp"])
         except ValueError:
-            raise DecodeError("Expiration Time claim (exp) must be an integer.") from None
+            raise DecodeError(
+                "Expiration Time claim (exp) must be an integer."
+            ) from None
 
         if exp <= (now - leeway):
             raise ExpiredSignatureError("Signature has expired")
@@ -550,7 +563,9 @@ class PyJWT:
         if all(aud not in audience_claims for aud in audience):
             raise InvalidAudienceError("Audience doesn't match")
 
-    def _validate_iss(self, payload: dict[str, Any], issuer: Container[str] | str | None) -> None:
+    def _validate_iss(
+        self, payload: dict[str, Any], issuer: Container[str] | str | None
+    ) -> None:
         if issuer is None:
             return
 
@@ -569,7 +584,9 @@ class PyJWT:
                 if iss not in issuer:
                     raise InvalidIssuerError("Invalid issuer")
             except TypeError:
-                raise InvalidIssuerError('Issuer param must be "str" or "Container[str]"') from None
+                raise InvalidIssuerError(
+                    'Issuer param must be "str" or "Container[str]"'
+                ) from None
 
 
 _jwt_global_obj = PyJWT()

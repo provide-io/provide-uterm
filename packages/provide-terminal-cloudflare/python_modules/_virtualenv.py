@@ -12,7 +12,7 @@ def patch_dist(dist):
     https://docs.python.org/3.11/install/index.html#distutils-configuration-files.
 
     Some of this arguments though don't make sense in context of the virtual environment files, let's fix them up.
-    """
+    """  # noqa: D205
     # we cannot allow some install config as that would get packages installed outside of the virtual environment
     old_parse_config_files = dist.Distribution.parse_config_files
 

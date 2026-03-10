@@ -1,5 +1,5 @@
-import type { SessionSurface, WidgetMountState } from "../types.js";
 import { widgetSurface } from "../api.js";
+import type { SessionSurface, WidgetMountState } from "../types.js";
 
 declare global {
   interface Window {

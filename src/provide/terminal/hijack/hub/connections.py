@@ -12,6 +12,7 @@ deregister workers/browsers without accessing hub internals directly.
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -26,7 +27,6 @@ _REST_CLIENT_CACHE_MAX = 1024
 _REST_CLIENT_EVICT_COUNT = _REST_CLIENT_CACHE_MAX // 2
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import Awaitable, Callable
 
     from fastapi import WebSocket
@@ -184,6 +184,7 @@ class _ConnectionMixin:
         Returns a dict with keys: ``was_owner``, ``resume_without_owner``,
         ``rest_still_active``.
         """
+        browser_count = -1
         async with self._lock:
             st = self._workers.get(worker_id)
             was_owner = st is not None and self.is_dashboard_hijack_active(st) and st.hijack_owner is ws
@@ -191,6 +192,7 @@ class _ConnectionMixin:
             resume_without_owner = False
             if st is not None:
                 st.browsers.pop(ws, None)
+                browser_count = len(st.browsers)
                 if was_owner:
                     st.hijack_owner = None
                     st.hijack_owner_expires_at = None
@@ -198,6 +200,11 @@ class _ConnectionMixin:
                 elif owned_hijack and st.worker_ws is not None and not self.is_hijacked(st):
                     last_event_type = str(st.events[-1].get("type", "")) if st.events else ""
                     resume_without_owner = last_event_type not in {"hijack_owner_expired", "hijack_lease_expired"}
+        # Fire empty-browser callback outside the lock when the last browser left.
+        on_empty = getattr(self, "on_worker_empty", None)
+        if browser_count == 0 and on_empty is not None:
+            task = asyncio.create_task(on_empty(worker_id))
+            _ = task  # keep reference to avoid GC before completion
         return {
             "was_owner": was_owner,
             "rest_still_active": rest_still_active,

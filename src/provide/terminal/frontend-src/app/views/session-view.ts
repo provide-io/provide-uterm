@@ -1,6 +1,6 @@
 import { loadUserWorkspaceState } from "../state.js";
-import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
 import type { AppBootstrap } from "../types.js";
+import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
 
 export async function renderSession(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   if (!bootstrap.session_id) throw new Error("session bootstrap missing session_id");

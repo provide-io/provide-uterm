@@ -89,6 +89,7 @@ class SessionDefinition:
     created_at: float = field(default_factory=time.time)
     owner: str | None = None
     visibility: Literal["public", "operator", "private"] = "public"
+    ephemeral: bool = False
 
 
 @dataclass(slots=True)

@@ -135,7 +135,7 @@ class TestReferenceServerJwtE2E:
                 json={
                     "session_id": "jwt-owned",
                     "display_name": "JWT Owned",
-                    "connector_type": "demo",
+                    "connector_type": "shell",
                     "auto_start": True,
                 },
             )

@@ -27,14 +27,14 @@ class _Entry:
     ts: float
 
 
-class DemoSessionConnector(SessionConnector):
+class ShellSessionConnector(SessionConnector):
     """Reference connector that behaves like a lightweight interactive session."""
 
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any] | None = None) -> None:
         cfg = config or {}
         unknown = set(cfg) - _VALID_CONFIG_KEYS
         if unknown:
-            raise ValueError(f"unknown demo connector_config keys: {sorted(unknown)}")
+            raise ValueError(f"unknown shell connector_config keys: {sorted(unknown)}")
         self._session_id = session_id
         self._display_name = display_name
         self._connected = False
@@ -84,7 +84,7 @@ class DemoSessionConnector(SessionConnector):
             "-" * 60,
             f"\x1b[32mMode:\x1b[0m {self._mode_label()}",
             f"\x1b[32mControl:\x1b[0m {self._control_label()}",
-            "\x1b[32mHelp:\x1b[0m /help /mode open|hijack /clear /nick /say /status /demo /reset",
+            "\x1b[32mHelp:\x1b[0m /help /mode open|hijack /clear /nick /say /status /shell /reset",
             f"\x1b[33m{self._banner}\x1b[0m",
             "",
             "\x1b[1mTranscript\x1b[0m",
@@ -108,7 +108,7 @@ class DemoSessionConnector(SessionConnector):
             "screen_hash": hashlib.sha256(screen.encode("utf-8")).hexdigest()[:16],
             "cursor_at_end": True,
             "has_trailing_space": False,
-            "prompt_detected": {"prompt_id": "demo_prompt"},
+            "prompt_detected": {"prompt_id": "shell_prompt"},
             "ts": time.time(),
         }
 
@@ -141,7 +141,7 @@ class DemoSessionConnector(SessionConnector):
                 self._banner = "Command help printed below."
                 self._append(
                     "system",
-                    "Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /demo /reset",
+                    "Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset",
                 )
                 return [self._snapshot()]
             if command == "/clear":
@@ -176,8 +176,8 @@ class DemoSessionConnector(SessionConnector):
                 self._banner = "Message appended."
                 self._append("user", f"{self._nickname}: {arg}")
                 return [self._snapshot()]
-            if command == "/demo":
-                self._banner = "Demo response appended."
+            if command == "/shell":
+                self._banner = "Shell response appended."
                 self._append("session", "This hosted server is the reference implementation.")
                 return [self._snapshot()]
             if command == "/reset":
@@ -216,7 +216,7 @@ class DemoSessionConnector(SessionConnector):
     async def get_analysis(self) -> str:
         return "\n".join(
             [
-                f"[interactive demo analysis — worker: {self._session_id}]",
+                f"[interactive shell analysis — worker: {self._session_id}]",
                 f"input_mode: {self._input_mode}",
                 f"paused: {self._paused}",
                 f"turn_counter: {self._turns}",

@@ -300,7 +300,7 @@ class TermBridge:
             self.attach_session()
         try:
             emulator = getattr(session, "emulator", None)
-            snapshot = self._latest_snapshot or (emulator.get_snapshot() if emulator else {})
+            snapshot = (emulator.get_snapshot() if emulator else None) or self._latest_snapshot or {}
             await ws.send(
                 json.dumps(
                     {

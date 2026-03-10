@@ -58,8 +58,7 @@ class SessionLogger:
                 self._file.close()
                 self._file = None
                 raise
-            file_to_flush = self._file
-        await self._flush(file_to_flush)
+            await self._flush(self._file)
 
     async def stop(self) -> None:
         """Write a ``log_stop`` entry and close the file."""
@@ -67,16 +66,16 @@ class SessionLogger:
         async with self._lock:
             if self._file:
                 self._write_event_unlocked("log_stop", {})
+                # Flush inside the lock so no concurrent write races with it.
+                await self._flush(self._file)
                 file_to_close = self._file
                 self._file = None
         if file_to_close is not None:
-            # Flush and close outside the lock so concurrent writers are not
-            # blocked during the I/O syscalls.  Both operations are offloaded to
-            # a thread-pool executor so the event loop is not stalled by kernel
-            # write-back flushing (which can block close() on some filesystems).
+            # Close outside the lock — no further writes can reach a None file.
+            # Offloaded to a thread-pool executor so kernel write-back flushing
+            # (which can block close() on some filesystems) does not stall the
+            # event loop.
             loop = asyncio.get_running_loop()
-            with contextlib.suppress(OSError):
-                await loop.run_in_executor(None, file_to_close.flush)
             with contextlib.suppress(OSError):
                 await loop.run_in_executor(None, file_to_close.close)
 
@@ -119,13 +118,14 @@ class SessionLogger:
         self._context = {}
 
     async def _write_event(self, event: str, data: dict[str, Any]) -> None:
-        # Write synchronously under the lock, then flush outside to avoid
-        # holding the lock across a thread-pool await.
-        file_to_flush: TextIOWrapper | None = None
+        # Hold the lock for the entire write + flush so no concurrent write()
+        # races with an in-flight run_in_executor(flush) on the same file handle.
+        # asyncio.Lock.acquire() suspends the coroutine rather than blocking the
+        # event loop, and the awaited run_in_executor inside _flush() yields
+        # control while the I/O runs in the thread pool.
         async with self._lock:
             self._write_event_unlocked(event, data)
-            file_to_flush = self._file
-        await self._flush(file_to_flush)
+            await self._flush(self._file)
 
     def _write_event_unlocked(self, event: str, data: dict[str, Any]) -> None:
         """Synchronously write one record.  Caller **must** hold ``self._lock``."""

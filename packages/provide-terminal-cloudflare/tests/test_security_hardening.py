@@ -112,6 +112,8 @@ class _Runtime:
             list_events_since=lambda *_args, **_kwargs: [],
             load_session=lambda *_args, **_kwargs: None,
             current_event_seq=lambda *_args, **_kwargs: 0,
+            min_event_seq=lambda *_args, **_kwargs: 0,
+            save_input_mode=lambda *_args, **_kwargs: None,
         )
 
 

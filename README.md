@@ -2,6 +2,10 @@
 
 Shared terminal I/O primitives and WebSocket proxy infrastructure for the provide ecosystem.
 
+**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1082+ tests at 99% server coverage
+
+For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
+
 ## Installation
 
 ```bash
@@ -172,7 +176,7 @@ This is the canonical hosted-app example for the library. It demonstrates:
 - named sessions above `TermHub`
 - browser session pages and operator pages
 - server-side role resolution and policy
-- hosted connectors (`demo`, `telnet`, `ssh`)
+- hosted connectors (`shell`, `telnet`, `ssh`)
 - session APIs, mode switching, and optional file-backed recording
 
 Key endpoints:
@@ -182,6 +186,7 @@ Key endpoints:
 - `GET /app/` (operator dashboard)
 - `GET /app/session/{session_id}` (end-user page)
 - `GET /app/operator/{session_id}` (operator console)
+- `GET /connect` (quick-connect: create ephemeral sessions on demand)
 
 The example TOML config in [scripts/uterm-server.example.toml](/REDACTED_ABS_PATH)
 shows the intended reference-implementation structure for server config.

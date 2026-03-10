@@ -34,3 +34,6 @@ pyrightconfig.json
 *-bf-*.txt
 *-bf.txt
 bf-*.txt
+
+# Node / frontend tooling
+node_modules/
