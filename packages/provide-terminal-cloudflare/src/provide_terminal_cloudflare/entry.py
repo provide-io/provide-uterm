@@ -4,17 +4,29 @@ import re
 from urllib.parse import urlparse
 
 try:
-    from provide_terminal_cloudflare.cf_types import WorkerEntrypoint, json_response
+    from provide_terminal_cloudflare.auth.jwt import (
+        JwtValidationError,
+        decode_jwt,
+        extract_bearer_or_cookie,
+        resolve_role,
+    )
+    from provide_terminal_cloudflare.cf_types import Response, WorkerEntrypoint, json_response
     from provide_terminal_cloudflare.config import CloudflareConfig
     from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
     from provide_terminal_cloudflare.state.registry import list_kv_sessions
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide_terminal_cloudflare.ui.assets import read_asset_text, serve_asset
 except Exception:
-    from cf_types import WorkerEntrypoint, json_response  # type: ignore[import-not-found]
+    from auth.jwt import (  # type: ignore[import-not-found]
+        JwtValidationError,
+        decode_jwt,
+        extract_bearer_or_cookie,
+        resolve_role,
+    )
+    from cf_types import Response, WorkerEntrypoint, json_response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
     from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]
     from state.registry import list_kv_sessions  # type: ignore[import-not-found]
-    from ui.assets import serve_asset  # type: ignore[import-not-found]
+    from ui.assets import read_asset_text, serve_asset  # type: ignore[import-not-found]
 
 __all__ = ["Default", "SessionRuntime", "ProvideTerminalCloudflareWorker"]
 
@@ -24,6 +36,7 @@ _WORKER_ROUTE_PATTERNS = (
     re.compile(r"^/ws/raw/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$"),
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/hijack(?:/.*)?$"),
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/(?:input_mode|disconnect_worker)$"),
+    re.compile(r"^/api/sessions/(?P<worker_id>[a-zA-Z0-9_-]{1,64})(?:/(?:snapshot|events|mode|clear|analyze))?$"),
 )
 _STATIC_ASSET_PATH = re.compile(r"^/[a-zA-Z0-9._/-]+\.(?:html|css|js)$")
 
@@ -50,6 +63,18 @@ class Default(WorkerEntrypoint):
             )
 
         if path == "/api/sessions":
+            # Require JWT auth in jwt mode — fleet-wide session list is sensitive.
+            if config.jwt.mode == "jwt":
+                token = extract_bearer_or_cookie(request)
+                if not token:
+                    return json_response({"error": "authentication required"}, status=401)
+                try:
+                    principal = await decode_jwt(token, config.jwt)
+                except JwtValidationError as exc:
+                    return json_response({"error": "invalid token", "detail": str(exc)}, status=401)
+                # Viewer is the minimum role; all authenticated users qualify.
+                # resolve_role ensures the token carries a valid role claim.
+                _ = resolve_role(principal)
             # Fleet-wide list: query KV registry populated by each DO on connect/disconnect.
             # Falls back to empty list when SESSION_REGISTRY KV binding is not configured.
             kv_configured = getattr(self.env, "SESSION_REGISTRY", None) is not None
@@ -65,6 +90,10 @@ class Default(WorkerEntrypoint):
         worker_id = _extract_worker_id(path)
         if worker_id is None:
             if path in {"/app", "/app/"}:
+                body = read_asset_text("terminal.html")
+                if body is not None:
+                    body = body.replace("<head>", '<head><base href="/assets/">', 1)
+                    return Response(body, status=200, headers={"content-type": "text/html; charset=utf-8"})
                 return serve_asset("terminal.html")
             if path == "/":
                 return serve_asset("hijack.html")

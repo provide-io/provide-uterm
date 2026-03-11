@@ -8,7 +8,8 @@ function readBootstrap() {
     if (parsed.page_kind !== "dashboard" &&
         parsed.page_kind !== "session" &&
         parsed.page_kind !== "operator" &&
-        parsed.page_kind !== "replay") {
+        parsed.page_kind !== "replay" &&
+        parsed.page_kind !== "connect") {
         throw new Error("Invalid page bootstrap");
     }
     if (typeof parsed.title !== "string" ||

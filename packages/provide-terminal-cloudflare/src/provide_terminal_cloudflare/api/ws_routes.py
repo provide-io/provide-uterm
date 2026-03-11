@@ -16,8 +16,13 @@ from __future__ import annotations
 
 try:
     from provide_terminal_cloudflare.contracts import MessageLimits, ProtocolError, RuntimeProtocol, parse_frame
-except Exception:
-    from contracts import MessageLimits, ProtocolError, RuntimeProtocol, parse_frame  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover
+    from contracts import (  # type: ignore[import-not-found]  # pragma: no cover
+        MessageLimits,
+        ProtocolError,
+        RuntimeProtocol,
+        parse_frame,
+    )
 
 
 async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, *, is_worker: bool) -> None:
@@ -38,12 +43,31 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
         if frame_type == "snapshot":
             runtime.last_snapshot = {"type": "snapshot", "screen": frame.get("screen", ""), "ts": frame.get("ts")}
             runtime.store.save_snapshot(runtime.worker_id, runtime.last_snapshot)
+        elif frame_type == "worker_hello":
+            mode = frame.get("mode")
+            if mode in {"hijack", "open"} and (mode != "open" or runtime.hijack.session is None):
+                # Block open mode while a hijack lease is active (mirrors FastAPI set_worker_hello_mode).
+                runtime.input_mode = mode
+                runtime.store.save_input_mode(runtime.worker_id, mode)
+        elif frame_type == "analysis":
+            formatted = str(frame.get("formatted", ""))
+            if formatted:
+                runtime.last_analysis = formatted
         await runtime.broadcast_worker_frame(frame)
         return
 
     frame_type = frame.get("type")
 
     if frame_type == "input":
+        # Open mode: operator and admin browsers can send input without an active hijack.
+        if runtime.input_mode == "open":
+            browser_role = runtime._socket_browser_role(ws)
+            if browser_role in {"operator", "admin"}:
+                await runtime.push_worker_input(str(frame.get("data", "")))
+            else:
+                await runtime.send_ws(ws, {"type": "error", "message": "viewer_cannot_send"})
+            return
+        # Hijack mode: must hold the active hijack lease.
         active = runtime.hijack.session
         if active is None:
             await runtime.send_ws(ws, {"type": "error", "message": "not_hijacked"})

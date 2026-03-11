@@ -94,14 +94,14 @@ class TestFrontendV8Coverage:
         ratio = covered / total if total else 0.0
         assert ratio >= 1.0, f"terminal.js V8 coverage too low: {ratio:.3%}"
 
-    def test_hijack_asset_meets_v8_coverage_threshold(self, page: Page, demo_server: str) -> None:
-        with httpx.Client(base_url=demo_server, timeout=5.0) as http:
+    def test_hijack_asset_meets_v8_coverage_threshold(self, page: Page, example_server: str) -> None:
+        with httpx.Client(base_url=example_server, timeout=5.0) as http:
             reset = http.post("/demo/session/demo-session/reset")
             assert reset.status_code == 200
             mode = http.post("/demo/session/demo-session/mode", json={"input_mode": "hijack"})
             assert mode.status_code == 200
         session = _start_precise_coverage(page)
-        page.goto(f"{demo_server}/hijack/hijack.html?worker=demo-session", wait_until="domcontentloaded")
+        page.goto(f"{example_server}/hijack/hijack.html?worker=demo-session", wait_until="domcontentloaded")
 
         expect(page.locator("#demo-session-status")).to_contain_text("demo-session", timeout=5000)
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)

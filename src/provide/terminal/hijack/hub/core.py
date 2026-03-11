@@ -15,10 +15,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-import re
 import time
 from collections.abc import Awaitable, Callable, Coroutine
-from contextlib import suppress
 from typing import Any
 
 try:
@@ -29,7 +27,8 @@ import logging
 
 from provide.terminal.hijack.hub.connections import _ConnectionMixin
 from provide.terminal.hijack.hub.ownership import _HijackOwnershipMixin
-from provide.terminal.hijack.models import WorkerTermState, extract_prompt_id
+from provide.terminal.hijack.hub.polling import _PollingMixin
+from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.ratelimit import TokenBucket
 
 logger = logging.getLogger(__name__)
@@ -45,7 +44,7 @@ class BrowserRoleResolutionError(RuntimeError):
     """Raised when a browser-role resolver fails and the WS should be rejected."""
 
 
-class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
+class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
     """In-memory registry for terminal WebSocket connections.
 
     Manages the lifecycle of worker / browser terminal streams and hijack leases.
@@ -184,89 +183,13 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
             st = self._workers.get(worker_id)
             if st is None:
                 return {"seq": 0, "ts": time.time(), "type": event_type, "data": payload}
-            if len(st.events) == st.events.maxlen:
-                # events[0] is about to be evicted; update the minimum tracked seq
-                st.min_event_seq = int(st.events[1]["seq"]) if len(st.events) > 1 else st.event_seq + 1
             st.event_seq += 1
             evt: dict[str, Any] = {"seq": st.event_seq, "ts": time.time(), "type": event_type, "data": payload}
             st.events.append(evt)
+            # Set min_event_seq after append so it always reflects events[0].seq,
+            # which is correct whether or not the deque was full before the append.
+            st.min_event_seq = int(st.events[0]["seq"])
             return evt
-
-    @staticmethod
-    def snapshot_matches(
-        snapshot: dict[str, Any] | None,
-        *,
-        expect_prompt_id: str | None,
-        expect_regex: re.Pattern[str] | None,
-    ) -> bool:
-        """Return True if *snapshot* satisfies the prompt-id and/or regex guard."""
-        if snapshot is None:
-            return False
-        if expect_prompt_id and extract_prompt_id(snapshot) != expect_prompt_id:
-            return False
-        return not (expect_regex is not None and not expect_regex.search(str(snapshot.get("screen", ""))))
-
-    async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
-        """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""
-        req_ts = time.time()
-        end = req_ts + timeout_ms / 1000.0
-        await self.request_snapshot(worker_id)
-        while time.time() < end:
-            async with self._lock:
-                st = self._workers.get(worker_id)
-                if st is None:
-                    return None
-                snap = st.last_snapshot
-            if snap is not None and snap.get("ts", 0) > req_ts:
-                return snap
-            await asyncio.sleep(0.08)
-        return None
-
-    async def wait_for_guard(
-        self,
-        worker_id: str,
-        *,
-        expect_prompt_id: str | None,
-        expect_regex: str | None,
-        timeout_ms: int,
-        poll_interval_ms: int,
-    ) -> tuple[bool, dict[str, Any] | None, str | None]:
-        """Poll until the snapshot satisfies prompt-id/regex guards or *timeout_ms* elapses.
-
-        Returns ``(matched, snapshot, reason)`` where *reason* is None on success
-        or a short error string on failure.
-        """
-        regex_obj: re.Pattern[str] | None = None
-        if expect_regex:
-            try:
-                regex_obj = re.compile(expect_regex, re.IGNORECASE | re.MULTILINE)
-            except re.error as exc:
-                return False, None, f"invalid expect_regex: {exc}"
-
-        if not expect_prompt_id and regex_obj is None:
-            async with self._lock:
-                st = self._workers.get(worker_id)
-                snap = st.last_snapshot if st is not None else None
-            await self.request_snapshot(worker_id)
-            return True, snap, None
-
-        end = time.time() + max(50, timeout_ms) / 1000.0
-        interval = max(20, poll_interval_ms) / 1000.0
-        last_snapshot: dict[str, Any] | None = None
-        while time.time() < end:
-            async with self._lock:
-                st = self._workers.get(worker_id)
-                last_snapshot = st.last_snapshot if st is not None else None
-            if self.snapshot_matches(
-                last_snapshot,
-                expect_prompt_id=expect_prompt_id,
-                expect_regex=regex_obj,
-            ):
-                return True, last_snapshot, None
-            await self.request_snapshot(worker_id)
-            await asyncio.sleep(interval)
-
-        return False, last_snapshot, "prompt_guard_not_satisfied"
 
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
         """Send *msg* to all browser WebSockets registered for *worker_id*."""
@@ -288,6 +211,46 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
             if changed:
                 await self.broadcast_hijack_state(worker_id)
 
+    async def _send_hijack_state_to(
+        self,
+        browsers: list[WebSocket],
+        *,
+        worker_id: str,
+        is_hijacked: bool,
+        is_dashboard: bool,
+        is_rest: bool,
+        hijack_owner: WebSocket | None,
+        input_mode: str,
+        lease_expires_at: float | None,
+        suppress_errors: bool = False,
+    ) -> set[WebSocket]:
+        """Send a hijack_state message to each browser; return the set of dead sockets."""
+        dead: set[WebSocket] = set()
+        for ws in browsers:
+            if is_dashboard and hijack_owner is ws:
+                owner: str | None = "me"
+            elif is_dashboard or is_rest:
+                owner = "other"
+            else:
+                owner = None
+            payload = json.dumps(
+                {
+                    "type": "hijack_state",
+                    "hijacked": is_hijacked,
+                    "owner": owner,
+                    "lease_expires_at": lease_expires_at,
+                    "input_mode": input_mode,
+                },
+                ensure_ascii=True,
+            )
+            try:
+                await ws.send_text(payload)
+            except Exception as exc:
+                if not suppress_errors:
+                    logger.debug("broadcast_hijack_state_send_failed worker_id=%s: %s", worker_id, exc)
+                dead.add(ws)
+        return dead
+
     async def broadcast_hijack_state(self, worker_id: str) -> None:
         """Send a hijack_state message to every browser for *worker_id*, cleaning up dead sockets."""
         async with self._lock:
@@ -306,30 +269,16 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
                 else st.hijack_owner_expires_at
             )
 
-        dead: set[WebSocket] = set()
-        for ws in browsers:
-            try:
-                if is_dashboard and hijack_owner is ws:
-                    owner: str | None = "me"
-                elif is_dashboard or is_rest:
-                    owner = "other"
-                else:
-                    owner = None
-                await ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "hijack_state",
-                            "hijacked": is_hijacked,
-                            "owner": owner,
-                            "lease_expires_at": lease_expires_at,
-                            "input_mode": input_mode,
-                        },
-                        ensure_ascii=True,
-                    )
-                )
-            except Exception as exc:
-                logger.debug("broadcast_hijack_state_send_failed worker_id=%s: %s", worker_id, exc)
-                dead.add(ws)
+        dead = await self._send_hijack_state_to(
+            browsers,
+            worker_id=worker_id,
+            is_hijacked=is_hijacked,
+            is_dashboard=is_dashboard,
+            is_rest=is_rest,
+            hijack_owner=hijack_owner,
+            input_mode=input_mode,
+            lease_expires_at=lease_expires_at,
+        )
         if dead:
             await self.remove_dead_browsers(worker_id, dead)
             # Re-read updated state and send to survivors directly — avoids recursion
@@ -349,26 +298,17 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
                     if is_rest2 and st2.hijack_session is not None
                     else st2.hijack_owner_expires_at
                 )
-            for ws in survivors:
-                if is_dashboard2 and hijack_owner2 is ws:
-                    owner2: str | None = "me"
-                elif is_dashboard2 or is_rest2:
-                    owner2 = "other"
-                else:
-                    owner2 = None
-                with suppress(Exception):
-                    await ws.send_text(
-                        json.dumps(
-                            {
-                                "type": "hijack_state",
-                                "hijacked": is_h2,
-                                "owner": owner2,
-                                "lease_expires_at": lease2,
-                                "input_mode": input_mode2,
-                            },
-                            ensure_ascii=True,
-                        )
-                    )
+            await self._send_hijack_state_to(
+                survivors,
+                worker_id=worker_id,
+                is_hijacked=is_h2,
+                is_dashboard=is_dashboard2,
+                is_rest=is_rest2,
+                hijack_owner=hijack_owner2,
+                input_mode=input_mode2,
+                lease_expires_at=lease2,
+                suppress_errors=True,
+            )
 
     async def send_worker(self, worker_id: str, msg: dict[str, Any]) -> bool:
         """Send *msg* to the worker WebSocket; returns False if no worker is connected."""
@@ -489,6 +429,12 @@ class TermHub(_HijackOwnershipMixin, _ConnectionMixin):
         async with self._lock:
             st = self._workers.get(worker_id)
             return None if st is None else st.last_snapshot
+
+    async def browser_count(self, worker_id: str) -> int:
+        """Return the number of browser WebSockets currently connected for *worker_id*."""
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            return 0 if st is None else len(st.browsers)
 
     async def get_recent_events(self, worker_id: str, limit: int) -> list[dict[str, Any]]:
         """Return the most recent events for *worker_id* (up to *limit*, clamped to 1-500)."""

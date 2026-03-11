@@ -9,11 +9,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "provide-terminal"
-version = "0.2.0"
+version = "0.3.0"
 description = "Shared terminal I/O primitives for the provide ecosystem"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "AGPL-3.0-or-later"}
+authors = [
+  {name = "MindTenet LLC"},
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -27,6 +30,10 @@ classifiers = [
     "Framework :: FastAPI",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/provide-io/provide-terminal"
+Repository = "https://github.com/provide-io/provide-terminal"
 
 [project.optional-dependencies]
 websocket = ["fastapi>=0.110", "websockets>=12.0"]

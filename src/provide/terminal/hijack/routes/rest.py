@@ -98,6 +98,12 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         request: HijackAcquireRequest | None = None,
     ) -> Any:
+        # NOTE: Uses the direct connection IP for per-client rate limiting.
+        # Behind a reverse proxy this will be 127.0.0.1, collapsing all clients
+        # into one bucket.  Trusting X-Forwarded-For without a trusted-proxy
+        # allowlist would be spoofable, so it is intentionally not used here.
+        # Deploy a gateway that enforces per-client limits before this service
+        # if fine-grained rate limiting is required.
         _client_id = (http_request.client.host if http_request.client else None) or "unknown"
         if not hub.allow_rest_acquire_for(_client_id):
             logger.warning("rest_acquire_rate_limited client=%s worker_id=%s", _client_id, worker_id)
@@ -308,6 +314,11 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         if not request.keys:
             return JSONResponse({"error": "keys must not be empty."}, status_code=400)
+        if len(request.keys) > hub.max_input_chars:
+            return JSONResponse(
+                {"error": f"keys too long: {len(request.keys)} > {hub.max_input_chars}"},
+                status_code=400,
+            )
         matched, snapshot, reason = await hub.wait_for_guard(
             worker_id,
             expect_prompt_id=request.expect_prompt_id,

@@ -318,14 +318,31 @@ def create_api_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="insufficient privileges")
         connector_type = str(payload.get("connector_type", "ssh")).strip()
         display_name = str(payload.get("display_name") or connector_type).strip() or connector_type
+        input_mode = str(payload.get("input_mode", "open")).strip()
+        tags_raw = payload.get("tags", [])
+        tags = [str(t).strip() for t in tags_raw if str(t).strip()] if isinstance(tags_raw, list) else []
         session_id = f"connect-{uuid.uuid4().hex[:12]}"
-        connector_config = {k: v for k, v in payload.items() if k not in {"connector_type", "display_name"}}
+        # Exclude session-level fields so they are not passed into connector_config,
+        # which would cause connectors to reject them as unknown keys.
+        _top_level = {
+            "connector_type",
+            "display_name",
+            "input_mode",
+            "tags",
+            "auto_start",
+            "visibility",
+            "owner",
+            "recording_enabled",
+            "ephemeral",
+        }
+        connector_config = {k: v for k, v in payload.items() if k not in _top_level}
         session_payload: dict[str, Any] = {
             "session_id": session_id,
             "display_name": display_name,
             "connector_type": connector_type,
             "connector_config": connector_config,
-            "input_mode": "open",
+            "input_mode": input_mode,
+            "tags": tags,
             "auto_start": True,
             "ephemeral": True,
             "visibility": "private",

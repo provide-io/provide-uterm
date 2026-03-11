@@ -1,0 +1,39 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Brings up both backends for local testing.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up
+#
+# FastAPI server: http://localhost:27780/app/
+# CF worker dev:  http://localhost:27788/api/health
+#
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    ports:
+      - "27780:27780"
+    # To use a custom config:
+    # volumes:
+    #   - ./my-server.toml:/config/server.toml:ro
+
+  cf:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cf
+    ports:
+      - "27788:27788"
+    environment:
+      # Override with AUTH_MODE=jwt + JWT_JWKS_URL etc. for production testing.
+      AUTH_MODE: "dev"
+    # Persist wrangler dev local state between container restarts:
+    # volumes:
+    #   - wrangler-state:/tmp/.wrangler
+
+# volumes:
+#   wrangler-state:

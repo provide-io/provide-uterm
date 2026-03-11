@@ -8,6 +8,20 @@ version = "0.3.0"
 description = "Cloudflare Workers runtime for provide-terminal control plane"
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "AGPL-3.0-or-later"}
+authors = [
+  {name = "MindTenet LLC"},
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Framework :: AsyncIO",
+]
 dependencies = [
   "pyjwt>=2.9",
 ]
@@ -25,6 +39,10 @@ dev = [
   "workers-py>=0.4.0",
   "websockets>=16.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/provide-io/provide-terminal"
+Repository = "https://github.com/provide-io/provide-terminal"
 
 [project.scripts]
 uterm-cf = "provide_terminal_cloudflare.cli:main"

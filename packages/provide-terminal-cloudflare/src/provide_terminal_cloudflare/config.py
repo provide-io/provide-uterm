@@ -13,7 +13,7 @@ class JwtConfig:
     public_key_pem: str | None = None
     jwks_url: str | None = None
     clock_skew_seconds: int = 30
-    allow_query_token: bool = True
+    allow_query_token: bool = False
     # Parity with provide-terminal AuthConfig: configurable claim keys so that
     # IdP-specific tokens (Auth0, Okta, Azure AD) work without token transforms.
     jwt_roles_claim: str = "roles"
@@ -22,6 +22,10 @@ class JwtConfig:
     # Useful for Cloudflare Access JWTs which don't include roles by default.
     # Set JWT_DEFAULT_ROLE=operator to grant all CF Access users operator access.
     jwt_default_role: str = "viewer"
+    # Optional mapping from group/claim values → terminal roles (admin/operator/viewer).
+    # Set JWT_ROLE_MAP to a JSON object: e.g. '{"engineering":"admin","ops":"operator"}'.
+    # When set with JWT_ROLES_CLAIM=groups, arbitrary CF Access group names map to roles.
+    jwt_role_map: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -86,6 +90,17 @@ class CloudflareConfig:
             heartbeat_s=max(1, int(_get("UPSTREAM_HEARTBEAT_S", "25"))),
             max_backoff_s=max(1, int(_get("UPSTREAM_MAX_BACKOFF_S", "5"))),
         )
+        jwt_role_map: dict[str, str] = {}
+        role_map_raw = _get("JWT_ROLE_MAP", "").strip()
+        if role_map_raw:
+            import json as _json
+
+            try:
+                parsed = _json.loads(role_map_raw)
+                if isinstance(parsed, dict):
+                    jwt_role_map = {str(k): str(v) for k, v in parsed.items()}
+            except Exception:  # noqa: S110
+                pass  # Invalid JSON — silently ignore, no role mapping applied.
         jwt = JwtConfig(
             mode=mode,
             issuer=_get("JWT_ISSUER") or None,
@@ -98,6 +113,7 @@ class CloudflareConfig:
             jwt_roles_claim=_get("JWT_ROLES_CLAIM", "roles") or "roles",
             jwt_scopes_claim=_get("JWT_SCOPES_CLAIM", "scope") or "scope",
             jwt_default_role=_get("JWT_DEFAULT_ROLE", "viewer") or "viewer",
+            jwt_role_map=jwt_role_map,
         )
         return cls(
             environment=environment,

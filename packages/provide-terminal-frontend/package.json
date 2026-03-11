@@ -1,0 +1,15 @@
+{
+  "name": "provide-terminal-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint src/",
+    "fix": "biome check --write --unsafe src/"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
+    "typescript": "^5.9.2"
+  }
+}

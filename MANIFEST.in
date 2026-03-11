@@ -1,5 +1,5 @@
 recursive-include src/undef/terminal/frontend *
-recursive-include src/undef/terminal/frontend-src *
+recursive-include packages/undef-terminal-frontend/src *
 prune .uterm-recordings
 prune .uterm-recordings-proof
 prune .tmp-proof-reel

@@ -202,6 +202,10 @@ class SshWsGateway:
         ws_url = self._ws_url
 
         class _NoAuthServer(asyncssh.SSHServer):
+            # begin_auth returns False → no credentials required from any SSH
+            # client.  This is intentional: the gateway trusts the caller to
+            # provide network-level access control.  Do NOT bind host="0.0.0.0"
+            # on a public interface without an external firewall or auth layer.
             def begin_auth(self, username: str) -> bool:  # noqa: ARG002
                 return False
 

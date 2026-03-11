@@ -14,8 +14,8 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    "rootDir": "src/provide/terminal/frontend-src",
-    "outDir": "src/provide/terminal/frontend"
+    "rootDir": "src",
+    "outDir": "../../src/provide/terminal/frontend"
   },
-  "include": ["src/provide/terminal/frontend-src/**/*"]
+  "include": ["src/**/*"]
 }

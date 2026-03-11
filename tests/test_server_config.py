@@ -98,3 +98,35 @@ def test_jwt_mode_requires_worker_token() -> None:
 
     with pytest.raises(ValueError, match="worker_bearer_token"):
         create_server_app(config)
+
+
+def test_config_fitaddon_cdn_roundtrips() -> None:
+    config = config_from_mapping({"ui": {"fitaddon_cdn": "https://example.com/fitaddon"}})
+    assert config.ui.fitaddon_cdn == "https://example.com/fitaddon"
+
+
+def test_config_from_mapping_skips_non_dict_session_entry() -> None:
+    # Line 119: non-dict entries in sessions_data are skipped with `continue`
+    config = config_from_mapping({"sessions": ["not-a-dict", {"session_id": "s1", "connector_type": "shell"}]})
+    assert len(config.sessions) == 1
+    assert config.sessions[0].session_id == "s1"
+
+
+def test_config_from_mapping_rejects_empty_session_id() -> None:
+    with pytest.raises(ValueError, match="session_id is required"):
+        config_from_mapping({"sessions": [{"session_id": "", "connector_type": "shell"}]})
+
+
+def test_config_from_mapping_rejects_invalid_session_id_chars() -> None:
+    with pytest.raises(ValueError, match=r"session_id must match"):
+        config_from_mapping({"sessions": [{"session_id": "bad id!", "connector_type": "shell"}]})
+
+
+def test_config_from_mapping_rejects_invalid_input_mode() -> None:
+    with pytest.raises(ValueError, match="invalid input_mode"):
+        config_from_mapping({"sessions": [{"session_id": "s1", "connector_type": "shell", "input_mode": "bad"}]})
+
+
+def test_config_from_mapping_rejects_invalid_visibility() -> None:
+    with pytest.raises(ValueError, match="invalid visibility"):
+        config_from_mapping({"sessions": [{"session_id": "s1", "connector_type": "shell", "visibility": "secret"}]})

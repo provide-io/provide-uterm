@@ -255,8 +255,9 @@ class TestResolveJwtKey:
             key = _resolve_jwt_key("some_token", auth)
 
         assert key == _TEST_KEY
-        # Cache was cleared before adding the new entry → only 1 entry remains
-        assert len(_JWKS_CLIENT_CACHE) == 1
+        # Half-eviction: _JWKS_CLIENT_CACHE_MAX // 2 oldest entries removed, then new entry added.
+        expected = _JWKS_CLIENT_CACHE_MAX - _JWKS_CLIENT_CACHE_MAX // 2 + 1
+        assert len(_JWKS_CLIENT_CACHE) == expected
         _JWKS_CLIENT_CACHE.clear()
 
 

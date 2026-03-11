@@ -37,3 +37,7 @@ bf-*.txt
 
 # Node / frontend tooling
 node_modules/
+
+# Playwright MCP output (screenshots, console logs)
+.playwright-mcp/
+*.png

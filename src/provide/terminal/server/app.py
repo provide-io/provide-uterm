@@ -170,6 +170,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         public_base_url=config.server.public_base_url,
         recording=config.recording,
         worker_bearer_token=config.auth.worker_bearer_token,
+        max_sessions=config.server.max_sessions,
     )
 
     @asynccontextmanager
@@ -247,7 +248,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             allow_origins=config.server.allowed_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["*"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         )
 
     frontend_path = importlib.resources.files("provide.terminal") / "frontend"

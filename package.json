@@ -1,15 +1,11 @@
 {
-  "name": "provide-terminal-frontend",
+  "name": "provide-terminal-root",
   "private": true,
-  "type": "module",
+  "workspaces": ["packages/provide-terminal-frontend"],
   "scripts": {
-    "build:frontend": "tsc -p tsconfig.frontend.json",
-    "typecheck:frontend": "tsc -p tsconfig.frontend.json --noEmit",
-    "lint:frontend": "biome ci src/provide/terminal/frontend-src/",
-    "fix:frontend": "biome check --write --unsafe src/provide/terminal/frontend-src/"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.6",
-    "typescript": "^5.9.2"
+    "build:frontend": "npm run build --workspace=packages/provide-terminal-frontend",
+    "typecheck:frontend": "npm run typecheck --workspace=packages/provide-terminal-frontend",
+    "lint:frontend": "npm run lint --workspace=packages/provide-terminal-frontend",
+    "fix:frontend": "npm run fix --workspace=packages/provide-terminal-frontend"
   }
 }

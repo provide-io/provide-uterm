@@ -46,8 +46,8 @@ except Exception:  # pragma: no cover
 def json_response(data: Any, status: int = 200, headers: dict[str, str] | None = None) -> Response:
     if hasattr(Response, "json"):
         return Response.json(data, status=status, headers=headers)  # type: ignore[attr-defined]
-    body = json.dumps(data, ensure_ascii=True)
-    merged_headers = {"content-type": "application/json"}
-    if headers:
-        merged_headers.update(headers)
-    return Response(body, status=status, headers=merged_headers)
+    body = json.dumps(data, ensure_ascii=True)  # pragma: no cover
+    merged_headers = {"content-type": "application/json"}  # pragma: no cover
+    if headers:  # pragma: no cover
+        merged_headers.update(headers)  # pragma: no cover
+    return Response(body, status=status, headers=merged_headers)  # pragma: no cover

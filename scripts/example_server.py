@@ -1,20 +1,20 @@
 """
-Interactive demo server for manual and Playwright testing of the hijack UI.
+Interactive example server for manual and Playwright testing of the hijack UI.
 
 Architecture
 ------------
 - Real TermHub handles the browser-side WebSocket protocol.
-- An in-memory demo session worker auto-connects as ``/ws/worker/demo-session/term``.
-- The demo worker renders a deterministic interactive transcript, responds to
+- An in-memory session worker auto-connects as ``/ws/worker/demo-session/term``.
+- The worker renders a deterministic interactive transcript, responds to
   snapshot/analyze/control requests, and reconnects automatically on disconnect.
 - Frontend static files are served at ``/hijack/``.
-- ``/hijack/hijack.html?worker=demo-session`` loads the interactive demo page.
+- ``/hijack/hijack.html?worker=demo-session`` loads the interactive example page.
 
 Run
 ---
-    uv run python scripts/demo_server.py [--port PORT]
-    # or via uvicorn (set DEMO_BASE_URL to match the bound address):
-    DEMO_BASE_URL=http://127.0.0.1:8888 uvicorn scripts.demo_server:app --port 8888
+    uv run python scripts/example_server.py [--port PORT]
+    # or via uvicorn (set EXAMPLE_BASE_URL to match the bound address):
+    EXAMPLE_BASE_URL=http://127.0.0.1:8888 uvicorn scripts.example_server:app --port 8888
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def _resolve_browser_role(_ws, _worker_id: str) -> str:
 
 
 _hub = TermHub(resolve_browser_role=_resolve_browser_role)
-_runtime_base_url = os.environ.get("DEMO_BASE_URL", f"http://127.0.0.1:{_DEFAULT_PORT}")
+_runtime_base_url = os.environ.get("EXAMPLE_BASE_URL", f"http://127.0.0.1:{_DEFAULT_PORT}")
 _sessions: dict[str, DemoSessionState] = {}
 _sessions_lock = RLock()
 
@@ -563,6 +563,59 @@ async def reset_demo_session(worker_id: str) -> dict[str, Any]:
     return _session_payload(session)
 
 
+def _session_status_payload(session: DemoSessionState) -> dict[str, Any]:
+    """Return a SessionStatus-compatible payload for the standard /api/sessions/ routes."""
+    return {
+        "session_id": session.worker_id,
+        "display_name": session.title,
+        "connector_type": "shell",
+        "lifecycle_state": "paused" if session.paused else "running",
+        "input_mode": session.input_mode,
+        "connected": session.connected,
+        "auto_start": True,
+        "tags": [],
+        "recording_enabled": False,
+        "recording_available": False,
+        "owner": None,
+        "visibility": "public",
+        "last_error": None,
+    }
+
+
+@app.get("/api/sessions/{worker_id}")
+async def get_session_status(worker_id: str) -> dict[str, Any]:
+    return _session_status_payload(_get_or_create_session(worker_id))
+
+
+@app.post("/api/sessions/{worker_id}/mode")
+async def set_session_mode(worker_id: str, payload: Annotated[dict[str, str], Body(...)]) -> dict[str, Any]:
+    mode = payload.get("input_mode", "").strip().lower()
+    if mode not in {"hijack", "open"}:
+        raise HTTPException(status_code=400, detail="input_mode must be 'hijack' or 'open'")
+    session = _get_or_create_session(worker_id)
+    if mode == "open":
+        released = await _force_release_hijack_for_shared_mode(worker_id)
+        if released:
+            session.paused = False
+            session.status_line = "Live"
+            session.pending_banner = "Switched to shared input. Active hijack released."
+            _append_entry(session, "system", "control: released for shared input")
+    messages = _set_input_mode(session, mode, source="http")
+    await _sync_hub_input_mode(worker_id, mode)
+    _enqueue_worker_messages(session, messages)
+    return _session_status_payload(session)
+
+
+@app.post("/api/sessions/{worker_id}/restart")
+async def restart_session(worker_id: str) -> dict[str, Any]:
+    session = _reset_session_state(worker_id)
+    session.analysis_note = "reset from http"
+    session.pending_banner = "Session reset."
+    messages = _state_update_messages(session)
+    _enqueue_worker_messages(session, messages)
+    return _session_status_payload(session)
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon() -> dict[str, bool]:
     return {"ok": True}
@@ -575,7 +628,7 @@ app.mount("/hijack", StaticFiles(directory=str(frontend_path), html=True), name=
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="provide-terminal interactive demo server")
+    parser = argparse.ArgumentParser(description="provide-terminal interactive example server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
     args = parser.parse_args()

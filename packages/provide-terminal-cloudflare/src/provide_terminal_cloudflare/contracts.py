@@ -102,6 +102,61 @@ class HijackEventsResponse(TypedDict):
     lease_expires_at: float | None
 
 
+class SessionStatusResponse(TypedDict):
+    """Shape of GET /api/sessions/{id} response."""
+
+    session_id: str
+    display_name: str
+    connector_type: str
+    lifecycle_state: str
+    input_mode: str
+    connected: bool
+    auto_start: bool
+    tags: list
+    recording_enabled: bool
+    recording_available: bool
+    owner: str | None
+    visibility: str
+    last_error: str | None
+    hijacked: bool
+
+
+class SessionSnapshotResponse(TypedDict):
+    """Shape of GET /api/sessions/{id}/snapshot response."""
+
+    session_id: str
+    snapshot: dict | None
+    prompt_detected: dict | None
+    prompt_id: str | None
+
+
+class SessionEventsResponse(TypedDict):
+    """Shape of GET /api/sessions/{id}/events response."""
+
+    session_id: str
+    after_seq: int
+    latest_seq: int
+    min_event_seq: int
+    has_more: bool
+    events: list
+
+
+class SessionModeResponse(TypedDict):
+    """Shape of POST /api/sessions/{id}/mode response."""
+
+    ok: bool
+    input_mode: str
+    worker_id: str
+
+
+class SessionAnalyzeResponse(TypedDict):
+    """Shape of POST /api/sessions/{id}/analyze response."""
+
+    ok: bool
+    analysis: str | None
+    worker_id: str
+
+
 FrameType = Literal[
     "snapshot_req",
     "snapshot",
@@ -113,6 +168,8 @@ FrameType = Literal[
     "error",
     "worker_connected",
     "worker_disconnected",
+    # Worker-originated lifecycle frame carrying input_mode.
+    "worker_hello",
     # Browser-originated frames (heartbeat/ping keepalives, WS-level hijack requests).
     # The CF backend routes hijack through REST; these arrive via WS from hijack.js.
     "heartbeat",
@@ -139,6 +196,7 @@ class Frame(TypedDict, total=False):
     lease_expires_at: float | None
     formatted: str
     message: str
+    mode: str  # worker_hello: input_mode value ("hijack" or "open")
 
 
 @dataclass(slots=True)
@@ -182,6 +240,10 @@ def parse_frame(raw: str, *, limits: MessageLimits | None = None) -> Frame:
         normalized["owner"] = str(value.get("owner", "")) if value.get("owner") is not None else None
         lease_expires_at = value.get("lease_expires_at")
         normalized["lease_expires_at"] = float(lease_expires_at) if lease_expires_at is not None else None
+    elif frame_type == "worker_hello":
+        mode = value.get("input_mode")
+        if mode in {"hijack", "open"}:
+            normalized["mode"] = mode
     elif frame_type in {
         "snapshot_req",
         "error",
@@ -224,6 +286,7 @@ class RuntimeProtocol(Protocol):
     config: Any  # CloudflareConfig
     store: Any  # SqliteStateStore
     last_snapshot: Any
+    last_analysis: Any
     browser_hijack_owner: dict[str, str]
 
     async def browser_role_for_request(self, request: object) -> str: ...
@@ -236,3 +299,4 @@ class RuntimeProtocol(Protocol):
     async def send_ws(self, ws: object, frame: dict[str, object]) -> None: ...
     async def broadcast_worker_frame(self, frame: object) -> None: ...
     def ws_key(self, ws: object) -> str: ...
+    def _socket_browser_role(self, ws: object) -> str: ...

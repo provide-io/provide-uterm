@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""End-to-end tests against the real interactive demo server."""
+"""End-to-end tests against the real interactive example server."""
 
 from __future__ import annotations
 
@@ -58,17 +58,17 @@ async def _wait_for_hijack_state(
 
 
 class TestDemoServerWs:
-    async def test_demo_worker_announces_hijack_mode_on_connect(self, demo_server: str) -> None:
-        async with websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as browser:
+    async def test_demo_worker_announces_hijack_mode_on_connect(self, example_server: str) -> None:
+        async with websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as browser:
             hello = await _drain_until(browser, "hello")
             assert hello is not None
             assert hello["worker_online"] is True
             assert hello["input_mode"] == "hijack"
 
-    async def test_input_after_hijack_updates_snapshot(self, demo_server: str) -> None:
-        async with httpx.AsyncClient(base_url=demo_server) as http:
+    async def test_input_after_hijack_updates_snapshot(self, example_server: str) -> None:
+        async with httpx.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/demo-session/reset")
-        async with websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as browser:
+        async with websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as browser:
             await _drain_until(browser, "hello")
             await _drain_until(browser, "hijack_state")
             await _drain_until(browser, "snapshot")
@@ -82,15 +82,15 @@ class TestDemoServerWs:
             assert "hello from owner" in snapshot["screen"]
             assert "session: received" in snapshot["screen"]
 
-    async def test_http_mode_switch_updates_browser_to_open_mode(self, demo_server: str) -> None:
-        async with httpx.AsyncClient(base_url=demo_server) as http:
+    async def test_http_mode_switch_updates_browser_to_open_mode(self, example_server: str) -> None:
+        async with httpx.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/demo-session/reset")
-        async with websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as browser:
+        async with websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as browser:
             await _drain_until(browser, "hello")
             await _drain_until(browser, "hijack_state")
             await _drain_until(browser, "snapshot")
 
-            async with httpx.AsyncClient(base_url=demo_server) as http:
+            async with httpx.AsyncClient(base_url=example_server) as http:
                 resp = await http.post("/demo/session/demo-session/mode", json={"input_mode": "open"})
                 assert resp.status_code == 200
 
@@ -98,13 +98,13 @@ class TestDemoServerWs:
             assert snapshot is not None
             assert "Shared input" in snapshot["screen"]
 
-    async def test_switching_to_open_releases_active_hijack_immediately(self, demo_server: str) -> None:
-        async with httpx.AsyncClient(base_url=demo_server) as http:
+    async def test_switching_to_open_releases_active_hijack_immediately(self, example_server: str) -> None:
+        async with httpx.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/demo-session/reset")
             await http.post("/demo/session/demo-session/mode", json={"input_mode": "hijack"})
         async with (
-            websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as b1,
-            websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as b2,
+            websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as b1,
+            websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as b2,
         ):
             for browser in (b1, b2):
                 await _drain_until(browser, "hello")
@@ -117,7 +117,7 @@ class TestDemoServerWs:
             assert owner_state is not None and owner_state["owner"] == "me"
             assert other_state is not None and other_state["owner"] == "other"
 
-            async with httpx.AsyncClient(base_url=demo_server) as http:
+            async with httpx.AsyncClient(base_url=example_server) as http:
                 resp = await http.post("/demo/session/demo-session/mode", json={"input_mode": "open"})
                 assert resp.status_code == 200
 
@@ -128,14 +128,14 @@ class TestDemoServerWs:
             assert b1_after["input_mode"] == "open"
             assert b2_after["input_mode"] == "open"
 
-    async def test_two_browsers_can_both_type_in_open_mode(self, demo_server: str) -> None:
-        async with httpx.AsyncClient(base_url=demo_server) as http:
+    async def test_two_browsers_can_both_type_in_open_mode(self, example_server: str) -> None:
+        async with httpx.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/demo-session/reset")
             await http.post("/demo/session/demo-session/mode", json={"input_mode": "open"})
 
         async with (
-            websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as b1,
-            websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as b2,
+            websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as b1,
+            websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as b2,
         ):
             for browser in (b1, b2):
                 await _drain_until(browser, "hello")
@@ -152,14 +152,14 @@ class TestDemoServerWs:
             assert snap2 is not None
             assert "from-two" in snap2["screen"]
 
-    async def test_hijack_handoff_still_works_in_exclusive_mode(self, demo_server: str) -> None:
-        async with httpx.AsyncClient(base_url=demo_server) as http:
+    async def test_hijack_handoff_still_works_in_exclusive_mode(self, example_server: str) -> None:
+        async with httpx.AsyncClient(base_url=example_server) as http:
             await http.post("/demo/session/demo-session/reset")
             await http.post("/demo/session/demo-session/mode", json={"input_mode": "hijack"})
 
         async with (
-            websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as b1,
-            websockets.connect(_ws_url(demo_server, "/ws/browser/demo-session/term")) as b2,
+            websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as b1,
+            websockets.connect(_ws_url(example_server, "/ws/browser/demo-session/term")) as b2,
         ):
             for browser in (b1, b2):
                 await _drain_until(browser, "hello")

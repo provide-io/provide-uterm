@@ -96,8 +96,11 @@ def _resolve_jwt_key(token: str, auth: AuthConfig) -> Any:
             client = _JWKS_CLIENT_CACHE.get(url)
             if client is None:
                 if len(_JWKS_CLIENT_CACHE) >= _JWKS_CLIENT_CACHE_MAX:
-                    _JWKS_CLIENT_CACHE.clear()
-                client = jwt.PyJWKClient(url)
+                    # Evict oldest half, preserving recently-active issuers.
+                    evict_n = _JWKS_CLIENT_CACHE_MAX // 2
+                    for _k in list(_JWKS_CLIENT_CACHE)[:evict_n]:
+                        del _JWKS_CLIENT_CACHE[_k]
+                client = jwt.PyJWKClient(url, cache_keys=True, timeout=10)
                 _JWKS_CLIENT_CACHE[url] = client
         return client.get_signing_key_from_jwt(token).key
     if auth.jwt_public_key_pem:

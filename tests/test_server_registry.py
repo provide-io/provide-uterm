@@ -22,6 +22,7 @@ def _make_hub() -> MagicMock:
     hub.force_release_hijack = AsyncMock(return_value=True)
     hub.get_last_snapshot = AsyncMock(return_value=None)
     hub.get_recent_events = AsyncMock(return_value=[])
+    hub.browser_count = AsyncMock(return_value=0)
     hub.on_worker_empty = None
     return hub
 
