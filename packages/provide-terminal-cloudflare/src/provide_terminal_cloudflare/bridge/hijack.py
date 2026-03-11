@@ -17,6 +17,7 @@ class AcquireResult:
     ok: bool
     session: HijackSession | None
     error: str | None = None
+    is_renewal: bool = False  # True when the same owner renewed an existing lease
 
 
 class HijackCoordinator:
@@ -50,10 +51,11 @@ class HijackCoordinator:
         active = self._active_session(now_ts)
         if active is not None and active.owner != owner:
             return AcquireResult(ok=False, session=active, error="already_hijacked")
+        is_renewal = active is not None  # same owner renewing an existing lease
         expires_at = now_ts + max(1, min(int(lease_s), 3600))
         active = HijackSession(hijack_id=str(uuid.uuid4()), owner=owner, lease_expires_at=expires_at)
         self._session = active
-        return AcquireResult(ok=True, session=active)
+        return AcquireResult(ok=True, session=active, is_renewal=is_renewal)
 
     def heartbeat(self, hijack_id: str, lease_s: int, *, now: float | None = None) -> AcquireResult:
         now_ts = time.time() if now is None else now

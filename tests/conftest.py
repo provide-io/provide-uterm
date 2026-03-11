@@ -49,18 +49,18 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def load_demo_server_module() -> Any:
-    """Load scripts/demo_server.py directly so tests do not depend on sys.path packaging."""
-    module_name = "_codex_demo_server_test_module"
+def load_example_server_module() -> Any:
+    """Load scripts/example_server.py directly so tests do not depend on sys.path packaging."""
+    module_name = "_codex_example_server_test_module"
     import sys
 
     if module_name in sys.modules:
         return sys.modules[module_name]
 
-    path = Path(__file__).resolve().parents[1] / "scripts" / "demo_server.py"
+    path = Path(__file__).resolve().parents[1] / "scripts" / "example_server.py"
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load demo server module from {path}")
+        raise RuntimeError(f"Unable to load example server module from {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
@@ -179,19 +179,19 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
 
 
 @pytest.fixture(scope="session")
-def demo_server() -> Generator[str, None, None]:
-    """Session-scoped sync fixture: run the real interactive demo server via uvicorn."""
-    demo_server_module = load_demo_server_module()
+def example_server() -> Generator[str, None, None]:
+    """Session-scoped sync fixture: run the interactive example server via uvicorn."""
+    example_server_module = load_example_server_module()
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
 
     base_url = f"http://127.0.0.1:{port}"
-    demo_server_module._runtime_base_url = base_url
-    demo_server_module._reset_all_sessions()
+    example_server_module._runtime_base_url = base_url
+    example_server_module._reset_all_sessions()
 
-    config = uvicorn.Config(demo_server_module.app, host="127.0.0.1", port=port, log_level="critical")
+    config = uvicorn.Config(example_server_module.app, host="127.0.0.1", port=port, log_level="critical")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -199,13 +199,13 @@ def demo_server() -> Generator[str, None, None]:
     deadline = time.monotonic() + 10.0
     while not server.started:
         if time.monotonic() > deadline:
-            raise RuntimeError("demo_server: uvicorn failed to start within 10 s")
+            raise RuntimeError("example_server: uvicorn failed to start within 10 s")
         time.sleep(0.05)
 
     worker_deadline = time.monotonic() + 10.0
-    while not demo_server_module._get_or_create_session(demo_server_module._DEFAULT_WORKER_ID).connected:
+    while not example_server_module._get_or_create_session(example_server_module._DEFAULT_WORKER_ID).connected:
         if time.monotonic() > worker_deadline:
-            raise RuntimeError("demo_server: demo worker failed to connect within 10 s")
+            raise RuntimeError("example_server: worker failed to connect within 10 s")
         time.sleep(0.05)
 
     yield base_url

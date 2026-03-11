@@ -1,4 +1,4 @@
-export type AppPageKind = "dashboard" | "session" | "operator" | "replay";
+export type AppPageKind = "dashboard" | "session" | "operator" | "replay" | "connect";
 export type SessionMode = "open" | "hijack";
 export type SessionSurface = "user" | "operator";
 export type AsyncState<T> = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; data: T };

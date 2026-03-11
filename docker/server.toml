@@ -1,0 +1,36 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Default Docker config: dev auth (no JWT), one shell session pre-started.
+# Mount a custom TOML at /config/server.toml to override.
+#
+
+[server]
+host = "0.0.0.0"
+port = 27780
+public_base_url = "http://localhost:27780"
+title = "provide-terminal (Docker)"
+
+[auth]
+# Dev mode: no JWT required. Accepts X-Uterm-Principal header or anonymous.
+mode = "dev"
+principal_header = "x-uterm-principal"
+role_header = "x-uterm-role"
+
+[ui]
+app_path = "/app"
+assets_path = "/_terminal"
+
+[recording]
+enabled_by_default = false
+directory = "/tmp/uterm-recordings"
+
+[[sessions]]
+session_id = "shell-demo"
+display_name = "Interactive Shell"
+connector_type = "shell"
+input_mode = "open"
+auto_start = true
+visibility = "public"
+tags = ["demo"]

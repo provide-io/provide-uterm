@@ -14,11 +14,44 @@ _MIME = {
     ".css": "text/css; charset=utf-8",
 }
 
+# Static directory co-located with this file (populated at build time in Docker).
+_LOCAL_STATIC = Path(__file__).parent / "static"
+
+
+def read_asset_text(path: str) -> str | None:
+    """Return the raw text content of an asset, or None if not found."""
+    rel = path.lstrip("/")
+    if ".." in rel.split("/"):
+        return None
+    try:
+        local_root = importlib.resources.files("provide_terminal_cloudflare.ui") / "static"
+        local_target = local_root / rel
+        if local_target.is_file():
+            return local_target.read_text(encoding="utf-8")
+    except (ModuleNotFoundError, TypeError):
+        pass
+    try:
+        local_target2 = _LOCAL_STATIC / rel
+        if local_target2.is_file():
+            return local_target2.read_text(encoding="utf-8")
+    except OSError:
+        pass
+    try:
+        frontend_root = importlib.resources.files("provide.terminal") / "frontend"
+        target = frontend_root / rel
+        if target.is_file():
+            return target.read_text(encoding="utf-8")
+    except (ModuleNotFoundError, TypeError):
+        pass
+    return None
+
 
 def serve_asset(path: str) -> Response:
     rel = path.lstrip("/")
     if ".." in rel.split("/"):
         return Response("forbidden", status=403, headers={"content-type": "text/plain"})
+
+    # 1. Try importlib.resources (works when package is properly installed in CPython).
     try:
         local_root = importlib.resources.files("provide_terminal_cloudflare.ui") / "static"
         local_target = local_root / rel
@@ -26,9 +59,20 @@ def serve_asset(path: str) -> Response:
             suffix = Path(local_target.name).suffix.lower()
             mime = _MIME.get(suffix, "application/octet-stream")
             return Response(local_target.read_text(encoding="utf-8"), status=200, headers={"content-type": mime})
-    except ModuleNotFoundError:
+    except (ModuleNotFoundError, TypeError):
         pass
 
+    # 2. Try __file__-relative path (works in pywrangler dev when static dir is populated).
+    try:
+        local_target2 = _LOCAL_STATIC / rel
+        if local_target2.is_file():
+            suffix = local_target2.suffix.lower()
+            mime = _MIME.get(suffix, "application/octet-stream")
+            return Response(local_target2.read_text(encoding="utf-8"), status=200, headers={"content-type": mime})
+    except OSError:
+        pass
+
+    # 3. Fall back to the main provide-terminal package (installed alongside this package).
     try:
         frontend_root = importlib.resources.files("provide.terminal") / "frontend"
     except ModuleNotFoundError:

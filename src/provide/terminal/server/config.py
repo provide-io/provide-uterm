@@ -101,6 +101,7 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
         app_path=_clean_path(str(ui_data.get("app_path", base.ui.app_path)), base.ui.app_path),
         assets_path=_clean_path(str(ui_data.get("assets_path", base.ui.assets_path)), base.ui.assets_path),
         xterm_cdn=str(ui_data.get("xterm_cdn", base.ui.xterm_cdn)),
+        fitaddon_cdn=str(ui_data.get("fitaddon_cdn", base.ui.fitaddon_cdn)),
         fonts_cdn=str(ui_data.get("fonts_cdn", base.ui.fonts_cdn)),
     )
     max_bytes = int(recording_data.get("max_bytes", base.recording.max_bytes))

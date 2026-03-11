@@ -20,6 +20,11 @@ from typing import TYPE_CHECKING, Any
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.ratelimit import TokenBucket
 
+# Keeps strong references to fire-and-forget tasks so CPython's GC cannot
+# collect them before the event loop runs them.  Each task removes itself
+# on completion via the done callback.
+_background_tasks: set[asyncio.Task[Any]] = set()
+
 # Maximum number of per-client rate-limit buckets held in memory at once.
 # On overflow the oldest half of entries are evicted (LRU-lite), preserving
 # rate-limit state for recently-active clients while bounding memory growth.
@@ -125,11 +130,20 @@ class _ConnectionMixin:
         """Set input_mode from a ``worker_hello`` message.
 
         Returns ``True`` if the mode was applied, ``False`` if the worker is no
-        longer registered.
+        longer registered or if switching to ``"open"`` while a hijack lease is
+        active (mode change is blocked in that case).
         """
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
+                return False
+            if mode == "open" and self.is_hijacked(st):
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "worker_hello_mode_blocked worker_id=%s — cannot switch to open while hijack active",
+                    worker_id,
+                )
                 return False
             st.input_mode = mode
         return True
@@ -204,7 +218,8 @@ class _ConnectionMixin:
         on_empty = getattr(self, "on_worker_empty", None)
         if browser_count == 0 and on_empty is not None:
             task = asyncio.create_task(on_empty(worker_id))
-            _ = task  # keep reference to avoid GC before completion
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
         return {
             "was_owner": was_owner,
             "rest_still_active": rest_still_active,

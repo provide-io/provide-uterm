@@ -275,6 +275,43 @@ class TestQuickConnectConflict:
         assert r.status_code == 409
 
 
+class TestMaxSessions:
+    def test_max_sessions_blocks_create(self) -> None:
+        """SessionRegistry enforces max_sessions limit."""
+        from provide.terminal.hijack.hub.core import TermHub
+        from provide.terminal.server.models import RecordingConfig
+        from provide.terminal.server.registry import SessionRegistry
+
+        hub = TermHub()
+        reg = SessionRegistry(
+            [], hub=hub, public_base_url="http://localhost", recording=RecordingConfig(), max_sessions=1
+        )
+        import asyncio
+
+        async def _run() -> None:
+            await reg.create_session({"session_id": "s1", "connector_type": "shell", "display_name": "S1"})
+            with pytest.raises(ValueError, match="session limit reached"):
+                await reg.create_session({"session_id": "s2", "connector_type": "shell", "display_name": "S2"})
+
+        asyncio.run(_run())
+
+    def test_max_sessions_none_is_unbounded(self) -> None:
+        """max_sessions=None (default) does not limit session creation."""
+        from provide.terminal.hijack.hub.core import TermHub
+        from provide.terminal.server.models import RecordingConfig
+        from provide.terminal.server.registry import SessionRegistry
+
+        hub = TermHub()
+        reg = SessionRegistry([], hub=hub, public_base_url="http://localhost", recording=RecordingConfig())
+        import asyncio
+
+        async def _run() -> None:
+            for i in range(5):
+                await reg.create_session({"session_id": f"s{i}", "connector_type": "shell", "display_name": f"S{i}"})
+
+        asyncio.run(_run())
+
+
 # ---------------------------------------------------------------------------
 # app.py: _validate_auth_config error paths (lines 77, 79, 83)
 # ---------------------------------------------------------------------------

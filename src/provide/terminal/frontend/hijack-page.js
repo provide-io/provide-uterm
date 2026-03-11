@@ -21,11 +21,12 @@ class HijackDemoPage {
     }
     async loadSession() {
         try {
-            const data = await apiJson(`/demo/session/${encodeURIComponent(this.workerId)}`);
+            const data = await apiJson(`/api/sessions/${encodeURIComponent(this.workerId)}`);
             this.modeElement.value = data.input_mode || "hijack";
-            this.statusElement.textContent = `${data.title || "Demo Session"} | ${data.input_mode || "hijack"} | ${data.paused ? "paused" : "live"}`;
+            const state = data.lifecycle_state === "paused" ? "paused" : "live";
+            this.statusElement.textContent = `${data.display_name || "Session"} | ${data.input_mode || "hijack"} | ${state}`;
             this.statusElement.classList.remove("error");
-            this.noteElement.textContent = data.pending_banner || "The demo worker accepts input while hijacked.";
+            this.noteElement.textContent = "The demo worker accepts input while hijacked.";
         }
         catch (error) {
             this.statusElement.textContent = `Session load failed: ${String(error)}`;
@@ -34,7 +35,7 @@ class HijackDemoPage {
     }
     async applyMode() {
         try {
-            await apiJson(`/demo/session/${encodeURIComponent(this.workerId)}/mode`, "POST", {
+            await apiJson(`/api/sessions/${encodeURIComponent(this.workerId)}/mode`, "POST", {
                 input_mode: this.modeElement.value,
             });
             await this.loadSession();
@@ -46,8 +47,9 @@ class HijackDemoPage {
     }
     async resetSession() {
         try {
-            await apiJson(`/demo/session/${encodeURIComponent(this.workerId)}/reset`, "POST");
+            await apiJson(`/api/sessions/${encodeURIComponent(this.workerId)}/restart`, "POST");
             await this.loadSession();
+            this.noteElement.textContent = "Session reset.";
         }
         catch (error) {
             this.statusElement.textContent = `Reset failed: ${String(error)}`;

@@ -178,6 +178,12 @@ class SqliteStateStore:
         )
 
     def append_event(self, worker_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        # SELECT→INSERT→UPDATE is intentionally non-atomic at the SQL level.
+        # CF Durable Objects execute in a single-threaded JS event loop so no
+        # concurrent callers can interleave these statements in production.
+        # Tests use sqlite3 without concurrent writers, so the non-atomic
+        # pattern is also safe there.  If this assumption changes, wrap the
+        # three _run() calls in a BEGIN/COMMIT pair.
         current_seq = self.current_event_seq(worker_id)
         seq = current_seq + 1
         ts = time.time()

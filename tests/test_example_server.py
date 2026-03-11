@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""Unit tests for the interactive demo session helpers."""
+"""Unit tests for the interactive example session helpers."""
 
 from __future__ import annotations
 
-from tests.conftest import load_demo_server_module
+from tests.conftest import load_example_server_module
 
-demo = load_demo_server_module()
+demo = load_example_server_module()
 
 
 def _fresh(worker_id: str = "unit-session") -> demo.DemoSessionState:

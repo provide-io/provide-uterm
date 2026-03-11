@@ -1,4 +1,4 @@
-import { apiJson, requireElement, type ProvideHijackConstructor } from "./server-common.js";
+import { apiJson, requireElement, type SessionStatus, type ProvideHijackConstructor } from "./server-common.js";
 
 declare global {
   interface Window {
@@ -11,13 +11,6 @@ declare global {
       workerId: string;
     };
   }
-}
-
-interface DemoSessionPayload {
-  title?: string;
-  input_mode?: string;
-  paused?: boolean;
-  pending_banner?: string | null;
 }
 
 class HijackDemoPage {
@@ -49,13 +42,12 @@ class HijackDemoPage {
 
   async loadSession(): Promise<void> {
     try {
-      const data = await apiJson<DemoSessionPayload>(`/demo/session/${encodeURIComponent(this.workerId)}`);
+      const data = await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(this.workerId)}`);
       this.modeElement.value = data.input_mode || "hijack";
-      this.statusElement.textContent = `${data.title || "Demo Session"} | ${data.input_mode || "hijack"} | ${
-        data.paused ? "paused" : "live"
-      }`;
+      const state = data.lifecycle_state === "paused" ? "paused" : "live";
+      this.statusElement.textContent = `${data.display_name || "Session"} | ${data.input_mode || "hijack"} | ${state}`;
       this.statusElement.classList.remove("error");
-      this.noteElement.textContent = data.pending_banner || "The demo worker accepts input while hijacked.";
+      this.noteElement.textContent = "The demo worker accepts input while hijacked.";
     } catch (error) {
       this.statusElement.textContent = `Session load failed: ${String(error)}`;
       this.statusElement.classList.add("error");
@@ -64,7 +56,7 @@ class HijackDemoPage {
 
   async applyMode(): Promise<void> {
     try {
-      await apiJson<DemoSessionPayload>(`/demo/session/${encodeURIComponent(this.workerId)}/mode`, "POST", {
+      await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(this.workerId)}/mode`, "POST", {
         input_mode: this.modeElement.value,
       });
       await this.loadSession();
@@ -76,8 +68,9 @@ class HijackDemoPage {
 
   async resetSession(): Promise<void> {
     try {
-      await apiJson<DemoSessionPayload>(`/demo/session/${encodeURIComponent(this.workerId)}/reset`, "POST");
+      await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(this.workerId)}/restart`, "POST");
       await this.loadSession();
+      this.noteElement.textContent = "Session reset.";
     } catch (error) {
       this.statusElement.textContent = `Reset failed: ${String(error)}`;
       this.statusElement.classList.add("error");

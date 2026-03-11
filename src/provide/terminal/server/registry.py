@@ -40,22 +40,32 @@ class SessionRegistry:
         public_base_url: str,
         recording: RecordingConfig,
         worker_bearer_token: str | None = None,
+        max_sessions: int | None = None,
     ) -> None:
         self._hub = hub
         self._recording = recording
         self._public_base_url = public_base_url
         self._worker_bearer_token = worker_bearer_token
+        self._max_sessions = max_sessions
         self._lock = asyncio.Lock()
         self._sessions: dict[str, SessionDefinition] = {session.session_id: session for session in sessions}
         self._runtimes: dict[str, HostedSessionRuntime] = {}
         hub.on_worker_empty = self._on_worker_empty
 
     async def _on_worker_empty(self, session_id: str) -> None:
-        """Auto-delete an ephemeral session when the last browser disconnects."""
+        """Auto-delete an ephemeral session when the last browser disconnects.
+
+        A short grace period lets reconnecting browsers (page refresh, brief
+        network drop, or the initial redirect to a freshly-created session) land
+        before the session is torn down.
+        """
         async with self._lock:
             session = self._sessions.get(session_id)
             if session is None or not session.ephemeral:
                 return
+        await asyncio.sleep(5)
+        if await self._hub.browser_count(session_id) > 0:
+            return
         with contextlib.suppress(KeyError):
             await self.delete_session(session_id)
 
@@ -144,6 +154,8 @@ class SessionRegistry:
             ephemeral=bool(payload.get("ephemeral", False)),
         )
         async with self._lock:
+            if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:
+                raise ValueError(f"session limit reached: max_sessions={self._max_sessions}")
             if session.session_id in self._sessions:
                 raise ValueError(f"session already exists: {session.session_id}")
             self._sessions[session.session_id] = session
@@ -276,10 +288,11 @@ class SessionRegistry:
         normalized_limit = max(1, min(limit, 500))
         normalized_event = None if event is None else str(event).strip()
         normalized_offset = max(0, offset) if offset is not None else None
+
         # Stream line-by-line to avoid loading the entire file into memory.
         # When offset is given, skip accepted entries until the offset is reached,
         # then collect up to limit — avoiding O(N) in-memory accumulation.
-        if normalized_offset is not None:
+        def _read_with_offset(offset: int) -> list[dict[str, Any]]:
             entries: list[dict[str, Any]] = []
             skipped = 0
             with path.open(encoding="utf-8") as fh:
@@ -292,24 +305,29 @@ class SessionRegistry:
                         continue
                     if normalized_event and str(entry.get("event", "")) != normalized_event:
                         continue
-                    if skipped < normalized_offset:
+                    if skipped < offset:
                         skipped += 1
                         continue
                     entries.append(entry)
                     if len(entries) >= normalized_limit:
                         break
             return entries
-        # No offset: collect last `limit` entries efficiently with a fixed-size buffer.
-        tail: deque[dict[str, Any]] = deque(maxlen=normalized_limit)
-        with path.open(encoding="utf-8") as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if normalized_event and str(entry.get("event", "")) != normalized_event:
-                    continue
-                tail.append(entry)
-        return list(tail)
+
+        def _read_tail() -> list[dict[str, Any]]:
+            tail: deque[dict[str, Any]] = deque(maxlen=normalized_limit)
+            with path.open(encoding="utf-8") as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if normalized_event and str(entry.get("event", "")) != normalized_event:
+                        continue
+                    tail.append(entry)
+            return list(tail)
+
+        if normalized_offset is not None:
+            return await asyncio.to_thread(_read_with_offset, normalized_offset)
+        return await asyncio.to_thread(_read_tail)

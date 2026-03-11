@@ -53,6 +53,7 @@ def create_page_router() -> APIRouter:
                 cfg.ui.app_path,
                 cfg.ui.assets_path,
                 xterm_cdn=cfg.ui.xterm_cdn,
+                fitaddon_cdn=cfg.ui.fitaddon_cdn,
                 fonts_cdn=cfg.ui.fonts_cdn,
             )
         )
@@ -79,6 +80,7 @@ def create_page_router() -> APIRouter:
             operator=False,
             app_path=cfg.ui.app_path,
             xterm_cdn=cfg.ui.xterm_cdn,
+            fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
@@ -104,6 +106,7 @@ def create_page_router() -> APIRouter:
             operator=True,
             app_path=cfg.ui.app_path,
             xterm_cdn=cfg.ui.xterm_cdn,
+            fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
@@ -128,6 +131,7 @@ def create_page_router() -> APIRouter:
             session_id,
             app_path=cfg.ui.app_path,
             xterm_cdn=cfg.ui.xterm_cdn,
+            fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
@@ -146,6 +150,7 @@ def create_page_router() -> APIRouter:
                 cfg.ui.assets_path,
                 cfg.ui.app_path,
                 xterm_cdn=cfg.ui.xterm_cdn,
+                fitaddon_cdn=cfg.ui.fitaddon_cdn,
                 fonts_cdn=cfg.ui.fonts_cdn,
             )
         )

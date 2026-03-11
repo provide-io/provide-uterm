@@ -107,11 +107,13 @@ class TestReferenceServerApp:
             assert "id='app-root'" in dashboard.text
             assert '"page_kind": "dashboard"' in dashboard.text
             assert "<table" not in dashboard.text
+            assert "addon-fit.js" in dashboard.text
 
             session_page = await http.get("/app/session/demo-session")
             assert session_page.status_code == 200
             assert '"page_kind": "session"' in session_page.text
             assert "uterm_surface=user" in ",".join(session_page.headers.get_list("set-cookie"))
+            assert "addon-fit.js" in session_page.text
 
             operator_page = await http.get("/app/operator/demo-session")
             assert operator_page.status_code == 200
@@ -122,12 +124,14 @@ class TestReferenceServerApp:
             assert "<style>" not in operator_page.text
             assert "const SESSION_ID=" not in operator_page.text
             assert "btn-refresh" not in operator_page.text
+            assert "addon-fit.js" in operator_page.text
 
             replay_page = await http.get("/app/replay/demo-session")
             assert replay_page.status_code == 200
             assert "/_terminal/server-replay-page.js" in replay_page.text
             assert "<style>" not in replay_page.text
             assert '"page_kind": "replay"' in replay_page.text
+            assert "addon-fit.js" in replay_page.text
 
     async def test_demo_session_browser_ws_is_online(self, live_reference_server: str) -> None:
         await self._wait_for_connected(live_reference_server, "demo-session")

@@ -112,3 +112,89 @@ def test_config_reads_jwt_default_role_from_env() -> None:
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_default_role == "operator"
+
+
+async def test_role_map_translates_group_names() -> None:
+    """JWT_ROLE_MAP maps arbitrary group names to terminal roles."""
+    now = int(time.time())
+    token = jwt.encode(
+        {"sub": "u1", "groups": ["engineering", "devs"], "exp": now + 600},
+        "secret",
+        algorithm="HS256",
+    )
+    config = JwtConfig(
+        mode="jwt",
+        public_key_pem="secret",
+        algorithms=("HS256",),
+        jwt_roles_claim="groups",
+        jwt_role_map={"engineering": "admin", "devs": "operator"},
+    )
+    principal = await decode_jwt(token, config)
+    assert resolve_role(principal) == "admin"
+
+
+async def test_role_map_unknown_groups_pass_through() -> None:
+    """Group names not in jwt_role_map are kept as-is (may not match any terminal role)."""
+    now = int(time.time())
+    token = jwt.encode(
+        {"sub": "u1", "groups": ["unknown-group"], "exp": now + 600},
+        "secret",
+        algorithm="HS256",
+    )
+    config = JwtConfig(
+        mode="jwt",
+        public_key_pem="secret",
+        algorithms=("HS256",),
+        jwt_roles_claim="groups",
+        jwt_role_map={"engineering": "admin"},
+    )
+    principal = await decode_jwt(token, config)
+    # "unknown-group" not in map → passes through → resolve_role falls back to viewer
+    assert resolve_role(principal) == "viewer"
+
+
+async def test_role_map_partial_match_picks_highest() -> None:
+    """When a user has multiple groups, resolve_role picks the highest-privilege role."""
+    now = int(time.time())
+    token = jwt.encode(
+        {"sub": "u1", "groups": ["ops", "everyone"], "exp": now + 600},
+        "secret",
+        algorithm="HS256",
+    )
+    config = JwtConfig(
+        mode="jwt",
+        public_key_pem="secret",
+        algorithms=("HS256",),
+        jwt_roles_claim="groups",
+        jwt_role_map={"ops": "operator", "everyone": "viewer"},
+    )
+    principal = await decode_jwt(token, config)
+    assert resolve_role(principal) == "operator"
+
+
+def test_config_reads_jwt_role_map_from_env() -> None:
+    """JWT_ROLE_MAP env var is parsed as JSON and wired to JwtConfig.jwt_role_map."""
+    import json
+
+    from provide_terminal_cloudflare.config import CloudflareConfig
+
+    class _FakeEnv:
+        AUTH_MODE = "jwt"
+        JWT_PUBLIC_KEY_PEM = "pem"
+        JWT_ROLE_MAP = json.dumps({"engineering": "admin", "ops": "operator"})
+
+    cfg = CloudflareConfig.from_env(_FakeEnv())
+    assert cfg.jwt.jwt_role_map == {"engineering": "admin", "ops": "operator"}
+
+
+def test_config_jwt_role_map_invalid_json_ignored() -> None:
+    """Invalid JWT_ROLE_MAP JSON is silently ignored (empty map)."""
+    from provide_terminal_cloudflare.config import CloudflareConfig
+
+    class _FakeEnv:
+        AUTH_MODE = "jwt"
+        JWT_PUBLIC_KEY_PEM = "pem"
+        JWT_ROLE_MAP = "not-valid-json{"
+
+    cfg = CloudflareConfig.from_env(_FakeEnv())
+    assert cfg.jwt.jwt_role_map == {}

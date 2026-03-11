@@ -2,7 +2,7 @@
 
 Shared terminal I/O primitives and WebSocket proxy infrastructure for the provide ecosystem.
 
-**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1082+ tests at 99% server coverage
+**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1096+ tests at 99% server coverage
 
 For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
 
@@ -133,12 +133,12 @@ Embed the hijack control widget in any HTML page:
 Mount the bundled frontend files via FastAPI's `StaticFiles` or use
 `mount_terminal_ui()` which includes `hijack.html`, `hijack.js`, and `hijack.css`.
 
-### Interactive Demo Server
+### Interactive Example Server
 
-The repo also includes an interactive demo server for manual testing:
+The repo also includes an interactive example server for manual testing:
 
 ```bash
-uv run python scripts/demo_server.py
+uv run python scripts/example_server.py
 ```
 
 Then open:
@@ -303,6 +303,49 @@ uterm listen wss://warp.provide.io/ws/terminal --port 2112 --ssh-port 2222
 # With host key (SSH)
 uterm listen wss://warp.provide.io/ws/terminal --server-key /etc/host_key
 ```
+
+---
+
+## Docker
+
+Pre-built Docker targets are provided for local testing of both backends.
+
+### FastAPI reference server
+
+```bash
+# Build (from repo root)
+docker build -f docker/Dockerfile.server -t provide-terminal-server .
+
+# Run — dashboard at http://localhost:27780/app/
+docker run --rm -p 27780:27780 provide-terminal-server
+
+# Custom config
+docker run --rm -p 27780:27780 \
+  -v /path/to/my.toml:/config/server.toml:ro \
+  provide-terminal-server
+```
+
+The default config (`docker/server.toml`) starts in `dev` auth mode with one pre-configured shell session. Mount a custom TOML to add JWT, real connectors, or additional sessions — see `scripts/uterm-server.jwt.example.toml` for a full JWT example.
+
+### Cloudflare Worker (pywrangler dev)
+
+```bash
+# Build (requires Docker Buildx; Node 20 + Python 3.11 image)
+docker build -f docker/Dockerfile.cf -t provide-terminal-cf .
+
+# Run — worker at http://localhost:27788/api/health
+docker run --rm -p 27788:27788 provide-terminal-cf
+```
+
+Runs `pywrangler dev` inside the container with `AUTH_MODE=dev`. Pass `-e AUTH_MODE=jwt -e JWT_JWKS_URL=...` etc. to test JWT auth. KV/DO state is local (SQLite in `/tmp`) — not written to Cloudflare.
+
+### Both backends together
+
+```bash
+docker compose -f docker/docker-compose.yml up
+```
+
+FastAPI on `:27780`, CF worker on `:27788`.
 
 ---
 

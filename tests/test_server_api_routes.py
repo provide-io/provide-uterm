@@ -365,6 +365,27 @@ def test_quick_connect_url_uses_app_path(app_client: TestClient) -> None:
     assert "/session/" in url
 
 
+def test_quick_connect_with_tags(app_client: TestClient) -> None:
+    r = app_client.post("/api/connect", json={"connector_type": "shell", "tags": ["game", "prod"]})
+    assert r.status_code == 200
+    assert r.json()["tags"] == ["game", "prod"]
+
+
+def test_quick_connect_with_input_mode_hijack(app_client: TestClient) -> None:
+    r = app_client.post("/api/connect", json={"connector_type": "shell", "input_mode": "hijack"})
+    assert r.status_code == 200
+    assert r.json()["input_mode"] == "hijack"
+
+
+def test_quick_connect_tags_and_input_mode_not_in_connector_config(app_client: TestClient) -> None:
+    """tags and input_mode must not bleed into connector_config."""
+    r = app_client.post(
+        "/api/connect",
+        json={"connector_type": "shell", "tags": ["x"], "input_mode": "open"},
+    )
+    assert r.status_code == 200
+
+
 def test_quick_connect_forbidden_without_create_privilege() -> None:
     """POST /api/connect returns 403 for a viewer-only principal."""
     import time

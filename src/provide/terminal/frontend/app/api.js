@@ -1,19 +1,4 @@
-async function apiJson(path, method = "GET", body = null) {
-    const init = {
-        method,
-        headers: {
-            "Content-Type": "application/json",
-        },
-    };
-    if (body !== null) {
-        init.body = JSON.stringify(body);
-    }
-    const response = await fetch(path, init);
-    if (!response.ok) {
-        throw new Error(`${response.status}`);
-    }
-    return (await response.json());
-}
+import { apiJson } from "../server-common.js";
 function normalizeMode(value) {
     return value === "hijack" ? "hijack" : "open";
 }
@@ -70,6 +55,9 @@ export async function setSessionMode(sessionId, inputMode) {
 export async function clearSession(sessionId) {
     return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/clear`, "POST"));
 }
+export async function restartSession(sessionId) {
+    return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/restart`, "POST"));
+}
 export async function analyzeSession(sessionId) {
     const result = await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/analyze`, "POST");
     return result.analysis;
@@ -81,6 +69,9 @@ export async function fetchRecordingEntries(sessionId, filter, limit) {
         params.set("event", filter);
     const result = await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/recording/entries?${params.toString()}`);
     return normalizeRecordingEntries(result);
+}
+export async function quickConnect(payload) {
+    return apiJson("/api/connect", "POST", payload);
 }
 export function widgetSurface(surface) {
     const isOperator = surface === "operator";

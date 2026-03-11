@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import secrets
 import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Annotated, Any
@@ -24,6 +25,7 @@ except ImportError as _e:  # pragma: no cover
 
 import logging
 
+from provide.terminal.hijack.hub.connections import _background_tasks
 from provide.terminal.hijack.models import VALID_ROLES, _safe_float, _safe_int, extract_prompt_id
 from provide.terminal.hijack.ratelimit import TokenBucket
 from provide.terminal.hijack.routes.browser_handlers import handle_browser_message
@@ -55,7 +57,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         if worker_token is not None:
             auth_header = websocket.headers.get("authorization", "")
             provided = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
-            if provided != worker_token:
+            if not secrets.compare_digest(provided, worker_token):
                 await websocket.close(code=1008, reason="authentication required")
                 return
         await websocket.accept()
@@ -99,9 +101,12 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 if mtype == "worker_hello":
                     _hello_mode = msg.get("input_mode")
                     if _hello_mode in ("hijack", "open"):
-                        await hub.set_worker_hello_mode(worker_id, _hello_mode)
-                        await hub.broadcast_hijack_state(worker_id)
-                        logger.info("worker_hello worker_id=%s input_mode=%s", worker_id, _hello_mode)
+                        mode_applied = await hub.set_worker_hello_mode(worker_id, _hello_mode)
+                        if mode_applied:
+                            await hub.broadcast_hijack_state(worker_id)
+                        logger.info(
+                            "worker_hello worker_id=%s input_mode=%s applied=%s", worker_id, _hello_mode, mode_applied
+                        )
                     elif _hello_mode is not None:
                         logger.warning(
                             "worker_hello_invalid_mode worker_id=%s input_mode=%r — expected 'hijack' or 'open', ignoring",
@@ -165,6 +170,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         {"type": "worker_disconnected", "worker_id": worker_id, "ts": time.time()},
                     )
                 )
+                _background_tasks.add(_broadcast_task)
+                _broadcast_task.add_done_callback(_background_tasks.discard)
                 _broadcast_task.add_done_callback(
                     lambda t: (
                         logger.warning(
@@ -177,6 +184,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 if was_hijacked:
                     hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
                     _hijack_state_task = asyncio.create_task(hub.broadcast_hijack_state(worker_id))
+                    _background_tasks.add(_hijack_state_task)
+                    _hijack_state_task.add_done_callback(_background_tasks.discard)
                     _hijack_state_task.add_done_callback(
                         lambda t: (
                             logger.warning(
@@ -202,6 +211,10 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         if role not in VALID_ROLES:
             role = "viewer"
         can_hijack = role == "admin"
+        # True once this browser has owned a dashboard hijack this session.
+        # Retained even after the hijack is released so the finally block can
+        # send a resume if the worker is still paused.  Does NOT reflect current
+        # ownership — check hub state for that.
         owned_hijack = False
         # Capture all startup state atomically while registering the browser.
         browser_state = await hub.register_browser(worker_id, websocket, role)
@@ -301,6 +314,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             },
                         )
                     )
+                    _background_tasks.add(_resume_task)
+                    _resume_task.add_done_callback(_background_tasks.discard)
                     _resume_task.add_done_callback(
                         lambda t: (
                             logger.warning(
@@ -330,6 +345,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             },
                         )
                     )
+                    _background_tasks.add(_resume_task)
+                    _resume_task.add_done_callback(_background_tasks.discard)
                     _resume_task.add_done_callback(
                         lambda t: (
                             logger.warning(

@@ -35,7 +35,7 @@ directory = ".uterm-recordings"
 [[sessions]]
 session_id = "demo-session"
 display_name = "Interactive Demo Session"
-connector_type = "demo"
+connector_type = "shell"
 input_mode = "open"
 auto_start = true
 owner = "ops@example.com"

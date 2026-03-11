@@ -1,22 +1,6 @@
 import type { AnalysisResponse, RecordingEntry, SessionStatus, SnapshotPayload } from "../server-common.js";
+import { apiJson } from "../server-common.js";
 import type { RecordingEntryView, SessionDetails, SessionSummary, SessionSurface } from "./types.js";
-
-async function apiJson<T>(path: string, method: "GET" | "POST" = "GET", body: unknown = null): Promise<T> {
-  const init: RequestInit = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  };
-  if (body !== null) {
-    init.body = JSON.stringify(body);
-  }
-  const response = await fetch(path, init);
-  if (!response.ok) {
-    throw new Error(`${response.status}`);
-  }
-  return (await response.json()) as T;
-}
 
 function normalizeMode(value: string): "open" | "hijack" {
   return value === "hijack" ? "hijack" : "open";
@@ -86,6 +70,12 @@ export async function clearSession(sessionId: string): Promise<SessionSummary> {
   );
 }
 
+export async function restartSession(sessionId: string): Promise<SessionSummary> {
+  return normalizeSessionStatus(
+    await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/restart`, "POST"),
+  );
+}
+
 export async function analyzeSession(sessionId: string): Promise<string> {
   const result = await apiJson<AnalysisResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/analyze`, "POST");
   return result.analysis;
@@ -103,6 +93,26 @@ export async function fetchRecordingEntries(
     `/api/sessions/${encodeURIComponent(sessionId)}/recording/entries?${params.toString()}`,
   );
   return normalizeRecordingEntries(result);
+}
+
+export interface QuickConnectPayload {
+  connector_type: string;
+  display_name?: string;
+  input_mode?: string;
+  tags?: string[];
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+}
+
+export interface QuickConnectResult {
+  session_id: string;
+  url: string;
+}
+
+export async function quickConnect(payload: QuickConnectPayload): Promise<QuickConnectResult> {
+  return apiJson<QuickConnectResult>("/api/connect", "POST", payload);
 }
 
 export function widgetSurface(surface: SessionSurface | undefined): { showAnalysis: boolean; mobileKeys: boolean } {
