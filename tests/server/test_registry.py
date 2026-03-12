@@ -132,15 +132,10 @@ class TestStartAutoStartSessions:
 class TestOnWorkerEmpty:
     async def test_ephemeral_session_deleted(self) -> None:
         reg = _make_registry([_session("ephem", ephemeral=True)])
-        deleted: list[str] = []
-
-        async def _mock_delete(session_id: str) -> None:
-            deleted.append(session_id)
-
-        with patch.object(reg, "delete_session", side_effect=_mock_delete):
-            await reg._on_worker_empty("ephem")
-
-        assert deleted == ["ephem"]
+        assert await reg.get_definition("ephem") is not None
+        await reg._on_worker_empty("ephem")
+        # Session should be gone — _on_worker_empty inlines the delete
+        assert await reg.get_definition("ephem") is None
 
     async def test_non_ephemeral_session_not_deleted(self) -> None:
         reg = _make_registry([_session("perm", ephemeral=False)])

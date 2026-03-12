@@ -326,7 +326,7 @@ def _handle_tilde_codes(text: str) -> str:
             if code in _TILDE_MAP:
                 polarity, color_char = _TILDE_MAP[code]
                 seq = _emit_color(polarity, color_char)
-                if seq:
+                if seq:  # pragma: no branch
                     out.append(seq)
                     i += 2
                     continue

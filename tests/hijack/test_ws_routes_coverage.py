@@ -74,7 +74,7 @@ class TestStaleHijackOnWorkerReconnect:
                     st.hijack_owner = AsyncMock()
                     st.hijack_owner_expires_at = now + 300
 
-            asyncio.get_event_loop().run_until_complete(_setup_stale())
+            asyncio.run(_setup_stale())
 
             # Connect a new worker — should clear stale hijack (lines 58-61, 65-66)
             with client.websocket_connect("/ws/worker/w1/term") as worker:
@@ -231,7 +231,7 @@ class TestSnapshotFieldSafety:
         ):
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "snapshot", "screen": "hi", "cols": 80, "rows": 25, "ts": None})
-            snap = asyncio.get_event_loop().run_until_complete(hub.get_last_snapshot("w1"))
+            snap = asyncio.run(hub.get_last_snapshot("w1"))
             if snap is not None:
                 assert isinstance(snap.get("ts"), float), "ts must be float, not None"
 
@@ -246,7 +246,7 @@ class TestSnapshotFieldSafety:
         ):
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "snapshot", "screen": "hi", "cols": -10, "rows": 25, "ts": time.time()})
-            snap = asyncio.get_event_loop().run_until_complete(hub.get_last_snapshot("w1"))
+            snap = asyncio.run(hub.get_last_snapshot("w1"))
             if snap is not None:
                 assert snap.get("cols", 80) >= 1, "cols must be ≥ 1"
 
@@ -261,6 +261,6 @@ class TestSnapshotFieldSafety:
         ):
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "snapshot", "screen": "hi", "cols": 80, "rows": 0, "ts": time.time()})
-            snap = asyncio.get_event_loop().run_until_complete(hub.get_last_snapshot("w1"))
+            snap = asyncio.run(hub.get_last_snapshot("w1"))
             if snap is not None:
                 assert snap.get("rows", 25) >= 1, "rows must be ≥ 1"

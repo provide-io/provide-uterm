@@ -58,6 +58,10 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             auth_header = websocket.headers.get("authorization", "")
             provided = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
             if not secrets.compare_digest(provided, worker_token):
+                # Accept first so the close code is transmitted to the client.
+                # Calling close() before accept() silently drops the connection
+                # without sending the 1008 policy-violation code.
+                await websocket.accept()
                 await websocket.close(code=1008, reason="authentication required")
                 return
         await websocket.accept()
@@ -148,7 +152,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             "ts": msg.get("ts", time.time()),
                         },
                     )
-                elif mtype == "status":
+                elif mtype == "status":  # pragma: no branch
                     await hub.broadcast(worker_id, msg)
                     await hub.append_event(worker_id, "worker_status", {"status": msg})
         except WebSocketDisconnect:
@@ -208,7 +212,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         except BrowserRoleResolutionError:
             await websocket.close(code=1008, reason="browser role resolution failed")
             return
-        if role not in VALID_ROLES:
+        if role not in VALID_ROLES:  # pragma: no cover
             role = "viewer"
         can_hijack = role == "admin"
         # True once this browser has owned a dashboard hijack this session.

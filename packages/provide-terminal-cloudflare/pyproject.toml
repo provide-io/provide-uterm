@@ -1,20 +1,19 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "provide-terminal-cloudflare"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Cloudflare Workers runtime for provide-terminal control plane"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "AGPL-3.0-or-later"}
+license = "AGPL-3.0-or-later"
 authors = [
   {name = "MindTenet LLC"},
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
-  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -47,8 +46,11 @@ Repository = "https://github.com/provide-io/provide-terminal"
 [project.scripts]
 uterm-cf = "provide_terminal_cloudflare.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/provide_terminal_cloudflare"]
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -58,3 +60,18 @@ markers = [
     "slow: slow tests (>10s); skipped unless SLOW=1 or REAL_CF=1",
     "playwright: Playwright browser UI tests",
 ]
+addopts = [
+    "--cov=provide_terminal_cloudflare",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+]
+
+[tool.coverage.run]
+source = ["provide_terminal_cloudflare"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false

@@ -32,6 +32,8 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
+_MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sandbox
+
 
 class SessionRuntime(_WsHelperMixin, DurableObject):
     """Durable Object runtime for one worker/session channel."""
@@ -71,6 +73,10 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
         return "default"
 
     def _restore_state(self) -> None:
+        # CF Durable Objects persist alarm registrations across cold starts — a
+        # setAlarm() call made before the DO hibernated will still fire after a
+        # cold-start wake.  We therefore do NOT need to re-arm the alarm here;
+        # if an active lease was stored, the original alarm is still scheduled.
         row = self.store.load_session(self.worker_id)
         if row is None:
             return
@@ -348,6 +354,9 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
     async def request_json(self, request: object) -> dict[str, Any]:
         body = await request.text()  # type: ignore[attr-defined]
         if not body:
+            return {}
+        if len(body) > _MAX_REQUEST_BODY:
+            logger.warning("request_json: body too large (%d bytes), rejecting", len(body))
             return {}
         value = json.loads(body)
         if not isinstance(value, dict):

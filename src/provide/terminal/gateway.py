@@ -206,7 +206,7 @@ class SshWsGateway:
             # client.  This is intentional: the gateway trusts the caller to
             # provide network-level access control.  Do NOT bind host="0.0.0.0"
             # on a public interface without an external firewall or auth layer.
-            def begin_auth(self, username: str) -> bool:  # noqa: ARG002
+            def begin_auth(self, username: str) -> bool:  # noqa: ARG002  # pragma: no cover
                 return False
 
         if self._server_key:

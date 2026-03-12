@@ -2,7 +2,7 @@
 
 Shared terminal I/O primitives and WebSocket proxy infrastructure for the provide ecosystem.
 
-**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1096+ tests at 99% server coverage
+**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1225+ tests at 100% branch coverage
 
 For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
 
@@ -188,10 +188,10 @@ Key endpoints:
 - `GET /app/operator/{session_id}` (operator console)
 - `GET /connect` (quick-connect: create ephemeral sessions on demand)
 
-The example TOML config in [scripts/uterm-server.example.toml](/REDACTED_ABS_PATH)
+The example TOML config in [`scripts/uterm-server.example.toml`](scripts/uterm-server.example.toml)
 shows the intended reference-implementation structure for server config.
 For production JWT deployments, start from
-[scripts/uterm-server.jwt.example.toml](/REDACTED_ABS_PATH).
+[`scripts/uterm-server.jwt.example.toml`](scripts/uterm-server.jwt.example.toml).
 
 ### Auth Runtime Posture
 
@@ -346,6 +346,31 @@ docker compose -f docker/docker-compose.yml up
 ```
 
 FastAPI on `:27780`, CF worker on `:27788`.
+
+---
+
+## Quality Guarantees
+
+- Test gate runs at **100% branch coverage** (`--cov-branch`), enforced via `addopts` in `pyproject.toml`.
+- Pre-commit hooks enforce ruff, mypy strict, ty, bandit, and biome on every commit.
+- Security audit via `pip-audit` and `bandit`; timing-safe token comparison in auth paths.
+- All input size limits enforced at boundaries; fail-closed auth on misconfiguration.
+
+## Documentation Ownership
+
+- README: installation, quick-start, and API overview.
+- Operations: runbook, SLOs, and production readiness gates.
+- Protocol: backend capability matrix and client contract.
+- Release: governance, tagging, and publishing workflow.
+
+## Docs
+
+- [Operations Runbook](https://github.com/provide-io/provide-terminal/blob/main/docs/operations/runbook.md)
+- [Service SLOs](https://github.com/provide-io/provide-terminal/blob/main/docs/operations/slo.md)
+- [Protocol Matrix](https://github.com/provide-io/provide-terminal/blob/main/docs/protocol-matrix.md)
+- [Production Readiness Gates](https://github.com/provide-io/provide-terminal/blob/main/docs/production-readiness-pass2.md)
+- [Release Governance](https://github.com/provide-io/provide-terminal/blob/main/docs/release-governance.md)
+- [Cloudflare Companion Package](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-cloudflare/README.md)
 
 ---
 

@@ -187,3 +187,16 @@ class TestTelnetNegotiateBranches:
         finally:
             server.close()
             await server.wait_closed()
+
+
+class TestConsumeRxBufferZeroConsumed:
+    def test_incomplete_iac_does_not_modify_buffer(self) -> None:
+        """Line 248->250: consumed=0 when buffer starts with incomplete IAC → buffer unchanged."""
+        t = TelnetTransport()
+        # Single IAC byte — incomplete sequence, nothing can be consumed
+        t._rx_buf = bytearray([IAC])
+        payload, events = t._consume_rx_buffer()
+        assert payload == b""
+        assert events == []
+        # Buffer must be unchanged since consumed=0
+        assert t._rx_buf == bytearray([IAC])

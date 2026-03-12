@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import importlib.resources
 import logging
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -69,6 +70,13 @@ def _validate_frontend_assets() -> None:
 def _validate_auth_config(config: ServerConfig) -> None:
     mode = str(config.auth.mode).strip().lower()
     if mode in {"none", "dev"}:
+        # Warn loudly — in dev/none mode any request can spoof any principal
+        # via the X-Principal/X-Role headers.  Never expose this mode publicly.
+        logger.warning(
+            "auth_mode=%s: authentication is disabled — any caller can claim any identity. "
+            "Do NOT expose this server on a public network in this mode.",
+            mode,
+        )
         return
     # All authenticated modes (jwt, header, …) require a worker bearer token.
     if not config.auth.worker_bearer_token:
@@ -118,7 +126,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             from provide.terminal.server.auth import _extract_bearer_token
 
             token = _extract_bearer_token(connection.headers)
-            if token == config.auth.worker_bearer_token:
+            if secrets.compare_digest(token or "", config.auth.worker_bearer_token or ""):
                 from provide.terminal.server.auth import Principal
 
                 connection.state.uterm_principal = Principal(

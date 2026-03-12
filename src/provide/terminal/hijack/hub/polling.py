@@ -86,6 +86,12 @@ class _PollingMixin:
         end = time.time() + max(50, timeout_ms) / 1000.0
         interval = max(20, poll_interval_ms) / 1000.0
         last_snapshot: dict[str, Any] | None = None
+        # Request an initial snapshot before entering the loop; subsequent
+        # requests are only sent when the snapshot timestamp has not advanced
+        # since the previous poll, avoiding flooding the worker channel when
+        # the worker is already streaming snapshots proactively.
+        await self.request_snapshot(worker_id)  # type: ignore[attr-defined]
+        last_snap_ts = 0.0
         while time.time() < end:
             async with self._lock:  # type: ignore[attr-defined]
                 st = self._workers.get(worker_id)  # type: ignore[attr-defined]
@@ -96,7 +102,11 @@ class _PollingMixin:
                 expect_regex=regex_obj,
             ):
                 return True, last_snapshot, None
-            await self.request_snapshot(worker_id)  # type: ignore[attr-defined]
+            snap_ts = last_snapshot.get("ts", 0.0) if last_snapshot else 0.0
+            if snap_ts <= last_snap_ts:
+                # No new snapshot since the last poll — nudge the worker again.
+                await self.request_snapshot(worker_id)  # type: ignore[attr-defined]
+            last_snap_ts = snap_ts
             await asyncio.sleep(interval)
 
         return False, last_snapshot, "prompt_guard_not_satisfied"
