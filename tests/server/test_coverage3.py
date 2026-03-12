@@ -218,3 +218,36 @@ async def test_on_worker_empty_skips_delete_when_browsers_remain() -> None:
     # Session should still exist because browser_count > 0
     session = await reg.get_definition("eph")
     assert session is not None
+
+
+# ---------------------------------------------------------------------------
+# registry.py — _on_worker_empty identity check: session replaced during grace
+# ---------------------------------------------------------------------------
+
+
+async def test_on_worker_empty_skips_delete_when_session_replaced() -> None:
+    """If the session is deleted and re-created during the grace sleep, keep the new one."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    hub = MagicMock()
+    hub.browser_count = AsyncMock(return_value=0)
+    hub.on_worker_empty = None
+    reg = SessionRegistry(
+        [],
+        hub=hub,
+        public_base_url="http://localhost:9999",
+        recording=RecordingConfig(),
+    )
+    await reg.create_session({"session_id": "eph", "connector_type": "shell", "ephemeral": True})
+
+    async def _sleep_and_replace(_s: float) -> None:
+        # Simulate the session being deleted and re-created under the same ID
+        # while the grace period sleep is in progress.
+        await reg.delete_session("eph")
+        await reg.create_session({"session_id": "eph", "connector_type": "shell", "ephemeral": True})
+
+    with patch("asyncio.sleep", side_effect=_sleep_and_replace):
+        await reg._on_worker_empty("eph")
+
+    # New session with the same ID should still be present (identity check protected it).
+    assert await reg.get_definition("eph") is not None

@@ -59,6 +59,57 @@ def load_server_config(path: str | Path | None = None) -> ServerConfig:
     return config
 
 
+_KNOWN_SESSION_FIELDS = frozenset(
+    {
+        "session_id",
+        "display_name",
+        "connector_type",
+        "input_mode",
+        "auto_start",
+        "tags",
+        "recording_enabled",
+        "owner",
+        "visibility",
+    }
+)
+
+
+def _parse_session_entry(raw: Any) -> SessionDefinition | None:
+    """Parse one [[sessions]] entry; return SessionDefinition or None for non-dict entries."""
+    if not isinstance(raw, dict):
+        return None
+    session_id = str(raw.get("session_id", "")).strip()
+    if not session_id:
+        raise ValueError("session_id is required for each [[sessions]] entry")
+    if not re.match(r"^[\w\-]+$", session_id):
+        raise ValueError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
+    connector_type = str(raw.get("connector_type", "shell")).strip() or "shell"
+    if connector_type not in KNOWN_CONNECTOR_TYPES:
+        raise ValueError(
+            f"invalid connector_type for {session_id!r}: {connector_type!r} — "
+            f"must be one of {sorted(KNOWN_CONNECTOR_TYPES)}"
+        )
+    input_mode = str(raw.get("input_mode", "open")).strip() or "open"
+    if input_mode not in {"hijack", "open"}:
+        raise ValueError(f"invalid input_mode for {session_id}: {input_mode}")
+    visibility = str(raw.get("visibility", "public")).strip() or "public"
+    if visibility not in {"public", "operator", "private"}:
+        raise ValueError(f"invalid visibility for {session_id}: {visibility!r}")
+    connector_config = {k: v for k, v in raw.items() if k not in _KNOWN_SESSION_FIELDS}
+    return SessionDefinition(
+        session_id=session_id,
+        display_name=str(raw.get("display_name", session_id)),
+        connector_type=connector_type,
+        connector_config=connector_config,
+        input_mode=input_mode,  # type: ignore[arg-type]
+        auto_start=bool(raw.get("auto_start", True)),
+        tags=[str(v) for v in raw.get("tags", [])],
+        recording_enabled=(None if raw.get("recording_enabled") is None else bool(raw.get("recording_enabled"))),
+        owner=(None if raw.get("owner") is None else str(raw.get("owner"))),
+        visibility=visibility,  # type: ignore[arg-type]
+    )
+
+
 def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
     """Build a validated config object from a plain mapping."""
     base = default_server_config()
@@ -115,53 +166,9 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
 
     sessions: list[SessionDefinition] = []
     for raw in sessions_data:
-        if not isinstance(raw, dict):
-            continue
-        session_id = str(raw.get("session_id", "")).strip()
-        if not session_id:
-            raise ValueError("session_id is required for each [[sessions]] entry")
-        if not re.match(r"^[\w\-]+$", session_id):
-            raise ValueError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
-        connector_type = str(raw.get("connector_type", "shell")).strip() or "shell"
-        if connector_type not in KNOWN_CONNECTOR_TYPES:
-            raise ValueError(
-                f"invalid connector_type for {session_id!r}: {connector_type!r} — "
-                f"must be one of {sorted(KNOWN_CONNECTOR_TYPES)}"
-            )
-        input_mode = str(raw.get("input_mode", "open")).strip() or "open"
-        if input_mode not in {"hijack", "open"}:
-            raise ValueError(f"invalid input_mode for {session_id}: {input_mode}")
-        known_fields = {
-            "session_id",
-            "display_name",
-            "connector_type",
-            "input_mode",
-            "auto_start",
-            "tags",
-            "recording_enabled",
-            "owner",
-            "visibility",
-        }
-        visibility = str(raw.get("visibility", "public")).strip() or "public"
-        if visibility not in {"public", "operator", "private"}:
-            raise ValueError(f"invalid visibility for {session_id}: {visibility!r}")
-        connector_config = {k: v for k, v in raw.items() if k not in known_fields}
-        sessions.append(
-            SessionDefinition(
-                session_id=session_id,
-                display_name=str(raw.get("display_name", session_id)),
-                connector_type=connector_type,
-                connector_config=connector_config,
-                input_mode=input_mode,  # type: ignore[arg-type]
-                auto_start=bool(raw.get("auto_start", True)),
-                tags=[str(v) for v in raw.get("tags", [])],
-                recording_enabled=(
-                    None if raw.get("recording_enabled") is None else bool(raw.get("recording_enabled"))
-                ),
-                owner=(None if raw.get("owner") is None else str(raw.get("owner"))),
-                visibility=visibility,  # type: ignore[arg-type]
-            )
-        )
+        entry = _parse_session_entry(raw)
+        if entry is not None:
+            sessions.append(entry)
 
     if sessions:
         base.sessions = sessions

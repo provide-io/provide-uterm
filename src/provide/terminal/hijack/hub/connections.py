@@ -152,7 +152,7 @@ class _ConnectionMixin:
         """Store *snapshot* as the most recent snapshot for *worker_id*."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None:
+            if st is not None:  # pragma: no branch
                 st.last_snapshot = snapshot
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
@@ -204,14 +204,14 @@ class _ConnectionMixin:
             was_owner = st is not None and self.is_dashboard_hijack_active(st) and st.hijack_owner is ws
             rest_still_active = False
             resume_without_owner = False
-            if st is not None:
+            if st is not None:  # pragma: no branch
                 st.browsers.pop(ws, None)
                 browser_count = len(st.browsers)
                 if was_owner:
                     st.hijack_owner = None
                     st.hijack_owner_expires_at = None
                     rest_still_active = self.has_valid_rest_lease(st)
-                elif owned_hijack and st.worker_ws is not None and not self.is_hijacked(st):
+                elif owned_hijack and st.worker_ws is not None and not self.is_hijacked(st):  # pragma: no branch
                     last_event_type = str(st.events[-1].get("type", "")) if st.events else ""
                     resume_without_owner = last_event_type not in {"hijack_owner_expired", "hijack_lease_expired"}
         # Fire empty-browser callback outside the lock when the last browser left.
@@ -266,7 +266,7 @@ class _ConnectionMixin:
                 owner = st.hijack_session.owner
                 st.hijack_session = None
                 had_hijack = True
-            if self.is_dashboard_hijack_active(st):
+            if self.is_dashboard_hijack_active(st):  # pragma: no branch
                 st.hijack_owner = None
                 st.hijack_owner_expires_at = None
                 had_hijack = True

@@ -348,3 +348,23 @@ class TestGetOrCreateHostKeySaveFailure:
             assert key is not None
         finally:
             tmp_path.chmod(stat.S_IRWXU)
+
+
+class TestSSHStreamReaderUnknownType:
+    async def test_read_unknown_type_returns_empty_bytes(self) -> None:
+        """Line 57: data is not str/bytes/bytearray → return b''."""
+        proc = MockProcess()
+        proc.stdin.read = AsyncMock(return_value=42)  # int — not str/bytes/bytearray
+        reader = SSHStreamReader(cast("asyncssh.SSHServerProcess[bytes]", proc))
+        data = await reader.read(1)
+        assert data == b""
+
+
+class TestSSHStreamWriterDoubleClose:
+    def test_close_when_already_closed_is_noop(self) -> None:
+        """Line 87->exit: _closed is already True → skip close body."""
+        proc = MockProcess()
+        writer = SSHStreamWriter(cast("asyncssh.SSHServerProcess[bytes]", proc))
+        writer._closed = True
+        writer.close()  # Should be a no-op, not call exit/close again
+        assert writer._closed

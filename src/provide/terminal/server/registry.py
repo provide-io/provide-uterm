@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import re
 from collections import deque
@@ -66,8 +65,17 @@ class SessionRegistry:
         await asyncio.sleep(5)
         if await self._hub.browser_count(session_id) > 0:
             return
-        with contextlib.suppress(KeyError):
-            await self.delete_session(session_id)
+        # Re-acquire the lock and verify the session object identity before
+        # deleting.  Another coroutine may have deleted and re-created a session
+        # under the same ID during the grace period sleep; checking identity
+        # prevents silently destroying the freshly-created session.
+        async with self._lock:
+            if self._sessions.get(session_id) is not session:
+                return
+            self._sessions.pop(session_id, None)
+            runtime = self._runtimes.pop(session_id, None)
+        if runtime is not None:
+            await runtime.stop()
 
     def _require_session(self, session_id: str) -> SessionDefinition:
         """Return the session definition or raise ``KeyError``.  Caller must hold ``self._lock``."""

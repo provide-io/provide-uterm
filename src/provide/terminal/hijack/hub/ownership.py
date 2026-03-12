@@ -40,25 +40,19 @@ class _HijackOwnershipMixin:
     _workers: dict[str, WorkerTermState]
     _dashboard_hijack_lease_s: int
 
-    async def cleanup_expired_hijack(self, worker_id: str) -> bool:
-        """Expire any stale REST or dashboard leases for *worker_id*; send resume if fully released."""
-        now = time.time()
-        rest_expired = False
-        dashboard_expired = False
-        should_resume = False
-
+    async def _expire_leases_under_lock(self, worker_id: str, now: float) -> tuple[bool, bool, bool] | None:
+        """Expire stale leases under lock; returns (rest_expired, dashboard_expired, should_resume) or None."""
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
-                return False
-            # Fast path: nothing to expire — avoids the time comparisons below.
+                return None
             if st.hijack_session is None and st.hijack_owner is None:
-                return False
-
+                return None
+            rest_expired = False
+            dashboard_expired = False
             if st.hijack_session is not None and st.hijack_session.lease_expires_at <= now:
                 st.hijack_session = None
                 rest_expired = True
-
             if (
                 st.hijack_owner is not None
                 and st.hijack_owner_expires_at is not None
@@ -67,31 +61,35 @@ class _HijackOwnershipMixin:
                 st.hijack_owner = None
                 st.hijack_owner_expires_at = None
                 dashboard_expired = True
-
             should_resume = (
                 (rest_expired or dashboard_expired) and st.hijack_owner is None and st.hijack_session is None
             )
+        return rest_expired, dashboard_expired, should_resume
 
+    async def _recheck_and_resume(self, worker_id: str, now: float) -> None:
+        """Re-check under lock that no concurrent hijack was acquired; send resume if clear."""
+        async with self._lock:
+            st2 = self._workers.get(worker_id)
+            if st2 is not None and self.is_hijacked(st2):  # type: ignore[attr-defined]  # pragma: no branch
+                return
+        await self.send_worker(  # type: ignore[attr-defined]
+            worker_id,
+            {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": now},
+        )
+        self.notify_hijack_changed(worker_id, enabled=False, owner=None)  # type: ignore[attr-defined]
+
+    async def cleanup_expired_hijack(self, worker_id: str) -> bool:
+        """Expire any stale REST or dashboard leases for *worker_id*; send resume if fully released."""
+        now = time.time()
+        result = await self._expire_leases_under_lock(worker_id, now)
+        if result is None:
+            return False
+        rest_expired, dashboard_expired, should_resume = result
         if not rest_expired and not dashboard_expired:
             return False
-
-        if rest_expired or dashboard_expired:
-            self.metric("hijack_lease_expiries_total")  # type: ignore[attr-defined]
-
+        self.metric("hijack_lease_expiries_total")  # type: ignore[attr-defined]
         if should_resume:
-            # Re-check under lock: a concurrent hijack_acquire may have written a
-            # new session between the first lock release and _send_worker.
-            async with self._lock:
-                st2 = self._workers.get(worker_id)
-                if st2 is not None and self.is_hijacked(st2):  # type: ignore[attr-defined]
-                    should_resume = False
-        if should_resume:
-            await self.send_worker(  # type: ignore[attr-defined]
-                worker_id,
-                {"type": "control", "action": "resume", "owner": "lease-expired", "lease_s": 0, "ts": now},
-            )
-            self.notify_hijack_changed(worker_id, enabled=False, owner=None)  # type: ignore[attr-defined]
-
+            await self._recheck_and_resume(worker_id, now)
         if rest_expired:
             await self.append_event(worker_id, "hijack_lease_expired")  # type: ignore[attr-defined]
         if dashboard_expired:
@@ -222,7 +220,7 @@ class _HijackOwnershipMixin:
             # between the lock release above and _send_worker below.
             async with self._lock:
                 _st2 = self._workers.get(worker_id)
-                if _st2 is not None and self.is_hijacked(_st2):  # type: ignore[attr-defined]
+                if _st2 is not None and self.is_hijacked(_st2):  # type: ignore[attr-defined]  # pragma: no branch
                     notify_hijack_off = False
         if notify_hijack_off:
             await self.send_worker(  # type: ignore[attr-defined]

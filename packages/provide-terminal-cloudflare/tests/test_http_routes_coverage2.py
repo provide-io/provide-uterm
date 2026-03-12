@@ -237,3 +237,48 @@ async def test_session_unknown_sub_method_returns_404() -> None:
         _Req("https://x/api/sessions/w/snapshot", method="POST"),  # snapshot only allows GET
     )
     assert resp.status == 404
+
+
+# ---------------------------------------------------------------------------
+# /send — invalid expect_regex returns 400 (ReDoS guard)
+# ---------------------------------------------------------------------------
+
+
+async def test_send_invalid_expect_regex_returns_400() -> None:
+    """send with an invalid expect_regex pattern returns 400 (not a 500)."""
+    mock_ws = object()
+    runtime = _Runtime(worker_ws=mock_ws)
+    r1 = await route_http(
+        runtime,
+        _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
+    )
+    hid = _body(r1)["hijack_id"]
+    resp = await route_http(
+        runtime,
+        _Req(f"https://x/worker/w/hijack/{hid}/send", method="POST").with_body(
+            {"keys": "ls\r", "expect_regex": "[invalid("}
+        ),
+    )
+    assert resp.status == 400
+    assert "invalid expect_regex" in _body(resp).get("error", "")
+
+
+async def test_send_expect_regex_too_long_returns_400() -> None:
+    """send with an expect_regex exceeding _MAX_REGEX_LEN returns 400."""
+    from provide_terminal_cloudflare.api.http_routes import _MAX_REGEX_LEN
+
+    mock_ws = object()
+    runtime = _Runtime(worker_ws=mock_ws)
+    r1 = await route_http(
+        runtime,
+        _Req("https://x/worker/w/hijack/acquire", method="POST").with_body({"owner": "a", "lease_s": 60}),
+    )
+    hid = _body(r1)["hijack_id"]
+    resp = await route_http(
+        runtime,
+        _Req(f"https://x/worker/w/hijack/{hid}/send", method="POST").with_body(
+            {"keys": "ls\r", "expect_regex": "a" * (_MAX_REGEX_LEN + 1)}
+        ),
+    )
+    assert resp.status == 400
+    assert "expect_regex too long" in _body(resp).get("error", "")

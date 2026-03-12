@@ -201,3 +201,13 @@ class TestTelnetTransportTasksCleanup:
         finally:
             server.close()
             await server.wait_closed()
+
+
+class TestTelnetClientCloseWhenNotConnected:
+    async def test_close_when_writer_none_is_noop(self) -> None:
+        """Line 91->exit: close() when _writer is None should be a no-op."""
+        client = TelnetClient("127.0.0.1", 9999)
+        # _writer is None by default (not connected)
+        assert client._writer is None
+        await client.close()  # should not raise
+        assert client._writer is None

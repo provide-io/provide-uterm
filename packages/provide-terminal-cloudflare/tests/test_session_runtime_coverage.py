@@ -108,6 +108,25 @@ def test_lazy_init_worker_id_url_raises_returns_early() -> None:
 
 
 # ---------------------------------------------------------------------------
+# request_json — oversized body guard
+# ---------------------------------------------------------------------------
+
+
+async def test_request_json_oversized_body_returns_empty() -> None:
+    """request_json returns {} when body exceeds _MAX_REQUEST_BODY (no crash, no OOM)."""
+    from provide_terminal_cloudflare.do.session_runtime import _MAX_REQUEST_BODY
+
+    rt = _make_runtime()
+
+    class _BigReq:
+        async def text(self) -> str:
+            return "x" * (_MAX_REQUEST_BODY + 1)
+
+    result = await rt.request_json(_BigReq())
+    assert result == {}
+
+
+# ---------------------------------------------------------------------------
 # fetch() — WebSocket upgrade path (lines 199-265)
 # ---------------------------------------------------------------------------
 

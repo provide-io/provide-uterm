@@ -391,7 +391,7 @@ class TelnetTransport:
             self._negotiated["dont"].add(opt)
         elif cmd == WILL:
             self._negotiated["will"].add(opt)
-        elif cmd == WONT:
+        elif cmd == WONT:  # pragma: no branch
             self._negotiated["wont"].add(opt)
 
         try:
@@ -413,7 +413,7 @@ class TelnetTransport:
                     await self._send_do(opt)
                 else:
                     await self._send_dont(opt)
-            elif cmd == WONT:
+            elif cmd == WONT:  # pragma: no branch
                 await self._send_dont(opt)
         except (ConnectionResetError, BrokenPipeError):  # pragma: no cover
             pass

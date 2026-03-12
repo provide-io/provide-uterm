@@ -1,0 +1,622 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+
+"""Branch coverage tests — covers branches not hit by any existing test suite.
+
+Each section corresponds to a file/line range reported by --cov-branch.
+"""
+
+from __future__ import annotations
+
+import importlib.resources
+import json
+import sqlite3
+import time
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+# ---------------------------------------------------------------------------
+# Helpers shared across sections
+# ---------------------------------------------------------------------------
+
+
+def _make_ctx(worker_id: str = "test-worker") -> SimpleNamespace:
+    conn = sqlite3.connect(":memory:")
+    return SimpleNamespace(
+        storage=SimpleNamespace(
+            sql=SimpleNamespace(exec=conn.execute),
+            setAlarm=lambda ms: None,
+        ),
+        id=SimpleNamespace(name=lambda: worker_id),
+        getWebSockets=list,
+        acceptWebSocket=lambda ws: None,
+    )
+
+
+def _make_env(mode: str = "dev") -> SimpleNamespace:
+    return SimpleNamespace(AUTH_MODE=mode)
+
+
+def _make_runtime(worker_id: str = "test-worker", mode: str = "dev"):
+    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+
+    return SessionRuntime(_make_ctx(worker_id), _make_env(mode))
+
+
+# ---------------------------------------------------------------------------
+# api/http_routes.py  76->81  — _wait_for_prompt: snapshot is None during poll
+# ---------------------------------------------------------------------------
+
+
+async def test_wait_for_prompt_snapshot_none_during_poll() -> None:
+    """Cover the `if snapshot:` false branch — snapshot stays None inside the loop."""
+    from provide_terminal_cloudflare.api.http_routes import _wait_for_prompt
+
+    class _NoSnapshotRuntime:
+        last_snapshot = None  # always None
+
+    result = await _wait_for_prompt(
+        _NoSnapshotRuntime(),
+        expect_prompt_id="some_prompt",
+        expect_regex=None,
+        timeout_ms=100,
+        poll_interval_ms=50,
+    )
+    # Returns None (last_snapshot) after timeout
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# api/http_routes.py  144->146  — acquire: renewal path skips pause
+# ---------------------------------------------------------------------------
+
+
+async def test_acquire_renewal_skips_pause() -> None:
+    """Cover the `if not result.is_renewal:` false branch (renewal → no pause sent)."""
+    from provide_terminal_cloudflare.api.http_routes import route_http
+    from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
+
+    class _Req:
+        def __init__(self, url: str, *, method: str = "GET", body: dict | None = None):
+            self.url = url
+            self.method = method
+            self._body = json.dumps(body or {})
+
+        async def text(self) -> str:
+            return self._body
+
+    pause_calls: list[str] = []
+
+    class _RT:
+        worker_id = "w"
+        worker_ws = object()
+        hijack = HijackCoordinator()
+        last_snapshot = None
+        last_analysis = None
+        input_mode = "hijack"
+        browser_hijack_owner: dict = {}
+
+        async def browser_role_for_request(self, req):
+            return "admin"
+
+        async def request_json(self, req):
+            return json.loads(req._body)
+
+        def persist_lease(self, session):
+            pass
+
+        def clear_lease(self):
+            pass
+
+        async def push_worker_control(self, action, *, owner, lease_s):
+            pause_calls.append(action)
+            return True
+
+        async def broadcast_hijack_state(self):
+            pass
+
+        async def push_worker_input(self, data):
+            return True
+
+        async def send_ws(self, ws, frame):
+            pass
+
+        def ws_key(self, ws):
+            return str(id(ws))
+
+        def _socket_browser_role(self, ws):
+            return "admin"
+
+        @property
+        def store(self):
+            return SimpleNamespace(
+                list_events_since=lambda *a, **k: [],
+                load_session=lambda *a, **k: None,
+                current_event_seq=lambda *a, **k: 0,
+                min_event_seq=lambda *a, **k: 0,
+                save_input_mode=lambda *a, **k: None,
+            )
+
+    rt = _RT()
+
+    # First acquire — fresh (is_renewal=False) → pause sent
+    r1 = await route_http(rt, _Req("https://x/w/hijack/acquire", method="POST", body={"owner": "alice", "lease_s": 60}))
+    assert r1.status == 200
+    assert "pause" in pause_calls
+    pause_calls.clear()
+
+    # Second acquire by same owner — renewal (is_renewal=True) → pause NOT sent
+    r2 = await route_http(rt, _Req("https://x/w/hijack/acquire", method="POST", body={"owner": "alice", "lease_s": 60}))
+    assert r2.status == 200
+    assert "pause" not in pause_calls
+
+
+# ---------------------------------------------------------------------------
+# auth/jwt.py  45->48  — _fetch_jwks: stale cache entry is refreshed
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_jwks_stale_cache_triggers_refetch() -> None:
+    """Line 45->48: cache entry exists but is past TTL → network call is made again."""
+    from provide_terminal_cloudflare.auth import jwt as jwt_module
+    from provide_terminal_cloudflare.auth.jwt import _JWKS_CACHE_TTL_S, _fetch_jwks
+
+    url = "https://example.com/.well-known/jwks-stale.json"
+    stale_data: dict = {"keys": [{"kty": "old"}]}
+    fresh_data: dict = {"keys": [{"kty": "new"}]}
+
+    # Plant a stale cache entry (timestamp well past TTL)
+    jwt_module._JWKS_CACHE[url] = (time.time() - _JWKS_CACHE_TTL_S - 10, stale_data)
+
+    encoded = json.dumps(fresh_data).encode()
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = encoded
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        result = await _fetch_jwks(url)
+
+    # Fresh data returned after re-fetch
+    assert result == fresh_data
+    # Cache updated with fresh data
+    assert jwt_module._JWKS_CACHE[url][1] == fresh_data
+
+
+# ---------------------------------------------------------------------------
+# auth/jwt.py  89->82  — _resolve_signing_key: no-kid alg-mismatch continues loop
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_signing_key_no_kid_alg_mismatch_skips_key() -> None:
+    """Line 89->82: no-kid path where key_alg != alg → loop continues, no match → raises."""
+    import jwt as pyjwt
+    from provide_terminal_cloudflare.auth.jwt import JwtValidationError, _resolve_signing_key
+    from provide_terminal_cloudflare.config import JwtConfig
+
+    config = JwtConfig(
+        mode="jwt",
+        jwks_url="https://example.com/.well-known/jwks-mismatch.json",
+        algorithms=("RS256",),
+    )
+
+    # Token without kid header — triggers no-kid algorithm-matching path
+    token = pyjwt.encode(
+        {"sub": "u", "exp": int(time.time()) + 600},
+        "dummy",
+        algorithm="HS256",
+        # Deliberately no kid
+    )
+
+    # A key whose algorithm_name doesn't match the token's "alg" header
+    mismatch_key = MagicMock()
+    mismatch_key.key_id = None  # no kid → enters no-kid branch
+    mismatch_key.algorithm_name = "ES256"  # mismatches "HS256" in header
+    mismatch_key.key = object()
+
+    with (
+        patch("provide_terminal_cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
+        patch("jwt.PyJWKSet.from_dict", return_value=MagicMock(keys=[mismatch_key])),
+        patch("jwt.get_unverified_header", return_value={"alg": "HS256"}),
+        pytest.raises(JwtValidationError, match="no matching key"),
+    ):
+        await _resolve_signing_key(token, config)
+
+
+# ---------------------------------------------------------------------------
+# cli.py  21->exit  — _require_pywrangler: pywrangler found (no raise)
+# ---------------------------------------------------------------------------
+
+
+def test_require_pywrangler_found_does_not_raise() -> None:
+    """Line 21->exit: shutil.which returns a path → _require_pywrangler returns without raising."""
+    from provide_terminal_cloudflare.cli import _require_pywrangler
+
+    with patch("shutil.which", return_value="/usr/local/bin/pywrangler"):
+        # Should complete without raising RuntimeError
+        _require_pywrangler()
+
+
+# ---------------------------------------------------------------------------
+# config.py  100->104  — is_production + mode in {"dev","none"} raises
+# ---------------------------------------------------------------------------
+
+
+def test_config_from_env_role_map_non_dict_json_ignored() -> None:
+    """Line 100->104: JWT_ROLE_MAP contains valid JSON but not a dict → ignored."""
+    from provide_terminal_cloudflare.config import CloudflareConfig
+
+    env = SimpleNamespace(AUTH_MODE="dev", JWT_ROLE_MAP='["admin", "operator"]')
+    cfg = CloudflareConfig.from_env(env)
+    # Non-dict JSON → silently ignored, jwt_role_map stays empty
+    assert cfg.jwt.jwt_role_map == {}
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  101->exit  — _restore_state: stored_mode not in valid set
+# ---------------------------------------------------------------------------
+
+
+def test_restore_state_invalid_input_mode_not_applied() -> None:
+    """Line 101->exit: stored_mode is an unknown value → input_mode stays 'hijack'."""
+    from unittest.mock import patch
+
+    rt = _make_runtime()
+
+    # Patch store.load_session to return a row with an invalid input_mode
+    invalid_row = {
+        "worker_id": "test-worker",
+        "hijack_id": None,
+        "owner": None,
+        "lease_expires_at": None,
+        "last_snapshot": None,
+        "event_seq": 0,
+        "input_mode": "invalid_mode",  # not in {"hijack", "open"}
+    }
+    with patch.object(rt.store, "load_session", return_value=invalid_row):
+        rt._restore_state()
+
+    # input_mode should stay at 'hijack' (the default), not 'invalid_mode'
+    assert rt.input_mode == "hijack"
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  184->exit  — _lazy_init_worker_id: no prefix matches
+# ---------------------------------------------------------------------------
+
+
+def test_lazy_init_worker_id_no_prefix_matches() -> None:
+    """Line 184->exit: path doesn't start with any known prefix → worker_id unchanged."""
+    rt = _make_runtime()
+    rt.worker_id = "default"
+
+    req = SimpleNamespace(url="https://x/unrecognised/path/here")
+    rt._lazy_init_worker_id(req)
+    # worker_id stays "default" because no prefix matched
+    assert rt.worker_id == "default"
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  187->184  — _lazy_init_worker_id: segment is empty
+# ---------------------------------------------------------------------------
+
+
+def test_lazy_init_worker_id_empty_segment_continues() -> None:
+    """Line 187->184: prefix matches but segment is empty → loop continues, id unchanged."""
+    rt = _make_runtime()
+    rt.worker_id = "default"
+
+    # Path starts with /ws/worker/ but the next segment is empty (malformed URL)
+    req = SimpleNamespace(url="https://x/ws/worker//term")
+    rt._lazy_init_worker_id(req)
+    # Empty segment: path[len("/ws/worker/"):].split("/")[0] == ""
+    # Should continue to next prefix, none match → stays "default"
+    assert rt.worker_id == "default"
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  293->exit  — webSocketOpen raw: screen is not a string
+# ---------------------------------------------------------------------------
+
+
+async def test_websocket_open_raw_no_send_when_screen_not_str() -> None:
+    """Line 293->exit: raw socket, snapshot exists but screen is not a str → no send_text."""
+    rt = _make_runtime()
+    rt.last_snapshot = {"type": "snapshot", "screen": None}  # screen is not str
+
+    class _RawWs:
+        def __init__(self):
+            self.sent: list[str] = []
+            self._ut_role = "raw"
+
+        def deserializeAttachment(self):  # noqa: N802
+            return "raw:admin:test-worker"
+
+        def send(self, data: str) -> None:
+            self.sent.append(data)
+
+    ws = _RawWs()
+    await rt.webSocketOpen(ws)
+
+    # raw sockets don't get hello, and screen was None so no screen send either
+    assert ws.sent == []
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  346->exit  — webSocketError: non-worker role (browser)
+# ---------------------------------------------------------------------------
+
+
+async def test_websocket_error_browser_no_kv_update() -> None:
+    """Line 346->exit: webSocketError for a browser socket → no KV update called."""
+    rt = _make_runtime()
+
+    class _BrowserWs:
+        def __init__(self):
+            self._attachment = "browser:admin:test-worker"
+
+        def deserializeAttachment(self):  # noqa: N802
+            return self._attachment
+
+    ws = _BrowserWs()
+    rt.browser_sockets[rt.ws_key(ws)] = ws
+
+    mock_kv = AsyncMock()
+    with patch("provide_terminal_cloudflare.do.session_runtime.update_kv_session", mock_kv):
+        await rt.webSocketError(ws, RuntimeError("test error"))
+
+    # KV update should NOT be called for browser sockets
+    mock_kv.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  377->exit  — persist_lease: no setAlarm on storage
+# ---------------------------------------------------------------------------
+
+
+def test_persist_lease_no_set_alarm_does_not_raise() -> None:
+    """Line 377->exit: persist_lease with storage that has no setAlarm → skips alarm."""
+    import sqlite3
+
+    from provide_terminal_cloudflare.bridge.hijack import HijackSession
+    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+
+    conn = sqlite3.connect(":memory:")
+    ctx = SimpleNamespace(
+        storage=SimpleNamespace(
+            sql=SimpleNamespace(exec=conn.execute),
+            # No setAlarm attribute → callable(getattr(..., "setAlarm", None)) is False
+        ),
+        id=SimpleNamespace(name=lambda: "w1"),
+        getWebSockets=list,
+        acceptWebSocket=lambda ws: None,
+    )
+    rt = SessionRuntime(ctx, _make_env("dev"))
+    session = HijackSession(
+        hijack_id="test-hid",
+        owner="alice",
+        lease_expires_at=time.time() + 60,
+    )
+    # Should not raise even though setAlarm is absent
+    rt.persist_lease(session)
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  491->exit  — alarm: worker_ws present, no setAlarm available
+# ---------------------------------------------------------------------------
+
+
+async def test_alarm_worker_connected_no_set_alarm() -> None:
+    """Line 491->exit: alarm() with worker_ws set but ctx.storage has no setAlarm."""
+    import sqlite3
+
+    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+
+    conn = sqlite3.connect(":memory:")
+    ctx = SimpleNamespace(
+        storage=SimpleNamespace(
+            sql=SimpleNamespace(exec=conn.execute),
+            # No setAlarm attribute → getattr returns None
+        ),
+        id=SimpleNamespace(name=lambda: "w1"),
+        getWebSockets=list,
+        acceptWebSocket=lambda ws: None,
+    )
+    rt = SessionRuntime(ctx, _make_env("dev"))
+
+    # Simulate an active worker connection
+    ws_stub = SimpleNamespace(send=lambda d: None, deserializeAttachment=lambda: "worker:admin:w1")
+    rt.worker_ws = ws_stub
+
+    mock_kv = AsyncMock()
+    with patch("provide_terminal_cloudflare.do.session_runtime.update_kv_session", mock_kv):
+        await rt.alarm()
+
+    mock_kv.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py  494->exit  — alarm: no worker, hijack active, no setAlarm
+# ---------------------------------------------------------------------------
+
+
+async def test_alarm_no_worker_active_hijack_no_set_alarm() -> None:
+    """Line 494->exit: alarm() with worker_ws=None, hijack.session present, no setAlarm."""
+    import sqlite3
+
+    from provide_terminal_cloudflare.bridge.hijack import HijackSession
+    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+
+    conn = sqlite3.connect(":memory:")
+    ctx = SimpleNamespace(
+        storage=SimpleNamespace(
+            sql=SimpleNamespace(exec=conn.execute),
+            # No setAlarm attribute → inner if is False → 494->exit
+        ),
+        id=SimpleNamespace(name=lambda: "w1"),
+        getWebSockets=list,
+        acceptWebSocket=lambda ws: None,
+    )
+    rt = SessionRuntime(ctx, _make_env("dev"))
+    rt.worker_ws = None
+
+    # Plant an active (non-expired) hijack session so the elif branch is True
+    rt.hijack._session = HijackSession(
+        hijack_id="hid",
+        owner="alice",
+        lease_expires_at=time.time() + 3600,
+    )
+
+    # Should not raise — setAlarm just won't be called
+    await rt.alarm()
+
+
+# ---------------------------------------------------------------------------
+# do/ws_helpers.py  50->52  — _socket_role: colon-format but parts[0] not valid
+# ---------------------------------------------------------------------------
+
+
+def test_socket_role_colon_format_invalid_first_part_falls_back() -> None:
+    """Line 50->52: attachment is colon-split string but parts[0] not in known roles."""
+    from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
+
+    class _Host(_WsHelperMixin):
+        worker_id = "w"
+        worker_ws = None
+        browser_sockets: dict = {}
+        raw_sockets: dict = {}
+        browser_hijack_owner: dict = {}
+        config = SimpleNamespace(jwt=SimpleNamespace(mode="dev"))
+
+    host = _Host()
+    ws = MagicMock()
+    # First part "unknown" is not in {"browser","worker","raw"} → falls through
+    ws.deserializeAttachment.return_value = "unknown:admin:w1"
+    # Falls through to the dict/object/to_py paths → eventually returns "browser" fallback
+    role = host._socket_role(ws)
+    assert role == "browser"
+
+
+# ---------------------------------------------------------------------------
+# do/ws_helpers.py  62->66  — _socket_role: to_py() returns non-str, non-dict
+# ---------------------------------------------------------------------------
+
+
+def test_socket_role_to_py_returns_other_type_falls_back() -> None:
+    """Line 62->66: to_py() returns an int (not str or dict) → role stays None → browser."""
+    from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
+
+    class _Host(_WsHelperMixin):
+        worker_id = "w"
+        worker_ws = None
+        browser_sockets: dict = {}
+        raw_sockets: dict = {}
+        browser_hijack_owner: dict = {}
+        config = SimpleNamespace(jwt=SimpleNamespace(mode="dev"))
+
+    host = _Host()
+    ws = MagicMock()
+    att = MagicMock(spec=["to_py"])
+    att.to_py.return_value = 42  # neither str nor dict
+    ws.deserializeAttachment.return_value = att
+    role = host._socket_role(ws)
+    assert role == "browser"
+
+
+# ---------------------------------------------------------------------------
+# state/registry.py  96->90  — list_kv_sessions: raw value is falsy
+# ---------------------------------------------------------------------------
+
+
+async def test_list_kv_sessions_skips_empty_raw_value() -> None:
+    """Line 96->90: kv.get() returns empty string → session is not appended."""
+    from provide_terminal_cloudflare.state.registry import list_kv_sessions
+
+    async def _get(key: str) -> str:
+        return ""  # falsy → `if raw:` is False
+
+    async def _list(*, prefix: str = "") -> SimpleNamespace:
+        return SimpleNamespace(keys=[{"name": "session:ghost"}])
+
+    kv = SimpleNamespace(get=_get, list=_list)
+    env = SimpleNamespace(SESSION_REGISTRY=kv)
+
+    sessions = await list_kv_sessions(env)
+    assert sessions == []
+
+
+# ---------------------------------------------------------------------------
+# ui/assets.py  29->33  — read_asset_text: importlib finds package but file missing
+# ---------------------------------------------------------------------------
+
+
+def test_read_asset_text_importlib_file_not_found_falls_through() -> None:
+    """Line 29->33: importlib.resources.files succeeds but is_file() returns False."""
+    from provide_terminal_cloudflare.ui.assets import read_asset_text
+
+    not_found = SimpleNamespace(is_file=lambda: False, name="missing.js")
+
+    local_root = MagicMock()
+    local_root.__truediv__ = MagicMock(return_value=not_found)
+
+    pkg = MagicMock()
+    pkg.__truediv__ = MagicMock(return_value=local_root)
+
+    with (
+        patch.object(importlib.resources, "files", return_value=pkg),
+        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-branch-test")),
+    ):
+        result = read_asset_text("missing.js")
+
+    # Falls through all paths, returns None
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# ui/assets.py  42->46  — read_asset_text: _LOCAL_STATIC exists but file not in it
+# ---------------------------------------------------------------------------
+
+
+def test_read_asset_text_local_static_file_not_found_falls_through(tmp_path: Path) -> None:
+    """Line 42->46: _LOCAL_STATIC directory accessible but file not present → falls through."""
+    from provide_terminal_cloudflare.ui.assets import read_asset_text
+
+    # tmp_path exists but we don't create the target file
+    with (
+        patch("importlib.resources.files", side_effect=ModuleNotFoundError("no pkg")),
+        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
+    ):
+        result = read_asset_text("absent.js")
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# ui/assets.py  58->66  — serve_asset: importlib finds package but file missing
+# ---------------------------------------------------------------------------
+
+
+def test_serve_asset_importlib_file_not_found_falls_through(tmp_path: Path) -> None:
+    """Line 58->66: importlib succeeds, is_file() returns False → falls through to _LOCAL_STATIC."""
+    from provide_terminal_cloudflare.ui.assets import serve_asset
+
+    not_found = SimpleNamespace(is_file=lambda: False, name="missing.js")
+    local_root = MagicMock()
+    local_root.__truediv__ = MagicMock(return_value=not_found)
+    pkg = MagicMock()
+    pkg.__truediv__ = MagicMock(return_value=local_root)
+
+    # tmp_path exists but file not there → _LOCAL_STATIC fallback also misses
+    with (
+        patch.object(importlib.resources, "files", return_value=pkg),
+        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
+    ):
+        resp = serve_asset("missing.js")
+
+    # Falls through to provide.terminal package or returns 404
+    assert resp.status in {200, 404}

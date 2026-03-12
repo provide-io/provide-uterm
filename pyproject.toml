@@ -9,18 +9,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "provide-terminal"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Shared terminal I/O primitives for the provide ecosystem"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "AGPL-3.0-or-later"}
+license = "AGPL-3.0-or-later"
 authors = [
   {name = "MindTenet LLC"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -47,6 +46,9 @@ all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "
 uterm = "provide.terminal.cli:main"
 uterm-server = "provide.terminal.server.cli:main"
 
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -66,19 +68,24 @@ dev = [
     "codespell>=2.4.1",
     "httpx>=0.27",
     "hypothesis>=6.151.9",
+    "mutmut>=3.3.1",
     "mypy>=1.19",
+    "pip-audit>=2.7.0",
     "pre-commit>=4.0",
     "pyte>=0.8.2",
     "pytest>=9.0",
     "pytest-asyncio>=1.3",
     "pytest-cov>=7.0",
     "pytest-playwright>=0.7.2",
+    "pytest-randomly>=3.15.0",
     "pytest-xdist>=3.8",
     "reuse>=6.2.0",
     "ruff>=0.15",
     "ty>=0.0.17",
     "uv>=0.10.7",
+    "vulture>=2.14",
     "websockets>=16.0",
+    "xenon>=0.9.3",
 ]
 
 [tool.pytest.ini_options]
@@ -92,6 +99,13 @@ addopts = [
     "--strict-config",
     "--tb=short",
     "-ra",
+    "--ignore=tests/playwright/test_hijack.py",
+    "--ignore=tests/playwright/test_server.py",
+    "--randomly-dont-reorganize",
+    "--cov=provide",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
 ]
 
 [tool.ruff]
@@ -139,8 +153,10 @@ ignore = ["E501", "S104", "S112", "S311"]
 [tool.coverage.run]
 source = ["provide"]
 omit = ["tests/*"]
+branch = true
 
 [tool.coverage.report]
+fail_under = 100
 show_missing = true
 skip_covered = false
 
@@ -182,6 +198,34 @@ exclude_dirs = [
     "tests",
     "packages/provide-terminal-cloudflare/python_modules",
     "packages/provide-terminal-cloudflare/node_modules",
+]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["src", "tests"]
+
+[tool.xenon]
+max_absolute = "C"
+max_modules = "B"
+max_average = "A"
+
+[tool.mutmut]
+paths_to_mutate = ["src/provide/terminal/"]
+tests_dir = ["tests/"]
+do_not_mutate = [
+    "src/provide/terminal/frontend/",
+    "src/provide/terminal/transports/",
+    "src/provide/terminal/gateway.py",
+    "src/provide/terminal/server/connectors/",
+]
+pytest_add_cli_args = ["--no-cov"]
+pytest_add_cli_args_test_selection = [
+    "-m",
+    "not playwright",
+    "--ignore=tests/playwright/test_hijack.py",
+    "--ignore=tests/e2e/test_live_hub_ws.py",
+    "--ignore=tests/e2e/test_ssh_gateway.py",
+    "--ignore=tests/e2e/test_telnet_gateway.py",
 ]
 
 [tool.uv.workspace]

@@ -663,3 +663,40 @@ class TestSshSessionConnector:
         c._conn = MagicMock()
         c._stdin = None
         assert not c.is_connected()
+
+    @pytest.mark.asyncio
+    async def test_stop_with_stdin_none_skips_write_eof(self) -> None:
+        """Line 164->167: stdin is None at stop time → write_eof is skipped."""
+        c = _make_ssh_connector()
+        mock_conn = MagicMock()
+        mock_conn.close = MagicMock()
+        mock_conn.wait_closed = AsyncMock()
+        mock_process = MagicMock()
+        mock_process.close = MagicMock()
+        c._conn = mock_conn
+        c._process = mock_process
+        c._stdin = None  # stdin is None — should skip write_eof
+        c._stdout = AsyncMock()
+        c._connected = True
+        await c.stop()
+        mock_process.close.assert_called_once()
+        mock_conn.close.assert_called_once()
+        assert c._stdin is None
+
+    @pytest.mark.asyncio
+    async def test_stop_with_conn_none_skips_close(self) -> None:
+        """Line 170->exit: conn is None at stop time → conn.close() is skipped."""
+        c = _make_ssh_connector()
+        mock_stdin = MagicMock()
+        mock_stdin.write_eof = MagicMock()
+        mock_process = MagicMock()
+        mock_process.close = MagicMock()
+        c._conn = None  # conn is None — should skip close
+        c._process = mock_process
+        c._stdin = mock_stdin
+        c._stdout = AsyncMock()
+        c._connected = True
+        await c.stop()
+        mock_stdin.write_eof.assert_called_once()
+        mock_process.close.assert_called_once()
+        assert c._conn is None

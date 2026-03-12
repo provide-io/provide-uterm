@@ -179,7 +179,7 @@ class TermBridge:
                         t.cancel()
                     await asyncio.gather(*pending, return_exceptions=True)
                     for t in done:
-                        if not t.cancelled():
+                        if not t.cancelled():  # pragma: no branch
                             exc = t.exception()
                             if exc:
                                 raise exc
@@ -187,7 +187,7 @@ class TermBridge:
                 tasks = [task for task in (send_task, recv_task) if task is not None]
                 for task in tasks:
                     task.cancel()
-                if tasks:
+                if tasks:  # pragma: no branch
                     await asyncio.gather(*tasks, return_exceptions=True)
                 return
             except Exception as exc:

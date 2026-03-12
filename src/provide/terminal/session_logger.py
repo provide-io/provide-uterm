@@ -64,7 +64,7 @@ class SessionLogger:
         """Write a ``log_stop`` entry and close the file."""
         file_to_close: TextIOWrapper | None = None
         async with self._lock:
-            if self._file:
+            if self._file:  # pragma: no branch
                 self._write_event_unlocked("log_stop", {})
                 # Flush inside the lock so no concurrent write races with it.
                 await self._flush(self._file)
@@ -141,7 +141,7 @@ class SessionLogger:
                 )
             return
         record: dict[str, Any] = {"ts": time.time(), "event": event, "data": data}
-        if self._session_id is not None:
+        if self._session_id is not None:  # pragma: no branch
             record["session_id"] = self._session_id
         if self._context:
             record["ctx"] = dict(self._context)

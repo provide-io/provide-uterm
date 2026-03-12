@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def _frontend_path(name: str) -> Path:
-    return Path(__file__).resolve().parents[1] / "src" / "provide" / "terminal" / "frontend" / name
+    return Path(__file__).resolve().parents[2] / "src" / "provide" / "terminal" / "frontend" / name
 
 
 def test_terminal_html_uses_external_page_assets_only() -> None:

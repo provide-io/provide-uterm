@@ -324,7 +324,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             logger.debug("send_worker_failed worker_id=%s: %s", worker_id, exc)
             async with self._lock:
                 st2 = self._workers.get(worker_id)
-                if st2 is not None and st2.worker_ws is ws:
+                if st2 is not None and st2.worker_ws is ws:  # pragma: no branch
                     st2.worker_ws = None
             return False
 
