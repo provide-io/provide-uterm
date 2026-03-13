@@ -17,7 +17,10 @@ import json
 import logging
 import secrets
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from provide_terminal_cloudflare.cf_types import CFWebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,7 @@ logger = logging.getLogger(__name__)
 class _WsHelperMixin:
     """Mixin providing WebSocket helper methods for SessionRuntime."""
 
-    def ws_key(self, ws: Any) -> str:
+    def ws_key(self, ws: CFWebSocket) -> str:
         try:
             existing = getattr(ws, "_ut_ws_key", None)
             if isinstance(existing, str) and existing:
@@ -38,7 +41,7 @@ class _WsHelperMixin:
             ws._ut_ws_key = key
         return key
 
-    def _socket_role(self, ws: Any) -> str:
+    def _socket_role(self, ws: CFWebSocket) -> str:
         """Return the socket type: ``"browser"``, ``"worker"``, or ``"raw"``."""
         try:
             attachment = ws.deserializeAttachment()
@@ -73,7 +76,7 @@ class _WsHelperMixin:
                 return candidate
         return "browser"
 
-    def _socket_browser_role(self, ws: Any) -> str:
+    def _socket_browser_role(self, ws: CFWebSocket) -> str:
         """Return the JWT-resolved browser role from the socket attachment.
 
         Defaults to ``"admin"`` in ``none``/``dev`` mode (open access).  In
@@ -106,7 +109,7 @@ class _WsHelperMixin:
             logger.warning("browser role unavailable (post-hibernation fallback), defaulting to viewer")
         return "admin" if self.config.jwt.mode in {"none", "dev"} else "viewer"  # type: ignore[attr-defined]
 
-    def _socket_worker_id(self, ws: Any) -> str:
+    def _socket_worker_id(self, ws: CFWebSocket) -> str:
         """Return the worker_id from the socket attachment (stored at connect time).
 
         Falls back to ``self.worker_id`` when not encoded in the attachment
@@ -122,7 +125,7 @@ class _WsHelperMixin:
             logger.debug("failed to deserialize worker_id from attachment: %s", exc)
         return self.worker_id  # type: ignore[attr-defined]
 
-    def _register_socket(self, ws: Any, role: str) -> None:
+    def _register_socket(self, ws: CFWebSocket, role: str) -> None:
         ws_id = self.ws_key(ws)
         if role == "worker":
             self.worker_ws = ws  # type: ignore[attr-defined]
@@ -132,7 +135,7 @@ class _WsHelperMixin:
             return
         self.browser_sockets[ws_id] = ws  # type: ignore[attr-defined]
 
-    def _remove_ws(self, ws: Any) -> None:
+    def _remove_ws(self, ws: CFWebSocket) -> None:
         """Remove *ws* from all socket registries (worker, browser, raw)."""
         ws_id = self.ws_key(ws)
         if ws is self.worker_ws:  # type: ignore[attr-defined]
@@ -141,10 +144,10 @@ class _WsHelperMixin:
         self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
         self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
 
-    async def send_ws(self, ws: Any, payload: dict[str, Any]) -> None:
+    async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
         await self._send_text(ws, json.dumps(payload, ensure_ascii=True))
 
-    async def _send_text(self, ws: Any, payload: str) -> None:
+    async def _send_text(self, ws: CFWebSocket, payload: str) -> None:
         result = ws.send(payload)
         if inspect.isawaitable(result):
             await result

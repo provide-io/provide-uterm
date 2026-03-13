@@ -88,7 +88,7 @@ def test_jwt_mode_requires_auth_for_api_and_ws_routes() -> None:
         health = client.get("/api/health")
         assert health.status_code == 401
 
-        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/browser/demo-session/term"):
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/browser/provide-shell/term"):
             pass
 
 
@@ -110,7 +110,7 @@ def test_jwt_mode_ignores_cookie_and_role_header_escalation_for_ws() -> None:
     with (
         TestClient(app) as client,
         client.websocket_connect(
-            "/ws/worker/demo-session/term",
+            "/ws/worker/provide-shell/term",
             headers={"Authorization": f"Bearer {config.auth.worker_bearer_token}"},
         ) as worker,
     ):
@@ -118,7 +118,7 @@ def test_jwt_mode_ignores_cookie_and_role_header_escalation_for_ws() -> None:
         assert msg["type"] == "snapshot_req"
 
         with client.websocket_connect(
-            "/ws/browser/demo-session/term",
+            "/ws/browser/provide-shell/term",
             headers={
                 **_jwt_headers(sub="viewer-a", roles=["viewer"]),
                 config.auth.role_header: "admin",
@@ -199,7 +199,7 @@ def test_replay_page_honors_custom_app_path() -> None:
     app = create_server_app(config)
 
     with TestClient(app) as client:
-        replay = client.get("/ops/replay/demo-session")
+        replay = client.get("/ops/replay/provide-shell")
 
     assert replay.status_code == 200
     assert '"app_path": "/ops"' in replay.text
@@ -263,13 +263,13 @@ def test_events_limit_query_rejects_out_of_range() -> None:
     config = default_server_config()
     app = create_server_app(config)
     with TestClient(app) as client:
-        r = client.get("/api/sessions/demo-session/events?limit=0")
+        r = client.get("/api/sessions/provide-shell/events?limit=0")
         assert r.status_code == 422
 
-        r = client.get("/api/sessions/demo-session/events?limit=501")
+        r = client.get("/api/sessions/provide-shell/events?limit=501")
         assert r.status_code == 422
 
-        r = client.get("/api/sessions/demo-session/recording/entries?limit=0")
+        r = client.get("/api/sessions/provide-shell/recording/entries?limit=0")
         assert r.status_code == 422
 
 
@@ -290,7 +290,7 @@ def test_patch_session_rejects_invalid_input_mode() -> None:
     config = default_server_config()
     app = create_server_app(config)
     with TestClient(app) as client:
-        r = client.patch("/api/sessions/demo-session", json={"input_mode": "garbage"})
+        r = client.patch("/api/sessions/provide-shell", json={"input_mode": "garbage"})
         assert r.status_code == 422
 
 
@@ -299,10 +299,10 @@ def test_delete_session_idempotent_returns_404_on_second_call() -> None:
     config = default_server_config()
     app = create_server_app(config)
     with TestClient(app) as client:
-        r1 = client.delete("/api/sessions/demo-session")
+        r1 = client.delete("/api/sessions/provide-shell")
         assert r1.status_code == 200
 
-        r2 = client.delete("/api/sessions/demo-session")
+        r2 = client.delete("/api/sessions/provide-shell")
         assert r2.status_code == 404
 
 
@@ -324,7 +324,7 @@ def test_page_route_returns_403_for_private_session_viewer() -> None:
     app = create_server_app(config)
     with TestClient(app) as client:
         r = client.get(
-            f"{config.ui.app_path}/session/demo-session",
+            f"{config.ui.app_path}/session/provide-shell",
             headers={"x-uterm-role": "viewer"},
         )
         assert r.status_code == 403
@@ -377,7 +377,7 @@ def test_recording_download_rejects_path_outside_recording_dir(tmp_path: Path) -
 
     with TestClient(app) as client:
         app.state.uterm_registry.recording_path = _fake_recording_path
-        r = client.get("/api/sessions/demo-session/recording/download")
+        r = client.get("/api/sessions/provide-shell/recording/download")
         assert r.status_code == 404
 
 
@@ -420,7 +420,7 @@ def test_set_mode_invalid_value_returns_422() -> None:
     config = default_server_config()
     app = create_server_app(config)
     with TestClient(app) as client:
-        r = client.post("/api/sessions/demo-session/mode", json={"input_mode": "garbage"})
+        r = client.post("/api/sessions/provide-shell/mode", json={"input_mode": "garbage"})
         assert r.status_code == 422
 
 
@@ -439,7 +439,7 @@ def test_recording_download_denied_when_config_absent() -> None:
     with TestClient(app) as client:
         del app.state.uterm_config
         app.state.uterm_registry.recording_path = _fake_path
-        r = client.get("/api/sessions/demo-session/recording/download")
+        r = client.get("/api/sessions/provide-shell/recording/download")
         assert r.status_code == 404
 
 

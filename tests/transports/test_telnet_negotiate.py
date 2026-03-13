@@ -394,3 +394,44 @@ class TestTelnetTransportNegotiate:
 
         # Response should contain TTYPE data
         assert OPT_TTYPE in bytes(all_data)
+
+    async def test_handle_subnegotiation_non_ttype_does_not_send_ttype(self) -> None:
+        """SB with a non-TTYPE option should NOT trigger _send_ttype."""
+        from unittest.mock import AsyncMock, patch
+
+        from provide.terminal.transports.telnet import IAC, SB, SE
+
+        # Use option 99 (not OPT_TTYPE) — _send_ttype must not be called
+        non_ttype_option = 99
+        all_data = bytearray()
+        ready = asyncio.Event()
+
+        async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            # Send SB with a non-TTYPE option: IAC SB <opt> 1 IAC SE
+            writer.write(bytes([IAC, SB, non_ttype_option, 1, IAC, SE]))
+            await writer.drain()
+            for _ in range(5):
+                try:
+                    data = await asyncio.wait_for(reader.read(256), timeout=0.3)
+                    all_data.extend(data)
+                except TimeoutError:
+                    break
+            ready.set()
+            writer.close()
+
+        server = await asyncio.start_server(_handler, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            t = TelnetTransport()
+            with patch.object(t, "_send_ttype", new_callable=AsyncMock) as mock_send_ttype:
+                await t.connect("127.0.0.1", port)
+                await asyncio.sleep(0.1)
+                with contextlib.suppress(ConnectionError, TimeoutError):
+                    await asyncio.wait_for(t.receive(256, 100), timeout=0.3)
+                await asyncio.wait_for(ready.wait(), timeout=2.0)
+                await t.disconnect()
+
+                mock_send_ttype.assert_not_called()
+        finally:
+            server.close()
+            await server.wait_closed()

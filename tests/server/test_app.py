@@ -100,7 +100,7 @@ class TestReferenceServerApp:
             assert sessions.status_code == 200
             payload = sessions.json()
             assert len(payload) == 1
-            assert payload[0]["session_id"] == "demo-session"
+            assert payload[0]["session_id"] == "provide-shell"
 
             dashboard = await http.get("/app/")
             assert dashboard.status_code == 200
@@ -109,13 +109,13 @@ class TestReferenceServerApp:
             assert "<table" not in dashboard.text
             assert "addon-fit.js" in dashboard.text
 
-            session_page = await http.get("/app/session/demo-session")
+            session_page = await http.get("/app/session/provide-shell")
             assert session_page.status_code == 200
             assert '"page_kind": "session"' in session_page.text
             assert "uterm_surface=user" in ",".join(session_page.headers.get_list("set-cookie"))
             assert "addon-fit.js" in session_page.text
 
-            operator_page = await http.get("/app/operator/demo-session")
+            operator_page = await http.get("/app/operator/provide-shell")
             assert operator_page.status_code == 200
             assert '"page_kind": "operator"' in operator_page.text
             assert "uterm_surface=operator" in ",".join(operator_page.headers.get_list("set-cookie"))
@@ -126,7 +126,7 @@ class TestReferenceServerApp:
             assert "btn-refresh" not in operator_page.text
             assert "addon-fit.js" in operator_page.text
 
-            replay_page = await http.get("/app/replay/demo-session")
+            replay_page = await http.get("/app/replay/provide-shell")
             assert replay_page.status_code == 200
             assert "/_terminal/server-replay-page.js" in replay_page.text
             assert "<style>" not in replay_page.text
@@ -134,8 +134,8 @@ class TestReferenceServerApp:
             assert "addon-fit.js" in replay_page.text
 
     async def test_demo_session_browser_ws_is_online(self, live_reference_server: str) -> None:
-        await self._wait_for_connected(live_reference_server, "demo-session")
-        async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/demo-session/term")) as browser:
+        await self._wait_for_connected(live_reference_server, "provide-shell")
+        async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/provide-shell/term")) as browser:
             hello = await _drain_until(browser, "hello", timeout=5.0)
             assert hello is not None
             assert hello["worker_online"] is True
@@ -159,13 +159,13 @@ class TestReferenceServerApp:
             assert parts[1].lstrip("-").isdigit(), f"non-integer value in: {ln!r}"
 
     async def test_metrics_include_ws_disconnect_and_hijack_counters(self, live_reference_server: str) -> None:
-        await self._wait_for_connected(live_reference_server, "demo-session")
+        await self._wait_for_connected(live_reference_server, "provide-shell")
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
             before = (await http.get("/api/metrics")).json()["metrics"]
             base_disconnect = int(before.get("ws_disconnect_browser_total", 0))
             assert "hijack_conflicts_total" in before
             assert "hijack_lease_expiries_total" in before
-        async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/demo-session/term")) as browser:
+        async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/provide-shell/term")) as browser:
             assert await _drain_until(browser, "hello", timeout=5.0) is not None
         await asyncio.sleep(0.15)
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
@@ -173,16 +173,16 @@ class TestReferenceServerApp:
             assert int(after.get("ws_disconnect_browser_total", 0)) >= base_disconnect + 1
 
     async def test_hijack_conflict_counter_increments_on_second_acquire(self, live_reference_server: str) -> None:
-        await self._wait_for_connected(live_reference_server, "demo-session")
+        await self._wait_for_connected(live_reference_server, "provide-shell")
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
             before = (await http.get("/api/metrics")).json()["metrics"]
             base_conflicts = int(before.get("hijack_conflicts_total", 0))
-            first = await http.post("/worker/demo-session/hijack/acquire", json={"owner": "test-a", "lease_s": 60})
+            first = await http.post("/worker/provide-shell/hijack/acquire", json={"owner": "test-a", "lease_s": 60})
             assert first.status_code == 200
-            second = await http.post("/worker/demo-session/hijack/acquire", json={"owner": "test-b", "lease_s": 60})
+            second = await http.post("/worker/provide-shell/hijack/acquire", json={"owner": "test-b", "lease_s": 60})
             assert second.status_code == 409
             hid = first.json()["hijack_id"]
-            release = await http.post(f"/worker/demo-session/hijack/{hid}/release")
+            release = await http.post(f"/worker/provide-shell/hijack/{hid}/release")
             assert release.status_code == 200
             after = (await http.get("/api/metrics")).json()["metrics"]
             assert int(after.get("hijack_conflicts_total", 0)) >= base_conflicts + 1

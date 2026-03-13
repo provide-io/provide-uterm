@@ -206,7 +206,7 @@ def test_session_runtime_module_level_fallback() -> None:
     from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
     from provide_terminal_cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
     from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
-    from provide_terminal_cloudflare.cf_types import DurableObject, Response
+    from provide_terminal_cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
     from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
     from provide_terminal_cloudflare.state.registry import KV_REFRESH_S, update_kv_session
@@ -230,6 +230,7 @@ def test_session_runtime_module_level_fallback() -> None:
     bridge_hijack.HijackSession = HijackSession  # type: ignore[attr-defined]
 
     cf = ModuleType("cf_types")
+    cf.CFWebSocket = CFWebSocket  # type: ignore[attr-defined]
     cf.DurableObject = DurableObject  # type: ignore[attr-defined]
     cf.Response = Response  # type: ignore[attr-defined]
 

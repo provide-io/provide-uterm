@@ -4,11 +4,11 @@ Interactive example server for manual and Playwright testing of the hijack UI.
 Architecture
 ------------
 - Real TermHub handles the browser-side WebSocket protocol.
-- An in-memory session worker auto-connects as ``/ws/worker/demo-session/term``.
+- An in-memory session worker auto-connects as ``/ws/worker/provide-shell/term``.
 - The worker renders a deterministic interactive transcript, responds to
   snapshot/analyze/control requests, and reconnects automatically on disconnect.
 - Frontend static files are served at ``/hijack/``.
-- ``/hijack/hijack.html?worker=demo-session`` loads the interactive example page.
+- ``/hijack/hijack.html?worker=provide-shell`` loads the interactive example page.
 
 Run
 ---
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 _SCREEN_COLS = 80
 _SCREEN_ROWS = 25
 _DEFAULT_PORT = 8742
-_DEFAULT_WORKER_ID = "demo-session"
+_DEFAULT_WORKER_ID = "provide-shell"
 
 
 @dataclass(slots=True)

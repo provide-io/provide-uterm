@@ -26,6 +26,7 @@ export async function renderOperator(root, bootstrap) {
     root.innerHTML = `
     <div class="layout">
       <section class="card stack">
+        <a href="${safeAppPath}/">&#8592; Dashboard</a>
         <div class="small">Operator Console</div>
         <h1>${safeTitle}</h1>
         <div class="toolbar">

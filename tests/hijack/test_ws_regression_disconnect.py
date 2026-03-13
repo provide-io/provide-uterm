@@ -176,6 +176,62 @@ def test_worker_disconnect_fires_notify_when_ws_hijack_active() -> None:
     assert disabled_calls[-1][0] == "bot1"
 
 
+def test_browser_disconnect_resume_without_owner() -> None:
+    """When a browser that previously owned a hijack disconnects after ownership
+    was cleared (e.g. expired), and no hijack is currently active, the handler
+    should send a resume control message to the worker (lines 337-354).
+
+    Scenario: admin acquires hijack (owned_hijack=True), then ownership is
+    manually cleared (simulating expiry cleanup without hijack_owner_expired
+    event), then browser disconnects. cleanup_browser_disconnect sees
+    was_owner=False, owned_hijack=True, worker connected, no hijack →
+    resume_without_owner=True. check_still_hijacked returns False → resume sent.
+    """
+    app, hub = make_app("admin")
+
+    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+        _read_worker_snapshot_req(worker)
+
+        with client.websocket_connect("/ws/browser/bot1/term") as browser:
+            _read_initial_browser_messages(browser)
+            # Worker already connected before browser — no worker_connected msg.
+
+            # Admin acquires hijack → owned_hijack becomes True
+            browser.send_json({"type": "hijack_request"})
+            # Drain messages until we get the pause control
+            pause_msg = worker.receive_json()
+            # Might get snapshot_req first if browser triggered one
+            if pause_msg.get("type") == "snapshot_req":
+                pause_msg = worker.receive_json()
+            assert pause_msg["type"] == "control" and pause_msg["action"] == "pause"
+
+            # Browser receives hijack_state from broadcast_hijack_state
+            hijack_state = browser.receive_json()
+            assert hijack_state["type"] == "hijack_state"
+            assert hijack_state["hijacked"] is True
+
+            # Simulate ownership cleared (as if expired by cleanup) but
+            # do NOT add a hijack_owner_expired event — that would suppress
+            # the resume_without_owner path. owned_hijack stays True in
+            # the WS handler since no explicit release was sent.
+            st = hub._workers["bot1"]
+            st.hijack_owner = None
+            st.hijack_owner_expires_at = None
+            # Ensure last event is not an expiry event
+            st.events.append({"type": "hijack_acquired"})
+
+        # Browser WS closed. The handler's finally block runs:
+        # cleanup_browser_disconnect sees was_owner=False (owner already None),
+        # owned_hijack=True, worker connected, no hijack active →
+        # resume_without_owner=True. check_still_hijacked returns False →
+        # resume control message sent via create_task.
+
+        # Drain the resume from the worker side.
+        resume_msg = worker.receive_json()
+        assert resume_msg["type"] == "control"
+        assert resume_msg["action"] == "resume"
+
+
 def test_worker_disconnect_no_notify_when_no_session() -> None:
     """on_hijack_changed must NOT fire when the worker disconnects with no hijack session."""
     callbacks: list[tuple] = []

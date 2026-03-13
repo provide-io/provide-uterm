@@ -72,10 +72,10 @@ async def _tcp_to_ws(reader: asyncio.StreamReader, ws: object) -> None:
 async def _ws_to_tcp(ws: object, writer: asyncio.StreamWriter) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
     async for message in ws:  # type: ignore[attr-defined]
-        if isinstance(message, str):
-            writer.write(message.encode("latin-1", errors="replace"))
-        else:
-            writer.write(message)
+        raw = message.encode("latin-1", errors="replace") if isinstance(message, str) else message
+        # Remap DEL (0x7F) → BS (0x08): xterm.js sends DEL for Backspace,
+        # but many BBS/telnet servers expect BS for character deletion.
+        writer.write(raw.replace(b"\x7f", b"\x08"))
         await writer.drain()
 
 

@@ -316,7 +316,9 @@ class TelnetTransport:
         """
         if not self._writer:
             raise ConnectionError("Not connected")
-        escaped = data.replace(b"\xff", b"\xff\xff")
+        # Remap DEL (0x7F) → BS (0x08): xterm.js sends DEL for Backspace,
+        # but many BBS/telnet servers expect BS for character deletion.
+        escaped = data.replace(b"\x7f", b"\x08").replace(b"\xff", b"\xff\xff")
         try:
             self._writer.write(escaped)
             await self._writer.drain()
