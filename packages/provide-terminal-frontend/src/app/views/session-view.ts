@@ -7,6 +7,7 @@ export async function renderSession(root: HTMLElement, bootstrap: AppBootstrap):
   root.innerHTML = `
     <div class="layout">
       <section class="card stack">
+        <a href="${bootstrap.app_path}/">&#8592; Dashboard</a>
         <div class="small">Session View</div>
         <h1>${bootstrap.title}</h1>
         <div id="session-status" class="status-chip info">Loading session…</div>

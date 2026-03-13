@@ -12,20 +12,20 @@ from playwright.sync_api import Page, expect
 
 
 def _example_url(base_url: str) -> str:
-    return f"{base_url}/hijack/hijack.html?worker=demo-session"
+    return f"{base_url}/hijack/hijack.html?worker=provide-shell"
 
 
 def _example_reset(base_url: str, mode: str = "hijack") -> None:
     with httpx.Client(base_url=base_url, timeout=5.0) as http:
-        reset = http.post("/demo/session/demo-session/reset")
+        reset = http.post("/demo/session/provide-shell/reset")
         assert reset.status_code == 200
-        switch = http.post("/demo/session/demo-session/mode", json={"input_mode": mode})
+        switch = http.post("/demo/session/provide-shell/mode", json={"input_mode": mode})
         assert switch.status_code == 200
 
 
 def _example_state(base_url: str) -> dict[str, object]:
     with httpx.Client(base_url=base_url, timeout=5.0) as http:
-        resp = http.get("/demo/session/demo-session")
+        resp = http.get("/demo/session/provide-shell")
         resp.raise_for_status()
         return resp.json()
 
@@ -39,7 +39,7 @@ class TestExamplePageSingleBrowser:
         _example_reset(example_server, mode="hijack")
 
         _navigate_example(page, example_server)
-        expect(page.locator("#demo-session-status")).to_contain_text("demo-session", timeout=5000)
+        expect(page.locator("#provide-shell-status")).to_contain_text("provide-shell", timeout=5000)
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
         expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
@@ -62,7 +62,7 @@ class TestExamplePageSingleBrowser:
         expect(page.locator("[id$='-analysistext']")).to_contain_text("interactive demo analysis", timeout=5000)
 
         page.locator("#demo-reset").click()
-        expect(page.locator("#demo-session-note")).to_contain_text("Session reset.", timeout=5000)
+        expect(page.locator("#provide-shell-note")).to_contain_text("Session reset.", timeout=5000)
         state_after = _example_state(example_server)
         transcript_after = state_after["transcript"]
         assert isinstance(transcript_after, list)
@@ -122,13 +122,13 @@ class TestExamplePageTwoBrowsers:
         _navigate_example(page, example_server)
         page.select_option("#demo-mode", "open")
         page.locator("#demo-apply").click()
-        expect(page.locator("#demo-session-status")).to_contain_text("open", timeout=5000)
+        expect(page.locator("#provide-shell-status")).to_contain_text("open", timeout=5000)
 
         ctx2 = browser.new_context()  # type: ignore[attr-defined]
         page2 = ctx2.new_page()
         try:
             _navigate_example(page2, example_server)
-            expect(page2.locator("#demo-session-status")).to_contain_text("open", timeout=5000)
+            expect(page2.locator("#provide-shell-status")).to_contain_text("open", timeout=5000)
             expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
             expect(page2.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
 

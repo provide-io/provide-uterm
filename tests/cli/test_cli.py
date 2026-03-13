@@ -113,6 +113,56 @@ class TestCmdProxy:
         routes = {r.path for r in app.routes}
         assert "/ws/bbs" in routes
 
+    def test_proxy_app_has_terminal_page(self) -> None:
+        """The proxy app serves a terminal HTML page at /."""
+        from starlette.testclient import TestClient
+
+        captured_app = {}
+        mock_uvicorn = MagicMock(side_effect=lambda app, **kw: captured_app.update({"app": app}))
+        mock_uv_mod = MagicMock()
+        mock_uv_mod.run = mock_uvicorn
+
+        with patch.dict("sys.modules", {"uvicorn": mock_uv_mod}):
+            main(["proxy", "bbs.example.com", "23"])
+
+        client = TestClient(captured_app["app"])
+        resp = client.get("/", follow_redirects=False)
+        assert resp.status_code == 200
+        assert "bbs.example.com:23" in resp.text
+        assert "/ws/terminal" in resp.text
+        assert "ProvideTerminal" in resp.text
+
+    def test_proxy_app_serves_static_frontend(self) -> None:
+        """The proxy app mounts the frontend directory at /static."""
+        captured_app = {}
+        mock_uvicorn = MagicMock(side_effect=lambda app, **kw: captured_app.update({"app": app}))
+        mock_uv_mod = MagicMock()
+        mock_uv_mod.run = mock_uvicorn
+
+        with patch.dict("sys.modules", {"uvicorn": mock_uv_mod}):
+            main(["proxy", "bbs.example.com", "23"])
+
+        app = captured_app["app"]
+        route_names = {getattr(r, "name", None) for r in app.routes}
+        assert "frontend" in route_names
+
+    def test_proxy_no_static_mount_when_frontend_missing(self) -> None:
+        """When frontend directory doesn't exist, static mount is skipped."""
+        captured_app = {}
+        mock_uvicorn = MagicMock(side_effect=lambda app, **kw: captured_app.update({"app": app}))
+        mock_uv_mod = MagicMock()
+        mock_uv_mod.run = mock_uvicorn
+
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uv_mod}),
+            patch("provide.terminal.cli._FRONTEND_DIR", MagicMock(is_dir=MagicMock(return_value=False))),
+        ):
+            main(["proxy", "bbs.example.com", "23"])
+
+        app = captured_app["app"]
+        route_names = {getattr(r, "name", None) for r in app.routes}
+        assert "frontend" not in route_names
+
     def test_missing_uvicorn_exits(self) -> None:
         """SystemExit(1) when uvicorn is not installed."""
         original = sys.modules.get("uvicorn")

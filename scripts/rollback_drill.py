@@ -127,7 +127,7 @@ async def run(base_url: str, session_id: str, out_dir: Path, timeout_s: float) -
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute a staging rollback drill and produce an artifact.")
     parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8400")
-    parser.add_argument("--session-id", default="demo-session", help="Session to use for the drill")
+    parser.add_argument("--session-id", default="provide-shell", help="Session to use for the drill")
     parser.add_argument("--out-dir", default="artifacts/rollback-drill", help="Output directory for drill artifact")
     parser.add_argument("--timeout-s", type=float, default=30.0, help="Reconnect timeout in seconds")
     args = parser.parse_args()

@@ -32,8 +32,8 @@ def app_client() -> TestClient:
 
 @pytest.fixture()
 def sid(app_client: TestClient) -> str:
-    """Return the pre-existing demo-session ID."""
-    return "demo-session"
+    """Return the pre-existing provide-shell ID."""
+    return "provide-shell"
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def test_list_sessions(app_client: TestClient) -> None:
     r = app_client.get("/api/sessions")
     assert r.status_code == 200
     ids = [s["session_id"] for s in r.json()]
-    assert "demo-session" in ids
+    assert "provide-shell" in ids
 
 
 def test_get_session(app_client: TestClient, sid: str) -> None:
@@ -329,7 +329,7 @@ def test_recording_download_path_traversal_rejected(app_client: TestClient) -> N
 
         with TestClient(app) as client:
             app.state.uterm_registry.recording_path = _evil_path
-            r = client.get("/api/sessions/demo-session/recording/download")
+            r = client.get("/api/sessions/provide-shell/recording/download")
             assert r.status_code == 404
 
 
@@ -503,37 +503,37 @@ def test_analyze_session_forbidden_for_viewer(viewer_client: TestClient) -> None
 
 
 def test_patch_session_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.patch("/api/sessions/demo-session", json={"display_name": "X"})
+    r = viewer_client.patch("/api/sessions/provide-shell", json={"display_name": "X"})
     assert r.status_code == 403
 
 
 def test_delete_session_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.delete("/api/sessions/demo-session")
+    r = viewer_client.delete("/api/sessions/provide-shell")
     assert r.status_code == 403
 
 
 def test_connect_session_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.post("/api/sessions/demo-session/connect")
+    r = viewer_client.post("/api/sessions/provide-shell/connect")
     assert r.status_code == 403
 
 
 def test_disconnect_session_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.post("/api/sessions/demo-session/disconnect")
+    r = viewer_client.post("/api/sessions/provide-shell/disconnect")
     assert r.status_code == 403
 
 
 def test_restart_session_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.post("/api/sessions/demo-session/restart")
+    r = viewer_client.post("/api/sessions/provide-shell/restart")
     assert r.status_code == 403
 
 
 def test_set_mode_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.post("/api/sessions/demo-session/mode", json={"input_mode": "open"})
+    r = viewer_client.post("/api/sessions/provide-shell/mode", json={"input_mode": "open"})
     assert r.status_code == 403
 
 
 def test_clear_session_forbidden_for_viewer(viewer_client: TestClient) -> None:
-    r = viewer_client.post("/api/sessions/demo-session/clear")
+    r = viewer_client.post("/api/sessions/provide-shell/clear")
     assert r.status_code == 403
 
 

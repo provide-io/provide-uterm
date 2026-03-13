@@ -100,7 +100,7 @@ async def run(base_url: str, worker_id: str, concurrency: int, rounds: int, time
 def main() -> int:
     parser = argparse.ArgumentParser(description="Load/churn profile for browser WS hello latency.")
     parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8400")
-    parser.add_argument("--worker-id", default="demo-session", help="Worker/session ID")
+    parser.add_argument("--worker-id", default="provide-shell", help="Worker/session ID")
     parser.add_argument("--concurrency", type=int, default=20, help="Concurrent WS probes per round")
     parser.add_argument("--rounds", type=int, default=25, help="Number of rounds")
     parser.add_argument("--timeout-s", type=float, default=5.0, help="Per-probe timeout seconds")

@@ -35,12 +35,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from provide.terminal.transports.base import ConnectionTransport
+
+_FRONTEND_DIR = Path(__file__).parent / "frontend"
+_XTERM_CDN = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
+_FITADDON_CDN = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
+_FONTS_CDN = "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap"
 
 # ---------------------------------------------------------------------------
 # Subcommand: proxy  (WS server → outbound telnet/SSH)
@@ -88,10 +94,43 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
         transport_factory=transport_factory,
     )
 
+    from fastapi.responses import HTMLResponse
+    from starlette.staticfiles import StaticFiles
+
     app = FastAPI(title="uterm proxy", docs_url=None, redoc_url=None)
     app.include_router(proxy.create_router(args.path))
 
+    title = f"uterm — {args.host}:{args.bbs_port}"
+
+    @app.get("/", response_class=HTMLResponse)
+    async def _terminal_page() -> str:
+        from html import escape
+
+        safe_title = escape(title)
+        ws_path = escape(args.path)
+        return (
+            '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">'
+            f"<title>{safe_title}</title>"
+            '<link rel="stylesheet" href="/static/terminal-page.css">'
+            f'<link rel="stylesheet" href="{_XTERM_CDN}/css/xterm.css">'
+            f'<link href="{_FONTS_CDN}" rel="stylesheet">'
+            '<link rel="stylesheet" href="/static/terminal.css">'
+            '</head><body><div id="app"></div>'
+            f'<script src="{_XTERM_CDN}/lib/xterm.js"></script>'
+            f'<script src="{_FITADDON_CDN}/lib/addon-fit.js"></script>'
+            '<script src="/static/terminal.js"></script>'
+            "<script>"
+            "new window.ProvideTerminal(document.getElementById('app'),"
+            f"{{wsUrl:'{ws_path}',title:'{safe_title}'}});"
+            "</script></body></html>"
+        )
+
+    if _FRONTEND_DIR.is_dir():
+        app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="frontend")
+
     print(f"uterm proxy  {args.transport}://{args.host}:{args.bbs_port}  →  ws://{args.bind}:{args.port}{args.path}")
+    print(f"  terminal   http://{args.bind}:{args.port}/")
 
     uvicorn.run(app, host=args.bind, port=args.port, log_level="warning")
 

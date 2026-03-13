@@ -13,7 +13,7 @@ try:
     from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
     from provide_terminal_cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
     from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
-    from provide_terminal_cloudflare.cf_types import DurableObject, Response
+    from provide_terminal_cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
     from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
     from provide_terminal_cloudflare.state.registry import KV_REFRESH_S, update_kv_session
@@ -24,7 +24,7 @@ except Exception:
     from auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie  # type: ignore[import-not-found]
     from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[import-not-found]
     from bridge.hijack import HijackCoordinator, HijackSession  # type: ignore[import-not-found]
-    from cf_types import DurableObject, Response  # type: ignore[import-not-found]
+    from cf_types import CFWebSocket, DurableObject, Response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
     from do.ws_helpers import _WsHelperMixin  # type: ignore[import-not-found]
     from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found]
@@ -49,9 +49,9 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
 
         self.worker_id = self._derive_worker_id()
         self.hijack = HijackCoordinator()
-        self.worker_ws: Any | None = None
-        self.browser_sockets: dict[str, Any] = {}
-        self.raw_sockets: dict[str, Any] = {}
+        self.worker_ws: CFWebSocket | None = None
+        self.browser_sockets: dict[str, CFWebSocket] = {}
+        self.raw_sockets: dict[str, CFWebSocket] = {}
         self.browser_hijack_owner: dict[str, str] = {}
         self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
@@ -272,7 +272,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
             return Response(None, status=101, web_socket=client)
         return await route_http(self, request)
 
-    async def webSocketOpen(self, ws: Any) -> None:  # noqa: N802
+    async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
         ws_id = self.ws_key(ws)
         role = self._socket_role(ws)
         self._register_socket(ws, role)
@@ -314,7 +314,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
             if self.last_snapshot is not None:
                 await self.send_ws(ws, self.last_snapshot)
 
-    async def webSocketMessage(self, ws: Any, message: Any) -> None:  # noqa: N802
+    async def webSocketMessage(self, ws: CFWebSocket, message: Any) -> None:  # noqa: N802
         role = self._socket_role(ws)
         self._register_socket(ws, role)
         if role == "raw":
@@ -327,7 +327,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
         raw = message if isinstance(message, str) else str(message)
         await handle_socket_message(self, ws, raw, is_worker=(role == "worker"))
 
-    async def webSocketClose(self, ws: Any, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
+    async def webSocketClose(self, ws: CFWebSocket, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
         # Use _socket_role() instead of `ws is self.worker_ws` — after hibernation,
         # self.worker_ws is None so the identity check would always be False.
@@ -338,7 +338,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
             await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)
 
-    async def webSocketError(self, ws: Any, error: Any) -> None:  # noqa: N802
+    async def webSocketError(self, ws: CFWebSocket, error: Any) -> None:  # noqa: N802
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
@@ -384,7 +384,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
     # Hijack state broadcast
     # ------------------------------------------------------------------
 
-    async def send_hijack_state(self, ws: Any) -> None:
+    async def send_hijack_state(self, ws: CFWebSocket) -> None:
         ws_id = self.ws_key(ws)
         session = self.hijack.session
         owner = None

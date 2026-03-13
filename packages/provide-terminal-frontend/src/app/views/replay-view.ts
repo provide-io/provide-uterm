@@ -49,6 +49,7 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
   root.innerHTML = `
     <div class="page">
       <section class="card stack">
+        <a href="${bootstrap.app_path}/">&#8592; Dashboard</a>
         <div class="small">Replay</div>
         <h1>${bootstrap.title} (${sessionId})</h1>
         <div class="toolbar">

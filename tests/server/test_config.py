@@ -24,7 +24,7 @@ def test_default_server_config_has_demo_session() -> None:
     assert config.server.public_base_url == "http://127.0.0.1:8780"
     assert config.auth.mode == "dev"
     assert len(config.sessions) == 1
-    assert config.sessions[0].session_id == "demo-session"
+    assert config.sessions[0].session_id == "provide-shell"
     assert config.sessions[0].connector_type == "shell"
 
 
@@ -77,7 +77,7 @@ def test_load_server_config_resolves_relative_recording_path(tmp_path: Path) -> 
                 'directory = "logs"',
                 "",
                 "[[sessions]]",
-                'session_id = "demo-session"',
+                'session_id = "provide-shell"',
                 'display_name = "Demo"',
                 'connector_type = "shell"',
             ]
