@@ -1,5 +1,6 @@
 import { loadReplayState } from "../state.js";
 import type { AppBootstrap, RecordingEntryView, ReplayIndexState } from "../types.js";
+import { renderAppHeader } from "./app-header.js";
 
 function renderEntryList(entries: RecordingEntryView[], index: number): string {
   if (entries.length === 0) {
@@ -48,8 +49,8 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
   const sessionId = bootstrap.session_id;
   root.innerHTML = `
     <div class="page">
+      ${renderAppHeader(bootstrap, "replay")}
       <section class="card stack">
-        <a href="${bootstrap.app_path}/">&#8592; Dashboard</a>
         <div class="small">Replay</div>
         <h1>${bootstrap.title} (${sessionId})</h1>
         <div class="toolbar">

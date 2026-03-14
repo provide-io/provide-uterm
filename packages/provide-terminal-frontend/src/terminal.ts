@@ -269,61 +269,41 @@ class ProvideTerminal {
     return el.innerHTML;
   }
 
-  private buildCrtFrame(): string {
-    const label = this.escapeHtml(this.config.title || "Warp Agent Runtime Platform");
-    return `
-      <div class="terminal-frame">
-        <div class="screen-inset">
-          <div class="terminal-div" id="terminalDiv-${this.uid}"></div>
-        </div>
-        <div class="frame-bottom">
-          <span class="frame-label">${label}</span>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div class="frame-status">
-              <span class="status-dot" id="statusDot-${this.uid}"></span>
-              <span id="statusText-${this.uid}">Connecting...</span>
-            </div>
-            <div class="led" id="ledIndicator-${this.uid}"></div>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  private buildBbsFrame(): string {
+  private buildFrame(): string {
     const title = this.escapeHtml((this.config.title || "Warp Agent Runtime Platform").toUpperCase());
+    const label = this.escapeHtml(this.config.title || "Warp Agent Runtime Platform");
     return `
       <div class="terminal-frame">
         <div class="frame-header">
           <span class="frame-header-title">${title}</span>
           <div class="frame-status">
-            <span class="status-dot" id="statusDot-${this.uid}"></span>
-            <span id="statusText-${this.uid}">Connecting...</span>
+            <span class="status-dot" data-status-dot="1"></span>
+            <span data-status-text="1">Connecting...</span>
           </div>
         </div>
-        <div class="screen-inset">
-          <div class="terminal-div" id="terminalDiv-${this.uid}"></div>
-        </div>
-        <div class="frame-statusbar">
-          <span>ANSI Terminal</span>
-          <span id="connectionInfo-${this.uid}">${this.settings.cols}×${this.settings.rows}</span>
-        </div>
-      </div>`;
-  }
-
-  private buildGlassFrame(): string {
-    const title = this.escapeHtml((this.config.title || "Warp Agent Runtime Platform").toUpperCase());
-    return `
-      <div class="terminal-frame">
         <div class="frame-titlebar">${title}</div>
         <div class="screen-inset">
           <div class="terminal-div" id="terminalDiv-${this.uid}"></div>
         </div>
         <div class="frame-statusbar">
-          <div class="frame-status">
-            <span class="status-dot" id="statusDot-${this.uid}"></span>
-            <span id="statusText-${this.uid}">Connecting...</span>
+          <span>ANSI Terminal</span>
+          <div class="frame-statusbar-right">
+            <div class="frame-status">
+              <span class="status-dot" data-status-dot="1"></span>
+              <span data-status-text="1">Connecting...</span>
+            </div>
+            <span data-connection-info="1">${this.settings.cols}×${this.settings.rows}</span>
           </div>
-          <span id="connectionInfo-${this.uid}">${this.settings.cols}×${this.settings.rows}</span>
+        </div>
+        <div class="frame-bottom">
+          <span class="frame-label">${label}</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="frame-status">
+              <span class="status-dot" data-status-dot="1"></span>
+              <span data-status-text="1">Connecting...</span>
+            </div>
+            <div class="led" data-led-indicator="1"></div>
+          </div>
         </div>
       </div>`;
   }
@@ -337,16 +317,19 @@ class ProvideTerminal {
   }
 
   private updateStatus(connected: boolean): void {
-    const dot = this.q<HTMLElement>("statusDot");
-    const text = this.q<HTMLElement>("statusText");
-    const led = this.q<HTMLElement>("ledIndicator");
-    dot.className = `status-dot${connected ? " connected" : ""}`;
-    led.classList.toggle("on", connected);
-    text.textContent = connected ? "Connected" : "Disconnected";
-    const info = this.root?.querySelector(`#connectionInfo-${this.uid}`);
-    if (info instanceof HTMLElement) {
+    const statusText = connected ? "Connected" : "Disconnected";
+    this.root?.querySelectorAll<HTMLElement>("[data-status-dot='1']").forEach((dot) => {
+      dot.className = `status-dot${connected ? " connected" : ""}`;
+    });
+    this.root?.querySelectorAll<HTMLElement>("[data-led-indicator='1']").forEach((led) => {
+      led.classList.toggle("on", connected);
+    });
+    this.root?.querySelectorAll<HTMLElement>("[data-status-text='1']").forEach((text) => {
+      text.textContent = statusText;
+    });
+    this.root?.querySelectorAll<HTMLElement>("[data-connection-info='1']").forEach((info) => {
       info.textContent = `${this.settings.cols}×${this.settings.rows}`;
-    }
+    });
   }
 
   private handleTerminalInput(data: string): void {
@@ -453,15 +436,11 @@ class ProvideTerminal {
     this.q<HTMLInputElement>("fxGlow").checked = this.settings.glow;
   }
 
-  private applyRuntimeSettings(recreate: boolean): void {
+  private applyRuntimeSettings(): void {
     this.applyThemeClasses();
     this.applyColors();
     this.applySettingsToUi();
     this.saveSettings();
-    if (recreate) {
-      this.recreateTerminal();
-      return;
-    }
     if (this.term !== null) {
       this.term.options.fontSize = this.settings.fontSize;
       this.term.options.theme = {
@@ -493,7 +472,7 @@ class ProvideTerminal {
         this.settings.scanlines = themeDefaults.scanlines;
         this.settings.vignette = themeDefaults.vignette;
         this.settings.glow = themeDefaults.glow;
-        this.applyRuntimeSettings(true);
+        this.applyRuntimeSettings();
       });
     });
 
@@ -502,14 +481,13 @@ class ProvideTerminal {
       outputId: string,
       update: (value: string) => void,
       format: (value: string) => string,
-      recreate = false,
     ): void => {
       const input = this.q<HTMLInputElement>(id);
       const output = this.q<HTMLElement>(outputId);
       input.addEventListener("input", () => {
         update(input.value);
         output.textContent = format(input.value);
-        this.applyRuntimeSettings(recreate);
+        this.applyRuntimeSettings();
       });
     };
 
@@ -536,26 +514,25 @@ class ProvideTerminal {
         this.settings.fontSize = Number(value);
       },
       (value) => `${value}px`,
-      true,
     );
 
     const pageBgInput = this.q<HTMLInputElement>("setPageBg");
     pageBgInput.addEventListener("input", () => {
       this.settings.pageBg = pageBgInput.value;
-      this.applyRuntimeSettings(false);
+      this.applyRuntimeSettings();
     });
 
     const termBgInput = this.q<HTMLInputElement>("setTermBg");
     termBgInput.addEventListener("input", () => {
       this.settings.termBg = termBgInput.value;
-      this.applyRuntimeSettings(true);
+      this.applyRuntimeSettings();
     });
 
     const bindCheckbox = (id: string, update: (value: boolean) => void): void => {
       const input = this.q<HTMLInputElement>(id);
       input.addEventListener("input", () => {
         update(input.checked);
-        this.applyRuntimeSettings(false);
+        this.applyRuntimeSettings();
       });
     };
     bindCheckbox("fxScanlines", (value) => {
@@ -568,7 +545,7 @@ class ProvideTerminal {
       this.settings.glow = value;
     });
 
-    this.applyRuntimeSettings(false);
+    this.applyRuntimeSettings();
   }
 
   private fitWithMinCols(minCols: number): void {
@@ -589,12 +566,7 @@ class ProvideTerminal {
       throw new Error("xterm addon-fit (FitAddon) not loaded — include @xterm/addon-fit before terminal.js");
     }
     const frameRoot = this.q<HTMLElement>("frameRoot");
-    const builders: Record<ThemeName, () => string> = {
-      crt: () => this.buildCrtFrame(),
-      bbs: () => this.buildBbsFrame(),
-      glass: () => this.buildGlassFrame(),
-    };
-    frameRoot.innerHTML = builders[this.settings.theme]();
+    frameRoot.innerHTML = this.buildFrame();
     this.applyThemeClasses();
     this.applyColors();
 
@@ -642,18 +614,6 @@ class ProvideTerminal {
     };
 
     this.updateStatus(this.connected);
-  }
-
-  private recreateTerminal(): void {
-    this.term?.dispose();
-    this.term = null;
-    this.fitAddon = null;
-    this.createTerminal();
-    const loading = this.q<HTMLElement>("loadingScreen");
-    loading.style.display = "none";
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.updateStatus(true);
-    }
   }
 }
 

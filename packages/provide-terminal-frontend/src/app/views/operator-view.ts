@@ -1,6 +1,7 @@
 import { clearRuntime, loadOperatorWorkspaceState, requestAnalysis, switchSessionMode } from "../state.js";
 import type { AppBootstrap, SessionMode } from "../types.js";
 import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
+import { renderAppHeader } from "./app-header.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -31,9 +32,10 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
   const safeTitle = escapeHtml(bootstrap.title);
   const safeAppPath = escapeHtml(bootstrap.app_path);
   root.innerHTML = `
-    <div class="layout">
-      <section class="card stack">
-        <a href="${safeAppPath}/">&#8592; Dashboard</a>
+    <div class="page">
+      ${renderAppHeader(bootstrap, "operator")}
+      <div class="layout">
+        <section class="card stack">
         <div class="small">Operator Console</div>
         <h1>${safeTitle}</h1>
         <div class="toolbar">
@@ -46,10 +48,11 @@ export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap)
         </div>
         <div id="operator-status" class="status-chip info">Loading operator workspace…</div>
         <pre class="small" id="meta"></pre>
-      </section>
-      <section class="card">
-        <div id="widget"></div>
-      </section>
+        </section>
+        <section class="card">
+          <div id="widget"></div>
+        </section>
+      </div>
     </div>
   `;
   const status = root.querySelector<HTMLElement>("#operator-status");

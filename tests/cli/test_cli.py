@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import io
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from provide.terminal.cli import _build_parser, main
+
+pytestmark = pytest.mark.timeout(5)
 
 # ---------------------------------------------------------------------------
 # Parser tests
@@ -23,6 +26,7 @@ from provide.terminal.cli import _build_parser, main
 class TestParser:
     def test_proxy_minimal(self) -> None:
         args = _build_parser().parse_args(["proxy", "bbs.example.com", "23"])
+        assert args.command == "proxy"
         assert args.host == "bbs.example.com"
         assert args.bbs_port == 23
         assert args.port == 8765
@@ -46,6 +50,7 @@ class TestParser:
                 "ssh",
             ]
         )
+        assert args.command == "proxy"
         assert args.port == 9000
         assert args.bind == "127.0.0.1"
         assert args.path == "/ws/bbs"
@@ -168,14 +173,40 @@ class TestCmdProxy:
         original = sys.modules.get("uvicorn")
         sys.modules["uvicorn"] = None  # type: ignore[assignment]
         try:
-            with pytest.raises(SystemExit) as exc_info:
+            captured = io.StringIO()
+            with pytest.raises(SystemExit) as exc_info, contextlib.redirect_stderr(captured):
                 main(["proxy", "bbs.example.com", "23"])
             assert exc_info.value.code == 1
+            assert "missing dependency" in captured.getvalue()
         finally:
             if original is None:
                 sys.modules.pop("uvicorn", None)
             else:
                 sys.modules["uvicorn"] = original
+
+    def test_proxy_passes_transport_factory(self) -> None:
+        """_cmd_proxy passes a non-None transport_factory to WsTerminalProxy."""
+
+        captured_factory = []
+
+        class _CapturingProxy:
+            def __init__(self, host, port, *, transport_factory=None):
+                captured_factory.append(transport_factory)
+
+            def create_router(self, path):
+                from fastapi import APIRouter
+
+                return APIRouter()
+
+        mock_uvicorn = MagicMock()
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("provide.terminal.fastapi.WsTerminalProxy", _CapturingProxy),
+        ):
+            main(["proxy", "bbs.example.com", "23"])
+
+        assert len(captured_factory) == 1
+        assert captured_factory[0] is not None
 
     def test_ssh_transport_selected(self) -> None:
         """--transport ssh uses SSHTransport, or exits cleanly if asyncssh missing."""
@@ -200,6 +231,7 @@ class TestCmdProxy:
 class TestListenParser:
     def test_listen_minimal(self) -> None:
         args = _build_parser().parse_args(["listen", "wss://warp.provide.io/ws/terminal"])
+        assert args.command == "listen"
         assert args.ws_url == "wss://warp.provide.io/ws/terminal"
         assert args.port == 2112
         assert args.ssh_port == 0
@@ -303,14 +335,16 @@ class TestCmdListen:
 
 class TestCmdProxySshImportError:
     def test_ssh_import_error_exits(self) -> None:
-        """SSH import failure in _cmd_proxy prints error and exits with code 1."""
+        """SSH import failure in _cmd_proxy prints error to stderr and exits with code 1."""
 
         original = sys.modules.get("provide.terminal.transports.ssh")
         sys.modules["provide.terminal.transports.ssh"] = None  # type: ignore[assignment]
         try:
-            with pytest.raises(SystemExit) as exc_info:
+            captured = io.StringIO()
+            with pytest.raises(SystemExit) as exc_info, contextlib.redirect_stderr(captured):
                 main(["proxy", "bbs.example.com", "23", "--transport", "ssh"])
             assert exc_info.value.code == 1
+            assert "asyncssh" in captured.getvalue().lower() or "ssh" in captured.getvalue().lower()
         finally:
             if original is None:
                 sys.modules.pop("provide.terminal.transports.ssh", None)
@@ -322,6 +356,8 @@ class TestRunListen:
     async def test_run_listen_telnet_only(self) -> None:
         """_run_listen with telnet_port > 0 starts a server and stops on cancel."""
         from provide.terminal.cli import _run_listen
+
+        start_calls: list[tuple[str, int]] = []
 
         class _FakeServer:
             closed = False
@@ -337,6 +373,7 @@ class TestRunListen:
                 pass
 
             async def start(self, host: str, port: int) -> _FakeServer:
+                start_calls.append((host, port))
                 return _FakeServer()
 
         class _FakeSshGateway:
@@ -349,6 +386,7 @@ class TestRunListen:
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+        assert start_calls == [("127.0.0.1", 2112)]
 
     async def test_run_listen_no_ports_is_noop(self) -> None:
         """_run_listen with both ports=0 starts nothing and returns."""
@@ -428,6 +466,8 @@ class TestRunListen:
         from provide.terminal.cli import _build_parser, _cmd_listen
 
         args = _build_parser().parse_args(["listen", "ws://localhost", "--port", "0", "--ssh-port", "0"])
-        with pytest.raises(SystemExit) as exc_info:
+        captured = io.StringIO()
+        with pytest.raises(SystemExit) as exc_info, contextlib.redirect_stderr(captured):
             _cmd_listen(args)
         assert exc_info.value.code == 1
+        assert "non-zero" in captured.getvalue()

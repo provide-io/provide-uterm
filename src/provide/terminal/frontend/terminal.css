@@ -188,6 +188,20 @@
   box-shadow: 0 0 6px var(--green-base);
 }
 
+/* Only one frame chrome variant is visible per active theme. */
+.provide-terminal .frame-header,
+.provide-terminal .frame-titlebar,
+.provide-terminal .frame-statusbar,
+.provide-terminal .frame-bottom {
+  display: none;
+}
+
+.provide-terminal .frame-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* ══════════════════════════════════════
    Theme A: CRT Monitor
    ══════════════════════════════════════ */
@@ -286,6 +300,9 @@
   align-items: center;
   font-size: 11px;
   color: #aaa;
+}
+.provide-terminal.theme-bbs .frame-statusbar-right .frame-status {
+  display: none;
 }
 
 /* BBS scanlines */

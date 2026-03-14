@@ -41,3 +41,7 @@ node_modules/
 # Playwright MCP output (screenshots, console logs)
 .playwright-mcp/
 *.png
+.pymutant-state/
+mutants/
+.pymutant-ledger.json
+.pymutant-strict-campaign.json

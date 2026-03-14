@@ -123,7 +123,13 @@ class TestTerminalProxyPage:
 
         page.get_by_role("button", name="Settings").click()
         expect(page.locator(".settings-panel.open")).to_be_visible(timeout=5000)
+        page.wait_for_function(
+            "() => Boolean(window.demoTerminal && window.demoTerminal.getBufferText().includes('WELCOME FROM TELNET'))"
+        )
+        page.evaluate("window.__termRef = window.demoTerminal.term")
+
         page.get_by_role("button", name="BBS/DOS").click()
+        page.get_by_role("button", name="Glass").click()
         page.locator("[id^='setFontSize-']").fill("16")
         page.locator("[id^='setFontSize-']").dispatch_event("input")
         page.locator("[id^='setPageBg-']").evaluate(
@@ -131,20 +137,22 @@ class TestTerminalProxyPage:
         )
         page.locator("[id^='fxGlow-']").check()
 
-        expect(page.locator(".provide-terminal.theme-bbs")).to_be_visible(timeout=5000)
+        expect(page.locator(".provide-terminal.theme-glass")).to_be_visible(timeout=5000)
         expect(page.locator("[id^='valFontSize-']")).to_have_text("16px", timeout=5000)
+        page.wait_for_function("window.__termRef === window.demoTerminal.term")
+        page.wait_for_function("window.demoTerminal.getBufferText().includes('WELCOME FROM TELNET')")
 
         saved = page.evaluate("JSON.parse(localStorage.getItem('provide-terminal-settings'))")
-        assert saved["theme"] == "bbs"
+        assert saved["theme"] == "glass"
         assert saved["fontSize"] == 16
         assert saved["pageBg"] == "#112233"
         assert saved["glow"] is True
 
         page.reload(wait_until="domcontentloaded")
-        expect(page.locator(".provide-terminal.theme-bbs")).to_be_visible(timeout=5000)
+        expect(page.locator(".provide-terminal.theme-glass")).to_be_visible(timeout=5000)
         expect(page.locator("[id^='valFontSize-']")).to_have_text("16px", timeout=5000)
         reloaded = page.evaluate("JSON.parse(localStorage.getItem('provide-terminal-settings'))")
-        assert reloaded["theme"] == "bbs"
+        assert reloaded["theme"] == "glass"
         assert reloaded["fontSize"] == 16
 
     def test_terminal_reconnects_after_socket_close(

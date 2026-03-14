@@ -1,4 +1,5 @@
 import { quickConnect } from "../api.js";
+import { renderAppHeader } from "./app-header.js";
 function escapeHtml(value) {
     return String(value)
         .replace(/&/g, "&amp;")
@@ -72,6 +73,7 @@ export function renderConnect(root, bootstrap) {
     const safeAppPath = escapeHtml(bootstrap.app_path);
     root.innerHTML = `
     <div class="page">
+      ${renderAppHeader(bootstrap, "connect")}
       <div class="card" style="max-width:480px;margin:2rem auto">
         <div class="small" style="margin-bottom:.75rem">
           <a href="${safeAppPath}/">&#8592; Dashboard</a>
