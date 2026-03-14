@@ -1,5 +1,6 @@
 import { restartSession } from "../api.js";
 import { loadDashboardState, summarizeSessions } from "../state.js";
+import { renderAppHeader } from "./app-header.js";
 function escapeHtml(value) {
     return value
         .replace(/&/g, "&amp;")
@@ -56,14 +57,13 @@ function sectionMarkup(title, sessions, appPath) {
 }
 export async function renderDashboard(root, bootstrap) {
     const safeTitle = escapeHtml(bootstrap.title);
-    const safeAppPath = escapeHtml(bootstrap.app_path);
     root.innerHTML = `
     <div class="page">
+      ${renderAppHeader(bootstrap, "dashboard")}
       <section class="card stack">
         <div class="small">Reference implementation</div>
         <h1>${safeTitle}</h1>
         <div class="toolbar">
-          <a class="btn" href="${safeAppPath}/connect">Quick Connect</a>
           <button id="dashboard-refresh" class="btn">Refresh</button>
         </div>
         <div id="dashboard-status" class="status-chip info">Loading sessions…</div>

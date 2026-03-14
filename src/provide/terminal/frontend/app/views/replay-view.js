@@ -1,4 +1,5 @@
 import { loadReplayState } from "../state.js";
+import { renderAppHeader } from "./app-header.js";
 function renderEntryList(entries, index) {
     if (entries.length === 0) {
         return `<div class="small">No entries match the current filter.</div>`;
@@ -40,8 +41,8 @@ export async function renderReplay(root, bootstrap) {
     const sessionId = bootstrap.session_id;
     root.innerHTML = `
     <div class="page">
+      ${renderAppHeader(bootstrap, "replay")}
       <section class="card stack">
-        <a href="${bootstrap.app_path}/">&#8592; Dashboard</a>
         <div class="small">Replay</div>
         <h1>${bootstrap.title} (${sessionId})</h1>
         <div class="toolbar">

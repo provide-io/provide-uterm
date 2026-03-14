@@ -1,21 +1,24 @@
 import { loadUserWorkspaceState } from "../state.js";
 import type { AppBootstrap } from "../types.js";
 import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
+import { renderAppHeader } from "./app-header.js";
 
 export async function renderSession(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   if (!bootstrap.session_id) throw new Error("session bootstrap missing session_id");
   root.innerHTML = `
-    <div class="layout">
-      <section class="card stack">
-        <a href="${bootstrap.app_path}/">&#8592; Dashboard</a>
+    <div class="page">
+      ${renderAppHeader(bootstrap, "session")}
+      <div class="layout">
+        <section class="card stack">
         <div class="small">Session View</div>
         <h1>${bootstrap.title}</h1>
         <div id="session-status" class="status-chip info">Loading session…</div>
         <div id="session-meta" class="small"></div>
-      </section>
-      <section class="card">
-        <div id="widget"></div>
-      </section>
+        </section>
+        <section class="card">
+          <div id="widget"></div>
+        </section>
+      </div>
     </div>
   `;
   const status = root.querySelector<HTMLElement>("#session-status");
