@@ -23,6 +23,10 @@ else
   exit 2
 fi
 
+# TODO: Generate SLSA provenance metadata (not yet implemented)
+# TODO: Execute rollback drill (scripts/rollback_drill.py)
+# TODO: Run load profile (scripts/load_profile.py)
+
 echo "[4/4] artifact signing (cosign keyless)"
 if ! command -v cosign >/dev/null 2>&1; then
   echo "cosign is not installed; signing gate cannot be completed" >&2

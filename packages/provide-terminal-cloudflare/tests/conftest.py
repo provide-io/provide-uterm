@@ -100,7 +100,7 @@ def wrangler_server():
 
     dev_vars_path = _PACKAGE_ROOT / ".dev.vars"
     _dev_vars_original: str | None = dev_vars_path.read_text(encoding="utf-8") if dev_vars_path.exists() else None
-    dev_vars_path.write_text("AUTH_MODE=dev\n", encoding="utf-8")
+    dev_vars_path.write_text("AUTH_MODE=dev\nWORKER_BEARER_TOKEN=e2e-worker-token\n", encoding="utf-8")
 
     pywrangler = shutil.which("pywrangler") or "pywrangler"
     proc = subprocess.Popen(  # noqa: S603

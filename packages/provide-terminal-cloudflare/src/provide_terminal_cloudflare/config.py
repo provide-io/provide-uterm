@@ -51,6 +51,7 @@ class CloudflareConfig:
     jwt: JwtConfig = field(default_factory=JwtConfig)
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     upstream: UpstreamConfig = field(default_factory=UpstreamConfig)
+    worker_bearer_token: str | None = None
 
     @classmethod
     def from_env(cls, env: Any) -> CloudflareConfig:
@@ -94,13 +95,17 @@ class CloudflareConfig:
         role_map_raw = _get("JWT_ROLE_MAP", "").strip()
         if role_map_raw:
             import json as _json
+            import logging as _logging
 
+            _log = _logging.getLogger(__name__)
             try:
                 parsed = _json.loads(role_map_raw)
                 if isinstance(parsed, dict):
                     jwt_role_map = {str(k): str(v) for k, v in parsed.items()}
-            except Exception:  # noqa: S110
-                pass  # Invalid JSON — silently ignore, no role mapping applied.
+                else:
+                    _log.warning("JWT_ROLE_MAP is valid JSON but not an object — ignored: %s", type(parsed).__name__)
+            except (ValueError, TypeError):
+                _log.warning("JWT_ROLE_MAP contains invalid JSON — ignored: %r", role_map_raw[:200])
         jwt = JwtConfig(
             mode=mode,
             issuer=_get("JWT_ISSUER") or None,
@@ -115,6 +120,9 @@ class CloudflareConfig:
             jwt_default_role=_get("JWT_DEFAULT_ROLE", "viewer") or "viewer",
             jwt_role_map=jwt_role_map,
         )
+        worker_bearer_token = _get("WORKER_BEARER_TOKEN") or None
+        if mode == "jwt" and not worker_bearer_token:
+            raise ValueError("WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'")
         return cls(
             environment=environment,
             log_level=_get("LOG_LEVEL", "info"),
@@ -122,4 +130,5 @@ class CloudflareConfig:
             jwt=jwt,
             limits=limits,
             upstream=upstream,
+            worker_bearer_token=worker_bearer_token,
         )

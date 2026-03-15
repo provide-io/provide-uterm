@@ -151,9 +151,7 @@ class PromptWaiter:
                     "is_idle": is_idle,
                 }
 
-            remaining = timeout_sec - (time.monotonic() - start_mono)
-            if remaining <= 0:  # pragma: no cover
-                break
+            remaining = max(0, timeout_sec - (time.monotonic() - start_mono))
             await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))
 
         raise TimeoutError(f"No prompt detected within {timeout_ms}ms")

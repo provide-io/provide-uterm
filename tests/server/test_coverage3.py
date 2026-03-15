@@ -93,7 +93,7 @@ def test_validate_auth_config_header_mode_passes() -> None:
 
     cfg = default_server_config()
     cfg.auth.mode = "header"
-    cfg.auth.worker_bearer_token = "test-token"  # noqa: S105
+    cfg.auth.worker_bearer_token = "test-token"
     # Should not raise — exits at line 77 before JWT checks
     _validate_auth_config(cfg)
 

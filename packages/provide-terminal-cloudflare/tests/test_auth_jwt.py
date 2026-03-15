@@ -109,6 +109,7 @@ def test_config_reads_jwt_default_role_from_env() -> None:
         AUTH_MODE = "jwt"
         JWT_PUBLIC_KEY_PEM = "pem"
         JWT_DEFAULT_ROLE = "operator"
+        WORKER_BEARER_TOKEN = "t"
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_default_role == "operator"
@@ -182,6 +183,7 @@ def test_config_reads_jwt_role_map_from_env() -> None:
         AUTH_MODE = "jwt"
         JWT_PUBLIC_KEY_PEM = "pem"
         JWT_ROLE_MAP = json.dumps({"engineering": "admin", "ops": "operator"})
+        WORKER_BEARER_TOKEN = "t"
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_role_map == {"engineering": "admin", "ops": "operator"}
@@ -195,6 +197,7 @@ def test_config_jwt_role_map_invalid_json_ignored() -> None:
         AUTH_MODE = "jwt"
         JWT_PUBLIC_KEY_PEM = "pem"
         JWT_ROLE_MAP = "not-valid-json{"
+        WORKER_BEARER_TOKEN = "t"
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_role_map == {}

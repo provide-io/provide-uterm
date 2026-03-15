@@ -8,7 +8,6 @@ try:
         JwtValidationError,
         decode_jwt,
         extract_bearer_or_cookie,
-        resolve_role,
     )
     from provide_terminal_cloudflare.cf_types import Response, WorkerEntrypoint, json_response
     from provide_terminal_cloudflare.config import CloudflareConfig
@@ -20,7 +19,6 @@ except Exception:
         JwtValidationError,
         decode_jwt,
         extract_bearer_or_cookie,
-        resolve_role,
     )
     from cf_types import Response, WorkerEntrypoint, json_response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
@@ -39,6 +37,23 @@ _WORKER_ROUTE_PATTERNS = (
     re.compile(r"^/api/sessions/(?P<worker_id>[a-zA-Z0-9_-]{1,64})(?:/(?:snapshot|events|mode|clear|analyze))?$"),
 )
 _STATIC_ASSET_PATH = re.compile(r"^/[a-zA-Z0-9._/-]+\.(?:html|css|js)$")
+
+
+async def _require_jwt(request: object, config: CloudflareConfig) -> Response | None:
+    """Return a 401 Response if JWT auth fails, or ``None`` if auth passes.
+
+    Skipped when auth mode is not ``jwt``.
+    """
+    if config.jwt.mode != "jwt":
+        return None
+    token = extract_bearer_or_cookie(request)
+    if not token:
+        return json_response({"error": "authentication required"}, status=401)
+    try:
+        await decode_jwt(token, config.jwt)
+    except JwtValidationError as exc:
+        return json_response({"error": "invalid token", "detail": str(exc)}, status=401)
+    return None
 
 
 class Default(WorkerEntrypoint):
@@ -63,18 +78,9 @@ class Default(WorkerEntrypoint):
             )
 
         if path == "/api/sessions":
-            # Require JWT auth in jwt mode — fleet-wide session list is sensitive.
-            if config.jwt.mode == "jwt":
-                token = extract_bearer_or_cookie(request)
-                if not token:
-                    return json_response({"error": "authentication required"}, status=401)
-                try:
-                    principal = await decode_jwt(token, config.jwt)
-                except JwtValidationError as exc:
-                    return json_response({"error": "invalid token", "detail": str(exc)}, status=401)
-                # Viewer is the minimum role; all authenticated users qualify.
-                # resolve_role ensures the token carries a valid role claim.
-                _ = resolve_role(principal)
+            auth_error = await _require_jwt(request, config)
+            if auth_error is not None:
+                return auth_error
             # Fleet-wide list: query KV registry populated by each DO on connect/disconnect.
             # Falls back to empty list when SESSION_REGISTRY KV binding is not configured.
             kv_configured = getattr(self.env, "SESSION_REGISTRY", None) is not None
@@ -89,13 +95,18 @@ class Default(WorkerEntrypoint):
 
         worker_id = _extract_worker_id(path)
         if worker_id is None:
-            if path in {"/app", "/app/"}:
-                body = read_asset_text("terminal.html")
-                if body is not None:
-                    body = body.replace("<head>", '<head><base href="/assets/">', 1)
-                    return Response(body, status=200, headers={"content-type": "text/html; charset=utf-8"})
-                return serve_asset("terminal.html")
-            if path == "/":
+            if path in {"/app", "/app/", "/"}:
+                # HTML page routes require JWT auth when mode=jwt.
+                # Static assets (JS/CSS) are public — same as FastAPI's StaticFiles mount.
+                auth_error = await _require_jwt(request, config)
+                if auth_error is not None:
+                    return auth_error
+                if path in {"/app", "/app/"}:
+                    body = read_asset_text("terminal.html")
+                    if body is not None:
+                        body = body.replace("<head>", '<head><base href="/assets/">', 1)
+                        return Response(body, status=200, headers={"content-type": "text/html; charset=utf-8"})
+                    return serve_asset("terminal.html")
                 return serve_asset("hijack.html")
             return json_response({"error": "not_found", "path": path}, status=404)
 

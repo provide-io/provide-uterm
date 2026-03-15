@@ -11,19 +11,15 @@ from shutil import which
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 
-REQUIRED_WHEEL = (
-    "provide/terminal/frontend/hijack.js",
-    "provide/terminal/frontend/hijack.css",
-    "provide/terminal/frontend/hijack.html",
-    "provide/terminal/frontend/app/boot.js",
-    "provide/terminal/frontend/app/router.js",
-    "provide/terminal/frontend/app/state.js",
-    "provide/terminal/frontend/app/api.js",
-    "provide/terminal/frontend/app/views/dashboard-view.js",
-    "provide/terminal/frontend/app/views/operator-view.js",
-    "provide/terminal/frontend/app/views/replay-view.js",
-    "provide/terminal/frontend/app/views/session-view.js",
-)
+
+def _expected_frontend_files() -> tuple[str, ...]:
+    """Discover all frontend files from the source tree at build time."""
+    frontend = ROOT / "src" / "provide" / "terminal" / "frontend"
+    return tuple(
+        str(p.relative_to(ROOT / "src")).replace("\\", "/")
+        for p in frontend.rglob("*")
+        if p.is_file() and "__pycache__" not in p.parts and not p.name.startswith(".")
+    )
 
 
 def _build() -> None:
@@ -57,11 +53,15 @@ def main() -> int:
     if not wheels or not sdists:
         raise RuntimeError("expected both wheel and sdist artifacts in dist/")
 
+    required = _expected_frontend_files()
+    if not required:
+        raise RuntimeError("no frontend files found in src/provide/terminal/frontend/")
+
     wheel_members = _wheel_members(wheels[-1])
     sdist_members = _sdist_members(sdists[-1])
-    _assert_contains(wheel_members, REQUIRED_WHEEL, "wheel")
-    _assert_contains(sdist_members, REQUIRED_WHEEL, "sdist")
-    print("artifact verification passed")
+    _assert_contains(wheel_members, required, "wheel")
+    _assert_contains(sdist_members, required, "sdist")
+    print(f"artifact verification passed ({len(required)} frontend files)")
     return 0
 
 

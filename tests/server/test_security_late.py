@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import time
 from pathlib import Path
@@ -311,3 +312,86 @@ class TestConnectorConfigValidation:
                     "totally_bogus_param": "oops",
                 },
             )
+
+
+# ---------------------------------------------------------------------------
+# Worker bearer token scope — must only authenticate WebSocket connections
+# ---------------------------------------------------------------------------
+
+
+class TestWorkerBearerTokenScope:
+    """Worker bearer token must NOT grant access to REST or page routes."""
+
+    @staticmethod
+    def _make_jwt_app():
+        """Create a JWT-mode app with a raw (non-JWT) worker bearer token."""
+        from provide.terminal.server.models import AuthConfig
+
+        auth = AuthConfig(
+            mode="jwt",
+            jwt_public_key_pem=_TEST_SIGNING_KEY,
+            jwt_algorithms=["HS256"],
+            worker_bearer_token="raw-worker-token-not-a-jwt",
+        )
+        cfg = default_server_config()
+        cfg.auth = auth
+        return create_server_app(cfg), auth
+
+    def test_worker_bearer_token_rejected_on_rest_api(self) -> None:
+        app, auth = self._make_jwt_app()
+        with TestClient(app) as client:
+            r = client.get("/api/sessions", headers={"Authorization": f"Bearer {auth.worker_bearer_token}"})
+            assert r.status_code == 401, f"expected 401, got {r.status_code}"
+
+    def test_worker_bearer_token_rejected_on_page_routes(self) -> None:
+        app, auth = self._make_jwt_app()
+        with TestClient(app) as client:
+            r = client.get("/app/", headers={"Authorization": f"Bearer {auth.worker_bearer_token}"})
+            assert r.status_code == 401, f"expected 401, got {r.status_code}"
+
+    def test_wrong_worker_token_on_worker_ws_falls_through(self) -> None:
+        """Wrong bearer token on /ws/worker/ must fall through to JWT auth (and fail)."""
+        from starlette.websockets import WebSocketDisconnect
+
+        app, _auth = self._make_jwt_app()
+        with TestClient(app) as client:
+            with (
+                pytest.raises(WebSocketDisconnect) as exc_info,
+                client.websocket_connect(
+                    "/ws/worker/test-worker/term",
+                    headers={"Authorization": "Bearer wrong-token"},
+                ),
+            ):
+                pass
+            assert exc_info.value.code == 1008
+
+    def test_header_mode_logs_startup_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Header auth mode must log a warning about trusting proxy headers."""
+        from provide.terminal.server.models import AuthConfig
+
+        auth = AuthConfig(
+            mode="header",
+            worker_bearer_token="header-mode-token",
+        )
+        cfg = default_server_config()
+        cfg.auth = auth
+        with caplog.at_level(logging.WARNING, logger="provide.terminal.server.app"):
+            create_server_app(cfg)
+        assert any("auth_mode=header" in r.message and "reverse proxy" in r.message for r in caplog.records)
+
+    def test_worker_bearer_token_rejected_on_browser_ws(self) -> None:
+        """Worker bearer token on a browser WS route must NOT grant admin — it's worker-route-scoped."""
+        from starlette.websockets import WebSocketDisconnect
+
+        app, auth = self._make_jwt_app()
+        with TestClient(app) as client:
+            with (
+                pytest.raises(WebSocketDisconnect) as exc_info,
+                client.websocket_connect(
+                    "/ws/browser/test-worker/term",
+                    headers={"Authorization": f"Bearer {auth.worker_bearer_token}"},
+                ),
+            ):
+                pass
+            # WS 1008 = policy violation (auth required), not 1000 (normal close)
+            assert exc_info.value.code == 1008

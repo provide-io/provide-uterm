@@ -47,6 +47,8 @@ def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
     if mode == "jwt":
         env.JWT_ALGORITHMS = "HS256"
         env.JWT_PUBLIC_KEY_PEM = _KEY
+        if not hasattr(env, "WORKER_BEARER_TOKEN"):
+            env.WORKER_BEARER_TOKEN = "test-worker-token"
     return env
 
 

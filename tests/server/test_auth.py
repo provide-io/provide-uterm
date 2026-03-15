@@ -356,15 +356,14 @@ class TestResolvePrincipal:
         assert p.subject_id == "charlie"
         assert "viewer" in p.roles
 
-    def test_unknown_mode_falls_back_to_anonymous(self) -> None:
+    def test_unknown_mode_raises_value_error(self) -> None:
         from provide.terminal.server.auth import _resolve_principal
         from provide.terminal.server.models import AuthConfig
 
         auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
         auth.mode = "mystery_mode"  # type: ignore[assignment]
-        p = _resolve_principal({}, {}, auth)
-        assert p.subject_id == "anonymous"
-        assert "viewer" in p.roles
+        with pytest.raises(ValueError, match="unknown auth mode"):
+            _resolve_principal({}, {}, auth)
 
     def test_jwt_mode_valid_bearer_token(self) -> None:
         from provide.terminal.server.auth import _resolve_principal
