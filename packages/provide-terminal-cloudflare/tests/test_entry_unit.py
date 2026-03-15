@@ -249,6 +249,7 @@ def _make_jwt_default() -> Default:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret",
+            WORKER_BEARER_TOKEN="test-worker-token",
         )
     )
 

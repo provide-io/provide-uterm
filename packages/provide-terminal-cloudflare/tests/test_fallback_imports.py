@@ -99,7 +99,6 @@ def test_entry_module_level_fallback() -> None:
     """entry.py module-level imports fall back to bare module names."""
     from provide_terminal_cloudflare import config as real_config
     from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
-    from provide_terminal_cloudflare.auth.jwt import resolve_role as _resolve_role
     from provide_terminal_cloudflare.cf_types import Response, WorkerEntrypoint, json_response
     from provide_terminal_cloudflare.do import session_runtime as real_sr_mod
     from provide_terminal_cloudflare.state import registry as real_reg
@@ -114,8 +113,6 @@ def test_entry_module_level_fallback() -> None:
     auth_jwt.JwtValidationError = JwtValidationError  # type: ignore[attr-defined]
     auth_jwt.decode_jwt = decode_jwt  # type: ignore[attr-defined]
     auth_jwt.extract_bearer_or_cookie = extract_bearer_or_cookie  # type: ignore[attr-defined]
-    auth_jwt.resolve_role = _resolve_role  # type: ignore[attr-defined]
-
     do_sr = ModuleType("do.session_runtime")
     do_sr.SessionRuntime = real_sr_mod.SessionRuntime  # type: ignore[attr-defined]
 
@@ -159,13 +156,11 @@ async def test_entry_inline_jwt_fallback() -> None:
         raise _FakeJwtError("test token rejected")
 
     from provide_terminal_cloudflare.auth.jwt import extract_bearer_or_cookie
-    from provide_terminal_cloudflare.auth.jwt import resolve_role as _resolve_role
 
     mock_auth_jwt = ModuleType("auth.jwt")
     mock_auth_jwt.JwtValidationError = _FakeJwtError  # type: ignore[attr-defined]
     mock_auth_jwt.decode_jwt = _always_invalid  # type: ignore[attr-defined]
     mock_auth_jwt.extract_bearer_or_cookie = extract_bearer_or_cookie  # type: ignore[attr-defined]
-    mock_auth_jwt.resolve_role = _resolve_role  # type: ignore[attr-defined]
 
     env = SimpleNamespace(
         AUTH_MODE="jwt",
@@ -175,6 +170,7 @@ async def test_entry_inline_jwt_fallback() -> None:
         JWT_DEFAULT_ROLE="viewer",
         JWT_ROLES_CLAIM="role",
         SESSION_REGISTRY=None,
+        WORKER_BEARER_TOKEN="test-worker-token",
     )
     default = Default(env)
 

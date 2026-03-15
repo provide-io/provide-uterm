@@ -208,7 +208,7 @@ class TestRestHijackRelease:
 class TestWsWorkerAuthRejection:
     def test_worker_auth_rejected_closes_with_1008(self) -> None:
         """Lines 64-66: provided token != hub token → accept + close 1008."""
-        hub, app, client = _make_app(worker_token="correct-token")  # noqa: S106
+        hub, app, client = _make_app(worker_token="correct-token")
 
         with client.websocket_connect("/ws/worker/w1/term", headers={"Authorization": "Bearer wrong-token"}) as ws:
             # After auth rejection the server closes with 1008

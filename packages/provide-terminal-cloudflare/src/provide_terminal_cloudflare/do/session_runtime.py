@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import secrets
 import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -66,17 +67,10 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
                 return str(name())
             except Exception as exc:
                 logger.debug("failed to derive worker_id from durable object name: %s", exc)
-        # Fallback: ctx.id.name() unavailable (hex-ID addressed DO, not name-addressed).
-        # In production all DOs are addressed via idFromName(worker_id), so this should
-        # never occur. If it does, multiple unnamed instances would collide on the same
-        # session row — investigate the routing configuration.
-        return "default"
+        return "default"  # fallback: hex-ID addressed DO, not name-addressed
 
     def _restore_state(self) -> None:
-        # CF Durable Objects persist alarm registrations across cold starts — a
-        # setAlarm() call made before the DO hibernated will still fire after a
-        # cold-start wake.  We therefore do NOT need to re-arm the alarm here;
-        # if an active lease was stored, the original alarm is still scheduled.
+        # Alarm registrations persist across cold starts — no need to re-arm here.
         row = self.store.load_session(self.worker_id)
         if row is None:
             return
@@ -191,16 +185,33 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
     async def fetch(self, request: object) -> Response:
         # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
         self._lazy_init_worker_id(request)
-        # Validate JWT before processing any request.
-        principal, auth_error = await self._resolve_principal(request)
-        if auth_error is not None:
-            return auth_error
 
+        # Parse URL once — reused for worker WS check and socket role routing.
         upgrade_header = str(request.headers.get("Upgrade") or "").lower()  # type: ignore[attr-defined]
+        path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
+
+        # Worker WS connections authenticate with a bearer token, not JWT.
+        # When worker_bearer_token is None (dev/none mode), this block is
+        # skipped entirely and the request falls through to _resolve_principal()
+        # which permits all callers in those modes.  In JWT mode, from_env()
+        # guarantees worker_bearer_token is set (ValueError otherwise).
+        _is_worker_ws = upgrade_header == "websocket" and path.startswith("/ws/worker/")
+        if _is_worker_ws and self.config.worker_bearer_token:
+            token = extract_bearer_or_cookie(request)
+            if not token or not secrets.compare_digest(token, self.config.worker_bearer_token):
+                return Response(
+                    json.dumps({"error": "worker authentication required"}),
+                    status=403,
+                    headers={"content-type": "application/json"},
+                )
+            principal, auth_error = None, None
+        else:
+            principal, auth_error = await self._resolve_principal(request)
+            if auth_error is not None:
+                return auth_error
         if upgrade_header == "websocket":
             from js import WebSocketPair  # type: ignore[import-not-found]
 
-            path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
             socket_role = "browser"
             if path.startswith("/ws/worker/"):
                 socket_role = "worker"
@@ -244,10 +255,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
                 except Exception as exc:
                     logger.debug("kv register worker in fetch() failed: %s", exc)
 
-            # For browser connections, send the hello frame synchronously in fetch()
-            # before returning 101. In CF hibernation mode, messages sent from
-            # webSocketOpen() may be dropped if the DO hibernates before the handler
-            # runs. Sending here (inside fetch()) guarantees delivery.
+            # Send hello in fetch() before 101 — webSocketOpen() may be dropped after hibernation.
             if socket_role == "browser":
                 try:
                     server.send(

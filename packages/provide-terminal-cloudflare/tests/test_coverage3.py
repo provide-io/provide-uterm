@@ -44,6 +44,8 @@ def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
     if mode == "jwt":
         env.JWT_ALGORITHMS = "HS256"
         env.JWT_PUBLIC_KEY_PEM = _KEY
+        if not hasattr(env, "WORKER_BEARER_TOKEN"):
+            env.WORKER_BEARER_TOKEN = "test-worker-token"
     return env
 
 
@@ -451,7 +453,7 @@ def test_config_invalid_mode_defaults_to_jwt() -> None:
     """Line 79: AUTH_MODE with unrecognised value → silently defaults to 'jwt'."""
     from provide_terminal_cloudflare.config import CloudflareConfig
 
-    env = SimpleNamespace(AUTH_MODE="invalid_mode")
+    env = SimpleNamespace(AUTH_MODE="invalid_mode", WORKER_BEARER_TOKEN="t")
     config = CloudflareConfig.from_env(env)
     assert config.jwt.mode == "jwt"
 

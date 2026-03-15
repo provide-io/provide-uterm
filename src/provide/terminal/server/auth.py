@@ -157,8 +157,7 @@ def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig) -> Principa
     if mode == "header":
         return _principal_from_header_auth(headers, cookies, auth)
     if mode != "jwt":
-        logger.warning("unknown_auth_mode mode=%s; falling back to anonymous", mode)
-        return _anonymous_principal()
+        raise ValueError(f"unknown auth mode: {mode!r}")
     token = _extract_bearer_token(headers) or _cookie_value(cookies, auth.token_cookie)
     if not token:
         return _anonymous_principal()

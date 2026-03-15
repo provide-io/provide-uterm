@@ -23,7 +23,12 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
 
 from provide.terminal.hijack.hub import TermHub
-from provide.terminal.server.auth import resolve_http_principal, resolve_ws_principal
+from provide.terminal.server.auth import (
+    Principal,
+    _extract_bearer_token,
+    resolve_http_principal,
+    resolve_ws_principal,
+)
 from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
 from provide.terminal.server.registry import SessionRegistry
@@ -47,20 +52,10 @@ _AUTO_START_DELAY_S = 0.15
 
 
 def _validate_frontend_assets() -> None:
-    required = (
-        "hijack.html",
-        "hijack.js",
-        "hijack.css",
-        "app/boot.js",
-        "app/router.js",
-        "app/state.js",
-        "app/api.js",
-        "app/views/dashboard-view.js",
-        "app/views/operator-view.js",
-        "app/views/replay-view.js",
-        "app/views/session-view.js",
-    )
     frontend_root = importlib.resources.files("provide.terminal") / "frontend"
+    # Require only the critical entry points — the full file set is validated
+    # at build time by scripts/verify_package_artifacts.py.
+    required = ("hijack.html", "terminal.html", "app/boot.js")
     missing = [name for name in required if not (frontend_root / name).is_file()]
     if missing:
         joined = ", ".join(missing)
@@ -78,6 +73,12 @@ def _validate_auth_config(config: ServerConfig) -> None:
             mode,
         )
         return
+    if mode == "header":
+        logger.warning(
+            "auth_mode=header: trusting X-Principal/X-Role headers from all callers. "
+            "This mode MUST run behind a reverse proxy that sets these headers. "
+            "Direct exposure allows any client to claim any identity.",
+        )
     # All authenticated modes (jwt, header, …) require a worker bearer token.
     if not config.auth.worker_bearer_token:
         raise ValueError(f"auth.worker_bearer_token is required when auth.mode='{mode}'")
@@ -122,13 +123,13 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         # Workers authenticate with a raw bearer token, not a JWT.  Check it
         # before JWT resolution so a valid worker token is never mis-rejected as
         # anonymous when auth.mode='jwt'.
-        if config.auth.worker_bearer_token:
-            from provide.terminal.server.auth import _extract_bearer_token
-
+        if (
+            config.auth.worker_bearer_token
+            and connection.scope.get("type") == "websocket"
+            and str(connection.scope.get("path", "")).startswith("/ws/worker/")
+        ):
             token = _extract_bearer_token(connection.headers)
             if secrets.compare_digest(token or "", config.auth.worker_bearer_token or ""):
-                from provide.terminal.server.auth import Principal
-
                 connection.state.uterm_principal = Principal(
                     subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"})
                 )

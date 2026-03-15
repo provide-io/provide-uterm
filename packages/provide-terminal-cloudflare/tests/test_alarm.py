@@ -22,7 +22,7 @@ def _make_runtime() -> SessionRuntime:
         ),
         id=SimpleNamespace(name=lambda: "test-worker"),
     )
-    runtime = SessionRuntime(ctx, {})
+    runtime = SessionRuntime(ctx, {"AUTH_MODE": "dev"})
     runtime._alarm_calls = alarm_calls  # expose for assertions
     return runtime
 
