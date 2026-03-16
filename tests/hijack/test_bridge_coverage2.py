@@ -155,7 +155,7 @@ class TestBridgeInvalidUri:
         bridge._worker_id = "w1"
         bridge._manager_url = "not-a-valid-url"
         bridge._max_ws_message_bytes = 1024 * 1024
-        bridge._running = True
+        bridge._running = False
         bridge._send_q = asyncio.Queue()
         bridge._task = None
         bridge._latest_snapshot = None
@@ -169,7 +169,7 @@ class TestBridgeInvalidUri:
 
         with patch("websockets.connect", side_effect=mock_exc):
             # Run the bridge — it should stop after InvalidURI
-            bridge.start()  # This calls asyncio.create_task internally
+            await bridge.start()
             await asyncio.sleep(0.1)
             await bridge.stop()
             await asyncio.sleep(0)  # Let any pending tasks complete

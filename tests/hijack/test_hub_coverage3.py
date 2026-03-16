@@ -56,10 +56,14 @@ class TestResolveRoleTimeout:
             await asyncio.sleep(0)
             return "admin"
 
+        def _mock_wait_for(coro: Any, **_kwargs: Any) -> None:
+            coro.close()  # prevent "coroutine never awaited" warning
+            raise TimeoutError("mocked")
+
         hub = _make_hub(resolve_browser_role=_slow_resolver)
         browser_ws = _make_ws()
 
-        with patch("asyncio.wait_for", side_effect=TimeoutError("mocked")), pytest.raises(BrowserRoleResolutionError):
+        with patch("asyncio.wait_for", side_effect=_mock_wait_for), pytest.raises(BrowserRoleResolutionError):
             await hub._resolve_role_for_browser(browser_ws, "w1")
 
 

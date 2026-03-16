@@ -108,6 +108,10 @@ class WebSocketSessionConnector(SessionConnector):
         except Exception:
             self._connected = False
             self._banner = "WebSocket connection closed."
+            # ws is guaranteed non-None: guarded by is_connected() check above.
+            ws, self._ws = self._ws, None
+            with contextlib.suppress(Exception):
+                await ws.close()
             return [self._snapshot()]
 
         if isinstance(data, bytes):
