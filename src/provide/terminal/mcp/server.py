@@ -18,7 +18,11 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 from fastmcp import FastMCP
 
@@ -101,7 +105,13 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         ``headers``, ``timeout``, ``transport``).
     """
     client = HijackClient(base_url, **client_kwargs)
-    mcp = FastMCP("uterm")
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(_app: FastMCP) -> AsyncIterator[None]:
+        yield
+        await client.__aexit__(None, None, None)
+
+    mcp = FastMCP("uterm", lifespan=_lifespan)
 
     # -- Hijack lifecycle tools -----------------------------------------------
 

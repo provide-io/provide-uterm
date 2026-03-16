@@ -151,9 +151,25 @@ class TestWebSocketSessionConnector:
         c._connected = True
         msgs = await c.poll_messages()
         assert not c._connected
+        assert c._ws is None
+        mock_ws.close.assert_awaited_once()
         assert len(msgs) == 1
         assert msgs[0]["type"] == "snapshot"
         assert "closed" in msgs[0]["screen"].lower()
+
+    @pytest.mark.asyncio
+    async def test_poll_connection_error_close_raises(self) -> None:
+        """close() failure during error cleanup is suppressed."""
+        mock_ws = AsyncMock()
+        mock_ws.recv.side_effect = ConnectionError("gone")
+        mock_ws.close.side_effect = RuntimeError("already closed")
+        c = self._make()
+        c._ws = mock_ws
+        c._connected = True
+        msgs = await c.poll_messages()
+        assert not c._connected
+        assert c._ws is None
+        assert len(msgs) == 1
 
     @pytest.mark.asyncio
     async def test_poll_buffer_truncation(self) -> None:

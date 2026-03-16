@@ -70,6 +70,7 @@ _KNOWN_SESSION_FIELDS = frozenset(
         "recording_enabled",
         "owner",
         "visibility",
+        "ephemeral",
     }
 )
 
@@ -107,6 +108,7 @@ def _parse_session_entry(raw: Any) -> SessionDefinition | None:
         recording_enabled=(None if raw.get("recording_enabled") is None else bool(raw.get("recording_enabled"))),
         owner=(None if raw.get("owner") is None else str(raw.get("owner"))),
         visibility=visibility,  # type: ignore[arg-type]
+        ephemeral=bool(raw.get("ephemeral", False)),
     )
 
 
@@ -126,6 +128,7 @@ def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
         public_base_url=str(server_data.get("public_base_url", base.server.public_base_url)),
         title=str(server_data.get("title", base.server.title)),
         allowed_origins=[str(v) for v in server_data.get("allowed_origins", base.server.allowed_origins)],
+        max_sessions=(None if (ms := server_data.get("max_sessions")) is None else int(ms)),
     )
     auth = AuthConfig(
         mode=str(auth_data.get("mode", base.auth.mode)),

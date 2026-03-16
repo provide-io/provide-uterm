@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import time
+
 import httpx
 from playwright.sync_api import Page, expect
 
@@ -30,6 +32,23 @@ def _example_state(base_url: str) -> dict[str, object]:
         return resp.json()
 
 
+def _wait_for_example_state(
+    base_url: str,
+    predicate: callable,
+    *,
+    timeout: float = 5.0,
+    interval: float = 0.05,
+) -> dict[str, object]:
+    deadline = time.monotonic() + timeout
+    last_state = _example_state(base_url)
+    while time.monotonic() < deadline:
+        if predicate(last_state):
+            return last_state
+        time.sleep(interval)
+        last_state = _example_state(base_url)
+    raise AssertionError(f"example state did not satisfy predicate within {timeout:.1f}s: {last_state}")
+
+
 def _navigate_example(page: Page, base_url: str) -> None:
     page.goto(_example_url(base_url), wait_until="domcontentloaded")
 
@@ -39,7 +58,7 @@ class TestExamplePageSingleBrowser:
         _example_reset(example_server, mode="hijack")
 
         _navigate_example(page, example_server)
-        expect(page.locator("#provide-shell-status")).to_contain_text("provide-shell", timeout=5000)
+        expect(page.locator("#demo-session-status")).to_contain_text("provide-shell", timeout=5000)
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
         expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
@@ -47,22 +66,26 @@ class TestExamplePageSingleBrowser:
         page.locator("[id$='-inputfield']").fill("hello from playwright")
         page.get_by_role("button", name="Send").click()
 
-        state = _example_state(example_server)
+        state = _wait_for_example_state(
+            example_server,
+            lambda state: any(
+                "hello from playwright" in str(entry.get("text", ""))
+                for entry in state.get("transcript", [])
+                if isinstance(entry, dict)
+            ),
+        )
         transcript = state.get("transcript", [])
         assert isinstance(transcript, list)
-        from typing import cast
 
         assert any(
-            "hello from playwright" in str(cast("dict", entry).get("text", ""))
-            for entry in transcript
-            if isinstance(entry, dict)
+            "hello from playwright" in str(entry.get("text", "")) for entry in transcript if isinstance(entry, dict)
         )
 
         page.get_by_role("button", name="Analyze").click()
         expect(page.locator("[id$='-analysistext']")).to_contain_text("interactive demo analysis", timeout=5000)
 
         page.locator("#demo-reset").click()
-        expect(page.locator("#provide-shell-note")).to_contain_text("Session reset.", timeout=5000)
+        expect(page.locator("#demo-session-note")).to_contain_text("Session reset.", timeout=5000)
         state_after = _example_state(example_server)
         transcript_after = state_after["transcript"]
         assert isinstance(transcript_after, list)
@@ -85,7 +108,10 @@ class TestExamplePageSingleBrowser:
         page.locator("[id$='-inputfield']").fill("/clear")
         page.get_by_role("button", name="Send").click()
 
-        state = _example_state(example_server)
+        state = _wait_for_example_state(
+            example_server,
+            lambda state: state.get("pending_banner") == "Transcript cleared.",
+        )
         assert state["input_mode"] == "hijack"
         assert state["pending_banner"] == "Transcript cleared."
 
@@ -122,13 +148,13 @@ class TestExamplePageTwoBrowsers:
         _navigate_example(page, example_server)
         page.select_option("#demo-mode", "open")
         page.locator("#demo-apply").click()
-        expect(page.locator("#provide-shell-status")).to_contain_text("open", timeout=5000)
+        expect(page.locator("#demo-session-status")).to_contain_text("open", timeout=5000)
 
         ctx2 = browser.new_context()  # type: ignore[attr-defined]
         page2 = ctx2.new_page()
         try:
             _navigate_example(page2, example_server)
-            expect(page2.locator("#provide-shell-status")).to_contain_text("open", timeout=5000)
+            expect(page2.locator("#demo-session-status")).to_contain_text("open", timeout=5000)
             expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
             expect(page2.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
 
@@ -137,20 +163,29 @@ class TestExamplePageTwoBrowsers:
             page2.locator("[id$='-inputfield']").fill("from second browser")
             page2.get_by_role("button", name="Send").click()
 
-            state = _example_state(example_server)
+            state = _wait_for_example_state(
+                example_server,
+                lambda state: (
+                    any(
+                        "from first browser" in str(entry.get("text", ""))
+                        for entry in state.get("transcript", [])
+                        if isinstance(entry, dict)
+                    )
+                    and any(
+                        "from second browser" in str(entry.get("text", ""))
+                        for entry in state.get("transcript", [])
+                        if isinstance(entry, dict)
+                    )
+                ),
+            )
             transcript = state.get("transcript", [])
             assert isinstance(transcript, list)
-            from typing import cast
 
             assert any(
-                "from first browser" in str(cast("dict", entry).get("text", ""))
-                for entry in transcript
-                if isinstance(entry, dict)
+                "from first browser" in str(entry.get("text", "")) for entry in transcript if isinstance(entry, dict)
             )
             assert any(
-                "from second browser" in str(cast("dict", entry).get("text", ""))
-                for entry in transcript
-                if isinstance(entry, dict)
+                "from second browser" in str(entry.get("text", "")) for entry in transcript if isinstance(entry, dict)
             )
         finally:
             page2.close()

@@ -410,7 +410,7 @@ def _make_ssh_connector(config: dict[str, Any] | None = None) -> Any:
 
 def _attach_mock_ssh(connector: Any) -> tuple[MagicMock, MagicMock, MagicMock]:
     """Attach mock SSH conn/process/stdin/stdout to an already-constructed connector."""
-    mock_stdout = AsyncMock()
+    mock_stdout = MagicMock()
     mock_stdin = MagicMock()
     mock_stdin.drain = AsyncMock()
     mock_conn = MagicMock()
@@ -495,8 +495,7 @@ class TestSshSessionConnector:
     @pytest.mark.asyncio
     async def test_poll_messages_empty_read(self) -> None:
         c = _make_ssh_connector()
-        _, _, mock_stdout = _attach_mock_ssh(c)
-        mock_stdout.read = AsyncMock(return_value=b"")
+        _attach_mock_ssh(c)
         with patch("asyncio.wait_for", new=AsyncMock(return_value=b"")):
             msgs = await c.poll_messages()
         assert msgs == []
@@ -623,7 +622,7 @@ class TestSshSessionConnector:
         c._conn = mock_conn
         c._process = mock_process
         c._stdin = mock_stdin
-        c._stdout = AsyncMock()
+        c._stdout = MagicMock()
         c._connected = True
         await c.stop()
         mock_stdin.write_eof.assert_called_once()

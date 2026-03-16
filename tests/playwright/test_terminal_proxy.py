@@ -165,8 +165,8 @@ class TestTerminalProxyPage:
 
         expect(page.locator(".terminal-div")).to_be_visible(timeout=5000)
         page.wait_for_function("Boolean(window.demoTerminal)")
-        expect(page.locator("[id^='statusText-']")).to_have_text("Connected", timeout=5000)
+        expect(page.locator("[data-status-text='1']").first).to_have_text("Connected", timeout=5000)
 
         page.evaluate("window.demoTerminal.ws.close()")
-        expect(page.locator("[id^='statusText-']")).to_have_text("Disconnected", timeout=5000)
-        expect(page.locator("[id^='statusText-']")).to_have_text("Connected", timeout=5000)
+        expect(page.locator("[data-status-text='1']").first).to_have_text("Disconnected", timeout=5000)
+        expect(page.locator("[data-status-text='1']").first).to_have_text("Connected", timeout=5000)

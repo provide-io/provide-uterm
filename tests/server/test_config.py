@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.auth import Principal
@@ -90,6 +91,32 @@ def test_load_server_config_resolves_relative_recording_path(tmp_path: Path) -> 
     assert config.recording.directory == (tmp_path / "logs").resolve()
 
 
+def test_load_server_config_parses_ephemeral_and_max_sessions(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "server.toml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "[server]",
+                "max_sessions = 3",
+                "",
+                "[[sessions]]",
+                'session_id = "ephemeral-shell"',
+                'display_name = "Ephemeral Shell"',
+                'connector_type = "shell"',
+                "ephemeral = true",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_server_config(cfg_path)
+
+    assert config.server.max_sessions == 3
+    assert len(config.sessions) == 1
+    assert config.sessions[0].ephemeral is True
+    assert "ephemeral" not in config.sessions[0].connector_config
+
+
 def test_jwt_mode_requires_worker_token() -> None:
     config = default_server_config()
     config.auth = AuthConfig(
@@ -130,3 +157,13 @@ def test_config_from_mapping_rejects_invalid_input_mode() -> None:
 def test_config_from_mapping_rejects_invalid_visibility() -> None:
     with pytest.raises(ValueError, match="invalid visibility"):
         config_from_mapping({"sessions": [{"session_id": "s1", "connector_type": "shell", "visibility": "secret"}]})
+
+
+def test_loaded_max_sessions_is_enforced_by_app() -> None:
+    config = config_from_mapping({"server": {"max_sessions": 1}})
+
+    with TestClient(create_server_app(config)) as client:
+        response = client.post("/api/connect", json={"connector_type": "shell"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "session limit reached: max_sessions=1"

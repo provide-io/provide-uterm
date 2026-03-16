@@ -98,3 +98,56 @@ class TestExtractActionTagsEmptyTag:
         # Empty tag should be skipped; "valid_tag" and "VALID_TAG" deduplicated
         assert "valid_tag" in result
         assert "" not in result
+        assert len(result) == 1
+
+
+class TestActionTagsBoundaries:
+    def test_max_tags_zero_defaults_to_one(self) -> None:
+        from provide.terminal.screen import extract_action_tags
+
+        result = extract_action_tags("<Tag1> <Tag2> <Tag3>", max_tags=0)
+        assert len(result) == 1
+        assert result[0] == "Tag1"
+
+    def test_max_tags_clamps_to_one(self) -> None:
+        from provide.terminal.screen import extract_action_tags
+
+        result = extract_action_tags("<Only>", max_tags=0)
+        assert result == ["Only"]
+
+    def test_long_tag_names(self) -> None:
+        from provide.terminal.screen import extract_action_tags
+
+        long_tag = "x" * 80
+        screen = f"<{long_tag}>"
+        result = extract_action_tags(screen)
+        assert long_tag in result
+
+    def test_tag_too_long_rejected(self) -> None:
+        from provide.terminal.screen import extract_action_tags
+
+        long_tag = "x" * 81
+        screen = f"<{long_tag}>"
+        result = extract_action_tags(screen)
+        assert long_tag not in result
+
+
+class TestNormalizeTerminalTextEdgeCases:
+    def test_preserves_newlines(self) -> None:
+        result = normalize_terminal_text("line1\nline2\nline3")
+        assert result == "line1\nline2\nline3"
+
+    def test_mixed_line_endings(self) -> None:
+        result = normalize_terminal_text("a\r\nb\rc\nd")
+        assert result == "a\nb\nc\nd"
+        assert "\r" not in result
+
+    def test_complex_ansi_sequence(self) -> None:
+        # Complex SGR with many parameters
+        result = normalize_terminal_text("\033[1;2;3;4;5;6;7;8;9mtext")
+        assert result == "text"
+
+    def test_multiple_bare_sgr(self) -> None:
+        result = normalize_terminal_text("1;31m\n2;32mtext")
+        assert "1;31m" not in result
+        assert "text" in result
