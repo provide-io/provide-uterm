@@ -16,6 +16,8 @@ try:
     from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
     from provide_terminal_cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
+    from provide_terminal_cloudflare.do.persistence import clear_lease as _clear_lease
+    from provide_terminal_cloudflare.do.persistence import persist_lease as _persist_lease
     from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
     from provide_terminal_cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
@@ -27,6 +29,8 @@ except Exception:
     from bridge.hijack import HijackCoordinator, HijackSession  # type: ignore[import-not-found]
     from cf_types import CFWebSocket, DurableObject, Response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
+    from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found]
+    from do.persistence import persist_lease as _persist_lease  # type: ignore[import-not-found]
     from do.ws_helpers import _WsHelperMixin  # type: ignore[import-not-found]
     from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found]
     from state.store import LeaseRecord, SqliteStateStore  # type: ignore[import-not-found]
@@ -253,7 +257,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
                         input_mode=self.input_mode,
                     )
                 except Exception as exc:
-                    logger.debug("kv register worker in fetch() failed: %s", exc)
+                    logger.warning("kv register worker in fetch() failed: %s", exc)
 
             # Send hello in fetch() before 101 — webSocketOpen() may be dropped after hibernation.
             if socket_role == "browser":
@@ -275,7 +279,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
                         )
                     )
                 except Exception as exc:
-                    logger.debug("failed to send hello from fetch(): %s", exc)
+                    logger.warning("failed to send hello from fetch(): %s", exc)
 
             return Response(None, status=101, web_socket=client)
         return await route_http(self, request)
@@ -372,21 +376,10 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
         return value
 
     def persist_lease(self, session: HijackSession | None) -> None:
-        if session is None:
-            return
-        self.store.save_lease(
-            LeaseRecord(
-                worker_id=self.worker_id,
-                hijack_id=session.hijack_id,
-                owner=session.owner,
-                lease_expires_at=session.lease_expires_at,
-            )
-        )
-        if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
-            _s.setAlarm(int(session.lease_expires_at * 1000))
+        _persist_lease(self.store, self.ctx, self.worker_id, session, LeaseRecord)
 
     def clear_lease(self) -> None:
-        self.store.clear_lease(self.worker_id)
+        _clear_lease(self.store, self.worker_id)
 
     # ------------------------------------------------------------------
     # Hijack state broadcast

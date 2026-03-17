@@ -52,12 +52,10 @@ class TestResolveRoleTimeout:
 
         from provide.terminal.hijack.hub import BrowserRoleResolutionError
 
-        async def _slow_resolver(ws: Any, worker_id: str) -> str:
-            await asyncio.sleep(0)
-            return "admin"
+        def _slow_resolver(ws: Any, worker_id: str) -> Any:
+            return asyncio.get_running_loop().create_future()
 
-        def _mock_wait_for(coro: Any, **_kwargs: Any) -> None:
-            coro.close()  # prevent "coroutine never awaited" warning
+        async def _mock_wait_for(coro: Any, **_kwargs: Any) -> None:
             raise TimeoutError("mocked")
 
         hub = _make_hub(resolve_browser_role=_slow_resolver)

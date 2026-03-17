@@ -19,7 +19,7 @@ command = "cp -r ../../src/provide/terminal/frontend/. src/provide_terminal_clou
 port = 8788
 
 [vars]
-AUTH_MODE = "jwt"
+AUTH_MODE = "dev"
 JWT_JWKS_URL = "https://neurotic.cloudflareaccess.com/cdn-cgi/access/certs"
 JWT_ISSUER = "https://neurotic.cloudflareaccess.com"
 JWT_ALGORITHMS = "RS256"

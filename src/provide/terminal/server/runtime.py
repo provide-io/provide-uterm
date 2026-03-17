@@ -70,6 +70,7 @@ class HostedSessionRuntime:
         return SessionRuntimeStatus(
             session_id=self.definition.session_id,
             display_name=self.definition.display_name,
+            created_at=self.definition.created_at,
             connector_type=self.definition.connector_type,
             lifecycle_state=self._state,
             input_mode=self.definition.input_mode,

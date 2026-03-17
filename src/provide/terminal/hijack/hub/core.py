@@ -73,6 +73,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         rest_acquire_rate_limit_per_sec: float = 5,
         rest_send_rate_limit_per_sec: float = 20,
         worker_token: str | None = None,
+        event_deque_maxlen: int = 2000,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -92,6 +93,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         # Per-client buckets; oldest half evicted when cache exceeds _REST_CLIENT_CACHE_MAX.
         self._rest_acquire_per_client: dict[str, TokenBucket] = {}
         self._rest_send_per_client: dict[str, TokenBucket] = {}
+        self._event_deque_maxlen = max(1, int(event_deque_maxlen))
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
@@ -163,6 +165,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                     resolved_role = await asyncio.wait_for(resolved_role, timeout=5.0)
                 except TimeoutError as exc:
                     logger.warning("resolve_browser_role_timeout worker_id=%s", worker_id)
+                    self.metric("browser_role_resolution_timeout")
                     raise BrowserRoleResolutionError(worker_id) from exc
         except (BrowserRoleResolutionError, WebSocketException):
             # Re-raise so the caller sees the original close code / error type.

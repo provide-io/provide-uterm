@@ -177,9 +177,15 @@ class TestCreateSessionValidation:
 
     async def test_auto_start_triggers_runtime_start(self) -> None:
         reg = _make_registry()
-        mock_runtime = MagicMock()
-        mock_runtime.start = AsyncMock()
-        mock_runtime.status.return_value = MagicMock(session_id="auto-s")
+
+        class _FakeRuntime:
+            def __init__(self) -> None:
+                self.start = AsyncMock()
+
+            def status(self) -> MagicMock:
+                return MagicMock(session_id="auto-s")
+
+        mock_runtime = _FakeRuntime()
 
         with patch("provide.terminal.server.registry.HostedSessionRuntime", return_value=mock_runtime):
             await reg.create_session({"session_id": "auto-s", "auto_start": True})
