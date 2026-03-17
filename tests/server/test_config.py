@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.auth import Principal
 from provide.terminal.server.config import config_from_mapping, default_server_config, load_server_config
-from provide.terminal.server.models import AuthConfig, SessionDefinition
+from provide.terminal.server.models import AuthConfig, RecordingConfig, SessionDefinition, validation_error_message
 from provide.terminal.server.policy import SessionPolicyResolver
 
 
@@ -132,6 +132,41 @@ def test_config_fitaddon_cdn_roundtrips() -> None:
     assert config.ui.fitaddon_cdn == "https://example.com/fitaddon"
 
 
+def test_session_definition_collects_unknown_fields_into_connector_config() -> None:
+    session = SessionDefinition.model_validate(
+        {"session_id": "bbs", "connector_type": "telnet", "host": "bbs.example.com"}
+    )
+
+    assert session.display_name == "bbs"
+    assert session.connector_config == {"host": "bbs.example.com"}
+
+
+def test_session_definition_validator_helpers_cover_non_mapping_paths() -> None:
+    assert SessionDefinition._collect_connector_config("not-a-dict") == "not-a-dict"
+
+    class _Info:
+        data = None
+
+    assert SessionDefinition._validate_display_name("", _Info()) == ""
+    assert SessionDefinition._validate_connector_type("shell", _Info()) == "shell"
+
+    with pytest.raises(ValueError, match="invalid input_mode for <unknown>: bad"):
+        SessionDefinition._validate_input_mode("bad", _Info())
+    with pytest.raises(ValueError, match="invalid visibility for <unknown>: 'secret'"):
+        SessionDefinition._validate_visibility("secret", _Info())
+
+
+def test_session_definition_validator_helpers_cover_remaining_schema_paths() -> None:
+    class _Info:
+        data = {"session_id": "s1"}
+
+    assert SessionDefinition._validate_display_name("", _Info()) == "s1"
+    with pytest.raises(ValueError, match=r"invalid connector_type for 's1': 'bogus'"):
+        SessionDefinition._validate_connector_type("bogus", _Info())
+    with pytest.raises(ValueError, match="recording.max_bytes must be >= 0"):
+        RecordingConfig(max_bytes=-1)
+
+
 def test_config_from_mapping_skips_non_dict_session_entry() -> None:
     # Line 119: non-dict entries in sessions_data are skipped with `continue`
     config = config_from_mapping({"sessions": ["not-a-dict", {"session_id": "s1", "connector_type": "shell"}]})
@@ -157,6 +192,76 @@ def test_config_from_mapping_rejects_invalid_input_mode() -> None:
 def test_config_from_mapping_rejects_invalid_visibility() -> None:
     with pytest.raises(ValueError, match="invalid visibility"):
         config_from_mapping({"sessions": [{"session_id": "s1", "connector_type": "shell", "visibility": "secret"}]})
+
+
+def test_partial_auth_override_preserves_default_server_config_auth_mode() -> None:
+    # Regression: replacing merged["auth"] with the raw user dict discarded
+    # default_server_config().auth.mode == "dev", falling back to AuthConfig's
+    # class default "jwt".
+    config = config_from_mapping({"auth": {"principal_header": "x-user"}})
+
+    assert config.auth.mode == "dev"
+    assert config.auth.principal_header == "x-user"
+
+
+def test_partial_server_override_preserves_sibling_defaults() -> None:
+    config = config_from_mapping({"server": {"port": 9999}})
+
+    assert config.server.port == 9999
+    assert config.server.host == default_server_config().server.host
+    assert config.server.public_base_url == default_server_config().server.public_base_url
+
+
+def test_partial_ui_override_preserves_sibling_defaults() -> None:
+    config = config_from_mapping({"ui": {"app_path": "/custom"}})
+
+    assert config.ui.app_path == "/custom"
+    assert config.ui.xterm_cdn == default_server_config().ui.xterm_cdn
+    assert config.ui.fitaddon_cdn == default_server_config().ui.fitaddon_cdn
+
+
+def test_partial_recording_override_preserves_sibling_defaults() -> None:
+    config = config_from_mapping({"recording": {"enabled_by_default": True}})
+
+    assert config.recording.enabled_by_default is True
+    assert config.recording.max_bytes == default_server_config().recording.max_bytes
+    assert config.recording.directory == default_server_config().recording.directory
+
+
+@pytest.mark.parametrize("section", ["server", "auth", "ui", "recording"])
+def test_config_from_mapping_rejects_non_dict_known_section(section: str) -> None:
+    # Malformed TOML (e.g. `server = []`) must raise ValueError, not TypeError.
+    with pytest.raises(ValueError, match=rf"\[{section}\] must be a table"):
+        config_from_mapping({section: []})
+
+
+def test_config_from_mapping_rejects_unknown_top_level_section() -> None:
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        config_from_mapping({"bogus": {"x": 1}})
+
+
+def test_config_from_mapping_rejects_unknown_nested_field() -> None:
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        config_from_mapping({"server": {"host": "127.0.0.1", "bogus": True}})
+
+
+def test_validation_error_message_handles_empty_and_prefixed_errors() -> None:
+    class _EmptyError:
+        def errors(self, *, include_url: bool = False) -> list[dict[str, object]]:
+            return []
+
+        def __str__(self) -> str:
+            return "empty-error"
+
+    class _PrefixedError:
+        def errors(self, *, include_url: bool = False) -> list[dict[str, object]]:
+            return [{"msg": "sessions exploded", "loc": ("sessions", 0)}]
+
+        def __str__(self) -> str:
+            return "prefixed-error"
+
+    assert validation_error_message(_EmptyError()) == "empty-error"
+    assert validation_error_message(_PrefixedError()) == "sessions exploded"
 
 
 def test_loaded_max_sessions_is_enforced_by_app() -> None:

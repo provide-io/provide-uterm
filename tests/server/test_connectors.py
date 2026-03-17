@@ -640,7 +640,7 @@ class TestSshSessionConnector:
         mock_process = MagicMock()
         mock_process.stdin = MagicMock()
         mock_process.stdout = MagicMock()
-        mock_conn = AsyncMock()
+        mock_conn = MagicMock()
         mock_conn.create_process = AsyncMock(return_value=mock_process)
         with patch.object(asyncssh, "connect", new=AsyncMock(return_value=mock_conn)):
             await c.start()

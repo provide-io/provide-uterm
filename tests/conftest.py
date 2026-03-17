@@ -19,7 +19,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import httpx
 import pytest
 import uvicorn
 from fastapi import FastAPI
@@ -179,9 +178,9 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
     thread.join(timeout=5)
 
 
-@pytest.fixture(scope="session")
-def _example_server_url() -> Generator[str, None, None]:
-    """Session-scoped sync fixture: run the interactive example server via uvicorn."""
+@pytest.fixture()
+def example_server() -> Generator[str, None, None]:
+    """Function-scoped fixture: run a fresh interactive example server per test."""
     example_server_module = load_example_server_module()
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -213,19 +212,6 @@ def _example_server_url() -> Generator[str, None, None]:
 
     server.should_exit = True
     thread.join(timeout=5)
-
-
-@pytest.fixture()
-def example_server(_example_server_url: str) -> Generator[str, None, None]:
-    """Function-scoped wrapper that resets the shared example server before each test."""
-    with httpx.Client(base_url=_example_server_url, timeout=5.0) as http:
-        reset = http.post("/demo/session/provide-shell/reset")
-        if reset.status_code != 200:
-            raise RuntimeError(f"example_server reset failed: {reset.status_code}")
-        mode = http.post("/demo/session/provide-shell/mode", json={"input_mode": "hijack"})
-        if mode.status_code != 200:
-            raise RuntimeError(f"example_server mode reset failed: {mode.status_code}")
-    yield _example_server_url
 
 
 @pytest.fixture(scope="session")

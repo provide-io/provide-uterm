@@ -213,7 +213,6 @@ class TestBrowserHello:
         async with websockets.connect(_ws_url(base_url, "/ws/worker/h3/term")) as worker:
             await worker.recv()  # snapshot_req
             await worker.send(json.dumps(_snapshot_msg("cached screen content")))
-            await asyncio.sleep(0.1)  # let hub store it
 
             async with websockets.connect(_ws_url(base_url, "/ws/browser/h3/term")) as browser:
                 snapshot = await _drain_until(browser, "snapshot", timeout=2.0)
@@ -254,7 +253,6 @@ class TestRestHijackCycle:
 
                 # Send a snapshot so the guard check passes.
                 await worker.send(json.dumps(_snapshot_msg()))
-                await asyncio.sleep(0.1)
 
                 r2 = await http.post(
                     f"/worker/r2/hijack/{hijack_id}/send",

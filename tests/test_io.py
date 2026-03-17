@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import time
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -401,7 +401,6 @@ class TestInputSenderTypes:
     async def test_wait_after_sec_zero_skips_sleep(self) -> None:
         session = _make_session()
         sender = InputSender(session=session)
-        start = asyncio.get_event_loop().time()
-        await sender.send_input("x", input_type="single_key", wait_after_sec=0)
-        elapsed = asyncio.get_event_loop().time() - start
-        assert elapsed < 0.03
+        with patch("asyncio.sleep", new=AsyncMock()) as mock_sleep:
+            await sender.send_input("x", input_type="single_key", wait_after_sec=0)
+        mock_sleep.assert_not_awaited()

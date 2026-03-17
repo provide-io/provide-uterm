@@ -11,11 +11,27 @@ import asyncio
 import json
 import re
 from collections import deque
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+from pydantic import ValidationError
 
 from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
-from provide.terminal.server.models import RecordingConfig, SessionDefinition, SessionRuntimeStatus
+from provide.terminal.server.models import (
+    InputMode,
+    RecordingConfig,
+    SessionDefinition,
+    SessionRuntimeStatus,
+    Visibility,
+    validation_error_message,
+)
 from provide.terminal.server.runtime import HostedSessionRuntime
+
+# Fields that callers may mutate on an existing session via update_session().
+# Immutable fields (session_id, connector_type, created_at, owner, ephemeral)
+# are intentionally excluded so they cannot drift after creation.
+_MUTABLE_SESSION_FIELDS = frozenset(
+    {"display_name", "input_mode", "visibility", "auto_start", "tags", "recording_enabled", "connector_config"}
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -151,14 +167,14 @@ class SessionRegistry:
             display_name=str(payload.get("display_name", session_id)),
             connector_type=connector_type_raw,
             connector_config=dict(payload.get("connector_config", {})),
-            input_mode=input_mode_raw,  # type: ignore[arg-type]
+            input_mode=cast("InputMode", input_mode_raw),
             auto_start=bool(payload.get("auto_start", False)),
             tags=[str(v) for v in payload.get("tags", [])],
             recording_enabled=(
                 None if payload.get("recording_enabled") is None else bool(payload.get("recording_enabled"))
             ),
             owner=(None if payload.get("owner") is None else str(payload.get("owner"))),
-            visibility=visibility_raw,  # type: ignore[arg-type]
+            visibility=cast("Visibility", visibility_raw),
             ephemeral=bool(payload.get("ephemeral", False)),
         )
         async with self._lock:
@@ -173,30 +189,18 @@ class SessionRegistry:
         return runtime.status()
 
     async def update_session(self, session_id: str, payload: dict[str, Any]) -> SessionRuntimeStatus:
+        updates = {k: v for k, v in payload.items() if k in _MUTABLE_SESSION_FIELDS}
         async with self._lock:
             session = self._require_session(session_id)
-            if "display_name" in payload:
-                session.display_name = str(payload["display_name"])
-            if "input_mode" in payload:
-                mode = str(payload["input_mode"])
-                if mode not in {"open", "hijack"}:
-                    raise SessionValidationError(f"input_mode must be 'open' or 'hijack', got: {mode!r}")
-                session.input_mode = mode  # type: ignore[assignment]
-            if "visibility" in payload:
-                vis = str(payload["visibility"])
-                if vis not in {"public", "operator", "private"}:
-                    raise SessionValidationError(f"visibility must be 'public', 'operator', or 'private', got: {vis!r}")
-                session.visibility = vis  # type: ignore[assignment]
-            if "auto_start" in payload:
-                session.auto_start = bool(payload["auto_start"])
-            if "tags" in payload:
-                session.tags = [str(v) for v in payload["tags"]]
-            if "recording_enabled" in payload:
-                session.recording_enabled = bool(payload["recording_enabled"])
-            if "connector_config" in payload:
-                session.connector_config = dict(payload["connector_config"])
+            if updates:
+                try:
+                    validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
+                except ValidationError as exc:
+                    raise SessionValidationError(validation_error_message(exc)) from exc
+                for field in updates:
+                    setattr(session, field, getattr(validated, field))
             runtime = self._runtime_for(session)
-        if "input_mode" in payload:
+        if "input_mode" in updates:
             await runtime.set_mode(session.input_mode)
         return runtime.status()
 
@@ -231,7 +235,11 @@ class SessionRegistry:
     async def set_mode(self, session_id: str, mode: str) -> SessionRuntimeStatus:
         async with self._lock:
             session = self._require_session(session_id)
-            session.input_mode = mode  # type: ignore[assignment]
+            try:
+                validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), "input_mode": mode})
+            except ValidationError as exc:
+                raise SessionValidationError(validation_error_message(exc)) from exc
+            session.input_mode = validated.input_mode
             runtime = self._runtime_for(session)
         if mode == "open":
             await self._force_release_hijack(session_id)

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from provide.terminal.hijack.models import WorkerTermState
@@ -50,6 +51,7 @@ class _ConnectionMixin:
     _lock: asyncio.Lock
     _workers: dict[str, WorkerTermState]
     _worker_token: str | None
+    _event_deque_maxlen: int
     _rest_acquire_rate: float
     _rest_send_rate: float
     _rest_acquire_bucket: TokenBucket
@@ -112,6 +114,7 @@ class _ConnectionMixin:
         """
         async with self._lock:
             st = self._workers.setdefault(worker_id, WorkerTermState())
+            st.events = deque(st.events, maxlen=self._event_deque_maxlen)
             prev_was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
             if prev_was_hijacked:
                 st.hijack_session = None
