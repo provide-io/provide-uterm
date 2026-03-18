@@ -18,12 +18,13 @@ import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Annotated, Any
 
+from provide.telemetry import get_logger
+
 try:
-    from fastapi import APIRouter, Path, WebSocket, WebSocketDisconnect
+    from fastapi import APIRouter, Path, WebSocket, WebSocketDisconnect, WebSocketException
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for hijack routes: pip install 'provide-terminal[websocket]'") from _e
 
-import logging
 
 from provide.terminal.hijack.hub.connections import _background_tasks
 from provide.terminal.hijack.models import VALID_ROLES, _safe_float, _safe_int, extract_prompt_id
@@ -35,8 +36,7 @@ if TYPE_CHECKING:
 else:
     from provide.terminal.hijack.hub import BrowserRoleResolutionError
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 _WORKER_HIJACK_CLEANUP_INTERVAL_S = 1.0
 _BROWSER_HIJACK_CLEANUP_INTERVAL_S = 1.0
 
@@ -212,6 +212,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         except BrowserRoleResolutionError:
             await websocket.close(code=1008, reason="browser role resolution failed")
             return
+        except WebSocketException:
+            raise  # re-raise so FastAPI closes the already-accepted socket with the exception's code
         if role not in VALID_ROLES:  # pragma: no cover
             role = "viewer"
         can_hijack = role == "admin"

@@ -8,13 +8,14 @@
 from __future__ import annotations
 
 import json
-import logging
 import sys
 import time
 from pathlib import Path
 from typing import IO
 
-logger = logging.getLogger(__name__)
+from provide.telemetry import get_logger
+
+logger = get_logger(__name__)
 
 
 def _clear_screen(output: IO[str]) -> None:

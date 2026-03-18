@@ -38,7 +38,7 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
     The cache avoids a network round-trip on every authenticated request within
     the same isolate lifetime.
     """
-    now = time.time()
+    now = time.monotonic()
     cached = _JWKS_CACHE.get(url)
     if cached is not None:
         fetched_at, jwks_dict = cached
@@ -60,7 +60,7 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
         with urllib.request.urlopen(_req) as resp:  # noqa: S310
             result = json.loads(resp.read())
 
-    _JWKS_CACHE[url] = (now, result)
+    _JWKS_CACHE[url] = (time.monotonic(), result)
     return result
 
 

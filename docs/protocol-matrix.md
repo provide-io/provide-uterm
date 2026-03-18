@@ -22,3 +22,10 @@ This matrix defines the backend capability contract consumed by `hijack.js`.
 - The client must key behavior on `hello.hijack_control` (or `hello.capabilities.hijack_control`).
 - The client must not assume backend type by URL or deployment.
 - Unsupported WS control paths must degrade to REST when `hijack_control=rest`.
+
+## Accuracy note
+
+This document describes the intended public contract. It does not mean every
+backend edge case is perfectly identical today. In particular, verify auth and
+lease-validation behavior against current tests before treating the two
+backends as interchangeable for security-sensitive flows.

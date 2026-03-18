@@ -29,6 +29,19 @@ _MAX_PROMPT_POLL_S = 30.0
 _MAX_REGEX_LEN = 500  # guard against ReDoS via pathological regex patterns
 
 
+def _safe_int(val: object, default: int, *, min_val: int | None = None, max_val: int | None = None) -> int:
+    """Coerce *val* to ``int``, returning *default* on failure or ``None``."""
+    try:
+        result = int(default if val is None else val)
+    except (ValueError, TypeError):
+        return default
+    if min_val is not None:
+        result = max(result, min_val)
+    if max_val is not None:
+        result = min(result, max_val)
+    return result
+
+
 def _extract_hijack_id(path: str) -> str | None:
     m = _HIJACK_ID_RE.search(path)
     return m.group(1) if m else None
@@ -250,14 +263,9 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
         session = runtime.hijack.session
         if session is None or session.hijack_id != hijack_id:
             return json_response({"error": "invalid or expired hijack session"}, status=404)
-        try:
-            after_seq = int(parse_qs(urlparse(url).query).get("after_seq", ["0"])[0])
-        except (ValueError, IndexError):
-            after_seq = 0
-        try:
-            limit = max(1, min(int(parse_qs(urlparse(url).query).get("limit", ["100"])[0]), 500))
-        except (ValueError, IndexError):
-            limit = 100
+        qs = parse_qs(urlparse(url).query)
+        after_seq = _safe_int(qs.get("after_seq", ["0"])[0], 0)
+        limit = _safe_int(qs.get("limit", ["100"])[0], 100, min_val=1, max_val=500)
         rows = runtime.store.list_events_since(runtime.worker_id, after_seq, limit)
         latest_seq = runtime.store.current_event_seq(runtime.worker_id)
         min_event_seq = runtime.store.min_event_seq(runtime.worker_id)
@@ -269,7 +277,7 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
                 "after_seq": after_seq,
                 "latest_seq": latest_seq,
                 "min_event_seq": min_event_seq,
-                "has_more": len(rows) == limit,
+                "has_more": len(rows) >= limit,
                 "events": rows,
                 "lease_expires_at": session.lease_expires_at,
             }
@@ -345,11 +353,8 @@ async def _handle_hijack_send(
                 expect_regex_obj = re.compile(expect_regex_raw)
             except re.error as exc:
                 return json_response({"error": f"invalid expect_regex: {exc}"}, status=400)
-        try:
-            timeout_ms = max(100, min(int(payload.get("timeout_ms") or 5_000), _MAX_TIMEOUT_MS))
-            poll_interval_ms = max(50, min(int(payload.get("poll_interval_ms") or 200), 5_000))
-        except (TypeError, ValueError):
-            timeout_ms, poll_interval_ms = 5_000, 200
+        timeout_ms = _safe_int(payload.get("timeout_ms"), 5_000, min_val=100, max_val=_MAX_TIMEOUT_MS)
+        poll_interval_ms = _safe_int(payload.get("poll_interval_ms"), 200, min_val=50, max_val=5_000)
         matched_snapshot = await _wait_for_prompt(
             runtime,
             expect_prompt_id=expect_prompt_id,
@@ -402,14 +407,8 @@ async def _handle_session_route(
 
     if sub == "events" and method == "GET":
         qs = parse_qs(urlparse(url).query)
-        try:
-            after_seq = int(qs.get("after_seq", ["0"])[0])
-        except (ValueError, IndexError):
-            after_seq = 0
-        try:
-            limit = max(1, min(int(qs.get("limit", ["100"])[0]), 500))
-        except (ValueError, IndexError):
-            limit = 100
+        after_seq = _safe_int(qs.get("after_seq", ["0"])[0], 0)
+        limit = _safe_int(qs.get("limit", ["100"])[0], 100, min_val=1, max_val=500)
         rows = runtime.store.list_events_since(runtime.worker_id, after_seq, limit)
         latest_seq = runtime.store.current_event_seq(runtime.worker_id)
         min_event_seq = runtime.store.min_event_seq(runtime.worker_id)
@@ -419,7 +418,7 @@ async def _handle_session_route(
                 "after_seq": after_seq,
                 "latest_seq": latest_seq,
                 "min_event_seq": min_event_seq,
-                "has_more": len(rows) == limit,
+                "has_more": len(rows) >= limit,
                 "events": rows,
             }
         )

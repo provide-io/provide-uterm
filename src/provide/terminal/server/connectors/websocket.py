@@ -10,9 +10,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import logging
 import time
 from typing import Any
+
+from provide.telemetry import get_logger
 
 from provide.terminal.screen import decode_cp437
 from provide.terminal.server.connectors.base import SessionConnector
@@ -20,7 +21,7 @@ from provide.terminal.server.connectors.base import SessionConnector
 _COLS = 80
 _ROWS = 25
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WebSocketSessionConnector(SessionConnector):

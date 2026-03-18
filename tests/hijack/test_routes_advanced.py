@@ -268,3 +268,73 @@ def test_send_guard_invalid_regex() -> None:
         )
 
     assert r.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# has_more pagination flag — uses >= so it is True when exactly limit rows returned
+# ---------------------------------------------------------------------------
+
+
+def test_events_has_more_true_when_exactly_limit_rows() -> None:
+    """has_more must be True when exactly limit events are returned.
+
+    Kills the mutation:
+      "has_more": len(rows) >= limit  →  "has_more": len(rows) > limit
+    (> would return False when len == limit, which is wrong.)
+    """
+    from collections import deque
+
+    app, hub = make_app()
+    mock_ws = AsyncMock()
+    hijack_id = str(uuid.uuid4())
+    st = WorkerTermState(
+        worker_ws=mock_ws,
+        hijack_session=_active_session(hijack_id),
+    )
+    # Add exactly 5 events, query with limit=5 → has_more should be True.
+    st.events = deque(maxlen=2000)
+    for i in range(5):
+        st.events.append({"seq": i + 1, "ts": time.time(), "type": "snapshot", "data": {}})
+    st.event_seq = 5
+    st.min_event_seq = 1
+    hub._workers["bot1"] = st
+
+    with TestClient(app) as client:
+        r = client.get(f"/worker/bot1/hijack/{hijack_id}/events?limit=5&after_seq=0")
+
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["events"]) == 5
+    assert data["has_more"] is True, "has_more must be True when exactly limit events are returned"
+
+
+def test_events_has_more_false_when_fewer_than_limit() -> None:
+    """has_more is False when fewer than limit events are returned.
+
+    Kills the mutation:
+      "has_more": len(rows) >= limit  →  "has_more": True  (always)
+    """
+    from collections import deque
+
+    app, hub = make_app()
+    mock_ws = AsyncMock()
+    hijack_id = str(uuid.uuid4())
+    st = WorkerTermState(
+        worker_ws=mock_ws,
+        hijack_session=_active_session(hijack_id),
+    )
+    # Only 3 events but limit=10 → has_more must be False.
+    st.events = deque(maxlen=2000)
+    for i in range(3):
+        st.events.append({"seq": i + 1, "ts": time.time(), "type": "snapshot", "data": {}})
+    st.event_seq = 3
+    st.min_event_seq = 1
+    hub._workers["bot1"] = st
+
+    with TestClient(app) as client:
+        r = client.get(f"/worker/bot1/hijack/{hijack_id}/events?limit=10&after_seq=0")
+
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["events"]) == 3
+    assert data["has_more"] is False, "has_more must be False when fewer than limit events are returned"

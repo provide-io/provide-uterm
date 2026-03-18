@@ -46,16 +46,16 @@ class TestAuthEdgeCases:
 
         assert _cookie_value({"token": ""}, "token") is None
 
-    def test_extract_bearer_token_case_variations(self) -> None:
+    def testextract_bearer_token_case_variations(self) -> None:
         """Bearer scheme detection is case-insensitive."""
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
         # lowercase
-        assert _extract_bearer_token({"authorization": "bearer token1"}) == "token1"
+        assert extract_bearer_token({"authorization": "bearer token1"}) == "token1"
         # Mixed case
-        assert _extract_bearer_token({"authorization": "BeArEr token2"}) == "token2"
+        assert extract_bearer_token({"authorization": "BeArEr token2"}) == "token2"
         # uppercase
-        assert _extract_bearer_token({"authorization": "BEARER token3"}) == "token3"
+        assert extract_bearer_token({"authorization": "BEARER token3"}) == "token3"
 
     def test_roles_from_claims_mixed_valid_invalid_string(self) -> None:
         """String with both valid and invalid roles extracts only valid."""
@@ -252,14 +252,14 @@ class TestAuthMutationKilling:
 
     def test_bearer_token_split_count_exact(self) -> None:
         """Bearer token split must produce exactly 2 parts."""
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
         # 2 parts → valid
-        assert _extract_bearer_token({"authorization": "Bearer token"}) == "token"
+        assert extract_bearer_token({"authorization": "Bearer token"}) == "token"
         # 1 part → invalid
-        assert _extract_bearer_token({"authorization": "Bearertoken"}) is None
+        assert extract_bearer_token({"authorization": "Bearertoken"}) is None
         # 3+ parts → should work (take everything after first space)
-        assert _extract_bearer_token({"authorization": "Bearer my token here"}) == "my token here"
+        assert extract_bearer_token({"authorization": "Bearer my token here"}) == "my token here"
 
     def test_roles_from_claims_empty_after_filter_defaults_viewer(self) -> None:
         """Empty list after filtering must default to viewer."""
@@ -382,18 +382,18 @@ class TestAuthMutationKilling:
         assert result is None
         assert result != "   "
 
-    def test_extract_bearer_token_scheme_case_lowercase_required(self) -> None:
+    def testextract_bearer_token_scheme_case_lowercase_required(self) -> None:
         """Scheme comparison uses lower(), not just checking Bearer."""
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
         # All case variations should work
         for scheme in ["bearer", "Bearer", "BEARER", "BeArEr"]:
-            token = _extract_bearer_token({"authorization": f"{scheme} token123"})
+            token = extract_bearer_token({"authorization": f"{scheme} token123"})
             assert token == "token123"
 
         # Non-bearer schemes should fail
-        assert _extract_bearer_token({"authorization": "Basic dXNlcjpwYXNz"}) is None
-        assert _extract_bearer_token({"authorization": "Digest username=user"}) is None
+        assert extract_bearer_token({"authorization": "Basic dXNlcjpwYXNz"}) is None
+        assert extract_bearer_token({"authorization": "Digest username=user"}) is None
 
     def test_resolve_principal_mode_set_membership_exact(self) -> None:
         """Mode check uses set membership {none, dev}, not just substring."""

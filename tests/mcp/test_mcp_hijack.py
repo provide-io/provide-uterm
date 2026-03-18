@@ -471,6 +471,35 @@ class TestHijackReadOutputModes:
         # snapshot key exists but is None — not processed by _clean_snapshot
         assert data.get("snapshot") is None
 
+    async def test_tail_lines_trims_snapshot(self) -> None:
+        hub, app = _make_hub_app()
+        _add_worker(hub)
+        mcp = _mcp_for(app)
+        hid = await _acquire(mcp)
+
+        hub._workers[WID].last_snapshot = {
+            "screen": "line1\nline2\nline3\nline4\nline5",
+            "cursor": {"row": 4, "col": 0},
+            "cols": 80,
+            "rows": 24,
+            "ts": time.time() + 10,
+        }
+
+        data = await _call(
+            mcp,
+            "hijack_read",
+            {
+                "worker_id": WID,
+                "hijack_id": hid,
+                "mode": "snapshot",
+                "output": "text",
+                "wait_ms": 50,
+                "tail_lines": 2,
+            },
+        )
+        assert data["success"] is True
+        assert data["snapshot"]["screen"] == "line4\nline5"
+
     async def test_events_mode_ignores_output_param(self) -> None:
         """Events mode never applies _clean_snapshot."""
         hub, app = _make_hub_app()

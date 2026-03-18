@@ -18,8 +18,12 @@ import uuid
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from provide.telemetry import get_logger
+
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.ratelimit import TokenBucket
+
+logger = get_logger(__name__)
 
 # Keeps strong references to fire-and-forget tasks so CPython's GC cannot
 # collect them before the event loop runs them.  Each task removes itself
@@ -83,7 +87,7 @@ class _ConnectionMixin:
             for k in list(self._rest_acquire_per_client)[:_REST_CLIENT_EVICT_COUNT]:
                 del self._rest_acquire_per_client[k]
         bucket = self._rest_acquire_per_client.setdefault(client_id, TokenBucket(self._rest_acquire_rate))
-        return self._rest_acquire_bucket.allow() and bucket.allow()
+        return bucket.allow() and self._rest_acquire_bucket.allow()
 
     def allow_rest_send_for(self, client_id: str) -> bool:
         """Per-client REST send/step rate limit (also checks the global bucket).
@@ -95,7 +99,7 @@ class _ConnectionMixin:
             for k in list(self._rest_send_per_client)[:_REST_CLIENT_EVICT_COUNT]:
                 del self._rest_send_per_client[k]
         bucket = self._rest_send_per_client.setdefault(client_id, TokenBucket(self._rest_send_rate))
-        return self._rest_send_bucket.allow() and bucket.allow()
+        return bucket.allow() and self._rest_send_bucket.allow()
 
     # -- Token access ----------------------------------------------------------
 
@@ -141,9 +145,7 @@ class _ConnectionMixin:
             if st is None:
                 return False
             if mode == "open" and self.is_hijacked(st):
-                import logging as _logging
-
-                _logging.getLogger(__name__).warning(
+                logger.warning(
                     "worker_hello_mode_blocked worker_id=%s — cannot switch to open while hijack active",
                     worker_id,
                 )
@@ -215,8 +217,18 @@ class _ConnectionMixin:
                     st.hijack_owner_expires_at = None
                     rest_still_active = self.has_valid_rest_lease(st)
                 elif owned_hijack and st.worker_ws is not None and not self.is_hijacked(st):  # pragma: no branch
-                    last_event_type = str(st.events[-1].get("type", "")) if st.events else ""
-                    resume_without_owner = last_event_type not in {"hijack_owner_expired", "hijack_lease_expired"}
+                    # Scan backwards for the most recent hijack-related event to determine
+                    # whether cleanup already sent a resume (lease/owner expired) or whether
+                    # a resume is still needed.  Checking only the last event is fragile
+                    # because a subsequent snapshot event can overwrite the expiry marker.
+                    resume_without_owner = True
+                    for evt in reversed(st.events):
+                        t = str(evt.get("type", ""))
+                        if t in {"hijack_owner_expired", "hijack_lease_expired"}:
+                            resume_without_owner = False
+                            break
+                        if t in {"hijack_acquired", "hijack_released"}:
+                            break
         # Fire empty-browser callback outside the lock when the last browser left.
         on_empty = getattr(self, "on_worker_empty", None)
         if browser_count == 0 and on_empty is not None:

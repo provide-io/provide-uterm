@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from typing import TYPE_CHECKING, Any
+
+from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
     from asyncio import StreamReader, StreamWriter
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Telnet protocol constants (local copies to avoid circular imports)
 # ---------------------------------------------------------------------------

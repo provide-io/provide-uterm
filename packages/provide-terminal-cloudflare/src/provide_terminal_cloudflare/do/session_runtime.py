@@ -160,8 +160,10 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
         try:
             principal = await decode_jwt(token, self.config.jwt)
             return _resolve_jwt_role(principal)
-        except Exception:
+        except JwtValidationError:
             return "viewer"
+        # Other exceptions (e.g. network errors fetching JWKS) propagate so the
+        # caller returns a 5xx rather than silently downgrading the caller to viewer.
 
     # ------------------------------------------------------------------
     # Fetch / WS lifecycle

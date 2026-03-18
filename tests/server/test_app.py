@@ -119,8 +119,13 @@ class TestReferenceServerApp:
             assert operator_page.status_code == 200
             assert '"page_kind": "operator"' in operator_page.text
             assert "uterm_surface=operator" in ",".join(operator_page.headers.get_list("set-cookie"))
-            assert "/_terminal/server-app-foundation.css" in operator_page.text
-            assert "/_terminal/server-session-page.js" in operator_page.text
+            # Either Vite manifest entry (React app) or legacy vanilla entry points
+            has_vite = "assets/main-" in operator_page.text
+            if has_vite:
+                assert "assets/main-" in operator_page.text
+            else:
+                assert "/_terminal/server-app-foundation.css" in operator_page.text
+                assert "/_terminal/server-session-page.js" in operator_page.text
             assert "<style>" not in operator_page.text
             assert "const SESSION_ID=" not in operator_page.text
             assert "btn-refresh" not in operator_page.text
@@ -128,7 +133,10 @@ class TestReferenceServerApp:
 
             replay_page = await http.get("/app/replay/provide-shell")
             assert replay_page.status_code == 200
-            assert "/_terminal/server-replay-page.js" in replay_page.text
+            if has_vite:
+                assert "assets/main-" in replay_page.text
+            else:
+                assert "/_terminal/server-replay-page.js" in replay_page.text
             assert "<style>" not in replay_page.text
             assert '"page_kind": "replay"' in replay_page.text
             assert "addon-fit.js" in replay_page.text

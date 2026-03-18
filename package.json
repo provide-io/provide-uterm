@@ -1,11 +1,17 @@
 {
   "name": "provide-terminal-root",
   "private": true,
-  "workspaces": ["packages/provide-terminal-frontend"],
+  "workspaces": ["packages/provide-terminal-frontend", "packages/provide-terminal-app"],
   "scripts": {
-    "build:frontend": "npm run build --workspace=packages/provide-terminal-frontend",
+    "build:frontend": "npm run build --workspace=packages/provide-terminal-frontend && npm run build --workspace=packages/provide-terminal-app",
+    "build:widgets": "npm run build --workspace=packages/provide-terminal-frontend",
+    "build:app": "npm run build --workspace=packages/provide-terminal-app",
+    "dev:app": "npm run dev --workspace=packages/provide-terminal-app",
     "typecheck:frontend": "npm run typecheck --workspace=packages/provide-terminal-frontend",
+    "typecheck:app": "npm run typecheck --workspace=packages/provide-terminal-app",
     "lint:frontend": "npm run lint --workspace=packages/provide-terminal-frontend",
-    "fix:frontend": "npm run fix --workspace=packages/provide-terminal-frontend"
+    "lint:app": "npm run lint --workspace=packages/provide-terminal-app",
+    "fix:frontend": "npm run fix --workspace=packages/provide-terminal-frontend",
+    "fix:app": "npm run fix --workspace=packages/provide-terminal-app"
   }
 }

@@ -12,10 +12,11 @@ lease, False = it does not).
 from __future__ import annotations
 
 import json
-import logging
 import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
+
+from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 else:
     WebSocket = Any
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def handle_browser_message(

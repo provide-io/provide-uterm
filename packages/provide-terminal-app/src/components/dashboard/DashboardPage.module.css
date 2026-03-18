@@ -1,0 +1,76 @@
+.content {
+  padding: 1.25rem;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.healthDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+}
+
+.healthDot[data-healthy] {
+  background: var(--success);
+}
+
+.title {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.error {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-danger);
+  color: var(--text-danger);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.listHeader input {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .listHeader input {
+    width: 100%;
+  }
+}

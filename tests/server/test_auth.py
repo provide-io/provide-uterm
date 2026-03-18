@@ -70,40 +70,40 @@ class TestCookieValue:
 
 class TestExtractBearerToken:
     def test_empty_auth_returns_none(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
-        assert _extract_bearer_token({"authorization": ""}) is None
+        assert extract_bearer_token({"authorization": ""}) is None
 
     def test_missing_auth_returns_none(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
-        assert _extract_bearer_token({}) is None
+        assert extract_bearer_token({}) is None
 
     def test_single_part_returns_none(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
         # "Bearertoken" — no space, so split gives one part
-        assert _extract_bearer_token({"authorization": "Bearertoken"}) is None
+        assert extract_bearer_token({"authorization": "Bearertoken"}) is None
 
     def test_non_bearer_scheme_returns_none(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
-        assert _extract_bearer_token({"authorization": "Basic abc123"}) is None
+        assert extract_bearer_token({"authorization": "Basic abc123"}) is None
 
     def test_empty_token_returns_none(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
-        assert _extract_bearer_token({"authorization": "Bearer   "}) is None
+        assert extract_bearer_token({"authorization": "Bearer   "}) is None
 
     def test_valid_bearer_returns_token(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
-        assert _extract_bearer_token({"authorization": "Bearer mytoken"}) == "mytoken"
+        assert extract_bearer_token({"authorization": "Bearer mytoken"}) == "mytoken"
 
     def test_bearer_case_insensitive(self) -> None:
-        from provide.terminal.server.auth import _extract_bearer_token
+        from provide.terminal.server.auth import extract_bearer_token
 
-        assert _extract_bearer_token({"authorization": "BEARER mytoken"}) == "mytoken"
+        assert extract_bearer_token({"authorization": "BEARER mytoken"}) == "mytoken"
 
 
 class TestRolesFromClaims:

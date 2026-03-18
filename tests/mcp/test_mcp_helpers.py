@@ -124,6 +124,49 @@ class TestCleanSnapshot:
         result = _clean_snapshot(snap, "raw")
         assert result["custom"] == 42
 
+    def test_tail_lines_text_mode(self) -> None:
+        snap: dict[str, Any] = {"screen": "line1\nline2\nline3\nline4\nline5"}
+        result = _clean_snapshot(snap, "text", tail_lines=2)
+        assert result["screen"] == "line4\nline5"
+
+    def test_tail_lines_rendered_mode(self) -> None:
+        snap: dict[str, Any] = {"screen": "a\nb\nc\nd", "cols": 80, "rows": 24}
+        result = _clean_snapshot(snap, "rendered", tail_lines=2)
+        assert result["screen"] == "c\nd"
+        assert result["cols"] == 80
+
+    def test_tail_lines_raw_mode(self) -> None:
+        snap: dict[str, Any] = {"screen": "\x1b[31mA\x1b[0m\nB\nC", "cols": 80}
+        result = _clean_snapshot(snap, "raw", tail_lines=1)
+        assert result["screen"] == "C"
+        assert result["cols"] == 80
+
+    def test_tail_lines_none_no_trim(self) -> None:
+        snap: dict[str, Any] = {"screen": "a\nb\nc"}
+        result = _clean_snapshot(snap, "text", tail_lines=None)
+        assert result["screen"] == "a\nb\nc"
+
+    def test_tail_lines_larger_than_content(self) -> None:
+        snap: dict[str, Any] = {"screen": "a\nb"}
+        result = _clean_snapshot(snap, "text", tail_lines=10)
+        assert result["screen"] == "a\nb"
+
+    def test_tail_lines_zero_no_trim(self) -> None:
+        snap: dict[str, Any] = {"screen": "a\nb\nc"}
+        result = _clean_snapshot(snap, "text", tail_lines=0)
+        assert result["screen"] == "a\nb\nc"
+
+    def test_tail_lines_raw_larger_than_content(self) -> None:
+        snap: dict[str, Any] = {"screen": "\x1b[31mA\x1b[0m\nB", "cols": 80}
+        result = _clean_snapshot(snap, "raw", tail_lines=10)
+        assert result["screen"] == "\x1b[31mA\x1b[0m\nB"
+        assert result["cols"] == 80
+
+    def test_tail_lines_rendered_larger_than_content(self) -> None:
+        snap: dict[str, Any] = {"screen": "a\nb", "cols": 80}
+        result = _clean_snapshot(snap, "rendered", tail_lines=10)
+        assert result["screen"] == "a\nb"
+
 
 # ---------------------------------------------------------------------------
 # _unescape_keys unit tests

@@ -265,12 +265,14 @@ def test_extract_token_url_parse_raises_returns_none() -> None:
 
 
 # ---------------------------------------------------------------------------
-# do/session_runtime.py — browser_role_for_request: exception → "viewer" (lines 160-164)
+# do/session_runtime.py — browser_role_for_request: exception handling (lines 160-166)
 # ---------------------------------------------------------------------------
 
 
-async def test_browser_role_for_request_exception_returns_viewer() -> None:
-    """If decode_jwt raises unexpectedly in jwt mode, browser_role falls back to viewer."""
+async def test_browser_role_for_request_jwt_validation_error_returns_viewer() -> None:
+    """JwtValidationError (bad/expired token) falls back to viewer — not a server fault."""
+    from provide_terminal_cloudflare.auth.jwt import JwtValidationError
+
     rt = _make_runtime(mode="jwt")
 
     token = _make_token(sub="u1", roles=["admin"])
@@ -281,11 +283,32 @@ async def test_browser_role_for_request_exception_returns_viewer() -> None:
 
     with patch(
         "provide_terminal_cloudflare.do.session_runtime.decode_jwt",
-        new=AsyncMock(side_effect=RuntimeError("unexpected")),
+        new=AsyncMock(side_effect=JwtValidationError("bad token")),
     ):
         role = await rt.browser_role_for_request(_Req())
 
     assert role == "viewer"
+
+
+async def test_browser_role_for_request_network_error_propagates() -> None:
+    """Non-JwtValidationError exceptions (e.g. JWKS network failure) propagate instead of
+    silently downgrading the caller to viewer and returning 403 to a legitimate admin."""
+    rt = _make_runtime(mode="jwt")
+
+    token = _make_token(sub="u1", roles=["admin"])
+
+    class _Req:
+        headers = SimpleNamespace(get=lambda name, default=None: f"Bearer {token}")
+        url = "http://localhost/"
+
+    with (
+        patch(
+            "provide_terminal_cloudflare.do.session_runtime.decode_jwt",
+            new=AsyncMock(side_effect=RuntimeError("JWKS network error")),
+        ),
+        pytest.raises(RuntimeError, match="JWKS network error"),
+    ):
+        await rt.browser_role_for_request(_Req())
 
 
 # ---------------------------------------------------------------------------

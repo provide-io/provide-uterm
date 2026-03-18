@@ -254,10 +254,23 @@ class TestUpdateSession:
             defn = reg._require_session("s1")
         assert defn.connector_config.get("host") == "newhost"
 
+    async def test_update_no_mutable_fields_is_noop(self) -> None:
+        """Payload with only unknown keys produces an empty updates dict → no mutation."""
+        reg = _make_registry([_session("s1")])
+        status = await reg.update_session("s1", {"not_a_real_field": 42})
+        assert status.session_id == "s1"
+
     async def test_update_unknown_session_raises(self) -> None:
         reg = _make_registry()
         with pytest.raises(KeyError):
             await reg.update_session("no-such", {"display_name": "x"})
+
+
+class TestSetMode:
+    async def test_set_mode_invalid_raises_validation_error(self) -> None:
+        reg = _make_registry([_session("mode-test")])
+        with pytest.raises(SessionValidationError, match="invalid input_mode"):
+            await reg.set_mode("mode-test", "superuser")
 
 
 # ---------------------------------------------------------------------------

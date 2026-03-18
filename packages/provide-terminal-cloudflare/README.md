@@ -35,7 +35,7 @@ uv run pywrangler deploy
   - `/ws/browser/{worker_id}/term` — browser/operator protocol (JSON frames)
   - `/ws/raw/{worker_id}/term` — raw stream mode for `uterm listen` telnet/SSH gateways
 - **Hibernation-safe** — uses CF WebSocket Hibernation API; state survives DO sleep/wake cycles.
-- **Quick-connect** — `GET /connect` page creates ephemeral sessions on demand (`POST /api/connect`).
+- **Quick-connect** — not currently exposed as a dedicated Cloudflare page or `POST /api/connect` flow in this package.
 
 ## Auth modes
 
@@ -45,6 +45,14 @@ Set `AUTH_MODE` in `wrangler.toml` or `.dev.vars`:
 |---|---|
 | `dev` | No auth checks; all requests accepted. |
 | `jwt` | Validates CF Access JWT; role from claim or `JWT_DEFAULT_ROLE`. |
+
+## Current gaps
+
+- There is no Cloudflare-hosted quick-connect page yet. The package serves the
+  dashboard and hijack surfaces, but not the FastAPI-style `/app/connect` flow.
+- The hijack REST surface is intended to match the FastAPI contract, but there
+  are still backend-parity gaps; treat `docs/protocol-matrix.md` as the target
+  contract, not a guarantee that every edge case is identical today.
 
 ## Commands
 

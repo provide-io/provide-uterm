@@ -10,9 +10,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 import time
 from typing import TYPE_CHECKING, Any, Literal, cast
+
+from provide.telemetry import get_logger
 
 from provide.terminal.server.connectors import SessionConnector, build_connector
 from provide.terminal.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
@@ -21,7 +22,7 @@ from provide.terminal.session_logger import SessionLogger
 if TYPE_CHECKING:
     from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _cancel_and_wait(tasks: set[asyncio.Task[object]]) -> None:
@@ -88,7 +89,7 @@ class HostedSessionRuntime:
         if self._task is not None and not self._task.done():
             return
         self._stop = asyncio.Event()
-        self._queue = asyncio.Queue()
+        self._queue = asyncio.Queue(maxsize=2000)
         self._state = "starting"
         self._last_error = None
         self._task = asyncio.create_task(self._run())

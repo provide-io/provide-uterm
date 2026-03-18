@@ -12,14 +12,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import time
 from typing import TYPE_CHECKING
+
+from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class HijackableMixin:

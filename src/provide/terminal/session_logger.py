@@ -11,13 +11,13 @@ import asyncio
 import base64
 import contextlib
 import json
-import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-logger = logging.getLogger(__name__)
+from provide.telemetry import get_logger
 
+logger = get_logger(__name__)
 if TYPE_CHECKING:
     from io import TextIOWrapper
 
