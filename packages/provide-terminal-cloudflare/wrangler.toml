@@ -14,12 +14,16 @@ fallthrough = true
 
 [build]
 command = "cp -r ../../src/provide/terminal/frontend/. src/provide_terminal_cloudflare/ui/static/"
+# Watch the frontend source — NOT the CF package dir.  The build command
+# copies *into* ui/static/ which lives inside the CF source tree; watching
+# that tree would trigger an infinite rebuild loop.
+watch_dir = "../../src/provide/terminal/frontend"
 
 [dev]
 port = 8788
 
 [vars]
-AUTH_MODE = "dev"
+AUTH_MODE = "jwt"
 JWT_JWKS_URL = "https://neurotic.cloudflareaccess.com/cdn-cgi/access/certs"
 JWT_ISSUER = "https://neurotic.cloudflareaccess.com"
 JWT_ALGORITHMS = "RS256"

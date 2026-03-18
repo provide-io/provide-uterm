@@ -19,15 +19,15 @@ Usage::
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
     from types import TracebackType
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class HijackClient:

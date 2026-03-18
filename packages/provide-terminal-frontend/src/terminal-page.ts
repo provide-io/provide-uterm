@@ -1,3 +1,8 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
 function sanitizeWorkerId(value: string | null): string {
   if (!value) return "demo";
   return /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : "demo";

@@ -1,3 +1,8 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
 import { restartSession } from "../api.js";
 import { loadDashboardState, summarizeSessions } from "../state.js";
 import type { AppBootstrap, SessionSummary } from "../types.js";

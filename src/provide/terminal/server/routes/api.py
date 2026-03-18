@@ -348,6 +348,8 @@ def create_api_router() -> APIRouter:
             "visibility": "private",
             "owner": principal.subject_id,
         }
+        if payload.get("recording_enabled"):
+            session_payload["recording_enabled"] = True
         try:
             session = await _registry(request).create_session(session_payload)
         except SessionValidationError as exc:

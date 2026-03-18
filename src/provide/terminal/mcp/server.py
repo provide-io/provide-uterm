@@ -67,7 +67,12 @@ def _unescape_keys(raw: str) -> str:
     return "".join(out)
 
 
-def _clean_snapshot(snapshot: dict[str, Any], output: str) -> dict[str, Any]:
+def _clean_snapshot(
+    snapshot: dict[str, Any],
+    output: str,
+    *,
+    tail_lines: int | None = None,
+) -> dict[str, Any]:
     """Process a snapshot dict according to the requested output mode.
 
     Parameters
@@ -79,14 +84,25 @@ def _clean_snapshot(snapshot: dict[str, Any], output: str) -> dict[str, Any]:
         ``"text"`` — strip ANSI, return only ``screen``.
         ``"rendered"`` — keep visual grid as-is + cursor/cols/rows metadata.
         ``"raw"`` — return full snapshot unchanged.
+    tail_lines:
+        When set, trim the ``screen`` text to the last *N* lines.
     """
     if output == "raw":
+        if tail_lines is not None and tail_lines > 0:
+            screen = snapshot.get("screen", "")
+            lines = screen.splitlines()
+            if len(lines) > tail_lines:
+                return {**snapshot, "screen": "\n".join(lines[-tail_lines:])}
         return snapshot
-    screen = snapshot.get("screen", "")
+    screen = strip_ansi(snapshot.get("screen", ""))
+    if tail_lines is not None and tail_lines > 0:
+        lines = screen.splitlines()
+        if len(lines) > tail_lines:
+            screen = "\n".join(lines[-tail_lines:])
     if output == "text":
-        return {"screen": strip_ansi(screen)}
+        return {"screen": screen}
     # rendered: visual grid intact, strip ANSI, include layout metadata
-    result: dict[str, Any] = {"screen": strip_ansi(screen)}
+    result: dict[str, Any] = {"screen": screen}
     for key in ("cursor", "cols", "rows"):
         if key in snapshot:
             result[key] = snapshot[key]
@@ -144,6 +160,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         wait_ms: int = 1500,
         after_seq: int = 0,
         limit: int = 200,
+        tail_lines: int | None = None,
     ) -> dict[str, Any]:
         """Read snapshot or events from an active hijack session.
 
@@ -162,6 +179,9 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
             Return events after this sequence number (events mode only).
         limit:
             Max events to return (events mode only).
+        tail_lines:
+            When set, trim the screen text to the last N lines.
+            Useful for reducing context when only recent output matters.
         """
         if mode == "events":
             ok, data = await client.events(
@@ -178,7 +198,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
             )
         result = _ok(ok, data)
         if ok and mode != "events" and result.get("snapshot"):
-            result["snapshot"] = _clean_snapshot(result["snapshot"], output)
+            result["snapshot"] = _clean_snapshot(result["snapshot"], output, tail_lines=tail_lines)
         return result
 
     @mcp.tool()
@@ -239,6 +259,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     async def session_read(
         session_id: str,
         output: str = "text",
+        tail_lines: int | None = None,
     ) -> dict[str, Any]:
         """Get terminal snapshot for a session.
 
@@ -248,11 +269,13 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
             ``"text"`` — plain text, ANSI stripped (default).
             ``"rendered"`` — visual grid with layout metadata.
             ``"raw"`` — full fidelity, ANSI intact.
+        tail_lines:
+            When set, trim the screen text to the last N lines.
         """
         ok, data = await client.session_snapshot(session_id)
         result = _ok(ok, data)
         if ok and result.get("snapshot"):
-            result["snapshot"] = _clean_snapshot(result["snapshot"], output)
+            result["snapshot"] = _clean_snapshot(result["snapshot"], output, tail_lines=tail_lines)
         return result
 
     @mcp.tool()

@@ -233,7 +233,7 @@ class ProvideHijack {
             throw new Error("xterm.js not loaded");
         const termDiv = this._q("terminal");
         this._term = new terminalCtor({
-            convertEol: true,
+            convertEol: false,
             cursorBlink: true,
             fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
             fontSize: 13,

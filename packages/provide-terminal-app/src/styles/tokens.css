@@ -1,0 +1,455 @@
+:root {
+  /* Semantic colors */
+  --success: #1D9E75;
+  --danger: #E24B4A;
+  --info: #378ADD;
+  --warning: #BA7517;
+  --neutral: #64748b;
+
+  /* Background surfaces */
+  --bg-primary: #0f1419;
+  --bg-secondary: #151b22;
+  --bg-tertiary: #1c2430;
+  --bg-terminal: #0d1117;
+
+  /* Semantic background tints */
+  --bg-success: rgba(29, 158, 117, 0.12);
+  --bg-danger: rgba(226, 75, 74, 0.12);
+  --bg-info: rgba(55, 138, 221, 0.12);
+  --bg-warning: rgba(186, 117, 23, 0.12);
+
+  /* Text */
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-tertiary: #484f58;
+
+  /* Semantic text */
+  --text-success: #3fb950;
+  --text-danger: #f85149;
+  --text-info: #58a6ff;
+  --text-warning: #d29922;
+
+  /* Borders */
+  --border-primary: #30363d;
+  --border-secondary: #21262d;
+  --border-info: rgba(55, 138, 221, 0.4);
+  --border-danger: rgba(226, 75, 74, 0.4);
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* Sizes */
+  --sidebar-width: 240px;
+  --header-height: 44px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app-root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 0.5px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--neutral);
+}
+
+button:active:not(:disabled) {
+  opacity: 0.8;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input, select {
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 0.5px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 13px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+input:focus, select:focus {
+  border-color: var(--info);
+}
+
+a {
+  color: var(--text-info);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* --- Action link: styled like a button --- */
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.action-link:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--neutral);
+  text-decoration: none;
+}
+
+/* --- Utility classes --- */
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.text-muted {
+  color: var(--text-secondary);
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.border-section {
+  border-top: 0.5px solid var(--border-primary);
+  padding-top: 16px;
+}
+
+.tag-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 0.5px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.code-box {
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+}
+
+.flex-spacer {
+  flex: 1;
+}
+
+.sidebar-btn {
+  text-align: left;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 8px 12px;
+}
+
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-primary {
+  background: var(--bg-info);
+  border-color: var(--border-info);
+  color: var(--text-info);
+}
+
+.btn-danger-outline {
+  color: var(--text-danger);
+  border-color: var(--border-danger);
+}
+
+.btn-full {
+  width: 100%;
+  padding: 8px 12px;
+}
+
+.form-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.error-text {
+  font-size: 12px;
+  color: var(--text-danger);
+}
+
+/* --- Layout helpers --- */
+
+.ssh-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* --- Size / spacing helpers --- */
+
+.checkbox-input {
+  width: 14px;
+  height: 14px;
+}
+
+.ml-16 { margin-left: 16px; }
+.mt-8  { margin-top: 8px; }
+.mb-4  { margin-bottom: 4px; }
+
+/* --- Button variants --- */
+
+.btn-connect {
+  font-size: 13px;
+  padding: 8px 20px;
+  font-weight: 500;
+}
+
+/* --- Component helpers --- */
+
+.code-box-sm {
+  font-size: 12px;
+}
+
+.border-section-sm {
+  padding-top: 12px;
+}
+
+.detail-header {
+  padding: 12px 14px;
+  border-bottom: 0.5px solid var(--border-primary);
+}
+
+.detail-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.detail-pad {
+  padding: 12px 14px;
+  font-size: 12px;
+}
+
+.detail-body {
+  padding: 12px 14px;
+  font-size: 12px;
+  flex: 1;
+  overflow: auto;
+}
+
+.code-box-scroll {
+  margin-top: 12px;
+  word-break: break-all;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* --- Small select (inline compact selects) --- */
+
+.select-sm {
+  width: auto;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* --- Filter input (compact text input) --- */
+
+.filter-input {
+  width: 180px;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* --- Status dot (6px indicator circle) --- */
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* --- Card (metric/stat card) --- */
+
+.card {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+.card-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.card-value {
+  font-size: 24px;
+  font-weight: 500;
+}
+
+/* --- Page shell (root layout wrapper) --- */
+
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--bg-primary);
+}
+
+/* --- Pre block (monospace screen preview) --- */
+
+.pre-block {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* --- Preset card --- */
+
+.preset-card {
+  padding: 12px;
+  border: 0.5px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* --- Nav button (playback navigation) --- */
+
+.nav-btn {
+  font-size: 14px;
+  padding: 6px 12px;
+  width: 36px;
+  text-align: center;
+}
+
+/* --- Play/pause button --- */
+
+.play-btn {
+  font-size: 14px;
+  padding: 6px 14px;
+  width: 44px;
+  text-align: center;
+}
+
+/* --- Restart button (small inline) --- */
+
+.btn-sm {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+/* --- Session list vertical stack --- */
+
+.session-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Empty state --- */
+
+.empty-state {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 12px 0;
+}
+
+/* --- Metric grid (4-column) --- */
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* --- Screen preview caption --- */
+
+.screen-caption {
+  color: #64748b;
+  margin-bottom: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}

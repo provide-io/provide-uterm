@@ -10,9 +10,10 @@ Extracted from ``hub.py`` to keep file sizes under 500 LOC.
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING, Any
+
+from provide.telemetry import get_logger
 
 from provide.terminal.hijack.models import HijackSession
 
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
     from provide.terminal.hijack.models import WorkerTermState
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _HijackOwnershipMixin:

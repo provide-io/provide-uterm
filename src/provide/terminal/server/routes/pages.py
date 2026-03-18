@@ -7,13 +7,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse
 
-from provide.terminal.server.auth import resolve_http_principal
+from provide.terminal.server.auth import extract_bearer_token, resolve_http_principal
 from provide.terminal.server.ui import connect_page_html, operator_dashboard_html, replay_page_html, session_page_html
+
+if TYPE_CHECKING:
+    from provide.terminal.server.models import ServerConfig
 
 _SessionId = Annotated[str, Path(pattern=r"^[\w\-]+$")]
 
@@ -40,6 +43,23 @@ def _set_auth_cookie(response: HTMLResponse, key: str, value: str, *, secure: bo
     )
 
 
+def _set_page_cookies(
+    response: HTMLResponse,
+    request: Request,
+    cfg: ServerConfig,
+    principal_name: str,
+    surface: str,
+    *,
+    secure: bool,
+) -> None:
+    _set_auth_cookie(response, cfg.auth.principal_cookie, principal_name, secure=secure)
+    _set_auth_cookie(response, cfg.auth.surface_cookie, surface, secure=secure)
+    if cfg.auth.mode == "jwt" and principal_name != "anonymous":
+        token = extract_bearer_token(request.headers)
+        if token:
+            _set_auth_cookie(response, cfg.auth.token_cookie, token, secure=secure)
+
+
 def create_page_router() -> APIRouter:
     router = APIRouter()
 
@@ -58,8 +78,7 @@ def create_page_router() -> APIRouter:
             )
         )
         principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
-        _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
-        _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
         return response
 
     @router.get("/session/{session_id}", response_class=HTMLResponse)
@@ -84,8 +103,7 @@ def create_page_router() -> APIRouter:
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
-        _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
-        _set_auth_cookie(response, cfg.auth.surface_cookie, "user", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "user", secure=secure)
         return response
 
     @router.get("/operator/{session_id}", response_class=HTMLResponse)
@@ -110,8 +128,7 @@ def create_page_router() -> APIRouter:
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
-        _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
-        _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
         return response
 
     @router.get("/replay/{session_id}", response_class=HTMLResponse)
@@ -135,8 +152,7 @@ def create_page_router() -> APIRouter:
             fonts_cdn=cfg.ui.fonts_cdn,
         )
         response = HTMLResponse(html)
-        _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
-        _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
         return response
 
     @router.get("/connect", response_class=HTMLResponse)
@@ -154,8 +170,7 @@ def create_page_router() -> APIRouter:
                 fonts_cdn=cfg.ui.fonts_cdn,
             )
         )
-        _set_auth_cookie(response, cfg.auth.principal_cookie, principal.name, secure=secure)
-        _set_auth_cookie(response, cfg.auth.surface_cookie, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
         return response
 
     return router

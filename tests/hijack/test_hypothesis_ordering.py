@@ -37,7 +37,9 @@ def _mock_ws() -> AsyncMock:
 
 class TestEventSeqMonotonicityAdditional:
     @given(n=st_h.integers(min_value=5, max_value=50))
-    @settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+    @settings(
+        max_examples=20, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.differing_executors]
+    )
     @pytest.mark.asyncio
     async def test_event_seqs_never_repeat_or_skip_with_multiple_workers(self, n: int) -> None:
         """Multiple workers' event sequences are independent and monotonic."""
@@ -75,7 +77,9 @@ class TestEventSeqMonotonicityAdditional:
                 assert seqs[i] > seqs[i - 1], f"{worker_id}: non-monotonic seqs: {seqs}"
 
     @given(n=st_h.integers(min_value=2, max_value=20))
-    @settings(max_examples=15, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+    @settings(
+        max_examples=15, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.differing_executors]
+    )
     @pytest.mark.asyncio
     async def test_event_seq_resumes_after_maxlen_overflow(self, n: int) -> None:
         """Event seq is monotonically increasing even after deque wraps around."""
@@ -108,7 +112,9 @@ class TestEventSeqMonotonicityAdditional:
 
 class TestManyBrowserBroadcast:
     @given(n=st_h.integers(min_value=1, max_value=20))
-    @settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+    @settings(
+        max_examples=20, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.differing_executors]
+    )
     @pytest.mark.asyncio
     async def test_broadcast_reaches_all_browsers(self, n: int) -> None:
         """Broadcast sends to all n browsers; each browser's send_text is called once."""
@@ -127,7 +133,9 @@ class TestManyBrowserBroadcast:
             b.send_text.assert_called_once(), f"Browser {i} should have received broadcast"
 
     @given(n=st_h.integers(min_value=2, max_value=10))
-    @settings(max_examples=15, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+    @settings(
+        max_examples=15, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.differing_executors]
+    )
     @pytest.mark.asyncio
     async def test_broadcast_with_one_dead_browser_removes_it(self, n: int) -> None:
         """Broadcast with one dead browser removes it and still delivers to others."""

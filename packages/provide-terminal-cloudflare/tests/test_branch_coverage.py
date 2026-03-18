@@ -171,7 +171,7 @@ async def test_fetch_jwks_stale_cache_triggers_refetch() -> None:
     fresh_data: dict = {"keys": [{"kty": "new"}]}
 
     # Plant a stale cache entry (timestamp well past TTL)
-    jwt_module._JWKS_CACHE[url] = (time.time() - _JWKS_CACHE_TTL_S - 10, stale_data)
+    jwt_module._JWKS_CACHE[url] = (time.monotonic() - _JWKS_CACHE_TTL_S - 10, stale_data)
 
     encoded = json.dumps(fresh_data).encode()
     mock_resp = MagicMock()

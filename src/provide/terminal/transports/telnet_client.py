@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 
-logger = logging.getLogger(__name__)
+from provide.telemetry import get_logger
 
+logger = get_logger(__name__)
 # Telnet protocol constants (duplicated here to avoid circular imports)
 IAC: int = 255  # Interpret As Command
 WILL: int = 251  # Will perform option

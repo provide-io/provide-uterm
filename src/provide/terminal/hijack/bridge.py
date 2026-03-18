@@ -24,14 +24,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 import time
 from typing import Any, Protocol, runtime_checkable
 
+from provide.telemetry import get_logger
+
 from provide.terminal.hijack.models import _safe_int
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 # Optional: websockets.exceptions.InvalidURI — used to detect malformed URLs
 # as a permanent failure in the reconnect loop.  None when websockets < 10.
 _InvalidURI: type | None = None

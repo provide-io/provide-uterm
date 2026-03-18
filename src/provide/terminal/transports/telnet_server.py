@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from provide.telemetry import get_logger
 
+logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Telnet protocol constants (subset used for server handshake)
 # ---------------------------------------------------------------------------

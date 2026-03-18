@@ -386,6 +386,19 @@ def test_quick_connect_tags_and_input_mode_not_in_connector_config(app_client: T
     assert r.status_code == 200
 
 
+def test_quick_connect_with_recording_enabled(app_client: TestClient) -> None:
+    r = app_client.post("/api/connect", json={"connector_type": "shell", "recording_enabled": True})
+    assert r.status_code == 200
+    assert r.json()["recording_enabled"] is True
+
+
+def test_quick_connect_without_recording_enabled(app_client: TestClient) -> None:
+    r = app_client.post("/api/connect", json={"connector_type": "shell"})
+    assert r.status_code == 200
+    # recording_enabled defaults to False when not specified
+    assert r.json()["recording_enabled"] is False
+
+
 def test_quick_connect_forbidden_without_create_privilege() -> None:
     """POST /api/connect returns 403 for a viewer-only principal."""
     import time

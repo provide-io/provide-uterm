@@ -1,0 +1,84 @@
+.content {
+  padding: 20px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.section {
+  margin-bottom: 0;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .presetGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.divider {
+  border-top: 0.5px solid var(--border-primary);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 120px 80px;
+  gap: 8px;
+  align-items: end;
+}
+
+@media (max-width: 480px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.formRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.shortcutGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .shortcutGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shortcutRow {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 0.5px solid var(--border-primary);
+  background: transparent;
+}

@@ -2,7 +2,7 @@
 
 Shared terminal I/O primitives and WebSocket proxy infrastructure for the provide ecosystem.
 
-**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1225+ tests at 100% branch coverage
+**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · quick-connect ephemeral sessions (`GET /app/connect`, `POST /api/connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 1225+ tests at 100% branch coverage
 
 For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
 
@@ -186,7 +186,8 @@ Key endpoints:
 - `GET /app/` (operator dashboard)
 - `GET /app/session/{session_id}` (end-user page)
 - `GET /app/operator/{session_id}` (operator console)
-- `GET /connect` (quick-connect: create ephemeral sessions on demand)
+- `GET /app/connect` (quick-connect page)
+- `POST /api/connect` (create ephemeral session)
 
 The example TOML config in [`scripts/uterm-server.example.toml`](scripts/uterm-server.example.toml)
 shows the intended reference-implementation structure for server config.
@@ -220,6 +221,16 @@ When `auth.mode = "jwt"`, the server fails fast at startup unless:
 4. Validate startup:
    - `uterm-server --config scripts/uterm-server.jwt.example.toml`
    - run smoke tests against `/api/health`, `/api/sessions`, and browser WS connect
+
+### JWT Browser-UI Caveat
+
+In `auth.mode = "jwt"`, the hosted HTML pages authenticate correctly when the
+initial page request carries an `Authorization: Bearer ...` header. However,
+the page routes do not currently bridge that JWT into `auth.token_cookie`, so
+browser follow-up requests to `/api/...` must still present an authorization
+header. If you rely on direct browser navigation to the hosted UI, put the app
+behind an auth proxy that injects the header on API requests, or stay on
+`auth.mode = "dev"`/`header` for local use until token-cookie bridging lands.
 
 ### Key Rotation
 

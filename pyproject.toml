@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Terminals",
     "Framework :: FastAPI",
 ]
-dependencies = []
+dependencies = ["provide-telemetry>=0.3"]
 
 [project.urls]
 Homepage = "https://github.com/provide-io/provide-terminal"
@@ -64,6 +64,8 @@ where = ["src"]
     "frontend/app/*.js",
     "frontend/app/views/*.js",
     "frontend/app/widgets/*.js",
+    "frontend/.vite/*",
+    "frontend/assets/*",
 ]
 
 [dependency-groups]
@@ -119,7 +121,7 @@ addopts = [
     "-ra",
     "--ignore=tests/playwright/test_hijack.py",
     "--ignore=tests/playwright/test_server.py",
-    "--cov=provide",
+    "--cov=provide.terminal",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
@@ -168,7 +170,7 @@ ignore = ["E501", "S104", "S112", "S311"]
 "packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.coverage.run]
-source = ["provide"]
+source = ["provide.terminal"]
 omit = ["tests/*"]
 branch = true
 
@@ -195,6 +197,15 @@ namespace_packages = true
 explicit_package_bases = true
 mypy_path = ["src"]
 
+[[tool.mypy.overrides]]
+module = [
+    "provide.telemetry",
+    "provide.telemetry.*",
+    "structlog",
+    "structlog.*",
+]
+ignore_missing_imports = true
+
 [tool.ty.environment]
 python-version = "3.11"
 
@@ -207,7 +218,7 @@ invalid-argument-type = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,src/provide/terminal/frontend/assets/*.js"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans"
 
 [tool.bandit]
@@ -246,9 +257,8 @@ pytest_add_cli_args_test_selection = [
     "--ignore=tests/playwright/test_terminal_proxy.py",
     "--ignore=tests/example/test_server_e2e.py",
     "--ignore=tests/hijack/test_hypothesis.py",
-    "--ignore=tests/e2e/test_live_hub_ws.py",
-    "--ignore=tests/e2e/test_ssh_gateway.py",
-    "--ignore=tests/e2e/test_telnet_gateway.py",
+    "--ignore=tests/e2e",
+    "--ignore=tests/hijack/test_hypothesis_ordering.py",
 ]
 
 [tool.uv.workspace]
@@ -260,3 +270,4 @@ members = [
 [tool.uv.sources]
 provide-terminal = { workspace = true }
 provide-terminal-cloudflare = { workspace = true }
+provide-telemetry = { path = "../provide-telemetry", editable = true }

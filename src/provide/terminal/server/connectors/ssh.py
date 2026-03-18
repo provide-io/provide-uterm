@@ -10,9 +10,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import logging
 import time
 from typing import Any
+
+from provide.telemetry import get_logger
 
 from provide.terminal.screen import decode_cp437
 from provide.terminal.server.connectors.base import SessionConnector
@@ -22,8 +23,7 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("asyncssh is required for the SSH server connector: pip install 'provide-terminal[ssh]'") from _e
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 _COLS = 80
 _ROWS = 25
 

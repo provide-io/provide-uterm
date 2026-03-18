@@ -700,3 +700,172 @@ async def test_send_without_guards_unchanged() -> None:
         _Req(f"https://x/worker/w/hijack/{hid}/send", method="POST").with_body({"keys": "ls\r"}),
     )
     assert resp.status == 200
+
+
+# ---------------------------------------------------------------------------
+# has_more pagination — uses >= so True when exactly limit rows returned
+# ---------------------------------------------------------------------------
+
+
+async def test_cf_hijack_events_has_more_true_when_exactly_limit() -> None:
+    """has_more must be True when exactly limit events are returned (hijack events).
+
+    Kills the mutation:
+      len(rows) >= limit  →  len(rows) > limit
+    """
+    import time
+    import uuid
+
+    from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
+
+    hid = str(uuid.uuid4())
+    now = time.time()
+
+    class _StoreWith5Events:
+        def list_events_since(self, worker_id, after_seq, limit):
+            # Return exactly 'limit' rows regardless of what limit is.
+            return [{"seq": i + 1, "ts": now, "type": "snapshot"} for i in range(limit)]
+
+        def current_event_seq(self, worker_id):
+            return limit
+
+        def min_event_seq(self, worker_id):
+            return 1
+
+        load_session = lambda *a, **k: None  # noqa: E731
+        save_input_mode = lambda *a, **k: None  # noqa: E731
+        append_event = lambda *a, **k: None  # noqa: E731
+
+    limit = 5
+    coord = HijackCoordinator()
+    coord._session = HijackSession(hijack_id=hid, owner="test", lease_expires_at=now + 3600)
+
+    class _RuntimeWith5:
+        # Reuse _Runtime but override store and hijack
+        worker_id = "w"
+        worker_ws = object()
+        hijack = coord
+        last_snapshot = None
+        last_analysis = None
+        input_mode = "hijack"
+        browser_hijack_owner: dict = {}
+        _role = "admin"
+
+        async def request_json(self, req):
+            return {}
+
+        async def browser_role_for_request(self, req):
+            return "admin"
+
+        def persist_lease(self, s):
+            pass
+
+        def clear_lease(self):
+            pass
+
+        async def push_worker_control(self, *a, **k):
+            return True
+
+        async def broadcast_hijack_state(self):
+            pass
+
+        async def push_worker_input(self, d):
+            return True
+
+        async def send_ws(self, ws, frame):
+            pass
+
+        def ws_key(self, ws):
+            return str(id(ws))
+
+        @property
+        def store(self):
+            return _StoreWith5Events()
+
+    runtime = _RuntimeWith5()
+    resp = await route_http(
+        runtime,
+        _Req(f"https://x/hijack/{hid}/events?limit={limit}&after_seq=0"),
+    )
+    body = json.loads(resp.body)
+    assert body["has_more"] is True, "has_more must be True when exactly limit events returned"
+
+
+async def test_cf_hijack_events_has_more_false_when_fewer() -> None:
+    """has_more is False when fewer than limit events returned.
+
+    Kills the mutation:
+      len(rows) >= limit  →  True  (always)
+    """
+    import time
+    import uuid
+
+    from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
+
+    hid = str(uuid.uuid4())
+    now = time.time()
+
+    class _StoreWith2:
+        def list_events_since(self, worker_id, after_seq, limit):
+            return [{"seq": 1, "ts": now, "type": "x"}, {"seq": 2, "ts": now, "type": "y"}]
+
+        def current_event_seq(self, worker_id):
+            return 2
+
+        def min_event_seq(self, worker_id):
+            return 1
+
+        load_session = lambda *a, **k: None  # noqa: E731
+        save_input_mode = lambda *a, **k: None  # noqa: E731
+        append_event = lambda *a, **k: None  # noqa: E731
+
+    coord = HijackCoordinator()
+    coord._session = HijackSession(hijack_id=hid, owner="test", lease_expires_at=now + 3600)
+
+    class _Runtime2:  # type: ignore[misc]
+        worker_id = "w"
+        worker_ws = object()
+        hijack = coord
+        last_snapshot = None
+        last_analysis = None
+        input_mode = "hijack"
+        browser_hijack_owner: dict = {}
+
+        async def request_json(self, req):
+            return {}
+
+        async def browser_role_for_request(self, req):
+            return "admin"
+
+        def persist_lease(self, s):
+            pass
+
+        def clear_lease(self):
+            pass
+
+        async def push_worker_control(self, *a, **k):
+            return True
+
+        async def broadcast_hijack_state(self):
+            pass
+
+        async def push_worker_input(self, d):
+            return True
+
+        async def send_ws(self, ws, frame):
+            pass
+
+        def ws_key(self, ws):
+            return str(id(ws))
+
+        @property
+        def store(self):
+            return _StoreWith2()
+
+    runtime = _Runtime2()
+    resp = await route_http(
+        runtime,
+        _Req(f"https://x/hijack/{hid}/events?limit=10&after_seq=0"),
+    )
+    body = json.loads(resp.body)
+    assert body["has_more"] is False, "has_more must be False when fewer than limit events returned"

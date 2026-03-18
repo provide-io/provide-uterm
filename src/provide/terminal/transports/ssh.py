@@ -19,19 +19,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any
+
+from provide.telemetry import get_logger
 
 try:
     import asyncssh
 except ImportError as _e:  # pragma: no cover
     raise ImportError("asyncssh is required for SSH transport: pip install 'provide-terminal[ssh]'") from _e
 
-logger = logging.getLogger(__name__)
-
-
+logger = get_logger(__name__)
 ConnectionHandler = Callable[
     [Any, Any],  # (SSHStreamReader, SSHStreamWriter)
     Coroutine[Any, Any, None],

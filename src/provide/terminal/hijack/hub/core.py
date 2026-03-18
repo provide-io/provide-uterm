@@ -19,11 +19,12 @@ import time
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
+from provide.telemetry import get_logger
+
 try:
     from fastapi import APIRouter, WebSocket, WebSocketException
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for TermHub: pip install 'provide-terminal[websocket]'") from _e
-import logging
 
 from provide.terminal.hijack.hub.connections import _ConnectionMixin
 from provide.terminal.hijack.hub.ownership import _HijackOwnershipMixin
@@ -31,8 +32,7 @@ from provide.terminal.hijack.hub.polling import _PollingMixin
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.ratelimit import TokenBucket
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 # Callback type aliases
 HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
 BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]

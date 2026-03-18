@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import importlib.resources
-import logging
 import secrets
 import time
 import uuid
@@ -21,11 +20,12 @@ from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketExcepti
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
+from provide.telemetry import get_logger
 
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.server.auth import (
     Principal,
-    _extract_bearer_token,
+    extract_bearer_token,
     resolve_http_principal,
     resolve_ws_principal,
 )
@@ -44,8 +44,7 @@ if TYPE_CHECKING:
 
     from provide.terminal.server.models import ServerConfig
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger(__name__)
 # Delay between FastAPI startup completing and the auto-start session loop
 # beginning.  Gives the event loop time to finish route/middleware init.
 _AUTO_START_DELAY_S = 0.15
@@ -55,8 +54,13 @@ def _validate_frontend_assets() -> None:
     frontend_root = importlib.resources.files("provide.terminal") / "frontend"
     # Require only the critical entry points — the full file set is validated
     # at build time by scripts/verify_package_artifacts.py.
-    required = ("hijack.html", "terminal.html", "app/boot.js")
+    # Accept either Vite manifest (React app built) or legacy app/boot.js.
+    required = ("hijack.html", "terminal.html")
     missing = [name for name in required if not (frontend_root / name).is_file()]
+    has_vite = (frontend_root / ".vite" / "manifest.json").is_file()
+    has_legacy = (frontend_root / "app" / "boot.js").is_file()
+    if not has_vite and not has_legacy:
+        missing.append("app/boot.js or .vite/manifest.json")
     if missing:
         joined = ", ".join(missing)
         raise RuntimeError(f"missing required frontend assets: {joined}")
@@ -128,7 +132,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             and connection.scope.get("type") == "websocket"
             and str(connection.scope.get("path", "")).startswith("/ws/worker/")
         ):
-            token = _extract_bearer_token(connection.headers)
+            token = extract_bearer_token(connection.headers)
             if secrets.compare_digest(token or "", config.auth.worker_bearer_token or ""):
                 connection.state.uterm_principal = Principal(
                     subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"})
