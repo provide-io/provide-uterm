@@ -136,7 +136,7 @@ def test_worker_snapshot_updates_hub_state() -> None:
             worker.send_json(
                 {
                     "type": "snapshot",
-                    "screen": "Welcome to TW2002",
+                    "screen": "Welcome to the server",
                     "cursor": {"x": 0, "y": 0},
                     "cols": 80,
                     "rows": 25,
@@ -150,11 +150,11 @@ def test_worker_snapshot_updates_hub_state() -> None:
 
             msg = browser.receive_json()
             assert msg["type"] == "snapshot"
-            assert msg["screen"] == "Welcome to TW2002"
+            assert msg["screen"] == "Welcome to the server"
 
             # Hub state updated while connections are still live.
             assert hub._workers["bot1"].last_snapshot is not None
-            assert hub._workers["bot1"].last_snapshot["screen"] == "Welcome to TW2002"
+            assert hub._workers["bot1"].last_snapshot["screen"] == "Welcome to the server"
 
 
 def test_worker_snapshot_appends_event() -> None:

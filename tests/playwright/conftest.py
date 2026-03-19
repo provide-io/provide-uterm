@@ -7,14 +7,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
+import pytest
 
 
 def pytest_collection_modifyitems(items: list) -> None:
-    """Move all items from tests/playwright/ to the end of the test collection."""
-    playwright_items = [i for i in items if "tests/playwright/" in str(i.fspath)]
-    other_items = [i for i in items if "tests/playwright/" not in str(i.fspath)]
+    """Mark all playwright tests and move them to the end of the collection."""
+    marker = pytest.mark.playwright
+    playwright_items = []
+    other_items = []
+    for item in items:
+        if "tests/playwright/" in str(item.fspath):
+            item.add_marker(marker)
+            playwright_items.append(item)
+        else:
+            other_items.append(item)
     items[:] = other_items + playwright_items

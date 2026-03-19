@@ -7,56 +7,153 @@
 
 from __future__ import annotations
 
-from provide.terminal.ansi import BOLD, CLEAR_SCREEN, DEFAULT_RGB, RESET, _color256_to_rgb, colorize, strip_colors
+import pytest
+
+from provide.terminal.ansi import (
+    BOLD,
+    CLEAR_SCREEN,
+    DEFAULT_RGB,
+    RESET,
+    _color256_to_rgb,
+    _handle_pipe_codes,
+    normalize_colors,
+    register_color_dialect,
+    registered_dialects,
+    unregister_color_dialect,
+)
 
 
-class TestColorize:
-    def test_bright_cyan(self) -> None:
-        result = colorize("{+c}hello{-x}")
-        assert result == "\033[1;36mhello\033[0m"
+@pytest.fixture()
+def _save_registry():
+    """Save and restore dialect registry around a test."""
+    from provide.terminal.ansi import _dialect_registry
 
-    def test_multiple_tags(self) -> None:
-        result = colorize("{+r}red{-x} {+g}green{-x}")
-        assert "\033[1;31m" in result
-        assert "\033[1;32m" in result
-        assert "\033[0m" in result
-
-    def test_unknown_tag_passthrough(self) -> None:
-        result = colorize("{+z}unknown{-x}")
-        assert "{+z}" in result
-
-    def test_no_tags(self) -> None:
-        text = "plain text"
-        assert colorize(text) == text
-
-    def test_bold_white(self) -> None:
-        result = colorize("{+Bw}header{-x}")
-        assert "\033[1;37m" in result
-
-    def test_empty_string(self) -> None:
-        assert colorize("") == ""
+    saved = list(_dialect_registry)
+    yield
+    _dialect_registry.clear()
+    _dialect_registry.extend(saved)
 
 
-class TestStripColors:
-    def test_removes_tag(self) -> None:
-        result = strip_colors("{+c}hello{-x}")
-        assert result == "hello"
+# ---------------------------------------------------------------------------
+# Dialect registry
+# ---------------------------------------------------------------------------
 
-    def test_removes_all_tags(self) -> None:
-        result = strip_colors("{+r}red{-x} {+g}green{-x}")
-        assert result == "red green"
 
-    def test_no_tags(self) -> None:
-        text = "plain text"
-        assert strip_colors(text) == text
+class TestDialectRegistry:
+    def test_builtins_registered(self) -> None:
+        assert registered_dialects() == ["extended_tokens", "tilde_codes", "pipe_codes"]
 
-    def test_empty_string(self) -> None:
-        assert strip_colors("") == ""
+    @pytest.mark.usefixtures("_save_registry")
+    def test_register_and_list(self) -> None:
+        register_color_dialect("test_dialect", lambda t: t)
+        assert "test_dialect" in registered_dialects()
 
-    def test_round_trip_plain(self) -> None:
-        """strip_colors(colorize(text)) should equal strip_colors(text) for plain text."""
-        text = "no tags here"
-        assert strip_colors(colorize(text)) == strip_colors(text)
+    @pytest.mark.usefixtures("_save_registry")
+    def test_register_duplicate_raises(self) -> None:
+        with pytest.raises(ValueError, match="already registered"):
+            register_color_dialect("pipe_codes", lambda t: t)
+
+    @pytest.mark.usefixtures("_save_registry")
+    def test_unregister(self) -> None:
+        register_color_dialect("temp", lambda t: t)
+        assert "temp" in registered_dialects()
+        unregister_color_dialect("temp")
+        assert "temp" not in registered_dialects()
+
+    def test_unregister_missing_raises(self) -> None:
+        with pytest.raises(KeyError, match="not registered"):
+            unregister_color_dialect("nonexistent")
+
+    @pytest.mark.usefixtures("_save_registry")
+    def test_dialects_called_in_order(self) -> None:
+        calls: list[str] = []
+
+        def handler_a(t: str) -> str:
+            calls.append("a")
+            return t
+
+        def handler_b(t: str) -> str:
+            calls.append("b")
+            return t
+
+        register_color_dialect("a", handler_a)
+        register_color_dialect("b", handler_b)
+        normalize_colors("test")
+        # Built-ins run first, then a, then b
+        assert calls == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# Pipe codes
+# ---------------------------------------------------------------------------
+
+
+class TestPipeCodes:
+    def test_pipe_00_black_fg(self) -> None:
+        assert _handle_pipe_codes("|00") == "\x1b[30m"
+
+    def test_pipe_01_blue_fg(self) -> None:
+        assert _handle_pipe_codes("|01") == "\x1b[34m"
+
+    def test_pipe_02_green_fg(self) -> None:
+        assert _handle_pipe_codes("|02") == "\x1b[32m"
+
+    def test_pipe_03_cyan_fg(self) -> None:
+        assert _handle_pipe_codes("|03") == "\x1b[36m"
+
+    def test_pipe_04_red_fg(self) -> None:
+        assert _handle_pipe_codes("|04") == "\x1b[31m"
+
+    def test_pipe_05_magenta_fg(self) -> None:
+        assert _handle_pipe_codes("|05") == "\x1b[35m"
+
+    def test_pipe_06_brown_fg(self) -> None:
+        assert _handle_pipe_codes("|06") == "\x1b[33m"
+
+    def test_pipe_07_white_fg(self) -> None:
+        assert _handle_pipe_codes("|07") == "\x1b[37m"
+
+    def test_pipe_08_bright_black(self) -> None:
+        assert _handle_pipe_codes("|08") == "\x1b[90m"
+
+    def test_pipe_09_bright_blue(self) -> None:
+        assert _handle_pipe_codes("|09") == "\x1b[94m"
+
+    def test_pipe_15_bright_white(self) -> None:
+        assert _handle_pipe_codes("|15") == "\x1b[97m"
+
+    def test_pipe_16_bg_black(self) -> None:
+        assert _handle_pipe_codes("|16") == "\x1b[40m"
+
+    def test_pipe_17_bg_blue(self) -> None:
+        assert _handle_pipe_codes("|17") == "\x1b[44m"
+
+    def test_pipe_23_bg_white(self) -> None:
+        assert _handle_pipe_codes("|23") == "\x1b[47m"
+
+    def test_pipe_24_passthrough(self) -> None:
+        assert _handle_pipe_codes("|24") == "|24"
+
+    def test_pipe_mixed_with_text(self) -> None:
+        result = _handle_pipe_codes("|04Red |02Green")
+        assert "\x1b[31m" in result
+        assert "\x1b[32m" in result
+        assert "Red " in result
+        assert "Green" in result
+
+    def test_pipe_via_normalize_colors(self) -> None:
+        result = normalize_colors("|04Red|00")
+        assert "\x1b[31m" in result
+        assert "\x1b[30m" in result
+
+    def test_pipe_single_digit_passthrough(self) -> None:
+        """A pipe followed by a single digit is not a valid pipe code."""
+        assert _handle_pipe_codes("|4 text") == "|4 text"
+
+
+# ---------------------------------------------------------------------------
+# _color256_to_rgb boundary conditions
+# ---------------------------------------------------------------------------
 
 
 class TestColor256ToRgb:

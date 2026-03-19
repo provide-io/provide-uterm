@@ -36,7 +36,7 @@ class TestNormalizeTerminalText:
         assert result == "a\nb"
 
     def test_bare_sgr_fragment(self) -> None:
-        # Bare SGR at line start (TWGS artifact) should be stripped
+        # Bare SGR at line start (BBS server artifact) should be stripped
         result = normalize_terminal_text("1;31mSOME TEXT")
         # The bare fragment should not appear in output
         assert "1;31m" not in result
