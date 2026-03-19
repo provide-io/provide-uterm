@@ -112,6 +112,9 @@ filterwarnings = [
     "ignore:websockets\\.server\\.WebSocketServerProtocol is deprecated:DeprecationWarning:uvicorn\\.protocols\\.websockets\\.websockets_impl",
     "ignore:remove second argument of ws_handler:DeprecationWarning:websockets\\.legacy\\.server",
 ]
+markers = [
+    "playwright: browser-based UI tests (deselected by default, run with -m playwright)",
+]
 addopts = [
     "--import-mode=importlib",
     "-v",
@@ -119,8 +122,8 @@ addopts = [
     "--strict-config",
     "--tb=short",
     "-ra",
-    "--ignore=tests/playwright/test_hijack.py",
-    "--ignore=tests/playwright/test_server.py",
+    "-m",
+    "not playwright",
     "--cov=provide.terminal",
     "--cov-branch",
     "--cov-report=term-missing",
@@ -251,14 +254,10 @@ pytest_add_cli_args = ["--no-cov"]
 pytest_add_cli_args_test_selection = [
     "-m",
     "not playwright",
-    "--ignore=tests/playwright/test_hijack.py",
-    "--ignore=tests/playwright/test_example.py",
-    "--ignore=tests/playwright/test_frontend_coverage.py",
-    "--ignore=tests/playwright/test_terminal_proxy.py",
     "--ignore=tests/example/test_server_e2e.py",
     "--ignore=tests/hijack/test_hypothesis.py",
-    "--ignore=tests/e2e",
     "--ignore=tests/hijack/test_hypothesis_ordering.py",
+    "--ignore=tests/e2e",
 ]
 
 [tool.uv.workspace]

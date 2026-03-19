@@ -209,7 +209,7 @@ class TestBridgeSessionUnknownMtypeRecvWins:
 
 
 # ---------------------------------------------------------------------------
-# ansi.py line 345->351 — _handle_twgs_tokens: emit_color returns empty
+# ansi.py line 345->351 — _handle_brace_tokens: emit_color returns empty
 # ---------------------------------------------------------------------------
 
 
@@ -223,23 +223,23 @@ class TestAnsiTildeCodeNotInMap:
         assert "~" in result
 
 
-class TestAnsiTwgsTokenInvalidPolarity:
-    def test_twgs_token_with_invalid_polarity_falls_through(self) -> None:
+class TestAnsiBraceTokenInvalidPolarity:
+    def test_brace_token_with_invalid_polarity_falls_through(self) -> None:
         """Line 345->351: polarity NOT in ('+', '-') → falls through to out.append(text[i])."""
-        from provide.terminal.ansi import _handle_twgs_tokens
+        from provide.terminal.ansi import _handle_brace_tokens
 
         # '{xR}' - polarity='x' is not in ('+', '-') → False branch of line 345 → appends '{'
-        # Note: TWGS token format is exactly 4 chars: {<polarity><color>}
-        result = _handle_twgs_tokens("{xR}")
+        # Note: brace token format is exactly 4 chars: {<polarity><color>}
+        result = _handle_brace_tokens("{xR}")
         # '{' is appended as a literal character
         assert "{" in result
 
-    def test_twgs_token_with_unknown_color_char_falls_through(self) -> None:
+    def test_brace_token_with_unknown_color_char_falls_through(self) -> None:
         """Line 347->351: polarity valid but emit_color returns '' (unknown char) → fall through."""
-        from provide.terminal.ansi import _handle_twgs_tokens
+        from provide.terminal.ansi import _handle_brace_tokens
 
         # color_char 'Z' is not in _PREVIEW_COLOR_MAP and not 'x', so _emit_color returns ""
-        result = _handle_twgs_tokens("{+Z}")
+        result = _handle_brace_tokens("{+Z}")
         # Since seq is "", the token is not consumed — '{' is appended literally
         assert "{" in result
 

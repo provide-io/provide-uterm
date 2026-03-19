@@ -305,7 +305,7 @@ class TestHijackableMixinBranches:
 
 
 # ---------------------------------------------------------------------------
-# 9. ansi.py — _handle_tilde_codes and _handle_twgs_tokens
+# 9. ansi.py — _handle_tilde_codes and _handle_brace_tokens
 # ---------------------------------------------------------------------------
 
 
@@ -337,20 +337,20 @@ class TestAnsiCoverage:
         # When seq is empty (""), the continue is skipped, so "~" and "1" are appended normally
         assert "~" in result or "1" in result
 
-    def test_twgs_token_polarity_not_plus_or_minus_falls_through(self) -> None:
+    def test_brace_token_polarity_not_plus_or_minus_falls_through(self) -> None:
         """Line 345->351: polarity not in ('+', '-') → fall through to out.append."""
-        from provide.terminal.ansi import _handle_twgs_tokens
+        from provide.terminal.ansi import _handle_brace_tokens
 
         # '{x+g}' — polarity 'x' is not '+' or '-' → falls through
-        result = _handle_twgs_tokens("{x+g}rest")
+        result = _handle_brace_tokens("{x+g}rest")
         assert "{" in result  # not converted, kept as-is
 
-    def test_twgs_token_emit_color_empty_falls_through(self) -> None:
+    def test_brace_token_emit_color_empty_falls_through(self) -> None:
         """Line 348->351: seq is empty → the continue is skipped."""
-        from provide.terminal.ansi import _handle_twgs_tokens
+        from provide.terminal.ansi import _handle_brace_tokens
 
         with patch("provide.terminal.ansi._emit_color", return_value=""):
-            result = _handle_twgs_tokens("{+g}rest")
+            result = _handle_brace_tokens("{+g}rest")
         # When seq is "", continue is skipped, the chars are NOT consumed
         # The code falls through to out.append(text[i]) for the '{' char
         assert "{" in result

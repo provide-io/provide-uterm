@@ -3,14 +3,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""Tests for the color-upgrade and preview_ansi additions to provide.terminal.ansi."""
+"""Tests for the color-upgrade and normalize_colors additions to provide.terminal.ansi."""
 
 from __future__ import annotations
 
 from provide.terminal.ansi import (
     DEFAULT_PALETTE,
     DEFAULT_RGB,
-    preview_ansi,
+    _color256_to_rgb,
+    _emit_color,
+    _handle_brace_tokens,
+    _handle_extended_tokens,
+    _handle_tilde_codes,
+    normalize_colors,
     upgrade_to_256,
     upgrade_to_truecolor,
 )
@@ -33,49 +38,47 @@ def test_default_rgb_tuples() -> None:
 
 
 # ---------------------------------------------------------------------------
-# preview_ansi
+# normalize_colors
 # ---------------------------------------------------------------------------
 
 
-def test_preview_ansi_twgs_tokens() -> None:
-    result = preview_ansi("{+r}text{-x}")
-    assert "\x1b[" in result
-    assert "text" in result
-    assert "{+r}" not in result
-    assert "{-x}" not in result
-
-
-def test_preview_ansi_tilde_codes() -> None:
-    result = preview_ansi("~1text~0")
+def test_normalize_colors_tilde_codes() -> None:
+    result = normalize_colors("~1text~0")
     assert "\x1b[" in result
     assert "text" in result
     assert "~1" not in result
     assert "~0" not in result
 
 
-def test_preview_ansi_pt_tokens() -> None:
+def test_normalize_colors_pt_tokens() -> None:
     # {P3} is a foreground palette token → SGR code
-    result = preview_ansi("{P3}text")
+    result = normalize_colors("{P3}text")
     assert "\x1b[" in result
     assert "text" in result
     assert "{P3}" not in result
 
 
-def test_preview_ansi_fb_tokens() -> None:
+def test_normalize_colors_fb_tokens() -> None:
     # {F196} is a 256-color foreground token
-    result = preview_ansi("{F196}text")
+    result = normalize_colors("{F196}text")
     assert "\x1b[38;5;196m" in result
     assert "text" in result
 
 
-def test_preview_ansi_b_token() -> None:
-    result = preview_ansi("{B45}text")
+def test_normalize_colors_b_token() -> None:
+    result = normalize_colors("{B45}text")
     assert "\x1b[48;5;45m" in result
 
 
-def test_preview_ansi_passthrough_plain() -> None:
-    result = preview_ansi("no tokens here")
+def test_normalize_colors_passthrough_plain() -> None:
+    result = normalize_colors("no tokens here")
     assert result == "no tokens here"
+
+
+def test_normalize_colors_pipe_codes() -> None:
+    result = normalize_colors("|04red|00")
+    assert "\x1b[31m" in result
+    assert "\x1b[30m" in result
 
 
 # ---------------------------------------------------------------------------
@@ -243,17 +246,346 @@ def test_upgrade_to_truecolor_p_token() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _emit_color edge cases (via preview_ansi / _handle_twgs_tokens)
+# _emit_color edge cases (via _handle_brace_tokens)
 # ---------------------------------------------------------------------------
 
 
-def test_preview_ansi_unknown_twgs_color_char() -> None:
+def test_brace_tokens_unknown_color_char() -> None:
     # {+z}: unknown color char → _emit_color returns "" → literal fallthrough
-    result = preview_ansi("{+z}")
+    result = _handle_brace_tokens("{+z}")
     assert "{" in result  # literal brace preserved
 
 
-def test_preview_ansi_dim_known_color() -> None:
-    # {-r}: polarity "-" with known color → \x1b[0;31m  (line 306 in ansi.py)
-    result = preview_ansi("{-r}")
+def test_brace_tokens_dim_known_color() -> None:
+    # {-r}: polarity "-" with known color → \x1b[0;31m
+    result = _handle_brace_tokens("{-r}")
     assert "\x1b[0;31m" in result
+
+
+# ---------------------------------------------------------------------------
+# Mutant-killing tests: exact boundary + value assertions
+# ---------------------------------------------------------------------------
+
+
+class TestMapIndexExactBoundaries:
+    """Pin exact SGR -> 256/truecolor output to kill off-by-one boundary mutations."""
+
+    def test_256_fg_black_code30(self) -> None:
+        assert upgrade_to_256("\x1b[30m") == "\x1b[38;5;0m"
+
+    def test_256_fg_white_code37(self) -> None:
+        assert upgrade_to_256("\x1b[37m") == "\x1b[38;5;252m"
+
+    def test_256_bright_fg_black_code90(self) -> None:
+        assert upgrade_to_256("\x1b[90m") == "\x1b[38;5;244m"
+
+    def test_256_bright_fg_white_code97(self) -> None:
+        assert upgrade_to_256("\x1b[97m") == "\x1b[38;5;231m"
+
+    def test_256_bg_black_code40(self) -> None:
+        assert upgrade_to_256("\x1b[40m") == "\x1b[48;5;0m"
+
+    def test_256_bg_white_code47(self) -> None:
+        assert upgrade_to_256("\x1b[47m") == "\x1b[48;5;252m"
+
+    def test_256_bright_bg_black_code100(self) -> None:
+        assert upgrade_to_256("\x1b[100m") == "\x1b[48;5;244m"
+
+    def test_256_bright_bg_white_code107(self) -> None:
+        assert upgrade_to_256("\x1b[107m") == "\x1b[48;5;231m"
+
+    def test_tc_fg_black_code30(self) -> None:
+        assert upgrade_to_truecolor("\x1b[30m") == "\x1b[38;2;0;0;0m"
+
+    def test_tc_fg_white_code37(self) -> None:
+        assert upgrade_to_truecolor("\x1b[37m") == "\x1b[38;2;208;208;208m"
+
+    def test_tc_bright_fg_black_code90(self) -> None:
+        assert upgrade_to_truecolor("\x1b[90m") == "\x1b[38;2;128;128;128m"
+
+    def test_tc_bright_fg_white_code97(self) -> None:
+        assert upgrade_to_truecolor("\x1b[97m") == "\x1b[38;2;255;255;255m"
+
+    def test_tc_bg_black_code40(self) -> None:
+        assert upgrade_to_truecolor("\x1b[40m") == "\x1b[48;2;0;0;0m"
+
+    def test_tc_bg_white_code47(self) -> None:
+        assert upgrade_to_truecolor("\x1b[47m") == "\x1b[48;2;208;208;208m"
+
+    def test_tc_bright_bg_black_code100(self) -> None:
+        assert upgrade_to_truecolor("\x1b[100m") == "\x1b[48;2;128;128;128m"
+
+    def test_tc_bright_bg_white_code107(self) -> None:
+        assert upgrade_to_truecolor("\x1b[107m") == "\x1b[48;2;255;255;255m"
+
+    def test_256_code29_not_mapped(self) -> None:
+        assert upgrade_to_256("\x1b[29m") == "\x1b[29m"
+
+    def test_256_code39_not_mapped(self) -> None:
+        assert upgrade_to_256("\x1b[39m") == "\x1b[39m"
+
+    def test_256_code89_not_mapped(self) -> None:
+        assert upgrade_to_256("\x1b[89m") == "\x1b[89m"
+
+    def test_256_code98_not_mapped(self) -> None:
+        assert upgrade_to_256("\x1b[98m") == "\x1b[98m"
+
+    def test_256_code99_not_mapped(self) -> None:
+        assert upgrade_to_256("\x1b[99m") == "\x1b[99m"
+
+    def test_256_code108_not_mapped(self) -> None:
+        assert upgrade_to_256("\x1b[108m") == "\x1b[108m"
+
+    def test_256_fg_vs_bg_exact(self) -> None:
+        assert upgrade_to_256("\x1b[30m") == "\x1b[38;5;0m"
+        assert upgrade_to_256("\x1b[40m") == "\x1b[48;5;0m"
+
+    def test_tc_fg_vs_bg_exact(self) -> None:
+        assert upgrade_to_truecolor("\x1b[30m") == "\x1b[38;2;0;0;0m"
+        assert upgrade_to_truecolor("\x1b[40m") == "\x1b[48;2;0;0;0m"
+
+
+class TestHandleExtendedTokensExact:
+    """Pin exact P/T token output to kill string and boundary mutations."""
+
+    def test_p0_fg_non_bright(self) -> None:
+        assert _handle_extended_tokens("{P0}") == "\x1b[30m"
+
+    def test_p7_fg_non_bright_upper(self) -> None:
+        assert _handle_extended_tokens("{P7}") == "\x1b[37m"
+
+    def test_p8_fg_bright_lower(self) -> None:
+        assert _handle_extended_tokens("{P8}") == "\x1b[90m"
+
+    def test_p15_fg_bright_upper(self) -> None:
+        assert _handle_extended_tokens("{P15}") == "\x1b[97m"
+
+    def test_t0_bg_non_bright(self) -> None:
+        assert _handle_extended_tokens("{T0}") == "\x1b[40m"
+
+    def test_t7_bg_non_bright_upper(self) -> None:
+        assert _handle_extended_tokens("{T7}") == "\x1b[47m"
+
+    def test_t8_bg_bright_lower(self) -> None:
+        assert _handle_extended_tokens("{T8}") == "\x1b[100m"
+
+    def test_t15_bg_bright_upper(self) -> None:
+        assert _handle_extended_tokens("{T15}") == "\x1b[107m"
+
+    def test_p_modulo_wraps(self) -> None:
+        assert _handle_extended_tokens("{P16}") == "\x1b[30m"
+
+    def test_t_modulo_wraps(self) -> None:
+        assert _handle_extended_tokens("{T16}") == "\x1b[40m"
+
+
+class TestEmitColorExact:
+    """Pin exact _emit_color return values."""
+
+    def test_reset_exact(self) -> None:
+        assert _emit_color("-", "x") == "\x1b[0m"
+
+    def test_bright_fg_exact(self) -> None:
+        assert _emit_color("+", "r") == "\x1b[0;1;31m"
+
+    def test_dim_fg_exact(self) -> None:
+        assert _emit_color("-", "r") == "\x1b[0;31m"
+
+    def test_unknown_char_empty(self) -> None:
+        assert _emit_color("+", "z") == ""
+
+
+class TestColor256ToRgbLevels:
+    """Pin exact RGB values for 256-color cube to kill levels-tuple constant mutations."""
+
+    def test_index_17_levels_1_blue(self) -> None:
+        assert _color256_to_rgb(17) == (0, 0, 95)
+
+    def test_index_18_levels_2_blue(self) -> None:
+        assert _color256_to_rgb(18) == (0, 0, 135)
+
+    def test_index_19_levels_3_blue(self) -> None:
+        assert _color256_to_rgb(19) == (0, 0, 175)
+
+    def test_index_20_levels_4_blue(self) -> None:
+        assert _color256_to_rgb(20) == (0, 0, 215)
+
+    def test_index_21_levels_5_blue(self) -> None:
+        assert _color256_to_rgb(21) == (0, 0, 255)
+
+    def test_index_22_levels_1_green(self) -> None:
+        assert _color256_to_rgb(22) == (0, 95, 0)
+
+    def test_index_88_levels_2_red(self) -> None:
+        assert _color256_to_rgb(88) == (135, 0, 0)
+
+    def test_index_112_levels_mixed(self) -> None:
+        assert _color256_to_rgb(112) == (135, 215, 0)
+
+
+class TestHandleBraceTokensExact:
+    """Pin exact brace token output and boundary passthrough."""
+
+    def test_plus_r_exact(self) -> None:
+        assert _handle_brace_tokens("{+r}") == "\x1b[0;1;31m"
+
+    def test_minus_x_exact(self) -> None:
+        assert _handle_brace_tokens("{-x}") == "\x1b[0m"
+
+    def test_minus_r_exact(self) -> None:
+        assert _handle_brace_tokens("{-r}") == "\x1b[0;31m"
+
+    def test_truncated_no_closing_brace(self) -> None:
+        assert _handle_brace_tokens("{+r") == "{+r"
+
+    def test_brace_as_only_char(self) -> None:
+        assert _handle_brace_tokens("{") == "{"
+
+    def test_invalid_polarity_passthrough(self) -> None:
+        assert _handle_brace_tokens("{xr}") == "{xr}"
+
+    def test_surrounding_text_preserved(self) -> None:
+        assert _handle_brace_tokens("A{+r}B") == "A\x1b[0;1;31mB"
+
+
+class TestHandleTildeCodesExact:
+    """Pin exact tilde code output and boundary passthrough."""
+
+    def test_tilde_1_exact(self) -> None:
+        assert _handle_tilde_codes("~1") == "\x1b[0;1;32m"
+
+    def test_tilde_at_end_passthrough(self) -> None:
+        assert _handle_tilde_codes("~") == "~"
+
+    def test_tilde_0_exact(self) -> None:
+        assert _handle_tilde_codes("~0") == "\x1b[0m"
+
+    def test_tilde_7_exact(self) -> None:
+        assert _handle_tilde_codes("~7") == "\x1b[0;37m"
+
+    def test_tilde_unknown_passthrough(self) -> None:
+        assert _handle_tilde_codes("~Z") == "~Z"
+
+    def test_tilde_in_context(self) -> None:
+        assert _handle_tilde_codes("A~ZB") == "A~ZB"
+
+
+class TestConvertTokensExact:
+    """Pin exact token conversion output for upgrade functions."""
+
+    def test_256_p3_produces_f184(self) -> None:
+        assert upgrade_to_256("{P3}") == "{F184}"
+
+    def test_256_t3_produces_b184(self) -> None:
+        assert upgrade_to_256("{T3}") == "{B184}"
+
+    def test_256_p0_produces_f0(self) -> None:
+        assert upgrade_to_256("{P0}") == "{F0}"
+
+    def test_256_t0_produces_b0(self) -> None:
+        assert upgrade_to_256("{T0}") == "{B0}"
+
+    def test_256_p8_produces_f244(self) -> None:
+        assert upgrade_to_256("{P8}") == "{F244}"
+
+    def test_256_t8_produces_b244(self) -> None:
+        assert upgrade_to_256("{T8}") == "{B244}"
+
+    def test_256_p15_produces_f231(self) -> None:
+        assert upgrade_to_256("{P15}") == "{F231}"
+
+    def test_256_t15_produces_b231(self) -> None:
+        assert upgrade_to_256("{T15}") == "{B231}"
+
+    def test_tc_p3_exact_rgb(self) -> None:
+        assert upgrade_to_truecolor("{P3}") == "\x1b[38;2;215;215;0m"
+
+    def test_tc_t3_exact_rgb(self) -> None:
+        assert upgrade_to_truecolor("{T3}") == "\x1b[48;2;215;215;0m"
+
+    def test_tc_p0_exact_rgb(self) -> None:
+        assert upgrade_to_truecolor("{P0}") == "\x1b[38;2;0;0;0m"
+
+    def test_tc_t8_exact_rgb(self) -> None:
+        assert upgrade_to_truecolor("{T8}") == "\x1b[48;2;128;128;128m"
+
+
+# ---------------------------------------------------------------------------
+# Mutant-killing round 2: the stubborn 18
+# ---------------------------------------------------------------------------
+
+
+class TestMultiPartSgr:
+    """Multi-code SGR sequences to kill continue→break, join-separator, and
+    upper-bound +1 mutations inside _convert_sgr_256 / _convert_sgr_tc."""
+
+    def test_256_bold_plus_red_fg(self) -> None:
+        # \x1b[1;31m: code 1 (bold, unmapped) + code 31 (red fg → 38;5;160)
+        # continue→break on code 1 would skip processing code 31
+        # ';'.join→'XX;XX'.join would corrupt the separator
+        result = upgrade_to_256("\x1b[1;31m")
+        assert result == "\x1b[1;38;5;160m"
+
+    def test_256_bold_plus_bg_green(self) -> None:
+        # \x1b[1;42m: code 1 (bold) + code 42 (green bg → 48;5;34)
+        result = upgrade_to_256("\x1b[1;42m")
+        assert result == "\x1b[1;48;5;34m"
+
+    def test_tc_bold_plus_red_fg(self) -> None:
+        # \x1b[1;31m → code 1 + code 31 → 1;38;2;215;0;0
+        result = upgrade_to_truecolor("\x1b[1;31m")
+        assert result == "\x1b[1;38;2;215;0;0m"
+
+    def test_tc_bold_plus_bg_green(self) -> None:
+        # \x1b[1;42m → code 1 + code 42 → 1;48;2;0;175;0
+        result = upgrade_to_truecolor("\x1b[1;42m")
+        assert result == "\x1b[1;48;2;0;175;0m"
+
+
+class TestEmptySeqAndPassthroughGuards:
+    """Kill seq=="" → "XXXX" and "48" → "XX48XX" string mutations."""
+
+    def test_256_empty_sgr_exact_match(self) -> None:
+        # \x1b[m has seq="" — must return the exact original match
+        text = "\x1b[m"
+        assert upgrade_to_256(text) == text
+
+    def test_tc_empty_sgr_exact_match(self) -> None:
+        text = "\x1b[m"
+        assert upgrade_to_truecolor(text) == text
+
+    def test_256_existing_48_passthrough(self) -> None:
+        # "48" in parts guard — must pass through unchanged
+        text = "\x1b[48;5;100m"
+        assert upgrade_to_256(text) == text
+
+    def test_tc_existing_48_passthrough(self) -> None:
+        text = "\x1b[48;5;100m"
+        assert upgrade_to_truecolor(text) == text
+
+    def test_256_existing_48_2_passthrough(self) -> None:
+        text = "\x1b[48;2;10;20;30m"
+        assert upgrade_to_256(text) == text
+
+    def test_tc_existing_48_2_passthrough(self) -> None:
+        text = "\x1b[48;2;10;20;30m"
+        assert upgrade_to_truecolor(text) == text
+
+
+class TestTokenModulo16:
+    """Kill % 16 → % 17 mutations in _convert_tokens_256 / _convert_tokens_tc."""
+
+    def test_256_p16_wraps_to_0(self) -> None:
+        # {P16}: 16%16=0 → palette[0]=0 → {F0}
+        # With %17: 16%17=16 → palette[16] → IndexError or wrong value
+        assert upgrade_to_256("{P16}") == "{F0}"
+
+    def test_256_t16_wraps_to_0(self) -> None:
+        assert upgrade_to_256("{T16}") == "{B0}"
+
+    def test_tc_p16_wraps_to_0(self) -> None:
+        # {P16}: 16%16=0 → rgb_palette[0] = _color256_to_rgb(0) = (0,0,0)
+        assert upgrade_to_truecolor("{P16}") == "\x1b[38;2;0;0;0m"
+
+    def test_tc_t16_wraps_to_0(self) -> None:
+        assert upgrade_to_truecolor("{T16}") == "\x1b[48;2;0;0;0m"

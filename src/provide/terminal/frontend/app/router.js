@@ -1,3 +1,7 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 import { renderConnect } from "./views/connect-view.js";
 import { renderDashboard } from "./views/dashboard-view.js";
 import { renderOperator } from "./views/operator-view.js";

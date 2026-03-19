@@ -1,3 +1,7 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 import { loadUserWorkspaceState } from "../state.js";
 import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
 import { renderAppHeader } from "./app-header.js";

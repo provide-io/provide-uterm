@@ -17,13 +17,14 @@ except PackageNotFoundError:  # pragma: no cover
 from provide.terminal.ansi import (
     BOLD,
     CLEAR_SCREEN,
-    COLOR_MAP,
     DEFAULT_PALETTE,
     DEFAULT_RGB,
     RESET,
-    colorize,
+    normalize_colors,
     preview_ansi,
-    strip_colors,
+    register_color_dialect,
+    registered_dialects,
+    unregister_color_dialect,
     upgrade_to_256,
     upgrade_to_truecolor,
 )
@@ -43,15 +44,16 @@ from provide.terminal.screen import (
 __all__ = [
     "__version__",
     # ansi
-    "COLOR_MAP",
     "CLEAR_SCREEN",
     "BOLD",
     "RESET",
     "DEFAULT_PALETTE",
     "DEFAULT_RGB",
-    "colorize",
-    "strip_colors",
+    "normalize_colors",
     "preview_ansi",
+    "register_color_dialect",
+    "unregister_color_dialect",
+    "registered_dialects",
     "upgrade_to_256",
     "upgrade_to_truecolor",
     # file_io

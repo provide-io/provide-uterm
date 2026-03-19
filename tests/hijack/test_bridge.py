@@ -191,13 +191,13 @@ class TestAttachSessionWatch:
         bridge.attach_session()
 
         watch_fn = session._watches[0]
-        raw = b"Hello from TW2002"
+        raw = b"Hello from server"
         watch_fn({"screen": "test"}, raw)
 
         assert not bridge._send_q.empty()
         msg = bridge._send_q.get_nowait()
         assert msg["type"] == "term"
-        assert "Hello from TW2002" in msg["data"]
+        assert "Hello from server" in msg["data"]
 
     def test_watch_noop_empty_raw(self) -> None:
         session = MockSession()
