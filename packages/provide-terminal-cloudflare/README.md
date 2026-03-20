@@ -35,6 +35,7 @@ uv run pywrangler deploy
   - `/ws/browser/{worker_id}/term` — browser/operator protocol (JSON frames)
   - `/ws/raw/{worker_id}/term` — raw stream mode for `uterm listen` telnet/SSH gateways
 - **Hibernation-safe** — uses CF WebSocket Hibernation API; state survives DO sleep/wake cycles.
+- **WS session resumption** — browser reconnects reclaim their role and hijack ownership via one-time tokens stored in DO SQLite; see `docs/cf-do-architecture.md`.
 - **Quick-connect** — not currently exposed as a dedicated Cloudflare page or `POST /api/connect` flow in this package.
 
 ## Auth modes

@@ -230,6 +230,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         input_mode = browser_state["input_mode"]
         initial_snapshot = browser_state["initial_snapshot"]
 
+        _resume_token = browser_state.get("resume_token")
         await websocket.send_text(
             json.dumps(
                 {
@@ -247,6 +248,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         "hijack_control": "ws",
                         "hijack_step_supported": True,
                     },
+                    "resume_supported": hub._resume_store is not None,
+                    "resume_token": _resume_token,
                 },
                 ensure_ascii=True,
             )
@@ -278,6 +281,22 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         await websocket.send_text(
                             json.dumps({"type": "error", "message": "rate_limited"}, ensure_ascii=True)
                         )
+                    continue
+
+                # Resume handled here (not in browser_handlers) because it can
+                # update the local `role` / `can_hijack` variables.
+                if mtype == "resume" and hub._resume_store is not None:
+                    from provide.terminal.hijack.routes.browser_handlers import _handle_resume
+
+                    _prev_role = role
+                    owned_hijack = await _handle_resume(hub, websocket, worker_id, role, msg_b, owned_hijack)
+                    # _handle_resume may have updated the role in st.browsers;
+                    # read it back so subsequent messages use the correct role.
+                    async with hub._lock:
+                        _st = hub._workers.get(worker_id)
+                        if _st is not None:  # pragma: no branch
+                            role = _st.browsers.get(websocket, role)
+                    can_hijack = role == "admin"
                     continue
 
                 owned_hijack = await handle_browser_message(hub, websocket, worker_id, role, msg_b, owned_hijack)

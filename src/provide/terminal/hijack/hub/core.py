@@ -29,6 +29,7 @@ except ImportError as _e:  # pragma: no cover
 from provide.terminal.hijack.hub.connections import _ConnectionMixin
 from provide.terminal.hijack.hub.ownership import _HijackOwnershipMixin
 from provide.terminal.hijack.hub.polling import _PollingMixin
+from provide.terminal.hijack.hub.resume import ResumeSession, ResumeTokenStore
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.ratelimit import TokenBucket
 
@@ -38,6 +39,7 @@ HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
 BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]
 MetricCallback = Callable[[str, int], None]
 WorkerEmptyCallback = Callable[[str], Coroutine[Any, Any, None]]
+ResumeCallback = Callable[[str, ResumeSession], Awaitable[bool]]
 
 
 class BrowserRoleResolutionError(RuntimeError):
@@ -74,6 +76,9 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         rest_send_rate_limit_per_sec: float = 20,
         worker_token: str | None = None,
         event_deque_maxlen: int = 2000,
+        resume_store: ResumeTokenStore | None = None,
+        resume_ttl_s: float = 300,
+        on_resume: ResumeCallback | None = None,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -94,6 +99,10 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._rest_acquire_per_client: dict[str, TokenBucket] = {}
         self._rest_send_per_client: dict[str, TokenBucket] = {}
         self._event_deque_maxlen = max(1, int(event_deque_maxlen))
+        self._resume_store = resume_store
+        self._resume_ttl_s = max(1.0, float(resume_ttl_s))
+        self._on_resume = on_resume
+        self._ws_to_resume_token: dict[WebSocket, str] = {}
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""

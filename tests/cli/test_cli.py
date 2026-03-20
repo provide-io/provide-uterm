@@ -291,7 +291,9 @@ class TestCmdListen:
             from provide.terminal.cli import _run_listen
             from provide.terminal.gateway import SshWsGateway, TelnetWsGateway
 
-            task = asyncio.create_task(_run_listen(ws_url, "127.0.0.1", 0, 0, None, TelnetWsGateway, SshWsGateway))
+            task = asyncio.create_task(
+                _run_listen(ws_url, "127.0.0.1", 0, 0, None, None, "passthrough", TelnetWsGateway, SshWsGateway)
+            )
             await asyncio.sleep(0)
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError, SystemExit):
@@ -369,7 +371,7 @@ class TestRunListen:
                 self.closed = True
 
         class _FakeGateway:
-            def __init__(self, ws_url: str) -> None:
+            def __init__(self, ws_url: str, **_: object) -> None:
                 pass
 
             async def start(self, host: str, port: int) -> _FakeServer:
@@ -380,7 +382,9 @@ class TestRunListen:
             pass
 
         task = asyncio.create_task(
-            _run_listen("ws://localhost/ws", "127.0.0.1", 2112, 0, None, _FakeGateway, _FakeSshGateway)
+            _run_listen(
+                "ws://localhost/ws", "127.0.0.1", 2112, 0, None, None, "passthrough", _FakeGateway, _FakeSshGateway
+            )
         )
         await asyncio.sleep(0.05)
         task.cancel()
@@ -396,7 +400,7 @@ class TestRunListen:
             async def start(self, host: str, port: int) -> object:
                 raise AssertionError("Should not be called")
 
-        await _run_listen("ws://localhost/ws", "127.0.0.1", 0, 0, None, _FakeGateway, _FakeGateway)
+        await _run_listen("ws://localhost/ws", "127.0.0.1", 0, 0, None, None, "passthrough", _FakeGateway, _FakeGateway)
 
     async def test_run_listen_ssh_port_starts_ssh(self) -> None:
         """_run_listen with ssh_port > 0 starts an SSH gateway."""
@@ -415,7 +419,7 @@ class TestRunListen:
                 pass
 
         class _FakeSshGateway:
-            def __init__(self, ws_url: str, server_key: object = None) -> None:
+            def __init__(self, ws_url: str, **_: object) -> None:
                 pass
 
             async def start(self, host: str, port: int) -> _FakeSshServer:
@@ -423,7 +427,17 @@ class TestRunListen:
                 return _FakeSshServer()
 
         task = asyncio.create_task(
-            _run_listen("ws://localhost/ws", "127.0.0.1", 0, 12345, None, _FakeTelnetGateway, _FakeSshGateway)
+            _run_listen(
+                "ws://localhost/ws",
+                "127.0.0.1",
+                0,
+                12345,
+                None,
+                None,
+                "passthrough",
+                _FakeTelnetGateway,
+                _FakeSshGateway,
+            )
         )
         await asyncio.sleep(0.05)
         task.cancel()
@@ -440,7 +454,7 @@ class TestRunListen:
                 raise ImportError("asyncssh missing")
 
         class _FakeTelnetGatewayWithStart:
-            def __init__(self, ws_url: str) -> None:
+            def __init__(self, ws_url: str, **_: object) -> None:
                 pass
 
             async def start(self, host: str, port: int) -> object:
@@ -454,7 +468,17 @@ class TestRunListen:
                 return S()
 
         task = asyncio.create_task(
-            _run_listen("ws://localhost/ws", "127.0.0.1", 2112, 2222, None, _FakeTelnetGatewayWithStart, _BadSshGateway)
+            _run_listen(
+                "ws://localhost/ws",
+                "127.0.0.1",
+                2112,
+                2222,
+                None,
+                None,
+                "passthrough",
+                _FakeTelnetGatewayWithStart,
+                _BadSshGateway,
+            )
         )
         await asyncio.sleep(0.05)
         task.cancel()

@@ -14,6 +14,12 @@ frames are rejected with `use_rest_hijack_api`.
 
 from __future__ import annotations
 
+import logging
+import secrets
+import time
+
+logger = logging.getLogger(__name__)
+
 try:
     from provide_terminal_cloudflare.contracts import MessageLimits, ProtocolError, RuntimeProtocol, parse_frame
 except Exception:  # pragma: no cover
@@ -58,6 +64,10 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
 
     frame_type = frame.get("type")
 
+    if frame_type == "resume":
+        await _handle_resume(runtime, ws, frame)
+        return
+
     if frame_type == "input":
         # Open mode: operator and admin browsers can send input without an active hijack.
         if runtime.input_mode == "open":
@@ -80,3 +90,56 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
         # CF backend: hijack is REST-only. Inform the client rather than silently dropping.
         await runtime.send_ws(ws, {"type": "error", "message": "use_rest_hijack_api"})
     # heartbeat / ping: keep-alive frames, no response required.
+
+
+async def _handle_resume(runtime: RuntimeProtocol, ws: object, frame: dict) -> None:  # type: ignore[type-arg]
+    """Handle a browser resume request using a previously issued token."""
+    old_token = str(frame.get("token", ""))
+    if not old_token:
+        return
+    record = runtime.store.get_resume_token(old_token)
+    if record is None or record.get("worker_id") != runtime.worker_id:
+        # Invalid / expired / wrong worker — silently ignore (browser gets fresh session)
+        return
+
+    # Valid resume — revoke old token
+    runtime.store.revoke_resume_token(old_token)
+
+    stored_role = str(record.get("role", "viewer"))
+    was_hijack_owner = bool(record.get("was_hijack_owner"))
+
+    # Update socket attachment with restored role
+    try:
+        ws.serializeAttachment(f"browser:{stored_role}:{runtime.worker_id}")  # type: ignore[attr-defined]
+    except Exception as exc:
+        logger.debug("resume: serializeAttachment failed: %s", exc)
+
+    # Issue new token
+    new_token = secrets.token_urlsafe(32)
+    resume_ttl_s = float(getattr(runtime.config, "resume_ttl_s", 300))
+    runtime.store.create_resume_token(new_token, runtime.worker_id, stored_role, resume_ttl_s)
+
+    # Send updated hello with resumed=True
+    await runtime.send_ws(
+        ws,
+        {
+            "type": "hello",
+            "worker_id": runtime.worker_id,
+            "worker_online": runtime.worker_ws is not None,
+            "can_hijack": stored_role == "admin",
+            "input_mode": runtime.input_mode,
+            "role": stored_role,
+            "hijack_control": "rest",
+            "hijack_step_supported": True,
+            "resume_supported": True,
+            "resume_token": new_token,
+            "resumed": True,
+            "ts": time.time(),
+        },
+    )
+    await runtime.send_hijack_state(ws)
+    if runtime.last_snapshot is not None:
+        await runtime.send_ws(ws, runtime.last_snapshot)
+    logger.info(
+        "ws_browser_resumed worker_id=%s role=%s hijack_owner=%s", runtime.worker_id, stored_role, was_hijack_owner
+    )

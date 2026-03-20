@@ -37,7 +37,7 @@ class _PollingMixin:
             return False
         if expect_prompt_id and extract_prompt_id(snapshot) != expect_prompt_id:
             return False
-        return not (expect_regex is not None and not expect_regex.search(str(snapshot.get("screen", ""))))
+        return expect_regex is None or bool(expect_regex.search(str(snapshot.get("screen", ""))))
 
     async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
         """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""

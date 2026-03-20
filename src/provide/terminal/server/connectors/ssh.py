@@ -15,6 +15,7 @@ from typing import Any
 
 from provide.telemetry import get_logger
 
+from provide.terminal.defaults import TerminalDefaults
 from provide.terminal.screen import decode_cp437
 from provide.terminal.server.connectors.base import SessionConnector
 
@@ -71,8 +72,8 @@ class SshSessionConnector(SessionConnector):
             client_keys.append(imported_key)
         self._session_id = session_id
         self._display_name = display_name
-        self._host = str(config.get("host", "127.0.0.1"))
-        self._port = int(config.get("port", 22))
+        self._host = str(config.get("host", TerminalDefaults.TELNET_HOST))
+        self._port = int(config.get("port", TerminalDefaults.SSH_REMOTE_PORT))
         self._username = str(config.get("username", "guest"))
         self._password = None if config.get("password") is None else str(config.get("password"))
         self._client_keys = client_keys

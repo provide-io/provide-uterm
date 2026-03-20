@@ -41,7 +41,8 @@ emulator  = ["pyte>=0.8"]
 server    = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9"]
 cli       = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0"]
 client    = ["httpx>=0.27"]
-all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0", "pyjwt>=2.9", "httpx>=0.27", "fastmcp>=2.0"]
+manager   = ["fastapi>=0.110", "uvicorn>=0.24", "pyyaml>=6.0"]
+all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0", "pyjwt>=2.9", "httpx>=0.27", "fastmcp>=2.0", "pyyaml>=6.0"]
 mcp = [
     "fastmcp>=2.0",
 ]
@@ -50,6 +51,7 @@ mcp = [
 uterm = "provide.terminal.cli:main"
 uterm-server = "provide.terminal.server.cli:main"
 uterm-mcp = "provide.terminal.mcp.cli:main"
+uterm-manager = "provide.terminal.manager.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -99,6 +101,7 @@ dev = [
     "uvicorn>=0.24",
     "vulture>=2.14",
     "websockets>=16.0",
+    "pyyaml>=6.0",
     "xenon>=0.9.3",
     "fastmcp>=2.0",
 ]
