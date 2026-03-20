@@ -247,6 +247,8 @@ def parse_frame(raw: str, *, limits: MessageLimits | None = None) -> Frame:
         mode = value.get("input_mode")
         if mode in {"hijack", "open"}:
             normalized["mode"] = mode
+    elif frame_type == "resume":
+        normalized["token"] = str(value.get("token", ""))
     elif frame_type in {
         "snapshot_req",
         "error",

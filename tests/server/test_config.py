@@ -264,6 +264,20 @@ def test_validation_error_message_handles_empty_and_prefixed_errors() -> None:
     assert validation_error_message(_PrefixedError()) == "sessions exploded"
 
 
+def test_server_bind_config_derives_url_from_custom_host_port() -> None:
+    from provide.terminal.server.models import ServerBindConfig
+
+    cfg = ServerBindConfig(host="10.0.0.1", port=9090)
+    assert cfg.public_base_url == "http://10.0.0.1:9090"
+
+
+def test_server_bind_config_preserves_explicit_public_base_url() -> None:
+    from provide.terminal.server.models import ServerBindConfig
+
+    cfg = ServerBindConfig(host="10.0.0.1", port=9090, public_base_url="https://proxy.example.com")
+    assert cfg.public_base_url == "https://proxy.example.com"
+
+
 def test_loaded_max_sessions_is_enforced_by_app() -> None:
     config = config_from_mapping({"server": {"max_sessions": 1}})
 

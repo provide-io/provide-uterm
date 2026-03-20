@@ -25,6 +25,8 @@ from typing import Any
 
 from provide.telemetry import get_logger
 
+from provide.terminal.defaults import TerminalDefaults
+
 try:
     import asyncssh
 except ImportError as _e:  # pragma: no cover
@@ -196,8 +198,8 @@ def _get_or_create_host_key(data_dir: Path) -> asyncssh.SSHKey:
 
 async def start_ssh_server(
     handler: ConnectionHandler,
-    host: str = "0.0.0.0",  # nosec B104
-    port: int = 2222,
+    host: str = TerminalDefaults.BIND_ALL,  # nosec B104
+    port: int = TerminalDefaults.SSH_PORT,
     host_key_path: Path | None = None,
     max_connections_per_ip: int = 5,
 ) -> Any:

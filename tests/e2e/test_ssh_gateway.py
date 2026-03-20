@@ -333,3 +333,100 @@ class TestSshWsGatewayStart:
         finally:
             srv.close()
             await srv.wait_closed()
+
+    async def test_process_handler_runs_on_ssh_connect(self) -> None:
+        """Connecting a real SSH client through SshWsGateway exercises _process_handler."""
+        import asyncssh
+
+        from provide.terminal.gateway import SshWsGateway
+
+        ws_srv, ws_port = await _start_ws_echo_server(banner="HELLO\r\n")
+        gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}")
+        ssh_srv = await gw.start("127.0.0.1", 0)
+        ssh_port: int = ssh_srv.sockets[0].getsockname()[1]
+        try:
+            async with (
+                asyncssh.connect(
+                    "127.0.0.1",
+                    port=ssh_port,
+                    known_hosts=None,
+                    username="guest",
+                    config=[],
+                ) as conn,
+                conn.create_process() as proc,
+            ):
+                proc.stdin.write_eof()
+                data = await asyncio.wait_for(proc.stdout.read(4096), timeout=5.0)
+            text = data if isinstance(data, str) else data.decode("latin-1")
+            assert "HELLO" in text
+        finally:
+            ssh_srv.close()
+            await ssh_srv.wait_closed()
+            ws_srv.close()
+
+    async def test_process_handler_sends_resume_token(self, tmp_path: Any) -> None:
+        """When a token_file has a saved token, _process_handler sends a resume message."""
+        import asyncssh
+
+        from provide.terminal.gateway import SshWsGateway, _write_token
+
+        resume_msgs: list[str] = []
+
+        async def _handler(ws: Any) -> None:
+            async for msg in ws:
+                if isinstance(msg, str) and '"type": "resume"' in msg:
+                    resume_msgs.append(msg)
+                break  # only care about first message
+
+        ws_srv = await websockets.serve(_handler, "127.0.0.1", 0)
+        ws_port: int = ws_srv.sockets[0].getsockname()[1]
+
+        token_file = tmp_path / "tok"
+        _write_token(token_file, "my_resume_token")
+        gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}", token_file=token_file)
+        ssh_srv = await gw.start("127.0.0.1", 0)
+        ssh_port: int = ssh_srv.sockets[0].getsockname()[1]
+        try:
+            with contextlib.suppress(Exception):
+                async with asyncssh.connect(
+                    "127.0.0.1",
+                    port=ssh_port,
+                    known_hosts=None,
+                    username="guest",
+                    config=[],
+                ) as conn:
+                    async with conn.create_process() as proc:
+                        proc.stdin.write_eof()
+                        await asyncio.wait_for(proc.stdout.read(4096), timeout=3.0)
+        finally:
+            ssh_srv.close()
+            await ssh_srv.wait_closed()
+            ws_srv.close()
+
+        assert any("my_resume_token" in m for m in resume_msgs)
+
+    async def test_process_handler_exception_is_swallowed(self) -> None:
+        """If WS is unreachable, _process_handler logs and exits cleanly (no hang)."""
+        import asyncssh
+
+        from provide.terminal.gateway import SshWsGateway
+
+        # Point gateway at a port with nothing listening — WS connect will fail.
+        gw = SshWsGateway("ws://127.0.0.1:1")
+        ssh_srv = await gw.start("127.0.0.1", 0)
+        ssh_port: int = ssh_srv.sockets[0].getsockname()[1]
+        try:
+            with contextlib.suppress(Exception):
+                async with asyncssh.connect(
+                    "127.0.0.1",
+                    port=ssh_port,
+                    known_hosts=None,
+                    username="guest",
+                    config=[],
+                ) as conn:
+                    async with conn.create_process() as proc:
+                        await asyncio.wait_for(proc.stdout.read(4096), timeout=3.0)
+        finally:
+            ssh_srv.close()
+            await ssh_srv.wait_closed()
+        # Reaching here means no hang and no unhandled exception.

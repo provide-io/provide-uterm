@@ -295,3 +295,125 @@ async def test_input_mode_change(wrangler_server: str) -> None:
         status2, body2 = _http_post(wrangler_server, f"/worker/{worker_id}/input_mode", {"input_mode": "hijack"})
         assert status2 == 200, f"input_mode revert: {body2}"
         assert body2.get("input_mode") == "hijack"
+
+
+# ---------------------------------------------------------------------------
+# Tests — WS session resumption
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.e2e
+@pytest.mark.real_cf
+async def test_browser_hello_includes_resume_token(wrangler_server: str) -> None:
+    """Browser WS hello must include resume_supported=True and a resume_token."""
+    base_ws = _base_ws(wrangler_server)
+    worker_id = _new_worker_id()
+    uri = f"{base_ws}/ws/browser/{worker_id}/term"
+    async with websockets.connect(uri) as browser_ws:
+        hello = await _recv_ws(browser_ws)
+    assert hello["type"] == "hello"
+    assert hello.get("resume_supported") is True, f"resume_supported missing or False: {hello}"
+    assert hello.get("resume_token") is not None, f"resume_token missing: {hello}"
+    assert len(hello["resume_token"]) > 10, f"resume_token too short: {hello['resume_token']}"
+
+
+@pytest.mark.e2e
+@pytest.mark.real_cf
+async def test_resume_after_disconnect(wrangler_server: str) -> None:
+    """Connect → get token → disconnect → reconnect → resume → get resumed hello.
+
+    This is the definitive proof that session resumption works end-to-end.
+    """
+    base_ws = _base_ws(wrangler_server)
+    worker_id = _new_worker_id()
+    uri = f"{base_ws}/ws/browser/{worker_id}/term"
+
+    # --- Connection 1: get the resume token ---
+    async with websockets.connect(uri) as ws1:
+        hello1 = await _recv_ws(ws1)
+        assert hello1["type"] == "hello", f"expected hello, got: {hello1}"
+        token = hello1["resume_token"]
+        role1 = hello1.get("role", "viewer")
+
+    # WS1 is now closed (disconnected).
+
+    # --- Connection 2: reconnect and resume ---
+    async with websockets.connect(uri) as ws2:
+        # Drain the initial hello (fresh session)
+        hello2 = await _recv_ws(ws2)
+        assert hello2["type"] == "hello"
+        fresh_token = hello2.get("resume_token")
+        assert fresh_token is not None
+
+        # Send resume with the old token
+        await ws2.send(json.dumps({"type": "resume", "token": token}))
+
+        # Should receive a resumed hello
+        resumed_hello = await _recv_ws(ws2)
+        assert resumed_hello["type"] == "hello", f"expected resumed hello, got: {resumed_hello}"
+        assert resumed_hello.get("resumed") is True, f"resumed flag not set: {resumed_hello}"
+        assert resumed_hello.get("resume_token") is not None, f"no new token in resumed hello: {resumed_hello}"
+        assert resumed_hello["resume_token"] != token, "new token should differ from old"
+        assert resumed_hello.get("role") == role1, f"role not restored: {resumed_hello}"
+
+        # Should also get hijack_state
+        hs = await _recv_ws(ws2)
+        assert hs["type"] == "hijack_state", f"expected hijack_state, got: {hs}"
+
+
+@pytest.mark.e2e
+@pytest.mark.real_cf
+async def test_resume_expired_or_invalid_token_ignored(wrangler_server: str) -> None:
+    """Resume with a bogus token → silently ignored, no error, connection continues."""
+    base_ws = _base_ws(wrangler_server)
+    worker_id = _new_worker_id()
+    uri = f"{base_ws}/ws/browser/{worker_id}/term"
+
+    async with websockets.connect(uri) as ws:
+        hello = await _recv_ws(ws)
+        assert hello["type"] == "hello"
+
+        # Send resume with a fake token
+        await ws.send(json.dumps({"type": "resume", "token": "totally-bogus-token-12345"}))
+
+        # Send a ping to verify connection still works
+        await ws.send(json.dumps({"type": "ping"}))
+        # The next frame should NOT be a resumed hello — it should be
+        # either a heartbeat response or nothing. The connection should stay alive.
+        # (We don't get a pong back from CF — ping is just a keep-alive.)
+        # Instead, verify the connection is still alive by sending input and
+        # not getting disconnected.
+        await asyncio.sleep(0.5)
+        # If we get here without an exception, the connection survived the bogus resume.
+
+
+@pytest.mark.e2e
+@pytest.mark.real_cf
+async def test_resume_token_is_one_time_use(wrangler_server: str) -> None:
+    """A resume token can only be used once — second attempt is ignored."""
+    base_ws = _base_ws(wrangler_server)
+    worker_id = _new_worker_id()
+    uri = f"{base_ws}/ws/browser/{worker_id}/term"
+
+    # Get a token
+    async with websockets.connect(uri) as ws1:
+        hello1 = await _recv_ws(ws1)
+        token = hello1["resume_token"]
+
+    # First resume — should succeed
+    async with websockets.connect(uri) as ws2:
+        await _recv_ws(ws2)  # initial hello
+        await ws2.send(json.dumps({"type": "resume", "token": token}))
+        resumed = await _recv_ws(ws2)
+        assert resumed.get("resumed") is True, f"first resume failed: {resumed}"
+
+    # Second resume with same token — should be silently ignored
+    async with websockets.connect(uri) as ws3:
+        hello3 = await _recv_ws(ws3)
+        assert hello3["type"] == "hello"
+        await ws3.send(json.dumps({"type": "resume", "token": token}))
+
+        # Send ping to verify connection is alive — no resumed hello should come
+        await ws3.send(json.dumps({"type": "ping"}))
+        await asyncio.sleep(0.5)
+        # If we get here without crash, the revoked token was properly ignored

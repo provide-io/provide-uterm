@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
+from provide.terminal.hijack.models import VALID_ROLES
+
 if TYPE_CHECKING:
     from fastapi import WebSocket
 
@@ -206,3 +208,86 @@ async def _handle_input(
             await ws.send_text(json.dumps({"type": "error", "message": "Worker connection lost."}, ensure_ascii=True))
         else:
             await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]})
+
+
+async def _handle_resume(
+    hub: TermHub,
+    ws: WebSocket,
+    worker_id: str,
+    role: str,
+    msg_b: dict[str, Any],
+    owned_hijack: bool,
+) -> bool:
+    """Process a resume message from the browser. Returns updated owned_hijack."""
+    store = hub._resume_store
+    if store is None:
+        return owned_hijack
+
+    old_token = msg_b.get("token", "")
+    if not old_token:
+        return owned_hijack
+
+    session = store.get(old_token)
+    if session is None or session.worker_id != worker_id:
+        return owned_hijack
+
+    # Optional application-level validation
+    if hub._on_resume is not None and not await hub._on_resume(old_token, session):
+        return owned_hijack
+
+    # Valid resume — revoke old token
+    store.revoke(old_token)
+
+    # Restore role if different and valid
+    new_role = role
+    can_hijack = role == "admin"
+    if session.role != role and session.role in VALID_ROLES:
+        async with hub._lock:
+            st = hub._workers.get(worker_id)
+            if st is not None:  # pragma: no branch
+                st.browsers[ws] = session.role
+        new_role = session.role
+        can_hijack = new_role == "admin"
+
+    # Reclaim hijack if was owner and no current hijack
+    if session.was_hijack_owner:
+        async with hub._lock:
+            st = hub._workers.get(worker_id)
+            if st is not None and st.hijack_owner is None and not hub.is_hijacked(st):  # pragma: no branch
+                st.hijack_owner = ws
+                st.hijack_owner_expires_at = time.time() + hub._dashboard_hijack_lease_s
+                owned_hijack = True
+
+    # Issue new token for this connection
+    new_token = store.create(worker_id, new_role, hub._resume_ttl_s)
+    hub._ws_to_resume_token[ws] = new_token
+
+    # Re-read state and send updated hello
+    _resumed_state = await hub.register_browser_state_snapshot(worker_id, ws)
+    await ws.send_text(
+        json.dumps(
+            {
+                "type": "hello",
+                "worker_id": worker_id,
+                "can_hijack": can_hijack,
+                "hijacked": _resumed_state.get("is_hijacked", False),
+                "hijacked_by_me": _resumed_state.get("hijacked_by_me", False),
+                "worker_online": _resumed_state.get("worker_online", False),
+                "input_mode": _resumed_state.get("input_mode", "hijack"),
+                "role": new_role,
+                "hijack_control": "ws",
+                "hijack_step_supported": True,
+                "capabilities": {
+                    "hijack_control": "ws",
+                    "hijack_step_supported": True,
+                },
+                "resume_supported": True,
+                "resume_token": new_token,
+                "resumed": True,
+            },
+            ensure_ascii=True,
+        )
+    )
+    await ws.send_text(json.dumps(await hub.hijack_state_msg_for(worker_id, ws), ensure_ascii=True))
+    logger.info("ws_browser_resumed worker_id=%s role=%s hijack=%s", worker_id, new_role, owned_hijack)
+    return owned_hijack

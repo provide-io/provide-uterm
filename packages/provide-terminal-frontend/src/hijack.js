@@ -81,6 +81,9 @@ class ProvideHijack {
     this._hijackControl = "ws"; // "ws" | "rest"
     this._hijackStepSupported = true;
     this._restHijackId = null;
+    this._resumeToken = null;
+    this._resumeSupported = false;
+    this._workerId = config.workerId || "default";
     this._mobileKeysVisible = false;
     this._root = null;
 
@@ -149,6 +152,22 @@ class ProvideHijack {
     const d = document.createElement("div");
     d.textContent = String(s);
     return d.innerHTML;
+  }
+
+  /** @param {string} token */
+  _saveResumeToken(token) {
+    try {
+      sessionStorage.setItem(`uterm_resume_${this._workerId}`, token);
+    } catch (_) {}
+  }
+
+  /** @returns {string|null} */
+  _loadResumeToken() {
+    try {
+      return sessionStorage.getItem(`uterm_resume_${this._workerId}`);
+    } catch (_) {
+      return null;
+    }
   }
 
   _resolveWsUrl() {
@@ -353,6 +372,11 @@ class ProvideHijack {
       this._reconnectAttempt = 0;
       this._setStatus("live", "Connected (watching)");
       this._updateButtons();
+      // Attempt session resumption if we have a stored token
+      const storedToken = this._resumeToken || this._loadResumeToken();
+      if (storedToken) {
+        this._wsSend({ type: "resume", token: storedToken });
+      }
       this._wsSend({ type: "snapshot_req" });
       this._startHeartbeat();
     };
@@ -379,6 +403,7 @@ class ProvideHijack {
       this._hijackControl = "ws";
       this._hijackStepSupported = true;
       this._restHijackId = null;
+      // Do NOT clear _resumeToken — needed for session resumption on reconnect
       this._updateStatus();
       this._updateButtons();
       this._ws = null;
@@ -471,7 +496,7 @@ class ProvideHijack {
       }
 
       case "hello": {
-        // {type, worker_id, can_hijack, hijacked, hijacked_by_me, input_mode, role}
+        // {type, worker_id, can_hijack, hijacked, hijacked_by_me, input_mode, role, resume_token, resumed}
         this._canHijack = !!msg.can_hijack;
         this._hijacked = !!msg.hijacked;
         this._hijackedByMe = !!msg.hijacked_by_me;
@@ -480,6 +505,11 @@ class ProvideHijack {
         this._hijackControl = msg.hijack_control || msg.capabilities?.hijack_control || "ws";
         const stepSupported = msg.hijack_step_supported ?? msg.capabilities?.hijack_step_supported;
         this._hijackStepSupported = stepSupported !== false;
+        if (msg.resume_supported !== undefined) this._resumeSupported = !!msg.resume_supported;
+        if (msg.resume_token) {
+          this._resumeToken = msg.resume_token;
+          this._saveResumeToken(msg.resume_token);
+        }
         this._updateStatus();
         this._updateButtons();
         break;
