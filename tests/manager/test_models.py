@@ -23,7 +23,6 @@ class TestBotStatusBase:
         assert bot.state == "unknown"
         assert bot.pid is None
         assert bot.config is None
-        assert bot.game_letter == "A"
         assert bot.paused is False
         assert bot.pending_command_seq == 0
         assert bot.manager_command_history == []
@@ -41,7 +40,6 @@ class TestBotStatusBase:
             last_update_time=4000.0,
             error_message="oops",
             exit_reason="crash",
-            game_letter="B",
             is_hijacked=True,
             hijacked_by="admin",
             hijacked_at=5000.0,
@@ -102,7 +100,6 @@ class TestSpawnBatchRequest:
         req = SpawnBatchRequest(config_paths=["/a.yaml"])
         assert req.group_size == 1
         assert req.group_delay == 12.0
-        assert req.game_letter == "A"
         assert req.name_style == "random"
         assert req.name_base == ""
 

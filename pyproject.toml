@@ -117,6 +117,7 @@ filterwarnings = [
 ]
 markers = [
     "playwright: browser-based UI tests (deselected by default, run with -m playwright)",
+    "mutant: mutation-killing tests (heavy, deselected by default, run with -m mutant)",
 ]
 addopts = [
     "--import-mode=importlib",
@@ -126,7 +127,7 @@ addopts = [
     "--tb=short",
     "-ra",
     "-m",
-    "not playwright",
+    "not playwright and not mutant",
     "--cov=provide.terminal",
     "--cov-branch",
     "--cov-report=term-missing",
@@ -244,6 +245,7 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
+max_children = 6
 paths_to_mutate = ["src/provide/terminal/"]
 tests_dir = ["tests/"]
 also_copy = ["scripts/"]

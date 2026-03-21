@@ -56,6 +56,25 @@ class TestCleanPath:
         result = _clean_path("worker", "/fallback")
         assert result == "/worker", f"Expected '/worker', got {result!r}"
 
+    def test_rstrip_only_removes_slash_not_x(self) -> None:
+        """rstrip('/') must strip only '/' — not the character 'X'.
+
+        Kills mutmut_13: rstrip('/') → rstrip('XX/XX').
+        rstrip('XX/XX') strips the char-set {X, /} from the right, so a path
+        ending in 'X' (e.g. '/pathX/') would lose the 'X' with the mutation.
+        """
+        result = _clean_path("/pathX/", "/fallback")
+        assert result == "/pathX", f"Expected '/pathX', trailing slash removed but X preserved, got {result!r}"
+
+    def test_rstrip_preserves_trailing_uppercase_in_segment(self) -> None:
+        """Path '/adminX' should not have 'X' stripped.
+
+        With rstrip('/') (correct): '/adminX' → '/adminX'.
+        With rstrip('XX/XX') (mutation): '/adminX' → '/admin' (X stripped).
+        """
+        result = _clean_path("/adminX", "/fallback")
+        assert result == "/adminX", f"Expected '/adminX', got {result!r}"
+
 
 # ---------------------------------------------------------------------------
 # model_dump

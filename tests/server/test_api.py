@@ -643,3 +643,63 @@ def test_principal_guard_500_when_missing() -> None:
     with TestClient(bare, raise_server_exceptions=False) as client:
         r = client.get("/api/sessions")
         assert r.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for api.py helpers
+# ---------------------------------------------------------------------------
+
+
+def test_principal_guard_detail_message_when_missing() -> None:
+    """_principal() must return status 500 with detail 'principal was not resolved'.
+
+    Kills mutmut_10 (status_code=None), mutmut_11 (detail=None),
+    mutmut_12 (no status_code kwarg), mutmut_13 (no detail kwarg).
+    """
+    from fastapi import FastAPI
+
+    from provide.terminal.server.routes.api import create_api_router
+
+    bare = FastAPI()
+    bare.include_router(create_api_router())
+    bare.state.uterm_registry = MagicMock()
+    bare.state.uterm_registry.list_sessions_with_definitions = AsyncMock(return_value=[])
+    bare.state.uterm_authz = MagicMock()
+
+    with TestClient(bare, raise_server_exceptions=False) as client:
+        r = client.get("/api/sessions")
+    assert r.status_code == 500, f"Expected 500, got {r.status_code}"
+    body = r.json()
+    assert body.get("detail") == "principal was not resolved", (
+        f"Expected detail='principal was not resolved', got {body.get('detail')!r}"
+    )
+
+
+def test_unknown_session_returns_404_with_detail(app_client: TestClient) -> None:
+    """Unknown session ID returns 404 with detail mentioning the session ID.
+
+    Kills:
+    - x__session_definition__mutmut_6: detail=f'unknown session: {session_id}' → detail=None
+    - x_create_api_router__mutmut_6: _sid_not_found detail → None
+    - x_create_api_router__mutmut_8: _sid_not_found detail omitted
+    - x__registry__mutmut_1: cast(None, ...) — runtime behavior same but type hint wrong
+    - x__registry__mutmut_5: cast('XXSessionRegistryXX', ...) — same runtime effect
+    """
+    r = app_client.get("/api/sessions/nonexistent-session-xyz")
+    assert r.status_code == 404, f"Expected 404 for unknown session, got {r.status_code}"
+    detail = r.json().get("detail", "")
+    assert detail is not None, "404 response must have a detail field"
+    assert "nonexistent-session-xyz" in str(detail), f"404 detail must mention the session ID, got {detail!r}"
+
+
+def test_unknown_session_connect_returns_404_with_detail(app_client: TestClient) -> None:
+    """Connecting to an unknown session returns 404 with detail mentioning the session ID.
+
+    Uses _session_definition which calls HTTPException(404, f'unknown session: {session_id}').
+    Kills x_create_api_router__mutmut_6 and mutmut_8 via _sid_not_found() and
+    x__session_definition__mutmut_6 which changes detail to None.
+    """
+    r = app_client.post("/api/sessions/nonexistent-xyz/connect")
+    assert r.status_code == 404
+    detail = r.json().get("detail", "")
+    assert "nonexistent-xyz" in str(detail), f"Connect unknown session detail must mention session ID, got {detail!r}"

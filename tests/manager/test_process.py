@@ -19,14 +19,14 @@ class FakeWorkerPlugin:
     """Minimal WorkerRegistryPlugin implementation for tests."""
 
     @property
-    def game_type(self) -> str:
+    def worker_type(self) -> str:
         return "test_game"
 
     @property
     def worker_module(self) -> str:
         return "test_worker_module"
 
-    def configure_worker_env(self, env, bot_status, manager):
+    def configure_worker_env(self, env, bot_status, manager, **kwargs):
         env["TEST_CUSTOM"] = "value"
 
 
@@ -139,16 +139,32 @@ class TestSpawnBot:
             await pm.spawn_bot("/nonexistent.yaml", "bot_000")
 
     @pytest.mark.asyncio
-    async def test_unknown_game_type(self, pm, tmp_path):
+    async def test_unknown_worker_type(self, pm, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: unknown_game\n")
-        with pytest.raises(RuntimeError, match="Unknown game_type"):
+        config.write_text("worker_type: unknown_game\n")
+        with pytest.raises(RuntimeError, match="Unknown worker_type"):
             await pm.spawn_bot(str(config), "bot_000")
+
+    @pytest.mark.asyncio
+    async def test_single_registry_fallback(self, pm, manager, tmp_path):
+        """No worker_type in YAML + single registry entry → uses that entry."""
+        config = tmp_path / "test.yaml"
+        config.write_text("# no worker_type key\n")
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 7777
+        manager.broadcast_status = AsyncMock()
+
+        with patch.object(pm, "_spawn_process", return_value=mock_proc):
+            result = await pm.spawn_bot(str(config), "bot_000")
+
+        assert result == "bot_000"
+        assert manager.bots["bot_000"].state == "running"
 
     @pytest.mark.asyncio
     async def test_spawn_success(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\nconnection:\n  game_letter: B\n")
+        config.write_text("worker_type: test_game\n")
 
         mock_proc = MagicMock()
         mock_proc.pid = 12345
@@ -165,7 +181,7 @@ class TestSpawnBot:
     @pytest.mark.asyncio
     async def test_spawn_updates_existing_bot(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="queued", pid=0)
 
         mock_proc = MagicMock()
@@ -181,7 +197,7 @@ class TestSpawnBot:
     @pytest.mark.asyncio
     async def test_spawn_process_failure(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with (
@@ -191,11 +207,15 @@ class TestSpawnBot:
             await pm.spawn_bot(str(config), "bot_000")
 
     @pytest.mark.asyncio
-    async def test_spawn_bad_yaml(self, pm, manager, tmp_path):
+    async def test_spawn_bad_yaml_with_multiple_registries(self, pm, manager, tmp_path):
+        """Bad YAML → falls to 'default'; with multiple registries, raises Unknown worker_type."""
         config = tmp_path / "test.yaml"
         config.write_text("{{invalid yaml")
-        # Should default to game_type "default" which isn't registered
-        with pytest.raises(RuntimeError, match="Unknown game_type"):
+        # Add a second registry entry so fallback doesn't apply
+        from unittest.mock import MagicMock
+
+        pm._worker_registry["other_game"] = MagicMock()
+        with pytest.raises(RuntimeError, match="Unknown worker_type"):
             await pm.spawn_bot(str(config), "bot_000")
 
 

@@ -110,11 +110,11 @@ class TimeseriesPlugin(Protocol):
 
 @runtime_checkable
 class WorkerRegistryPlugin(Protocol):
-    """Maps a game type to its worker subprocess module."""
+    """Maps a worker type to its worker subprocess module."""
 
     @property
-    def game_type(self) -> str:
-        """The game identifier, e.g. ``"tradewars"``."""
+    def worker_type(self) -> str:
+        """The worker identifier, e.g. ``"tradewars"``."""
         ...
 
     @property
@@ -122,6 +122,18 @@ class WorkerRegistryPlugin(Protocol):
         """Fully-qualified Python module path for the worker process."""
         ...
 
-    def configure_worker_env(self, env: dict[str, str], bot_status: BotStatusBase, manager: Any) -> None:
-        """Inject game-specific environment variables before spawning."""
+    def configure_worker_env(
+        self,
+        env: dict[str, str],
+        bot_status: BotStatusBase,
+        manager: Any,
+        *,
+        raw_config: dict[str, Any] | None = None,
+    ) -> None:
+        """Inject game-specific environment variables before spawning.
+
+        *raw_config* is the raw YAML dict for the bot's config file, allowing
+        plugins to read game-specific keys without the generic manager needing
+        to know about them.
+        """
         ...

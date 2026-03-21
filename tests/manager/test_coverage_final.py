@@ -21,14 +21,14 @@ from provide.terminal.manager.process import BotProcessManager
 
 class FakeWorkerPlugin:
     @property
-    def game_type(self) -> str:
+    def worker_type(self) -> str:
         return "test_game"
 
     @property
     def worker_module(self) -> str:
         return "test_module"
 
-    def configure_worker_env(self, env, bot_status, manager):
+    def configure_worker_env(self, env, bot_status, manager, **kwargs):
         pass
 
 

@@ -8,9 +8,10 @@ Provides a pluggable dialect registry for converting BBS color tokens to
 standard ANSI escape sequences, plus color-upgrade utilities (16-color →
 256-color / truecolor).
 
-Built-in dialects: extended tokens ({F#}/{B#}/{P#}/{T#}), tilde codes (~N),
-and pipe codes (|00-|23).  Additional dialects (e.g. brace tokens) can be
-registered at runtime via :func:`register_color_dialect`.
+Built-in dialects: extended tokens ({F#}/{B#}/{P#}/{T#}), TWGS brace tokens
+({+c}/{-x}/{+Bw}/{NK}), tilde codes (~N), and pipe codes (|00-|23).
+Additional dialects can be registered at runtime via
+:func:`register_color_dialect`.
 """
 
 from __future__ import annotations
@@ -235,6 +236,30 @@ _TILDE_MAP: dict[str, tuple[str, str]] = {
     "E": ("+", "r"),
 }
 
+_BRACE_TOKEN_MAP: dict[str, str] = {
+    "{+c}": "\x1b[1;36m",
+    "{-c}": "\x1b[0;36m",
+    "{+r}": "\x1b[1;31m",
+    "{-r}": "\x1b[0;31m",
+    "{+g}": "\x1b[1;32m",
+    "{-g}": "\x1b[0;32m",
+    "{+y}": "\x1b[1;33m",
+    "{-y}": "\x1b[0;33m",
+    "{+b}": "\x1b[1;34m",
+    "{-b}": "\x1b[0;34m",
+    "{+m}": "\x1b[1;35m",
+    "{-m}": "\x1b[0;35m",
+    "{+w}": "\x1b[1;37m",
+    "{+Bw}": "\x1b[1;37m",
+    "{-w}": "\x1b[0;37m",
+    "{+k}": "\x1b[1;30m",
+    "{-k}": "\x1b[0;30m",
+    "{-x}": "\x1b[0m",
+    "{NK}": "\x1b[0m",
+    "{T}": "\x1b[1m",
+    "{t}": "\x1b[0m",
+}
+
 
 def _emit_color(polarity: str, color_char: str) -> str:
     if color_char == "x":
@@ -287,20 +312,30 @@ def _handle_tilde_codes(text: str) -> str:
 def _handle_brace_tokens(text: str) -> str:
     """Convert ``{+c}``/``{-x}`` brace tokens to ANSI escapes.
 
-    Not registered as a built-in dialect — intended for external registration
-    by game servers that use this format (e.g. TWGS).
+    Includes the TWGS-specific ``{+Bw}`` header token in addition to the
+    single-character color tags.
     """
     out = []
     i = 0
     while i < len(text):
-        if text[i] == "{" and i + 3 < len(text) and text[i + 3] == "}":
-            polarity = text[i + 1]
-            color_char = text[i + 2]
-            if polarity in ("+", "-"):
-                seq = _emit_color(polarity, color_char)
-                if seq:
-                    out.append(seq)
+        if text[i] == "{":
+            if i + 2 < len(text):
+                token = text[i : i + 3]
+                if token in _BRACE_TOKEN_MAP:
+                    out.append(_BRACE_TOKEN_MAP[token])
+                    i += 3
+                    continue
+            if i + 3 < len(text):
+                token = text[i : i + 4]
+                if token in _BRACE_TOKEN_MAP:
+                    out.append(_BRACE_TOKEN_MAP[token])
                     i += 4
+                    continue
+            if i + 4 < len(text):
+                token = text[i : i + 5]
+                if token in _BRACE_TOKEN_MAP:
+                    out.append(_BRACE_TOKEN_MAP[token])
+                    i += 5
                     continue
         out.append(text[i])
         i += 1
@@ -445,6 +480,7 @@ preview_ansi = normalize_colors
 # Register built-in dialects
 # ---------------------------------------------------------------------------
 
+register_color_dialect("brace_tokens", _handle_brace_tokens)
 register_color_dialect("extended_tokens", _handle_extended_tokens)
 register_color_dialect("tilde_codes", _handle_tilde_codes)
 register_color_dialect("pipe_codes", _handle_pipe_codes)

@@ -102,7 +102,6 @@ class SwarmManager:
         group_size: int = 1,
         group_delay: float = 12.0,
         cancel_existing: bool = True,
-        game_letter: str = "A",
         name_style: str = "random",
         name_base: str = "",
     ) -> None:
@@ -111,7 +110,6 @@ class SwarmManager:
             group_size=group_size,
             group_delay=group_delay,
             cancel_existing=cancel_existing,
-            game_letter=game_letter,
             name_style=name_style,
             name_base=name_base,
         )

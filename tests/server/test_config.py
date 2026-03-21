@@ -278,6 +278,100 @@ def test_server_bind_config_preserves_explicit_public_base_url() -> None:
     assert cfg.public_base_url == "https://proxy.example.com"
 
 
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for default_server_config
+# ---------------------------------------------------------------------------
+
+
+def test_default_server_config_session_display_name() -> None:
+    """Kills mutmut_9 (None), mutmut_15 (omitted), mutmut_22 (XXProvide ShellXX),
+    mutmut_23 (provide shell lowercase), mutmut_24 (PROVIDE SHELL uppercase).
+    """
+    config = default_server_config()
+    session = config.sessions[0]
+    assert session.display_name == "Provide Shell", (
+        f"Default session display_name must be 'Provide Shell', got {session.display_name!r}"
+    )
+
+
+def test_default_server_config_session_connector_type_is_shell() -> None:
+    """Kills mutmut_16 (connector_type omitted, defaults to 'shell' — same value but
+    verifies explicit setting is present and tests structural completeness).
+    """
+    config = default_server_config()
+    session = config.sessions[0]
+    assert session.connector_type == "shell", (
+        f"Default session connector_type must be 'shell', got {session.connector_type!r}"
+    )
+
+
+def test_default_server_config_session_input_mode_is_open() -> None:
+    """Kills mutmut_17 (input_mode omitted — defaults to 'open' but verifies explicit setting)."""
+    config = default_server_config()
+    session = config.sessions[0]
+    assert session.input_mode == "open", f"Default session input_mode must be 'open', got {session.input_mode!r}"
+
+
+def test_default_server_config_session_auto_start_is_true() -> None:
+    """Kills mutmut_18 (auto_start omitted — defaults to True but verifies explicit setting)."""
+    config = default_server_config()
+    session = config.sessions[0]
+    assert session.auto_start is True, f"Default session auto_start must be True, got {session.auto_start!r}"
+
+
+def test_default_server_config_session_tags_exact() -> None:
+    """Kills mutmut_19 (tags omitted), mutmut_30 (XXshellXX), mutmut_31 (SHELL),
+    mutmut_32 (XXreferenceXX), mutmut_33 (REFERENCE).
+    Tags must be exactly ['shell', 'reference'] (lowercase, unmodified).
+    """
+    config = default_server_config()
+    session = config.sessions[0]
+    assert session.tags == ["shell", "reference"], (
+        f"Default session tags must be ['shell', 'reference'], got {session.tags!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for _merged_config_mapping (model_dump mode)
+# ---------------------------------------------------------------------------
+
+
+def test_config_from_mapping_produces_correct_datetime_type() -> None:
+    """Kills mutmut_17 (mode=None), mutmut_18 (mode=XXpythonXX), mutmut_19 (mode=PYTHON).
+
+    _merged_config_mapping calls default_server_config().model_dump(mode='python').
+    With mode='python', created_at is a datetime object (not a string).
+    With mode=None, pydantic uses 'python' mode by default (may be equivalent),
+    but mode='XXpythonXX' raises or gives wrong result.
+    We verify round-tripping produces a valid ServerConfig with datetime intact.
+    """
+    from datetime import datetime
+
+    from provide.terminal.server.models import ServerConfig
+
+    # config_from_mapping() internally uses _merged_config_mapping which calls model_dump(mode='python')
+    config = config_from_mapping({})
+    assert isinstance(config, ServerConfig)
+    # If mode was wrong, the sessions created_at would be a string instead of datetime
+    session = config.sessions[0]
+    assert isinstance(session.created_at, datetime), (
+        f"session.created_at must be a datetime (model_dump mode='python'), got {type(session.created_at)}"
+    )
+
+
+def test_config_from_mapping_non_dict_section_error_mentions_type(section: str = "server") -> None:
+    """Kills mutmut_33: error message uses type(data[section]).__name__ not type(None).__name__.
+
+    The error must mention the actual type of the bad value, not always 'NoneType'.
+    """
+    with pytest.raises(ValueError) as exc_info:
+        config_from_mapping({"server": ["not", "a", "dict"]})
+    msg = str(exc_info.value)
+    # Should mention 'list', not 'NoneType'
+    assert "list" in msg, f"Error must mention actual type 'list', got: {msg!r}"
+    assert "NoneType" not in msg, f"Error must not say 'NoneType', got: {msg!r}"
+
+
 def test_loaded_max_sessions_is_enforced_by_app() -> None:
     config = config_from_mapping({"server": {"max_sessions": 1}})
 

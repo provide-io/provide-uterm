@@ -18,14 +18,14 @@ from provide.terminal.manager.process import BotProcessManager
 
 class FakeWorkerPlugin:
     @property
-    def game_type(self) -> str:
+    def worker_type(self) -> str:
         return "test_game"
 
     @property
     def worker_module(self) -> str:
         return "test_module"
 
-    def configure_worker_env(self, env, bot_status, manager):
+    def configure_worker_env(self, env, bot_status, manager, **kwargs):
         pass
 
 
@@ -60,7 +60,7 @@ class TestStartSpawnSwarm:
     @pytest.mark.asyncio
     async def test_start_cancels_existing(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         # Start a "spawn" that will be cancelled
@@ -86,7 +86,7 @@ class TestSpawnSwarm:
     @pytest.mark.asyncio
     async def test_spawn_swarm_basic(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
         mock_proc = MagicMock()
         mock_proc.pid = 100
@@ -96,33 +96,15 @@ class TestSpawnSwarm:
                 [str(config), str(config)],
                 group_size=2,
                 group_delay=0.01,
-                game_letter="B",
             )
 
         assert len(result) == 2
         assert all(bid.startswith("bot_") for bid in result)
 
     @pytest.mark.asyncio
-    async def test_spawn_swarm_game_full_abort(self, pm, manager, tmp_path):
-        config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
-        manager.broadcast_status = AsyncMock()
-
-        # Pre-register a bot with game_full exit
-        manager.bots["bot_existing"] = BotStatusBase(bot_id="bot_existing", state="error", exit_reason="game_full")
-
-        result = await pm.spawn_swarm(
-            [str(config), str(config)],
-            group_size=1,
-            game_letter="A",
-        )
-
-        assert len(result) == 0  # all aborted
-
-    @pytest.mark.asyncio
     async def test_spawn_swarm_with_delay(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
         mock_proc = MagicMock()
         mock_proc.pid = 200
@@ -139,7 +121,7 @@ class TestSpawnSwarm:
     @pytest.mark.asyncio
     async def test_spawn_swarm_spawn_failure(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", side_effect=OSError("fail")):
@@ -260,7 +242,7 @@ class TestDesiredStateEnforcement:
     @pytest.mark.asyncio
     async def test_desired_state_scale_up(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.desired_bots = 2
         manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running", config=str(config))
         manager.broadcast_status = AsyncMock()

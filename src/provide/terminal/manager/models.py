@@ -66,7 +66,6 @@ class BotStatusBase(BaseModel):
     last_action_time: float | None = None
     status_reported_at: float | None = None
     recent_actions: list[dict[str, Any]] = Field(default_factory=list)
-    game_letter: str = "A"
     is_hijacked: bool = False
     hijacked_by: str | None = None
     hijacked_at: float | None = None
@@ -108,6 +107,5 @@ class SpawnBatchRequest(BaseModel):
     config_paths: list[str] = Field(min_length=1)
     group_size: int = Field(default=1, gt=0)
     group_delay: float = Field(default=12.0, ge=0.0)
-    game_letter: str = "A"
     name_style: str = "random"
     name_base: str = ""

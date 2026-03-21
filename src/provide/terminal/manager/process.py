@@ -118,7 +118,6 @@ class BotProcessManager:
         group_size: int = 1,
         group_delay: float = 12.0,
         cancel_existing: bool = True,
-        game_letter: str = "A",
         name_style: str = "random",
         name_base: str = "",
     ) -> None:
@@ -130,7 +129,6 @@ class BotProcessManager:
                 config_paths,
                 group_size=group_size,
                 group_delay=group_delay,
-                game_letter=game_letter,
                 name_style=name_style,
                 name_base=name_base,
             )
@@ -146,21 +144,25 @@ class BotProcessManager:
 
         logger.info("spawning_bot", bot_id=bot_id, config_path=config_path)
 
-        game_type = "default"
-        config_game_letter = ""
+        worker_type = "default"
+        raw: dict[str, Any] = {}
         try:
             raw_text = await asyncio.to_thread(Path(config_path).read_text)
             raw = yaml.safe_load(raw_text) or {}
-            game_type = str(raw.get("game_type", "default") or "default")
-            config_game_letter = str((raw.get("connection") or {}).get("game_letter", "") or "")
+            worker_type = str(raw.get("worker_type", "default") or "default")
         except Exception as exc:
-            logger.warning("game_type_read_failed_defaulting", config_path=config_path, error=str(exc))
+            logger.warning("worker_type_read_failed", config_path=config_path, error=str(exc))
 
-        registry_entry = self._worker_registry.get(game_type)
+        registry_entry = self._worker_registry.get(worker_type)
         if registry_entry is None:
-            raise RuntimeError(
-                f"Unknown game_type {game_type!r} in {config_path}. Registered: {sorted(self._worker_registry)}"
-            )
+            # Single-registry fallback: if only one worker type is registered and the
+            # config has no worker_type key, use that sole entry automatically.
+            if len(self._worker_registry) == 1 and worker_type == "default":
+                registry_entry = next(iter(self._worker_registry.values()))
+            else:
+                raise RuntimeError(
+                    f"Unknown worker_type {worker_type!r} in {config_path}. Registered: {sorted(self._worker_registry)}"
+                )
         worker_module = registry_entry.worker_module
 
         cmd = [sys.executable, "-m", worker_module, "--config", config_path, "--bot-id", bot_id]
@@ -170,18 +172,14 @@ class BotProcessManager:
             env = {k: v for k, v in os.environ.items() if k.startswith(env_prefix) or k in _WORKER_ENV_PASSTHROUGH}
 
             bot_entry = self.manager.bots.get(bot_id)
-            effective_game_letter = config_game_letter or (bot_entry.game_letter if bot_entry else "") or "A"
-            env[f"{env_prefix}GAME_LETTER"] = effective_game_letter
-            if bot_entry and bot_entry.game_letter != effective_game_letter:
-                bot_entry.game_letter = effective_game_letter
             if self._spawn_name_style:
                 env[f"{env_prefix}NAME_STYLE"] = self._spawn_name_style
             if self._spawn_name_base:
                 env[f"{env_prefix}NAME_BASE"] = self._spawn_name_base
 
-            # Let the game plugin inject additional env vars.
+            # Let the game plugin inject additional env vars (incl. game-specific fields).
             if bot_entry is not None:
-                registry_entry.configure_worker_env(env, bot_entry, self.manager)
+                registry_entry.configure_worker_env(env, bot_entry, self.manager, raw_config=raw)
 
             process = await asyncio.to_thread(self._spawn_process, bot_id, cmd, env)
 
@@ -234,7 +232,6 @@ class BotProcessManager:
         config_paths: list[str],
         group_size: int = 5,
         group_delay: float = 60.0,
-        game_letter: str = "A",
         name_style: str = "random",
         name_base: str = "",
     ) -> list[str]:
@@ -256,27 +253,10 @@ class BotProcessManager:
                     pid=0,
                     config=config,
                     state="queued",
-                    game_letter=game_letter,
                 )
         await self.manager.broadcast_status()
 
         for group_start in range(0, total, group_size):
-            game_full_bots = [b for b in self.manager.bots.values() if b.exit_reason == "game_full"]
-            if game_full_bots:
-                logger.warning(
-                    "spawn_swarm_aborted",
-                    reason="game_full",
-                    triggered_by=game_full_bots[0].bot_id,
-                    remaining=total - group_start,
-                )
-                for i in range(group_start, total):
-                    bid = f"bot_{base_index + i:03d}"
-                    if bid in self.manager.bots and self.manager.bots[bid].state == "queued":
-                        self.manager.bots[bid].state = "stopped"
-                        self.manager.bots[bid].exit_reason = "game_full"
-                await self.manager.broadcast_status()
-                break
-
             group_end = min(group_start + group_size, total)
             group_configs = config_paths[group_start:group_end]
 
@@ -390,6 +370,8 @@ class BotProcessManager:
                         bot.error_message = (
                             f"No heartbeat in {heartbeat_timeout:.0f}s - bot process may have crashed or is stuck"
                         )
+                        bot.error_type = "HeartbeatTimeout"
+                        bot.error_timestamp = time.time()
                         bot.exit_reason = "heartbeat_timeout"
                         bot.stopped_at = time.time()
                         if bot.bot_id in self.manager.processes:
