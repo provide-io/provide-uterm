@@ -470,6 +470,41 @@ class TestHandleTildeCodesExact:
         assert _handle_tilde_codes("A~ZB") == "A~ZB"
 
 
+class TestMapIndexDirectBoundaries:
+    """Kill _map_index boundary mutations directly.
+
+    mutmut_4: 30 <= code <= 37 → 30 <= code <= 38
+    mutmut_18: 40 <= code <= 47 → 40 <= code <= 48
+    Code 38 and 48 cannot be tested through upgrade_to_256 because the
+    '38 in parts' and '48 in parts' guards intercept them first.
+    We call _map_index directly to pin these boundary values.
+    """
+
+    def test_map_index_38_is_none(self) -> None:
+        """_map_index(38) must return None — kills mutmut_4 (37 → 38 upper bound)."""
+        from provide.terminal.ansi import _map_index
+
+        assert _map_index(38) is None, "_map_index(38) must be None (38 is not a valid fg color code)"
+
+    def test_map_index_48_is_none(self) -> None:
+        """_map_index(48) must return None — kills mutmut_18 (47 → 48 upper bound)."""
+        from provide.terminal.ansi import _map_index
+
+        assert _map_index(48) is None, "_map_index(48) must be None (48 is not a valid bg color code)"
+
+    def test_map_index_37_is_7(self) -> None:
+        """_map_index(37) must return 7 — confirms the fg upper bound is exactly 37."""
+        from provide.terminal.ansi import _map_index
+
+        assert _map_index(37) == 7
+
+    def test_map_index_47_is_7(self) -> None:
+        """_map_index(47) must return 7 — confirms the bg upper bound is exactly 47."""
+        from provide.terminal.ansi import _map_index
+
+        assert _map_index(47) == 7
+
+
 class TestConvertTokensExact:
     """Pin exact token conversion output for upgrade functions."""
 

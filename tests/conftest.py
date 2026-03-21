@@ -397,3 +397,25 @@ def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
     telnet_server.shutdown()
     telnet_server.server_close()
     telnet_thread.join(timeout=5)
+
+
+# ---------------------------------------------------------------------------
+# Auto-mark mutation-killing tests so they are excluded from the default run.
+# Files matching these patterns are heavy and intended to be run alongside
+# mutmut, not as part of normal development test cycles.
+# Run them explicitly with: pytest -m mutant
+# ---------------------------------------------------------------------------
+
+_MUTANT_FILE_PATTERNS = (
+    "mutant",
+    "mutation",
+    "mutmut",
+)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    mutant_mark = pytest.mark.mutant
+    for item in items:
+        fspath = str(item.fspath)
+        if any(pat in fspath for pat in _MUTANT_FILE_PATTERNS):
+            item.add_marker(mutant_mark, append=False)

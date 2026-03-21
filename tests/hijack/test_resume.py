@@ -145,3 +145,60 @@ class TestInMemoryResumeStore:
         s2 = store.get(t2)
         assert s1 is not None and s1.worker_id == "w1"
         assert s2 is not None and s2.worker_id == "w2"
+
+    def test_create_token_length_is_43_chars(self) -> None:
+        """Kill create__mutmut_3: nbytes 32→33 changes token length from 43 to 44."""
+        store = InMemoryResumeStore()
+        token = store.create("w1", "admin", 60)
+        # secrets.token_urlsafe(32) → 43 base64url chars
+        assert len(token) == 43
+
+    def test_create_stored_session_has_correct_token(self) -> None:
+        """Kill create__mutmut_6: session stored with token=None instead of real token."""
+        store = InMemoryResumeStore()
+        token = store.create("w1", "admin", 60)
+        session = store.get(token)
+        assert session is not None
+        assert session.token == token
+
+    def test_create_stored_session_has_created_at(self) -> None:
+        """Kill create__mutmut_9: session stored with created_at=None."""
+        store = InMemoryResumeStore()
+        token = store.create("w1", "admin", 60)
+        session = store.get(token)
+        assert session is not None
+        assert isinstance(session.created_at, float)
+        assert session.created_at > 0.0
+
+    def test_get_at_exact_expiry_not_expired(self) -> None:
+        """Kill get__mutmut_4: > → >= makes token at exactly expires_at return None."""
+        store = InMemoryResumeStore()
+        with patch("provide.terminal.hijack.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            token = store.create("w1", "admin", 30.0)
+            # At exactly expires_at (130.0), should NOT be expired (uses >, not >=)
+            mock_time.monotonic.return_value = 130.0
+            assert store.get(token) is not None
+
+    def test_cleanup_expired_at_exact_expiry_not_removed(self) -> None:
+        """Kill cleanup_expired__mutmut_3: > → >= removes token at exactly expires_at."""
+        store = InMemoryResumeStore()
+        with patch("provide.terminal.hijack.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            store.create("w1", "admin", 30.0)
+            # At exactly expires_at (130.0), should NOT be cleaned up (uses >, not >=)
+            mock_time.monotonic.return_value = 130.0
+            removed = store.cleanup_expired()
+            assert removed == 0
+            assert len(store) == 1
+
+    def test_active_tokens_at_exact_expiry_is_active(self) -> None:
+        """Kill active_tokens__mutmut_2: <= → < excludes token at exactly expires_at."""
+        store = InMemoryResumeStore()
+        with patch("provide.terminal.hijack.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            token = store.create("w1", "admin", 30.0)
+            # At exactly expires_at (130.0), should be active (uses <=, not <)
+            mock_time.monotonic.return_value = 130.0
+            active = store.active_tokens()
+            assert token in active

@@ -321,3 +321,46 @@ class TestResolveBrowserRole:
         role = await hub._resolve_role_for_browser(ws, "w1")
         # 'superadmin' is not in valid roles, should fall back to 'viewer'
         assert role == "viewer", f"Invalid role must fall back to 'viewer', got {role!r}"
+
+
+# ---------------------------------------------------------------------------
+# _safe_int in hijack/models.py
+# ---------------------------------------------------------------------------
+
+
+class TestSafeIntModels:
+    """Kill hijack.models._safe_int mutmut_6: result < min_val → result <= min_val.
+
+    With the mutation, _safe_int(min_val, default, min_val=min_val) would return
+    default even when result == min_val (the minimum valid value).
+    The original only rejects when result < min_val; min_val itself is valid.
+    """
+
+    def test_safe_int_exact_min_val_is_accepted(self) -> None:
+        """_safe_int(1, 80, min_val=1) must return 1, not the default.
+
+        Kills mutmut_6: result < min_val → result <= min_val.
+        With mutation: result=1 <= min_val=1 is True → returns default=80.
+        With original: result=1 < min_val=1 is False → returns 1.
+        """
+        from provide.terminal.hijack.models import _safe_int
+
+        assert _safe_int(1, 80, min_val=1) == 1, "_safe_int(1, 80, min_val=1) must return 1 (min_val is valid)"
+
+    def test_safe_int_below_min_val_is_rejected(self) -> None:
+        """_safe_int(0, 80, min_val=1) must return default=80."""
+        from provide.terminal.hijack.models import _safe_int
+
+        assert _safe_int(0, 80, min_val=1) == 80
+
+    def test_safe_int_above_min_val_is_accepted(self) -> None:
+        """_safe_int(2, 80, min_val=1) must return 2."""
+        from provide.terminal.hijack.models import _safe_int
+
+        assert _safe_int(2, 80, min_val=1) == 2
+
+    def test_safe_int_no_min_val_accepts_any_int(self) -> None:
+        """Without min_val, any valid int is accepted."""
+        from provide.terminal.hijack.models import _safe_int
+
+        assert _safe_int(-100, 0) == -100

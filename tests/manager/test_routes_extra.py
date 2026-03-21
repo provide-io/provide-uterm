@@ -86,7 +86,7 @@ class TestSpawnRoute:
 
     def test_spawn_batch(self, client, manager, tmp_path):
         config = tmp_path / "c.yaml"
-        config.write_text("game_type: test\n")
+        config.write_text("worker_type: test\n")
         manager.start_spawn_swarm = AsyncMock()
         resp = client.post(
             "/swarm/spawn-batch",

@@ -7,7 +7,15 @@
 
 from __future__ import annotations
 
-from provide.terminal.screen import decode_cp437, encode_cp437, normalize_terminal_text, strip_ansi
+from provide.terminal.screen import (
+    clean_screen_for_display,
+    decode_cp437,
+    encode_cp437,
+    extract_action_tags,
+    extract_key_value_pairs,
+    normalize_terminal_text,
+    strip_ansi,
+)
 
 
 class TestStripAnsi:
@@ -151,3 +159,120 @@ class TestNormalizeTerminalTextEdgeCases:
         result = normalize_terminal_text("1;31m\n2;32mtext")
         assert "1;31m" not in result
         assert "text" in result
+
+
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for normalize_terminal_text
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeTerminalTextMutants:
+    """Kill surviving mutants in normalize_terminal_text.
+
+    mutmut_27: _BARE_SGR_LINE_PREFIX_RE.sub('', ...) → sub('XXXX', ...)
+    mutmut_33: _BARE_SGR_RE.sub('', ...) → sub('XXXX', ...)
+    """
+
+    def test_line_prefix_bare_sgr_not_replaced_with_xxxx(self) -> None:
+        """Bare SGR at line start before uppercase letter must be REMOVED, not replaced.
+
+        _BARE_SGR_LINE_PREFIX_RE matches e.g. '1;31m' before 'SOME' at line start.
+        Mutation: sub('XXXX', ...) would leave 'XXXX' in output.
+        """
+        # '1;31m' at line start followed by uppercase letter matches the pattern
+        text = "1;31mSOME TEXT"
+        result = normalize_terminal_text(text)
+        assert "1;31m" not in result, "Bare SGR prefix should be removed"
+        assert "XXXX" not in result, "Replacement should be empty string, not 'XXXX'"
+        assert "SOME TEXT" in result, "Non-SGR content must be preserved"
+
+    def test_bare_sgr_not_replaced_with_xxxx(self) -> None:
+        """Isolated bare SGR fragment between whitespace/start and escape/whitespace/end
+        must be REMOVED (empty string sub), not replaced with 'XXXX'.
+
+        _BARE_SGR_RE matches e.g. '1;31m' between newline and ESC.
+        Mutation: sub('XXXX', ...) would insert 'XXXX'.
+        """
+        # bare SGR fragment after newline before ESC matches _BARE_SGR_RE
+        text = "before\n1;31m\x1bmore"
+        result = normalize_terminal_text(text)
+        assert "1;31m" not in result, "Bare SGR should be removed"
+        assert "XXXX" not in result, "Sub replacement must be '' not 'XXXX'"
+        assert "before" in result
+        assert "more" in result
+
+
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for extract_action_tags
+# ---------------------------------------------------------------------------
+
+
+class TestExtractActionTagsMutants:
+    """Kill surviving mutants in extract_action_tags.
+
+    mutmut_1: default max_tags=8 → max_tags=9
+    mutmut_15: continue → break (when tag already in seen)
+    """
+
+    def test_default_max_tags_is_8_not_9(self) -> None:
+        """With 9 unique tags, default max_tags=8 returns 8 items.
+
+        Mutation max_tags=9 would return 9 items.
+        """
+        text = " ".join(f"<Tag{i}>" for i in range(9))
+        result = extract_action_tags(text)  # uses default max_tags
+        assert len(result) == 8, f"Default max_tags must be 8, got {len(result)} items"
+
+    def test_duplicate_before_unique_does_not_stop_processing(self) -> None:
+        """After a duplicate tag is encountered, processing must CONTINUE (not break).
+
+        With continue: <A> <A> <B> → ['A', 'B'] (two items)
+        With break: <A> <A> <B> → ['A'] (stops at first duplicate)
+        """
+        result = extract_action_tags("<A> then <A> then <B>")
+        assert "A" in result, "First tag must be included"
+        assert "B" in result, "Tag after duplicate must also be included (continue, not break)"
+        assert len(result) == 2, f"Expected 2 unique tags, got {result}"
+
+
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for clean_screen_for_display
+# ---------------------------------------------------------------------------
+
+
+class TestCleanScreenForDisplayMutants:
+    """Kill mutmut_1: default max_lines=30 → max_lines=31."""
+
+    def test_default_max_lines_is_30_not_31(self) -> None:
+        """With 31 content lines, default max_lines=30 returns exactly 30 lines.
+
+        Mutation max_lines=31 would return 31 lines.
+        """
+        screen = "\n".join(f"content line {i}" for i in range(31))
+        result = clean_screen_for_display(screen)  # uses default max_lines
+        assert len(result) == 30, f"Default max_lines must be 30, got {len(result)}"
+
+
+# ---------------------------------------------------------------------------
+# Mutation-killing tests for extract_key_value_pairs
+# ---------------------------------------------------------------------------
+
+
+class TestExtractKeyValuePairsMutants:
+    """Kill mutmut_9: continue → break when regex pattern is invalid."""
+
+    def test_invalid_pattern_first_does_not_stop_valid_pattern(self) -> None:
+        """When an invalid regex pattern comes FIRST, processing must CONTINUE.
+
+        With continue: invalid first, valid second → valid result found.
+        With break: invalid first → breaks immediately → valid result missed.
+        """
+        patterns = {
+            "invalid": r"(bad(?P<invalid>)",  # invalid regex — comes first
+            "credits": r"Credits:\s*(\d+)",  # valid regex — comes second
+        }
+        screen = "Credits: 100"
+        result = extract_key_value_pairs(screen, patterns)
+        assert "credits" in result, "Valid pattern after invalid must be processed (continue not break)"
+        assert result["credits"] == "100"
+        assert "invalid" not in result

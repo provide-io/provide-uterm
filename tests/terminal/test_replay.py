@@ -57,6 +57,27 @@ class TestRebuildRawStream:
         rebuild_raw_stream(log_path, out_path)
         assert out_path.read_bytes() == b""
 
+    def test_read_event_without_data_key_is_skipped(self, tmp_path: Path) -> None:
+        """Kill mutmut_26/28: get("data", None) crashes when "data" key is missing."""
+        records = [
+            {"event": "read", "ts": 1.0},  # no "data" key at all
+            {"event": "read", "ts": 2.0, "data": {"raw_bytes_b64": base64.b64encode(b"hi").decode()}},
+        ]
+        log_path = _make_log(tmp_path, records)
+        out_path = tmp_path / "out.bin"
+        rebuild_raw_stream(log_path, out_path)
+        assert out_path.read_bytes() == b"hi"
+
+    def test_read_event_without_raw_bytes_b64_produces_no_output(self, tmp_path: Path) -> None:
+        """Kill mutmut_33: default "XXXX" instead of "" causes garbage bytes to be written."""
+        records = [
+            {"event": "read", "ts": 1.0, "data": {}},  # data present but no raw_bytes_b64
+        ]
+        log_path = _make_log(tmp_path, records)
+        out_path = tmp_path / "out.bin"
+        rebuild_raw_stream(log_path, out_path)
+        assert out_path.read_bytes() == b""
+
 
 class TestRebuildRawStreamBlankLines:
     def test_skips_blank_lines(self, tmp_path: Path) -> None:

@@ -31,14 +31,14 @@ from provide.terminal.manager.timeseries.manager import TimeseriesManager
 
 class FakeWorkerPlugin:
     @property
-    def game_type(self) -> str:
+    def worker_type(self) -> str:
         return "test_game"
 
     @property
     def worker_module(self) -> str:
         return "test_module"
 
-    def configure_worker_env(self, env, bot_status, manager):
+    def configure_worker_env(self, env, bot_status, manager, **kwargs):
         pass
 
 
@@ -482,23 +482,10 @@ class TestProcessSpawnEdgeCases:
         assert bid == "bot_001"
 
     @pytest.mark.asyncio
-    async def test_spawn_bot_updates_game_letter(self, pm, manager, tmp_path):
-        """Line 176: bot_entry.game_letter = effective_game_letter."""
-        config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\nconnection:\n  game_letter: C\n")
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="queued", game_letter="A")
-        manager.broadcast_status = AsyncMock()
-        mock_proc = MagicMock(pid=123)
-
-        with patch.object(pm, "_spawn_process", return_value=mock_proc):
-            await pm.spawn_bot(str(config), "bot_000")
-        assert manager.bots["bot_000"].game_letter == "C"
-
-    @pytest.mark.asyncio
     async def test_spawn_bot_passes_name_base(self, pm, manager, tmp_path):
-        """Line 180: env[NAME_BASE] set."""
+        """env[NAME_BASE] set when _spawn_name_base is not empty."""
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         pm._spawn_name_base = "fleet"
         manager.broadcast_status = AsyncMock()
 
@@ -674,7 +661,7 @@ class TestSpawnRouteCoverage:
         """Lines 83-88: successful spawn with auto-allocated ID."""
         client, manager, tmp_path = setup
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         mock_proc = MagicMock(pid=123)
         manager.broadcast_status = AsyncMock()
 
@@ -687,7 +674,7 @@ class TestSpawnRouteCoverage:
         """Lines 85-86: spawn with explicit bot_id."""
         client, manager, tmp_path = setup
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         mock_proc = MagicMock(pid=123)
         manager.broadcast_status = AsyncMock()
 
@@ -700,7 +687,7 @@ class TestSpawnRouteCoverage:
         """Lines 89-90: spawn error."""
         client, manager, tmp_path = setup
         config = tmp_path / "test.yaml"
-        config.write_text("game_type: test_game\n")
+        config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(manager.bot_process_manager, "_spawn_process", side_effect=OSError("fail")):

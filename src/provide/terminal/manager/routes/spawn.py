@@ -101,7 +101,6 @@ async def spawn_batch(request: SpawnBatchRequest, manager: SwarmManager = Depend
         group_size=request.group_size,
         group_delay=request.group_delay,
         cancel_existing=True,
-        game_letter=request.game_letter,
         name_style=request.name_style,
         name_base=request.name_base,
     )
