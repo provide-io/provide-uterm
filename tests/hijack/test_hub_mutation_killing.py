@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.hijack.control_stream_helpers import decode_control_payload
 from provide.terminal.hijack.hub import BrowserRoleResolutionError, TermHub
 from provide.terminal.hijack.models import WorkerTermState
 
@@ -67,7 +68,7 @@ class TestForceReleaseHijackControlMsg:
         async def _capture(msg: dict[str, Any]) -> None:
             sent_msgs.append(msg)
 
-        worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(__import__("json").loads(s)))
+        worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(decode_control_payload(s)))
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
@@ -176,7 +177,7 @@ class TestRequestAnalysis:
         hub = _make_hub()
         worker_ws = AsyncMock()
         sent_msgs: list[dict[str, Any]] = []
-        worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(__import__("json").loads(s)))
+        worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(decode_control_payload(s)))
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())

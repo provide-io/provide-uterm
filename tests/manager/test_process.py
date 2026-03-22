@@ -5,10 +5,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+import asyncio
+import os
+import sys
+import time
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
+import provide.terminal.manager.process as process_module
 from provide.terminal.manager.config import ManagerConfig
 from provide.terminal.manager.core import SwarmManager
 from provide.terminal.manager.models import BotStatusBase
@@ -229,32 +234,153 @@ class TestKillBot:
     @pytest.mark.asyncio
     async def test_kill_terminates(self, pm, manager):
         mock_proc = MagicMock()
-        mock_proc.wait.return_value = 0
         manager.processes["bot_000"] = mock_proc
         manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
         manager.broadcast_status = AsyncMock()
 
-        await pm.kill_bot("bot_000")
-        mock_proc.terminate.assert_called_once()
+        with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
+            await pm.kill_bot("bot_000")
+        mock_stop.assert_awaited_once_with(
+            bot_id="bot_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
+        )
         assert manager.bots["bot_000"].state == "stopped"
         assert "bot_000" not in manager.processes
 
     @pytest.mark.asyncio
     async def test_kill_force_on_timeout(self, pm, manager):
-        import asyncio
-
         mock_proc = MagicMock()
-
-        # wait() blocks forever
-        async def slow_wait():
-            await asyncio.sleep(100)
-
-        mock_proc.wait.side_effect = lambda: slow_wait()
         manager.processes["bot_000"] = mock_proc
         manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
         manager.broadcast_status = AsyncMock()
 
-        # The wait_for will timeout, triggering kill
-        with patch("asyncio.wait_for", side_effect=TimeoutError):
+        with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
             await pm.kill_bot("bot_000")
-        mock_proc.kill.assert_called_once()
+        mock_stop.assert_awaited_once_with(
+            bot_id="bot_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
+        )
+
+
+class TestProcessTreeHelpers:
+    def test_spawn_process_posix_sets_start_new_session(self, pm, tmp_path):
+        pm._log_dir = str(tmp_path / "logs")
+        with (
+            patch.object(process_module.os, "name", "posix"),
+            patch("subprocess.Popen") as mock_popen,
+        ):
+            mock_popen.return_value = MagicMock(pid=123)
+            pm._spawn_process("bot_000", ["python", "-c", "pass"], {})
+        assert mock_popen.call_args.kwargs["start_new_session"] is True
+
+    def test_spawn_process_windows_sets_creationflags(self, pm, tmp_path):
+        with (
+            patch.object(process_module.os, "name", "nt"),
+            patch.object(process_module.subprocess, "CREATE_NEW_PROCESS_GROUP", 512, create=True),
+        ):
+            assert pm._spawn_platform_kwargs() == {"creationflags": 512}
+
+    @pytest.mark.asyncio
+    async def test_stop_process_tree_posix_graceful(self, pm):
+        proc = MagicMock(pid=321)
+        with (
+            patch.object(process_module.os, "name", "posix"),
+            patch.object(pm, "_wait_for_process_exit", new_callable=AsyncMock),
+            patch.object(pm, "_signal_posix_process_group") as mock_signal,
+        ):
+            await pm._stop_process_tree(bot_id="bot_000", process=proc)
+        mock_signal.assert_called_once_with(321, process_module.signal.SIGTERM)
+
+    @pytest.mark.asyncio
+    async def test_stop_process_tree_posix_timeout_escalates(self, pm):
+        proc = MagicMock(pid=654)
+        with (
+            patch.object(process_module.os, "name", "posix"),
+            patch.object(pm, "_wait_for_process_exit", new_callable=AsyncMock) as mock_wait,
+            patch.object(pm, "_signal_posix_process_group") as mock_signal,
+        ):
+            mock_wait.side_effect = [TimeoutError, None]
+            await pm._stop_process_tree(bot_id="bot_000", process=proc)
+        assert mock_signal.call_args_list == [
+            call(654, process_module.signal.SIGTERM),
+            call(654, process_module.signal.SIGKILL),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_stop_process_tree_windows_uses_taskkill_immediately(self, pm):
+        # On Windows, terminate() only kills the direct child; taskkill /T /F
+        # must be used immediately so the whole process tree is killed.
+        proc = MagicMock(pid=987)
+        with (
+            patch.object(process_module.os, "name", "nt"),
+            patch.object(pm, "_wait_for_process_exit", new_callable=AsyncMock) as mock_wait,
+            patch.object(pm, "_taskkill_process_tree", new_callable=AsyncMock) as mock_taskkill,
+        ):
+            mock_wait.return_value = None
+            await pm._stop_process_tree(bot_id="bot_000", process=proc)
+        proc.terminate.assert_not_called()
+        mock_taskkill.assert_awaited_once_with(987)
+
+    @pytest.mark.asyncio
+    async def test_kill_bot_terminates_spawned_child_process_tree(self, pm, manager, tmp_path):
+        parent_script = tmp_path / "parent.py"
+        child_script = tmp_path / "child.py"
+        child_pid_file = tmp_path / "child.pid"
+        heartbeat_file = tmp_path / "child.heartbeat"
+
+        child_script.write_text(
+            "import pathlib\n"
+            "import sys\n"
+            "import time\n"
+            "\n"
+            "heartbeat = pathlib.Path(sys.argv[1])\n"
+            "while True:\n"
+            "    heartbeat.write_text(str(time.time()))\n"
+            "    time.sleep(0.05)\n"
+        )
+        parent_script.write_text(
+            "import pathlib\n"
+            "import subprocess\n"
+            "import sys\n"
+            "import time\n"
+            "\n"
+            "child_script = sys.argv[1]\n"
+            "heartbeat = sys.argv[2]\n"
+            "pid_file = pathlib.Path(sys.argv[3])\n"
+            "child = subprocess.Popen([sys.executable, child_script, heartbeat])\n"
+            "pid_file.write_text(str(child.pid))\n"
+            "time.sleep(60)\n"
+        )
+
+        process = pm._spawn_process(
+            "bot_123",
+            [sys.executable, str(parent_script), str(child_script), str(heartbeat_file), str(child_pid_file)],
+            dict(os.environ),
+        )
+        manager.processes["bot_123"] = process
+        manager.bots["bot_123"] = BotStatusBase(bot_id="bot_123", state="running", pid=process.pid)
+        manager.broadcast_status = AsyncMock()
+
+        try:
+            deadline = time.time() + 5.0
+            while time.time() < deadline and not child_pid_file.exists():
+                await asyncio.sleep(0.05)
+            assert child_pid_file.exists(), "child process pid file was never created"
+
+            deadline = time.time() + 5.0
+            while time.time() < deadline and not heartbeat_file.exists():
+                await asyncio.sleep(0.05)
+            assert heartbeat_file.exists(), "child heartbeat file was never created"
+
+            first_mtime = heartbeat_file.stat().st_mtime_ns
+            await asyncio.sleep(0.2)
+            second_mtime = heartbeat_file.stat().st_mtime_ns
+            assert second_mtime > first_mtime, "child heartbeat did not advance before shutdown"
+
+            await pm.kill_bot("bot_123")
+
+            stopped_mtime = heartbeat_file.stat().st_mtime_ns
+            await asyncio.sleep(0.5 if os.name == "nt" else 0.25)
+            assert heartbeat_file.stat().st_mtime_ns == stopped_mtime, "child heartbeat kept advancing after kill_bot()"
+            assert process.poll() is not None
+        finally:
+            if process.poll() is None:
+                await pm._stop_process_tree(bot_id="bot_123", process=process)

@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -142,69 +141,27 @@ async def toggle_bust_respawn(request: dict[str, Any], manager: SwarmManager = D
 
 @router.post("/swarm/kill-all")
 async def kill_all(manager: SwarmManager = Depends(require_manager)) -> Any:  # noqa: B008
-    await manager.cancel_spawn()
-    killed = []
-    for bot_id in list(manager.processes.keys()):
-        try:
-            await manager.kill_bot(bot_id)
-            killed.append(bot_id)
-        except Exception as e:
-            logger.exception("failed_to_kill_bot", bot_id=bot_id, error=str(e))
-    return {"killed": killed, "count": len(killed)}
+    return await manager.kill_all()
 
 
 @router.post("/swarm/clear")
 async def clear_swarm(manager: SwarmManager = Depends(require_manager)) -> Any:  # noqa: B008
-    await manager.cancel_spawn()
-    for bot_id in list(manager.processes.keys()):
-        with contextlib.suppress(OSError, RuntimeError):
-            await manager.kill_bot(bot_id)
-    for bot_id in list(manager.bots.keys()):
-        with contextlib.suppress(AttributeError, RuntimeError):
-            manager.bot_process_manager.release_bot_account(bot_id)
-    count = len(manager.bots)
-    manager.bots.clear()
-    manager.processes.clear()
-    await manager.broadcast_status()
-    return {"cleared": count}
+    return await manager.clear_swarm()
 
 
 @router.post("/swarm/prune")
 async def prune_dead(manager: SwarmManager = Depends(require_manager)) -> Any:  # noqa: B008
-    terminal = {"stopped", "error", "completed"}
-    dead_ids = [bid for bid, b in manager.bots.items() if b.state in terminal]
-    for bid in dead_ids:
-        with contextlib.suppress(AttributeError, RuntimeError):
-            manager.bot_process_manager.release_bot_account(bid)
-        if bid in manager.processes:
-            with contextlib.suppress(OSError, ProcessLookupError):
-                manager.processes[bid].kill()
-            del manager.processes[bid]
-        del manager.bots[bid]
-    await manager.broadcast_status()
-    return {"pruned": len(dead_ids), "remaining": len(manager.bots)}
+    return await manager.prune_dead()
 
 
 @router.post("/swarm/pause")
 async def pause_swarm(manager: SwarmManager = Depends(require_manager)) -> Any:  # noqa: B008
-    manager.swarm_paused = True
-    for bot in manager.bots.values():
-        if bot.state in {"running", "recovering", "blocked"}:
-            bot.paused = True
-    await manager.broadcast_status()
-    return {"paused": True, "affected": sum(1 for b in manager.bots.values() if b.paused)}
+    return await manager.pause_swarm()
 
 
 @router.post("/swarm/resume")
 async def resume_swarm(manager: SwarmManager = Depends(require_manager)) -> Any:  # noqa: B008
-    manager.swarm_paused = False
-    resumed = 0
-    for bot in manager.bots.values():
-        if bot.paused:
-            bot.paused = False
-            resumed += 1
-    await manager.broadcast_status()
-    return {"paused": False, "resumed": resumed}
+    return await manager.resume_swarm()
 
 
 @router.post("/bot/{bot_id}/pause")

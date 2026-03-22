@@ -11,6 +11,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from provide.terminal.hijack.rest_helpers import MAX_EXPECT_REGEX_LEN
+
 
 def _safe_int(val: Any, default: int, *, min_val: int | None = None) -> int:
     """Coerce *val* to ``int``, returning *default* on failure, ``None``, or out-of-range."""
@@ -94,23 +96,6 @@ class InputModeRequest(BaseModel):
 class HijackSendRequest(BaseModel):
     keys: str = Field(..., max_length=10_000)
     expect_prompt_id: str | None = Field(None, max_length=200)
-    expect_regex: str | None = Field(None, max_length=200)
+    expect_regex: str | None = Field(None, max_length=MAX_EXPECT_REGEX_LEN)
     timeout_ms: int = Field(2000, ge=100, le=30_000)
     poll_interval_ms: int = Field(120, ge=50, le=5_000)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def extract_prompt_id(snapshot: dict[str, Any] | None) -> str | None:
-    """Pull ``prompt_id`` out of a snapshot dict (returns ``None`` if absent)."""
-    if not snapshot:
-        return None
-    prompt = snapshot.get("prompt_detected")
-    if isinstance(prompt, dict):
-        value = prompt.get("prompt_id")
-        if isinstance(value, str) and value:
-            return value
-    return None

@@ -14,7 +14,23 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from provide.terminal.control_stream import encode_control, encode_data
 from provide.terminal.hijack.bridge import TermBridge
+
+_DLE_STX = "\x10\x02"
+_HEADER_LEN = 11  # DLE STX + 8 hex + ':'
+
+
+def _decode_msg(raw: str) -> dict:
+    """Decode a control-stream-framed message to a dict."""
+    if raw.startswith(_DLE_STX):
+        return json.loads(raw[_HEADER_LEN:])
+    return json.loads(raw)
+
+
+def _ec(msg: dict) -> str:
+    """Shorthand for encode_control."""
+    return encode_control(msg)
 
 
 class MockSession:
@@ -92,7 +108,7 @@ class TestSendLoop:
         await bridge._send_loop(ws)
 
         assert len(ws.sent) == 1
-        payload = json.loads(ws.sent[0])
+        payload = _decode_msg(ws.sent[0])
         assert payload["type"] == "status"
 
     async def test_send_loop_exits_when_not_running(self) -> None:
@@ -124,12 +140,12 @@ class TestRecvLoop:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        ws = MockWS([json.dumps({"type": "snapshot_req"})])
+        ws = MockWS([_ec({"type": "snapshot_req"})])
         await bridge._recv_loop(ws)
 
         # _send_snapshot should have sent a snapshot via ws.send
         assert len(ws.sent) == 1
-        payload = json.loads(ws.sent[0])
+        payload = _decode_msg(ws.sent[0])
         assert payload["type"] == "snapshot"
 
     async def test_recv_loop_control_pause(self) -> None:
@@ -137,7 +153,7 @@ class TestRecvLoop:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        ws = MockWS([json.dumps({"type": "control", "action": "pause"})])
+        ws = MockWS([_ec({"type": "control", "action": "pause"})])
         await bridge._recv_loop(ws)
 
         # pause sets hijacked=True; finally block always clears to False on exit
@@ -149,7 +165,7 @@ class TestRecvLoop:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        ws = MockWS([json.dumps({"type": "control", "action": "resume"})])
+        ws = MockWS([_ec({"type": "control", "action": "resume"})])
         await bridge._recv_loop(ws)
 
         # resume sets hijacked=False; finally block also calls False (idempotent
@@ -161,21 +177,21 @@ class TestRecvLoop:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        ws = MockWS([json.dumps({"type": "control", "action": "step"})])
+        ws = MockWS([_ec({"type": "control", "action": "step"})])
         await bridge._recv_loop(ws)
 
         assert bot.step_calls == 1
 
     async def test_recv_loop_input(self) -> None:
-        """Regression: input data from the WS is forwarded verbatim (no escape conversion)."""
+        """Regression: raw input data from the WS is forwarded verbatim to the session."""
         session = MockSession()
         bot = MockBot(session)
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        # The JS text-input bar sends a real CR (\\r → \r before JSON encode).
-        # Simulate that: the JSON string contains a real CR character.
-        ws = MockWS([json.dumps({"type": "input", "data": "hello\r"})])
+        # Input is now sent as raw data (DataChunk), not a JSON envelope.
+        # The JS text-input bar sends a real CR; simulate with raw data encoding.
+        ws = MockWS([encode_data("hello\r")])
         await bridge._recv_loop(ws)
 
         assert session.sent == ["hello\r"]
@@ -186,7 +202,7 @@ class TestRecvLoop:
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        ws = MockWS([json.dumps({"type": "resize", "cols": 132, "rows": 50})])
+        ws = MockWS([_ec({"type": "resize", "cols": 132, "rows": 50})])
         await bridge._recv_loop(ws)
 
         assert session.sizes == [(132, 50)]
@@ -199,13 +215,15 @@ class TestRecvLoop:
         ws = MockWS()  # no messages → recv raises immediately
         await bridge._recv_loop(ws)  # should return cleanly
 
-    async def test_recv_loop_invalid_json_continues(self) -> None:
+    async def test_recv_loop_raw_data_then_control(self) -> None:
+        """Raw data (non-framed) is treated as input; framed control is processed normally."""
         bot = MockBot()
         bridge = TermBridge(bot, "bot1", "http://localhost:8000")
         bridge._running = True
 
-        # First message is invalid JSON; second is valid control/step
-        ws = MockWS(["not json {{", json.dumps({"type": "control", "action": "step"})])
+        # First message: raw text (DataChunk — no session, so ignored)
+        # Second message: proper control frame (step)
+        ws = MockWS(["some raw data", _ec({"type": "control", "action": "step"})])
         await bridge._recv_loop(ws)
 
         assert bot.step_calls == 1
@@ -217,9 +235,9 @@ class TestRecvLoop:
 
         ws = MockWS(
             [
-                json.dumps({"type": "control", "action": "pause"}),
-                json.dumps({"type": "control", "action": "resume"}),
-                json.dumps({"type": "control", "action": "step"}),
+                _ec({"type": "control", "action": "pause"}),
+                _ec({"type": "control", "action": "resume"}),
+                _ec({"type": "control", "action": "step"}),
             ]
         )
         await bridge._recv_loop(ws)
@@ -238,14 +256,14 @@ class TestRunLoop:
     async def test_run_connects_to_ws_server(self) -> None:
         """_run opens a WebSocket to the manager URL and pumps messages."""
 
-        received_from_bridge: list[dict] = []
+        received_frames: list[str] = []
 
         async def _ws_handler(websocket) -> None:
             try:
                 while True:
                     msg = await websocket.recv()
-                    received_from_bridge.append(json.loads(msg))
-                    if len(received_from_bridge) >= 1:
+                    received_frames.append(msg)
+                    if len(received_frames) >= 1:
                         break
             except Exception:
                 pass
@@ -266,12 +284,12 @@ class TestRunLoop:
 
             bot = _FakeBot()
             bridge = TermBridge(bot, "bot1", f"http://127.0.0.1:{port}")
-            bridge._send_q.put_nowait({"type": "term", "data": "hello", "ts": 0.0})
+            bridge._send_q.put_nowait({"type": "status", "hijacked": False, "ts": 0.0})
             await bridge.start()
             await asyncio.sleep(0.2)
             await bridge.stop()
 
-        assert len(received_from_bridge) >= 1
+        assert len(received_frames) >= 1
 
     async def test_send_snapshot_exception_suppressed(self) -> None:
         """_send_snapshot catches exceptions from ws.send() silently."""

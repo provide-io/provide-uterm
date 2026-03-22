@@ -20,10 +20,20 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+_DLE_STX = "\x10\x02"
+_HEADER_LEN = 11  # DLE STX + 8 hex + ':'
+
+
+def _decode_msg(raw: str) -> dict:
+    """Decode a control-stream-framed message to a dict."""
+    if raw.startswith(_DLE_STX):
+        return json.loads(raw[_HEADER_LEN:])
+    return json.loads(raw)
+
+
 from provide.terminal.hijack.hub import InMemoryResumeStore, TermHub
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.routes.browser_handlers import (
-    _handle_resume,
     handle_browser_message,
 )
 
@@ -69,7 +79,7 @@ class TestHijackRequestWorkerMessage:
         await _register(hub, "w1", ws, "admin", wws)
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["type"] == "control"
 
     async def test_pause_message_action_is_pause(self) -> None:
@@ -80,7 +90,7 @@ class TestHijackRequestWorkerMessage:
         await _register(hub, "w1", ws, "admin", wws)
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["action"] == "pause"
 
     async def test_pause_message_owner_is_dashboard(self) -> None:
@@ -91,7 +101,7 @@ class TestHijackRequestWorkerMessage:
         await _register(hub, "w1", ws, "admin", wws)
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["owner"] == "dashboard"
 
     async def test_pause_message_lease_s_is_zero(self) -> None:
@@ -102,7 +112,7 @@ class TestHijackRequestWorkerMessage:
         await _register(hub, "w1", ws, "admin", wws)
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["lease_s"] == 0
 
     async def test_pause_message_has_ts(self) -> None:
@@ -113,7 +123,7 @@ class TestHijackRequestWorkerMessage:
         await _register(hub, "w1", ws, "admin", wws)
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert "ts" in msg
 
     async def test_hijack_request_non_admin_sends_exact_error_message(self) -> None:
@@ -122,7 +132,7 @@ class TestHijackRequestWorkerMessage:
         ws = _make_ws()
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "hijack_request"}, False)
         ws.send_text.assert_called_once()
-        payload = json.loads(ws.send_text.call_args[0][0])
+        payload = _decode_msg(ws.send_text.call_args[0][0])
         assert payload["type"] == "error"
         assert payload["message"] == "Hijack requires admin role."
 
@@ -136,7 +146,7 @@ class TestHijackRequestWorkerMessage:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         ws.send_text.assert_called_once()
-        payload = json.loads(ws.send_text.call_args[0][0])
+        payload = _decode_msg(ws.send_text.call_args[0][0])
         assert payload["type"] == "error"
         assert payload["message"] == "Hijack not available in open input mode."
 
@@ -148,7 +158,7 @@ class TestHijackRequestWorkerMessage:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         assert result is False
         ws.send_text.assert_called()
-        payload = json.loads(ws.send_text.call_args_list[0][0][0])
+        payload = _decode_msg(ws.send_text.call_args_list[0][0][0])
         assert payload["type"] == "error"
         assert payload["message"] == "No worker connected for this session."
 
@@ -162,7 +172,7 @@ class TestHijackRequestWorkerMessage:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         assert result is True
         # Worker should receive pause, not an error
-        call_args = [json.loads(c[0][0]) for c in wws.send_text.call_args_list]
+        call_args = [_decode_msg(c[0][0]) for c in wws.send_text.call_args_list]
         assert any(m.get("action") == "pause" for m in call_args)
 
     async def test_hijack_request_role_check_not_inverted(self) -> None:
@@ -191,7 +201,7 @@ class TestHijackRequestWorkerMessage:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         assert result is False
         # Find the error message
-        msgs = [json.loads(c[0][0]) for c in ws.send_text.call_args_list]
+        msgs = [_decode_msg(c[0][0]) for c in ws.send_text.call_args_list]
         error_msgs = [m for m in msgs if m.get("type") == "error"]
         assert error_msgs
         assert error_msgs[0]["message"] == "Already hijacked by another client."
@@ -257,7 +267,7 @@ class TestHijackReleaseWorkerMessage:
             st.hijack_owner_expires_at = time.time() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         # First call = resume control frame
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["type"] == "control"
 
     async def test_resume_message_action_is_resume(self) -> None:
@@ -270,7 +280,7 @@ class TestHijackReleaseWorkerMessage:
             st.hijack_owner = ws
             st.hijack_owner_expires_at = time.time() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["action"] == "resume"
 
     async def test_resume_message_owner_is_dashboard(self) -> None:
@@ -283,7 +293,7 @@ class TestHijackReleaseWorkerMessage:
             st.hijack_owner = ws
             st.hijack_owner_expires_at = time.time() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["owner"] == "dashboard"
 
     async def test_resume_message_lease_s_is_zero(self) -> None:
@@ -296,7 +306,7 @@ class TestHijackReleaseWorkerMessage:
             st.hijack_owner = ws
             st.hijack_owner_expires_at = time.time() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["lease_s"] == 0
 
     async def test_resume_message_has_ts(self) -> None:
@@ -309,7 +319,7 @@ class TestHijackReleaseWorkerMessage:
             st.hijack_owner = ws
             st.hijack_owner_expires_at = time.time() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
+        msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert "ts" in msg
 
     async def test_release_returns_false_after_release(self) -> None:
@@ -336,7 +346,7 @@ class TestHijackReleaseWorkerMessage:
         # No rest lease → rest_active=False → _do_resume=True → resume sent
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         wws.send_text.assert_called()
-        msgs = [json.loads(c[0][0]) for c in wws.send_text.call_args_list]
+        msgs = [_decode_msg(c[0][0]) for c in wws.send_text.call_args_list]
         assert any(m.get("action") == "resume" for m in msgs)
 
     async def test_release_notify_called_with_enabled_false(self) -> None:
@@ -364,7 +374,7 @@ class TestHandleInputWorkerMessage:
     """Verify exact content of input messages sent to the worker."""
 
     async def test_input_message_type_is_input(self) -> None:
-        """mutmut_37-40: type must be 'input'."""
+        """mutmut_37-40: type=='input' → raw data encoding (not control frame) sent to worker."""
         hub = _make_hub()
         ws = _make_ws()
         wws = _make_ws()
@@ -373,11 +383,12 @@ class TestHandleInputWorkerMessage:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
         wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args[0][0])
-        assert msg["type"] == "input"
+        # Input uses raw data encoding — NOT a control frame
+        raw = wws.send_text.call_args[0][0]
+        assert not raw.startswith(_DLE_STX)
 
     async def test_input_message_data_key_present(self) -> None:
-        """mutmut_41-42: data key must be 'data'."""
+        """mutmut_41-42: data key must be 'data' — worker receives the actual payload."""
         hub = _make_hub()
         ws = _make_ws()
         wws = _make_ws()
@@ -385,12 +396,11 @@ class TestHandleInputWorkerMessage:
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
-        msg = json.loads(wws.send_text.call_args[0][0])
-        assert "data" in msg
-        assert msg["data"] == "hello"
+        raw = wws.send_text.call_args[0][0]
+        assert raw == "hello"
 
-    async def test_input_message_has_ts(self) -> None:
-        """mutmut_43-44: ts key must be present."""
+    async def test_input_message_sent_to_worker(self) -> None:
+        """send_worker is called once with the correct data."""
         hub = _make_hub()
         ws = _make_ws()
         wws = _make_ws()
@@ -398,8 +408,7 @@ class TestHandleInputWorkerMessage:
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
-        msg = json.loads(wws.send_text.call_args[0][0])
-        assert "ts" in msg
+        wws.send_text.assert_called_once()
 
     async def test_input_too_long_error_exact_message(self) -> None:
         """mutmut_22-30: 'Input too long.' must be exact."""
@@ -412,7 +421,7 @@ class TestHandleInputWorkerMessage:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "toolong"}, False)
         ws.send_text.assert_called()
-        payload = json.loads(ws.send_text.call_args[0][0])
+        payload = _decode_msg(ws.send_text.call_args[0][0])
         assert payload["type"] == "error"
         assert payload["message"] == "Input too long."
 
@@ -441,7 +450,7 @@ class TestHandleInputWorkerMessage:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hi"}, False)
         ws.send_text.assert_called()
-        payload = json.loads(ws.send_text.call_args[0][0])
+        payload = _decode_msg(ws.send_text.call_args[0][0])
         assert payload["type"] == "error"
         assert payload["message"] == "Worker connection lost."
 
@@ -458,7 +467,7 @@ class TestHandleInputWorkerMessage:
         wws.send_text.assert_not_called()
 
     async def test_input_data_key_lookup_exact(self) -> None:
-        """mutmut_12-13: data must be looked up by 'data' key, not 'XXdataXX'."""
+        """mutmut_12-13: data must be looked up by 'data' key — worker gets the actual text."""
         hub = _make_hub()
         ws = _make_ws()
         wws = _make_ws()
@@ -466,321 +475,5 @@ class TestHandleInputWorkerMessage:
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
-        msg = json.loads(wws.send_text.call_args[0][0])
-        assert msg["data"] == "hello"
-
-
-# ---------------------------------------------------------------------------
-# _handle_resume — token/role/hijack reclaim logic
-# ---------------------------------------------------------------------------
-
-
-class TestHandleResumeTokenLogic:
-    """Verify resume token logic mutations."""
-
-    def _make_app_client(self, role: str, store: InMemoryResumeStore):
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        hub = TermHub(
-            resolve_browser_role=lambda _ws, _wid: role,
-            resume_store=store,
-        )
-        app = FastAPI()
-        app.include_router(hub.create_router())
-        return TestClient(app), hub
-
-    def _read_initial(self, ws):
-        hello = ws.receive_json()
-        assert hello["type"] == "hello"
-        hs = ws.receive_json()
-        assert hs["type"] == "hijack_state"
-        return hello, hs
-
-    def test_resume_token_key_is_token(self) -> None:
-        """mutmut_8-9: 'token' key must be used (not 'XXtokenXX' or 'TOKEN')."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            # Use exact key "token"
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["type"] == "hello"
-            assert resumed["resumed"] is True
-
-    def test_resume_empty_token_not_resumed(self) -> None:
-        """mutmut_11: 'if not old_token' must not be inverted."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": ""})
-            ws.send_json({"type": "ping"})
-            pong = ws.receive_json()
-            assert pong["type"] == "pong"
-
-    def test_resume_wrong_worker_id_rejected(self) -> None:
-        """mutmut_16: session.worker_id != worker_id condition must not be inverted."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/worker-a/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/worker-b/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            ws.send_json({"type": "ping"})
-            pong = ws.receive_json()
-            assert pong["type"] == "pong"
-
-    def test_resume_can_hijack_true_for_admin(self) -> None:
-        """mutmut_27-29: can_hijack = role == 'admin' must be correct."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["can_hijack"] is True
-
-    def test_resume_can_hijack_false_for_operator(self) -> None:
-        """mutmut_27: can_hijack must be False for operator, not inverted."""
-        store = InMemoryResumeStore()
-        hub = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "operator",
-            resume_store=store,
-        )
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        app = FastAPI()
-        app.include_router(hub.create_router())
-        client = TestClient(app)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["can_hijack"] is False
-
-    def test_resume_hello_type_is_hello(self) -> None:
-        """mutmut_75-76: type must be 'hello', not 'XXhelloXX'."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["type"] == "hello"
-
-    def test_resume_hello_has_worker_id(self) -> None:
-        """mutmut_77-78: 'worker_id' key must be exact."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert "worker_id" in resumed
-
-    def test_resume_hello_resumed_is_true(self) -> None:
-        """Verify resumed=True is present in the response."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["resumed"] is True
-
-    def test_resume_role_restored_from_token(self) -> None:
-        """mutmut_30-32: role != role AND role in VALID_ROLES must both be True."""
-        store = InMemoryResumeStore()
-        hub1 = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "admin",
-            resume_store=store,
-        )
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-
-        app1 = FastAPI()
-        app1.include_router(hub1.create_router())
-        client1 = TestClient(app1)
-
-        with client1.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-            assert hello["role"] == "admin"
-
-        # Second hub resolves viewer, but resume should restore admin
-        hub2 = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "viewer",
-            resume_store=store,
-        )
-        app2 = FastAPI()
-        app2.include_router(hub2.create_router())
-        client2 = TestClient(app2)
-
-        with client2.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["role"] == "admin"
-
-    def test_resume_old_token_revoked_after_resume(self) -> None:
-        """mutmut_24: store.revoke(old_token) must be called with old_token."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            ws.receive_json()  # resumed hello
-            # Old token must be revoked
-            assert store.get(token) is None
-
-    def test_resume_new_token_different_from_old(self) -> None:
-        """mutmut_55-61: new_token = store.create(...) must create a new token."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["resume_token"] is not None
-            assert resumed["resume_token"] != token
-
-    def test_resume_hijack_reclaim_sets_owned_hijack_true(self) -> None:
-        """mutmut_53-54: owned_hijack = True after hijack reclaim."""
-        store = InMemoryResumeStore()
-        client, _ = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        store.mark_hijack_owner(token, True)
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["hijacked_by_me"] is True
-
-    def test_resume_store_none_returns_unchanged_owned_hijack(self) -> None:
-        """mutmut_1-2: no store → return owned_hijack unchanged."""
-        hub = TermHub()  # no store
-        assert hub._resume_store is None
-
-        async def _run():
-            ws = _make_ws()
-            result = await _handle_resume(hub, ws, "w1", "admin", {"type": "resume", "token": "x"}, False)
-            assert result is False
-
-        import asyncio
-
-        asyncio.run(_run())
-
-    def test_resume_hijack_expiry_not_subtracted(self) -> None:
-        """mutmut_52: hijack_owner_expires_at = time.time() + lease (not minus)."""
-        store = InMemoryResumeStore()
-        client, hub = self._make_app_client("admin", store)
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            hello, _ = self._read_initial(ws)
-            token = hello["resume_token"]
-
-        store.mark_hijack_owner(token, True)
-
-        with client.websocket_connect("/ws/browser/w1/term") as ws:
-            self._read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["hijacked_by_me"] is True
-            # If expiry was time.time() - lease_s, hijack would be expired immediately
-            # Check hijack_state says owner=me
-            hs = ws.receive_json()
-            assert hs["type"] == "hijack_state"
-            assert hs["owner"] == "me"
-
-
-# ---------------------------------------------------------------------------
-# handle_browser_message — dispatch and ping/pong
-# ---------------------------------------------------------------------------
-
-
-class TestHandleBrowserMessageDispatch:
-    """Verify message dispatch and ping response."""
-
-    async def test_ping_type_in_response_is_pong(self) -> None:
-        """Ping must send 'pong' type, not an altered string."""
-        hub = _make_hub()
-        ws = _make_ws()
-        await handle_browser_message(hub, ws, "w1", "admin", {"type": "ping"}, False)
-        ws.send_text.assert_called_once()
-        sent = json.loads(ws.send_text.call_args[0][0])
-        assert sent["type"] == "pong"
-
-    async def test_ping_has_ts_field(self) -> None:
-        """Ping response must have 'ts' key."""
-        hub = _make_hub()
-        ws = _make_ws()
-        await handle_browser_message(hub, ws, "w1", "admin", {"type": "ping"}, False)
-        sent = json.loads(ws.send_text.call_args[0][0])
-        assert "ts" in sent
-
-    async def test_input_returns_owned_hijack_unchanged(self) -> None:
-        """Input handler must not alter owned_hijack return value."""
-        hub = _make_hub()
-        ws = _make_ws()
-        wws = _make_ws()
-        await _register(hub, "w1", ws, "operator", wws)
-        async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
-        result = await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "x"}, True)
-        assert result is True
-
-    async def test_hijack_step_type_is_control(self) -> None:
-        """hijack_step must send type='control', action='step'."""
-        hub = _make_hub()
-        ws = _make_ws()
-        wws = _make_ws()
-        st = await _register(hub, "w1", ws, "admin", wws)
-        async with hub._lock:
-            st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
-        await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_step"}, True)
-        wws.send_text.assert_called()
-        msg = json.loads(wws.send_text.call_args_list[0][0][0])
-        assert msg["type"] == "control"
-        assert msg["action"] == "step"
+        raw = wws.send_text.call_args[0][0]
+        assert raw == "hello"

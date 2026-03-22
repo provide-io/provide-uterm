@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import contextlib
 import inspect
-import json
 import logging
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
+
+from provide.terminal.control_stream import encode_control, encode_data
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.cf_types import CFWebSocket
@@ -145,7 +146,11 @@ class _WsHelperMixin:
         self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
 
     async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
-        await self._send_text(ws, json.dumps(payload, ensure_ascii=True))
+        frame_type = str(payload.get("type") or "")
+        if frame_type in {"input", "term"}:
+            await self._send_text(ws, encode_data(str(payload.get("data", ""))))
+            return
+        await self._send_text(ws, encode_control(payload))
 
     async def _send_text(self, ws: CFWebSocket, payload: str) -> None:
         result = ws.send(payload)

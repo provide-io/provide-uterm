@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
@@ -207,7 +208,7 @@ def test_rest_acquire_rejects_concurrent_duplicate() -> None:
 def test_ws_hijack_request_no_worker_returns_error() -> None:
     """hijack_request with no worker connected returns error (no_worker path)."""
     app, hub = make_app("admin")
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/nobot/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/nobot/term") as browser:
         # Drain hello + hijack_state
         browser.receive_json()
         browser.receive_json()
@@ -233,11 +234,11 @@ def test_disconnect_as_owner_sends_resume_and_clears_owner() -> None:
     """
     app, hub = make_app("admin")
 
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot3/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot3/term") as worker:
         # snapshot_req on worker connect
         worker.receive_json()
 
-        with client.websocket_connect("/ws/browser/bot3/term") as browser:
+        with connect_test_ws(client, "/ws/browser/bot3/term") as browser:
             browser.receive_json()  # hello
             browser.receive_json()  # hijack_state
             # browser connect triggers _request_snapshot → second snapshot_req

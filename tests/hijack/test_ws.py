@@ -28,6 +28,7 @@ import time
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession
 
@@ -84,7 +85,7 @@ def _read_worker_connected(browser) -> dict:
 
 def test_worker_connect_receives_snapshot_req() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         msg = worker.receive_json()
         assert msg["type"] == "snapshot_req"
         assert "req_id" in msg
@@ -92,7 +93,7 @@ def test_worker_connect_receives_snapshot_req() -> None:
 
 def test_worker_registers_in_hub() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
         assert hub._workers.get("bot1") is not None
         assert hub._workers["bot1"].worker_ws is not None
@@ -100,7 +101,7 @@ def test_worker_registers_in_hub() -> None:
 
 def test_worker_disconnect_clears_ws() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
     # After context exits worker_ws must be cleared
     st = hub._workers.get("bot1")
@@ -110,10 +111,10 @@ def test_worker_disconnect_clears_ws() -> None:
 
 def test_worker_term_broadcast_to_browser() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_snapshot_req(worker)
             _read_worker_connected(browser)
 
@@ -126,10 +127,10 @@ def test_worker_term_broadcast_to_browser() -> None:
 
 def test_worker_snapshot_updates_hub_state() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_snapshot_req(worker)
             _read_worker_connected(browser)
 
@@ -159,9 +160,9 @@ def test_worker_snapshot_updates_hub_state() -> None:
 
 def test_worker_snapshot_appends_event() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_snapshot_req(worker)
             _read_worker_connected(browser)
             worker.send_json(
@@ -191,10 +192,10 @@ def test_worker_snapshot_appends_event() -> None:
 
 def test_worker_status_broadcast() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_snapshot_req(worker)
             _read_worker_connected(browser)
 
@@ -206,10 +207,10 @@ def test_worker_status_broadcast() -> None:
 
 def test_worker_analysis_broadcast() -> None:
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_snapshot_req(worker)
             _read_worker_connected(browser)
 
@@ -223,7 +224,7 @@ def test_worker_analysis_broadcast() -> None:
 def test_worker_invalid_json_ignored() -> None:
     """Invalid JSON from the worker should not crash the connection."""
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
         worker.send_text("not json {{{{")
         # Connection still alive — valid message goes through

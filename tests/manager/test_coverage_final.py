@@ -216,7 +216,10 @@ class TestDesiredStatePruneDeadWithProcess:
             config="/c.yaml",
         )
 
-        with patch.object(pm, "_launch_queued_bot", new_callable=AsyncMock):
+        with (
+            patch.object(pm, "_launch_queued_bot", new_callable=AsyncMock),
+            patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop,
+        ):
             task = asyncio.create_task(pm.monitor_processes())
             await asyncio.sleep(0.05)
             task.cancel()
@@ -225,7 +228,7 @@ class TestDesiredStatePruneDeadWithProcess:
 
         # Dead bot should be pruned
         assert "dead_bot" not in manager.bots
-        proc.kill.assert_called()
+        mock_stop.assert_awaited_once_with(bot_id="dead_bot", process=proc, timeout_s=5.0)
 
 
 # ── process.py: desired uses dead bot configs (line 472) ──────────────
@@ -353,9 +356,10 @@ class TestPruneWithProcessKill:
         proc = MagicMock()
         manager.processes["bot_000"] = proc
         manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="error")
+        manager.kill_bot = AsyncMock()
         resp = client.post("/swarm/prune")
         assert resp.status_code == 200
-        proc.kill.assert_called_once()
+        manager.kill_bot.assert_awaited_once_with("bot_000")
         assert "bot_000" not in manager.processes
 
 

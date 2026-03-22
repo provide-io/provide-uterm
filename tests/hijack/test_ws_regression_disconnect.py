@@ -17,6 +17,7 @@ import uuid
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession
 
@@ -73,10 +74,10 @@ def test_worker_disconnect_broadcasts_worker_disconnected_to_browsers() -> None:
     """
     app, hub = make_app("admin")
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
             # worker exits this block → disconnect
@@ -100,7 +101,7 @@ def test_worker_disconnect_clears_rest_hijack_session() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(fapp) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
         session_id = str(uuid.uuid4())
         hub._workers["bot1"].hijack_session = _active_session(session_id, "rest_owner")
@@ -120,10 +121,10 @@ def test_worker_disconnect_clears_ws_hijack_owner() -> None:
     """
     app, hub = make_app("admin")
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
 
@@ -157,10 +158,10 @@ def test_worker_disconnect_fires_notify_when_ws_hijack_active() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(fapp) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
 
@@ -189,10 +190,10 @@ def test_browser_disconnect_resume_without_owner() -> None:
     """
     app, hub = make_app("admin")
 
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
 
-        with client.websocket_connect("/ws/browser/bot1/term") as browser:
+        with connect_test_ws(client, "/ws/browser/bot1/term") as browser:
             _read_initial_browser_messages(browser)
             # Worker already connected before browser — no worker_connected msg.
 
@@ -243,7 +244,7 @@ def test_worker_disconnect_no_notify_when_no_session() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(fapp) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
         # worker disconnects with no hijack session
 

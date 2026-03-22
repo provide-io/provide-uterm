@@ -12,7 +12,8 @@ import json
 from typing import Any
 
 import httpx
-import websockets
+
+from provide.terminal.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _ws_url
 
@@ -27,7 +28,7 @@ class TestWorkerDropsMidHijack:
         _, base_url = live_hub
 
         async with httpx.AsyncClient(base_url=base_url) as http:
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos1/term")) as worker:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos1/term")) as worker:
                 await worker.recv()  # snapshot_req
 
                 r = await http.post("/worker/chaos1/hijack/acquire", json={"owner": "chaos-owner", "lease_s": 60})
@@ -36,7 +37,7 @@ class TestWorkerDropsMidHijack:
             # Worker drops; hub should clear hijack state on disconnect
 
             # Reconnect worker and try to acquire again
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos1/term")) as worker2:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos1/term")) as worker2:
                 await worker2.recv()  # snapshot_req
                 r2 = await http.post("/worker/chaos1/hijack/acquire", json={"owner": "new-owner", "lease_s": 60})
                 assert r2.status_code == 200, (
@@ -47,10 +48,10 @@ class TestWorkerDropsMidHijack:
         """Worker drops while browser WS hijack is active; browser sees worker_disconnected."""
         _, base_url = live_hub
 
-        async with websockets.connect(_ws_url(base_url, "/ws/browser/chaos2/term")) as browser:
+        async with connect_async_ws(_ws_url(base_url, "/ws/browser/chaos2/term")) as browser:
             await _drain_all(browser)
 
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos2/term")) as worker:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos2/term")) as worker:
                 await worker.recv()
                 await _drain_until(browser, "worker_connected", timeout=2.0)
 
@@ -78,10 +79,10 @@ class TestBrowserDropsMidHijack:
         """Browser drops while hijacking; worker receives resume."""
         _, base_url = live_hub
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos3/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos3/term")) as worker:
             await worker.recv()
 
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/chaos3/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/chaos3/term")) as browser:
                 await _drain_all(browser)
                 await browser.send(json.dumps({"type": "hijack_request"}))
                 state = await _drain_until(browser, "hijack_state")
@@ -99,12 +100,12 @@ class TestBrowserDropsMidHijack:
         """Two browsers; one drops — the remaining browser is still connected."""
         _, base_url = live_hub
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos4/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos4/term")) as worker:
             await worker.recv()
 
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/browser/chaos4/term")) as b1,
-                websockets.connect(_ws_url(base_url, "/ws/browser/chaos4/term")) as b2,
+                connect_async_ws(_ws_url(base_url, "/ws/browser/chaos4/term")) as b1,
+                connect_async_ws(_ws_url(base_url, "/ws/browser/chaos4/term")) as b2,
             ):
                 await _drain_all(b1)
                 await _drain_all(b2)
@@ -140,7 +141,7 @@ class TestRapidConnectDisconnect:
         _, base_url = live_hub
 
         for cycle in range(5):
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos5/term")) as worker:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos5/term")) as worker:
                 msg_str = await asyncio.wait_for(worker.recv(), timeout=2.0)
                 msg = json.loads(msg_str)
                 assert msg.get("type") == "snapshot_req", f"Cycle {cycle}: expected snapshot_req, got {msg.get('type')}"
@@ -150,7 +151,7 @@ class TestRapidConnectDisconnect:
         # Hub should not have leaked workers
         async with httpx.AsyncClient(base_url=base_url) as http:  # noqa: SIM117
             # POST acquire to a fresh worker to confirm hub is still functional
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos5/term")) as worker:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos5/term")) as worker:
                 await worker.recv()
                 r = await http.post("/worker/chaos5/hijack/acquire", json={"owner": "test", "lease_s": 10})
                 assert r.status_code == 200, f"Hub should still work after rapid reconnects, got {r.status_code}"
@@ -159,17 +160,17 @@ class TestRapidConnectDisconnect:
         """Browser connects and disconnects rapidly; hub state consistent."""
         _, base_url = live_hub
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos6/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos6/term")) as worker:
             await worker.recv()
 
             for cycle in range(5):
-                async with websockets.connect(_ws_url(base_url, "/ws/browser/chaos6/term")) as browser:
+                async with connect_async_ws(_ws_url(base_url, "/ws/browser/chaos6/term")) as browser:
                     hello = await _drain_until(browser, "hello", timeout=2.0)
                     assert hello is not None, f"Cycle {cycle}: browser should receive hello"
                 await asyncio.sleep(0.02)
 
             # Worker should still be connected
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/chaos6/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/chaos6/term")) as browser:
                 hello = await _drain_until(browser, "hello", timeout=2.0)
                 assert hello is not None, "Browser should still receive hello after rapid cycles"
                 assert hello.get("worker_online") is True, "Worker should be online, got hello={hello}"
@@ -178,11 +179,11 @@ class TestRapidConnectDisconnect:
         """Many concurrent WS connections; hub handles all without corruption."""
         _, base_url = live_hub
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/chaos7/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos7/term")) as worker:
             await worker.recv()
 
             async def _connect_and_disconnect(i: int) -> None:
-                async with websockets.connect(_ws_url(base_url, "/ws/browser/chaos7/term")) as browser:
+                async with connect_async_ws(_ws_url(base_url, "/ws/browser/chaos7/term")) as browser:
                     await _drain_until(browser, "hello", timeout=2.0)
 
             # Launch 8 concurrent browser connects/disconnects

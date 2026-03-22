@@ -43,7 +43,6 @@ from provide.terminal.gateway._colors import (
     _rgb_to_256,
 )
 from provide.terminal.gateway._gateway import (
-    SshWsGateway,
     TelnetWsGateway,
     _delete_token,
     _handle_ws_control,
@@ -57,6 +56,7 @@ from provide.terminal.gateway._gateway import (
     _ws_to_ssh,
     _ws_to_tcp,
 )
+from provide.terminal.gateway._ssh_gateway import SshWsGateway
 
 __all__ = [
     "SshWsGateway",

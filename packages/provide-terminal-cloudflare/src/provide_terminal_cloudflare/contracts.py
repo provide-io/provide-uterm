@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+
+from provide.terminal.control_stream import (
+    ControlChunk,
+    ControlStreamDecoder,
+    ControlStreamProtocolError,
+    DataChunk,
+    encode_control,
+    encode_data,
+)
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.cf_types import CFWebSocket
@@ -181,6 +189,7 @@ FrameType = Literal[
     "hijack_release",
     "hijack_step",
     "hello",
+    "resume",
 ]
 
 
@@ -200,6 +209,7 @@ class Frame(TypedDict, total=False):
     formatted: str
     message: str
     mode: str  # worker_hello: input_mode value ("hijack" or "open")
+    token: str
 
 
 @dataclass(slots=True)
@@ -208,16 +218,7 @@ class MessageLimits:
     max_input_chars: int = 10_000
 
 
-def parse_frame(raw: str, *, limits: MessageLimits | None = None) -> Frame:
-    active_limits = limits or MessageLimits()
-    if len(raw.encode("utf-8")) > active_limits.max_ws_message_bytes:
-        raise ProtocolError("message too large")
-    try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ProtocolError("invalid json") from exc
-    if not isinstance(value, dict):
-        raise ProtocolError("frame must be an object")
+def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
     frame_type = value.get("type")
     if not isinstance(frame_type, str):
         raise ProtocolError("missing frame type")
@@ -226,7 +227,7 @@ def parse_frame(raw: str, *, limits: MessageLimits | None = None) -> Frame:
 
     if frame_type == "input":
         data = str(value.get("data", ""))
-        if len(data) > active_limits.max_input_chars:
+        if len(data) > limits.max_input_chars:
             raise ProtocolError("input too large")
         normalized["data"] = data
     elif frame_type == "snapshot":
@@ -268,9 +269,60 @@ def parse_frame(raw: str, *, limits: MessageLimits | None = None) -> Frame:
     return normalized
 
 
+def parse_stream(
+    raw: str,
+    *,
+    data_frame_type: Literal["input", "term"],
+    limits: MessageLimits | None = None,
+) -> list[Frame]:
+    active_limits = limits or MessageLimits()
+    if len(raw.encode("utf-8")) > active_limits.max_ws_message_bytes:
+        raise ProtocolError("message too large")
+    decoder = ControlStreamDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
+    try:
+        events = decoder.feed(raw)
+        events.extend(decoder.finish())
+    except ControlStreamProtocolError as exc:
+        raise ProtocolError(str(exc)) from exc
+    if not events:
+        raise ProtocolError("empty frame")
+
+    frames: list[Frame] = []
+    for event in events:
+        if isinstance(event, ControlChunk):
+            frames.append(_normalize_frame(event.control, limits=active_limits))
+        elif isinstance(event, DataChunk):
+            frames.append(
+                _normalize_frame(
+                    {"type": data_frame_type, "data": event.data, "ts": time.time()},
+                    limits=active_limits,
+                )
+            )
+    return frames
+
+
+def parse_frame(
+    raw: str,
+    *,
+    data_frame_type: Literal["input", "term"] | None = None,
+    limits: MessageLimits | None = None,
+) -> Frame:
+    if data_frame_type is None:
+        frames = parse_stream(raw, data_frame_type="term", limits=limits)
+        if len(frames) == 1 and frames[0].get("type") != "term":
+            return frames[0]
+        raise ProtocolError("data frame type required")
+    frames = parse_stream(raw, data_frame_type=data_frame_type, limits=limits)
+    if len(frames) != 1:
+        raise ProtocolError("expected a single frame")
+    return frames[0]
+
+
 def frame_json(frame_type: FrameType, **kwargs: Any) -> str:
     payload = {"type": frame_type, "ts": time.time(), **kwargs}
-    return json.dumps(payload, ensure_ascii=True)
+    if frame_type in {"input", "term"}:
+        return encode_data(str(payload.get("data", "")))
+    return encode_control(payload)
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.server import config_from_mapping, create_server_app, default_server_config
 from provide.terminal.server.auth import Principal
 from provide.terminal.server.models import AuthConfig, SessionDefinition
@@ -88,7 +89,7 @@ def test_jwt_mode_requires_auth_for_api_and_ws_routes() -> None:
         health = client.get("/api/health")
         assert health.status_code == 401
 
-        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/browser/provide-shell/term"):
+        with pytest.raises(WebSocketDisconnect), connect_test_ws(client, "/ws/browser/provide-shell/term"):
             pass
 
 
@@ -109,7 +110,8 @@ def test_jwt_mode_ignores_cookie_and_role_header_escalation_for_ws() -> None:
 
     with (
         TestClient(app) as client,
-        client.websocket_connect(
+        connect_test_ws(
+            client,
             "/ws/worker/provide-shell/term",
             headers={"Authorization": f"Bearer {config.auth.worker_bearer_token}"},
         ) as worker,
@@ -117,7 +119,8 @@ def test_jwt_mode_ignores_cookie_and_role_header_escalation_for_ws() -> None:
         msg = worker.receive_json()
         assert msg["type"] == "snapshot_req"
 
-        with client.websocket_connect(
+        with connect_test_ws(
+            client,
             "/ws/browser/provide-shell/term",
             headers={
                 **_jwt_headers(sub="viewer-a", roles=["viewer"]),

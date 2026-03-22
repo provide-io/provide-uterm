@@ -7,11 +7,12 @@
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
+
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder
 
 
 def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:
@@ -251,14 +252,18 @@ def test_remove_ws_clears_worker() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_send_ws_serialises_to_json() -> None:
+async def test_send_ws_encodes_control_frame() -> None:
     host = _make_host()
     ws = MagicMock()
     ws.send = MagicMock(return_value=None)
     await host.send_ws(ws, {"type": "hello", "v": 1})
     ws.send.assert_called_once()
     payload = ws.send.call_args[0][0]
-    assert json.loads(payload) == {"type": "hello", "v": 1}
+    decoder = ControlStreamDecoder()
+    events = decoder.feed(payload)
+    assert len(events) == 1
+    assert isinstance(events[0], ControlChunk)
+    assert events[0].control == {"type": "hello", "v": 1}
 
 
 async def test_send_text_awaitable_send() -> None:

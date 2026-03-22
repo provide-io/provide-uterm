@@ -50,6 +50,17 @@ class TestRebuildRawStream:
         rebuild_raw_stream(log_path, out_path)
         assert out_path.read_bytes() == b"response"
 
+    def test_skips_wire_control_events(self, tmp_path: Path) -> None:
+        records = [
+            {"event": "wire_send", "ts": 1.0, "data": {"bytes_b64": base64.b64encode(b"wire").decode()}},
+            {"event": "control_recv", "ts": 1.5, "data": {"control": {"type": "hello"}}},
+            {"event": "read", "ts": 2.0, "data": {"raw_bytes_b64": base64.b64encode(b"response").decode()}},
+        ]
+        log_path = _make_log(tmp_path, records)
+        out_path = tmp_path / "out-wire.bin"
+        rebuild_raw_stream(log_path, out_path)
+        assert out_path.read_bytes() == b"response"
+
     def test_empty_log_produces_empty_file(self, tmp_path: Path) -> None:
         log_path = tmp_path / "empty.jsonl"
         log_path.write_text("")

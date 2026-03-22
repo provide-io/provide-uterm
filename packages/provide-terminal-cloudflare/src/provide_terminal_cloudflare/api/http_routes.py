@@ -4,19 +4,28 @@ import asyncio
 import contextlib
 import re
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import parse_qs, urlparse
 
-try:
-    from provide_terminal_cloudflare.cf_types import Response, json_response
-except Exception:  # pragma: no cover
-    from cf_types import Response, json_response  # type: ignore[import-not-found]  # pragma: no cover
+from provide.terminal.hijack.rest_helpers import (
+    MAX_EXPECT_REGEX_LEN,
+    PromptRegexError,
+    build_hijack_events_response,
+    build_hijack_snapshot_response,
+    compile_expect_regex,
+    extract_prompt_id,
+    snapshot_matches,
+)
 
 if TYPE_CHECKING:
+    from provide_terminal_cloudflare.contracts import RuntimeProtocol
+
+    def json_response(data: Any, status: int = 200, headers: dict[str, str] | None = None) -> object: ...
+else:
     try:
-        from provide_terminal_cloudflare.contracts import RuntimeProtocol
-    except Exception:
-        from contracts import RuntimeProtocol  # type: ignore[import-not-found]
+        from provide_terminal_cloudflare.cf_types import json_response
+    except Exception:  # pragma: no cover
+        from cf_types import json_response  # type: ignore[import-not-found]  # pragma: no cover
 
 # Matches /hijack/{hijack_id}/ in any path segment position.
 _HIJACK_ID_RE = re.compile(r"/hijack/([0-9a-fA-F\-]{1,64})/")
@@ -26,13 +35,14 @@ _MAX_INPUT_CHARS = 10_000  # must match main package TermHub.max_input_chars def
 _SESSION_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})(?:/([a-z]+))?$")
 _MAX_TIMEOUT_MS = 30_000
 _MAX_PROMPT_POLL_S = 30.0
-_MAX_REGEX_LEN = 500  # guard against ReDoS via pathological regex patterns
+_MAX_REGEX_LEN = MAX_EXPECT_REGEX_LEN
 
 
 def _safe_int(val: object, default: int, *, min_val: int | None = None, max_val: int | None = None) -> int:
     """Coerce *val* to ``int``, returning *default* on failure or ``None``."""
+    raw: Any = default if val is None else val
     try:
-        result = int(default if val is None else val)
+        result = int(raw)
     except (ValueError, TypeError):
         return default
     if min_val is not None:
@@ -48,7 +58,7 @@ def _extract_hijack_id(path: str) -> str | None:
 
 
 def _parse_lease_s(payload: dict[str, object], *, default: int = 60) -> tuple[int | None, str | None]:
-    value = payload.get("lease_s", default)
+    value: Any = payload.get("lease_s", default)
     try:
         parsed = int(value)
     except (TypeError, ValueError):
@@ -57,14 +67,7 @@ def _parse_lease_s(payload: dict[str, object], *, default: int = 60) -> tuple[in
 
 
 def _extract_prompt_id(snapshot: dict[str, object] | None) -> str | None:
-    if not snapshot:
-        return None
-    prompt = snapshot.get("prompt_detected")
-    if isinstance(prompt, dict):
-        value = prompt.get("prompt_id")
-        if isinstance(value, str) and value:
-            return value
-    return None
+    return extract_prompt_id(snapshot)
 
 
 async def _wait_for_prompt(
@@ -86,13 +89,10 @@ async def _wait_for_prompt(
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         snapshot = runtime.last_snapshot
-        if snapshot:
-            if expect_prompt_id and _extract_prompt_id(snapshot) == expect_prompt_id:
-                return snapshot
-            if expect_regex and expect_regex.search(str(snapshot.get("screen", ""))):
-                return snapshot
+        if snapshot_matches(snapshot, expect_prompt_id=expect_prompt_id, expect_regex=expect_regex):
+            return cast("dict[str, object] | None", snapshot)
         await asyncio.sleep(interval_s)
-    return runtime.last_snapshot
+    return cast("dict[str, object] | None", runtime.last_snapshot)
 
 
 async def _wait_for_analysis(runtime: RuntimeProtocol, *, timeout_ms: int = 5_000) -> str | None:
@@ -101,9 +101,9 @@ async def _wait_for_analysis(runtime: RuntimeProtocol, *, timeout_ms: int = 5_00
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         if runtime.last_analysis:
-            return runtime.last_analysis
+            return cast("str | None", runtime.last_analysis)
         await asyncio.sleep(0.2)
-    return runtime.last_analysis
+    return cast("str | None", runtime.last_analysis)
 
 
 def _session_status_item(runtime: RuntimeProtocol) -> dict[str, object]:
@@ -127,7 +127,7 @@ def _session_status_item(runtime: RuntimeProtocol) -> dict[str, object]:
     }
 
 
-async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
+async def route_http(runtime: RuntimeProtocol, request: object) -> object:
     url = str(getattr(request, "url", ""))
     path = urlparse(url).path
     method = str(getattr(request, "method", "GET")).upper()
@@ -244,14 +244,12 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
             snapshot = row.get("last_snapshot") if row else None
         session = runtime.hijack.session
         return json_response(
-            {
-                "ok": True,
-                "worker_id": runtime.worker_id,
-                "hijack_id": hijack_id,
-                "snapshot": snapshot,
-                "prompt_id": _extract_prompt_id(snapshot),
-                "lease_expires_at": session.lease_expires_at if session is not None else None,
-            }
+            build_hijack_snapshot_response(
+                worker_id=runtime.worker_id,
+                hijack_id=hijack_id,
+                snapshot=snapshot,
+                lease_expires_at=session.lease_expires_at if session is not None else None,
+            )
         )
 
     if "/hijack/" in path and path.endswith("/events") and method == "GET":
@@ -270,17 +268,16 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
         latest_seq = runtime.store.current_event_seq(runtime.worker_id)
         min_event_seq = runtime.store.min_event_seq(runtime.worker_id)
         return json_response(
-            {
-                "ok": True,
-                "worker_id": runtime.worker_id,
-                "hijack_id": hijack_id,
-                "after_seq": after_seq,
-                "latest_seq": latest_seq,
-                "min_event_seq": min_event_seq,
-                "has_more": len(rows) >= limit,
-                "events": rows,
-                "lease_expires_at": session.lease_expires_at,
-            }
+            build_hijack_events_response(
+                worker_id=runtime.worker_id,
+                hijack_id=hijack_id,
+                after_seq=after_seq,
+                latest_seq=latest_seq,
+                min_event_seq=min_event_seq,
+                events=rows,
+                limit=limit,
+                lease_expires_at=session.lease_expires_at,
+            )
         )
 
     if path.endswith("/input_mode") and method == "POST":
@@ -292,7 +289,7 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> Response:
             return json_response({"error": "input_mode must be 'hijack' or 'open'"}, status=400)
         if mode == "open" and runtime.hijack.session is not None:
             return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
-        runtime.input_mode = mode  # type: ignore[misc]
+        runtime.input_mode = mode
         runtime.store.save_input_mode(runtime.worker_id, mode)
         return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 
@@ -319,7 +316,7 @@ async def _handle_hijack_send(
     runtime: RuntimeProtocol,
     request: object,
     path: str,
-) -> Response:
+) -> object:
     """Handle POST /hijack/{id}/send — validate, send input, optionally wait for prompt."""
     if await runtime.browser_role_for_request(request) != "admin":
         return json_response({"error": "admin role required"}, status=403)
@@ -347,12 +344,13 @@ async def _handle_hijack_send(
         # enabling a clean 400 response (avoids ReDoS in the polling loop).
         expect_regex_obj: re.Pattern[str] | None = None
         if expect_regex_raw:
-            if len(expect_regex_raw) > _MAX_REGEX_LEN:
-                return json_response({"error": "expect_regex too long", "max": _MAX_REGEX_LEN}, status=400)
             try:
-                expect_regex_obj = re.compile(expect_regex_raw)
-            except re.error as exc:
-                return json_response({"error": f"invalid expect_regex: {exc}"}, status=400)
+                expect_regex_obj = compile_expect_regex(expect_regex_raw, max_length=_MAX_REGEX_LEN)
+            except PromptRegexError as exc:
+                payload = {"error": str(exc)}
+                if exc.kind == "too_long":
+                    payload["max"] = int(exc.max_length or _MAX_REGEX_LEN)
+                return json_response(payload, status=400)
         timeout_ms = _safe_int(payload.get("timeout_ms"), 5_000, min_val=100, max_val=_MAX_TIMEOUT_MS)
         poll_interval_ms = _safe_int(payload.get("poll_interval_ms"), 200, min_val=50, max_val=5_000)
         matched_snapshot = await _wait_for_prompt(
@@ -382,7 +380,7 @@ async def _handle_session_route(
     url: str,
     method: str,
     session_match: re.Match[str],
-) -> Response:
+) -> object:
     """Handle /api/sessions/{id}[/sub] routes."""
     session_id, sub = session_match.group(1), (session_match.group(2) or "")
     if session_id != runtime.worker_id:
@@ -432,7 +430,7 @@ async def _handle_session_route(
             return json_response({"error": "input_mode must be 'hijack' or 'open'"}, status=400)
         if mode == "open" and runtime.hijack.session is not None:
             return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
-        runtime.input_mode = mode  # type: ignore[misc]
+        runtime.input_mode = mode
         runtime.store.save_input_mode(runtime.worker_id, mode)
         return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 

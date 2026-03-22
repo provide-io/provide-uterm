@@ -15,9 +15,9 @@ from typing import Any
 
 import httpx
 import uvicorn
-import websockets
 from fastapi import FastAPI
 
+from provide.terminal.client import connect_async_ws
 from provide.terminal.hijack.hub import TermHub
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _wait_for_server, _ws_url
@@ -55,8 +55,8 @@ class TestBrowserRoles:
         async with _hub_with_roles({"*": "viewer"}) as (hub, base_url):
             hub._dashboard_hijack_lease_s = 0.5
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/browser/v1/term")) as browser,
-                websockets.connect(_ws_url(base_url, "/ws/worker/v1/term")) as worker,
+                connect_async_ws(_ws_url(base_url, "/ws/browser/v1/term")) as browser,
+                connect_async_ws(_ws_url(base_url, "/ws/worker/v1/term")) as worker,
             ):
                 await worker.recv()  # snapshot_req
                 await _drain_all(browser)  # hello, hijack_state
@@ -84,7 +84,7 @@ class TestBrowserRoles:
         """Viewer hello message includes can_hijack=false."""
         async with (
             _hub_with_roles({"*": "viewer"}) as (_hub, base_url),
-            websockets.connect(_ws_url(base_url, "/ws/browser/v2/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/v2/term")) as browser,
         ):
             hello = await _drain_until(browser, "hello")
             assert hello is not None, "Should receive hello message"
@@ -94,8 +94,8 @@ class TestBrowserRoles:
         """Operator can send input in open mode; worker receives it."""
         async with (
             _hub_with_roles({"*": "operator"}) as (_hub, base_url),
-            websockets.connect(_ws_url(base_url, "/ws/browser/op1/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/op1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/op1/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/op1/term")) as worker,
         ):
             await worker.recv()  # snapshot_req
             await _drain_all(browser)
@@ -122,8 +122,8 @@ class TestBrowserRoles:
         """Operator sends hijack_request, gets error."""
         async with (
             _hub_with_roles({"*": "operator"}) as (_hub, base_url),
-            websockets.connect(_ws_url(base_url, "/ws/browser/op2/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/op2/term")),
+            connect_async_ws(_ws_url(base_url, "/ws/browser/op2/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/op2/term")),
         ):
             await _drain_all(browser)
             await browser.send(json.dumps({"type": "hijack_request"}))
@@ -136,8 +136,8 @@ class TestBrowserRoles:
         """Admin sends hijack_request, acquires hijack with owner=me."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/browser/a1/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/a1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/a1/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/a1/term")) as worker,
         ):
             await worker.recv()  # snapshot_req
             await _drain_all(browser)
@@ -159,7 +159,7 @@ class TestLeaseExpiry:
         """Acquire with lease_s=0.3; sleep 0.6s; worker receives resume."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/le1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/le1/term")) as worker,
             httpx.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()  # snapshot_req
@@ -184,10 +184,10 @@ class TestLeaseExpiry:
     async def test_ws_hijack_owner_disconnect_sends_resume(self, live_hub: Any) -> None:
         """Browser hijacks, then disconnects; worker receives resume."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/le2/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/le2/term")) as worker:
             await worker.recv()  # snapshot_req
 
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/le2/term")) as b1:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/le2/term")) as b1:
                 await _drain_all(b1)
                 await b1.send(json.dumps({"type": "hijack_request"}))
                 state = await _drain_until(b1, "hijack_state")
@@ -212,10 +212,10 @@ class TestWorkerReconnect:
     async def test_worker_reconnect_browser_sees_events(self, live_hub: Any) -> None:
         """Worker disconnects and reconnects; browser sees events."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/browser/wr1/term")) as browser:
+        async with connect_async_ws(_ws_url(base_url, "/ws/browser/wr1/term")) as browser:
             await _drain_all(browser)
 
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/wr1/term")):
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/wr1/term")):
                 connected = await _drain_until(browser, "worker_connected", timeout=2.0)
                 assert connected is not None, "Browser should see worker_connected event"
 
@@ -227,14 +227,14 @@ class TestWorkerReconnect:
         """REST acquire, then worker disconnects; second acquire succeeds."""
         _, base_url = live_hub
         async with httpx.AsyncClient(base_url=base_url) as http:
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/wr2/term")) as worker:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/wr2/term")) as worker:
                 await worker.recv()  # snapshot_req
 
                 r1 = await http.post("/worker/wr2/hijack/acquire", json={"owner": "test", "lease_s": 60})
                 assert r1.status_code == 200, f"First acquire should succeed, got {r1.status_code}: {r1.text}"
 
             # Worker reconnects; hub clears hijack on worker disconnect before registering new worker
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/wr2/term")) as worker:
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/wr2/term")) as worker:
                 await worker.recv()  # snapshot_req — server processed disconnect before this
                 # Second acquire should succeed
                 r2 = await http.post("/worker/wr2/hijack/acquire", json={"owner": "test2", "lease_s": 60})
@@ -253,7 +253,7 @@ class TestRestHijackAdvanced:
         """Acquire, then poll snapshot endpoint; returns 200 with ok=True."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/rha1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/rha1/term")) as worker,
             httpx.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()  # snapshot_req
@@ -276,7 +276,7 @@ class TestRestHijackAdvanced:
         """Acquire, step, GET /events; returns events with monotonic seq."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/rha2/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/rha2/term")) as worker,
             httpx.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
@@ -307,7 +307,7 @@ class TestRestHijackAdvanced:
     async def test_concurrent_acquire_second_client_gets_409(self, live_hub: Any) -> None:
         """Two clients race to acquire; exactly one gets 200, other gets 409."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/rha3/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/rha3/term")) as worker:
             await worker.recv()
 
             async def acquire(client_id: int):
@@ -334,8 +334,8 @@ class TestAnalyzeRoundTrip:
         """Hijack owner sends analyze_req; worker receives and replies with analysis."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/browser/ar1/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/ar1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ar1/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/ar1/term")) as worker,
         ):
             await worker.recv()
             await _drain_all(browser)
@@ -380,7 +380,7 @@ class TestInputModeLifecycle:
         """REST acquire hijack; attempt /input_mode → 409."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/im1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/im1/term")) as worker,
             httpx.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
@@ -396,8 +396,8 @@ class TestInputModeLifecycle:
         """Worker sends worker_hello with open mode; browser receives mode update."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/browser/im2/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/im2/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/im2/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/im2/term")) as worker,
         ):
             await worker.recv()
             await _drain_all(browser)

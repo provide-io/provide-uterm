@@ -14,9 +14,9 @@ from contextlib import asynccontextmanager
 
 import httpx
 import uvicorn
-import websockets
 from fastapi import FastAPI
 
+from provide.terminal.client import connect_async_ws
 from provide.terminal.hijack.hub import TermHub
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _wait_for_server, _ws_url
@@ -53,7 +53,7 @@ class TestRestAcquireRateLimit:
         """Fire 10 acquire requests rapidly; at least one gets 429."""
         async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):  # noqa: SIM117
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/worker/rrl1/term")) as worker,
+                connect_async_ws(_ws_url(base_url, "/ws/worker/rrl1/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()  # snapshot_req
@@ -76,7 +76,7 @@ class TestRestAcquireRateLimit:
         """Hit limit, sleep 1.1s, verify next acquire succeeds."""
         async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):  # noqa: SIM117
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/worker/rrl2/term")) as worker,
+                connect_async_ws(_ws_url(base_url, "/ws/worker/rrl2/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()
@@ -119,7 +119,7 @@ class TestRestSendRateLimit:
         """Acquire once, fire 20 send requests; at least one gets 429."""
         async with _tight_rate_hub(send_rate=2.0) as (_hub, base_url):  # noqa: SIM117
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/worker/rrl3/term")) as worker,
+                connect_async_ws(_ws_url(base_url, "/ws/worker/rrl3/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()
@@ -155,7 +155,7 @@ class TestRestSendRateLimit:
         """Rapid POST /step calls also hit send rate limit."""
         async with _tight_rate_hub(send_rate=1.0) as (_hub, base_url):  # noqa: SIM117
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/worker/rrl4/term")) as worker,
+                connect_async_ws(_ws_url(base_url, "/ws/worker/rrl4/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()
@@ -190,8 +190,8 @@ class TestBrowserWsRateLimit:
         """Browser fires >30 input msgs/sec; worker receives fewer (hub silently drops)."""
         async with _tight_rate_hub() as (_hub, base_url):  # noqa: SIM117
             async with (
-                websockets.connect(_ws_url(base_url, "/ws/browser/rrl5/term")) as browser,
-                websockets.connect(_ws_url(base_url, "/ws/worker/rrl5/term")) as worker,
+                connect_async_ws(_ws_url(base_url, "/ws/browser/rrl5/term")) as browser,
+                connect_async_ws(_ws_url(base_url, "/ws/worker/rrl5/term")) as worker,
             ):
                 await worker.recv()
                 await _drain_all(browser)

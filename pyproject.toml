@@ -79,6 +79,7 @@ dev = [
     "fastapi>=0.110",
     "httpx>=0.27",
     "hypothesis>=6.151.9",
+    "memray>=1.0",
     "mutmut>=3.3.1",
     "mypy>=1.19",
     "pip-audit>=2.7.0",
@@ -117,7 +118,9 @@ filterwarnings = [
 ]
 markers = [
     "playwright: browser-based UI tests (deselected by default, run with -m playwright)",
-    "mutant: mutation-killing tests (heavy, deselected by default, run with -m mutant)",
+    "mutant: mutation-testing and mutmut-focused tests (deselected by default)",
+    "memray: memory profiling and allocation stress tests (deselected by default, run with -m memray)",
+    "slow: slow tests >10s (deselected by default)",
 ]
 addopts = [
     "--import-mode=importlib",
@@ -127,7 +130,7 @@ addopts = [
     "--tb=short",
     "-ra",
     "-m",
-    "not playwright and not mutant",
+    "not playwright and not memray and not slow",
     "--cov=provide.terminal",
     "--cov-branch",
     "--cov-report=term-missing",
@@ -173,7 +176,8 @@ ignore = ["E501", "S104", "S112", "S311"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "RUF022"]
-"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+"tests_mutation/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 "packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.coverage.run]
@@ -247,7 +251,7 @@ max_average = "A"
 [tool.mutmut]
 max_children = 6
 paths_to_mutate = ["src/provide/terminal/"]
-tests_dir = ["tests/"]
+tests_dir = ["tests/", "tests_mutation/"]
 also_copy = ["scripts/"]
 do_not_mutate = [
     "src/provide/terminal/frontend/",
@@ -255,7 +259,7 @@ do_not_mutate = [
     "src/provide/terminal/gateway.py",
     "src/provide/terminal/server/connectors/",
 ]
-pytest_add_cli_args = ["--no-cov"]
+pytest_add_cli_args = ["--no-cov", "--timeout=30"]
 pytest_add_cli_args_test_selection = [
     "-m",
     "not playwright",
@@ -272,6 +276,6 @@ members = [
 ]
 
 [tool.uv.sources]
+provide-telemetry = { path = "/REDACTED_ABS_PATH", editable = true }
 provide-terminal = { workspace = true }
 provide-terminal-cloudflare = { workspace = true }
-provide-telemetry = { path = "../provide-telemetry", editable = true }

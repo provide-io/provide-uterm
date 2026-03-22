@@ -17,6 +17,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, initialize, rule
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 
 # ---------------------------------------------------------------------------
@@ -214,7 +215,7 @@ class TestRESTFuzz:
         from starlette.testclient import TestClient
 
         app, hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/fuzz1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/fuzz1/term") as worker:
             worker.receive_json()  # snapshot_req
             resp = client.post("/worker/fuzz1/hijack/acquire", json={"owner": owner, "lease_s": lease})
             if 1 <= lease <= 3600:
@@ -234,7 +235,7 @@ class TestRESTFuzz:
         from starlette.testclient import TestClient
 
         app, hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/fuzz1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/fuzz1/term") as worker:
             worker.receive_json()  # snapshot_req
             # Acquire hijack first
             acq = client.post("/worker/fuzz1/hijack/acquire", json={"owner": "fuzz", "lease_s": 300})
@@ -258,7 +259,7 @@ class TestRESTFuzz:
         from starlette.testclient import TestClient
 
         app, hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/fuzz1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/fuzz1/term") as worker:
             worker.receive_json()  # snapshot_req
             resp = client.post("/worker/fuzz1/input_mode", json={"input_mode": mode})
             if mode in ("hijack", "open"):
@@ -288,7 +289,7 @@ class TestRESTFuzz:
         from starlette.testclient import TestClient
 
         app, hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/fuzz1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/fuzz1/term") as worker:
             worker.receive_json()  # snapshot_req
             acq = client.post("/worker/fuzz1/hijack/acquire", json={"owner": "fuzz", "lease_s": 300})
             assert acq.status_code == 200

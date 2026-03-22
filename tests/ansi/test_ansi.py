@@ -41,7 +41,7 @@ def _save_registry():
 
 class TestDialectRegistry:
     def test_builtins_registered(self) -> None:
-        assert registered_dialects() == ["extended_tokens", "tilde_codes", "pipe_codes"]
+        assert registered_dialects() == ["brace_tokens", "extended_tokens", "tilde_codes", "pipe_codes"]
 
     @pytest.mark.usefixtures("_save_registry")
     def test_register_and_list(self) -> None:

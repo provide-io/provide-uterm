@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -321,17 +321,74 @@ class TestGetOrCreateHostKey:
 
 class TestStartSshServer:
     async def test_start_ssh_server_basic(self, tmp_path) -> None:
-        from provide.terminal.transports.ssh import start_ssh_server
+        from provide.terminal.transports.ssh import SSHStreamReader, SSHStreamWriter, start_ssh_server
+
+        seen: dict[str, object] = {}
 
         async def _handler(reader: object, writer: object) -> None:
-            pass
+            seen["reader"] = reader
+            seen["writer"] = writer
 
-        server = await start_ssh_server(_handler, host="127.0.0.1", port=0, host_key_path=tmp_path)
-        try:
-            assert server is not None
-        finally:
-            server.close()
-            await server.wait_closed()
+        async def _create_server(server_class, host, port, **kwargs):
+            assert host == "127.0.0.1"
+            assert port == 0
+            assert kwargs["server_host_keys"]
+            assert kwargs["encoding"] is None
+            process_factory = kwargs["process_factory"]
+            proc = MockProcess()
+            await process_factory(cast("asyncssh.SSHServerProcess[bytes]", proc))
+            return MagicMock()
+
+        with patch("provide.terminal.transports.ssh.asyncssh.create_server", side_effect=_create_server) as mock_create:
+            server = await start_ssh_server(_handler, host="127.0.0.1", port=0, host_key_path=tmp_path)
+        assert server is not None
+        assert isinstance(seen["reader"], SSHStreamReader)
+        assert isinstance(seen["writer"], SSHStreamWriter)
+        mock_create.assert_called_once()
+
+    async def test_start_ssh_server_uses_injected_factories(self, tmp_path) -> None:
+        from provide.terminal.transports.ssh import start_ssh_server
+
+        seen: dict[str, object] = {}
+
+        class DummyReader:
+            def __init__(self, process) -> None:
+                seen["reader_process"] = process
+
+        class DummyWriter:
+            def __init__(self, process) -> None:
+                seen["writer_process"] = process
+
+        async def _handler(reader: object, writer: object) -> None:
+            seen["handler_reader"] = reader
+            seen["handler_writer"] = writer
+
+        async def _create_server(server_class, host, port, **kwargs):
+            seen["server_class"] = server_class
+            seen["host"] = host
+            seen["port"] = port
+            process_factory = kwargs["process_factory"]
+            proc = MockProcess()
+            await process_factory(cast("asyncssh.SSHServerProcess[bytes]", proc))
+            return MagicMock()
+
+        with patch("provide.terminal.transports.ssh.asyncssh.create_server", side_effect=_create_server):
+            server = await start_ssh_server(
+                _handler,
+                host="127.0.0.1",
+                port=0,
+                host_key_path=tmp_path,
+                reader_factory=DummyReader,
+                writer_factory=DummyWriter,
+            )
+
+        assert server is not None
+        assert seen["host"] == "127.0.0.1"
+        assert seen["port"] == 0
+        assert isinstance(seen["handler_reader"], DummyReader)
+        assert isinstance(seen["handler_writer"], DummyWriter)
+        assert seen["reader_process"] is not None
+        assert seen["writer_process"] is not None
 
 
 class TestGetOrCreateHostKeySaveFailure:

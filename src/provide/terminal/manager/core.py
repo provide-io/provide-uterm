@@ -128,6 +128,70 @@ class SwarmManager:
     async def kill_bot(self, bot_id: str) -> None:
         await self.bot_process_manager.kill_bot(bot_id)
 
+    # --- Fleet operations ---
+
+    async def kill_all(self) -> dict[str, Any]:
+        """Cancel pending spawns and kill all running bot processes."""
+        await self.cancel_spawn()
+        killed: list[str] = []
+        for bot_id in list(self.processes.keys()):
+            try:
+                await self.kill_bot(bot_id)
+                killed.append(bot_id)
+            except Exception:
+                logger.exception("failed_to_kill_bot", bot_id=bot_id)
+        return {"killed": killed, "count": len(killed)}
+
+    async def clear_swarm(self) -> dict[str, Any]:
+        """Kill all processes and remove all bot registrations."""
+        await self.cancel_spawn()
+        for bot_id in list(self.processes.keys()):
+            with contextlib.suppress(OSError, RuntimeError):
+                await self.kill_bot(bot_id)
+        for bot_id in list(self.bots.keys()):
+            with contextlib.suppress(AttributeError, RuntimeError):
+                self.bot_process_manager.release_bot_account(bot_id)
+        count = len(self.bots)
+        self.bots.clear()
+        self.processes.clear()
+        await self.broadcast_status()
+        return {"cleared": count}
+
+    async def prune_dead(self) -> dict[str, Any]:
+        """Remove bots in terminal states (stopped/error/completed)."""
+        terminal = {"stopped", "error", "completed"}
+        dead_ids = [bid for bid, b in self.bots.items() if b.state in terminal]
+        for bid in dead_ids:
+            with contextlib.suppress(AttributeError, RuntimeError):
+                self.bot_process_manager.release_bot_account(bid)
+            if bid in self.processes:
+                with contextlib.suppress(OSError, ProcessLookupError, RuntimeError):
+                    await self.kill_bot(bid)
+                self.processes.pop(bid, None)
+            del self.bots[bid]
+        await self.broadcast_status()
+        return {"pruned": len(dead_ids), "remaining": len(self.bots)}
+
+    async def pause_swarm(self) -> dict[str, Any]:
+        """Pause the swarm and mark active bots as paused."""
+        self.swarm_paused = True
+        for bot in self.bots.values():
+            if bot.state in {"running", "recovering", "blocked"}:
+                bot.paused = True
+        await self.broadcast_status()
+        return {"paused": True, "affected": sum(1 for b in self.bots.values() if b.paused)}
+
+    async def resume_swarm(self) -> dict[str, Any]:
+        """Resume the swarm and unset pause flag on all bots."""
+        self.swarm_paused = False
+        resumed = 0
+        for bot in self.bots.values():
+            if bot.paused:
+                bot.paused = False
+                resumed += 1
+        await self.broadcast_status()
+        return {"paused": False, "resumed": resumed}
+
     # --- Delegate timeseries ---
 
     def get_timeseries_info(self) -> dict[str, Any]:

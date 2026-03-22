@@ -80,6 +80,7 @@ def _shell(
     *,
     extra_css: tuple[str, ...] = (),
     scripts: tuple[str, ...] = (),
+    pre_vite_modules: tuple[str, ...] = (),
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
@@ -93,6 +94,11 @@ def _shell(
     css_links = "".join(f"<link rel='stylesheet' href='{escape(assets_path)}/{escape(name)}'>" for name in extra_css)
     script_tags = "".join(
         f"<script type='module' src='{escape(assets_path)}/{escape(name)}'></script>" for name in scripts
+    )
+    # pre_vite_modules are type="module" scripts that must execute BEFORE the Vite
+    # React bundle so their exports are available when React effects run.
+    pre_vite_tags = "".join(
+        f"<script type='module' src='{escape(assets_path)}/{escape(name)}'></script>" for name in pre_vite_modules
     )
     xterm_css = f"<link rel='stylesheet' href='{escape(xterm_cdn)}/css/xterm.css'>" if xterm_cdn else ""
     xterm_js = f"<script src='{escape(xterm_cdn)}/lib/xterm.js'></script>" if xterm_cdn else ""
@@ -114,6 +120,7 @@ def _shell(
         f"{legacy_css}"
         f"{css_links}{xterm_css}{fonts_link}"
         f"{xterm_js}{fitaddon_js}"
+        f"{pre_vite_tags}"
         f"{vite_tags}"
         f"{body}{script_tags}</html>"
     )
@@ -175,13 +182,16 @@ def session_page_html(
         "<div id='app-root'></div>"
         "<noscript><div class='page'><div class='card'>This application requires JavaScript.</div></div></noscript>"
         f"{_bootstrap_tag(bootstrap)}"
-        f"<script src='{escape(assets_path)}/hijack.js'></script>"
         "</body>"
     )
     return _shell(
         title,
         assets_path,
         body,
+        # hijack.js must appear before the Vite React bundle so window.ProvideHijack
+        # is set before React's useEffect runs (both are deferred modules; document
+        # order determines execution order).
+        pre_vite_modules=("hijack.js",),
         scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,

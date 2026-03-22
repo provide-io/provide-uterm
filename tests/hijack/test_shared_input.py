@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 
 # ---------------------------------------------------------------------------
@@ -47,40 +48,40 @@ def _read_worker_snapshot_req(worker) -> dict:
 class TestWorkerHello:
     def test_worker_hello_sets_open_mode(self) -> None:
         app, _hub = _make_app("operator")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "open"})
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, hs = _read_initial_browser(browser)
                 assert hello["input_mode"] == "open"
                 assert hs["input_mode"] == "open"
 
     def test_worker_hello_hijack_mode(self) -> None:
         app, _hub = _make_app("admin")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "hijack"})
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, hs = _read_initial_browser(browser)
                 assert hello["input_mode"] == "hijack"
                 assert hs["input_mode"] == "hijack"
 
     def test_no_worker_hello_defaults_hijack(self) -> None:
         app, _hub = _make_app("operator")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "term", "data": "hello world"})
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, hs = _read_initial_browser(browser)
                 assert hello["input_mode"] == "hijack"
                 assert hs["input_mode"] == "hijack"
 
     def test_worker_hello_invalid_mode_ignored(self) -> None:
         app, _hub = _make_app("admin")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "bad_value"})
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, _hs = _read_initial_browser(browser)
                 assert hello["input_mode"] == "hijack"
 
@@ -94,13 +95,13 @@ class TestOpenModeInput:
     def test_browser_sends_input_open_mode(self) -> None:
         """In open mode, an operator browser can send input without hijacking."""
         app, _hub = _make_app("operator")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             # Set open mode via REST
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as b1:
+            with connect_test_ws(client, "/ws/browser/w1/term") as b1:
                 hello, _hs = _read_initial_browser(b1)
                 assert hello["input_mode"] == "open"
 
@@ -118,10 +119,10 @@ class TestOpenModeInput:
     def test_input_ignored_in_hijack_mode_without_ownership(self) -> None:
         """In default hijack mode, a browser without ownership cannot send input."""
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/w1/term") as b1:
+            with connect_test_ws(client, "/ws/browser/w1/term") as b1:
                 _read_initial_browser(b1)
 
                 # Send input without hijacking — should be silently ignored
@@ -148,11 +149,11 @@ class TestOpenModeInput:
 class TestHijackRejectedInOpenMode:
     def test_hijack_request_rejected_open_mode(self) -> None:
         app, _hub = _make_app("admin")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "open"})
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 browser.send_json({"type": "hijack_request"})
@@ -169,7 +170,7 @@ class TestHijackRejectedInOpenMode:
 class TestRestInputMode:
     def test_set_input_mode_open(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
@@ -179,7 +180,7 @@ class TestRestInputMode:
 
     def test_set_input_mode_back_to_hijack(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "worker_hello", "input_mode": "open"})
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "hijack"})
@@ -195,7 +196,7 @@ class TestRestInputMode:
     def test_set_input_mode_rejected_active_hijack(self) -> None:
         """Cannot switch to open when a hijack session is active."""
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             resp = client.post("/worker/w1/hijack/acquire", json={"owner": "test", "lease_s": 3600})
             assert resp.status_code == 200
@@ -214,10 +215,10 @@ class TestRestInputMode:
 
     def test_input_mode_broadcast_to_browsers(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
@@ -239,7 +240,7 @@ class TestRestInputMode:
 class TestRestDisconnectWorker:
     def test_disconnect_worker(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
             resp = client.post("/worker/w1/disconnect_worker")

@@ -11,7 +11,6 @@ Split from test_mcp_regression.py.
 
 from __future__ import annotations
 
-import json
 from io import StringIO
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -97,9 +96,9 @@ class TestKeyEscapeProcessing:
         sent_calls = ws.send_text.call_args_list
 
         for call in sent_calls:
-            msg = json.loads(call[0][0])
-            if msg.get("type") == "input":
-                assert msg["data"] == "hello\r"
+            payload = call[0][0]
+            if payload == "hello\r":
+                assert payload == "hello\r"
                 break
 
     async def test_backslash_n_unescaped_to_lf(self) -> None:

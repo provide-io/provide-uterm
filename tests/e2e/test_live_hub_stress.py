@@ -12,7 +12,7 @@ import json
 import time
 from typing import Any
 
-import websockets
+from provide.terminal.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
@@ -27,7 +27,7 @@ class TestConcurrentBrowsers:
         _, base_url = live_hub
 
         async def _connect_and_get_hello(i: int) -> dict[str, Any] | None:
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/stress1/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress1/term")) as browser:
                 return await _drain_until(browser, "hello", timeout=3.0)
 
         results = await asyncio.gather(*[_connect_and_get_hello(i) for i in range(10)])
@@ -44,7 +44,7 @@ class TestConcurrentBrowsers:
         ready = asyncio.Barrier(11)  # 10 browsers + 1 coordinator
 
         async def _browser_task(i: int) -> None:
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/stress2/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress2/term")) as browser:
                 await _drain_all(browser)  # consume hello + hijack_state
                 await ready.wait()  # signal ready, wait for all + coordinator
                 # Wait for the term message
@@ -52,7 +52,7 @@ class TestConcurrentBrowsers:
                 if term is not None:
                     received[i].append(term)
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/stress2/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/stress2/term")) as worker:
             await worker.recv()  # snapshot_req
 
             # Start 10 browsers
@@ -86,14 +86,14 @@ class TestConcurrentBrowsers:
         result_lock = asyncio.Lock()
 
         async def _try_hijack(i: int) -> None:
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/stress3/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress3/term")) as browser:
                 await _drain_all(browser)
                 await browser.send(json.dumps({"type": "hijack_request"}))
                 state = await _drain_until(browser, "hijack_state", timeout=3.0)
                 async with result_lock:
                     results.append(state)
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/stress3/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/stress3/term")) as worker:
             await worker.recv()
 
             await asyncio.gather(*[_try_hijack(i) for i in range(10)])
@@ -121,13 +121,13 @@ class TestBroadcastUnderLoad:
         ready4 = asyncio.Barrier(4)  # 3 browsers + 1 coordinator
 
         async def _browser_task(i: int) -> None:
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/stress4/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress4/term")) as browser:
                 await _drain_all(browser)  # drain initial messages
                 await ready4.wait()
                 msgs = await _drain_all(browser, timeout=2.0)
                 browser_counts[i] = sum(1 for m in msgs if m.get("type") == "term")
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/stress4/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/stress4/term")) as worker:
             await worker.recv()
 
             browser_tasks = [asyncio.create_task(_browser_task(i)) for i in range(3)]
@@ -152,13 +152,13 @@ class TestBroadcastUnderLoad:
         ready5 = asyncio.Barrier(6)  # 5 browsers + 1 coordinator
 
         async def _browser_task(i: int) -> None:
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/stress5/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress5/term")) as browser:
                 await _drain_all(browser)  # drain hello + hijack_state
                 await ready5.wait()
                 snap = await _drain_until(browser, "snapshot", timeout=3.0)
                 snapshots[i] = snap
 
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/stress5/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/stress5/term")) as worker:
             await worker.recv()
 
             browser_tasks = [asyncio.create_task(_browser_task(i)) for i in range(5)]

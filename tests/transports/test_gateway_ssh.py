@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from provide.terminal.control_stream import encode_control
 from provide.terminal.gateway import SshWsGateway, _ssh_to_ws, _ws_to_ssh
 from provide.terminal.gateway._gateway import _make_no_auth_server_class
 
@@ -200,7 +201,7 @@ class TestWsToSshControl:
             stdout = _MockStdout()
 
         async def _gen():
-            yield '{"type": "resume_ok"}'
+            yield encode_control({"type": "resume_ok"})
 
         await _ws_to_ssh(_gen(), _MockProcess())
         assert any("Session resumed" in w for w in written)
@@ -218,7 +219,7 @@ class TestWsToSshControl:
             stdout = _MockStdout()
 
         async def _gen():
-            yield '{"type": "session_token", "token": "abc"}'
+            yield encode_control({"type": "session_token", "token": "abc"})
 
         await _ws_to_ssh(_gen(), _MockProcess(), token_file=token_file)
         assert written == []

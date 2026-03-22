@@ -37,6 +37,7 @@ class ResumeSession:
     created_at: float  # time.monotonic()
     expires_at: float  # time.monotonic()
     was_hijack_owner: bool = False
+    wall_created_at: float = 0.0  # time.time() at token creation, for session identity checks
 
 
 @runtime_checkable
@@ -74,6 +75,9 @@ class InMemoryResumeStore:
         # _ws_to_resume_token.
 
     def create(self, worker_id: str, role: str, ttl_s: float) -> str:
+        # Opportunistically prune on create so expired entries cannot grow
+        # without bound in long-lived processes with repeated browser churn.
+        self.cleanup_expired()
         token = secrets.token_urlsafe(32)
         now = time.monotonic()
         self._tokens[token] = ResumeSession(
@@ -82,6 +86,7 @@ class InMemoryResumeStore:
             role=role,
             created_at=now,
             expires_at=now + ttl_s,
+            wall_created_at=time.time(),
         )
         return token
 

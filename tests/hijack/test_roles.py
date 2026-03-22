@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import VALID_ROLES
 
@@ -56,18 +57,18 @@ class TestValidRoles:
 class TestDefaultRole:
     def test_no_resolver_defaults_to_viewer(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, _ = _read_initial_browser(browser)
                 assert hello["role"] == "viewer"
                 assert hello["can_hijack"] is False
 
     def test_invalid_resolver_value_falls_back_to_viewer(self) -> None:
         app, _hub = _make_app(lambda _ws, _worker_id: "superuser")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, _ = _read_initial_browser(browser)
                 assert hello["role"] == "viewer"
                 assert hello["can_hijack"] is False
@@ -77,9 +78,9 @@ class TestDefaultRole:
             return "operator"
 
         app, _hub = _make_app(_resolve)
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, _ = _read_initial_browser(browser)
                 assert hello["role"] == "operator"
                 assert hello["can_hijack"] is False
@@ -89,9 +90,9 @@ class TestDefaultRole:
             raise RuntimeError("auth backend unavailable")
 
         app, _hub = _make_app(_explode)
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 try:
                     browser.receive_json()
                 except WebSocketDisconnect:
@@ -103,24 +104,24 @@ class TestDefaultRole:
 class TestOpenModeInput:
     def test_viewer_input_ignored_in_open_mode(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
                 browser.send_json({"type": "input", "data": "hello"})
                 browser.send_json({"type": "ping"})
 
     def test_operator_input_forwarded_in_open_mode(self) -> None:
         app, _hub = _make_app(lambda _ws, _worker_id: "operator")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
                 _drain_snapshot_req(worker)
                 browser.send_json({"type": "input", "data": "hello"})
@@ -130,12 +131,12 @@ class TestOpenModeInput:
 
     def test_admin_input_forwarded_in_open_mode(self) -> None:
         app, _hub = _make_app(lambda _ws, _worker_id: "admin")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
                 _drain_snapshot_req(worker)
                 browser.send_json({"type": "input", "data": "hello"})
@@ -147,9 +148,9 @@ class TestOpenModeInput:
 class TestHijackPermissions:
     def test_viewer_hijack_request_rejected(self) -> None:
         app, _hub = _make_app()
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
                 browser.send_json({"type": "hijack_request"})
                 error = browser.receive_json()
@@ -158,9 +159,9 @@ class TestHijackPermissions:
 
     def test_operator_hijack_request_rejected(self) -> None:
         app, _hub = _make_app(lambda _ws, _worker_id: "operator")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
                 browser.send_json({"type": "hijack_request"})
                 error = browser.receive_json()
@@ -169,9 +170,9 @@ class TestHijackPermissions:
 
     def test_admin_hijack_request_succeeds(self) -> None:
         app, _hub = _make_app(lambda _ws, _worker_id: "admin")
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 hello, _ = _read_initial_browser(browser)
                 assert hello["role"] == "admin"
                 assert hello["can_hijack"] is True

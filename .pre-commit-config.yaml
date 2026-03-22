@@ -17,6 +17,14 @@ repos:
         always_run: false
         types_or: [ts, javascript]
 
+      - id: vitest
+        name: vitest frontend tests
+        entry: npm test --workspace=packages/provide-terminal-frontend
+        language: system
+        pass_filenames: false
+        always_run: false
+        types_or: [ts, javascript]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.2
     hooks:
@@ -34,6 +42,7 @@ repos:
     hooks:
       - id: codespell
         additional_dependencies: ["tomli"]
+        exclude: "package-lock\\.json"
 
   - repo: local
     hooks:

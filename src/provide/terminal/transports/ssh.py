@@ -37,6 +37,7 @@ ConnectionHandler = Callable[
     [Any, Any],  # (SSHStreamReader, SSHStreamWriter)
     Coroutine[Any, Any, None],
 ]
+StreamAdapterFactory = Callable[[asyncssh.SSHServerProcess[bytes]], Any]
 
 
 class SSHStreamReader:
@@ -202,6 +203,9 @@ async def start_ssh_server(
     port: int = TerminalDefaults.SSH_PORT,
     host_key_path: Path | None = None,
     max_connections_per_ip: int = 5,
+    *,
+    reader_factory: StreamAdapterFactory | None = None,
+    writer_factory: StreamAdapterFactory | None = None,
 ) -> Any:
     """Create and start an asyncssh SSH server.
 
@@ -212,6 +216,10 @@ async def start_ssh_server(
         port: TCP port number.
         host_key_path: Directory for host key storage (defaults to ``Path.cwd()``).
         max_connections_per_ip: Max concurrent connections from a single IP.
+        reader_factory: Optional per-connection reader adapter factory. Defaults
+            to :class:`SSHStreamReader`.
+        writer_factory: Optional per-connection writer adapter factory. Defaults
+            to :class:`SSHStreamWriter`.
 
     Returns:
         The running asyncssh server instance.
@@ -221,10 +229,12 @@ async def start_ssh_server(
 
     key_dir = host_key_path if host_key_path is not None else Path.cwd()
     host_key = _get_or_create_host_key(key_dir)
+    make_reader = reader_factory or SSHStreamReader
+    make_writer = writer_factory or SSHStreamWriter
 
     async def _process_factory(process: asyncssh.SSHServerProcess[bytes]) -> None:  # pragma: no cover
-        reader = SSHStreamReader(process)
-        writer = SSHStreamWriter(process)
+        reader = make_reader(process)
+        writer = make_writer(process)
         await handler(reader, writer)
         with contextlib.suppress(Exception):
             process.exit(0)

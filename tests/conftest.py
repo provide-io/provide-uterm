@@ -44,6 +44,7 @@ from provide.terminal.server import create_server_app, default_server_config
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
+
 # ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
@@ -153,9 +154,11 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
             "html,body{width:100%;height:100dvh;background:#0b0f14}"
             "#app{width:100%;height:100%}</style></head>"
             "<body><div id='app'></div>"
-            "<script src='/ui/hijack.js'></script>"
-            "<script>new ProvideHijack(document.getElementById('app'),"
-            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});</script>"
+            "<script type='module'>"
+            "import { ProvideHijack } from '/ui/hijack.js';"
+            "new ProvideHijack(document.getElementById('app'),"
+            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
+            "</script>"
             "</body></html>"
         )
 
@@ -291,30 +294,35 @@ class WorkerController:
     async def _connect(self) -> None:
         import websockets
 
+        from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk, encode_control
+
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
         try:
             async with websockets.connect(ws_url) as ws:
                 self._connected.set()
-                await ws.send(
-                    json.dumps(
-                        {
-                            "type": "snapshot",
-                            "screen": f"E2E test worker: {self._worker_id}",
-                            "cursor": {"x": 0, "y": 0},
-                            "cols": 80,
-                            "rows": 25,
-                            "screen_hash": "e2e-hash",
-                            "cursor_at_end": True,
-                            "has_trailing_space": False,
-                            "prompt_detected": {"prompt_id": "test_prompt"},
-                            "ts": time.time(),
-                        }
-                    )
-                )
+                snapshot_msg = {
+                    "type": "snapshot",
+                    "screen": f"E2E test worker: {self._worker_id}",
+                    "cursor": {"x": 0, "y": 0},
+                    "cols": 80,
+                    "rows": 25,
+                    "screen_hash": "e2e-hash",
+                    "cursor_at_end": True,
+                    "has_trailing_space": False,
+                    "prompt_detected": {"prompt_id": "test_prompt"},
+                    "ts": time.time(),
+                }
+                await ws.send(encode_control(snapshot_msg))
+                decoder = ControlStreamDecoder()
                 while not self._stop.is_set():
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                        self.received.append(json.loads(raw))
+                        for chunk in decoder.feed(raw):
+                            if isinstance(chunk, ControlChunk):
+                                self.received.append(chunk.control)
+                            elif isinstance(chunk, DataChunk) and chunk.data:
+                                # Hub encodes "input" messages as raw data frames
+                                self.received.append({"type": "input", "data": chunk.data})
                     except TimeoutError:
                         continue
                     except Exception:

@@ -8,28 +8,57 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
+from weakref import WeakKeyDictionary
 
 import httpx
 import websockets
+
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk, encode_control, encode_data
 
 
 def _ws_url(base_url: str, path: str) -> str:
     return base_url.replace("http://", "ws://") + path
 
 
+_WS_DECODERS: WeakKeyDictionary[Any, ControlStreamDecoder] = WeakKeyDictionary()
+_WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
+
+
 async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, Any] | None:
+    decoder = _WS_DECODERS.setdefault(ws, ControlStreamDecoder())
+    pending = _WS_PENDING.setdefault(ws, [])
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         try:
+            if pending:
+                msg = pending.pop(0)
+                if msg.get("type") == type_:
+                    return msg
+                continue
             raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-            msg = json.loads(raw)
+            events = decoder.feed(raw)
+            for event in events:
+                if isinstance(event, ControlChunk):
+                    pending.append(event.control)
+                elif isinstance(event, DataChunk):
+                    pending.append({"type": "term", "data": event.data})
+            if not pending:
+                continue
+            msg = pending.pop(0)
             if msg.get("type") == type_:
                 return msg
         except TimeoutError:
             continue
     return None
+
+
+async def _send_frame(ws: Any, payload: dict[str, Any]) -> None:
+    frame_type = payload.get("type")
+    if frame_type in {"input", "term"}:
+        await ws.send(encode_data(str(payload.get("data", ""))))
+        return
+    await ws.send(encode_control(payload))
 
 
 async def _wait_for_snapshot_text(ws: Any, needle: str, timeout: float = 3.0) -> dict[str, Any] | None:
@@ -73,9 +102,9 @@ class TestDemoServerWs:
             await _drain_until(browser, "hijack_state")
             await _drain_until(browser, "snapshot")
 
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await _send_frame(browser, {"type": "hijack_request"})
             await _drain_until(browser, "hijack_state")
-            await browser.send(json.dumps({"type": "input", "data": "hello from owner"}))
+            await _send_frame(browser, {"type": "input", "data": "hello from owner"})
 
             snapshot = await _wait_for_snapshot_text(browser, "hello from owner")
             assert snapshot is not None
@@ -111,7 +140,7 @@ class TestDemoServerWs:
                 await _drain_until(browser, "hijack_state")
                 await _drain_until(browser, "snapshot")
 
-            await b1.send(json.dumps({"type": "hijack_request"}))
+            await _send_frame(b1, {"type": "hijack_request"})
             owner_state = await _drain_until(b1, "hijack_state")
             other_state = await _drain_until(b2, "hijack_state")
             assert owner_state is not None and owner_state["owner"] == "me"
@@ -142,12 +171,12 @@ class TestDemoServerWs:
                 await _drain_until(browser, "hijack_state")
                 await _drain_until(browser, "snapshot")
 
-            await b1.send(json.dumps({"type": "input", "data": "from-one"}))
+            await _send_frame(b1, {"type": "input", "data": "from-one"})
             snap1 = await _wait_for_snapshot_text(b1, "from-one")
             assert snap1 is not None
             assert "from-one" in snap1["screen"]
 
-            await b2.send(json.dumps({"type": "input", "data": "from-two"}))
+            await _send_frame(b2, {"type": "input", "data": "from-two"})
             snap2 = await _wait_for_snapshot_text(b2, "from-two")
             assert snap2 is not None
             assert "from-two" in snap2["screen"]
@@ -166,17 +195,17 @@ class TestDemoServerWs:
                 await _drain_until(browser, "hijack_state")
                 await _drain_until(browser, "snapshot")
 
-            await b1.send(json.dumps({"type": "hijack_request"}))
+            await _send_frame(b1, {"type": "hijack_request"})
             b1_state = await _drain_until(b1, "hijack_state")
             b2_state = await _drain_until(b2, "hijack_state")
             assert b1_state is not None and b1_state["owner"] == "me"
             assert b2_state is not None and b2_state["owner"] == "other"
 
-            await b1.send(json.dumps({"type": "hijack_release"}))
+            await _send_frame(b1, {"type": "hijack_release"})
             await _drain_until(b1, "hijack_state")
             await _drain_until(b2, "hijack_state")
 
-            await b2.send(json.dumps({"type": "hijack_request"}))
+            await _send_frame(b2, {"type": "hijack_request"})
             b2_state2 = await _drain_until(b2, "hijack_state")
             b1_state2 = await _drain_until(b1, "hijack_state")
             assert b2_state2 is not None and b2_state2["owner"] == "me"

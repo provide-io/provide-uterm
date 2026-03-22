@@ -17,5 +17,6 @@
     "rootDir": "src",
     "outDir": "../../src/provide/terminal/frontend"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
 }

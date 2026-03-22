@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from pathlib import Path
+from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,6 +17,14 @@ if TYPE_CHECKING:
 
 from provide.telemetry import get_logger
 
+from provide.terminal.control_stream import (
+    ControlChunk,
+    ControlStreamDecoder,
+    ControlStreamProtocolError,
+    DataChunk,
+    encode_control,
+    encode_data,
+)
 from provide.terminal.defaults import TerminalDefaults
 from provide.terminal.gateway._colors import _apply_color_mode
 
@@ -70,14 +78,41 @@ async def _handle_ws_control(
     token_file: Path | None,
     write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
 ) -> bool:
-    """Return True if message was a JSON control frame (intercept it)."""
+    """Return True if *message* is a gateway control frame (intercept it)."""
     try:
-        data = json.loads(message)
-        msg_type = data.get("type") if isinstance(data, dict) else None
-    except (json.JSONDecodeError, ValueError):
+        decoder = ControlStreamDecoder()
+        events = decoder.feed(message)
+        events.extend(decoder.finish())
+    except ControlStreamProtocolError:
+        try:
+            data = json.loads(message)
+        except (json.JSONDecodeError, ValueError):
+            return False
+        if not isinstance(data, dict):
+            return False
+        return await _handle_ws_control_frame(data, token_file, write_fn)
+
+    if not events:
+        return False
+    handled = False
+    for event in events:
+        if isinstance(event, DataChunk):
+            return False
+        handled = await _handle_ws_control_frame(event.control, token_file, write_fn) or handled
+    return handled
+
+
+async def _handle_ws_control_frame(
+    data: dict[str, object],
+    token_file: Path | None,
+    write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
+) -> bool:
+    try:
+        msg_type = data.get("type") if isinstance(data.get("type"), str) else None
+    except AttributeError:
         return False
     if msg_type == "session_token" and token_file and "token" in data:
-        _write_token(token_file, data["token"])
+        _write_token(token_file, str(data["token"]))
         return True
     if msg_type == "resume_ok":
         await write_fn(b"\r\n[Session resumed]\r\n")
@@ -177,7 +212,7 @@ async def _tcp_to_ws(reader: asyncio.StreamReader, ws: object, *, telnet: bool =
             data = _strip_iac(data)
             if not data:
                 continue
-        await ws.send(data.decode("latin-1", errors="replace"))  # type: ignore[attr-defined]
+        await ws.send(encode_data(data.decode("latin-1", errors="replace")))  # type: ignore[attr-defined]
 
 
 async def _ws_to_tcp(
@@ -188,6 +223,7 @@ async def _ws_to_tcp(
     color_mode: str = "passthrough",
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
+    decoder = ControlStreamDecoder()
 
     async def _write_fn(data: bytes) -> None:
         writer.write(data)
@@ -195,11 +231,22 @@ async def _ws_to_tcp(
 
     async for message in ws:  # type: ignore[attr-defined]
         if isinstance(message, str):
-            if await _handle_ws_control(message, token_file, _write_fn):
+            try:
+                events = decoder.feed(message)
+            except ControlStreamProtocolError:
                 continue
-            raw = message.encode("latin-1", errors="replace")
-        else:
-            raw = message
+            for event in events:
+                if isinstance(event, ControlChunk):
+                    await _handle_ws_control_frame(event.control, token_file, _write_fn)
+                    continue
+                raw = event.data.encode("latin-1", errors="replace")
+                raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
+                raw = _normalize_crlf(raw)
+                raw = _apply_color_mode(raw, color_mode)
+                writer.write(raw)
+                await writer.drain()
+            continue
+        raw = message
         raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
         raw = _normalize_crlf(raw)
         raw = _apply_color_mode(raw, color_mode)
@@ -222,7 +269,7 @@ async def _pipe_ws(
     async with websockets.connect(ws_url) as ws:
         token = _read_token(token_file) if token_file else None
         if token:
-            await ws.send(json.dumps({"type": "resume", "token": token}))
+            await ws.send(encode_control({"type": "resume", "token": token}))
         t1 = asyncio.create_task(_tcp_to_ws(reader, ws, telnet=telnet))
         t2 = asyncio.create_task(_ws_to_tcp(ws, writer, token_file=token_file, color_mode=color_mode))
         _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
@@ -246,7 +293,8 @@ async def _ssh_to_ws(process: object, ws: object) -> None:
             break
         if not data:
             break
-        await ws.send(data if isinstance(data, str) else data.decode("latin-1", errors="replace"))  # type: ignore[attr-defined]
+        payload = data if isinstance(data, str) else data.decode("latin-1", errors="replace")
+        await ws.send(encode_data(payload))  # type: ignore[attr-defined]
 
 
 async def _ws_to_ssh(
@@ -258,17 +306,24 @@ async def _ws_to_ssh(
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
     stdout = process.stdout  # type: ignore[attr-defined]
+    decoder = ControlStreamDecoder()
 
     async def _write_fn(data: bytes) -> None:
         stdout.write(data.decode("utf-8", errors="replace"))
 
     async for message in ws:  # type: ignore[attr-defined]
         if isinstance(message, str):
-            if await _handle_ws_control(message, token_file, _write_fn):
+            try:
+                events = decoder.feed(message)
+            except ControlStreamProtocolError:
                 continue
-            raw = message.encode("latin-1", errors="replace")
-            raw = _apply_color_mode(raw, color_mode)
-            stdout.write(raw.decode("latin-1", errors="replace"))
+            for event in events:
+                if isinstance(event, ControlChunk):
+                    await _handle_ws_control_frame(event.control, token_file, _write_fn)
+                    continue
+                raw = event.data.encode("latin-1", errors="replace")
+                raw = _apply_color_mode(raw, color_mode)
+                stdout.write(raw.decode("latin-1", errors="replace"))
         else:
             raw = _apply_color_mode(message, color_mode)
             stdout.write(raw.decode("latin-1", errors="replace"))
@@ -308,7 +363,7 @@ async def _make_process_handler(
             async with websockets.connect(ws_url) as ws:
                 token = _read_token(token_file) if token_file else None
                 if token:
-                    await ws.send(json.dumps({"type": "resume", "token": token}))
+                    await ws.send(encode_control({"type": "resume", "token": token}))
                 t1 = asyncio.create_task(_ssh_to_ws(process, ws))
                 t2 = asyncio.create_task(_ws_to_ssh(ws, process, token_file=token_file, color_mode=color_mode))
                 _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
@@ -398,91 +453,3 @@ class TelnetWsGateway:
             with contextlib.suppress(Exception):
                 writer.close()
                 await writer.wait_closed()
-
-
-# ---------------------------------------------------------------------------
-# SshWsGateway
-# ---------------------------------------------------------------------------
-
-
-class SshWsGateway:
-    """SSH server that proxies shell sessions to a WebSocket terminal server.
-
-    Accepts standard SSH client connections (``ssh``, ``putty``, etc.).
-    Each shell channel gets its own outbound WebSocket connection and the
-    I/O is bridged bidirectionally.
-
-    Requires the ``[ssh]`` extra (asyncssh)::
-
-        pip install 'provide-terminal[cli,ssh]'
-
-    Args:
-        ws_url: WebSocket URL of the upstream terminal server.
-        server_key: Path to a PEM-encoded SSH host private key file.
-            If ``None`` an ephemeral RSA key is generated for each run.
-        token_file: Path to persist the resume token.
-        color_mode: ANSI color downgrade mode — ``"passthrough"`` (default),
-            ``"256"``, or ``"16"``.
-
-    Example::
-
-        gw = SshWsGateway("wss://warp.provide.io/ws/terminal")
-        server = await gw.start(port=2222)
-        await server.wait_closed()
-    """
-
-    def __init__(
-        self,
-        ws_url: str,
-        *,
-        server_key: str | Path | None = None,
-        token_file: Path | None = None,
-        color_mode: str = "passthrough",
-    ) -> None:
-        _require_websockets()
-        try:
-            import asyncssh  # noqa: F401
-        except ImportError as exc:  # pragma: no cover
-            raise ImportError(
-                "asyncssh is required for SSH gateway support: pip install 'provide-terminal[ssh]'"
-            ) from exc
-        self._ws_url = ws_url
-        self._server_key = server_key
-        self._token_file = token_file
-        self._color_mode = color_mode
-
-    async def start(
-        self, host: str = TerminalDefaults.BIND_ALL, port: int = TerminalDefaults.GATEWAY_SSH_PORT
-    ) -> object:  # nosec B104
-        """Start the SSH server and return the server object.
-
-        Args:
-            host: Bind address. Defaults to ``"0.0.0.0"``.
-            port: TCP port. Defaults to ``2222``.
-
-        Returns:
-            An asyncssh server object — call ``await server.wait_closed()``
-            to block until shutdown.
-        """
-        import asyncssh
-
-        if self._server_key:
-            key_path = Path(self._server_key)
-            if not key_path.exists():
-                raise FileNotFoundError(f"SSH host key not found: {key_path}")
-            if not key_path.is_file():
-                raise ValueError(f"SSH host key path is not a file: {key_path}")
-            host_keys = [asyncssh.read_private_key(str(key_path))]
-        else:
-            host_keys = [asyncssh.generate_private_key("ssh-ed25519")]
-
-        no_auth_server_cls = _make_no_auth_server_class()
-        process_handler = await _make_process_handler(self._ws_url, self._token_file, self._color_mode)
-
-        return await asyncssh.create_server(
-            no_auth_server_cls,
-            host,
-            port,
-            server_host_keys=host_keys,
-            process_factory=process_handler,
-        )

@@ -17,6 +17,7 @@ from fastapi import FastAPI, WebSocketException
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import BrowserRoleResolutionError, TermHub
 
 
@@ -42,7 +43,7 @@ class TestWebSocketExceptionPropagation:
         hub = TermHub(resolve_browser_role=_reject)
         client = _make_client(hub)
 
-        with client.websocket_connect("/ws/browser/test-w/term") as ws, pytest.raises(WebSocketDisconnect):
+        with connect_test_ws(client, "/ws/browser/test-w/term") as ws, pytest.raises(WebSocketDisconnect):
             # WebSocketException causes close; receiving should raise.
             ws.receive_text()
 
@@ -59,5 +60,5 @@ class TestWebSocketExceptionPropagation:
         hub = TermHub(resolve_browser_role=_reject)
         client = _make_client(hub)
 
-        with client.websocket_connect("/ws/browser/test-w/term") as ws, pytest.raises(WebSocketDisconnect):
+        with connect_test_ws(client, "/ws/browser/test-w/term") as ws, pytest.raises(WebSocketDisconnect):
             ws.receive_text()

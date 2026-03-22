@@ -18,7 +18,8 @@ import time
 from typing import Any
 
 import httpx
-import websockets
+
+from provide.terminal.client import connect_async_ws
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -85,17 +86,17 @@ class TestWorkerConnect:
     async def test_worker_receives_snapshot_req_on_connect(self, live_hub: Any) -> None:
         """Hub sends snapshot_req immediately after worker connects."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/w1/term")) as ws:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/w1/term")) as ws:
             msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
             assert json.loads(msg)["type"] == "snapshot_req"
 
     async def test_worker_connected_broadcast_to_browsers(self, live_hub: Any) -> None:
         """Browser receives worker_connected when a worker joins."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/browser/w2/term")) as browser:
+        async with connect_async_ws(_ws_url(base_url, "/ws/browser/w2/term")) as browser:
             await _drain(browser, count=2)  # hello + hijack_state
 
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/w2/term")):
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/w2/term")):
                 msg = await _drain_until(browser, "worker_connected")
                 assert msg is not None
                 assert msg["worker_id"] == "w2"
@@ -103,10 +104,10 @@ class TestWorkerConnect:
     async def test_worker_disconnected_broadcast_to_browsers(self, live_hub: Any) -> None:
         """Browser receives worker_disconnected when the worker closes."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/browser/w3/term")) as browser:
+        async with connect_async_ws(_ws_url(base_url, "/ws/browser/w3/term")) as browser:
             await _drain(browser, count=2)
 
-            async with websockets.connect(_ws_url(base_url, "/ws/worker/w3/term")):
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/w3/term")):
                 await _drain_until(browser, "worker_connected")
 
             # Worker exited; browser should learn about it
@@ -125,8 +126,8 @@ class TestTermBroadcast:
         """Term data from worker is broadcast to all connected browsers."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/browser/b1/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/b1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/b1/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/b1/term")) as worker,
         ):
             await _drain(browser, count=3)  # hello, hijack_state, worker_connected
             await worker.recv()  # snapshot_req
@@ -140,8 +141,8 @@ class TestTermBroadcast:
         """Snapshot from worker is broadcast to browsers."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/browser/b2/term")) as browser,
-            websockets.connect(_ws_url(base_url, "/ws/worker/b2/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/b2/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/b2/term")) as worker,
         ):
             await _drain(browser, count=3)
             await worker.recv()  # snapshot_req
@@ -158,10 +159,10 @@ class TestTermBroadcast:
         w_url = _ws_url(base_url, "/ws/worker/b3/term")
 
         async with (
-            websockets.connect(b_url) as b1,
-            websockets.connect(b_url) as b2,
-            websockets.connect(b_url) as b3,
-            websockets.connect(w_url) as worker,
+            connect_async_ws(b_url) as b1,
+            connect_async_ws(b_url) as b2,
+            connect_async_ws(b_url) as b3,
+            connect_async_ws(w_url) as worker,
         ):
             # Drain initial messages for all browsers
             for b in (b1, b2, b3):
@@ -189,7 +190,7 @@ class TestBrowserHello:
     async def test_hello_includes_worker_online_false_when_no_worker(self, live_hub: Any) -> None:
         """Hello message correctly reports worker_online=false when no worker is present."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/browser/h1/term")) as browser:
+        async with connect_async_ws(_ws_url(base_url, "/ws/browser/h1/term")) as browser:
             msgs = await _drain(browser, count=2)
             hello = next((m for m in msgs if m.get("type") == "hello"), None)
             assert hello is not None
@@ -199,8 +200,8 @@ class TestBrowserHello:
         """Hello message reports worker_online=true when a worker is already connected."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/h2/term")),
-            websockets.connect(_ws_url(base_url, "/ws/browser/h2/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/h2/term")),
+            connect_async_ws(_ws_url(base_url, "/ws/browser/h2/term")) as browser,
         ):
             msgs = await _drain(browser, count=2)
             hello = next((m for m in msgs if m.get("type") == "hello"), None)
@@ -210,11 +211,11 @@ class TestBrowserHello:
     async def test_browser_receives_cached_snapshot_on_connect(self, live_hub: Any) -> None:
         """A browser connecting after a snapshot has been sent gets it immediately."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/h3/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/h3/term")) as worker:
             await worker.recv()  # snapshot_req
             await worker.send(json.dumps(_snapshot_msg("cached screen content")))
 
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/h3/term")) as browser:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/h3/term")) as browser:
                 snapshot = await _drain_until(browser, "snapshot", timeout=2.0)
                 assert snapshot is not None
                 assert snapshot["screen"] == "cached screen content"
@@ -229,7 +230,7 @@ class TestRestHijackCycle:
     async def test_acquire_pauses_worker(self, live_hub: Any) -> None:
         """REST hijack_acquire sends a pause control message to the worker."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/r1/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/r1/term")) as worker:
             await worker.recv()  # snapshot_req
 
             async with httpx.AsyncClient(base_url=base_url) as http:
@@ -243,7 +244,7 @@ class TestRestHijackCycle:
     async def test_send_delivers_input_to_worker(self, live_hub: Any) -> None:
         """REST hijack_send delivers keystroke data to the worker after guard passes."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/r2/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/r2/term")) as worker:
             await worker.recv()  # snapshot_req (sent on connect)
 
             async with httpx.AsyncClient(base_url=base_url) as http:
@@ -268,7 +269,7 @@ class TestRestHijackCycle:
     async def test_release_resumes_worker(self, live_hub: Any) -> None:
         """REST hijack_release sends a resume control message to the worker."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/r3/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/r3/term")) as worker:
             await worker.recv()  # snapshot_req
 
             async with httpx.AsyncClient(base_url=base_url) as http:
@@ -286,7 +287,7 @@ class TestRestHijackCycle:
     async def test_step_sends_step_control_to_worker(self, live_hub: Any) -> None:
         """REST hijack_step sends a step control message to the worker."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/r4/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/r4/term")) as worker:
             await worker.recv()
 
             async with httpx.AsyncClient(base_url=base_url) as http:
@@ -303,7 +304,7 @@ class TestRestHijackCycle:
     async def test_heartbeat_extends_lease(self, live_hub: Any) -> None:
         """REST heartbeat returns an updated lease_expires_at."""
         _, base_url = live_hub
-        async with websockets.connect(_ws_url(base_url, "/ws/worker/r5/term")) as worker:
+        async with connect_async_ws(_ws_url(base_url, "/ws/worker/r5/term")) as worker:
             await worker.recv()
 
             async with httpx.AsyncClient(base_url=base_url) as http:
@@ -332,8 +333,8 @@ class TestWsHijack:
         """WS hijack_request from browser triggers a pause on the worker."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/ws1/term")) as worker,
-            websockets.connect(_ws_url(base_url, "/ws/browser/ws1/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/ws1/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ws1/term")) as browser,
         ):
             await _drain(browser, count=3)
             await _drain_until(worker, "snapshot_req")  # drain all initial snapshot_reqs
@@ -354,8 +355,8 @@ class TestWsHijack:
         """WS hijack_release from browser triggers a resume on the worker."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/ws2/term")) as worker,
-            websockets.connect(_ws_url(base_url, "/ws/browser/ws2/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/ws2/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ws2/term")) as browser,
         ):
             await _drain(browser, count=3)
             await _drain_until(worker, "snapshot_req")  # drain initial snapshot_reqs
@@ -374,8 +375,8 @@ class TestWsHijack:
         """WS input message from browser owner is forwarded to the worker."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/ws3/term")) as worker,
-            websockets.connect(_ws_url(base_url, "/ws/browser/ws3/term")) as browser,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/ws3/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ws3/term")) as browser,
         ):
             await _drain(browser, count=3)
             await _drain_until(worker, "snapshot_req")  # drain initial snapshot_reqs
@@ -393,8 +394,8 @@ class TestWsHijack:
         """A second browser connecting during an active WS hijack sees owner='other'."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/ws4/term")) as worker,
-            websockets.connect(_ws_url(base_url, "/ws/browser/ws4/term")) as b1,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/ws4/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ws4/term")) as b1,
         ):
             await _drain(b1, count=3)
             await _drain_until(worker, "snapshot_req")  # drain initial snapshot_reqs
@@ -403,7 +404,7 @@ class TestWsHijack:
             await _drain_until(worker, "control")  # pause (skips any snapshot_req)
             await _drain_until(b1, "hijack_state")
 
-            async with websockets.connect(_ws_url(base_url, "/ws/browser/ws4/term")) as b2:
+            async with connect_async_ws(_ws_url(base_url, "/ws/browser/ws4/term")) as b2:
                 msgs = await _drain(b2, count=3)
                 hijack_state = next((m for m in msgs if m.get("type") == "hijack_state"), None)
                 assert hijack_state is not None
@@ -414,9 +415,9 @@ class TestWsHijack:
         """After browser 1 releases, browser 2 can acquire hijack and browser 1 sees owner='other'."""
         _, base_url = live_hub
         async with (
-            websockets.connect(_ws_url(base_url, "/ws/worker/ws5/term")) as worker,
-            websockets.connect(_ws_url(base_url, "/ws/browser/ws5/term")) as b1,
-            websockets.connect(_ws_url(base_url, "/ws/browser/ws5/term")) as b2,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/ws5/term")) as worker,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ws5/term")) as b1,
+            connect_async_ws(_ws_url(base_url, "/ws/browser/ws5/term")) as b2,
         ):
             await _drain(b1, count=3)
             await _drain(b2, count=3)

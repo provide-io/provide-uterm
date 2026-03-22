@@ -273,6 +273,8 @@ def _emit_color(polarity: str, color_char: str) -> str:
 
 
 def _handle_extended_tokens(text: str) -> str:
+    """Convert {F###}/{B###}/{P#}/{T#} extended color tokens to ANSI escapes."""
+
     def repl(m: re.Match[str]) -> str:
         kind = m.group(1)
         val = int(m.group(2))
@@ -291,22 +293,23 @@ def _handle_extended_tokens(text: str) -> str:
     return _EXT_TOKEN_RE.sub(repl, text)
 
 
+_TILDE_RE = re.compile(r"~(.)")
+
+
 def _handle_tilde_codes(text: str) -> str:
-    out = []
-    i = 0
-    while i < len(text):
-        if text[i] == "~" and i + 1 < len(text):
-            code = text[i + 1]
-            if code in _TILDE_MAP:
-                polarity, color_char = _TILDE_MAP[code]
-                seq = _emit_color(polarity, color_char)
-                if seq:  # pragma: no branch
-                    out.append(seq)
-                    i += 2
-                    continue
-        out.append(text[i])
-        i += 1
-    return "".join(out)
+    def repl(m: re.Match[str]) -> str:
+        code = m.group(1)
+        if code not in _TILDE_MAP:
+            return m.group(0)
+        polarity, color_char = _TILDE_MAP[code]
+        seq = _emit_color(polarity, color_char)
+        return seq if seq else m.group(0)
+
+    return _TILDE_RE.sub(repl, text)
+
+
+_BRACE_3_RE = re.compile(r"\{[+\-][a-zA-Z]\}|\{NK\}|\{T\}|\{t\}")
+_BRACE_4_RE = re.compile(r"\{[+\-]Bw\}")
 
 
 def _handle_brace_tokens(text: str) -> str:
@@ -315,31 +318,10 @@ def _handle_brace_tokens(text: str) -> str:
     Includes the TWGS-specific ``{+Bw}`` header token in addition to the
     single-character color tags.
     """
-    out = []
-    i = 0
-    while i < len(text):
-        if text[i] == "{":
-            if i + 2 < len(text):
-                token = text[i : i + 3]
-                if token in _BRACE_TOKEN_MAP:
-                    out.append(_BRACE_TOKEN_MAP[token])
-                    i += 3
-                    continue
-            if i + 3 < len(text):
-                token = text[i : i + 4]
-                if token in _BRACE_TOKEN_MAP:
-                    out.append(_BRACE_TOKEN_MAP[token])
-                    i += 4
-                    continue
-            if i + 4 < len(text):
-                token = text[i : i + 5]
-                if token in _BRACE_TOKEN_MAP:
-                    out.append(_BRACE_TOKEN_MAP[token])
-                    i += 5
-                    continue
-        out.append(text[i])
-        i += 1
-    return "".join(out)
+    # Handle 5-char tokens first (longest match first to avoid conflicts)
+    text = _BRACE_4_RE.sub(lambda m: _BRACE_TOKEN_MAP.get(m.group(0), m.group(0)), text)
+    # Then 3-char and other tokens
+    return _BRACE_3_RE.sub(lambda m: _BRACE_TOKEN_MAP.get(m.group(0), m.group(0)), text)
 
 
 # ---------------------------------------------------------------------------

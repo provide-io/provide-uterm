@@ -12,10 +12,10 @@ import json
 from contextlib import asynccontextmanager
 
 import uvicorn
-import websockets
 from fastapi import FastAPI
 from websockets.exceptions import ConnectionClosedError
 
+from provide.terminal.client import connect_async_ws
 from provide.terminal.hijack.hub import TermHub
 
 from .conftest import _wait_for_server, _ws_url
@@ -52,7 +52,7 @@ class TestWorkerTokenAuth:
         async with _hub_with_worker_token(token="secret-token") as (_hub, base_url):
             url = _ws_url(base_url, "/ws/worker/wa1/term")
             try:
-                async with websockets.connect(url) as ws:
+                async with connect_async_ws(url) as ws:
                     # Attempt to receive; connection should close with 1008
                     msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     # Should not reach here if auth fails properly
@@ -69,7 +69,7 @@ class TestWorkerTokenAuth:
         async with _hub_with_worker_token(token="secret-token") as (_hub, base_url):
             url = _ws_url(base_url, "/ws/worker/wa2/term")
             try:
-                async with websockets.connect(url, additional_headers={"Authorization": "Bearer wrong-token"}) as ws:
+                async with connect_async_ws(url, additional_headers={"Authorization": "Bearer wrong-token"}) as ws:
                     msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     raise AssertionError(f"Expected closure, got: {msg}")
             except ConnectionClosedError as e:
@@ -81,7 +81,7 @@ class TestWorkerTokenAuth:
         """Worker connects with correct token; connection accepted and receives hello."""
         async with _hub_with_worker_token(token="secret-token") as (_hub, base_url):
             url = _ws_url(base_url, "/ws/worker/wa3/term")
-            async with websockets.connect(url, additional_headers={"Authorization": "Bearer secret-token"}) as ws:
+            async with connect_async_ws(url, additional_headers={"Authorization": "Bearer secret-token"}) as ws:
                 # Should receive snapshot_req message from hub
                 msg_str = await asyncio.wait_for(ws.recv(), timeout=1.0)
                 msg = json.loads(msg_str)
@@ -92,7 +92,7 @@ class TestWorkerTokenAuth:
         """Hub without worker_token; worker connects without auth header successfully."""
         async with _hub_with_worker_token(token=None) as (_hub, base_url):
             url = _ws_url(base_url, "/ws/worker/wa4/term")
-            async with websockets.connect(url) as ws:
+            async with connect_async_ws(url) as ws:
                 # Should connect and receive snapshot_req
                 msg_str = await asyncio.wait_for(ws.recv(), timeout=1.0)
                 msg = json.loads(msg_str)
@@ -103,7 +103,7 @@ class TestWorkerTokenAuth:
         async with _hub_with_worker_token(token="secret-token") as (_hub, base_url):
             url = _ws_url(base_url, "/ws/worker/wa5/term")
             try:
-                async with websockets.connect(url, additional_headers={"Authorization": "Bearer"}) as ws:
+                async with connect_async_ws(url, additional_headers={"Authorization": "Bearer"}) as ws:
                     msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     raise AssertionError(f"Expected closure, got: {msg}")
             except ConnectionClosedError as e:

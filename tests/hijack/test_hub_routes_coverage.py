@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from tests.hijack.control_stream_helpers import decode_control_payload, decode_control_payloads
 from provide.terminal.hijack.hub import TermHub
 
 
@@ -275,7 +276,8 @@ class TestBroadcastDeadSocketHijackOwner:
         await hub.broadcast("w1", {"type": "test_msg"})
 
         # Worker should have received the original broadcast + resume control
-        resume_msgs = [json.loads(p) for p in sent_to_worker if "resume" in p]
+        decoded = decode_control_payloads(sent_to_worker)
+        resume_msgs = [m for m in decoded if m.get("action") == "resume"]
         assert len(resume_msgs) == 1
         assert resume_msgs[0]["action"] == "resume"
 
@@ -320,7 +322,7 @@ class TestBroadcastHijackStateDeadSocketOwner:
         await hub.broadcast_hijack_state("w1")
 
         # Resume should have been sent to the worker
-        resume_msgs = [json.loads(p) for p in sent_to_worker if "resume" in p]
+        resume_msgs = [decode_control_payload(p) for p in sent_to_worker if "resume" in p]
         assert len(resume_msgs) == 1
         assert resume_msgs[0]["action"] == "resume"
 

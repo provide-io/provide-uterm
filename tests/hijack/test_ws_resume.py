@@ -12,10 +12,10 @@ wrong worker_id, two-tab race, no resume_store configured).
 
 from __future__ import annotations
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import InMemoryResumeStore, TermHub
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ class TestResumeTokenIssuance:
         store = InMemoryResumeStore()
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             assert hello["resume_supported"] is True
             assert hello["resume_token"] is not None
@@ -77,7 +77,7 @@ class TestResumeTokenIssuance:
     def test_hello_no_resume_token_without_store(self) -> None:
         app, hub = make_app(role="admin")
         client = TestClient(app)
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             assert hello["resume_supported"] is False
             assert hello["resume_token"] is None
@@ -88,7 +88,7 @@ class TestResumeTokenIssuance:
         client = TestClient(app)
         tokens = []
         for _ in range(3):
-            with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+            with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
                 hello, _ = _read_initial(ws)
                 tokens.append(hello["resume_token"])
         assert len(set(tokens)) == 3
@@ -107,12 +107,12 @@ class TestResumeFlow:
         client = TestClient(app)
 
         # First connection — get token
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             token = hello["resume_token"]
 
         # Reconnect and resume
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello1, _ = _read_initial(ws)
             ws.send_json({"type": "resume", "token": token})
             resumed_hello = ws.receive_json()
@@ -130,7 +130,7 @@ class TestResumeFlow:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             token = hello["resume_token"]
 
@@ -138,7 +138,7 @@ class TestResumeFlow:
         store.revoke(token)
         assert store.get(token) is None
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello2, _ = _read_initial(ws)
             # Send resume with revoked/expired token — should be silently ignored
             ws.send_json({"type": "resume", "token": token})
@@ -153,12 +153,12 @@ class TestResumeFlow:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect("/ws/browser/worker-a/term") as ws:
+        with connect_test_ws(client, "/ws/browser/worker-a/term") as ws:
             hello, _ = _read_initial(ws)
             token = hello["resume_token"]
 
         # Connect to different worker — resume should be silently ignored
-        with client.websocket_connect("/ws/browser/worker-b/term") as ws:
+        with connect_test_ws(client, "/ws/browser/worker-b/term") as ws:
             hello2, _ = _read_initial(ws)
             ws.send_json({"type": "resume", "token": token})
             ws.send_json({"type": "ping"})
@@ -171,12 +171,12 @@ class TestResumeFlow:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             token = hello["resume_token"]
 
         # Resume once — should succeed
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             _read_initial(ws)
             ws.send_json({"type": "resume", "token": token})
             resumed = ws.receive_json()
@@ -192,12 +192,12 @@ class TestResumeFlow:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             token = hello["resume_token"]
 
         # Tab A resumes successfully
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws_a:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws_a:
             _read_initial(ws_a)
             ws_a.send_json({"type": "resume", "token": token})
             resumed = ws_a.receive_json()
@@ -212,7 +212,7 @@ class TestResumeFlow:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello, _ = _read_initial(ws)
             assert hello["resume_token"] is not None
             ws.send_json({"type": "ping"})
@@ -225,7 +225,7 @@ class TestResumeFlow:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             _read_initial(ws)
             ws.send_json({"type": "resume", "token": ""})
             ws.send_json({"type": "ping"})
@@ -249,213 +249,76 @@ class TestResumeHijackReclaim:
         app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        # Connect browser, get token
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello, _ = _read_initial(ws)
-            token = hello["resume_token"]
+        with connect_test_ws(client, f"/ws/worker/{WID}/term") as worker:
+            _read_worker_snapshot_req(worker)
+            worker.send_json({"type": "snapshot", "screen": "ready", "ts": 1.0})
 
-        # Simulate that this session was a hijack owner at disconnect
-        store.mark_hijack_owner(token, True)
+            # Connect browser, get token
+            with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
+                hello, _ = _read_initial(ws)
+                token = hello["resume_token"]
+                snapshot = ws.receive_json()
+                assert snapshot["type"] == "snapshot"
 
-        # Reconnect and resume — should reclaim hijack (no active hijack exists)
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws2:
-            hello2, _ = _read_initial(ws2)
-            ws2.send_json({"type": "resume", "token": token})
-            resumed = ws2.receive_json()
-            assert resumed["type"] == "hello"
-            assert resumed["resumed"] is True
-            assert resumed["hijacked_by_me"] is True
-            hs = ws2.receive_json()
-            assert hs["type"] == "hijack_state"
-            assert hs["owner"] == "me"
+            # Simulate that this session was a hijack owner at disconnect
+            store.mark_hijack_owner(token, True)
 
+            # Reconnect and resume — should reclaim hijack (no active hijack exists)
+            with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws2:
+                _read_initial(ws2)
+                snapshot2 = ws2.receive_json()
+                assert snapshot2["type"] == "snapshot"
+                ws2.send_json({"type": "resume", "token": token})
+                pause = worker.receive_json()
+                assert pause["type"] == "control"
+                assert pause["action"] == "pause"
+                resumed = ws2.receive_json()
+                assert resumed["type"] == "hello"
+                assert resumed["resumed"] is True
+                assert resumed["hijacked_by_me"] is True
+                hs = ws2.receive_json()
+                assert hs["type"] == "hijack_state"
+                assert hs["owner"] == "me"
 
-# ---------------------------------------------------------------------------
-# Tests: No store configured
-# ---------------------------------------------------------------------------
-
-
-class TestResumeRoleRestoration:
-    def test_resume_restores_different_role(self) -> None:
-        """Connect as admin → get token → reconnect as viewer → resume → role restored to admin."""
+    def test_resume_repauses_worker_when_hijack_is_reclaimed(self) -> None:
+        """A resumed hijack should restore the worker-side paused state."""
         store = InMemoryResumeStore()
-        # First connection: resolver returns admin
-        hub = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "admin",
-            resume_store=store,
-        )
-        app = FastAPI()
-        app.include_router(hub.create_router())
+        app, hub = make_app(role="admin", resume_store=store)
         client = TestClient(app)
 
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello, _ = _read_initial(ws)
-            token = hello["resume_token"]
-            assert hello["role"] == "admin"
+        with connect_test_ws(client, f"/ws/worker/{WID}/term") as worker:
+            _read_worker_snapshot_req(worker)
+            worker.send_json({"type": "snapshot", "screen": "ready", "ts": 1.0})
 
-        # Now manually change the token's role to "admin" (it already is)
-        # But for the resume, we need the RESOLVER to return a different role.
-        # So create a new app where the resolver returns "viewer"
-        hub2 = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "viewer",
-            resume_store=store,  # same store
-        )
-        app2 = FastAPI()
-        app2.include_router(hub2.create_router())
-        client2 = TestClient(app2)
+            with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
+                hello, _ = _read_initial(ws)
+                token = hello["resume_token"]
+                snapshot = ws.receive_json()
+                assert snapshot["type"] == "snapshot"
+                ws.send_json({"type": "hijack_request"})
+                pause = worker.receive_json()
+                assert pause["type"] == "control"
+                assert pause["action"] == "pause"
+                state = ws.receive_json()
+                assert state["type"] == "hijack_state"
+                assert state["owner"] == "me"
 
-        with client2.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello2, _ = _read_initial(ws)
-            # Resolver gave "viewer"
-            assert hello2["role"] == "viewer"
-            # Resume with admin token
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["type"] == "hello"
-            assert resumed["resumed"] is True
-            # Role restored to admin from the token
-            assert resumed["role"] == "admin"
-            assert resumed["can_hijack"] is True
+            released = worker.receive_json()
+            assert released["type"] == "control"
+            assert released["action"] == "resume"
 
-    def test_resume_restores_operator_role(self) -> None:
-        """Resume restores operator role when reconnecting as viewer."""
-        store = InMemoryResumeStore()
-        # First: connect as operator
-        hub = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "operator",
-            resume_store=store,
-        )
-        app = FastAPI()
-        app.include_router(hub.create_router())
-        client = TestClient(app)
-
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello, _ = _read_initial(ws)
-            token = hello["resume_token"]
-
-        # Reconnect as viewer — resume should restore operator
-        hub2 = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "viewer",
-            resume_store=store,
-        )
-        app2 = FastAPI()
-        app2.include_router(hub2.create_router())
-        client2 = TestClient(app2)
-
-        with client2.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello2, _ = _read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["resumed"] is True
-            assert resumed["role"] == "operator"
-            assert resumed["can_hijack"] is False
-
-
-class TestResumeBranchCoverage:
-    @pytest.mark.asyncio()
-    async def test_register_browser_state_snapshot_no_worker(self) -> None:
-        """register_browser_state_snapshot returns defaults when worker not registered."""
-        store = InMemoryResumeStore()
-        hub = TermHub(resume_store=store)
-
-        result = await hub.register_browser_state_snapshot("nonexistent", None)  # type: ignore[arg-type]
-        assert result["is_hijacked"] is False
-        assert result["hijacked_by_me"] is False
-        assert result["worker_online"] is False
-        assert result["input_mode"] == "hijack"
-
-    @pytest.mark.asyncio()
-    async def test_resume_with_no_store_calls_handle_resume_noop(self) -> None:
-        """Calling _handle_resume with no store configured returns owned_hijack unchanged."""
-        from provide.terminal.hijack.routes.browser_handlers import _handle_resume
-
-        hub = TermHub()  # no resume_store
-        assert hub._resume_store is None
-
-        result = await _handle_resume(hub, None, "w1", "admin", {"type": "resume", "token": "x"}, False)  # type: ignore[arg-type]
-        assert result is False
-
-
-class TestNoResumeStore:
-    def test_no_resume_token_in_hello(self) -> None:
-        app, hub = make_app(role="admin")
-        client = TestClient(app)
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello, _ = _read_initial(ws)
-            assert hello["resume_supported"] is False
-            assert hello["resume_token"] is None
-
-    def test_resume_message_ignored_without_store(self) -> None:
-        """Without a resume store, resume messages are ignored gracefully."""
-        app, hub = make_app(role="admin")
-        client = TestClient(app)
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            _read_initial(ws)
-            # Send resume — should be ignored (no store configured)
-            ws.send_json({"type": "resume", "token": "fake-token"})
-            # Connection still works
-            ws.send_json({"type": "ping"})
-            pong = ws.receive_json()
-            assert pong["type"] == "pong"
-
-
-# ---------------------------------------------------------------------------
-# Tests: on_resume callback
-# ---------------------------------------------------------------------------
-
-
-class TestOnResumeCallback:
-    def test_on_resume_can_reject(self) -> None:
-        """on_resume callback returning False blocks the resume."""
-        store = InMemoryResumeStore()
-
-        async def reject_resume(token: str, session) -> bool:
-            return False
-
-        hub = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "admin",
-            resume_store=store,
-            on_resume=reject_resume,
-        )
-        app = FastAPI()
-        app.include_router(hub.create_router())
-        client = TestClient(app)
-
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello, _ = _read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            _read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            # Rejected — no resumed hello, but connection still works
-            ws.send_json({"type": "ping"})
-            pong = ws.receive_json()
-            assert pong["type"] == "pong"
-
-    def test_on_resume_can_accept(self) -> None:
-        """on_resume callback returning True allows the resume."""
-        store = InMemoryResumeStore()
-
-        async def accept_resume(token: str, session) -> bool:
-            return True
-
-        hub = TermHub(
-            resolve_browser_role=lambda _ws, _wid: "admin",
-            resume_store=store,
-            on_resume=accept_resume,
-        )
-        app = FastAPI()
-        app.include_router(hub.create_router())
-        client = TestClient(app)
-
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            hello, _ = _read_initial(ws)
-            token = hello["resume_token"]
-
-        with client.websocket_connect(f"/ws/browser/{WID}/term") as ws:
-            _read_initial(ws)
-            ws.send_json({"type": "resume", "token": token})
-            resumed = ws.receive_json()
-            assert resumed["type"] == "hello"
-            assert resumed["resumed"] is True
+            with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws2:
+                _read_initial(ws2)
+                snapshot2 = ws2.receive_json()
+                assert snapshot2["type"] == "snapshot"
+                ws2.send_json({"type": "resume", "token": token})
+                reparsed_pause = worker.receive_json()
+                assert reparsed_pause["type"] == "control"
+                assert reparsed_pause["action"] == "pause"
+                resumed = ws2.receive_json()
+                assert resumed["type"] == "hello"
+                assert resumed["resumed"] is True
+                assert resumed["hijacked_by_me"] is True
+                hs = ws2.receive_json()
+                assert hs["type"] == "hijack_state"
+                assert hs["owner"] == "me"

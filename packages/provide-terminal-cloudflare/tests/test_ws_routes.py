@@ -7,11 +7,11 @@
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 
 from provide_terminal_cloudflare.api.ws_routes import handle_socket_message
 from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
+from provide_terminal_cloudflare.contracts import frame_json
 
 # ---------------------------------------------------------------------------
 # Minimal runtime mock
@@ -60,7 +60,7 @@ class _Ws:
 
 
 def _raw(frame_type: str, **kwargs) -> str:
-    return json.dumps({"type": frame_type, **kwargs})
+    return frame_json(frame_type, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -69,10 +69,10 @@ def _raw(frame_type: str, **kwargs) -> str:
 
 
 async def test_protocol_error_sends_error_frame() -> None:
-    """Malformed JSON → ProtocolError → error frame sent to ws."""
+    """Malformed control stream → ProtocolError → error frame sent to ws."""
     runtime = _Runtime()
     ws = _Ws()
-    await handle_socket_message(runtime, ws, "not-json", is_worker=False)
+    await handle_socket_message(runtime, ws, "\x10X", is_worker=False)
     assert runtime._sent
     assert runtime._sent[0]["type"] == "error"
 

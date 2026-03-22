@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import secrets
@@ -16,11 +15,10 @@ try:
     from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
     from provide_terminal_cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
-    from provide_terminal_cloudflare.do.persistence import clear_lease as _clear_lease
-    from provide_terminal_cloudflare.do.persistence import persist_lease as _persist_lease
+    from provide_terminal_cloudflare.do._session_runtime_io import _SessionRuntimeIoMixin
     from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
-    from provide_terminal_cloudflare.state.registry import KV_REFRESH_S, update_kv_session
-    from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
+    from provide_terminal_cloudflare.state.registry import update_kv_session
+    from provide_terminal_cloudflare.state.store import SqliteStateStore
 except Exception:
     from api.http_routes import route_http  # type: ignore[import-not-found]
     from api.ws_routes import handle_socket_message  # type: ignore[import-not-found]
@@ -29,18 +27,17 @@ except Exception:
     from bridge.hijack import HijackCoordinator, HijackSession  # type: ignore[import-not-found]
     from cf_types import CFWebSocket, DurableObject, Response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
-    from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found]
-    from do.persistence import persist_lease as _persist_lease  # type: ignore[import-not-found]
+    from do._session_runtime_io import _SessionRuntimeIoMixin  # type: ignore[import-not-found]
     from do.ws_helpers import _WsHelperMixin  # type: ignore[import-not-found]
-    from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found]
-    from state.store import LeaseRecord, SqliteStateStore  # type: ignore[import-not-found]
+    from state.registry import update_kv_session  # type: ignore[import-not-found]
+    from state.store import SqliteStateStore  # type: ignore[import-not-found]
+
+from provide.terminal.control_stream import encode_control
 
 logger = logging.getLogger(__name__)
 
-_MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sandbox
 
-
-class SessionRuntime(_WsHelperMixin, DurableObject):
+class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
     """Durable Object runtime for one worker/session channel."""
 
     def __init__(self, ctx: Any, env: Any):
@@ -269,7 +266,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
                 self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
                 try:
                     server.send(
-                        json.dumps(
+                        encode_control(
                             {
                                 "type": "hello",
                                 "worker_id": self.worker_id,
@@ -282,8 +279,7 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
                                 "resume_supported": True,
                                 "resume_token": resume_token,
                                 "ts": time.time(),
-                            },
-                            ensure_ascii=True,
+                            }
                         )
                     )
                 except Exception as exc:
@@ -372,142 +368,3 @@ class SessionRuntime(_WsHelperMixin, DurableObject):
         if role == "worker":
             await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)
-
-    # ------------------------------------------------------------------
-    # Request helpers
-    # ------------------------------------------------------------------
-
-    async def request_json(self, request: object) -> dict[str, Any]:
-        body = await request.text()  # type: ignore[attr-defined]
-        if not body:
-            return {}
-        if len(body) > _MAX_REQUEST_BODY:
-            logger.warning("request_json: body too large (%d bytes), rejecting", len(body))
-            return {}
-        value = json.loads(body)
-        if not isinstance(value, dict):
-            return {}
-        return value
-
-    def persist_lease(self, session: HijackSession | None) -> None:
-        _persist_lease(self.store, self.ctx, self.worker_id, session, LeaseRecord)
-
-    def clear_lease(self) -> None:
-        _clear_lease(self.store, self.worker_id)
-
-    # ------------------------------------------------------------------
-    # Hijack state broadcast
-    # ------------------------------------------------------------------
-
-    async def send_hijack_state(self, ws: CFWebSocket) -> None:
-        ws_id = self.ws_key(ws)
-        session = self.hijack.session
-        owner = None
-        if session is not None:
-            owner = "me" if self.browser_hijack_owner.get(ws_id) == session.hijack_id else "other"
-        await self.send_ws(
-            ws,
-            {
-                "type": "hijack_state",
-                "hijacked": session is not None,
-                "owner": owner,
-                "lease_expires_at": (session.lease_expires_at if session is not None else None),
-                "ts": time.time(),
-            },
-        )
-
-    async def broadcast_hijack_state(self) -> None:
-        for ws_id, ws in list(self.browser_sockets.items()):
-            try:
-                await self.send_hijack_state(ws)
-            except Exception:
-                self.browser_sockets.pop(ws_id, None)
-                self.browser_hijack_owner.pop(ws_id, None)
-
-    # ------------------------------------------------------------------
-    # Worker I/O
-    # ------------------------------------------------------------------
-
-    async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool:
-        if self.worker_ws is None:
-            return False
-        await self.send_ws(
-            self.worker_ws,
-            {"type": "control", "action": action, "owner": owner, "lease_s": lease_s, "ts": time.time()},
-        )
-        return True
-
-    async def push_worker_input(self, data: str) -> bool:
-        if self.worker_ws is None:
-            return False
-        await self.send_ws(self.worker_ws, {"type": "input", "data": data, "ts": time.time()})
-        return True
-
-    async def broadcast_to_browsers(self, payload: dict[str, Any]) -> None:
-        # After CF hibernation, in-memory dicts are reset. Use ctx.getWebSockets()
-        # to enumerate all live sockets. In local pywrangler dev, ctx.getWebSockets()
-        # returns [] (no hibernation state) — fall back to the in-memory dict when empty.
-        try:
-            all_ws = list(self.ctx.getWebSockets())
-        except Exception:
-            all_ws = []
-        if not all_ws:
-            all_ws = list(self.browser_sockets.values())
-        for ws in all_ws:
-            if self._socket_role(ws) != "browser":
-                continue
-            ws_id = self.ws_key(ws)
-            try:
-                await self.send_ws(ws, payload)
-            except Exception:
-                self.browser_sockets.pop(ws_id, None)
-                self.browser_hijack_owner.pop(ws_id, None)
-
-    async def broadcast_worker_frame(self, payload: dict[str, Any]) -> None:
-        self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)
-        await self.broadcast_to_browsers(payload)
-
-        text_payload: str | None = None
-        frame_type = str(payload.get("type") or "")
-        if frame_type == "term":
-            text_payload = str(payload.get("data") or "")
-        elif frame_type == "snapshot":
-            screen = payload.get("screen")
-            text_payload = str(screen) if screen is not None else ""
-        elif frame_type == "worker_connected":
-            text_payload = "\r\n[worker connected]\r\n"
-        elif frame_type == "worker_disconnected":
-            text_payload = "\r\n[worker disconnected]\r\n"
-
-        if text_payload is None:
-            return
-
-        for ws_id, ws in list(self.raw_sockets.items()):
-            try:
-                await self._send_text(ws, text_payload)
-            except Exception:
-                self.raw_sockets.pop(ws_id, None)
-
-    async def alarm(self) -> None:
-        now = time.time()
-        session = self.hijack.session
-        if session is not None and session.lease_expires_at <= now:
-            logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
-            self.hijack.release(session.hijack_id)
-            self.clear_lease()
-            with contextlib.suppress(Exception):
-                await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
-            await self.broadcast_hijack_state()
-        if self.worker_ws is not None:
-            await update_kv_session(
-                self.env,
-                self.worker_id,
-                connected=True,
-                hijacked=self.hijack.session is not None,
-                input_mode=self.input_mode,
-            )
-            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
-                _s.setAlarm(int((now + KV_REFRESH_S) * 1000))
-        elif self.hijack.session is not None:
-            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
-                _s.setAlarm(int(self.hijack.session.lease_expires_at * 1000))
