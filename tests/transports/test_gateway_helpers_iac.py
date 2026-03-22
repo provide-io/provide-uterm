@@ -11,6 +11,7 @@ from typing import Any
 
 import websockets
 
+from provide.terminal.control_stream import encode_control
 from provide.terminal.gateway import (
     TelnetWsGateway,
     _apply_color_mode,
@@ -83,7 +84,9 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control('{"type": "session_token", "token": "abc123"}', token_file, _write_fn)
+        result = await _handle_ws_control(
+            encode_control({"type": "session_token", "token": "abc123"}), token_file, _write_fn
+        )
         assert result is True
         assert token_file.read_text() == "abc123"
         assert written == []
@@ -94,7 +97,7 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control('{"type": "resume_ok"}', None, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "resume_ok"}), None, _write_fn)
         assert result is True
         assert b"Session resumed" in written[0]
 
@@ -106,7 +109,7 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control('{"type": "resume_failed"}', token_file, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), token_file, _write_fn)
         assert result is True
         assert not token_file.exists()
 
@@ -128,14 +131,14 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             pass
 
-        result = await _handle_ws_control('{"type": "session_token", "token": "x"}', None, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "session_token", "token": "x"}), None, _write_fn)
         assert result is False  # token_file is None → skip write
 
     async def test_resume_failed_no_token_file_no_raise(self) -> None:
         async def _write_fn(data: bytes) -> None:
             pass
 
-        result = await _handle_ws_control('{"type": "resume_failed"}', None, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), None, _write_fn)
         assert result is True
 
 

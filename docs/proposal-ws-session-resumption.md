@@ -194,6 +194,10 @@ async def my_resume_validator(token: str, session: ResumeSession) -> bool:
     return player is not None and not player.banned
 ```
 
+The library treats resume tokens as opaque session handles. Without a
+consumer-supplied `on_resume` policy, a successful FastAPI resume restores the
+role cached in the token for that browser session.
+
 ---
 
 ## Files to Modify

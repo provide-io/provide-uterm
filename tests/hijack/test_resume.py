@@ -170,6 +170,19 @@ class TestInMemoryResumeStore:
         assert isinstance(session.created_at, float)
         assert session.created_at > 0.0
 
+    def test_create_prunes_expired_tokens_opportunistically(self) -> None:
+        """Creating a new token should prune previously-expired entries."""
+        store = InMemoryResumeStore()
+        with patch("provide.terminal.hijack.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            expired = store.create("w1", "admin", 1.0)
+            mock_time.monotonic.return_value = 102.0
+            fresh = store.create("w2", "viewer", 30.0)
+            assert expired not in store.active_tokens()
+            assert store.get(expired) is None
+            assert store.get(fresh) is not None
+            assert len(store) == 1
+
     def test_get_at_exact_expiry_not_expired(self) -> None:
         """Kill get__mutmut_4: > → >= makes token at exactly expires_at return None."""
         store = InMemoryResumeStore()

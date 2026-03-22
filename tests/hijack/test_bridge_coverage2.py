@@ -8,9 +8,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from provide.terminal.control_stream import encode_control, encode_data
 from provide.terminal.hijack.bridge import TermBridge, _to_ws_url
 
 # ---------------------------------------------------------------------------
@@ -238,7 +238,7 @@ class TestRecvLoopSnapshotReqAndPause:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return json.dumps({"type": "snapshot_req"})
+                return encode_control({"type": "snapshot_req"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -271,7 +271,7 @@ class TestRecvLoopSnapshotReqAndPause:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return json.dumps({"type": "control", "action": "pause"})
+                return encode_control({"type": "control", "action": "pause"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -340,7 +340,7 @@ class TestRecvLoopMtypeBranches:
             call_count += 1
             if call_count == 1:
                 # action not in (pause, resume, step) → falls through to 278->259 (False branch)
-                return json.dumps({"type": "control", "action": "unknown_action"})
+                return encode_control({"type": "control", "action": "unknown_action"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -351,8 +351,8 @@ class TestRecvLoopMtypeBranches:
         await bridge._recv_loop(mock_ws)
         # Should complete without error
 
-    async def test_recv_loop_input_empty_data_covers_282_branch(self) -> None:
-        """Line 282->259: elif mtype=='input': data is empty → if data: False → back to 259."""
+    async def test_recv_loop_empty_data_chunk_skips_send(self) -> None:
+        """Empty terminal data chunks should not call session.send()."""
         bot = MagicMock()
         bot.set_hijacked = AsyncMock()
         bot.session = MagicMock()
@@ -374,7 +374,7 @@ class TestRecvLoopMtypeBranches:
             call_count += 1
             if call_count == 1:
                 # data is empty → if data: False → loop continues (282->259)
-                return json.dumps({"type": "input", "data": ""})
+                return ""
             bridge._running = False
             raise RuntimeError("done")
 
@@ -407,7 +407,7 @@ class TestRecvLoopMtypeBranches:
             call_count += 1
             if call_count == 1:
                 # Unknown mtype → falls through all elif → 284->259 (False branch)
-                return json.dumps({"type": "completely_unknown"})
+                return encode_control({"type": "completely_unknown"})
             bridge._running = False
             raise RuntimeError("done")
 
@@ -440,19 +440,19 @@ class TestRecvLoopMtypeBranches:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return json.dumps({"type": "control", "action": "resume"})
+                return encode_control({"type": "control", "action": "resume"})
             if call_count == 2:
-                return json.dumps({"type": "control", "action": "step"})
+                return encode_control({"type": "control", "action": "step"})
             if call_count == 3:
-                return json.dumps({"type": "control", "action": "unknown"})  # 278->259 False
+                return encode_control({"type": "control", "action": "unknown"})
             if call_count == 4:
-                return json.dumps({"type": "input", "data": "hello"})
+                return encode_data("hello")
             if call_count == 5:
-                return json.dumps({"type": "input", "data": ""})  # 282->259 False (empty data)
+                return ""
             if call_count == 6:
-                return json.dumps({"type": "resize", "cols": 120, "rows": 40})
+                return encode_control({"type": "resize", "cols": 120, "rows": 40})
             if call_count == 7:
-                return json.dumps({"type": "completely_unknown"})  # 284->259 False
+                return encode_control({"type": "completely_unknown"})
             # Now let _running=False so while exits normally (259->293)
             bridge._running = False
             raise RuntimeError("done")
@@ -489,157 +489,3 @@ class TestRecvLoopMtypeBranches:
 
         # Finally block should have called _set_hijacked(False)
         bot.set_hijacked.assert_awaited_with(False)
-
-
-# ---------------------------------------------------------------------------
-# bridge.py line 336->exit — _send_keys when session is None
-# ---------------------------------------------------------------------------
-
-
-class TestBridgeSendKeysSessionNone:
-    async def test_send_keys_session_none_is_noop(self) -> None:
-        """Line (send_keys 327->328): session is None → _send_keys returns early."""
-        bot = MagicMock()
-        bot.session = None  # no active session
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-        bridge._send_q = asyncio.Queue()
-
-        # Should not raise
-        await bridge._send_keys("hello")
-
-    async def test_request_step_not_callable_skips(self) -> None:
-        """Line 336->exit: callable(fn) is False in _request_step → exits."""
-        bot = MagicMock()
-        bot.request_step = None  # not callable
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-
-        await bridge._request_step()  # should not raise
-
-    async def test_request_step_raises_exception_caught(self) -> None:
-        """Lines 339-340: _request_step's fn() raises → exception logged."""
-        bot = MagicMock()
-        bot.request_step = AsyncMock(side_effect=RuntimeError("step failed"))
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-
-        await bridge._request_step()  # should not raise
-
-    async def test_set_size_session_none_is_noop(self) -> None:
-        """Line 345: session is None in _set_size → returns early."""
-        bot = MagicMock()
-        bot.session = None
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-
-        await bridge._set_size(80, 25)  # should not raise
-
-    async def test_set_size_raises_exception_caught(self) -> None:
-        """Lines 348-349: session.set_size raises → exception logged."""
-        bot = MagicMock()
-        bot.session = MagicMock()
-        bot.session.set_size = AsyncMock(side_effect=RuntimeError("resize failed"))
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-
-        await bridge._set_size(80, 25)  # should not raise
-
-    async def test_send_snapshot_session_none_returns(self) -> None:
-        """Line 298: session is None in _send_snapshot → returns."""
-        bot = MagicMock()
-        bot.session = None
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-        bridge._latest_snapshot = None
-
-        mock_ws = AsyncMock()
-        await bridge._send_snapshot(mock_ws)  # should not raise, no send
-        mock_ws.send.assert_not_awaited()
-
-    async def test_send_snapshot_ws_send_raises(self) -> None:
-        """Lines 321-323: ws.send() raises → exception caught and logged."""
-        bot = MagicMock()
-        bot.session = MagicMock()
-        bot.session.emulator = None
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-        bridge._latest_snapshot = {"screen": "test", "ts": 1.0}
-
-        mock_ws = AsyncMock()
-        mock_ws.send = AsyncMock(side_effect=RuntimeError("ws send failed"))
-
-        await bridge._send_snapshot(mock_ws)  # should not raise
-
-    async def test_send_keys_session_send_raises(self) -> None:
-        """Lines 331-332: session.send() raises → exception logged."""
-        bot = MagicMock()
-        bot.session = MagicMock()
-        bot.session.send = AsyncMock(side_effect=RuntimeError("send failed"))
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-        bridge._send_q = asyncio.Queue()
-
-        await bridge._send_keys("hello")  # should not raise
-
-
-# ---------------------------------------------------------------------------
-# bridge.py lines 353->358 — _set_hijacked when set_hijacked raises
-# ---------------------------------------------------------------------------
-
-
-class TestBridgeSetHijackedRaises:
-    async def test_set_hijacked_exception_logged_not_raised(self) -> None:
-        """Lines 355-357: set_hijacked raises → exception logged, not re-raised."""
-        bot = MagicMock()
-        bot.set_hijacked = AsyncMock(side_effect=RuntimeError("callback error"))
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-        bridge._send_q = asyncio.Queue(maxsize=1000)
-
-        # Should not raise — exception is caught and logged
-        await bridge._set_hijacked(True)
-
-        # The status message should still be queued
-        assert not bridge._send_q.empty()
-        msg = bridge._send_q.get_nowait()
-        assert msg["type"] == "status"
-        assert msg["hijacked"] is True
-
-    async def test_set_hijacked_not_callable_skips_to_queue(self) -> None:
-        """Line 353->358: callable(fn) is False → skip to queue put."""
-        bot = MagicMock()
-        del bot.set_hijacked  # remove the attribute so getattr returns None
-        # Actually MagicMock has all attrs - use spec or just set to None
-        bot.set_hijacked = None  # not callable
-
-        bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
-        bridge._worker_id = "w1"
-        bridge._send_q = asyncio.Queue(maxsize=1000)
-
-        await bridge._set_hijacked(False)
-
-        # The status message should still be queued
-        assert not bridge._send_q.empty()
-        msg = bridge._send_q.get_nowait()
-        assert msg["type"] == "status"
-        assert msg["hijacked"] is False

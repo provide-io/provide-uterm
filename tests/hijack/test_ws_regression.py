@@ -19,6 +19,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
@@ -84,7 +85,7 @@ def test_browser_hello_reflects_hijacked_state_at_connect() -> None:
         hijack_session=_active_session(session_id, "rest_user"),
     )
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot42/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot42/term") as browser:
         hello = browser.receive_json()
         assert hello["type"] == "hello"
         # The hello must reflect the hijacked state captured inside the lock.
@@ -95,7 +96,7 @@ def test_browser_hello_reflects_not_hijacked_when_no_session() -> None:
     """Regression counter-case: hello.hijacked is False when no session exists."""
     app, hub = make_app("admin")
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot99/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot99/term") as browser:
         hello = browser.receive_json()
         assert hello["type"] == "hello"
         assert hello["hijacked"] is False
@@ -127,7 +128,7 @@ def test_browser_receives_cached_snapshot_on_connect() -> None:
         }
     )
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/snap_bot/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/snap_bot/term") as browser:
         _read_initial_browser_messages(browser)
         # Third message must be the cached snapshot
         snap = browser.receive_json()
@@ -141,8 +142,8 @@ def test_browser_requests_snapshot_when_none_cached() -> None:
 
     with (
         TestClient(app) as client,
-        client.websocket_connect("/ws/worker/bot_nosnap/term") as worker,
-        client.websocket_connect("/ws/browser/bot_nosnap/term") as browser,
+        connect_test_ws(client, "/ws/worker/bot_nosnap/term") as worker,
+        connect_test_ws(client, "/ws/browser/bot_nosnap/term") as browser,
     ):
         # Drain worker's initial snapshot_req from connect
         _read_worker_snapshot_req(worker)
@@ -165,11 +166,11 @@ def test_non_owner_browser_disconnect_does_not_send_resume() -> None:
     non-owner browser disconnect never triggers an UnboundLocalError and never
     sends a spurious resume to the worker."""
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
 
         # Browser connects but never acquires the hijack
-        with client.websocket_connect("/ws/browser/bot1/term") as browser:
+        with connect_test_ws(client, "/ws/browser/bot1/term") as browser:
             _read_initial_browser_messages(browser)
             # Browser connect triggers a snapshot_req to the worker
             _read_worker_snapshot_req(worker)
@@ -200,10 +201,10 @@ def test_hijack_request_send_fail_no_notify_no_owner() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(fapp) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
 
@@ -234,10 +235,10 @@ def test_ping_is_silently_ignored() -> None:
     """ping from browser must produce no reply; the next received message should
     be from a subsequent snapshot_req, proving nothing was queued by the ping."""
     app, hub = make_app()
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
 
@@ -255,10 +256,10 @@ def test_browser_rate_limit_does_not_drop_control_frames() -> None:
     app = FastAPI()
     app.include_router(hub.create_router())
 
-    with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
 
-        with client.websocket_connect("/ws/browser/bot1/term") as browser:
+        with connect_test_ws(client, "/ws/browser/bot1/term") as browser:
             _read_initial_browser_messages(browser)
             _read_worker_snapshot_req(worker)
 
@@ -290,15 +291,15 @@ def test_stale_worker_disconnect_does_not_broadcast_offline() -> None:
     """Regression: closing an old worker socket must not mark the new one offline."""
     app, _hub = make_app()
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        worker1 = client.websocket_connect("/ws/worker/bot1/term")
+        worker1 = connect_test_ws(client, "/ws/worker/bot1/term")
         worker1.__enter__()
         _read_worker_snapshot_req(worker1)
         _read_worker_connected(browser)
 
-        worker2 = client.websocket_connect("/ws/worker/bot1/term")
+        worker2 = connect_test_ws(client, "/ws/worker/bot1/term")
         worker2.__enter__()
         try:
             _read_worker_snapshot_req(worker2)
@@ -318,15 +319,15 @@ def test_stale_worker_output_is_ignored_after_reconnect() -> None:
     """Regression: a superseded worker socket cannot publish term/snapshot output."""
     app, hub = make_app()
 
-    with TestClient(app) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        worker1 = client.websocket_connect("/ws/worker/bot1/term")
+        worker1 = connect_test_ws(client, "/ws/worker/bot1/term")
         worker1.__enter__()
         _read_worker_snapshot_req(worker1)
         _read_worker_connected(browser)
 
-        worker2 = client.websocket_connect("/ws/worker/bot1/term")
+        worker2 = connect_test_ws(client, "/ws/worker/bot1/term")
         worker2.__enter__()
         try:
             _read_worker_snapshot_req(worker2)
@@ -361,10 +362,10 @@ def test_idle_loops_still_cleanup_expired_hijack() -> None:
         app = FastAPI()
         app.include_router(hub.create_router())
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/bot1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/bot1/term") as browser:
                 _read_initial_browser_messages(browser)
                 _read_worker_snapshot_req(worker)
 
@@ -400,10 +401,10 @@ def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
     fapp = FastAPI()
     fapp.include_router(hub.create_router())
 
-    with TestClient(fapp) as client, client.websocket_connect("/ws/browser/bot1/term") as browser:
+    with TestClient(fapp) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
 
-        with client.websocket_connect("/ws/worker/bot1/term") as worker:
+        with connect_test_ws(client, "/ws/worker/bot1/term") as worker:
             _read_worker_connected(browser)
             _read_worker_snapshot_req(worker)
 

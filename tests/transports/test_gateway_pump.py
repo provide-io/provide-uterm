@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +14,7 @@ import pytest
 import websockets
 import websockets.server
 
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, encode_control
 from provide.terminal.gateway import (
     TelnetWsGateway,
     _normalize_crlf,
@@ -27,6 +27,15 @@ from provide.terminal.gateway import (
 # ---------------------------------------------------------------------------
 # Pump helper unit tests
 # ---------------------------------------------------------------------------
+
+
+def _decode_control(raw: str) -> dict[str, Any]:
+    decoder = ControlStreamDecoder()
+    events = decoder.feed(raw)
+    events.extend(decoder.finish())
+    assert len(events) == 1
+    assert isinstance(events[0], ControlChunk)
+    return events[0].control
 
 
 class TestTcpToWs:
@@ -287,7 +296,7 @@ class TestWsToTcpResume:
         from asyncio import StreamWriter
         from typing import cast
 
-        msg = '{"type": "session_token", "token": "tok123"}'
+        msg = encode_control({"type": "session_token", "token": "tok123"})
         await _ws_to_tcp(_async_iter([msg]), cast("StreamWriter", MockWriter()), token_file=token_file)
         assert written == []
         assert token_file.read_text() == "tok123"
@@ -305,7 +314,7 @@ class TestWsToTcpResume:
         from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(['{"type": "resume_ok"}']), cast("StreamWriter", MockWriter()))
+        await _ws_to_tcp(_async_iter([encode_control({"type": "resume_ok"})]), cast("StreamWriter", MockWriter()))
         assert any(b"Session resumed" in w for w in written)
 
     async def test_resume_failed_deletes_token(self, tmp_path) -> None:
@@ -324,7 +333,7 @@ class TestWsToTcpResume:
         from typing import cast
 
         await _ws_to_tcp(
-            _async_iter(['{"type": "resume_failed"}']),
+            _async_iter([encode_control({"type": "resume_failed"})]),
             cast("StreamWriter", MockWriter()),
             token_file=token_file,
         )
@@ -409,7 +418,7 @@ class TestNormalizeCrlf:
 
 class TestPipeWsResume:
     async def test_token_file_present_sends_resume(self, tmp_path) -> None:
-        """When a token file exists, the first WS message should be a resume JSON."""
+        """When a token file exists, the first WS message should be an encoded resume control frame."""
         received: list[str] = []
 
         async def handler(ws: websockets.ServerConnection) -> None:
@@ -448,7 +457,7 @@ class TestPipeWsResume:
             srv.close()
 
         assert len(received) >= 1
-        first = json.loads(received[0])
+        first = _decode_control(received[0])
         assert first == {"type": "resume", "token": "resume_tok_abc"}
 
     async def test_no_token_file_sends_no_resume(self) -> None:

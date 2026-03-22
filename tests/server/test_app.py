@@ -8,11 +8,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import socket
 import threading
 import time
 from typing import TYPE_CHECKING, Any
+from weakref import WeakKeyDictionary
 
 import asyncssh
 import httpx
@@ -20,6 +20,7 @@ import pytest
 import uvicorn
 import websockets
 
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk
 from provide.terminal.server import create_server_app, default_server_config
 from provide.terminal.transports.ssh import start_ssh_server
 
@@ -32,12 +33,31 @@ def _ws_url(base_url: str, path: str) -> str:
     return base_url.replace("http://", "ws://") + path
 
 
+_WS_DECODERS: WeakKeyDictionary[Any, ControlStreamDecoder] = WeakKeyDictionary()
+_WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
+
+
 async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, Any] | None:
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         try:
+            pending = _WS_PENDING.setdefault(ws, [])
+            if pending:
+                msg = pending.pop(0)
+                if msg.get("type") == type_:
+                    return msg
+                continue
             raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-            msg = json.loads(raw)
+            decoder = _WS_DECODERS.setdefault(ws, ControlStreamDecoder())
+            events = decoder.feed(raw)
+            for event in events:
+                if isinstance(event, ControlChunk):
+                    pending.append(event.control)
+                elif isinstance(event, DataChunk):
+                    pending.append({"type": "term", "data": event.data})
+            if not pending:
+                continue
+            msg = pending.pop(0)
             if msg.get("type") == type_:
                 return msg
         except TimeoutError:
@@ -148,6 +168,9 @@ class TestReferenceServerApp:
             assert hello is not None
             assert hello["worker_online"] is True
             assert hello["input_mode"] == "open"
+            assert hello["resume_supported"] is True
+            assert isinstance(hello["resume_token"], str)
+            assert len(hello["resume_token"]) > 10
 
     async def test_metrics_prometheus_endpoint(self, live_reference_server: str) -> None:
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
@@ -415,3 +438,6 @@ class TestReferenceServerApp:
         finally:
             ssh_server.close()
             await ssh_server.wait_closed()
+
+
+# (TestOnResumeCallback moved to test_app_2.py)

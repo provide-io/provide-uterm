@@ -26,6 +26,7 @@ import asyncssh
 import websockets
 import websockets.server
 
+from tests.hijack.control_stream_helpers import decode_control_payload
 from provide.terminal.gateway import _ssh_to_ws, _ws_to_ssh
 
 
@@ -374,8 +375,11 @@ class TestSshWsGatewayStart:
 
         async def _handler(ws: Any) -> None:
             async for msg in ws:
-                if isinstance(msg, str) and '"type": "resume"' in msg:
-                    resume_msgs.append(msg)
+                if isinstance(msg, str):
+                    with contextlib.suppress(AssertionError):
+                        payload = decode_control_payload(msg)
+                        if payload.get("type") == "resume":
+                            resume_msgs.append(str(payload.get("token") or ""))
                 break  # only care about first message
 
         ws_srv = await websockets.serve(_handler, "127.0.0.1", 0)
@@ -403,7 +407,7 @@ class TestSshWsGatewayStart:
             await ssh_srv.wait_closed()
             ws_srv.close()
 
-        assert any("my_resume_token" in m for m in resume_msgs)
+        assert "my_resume_token" in resume_msgs
 
     async def test_process_handler_exception_is_swallowed(self) -> None:
         """If WS is unreachable, _process_handler logs and exits cleanly (no hang)."""

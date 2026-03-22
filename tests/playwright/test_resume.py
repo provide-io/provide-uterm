@@ -63,9 +63,11 @@ def resume_server() -> Generator[tuple[str, TermHub, InMemoryResumeStore], None,
             "html,body{width:100%;height:100dvh;background:#0b0f14}"
             "#app{width:100%;height:100%}</style></head>"
             "<body><div id='app'></div>"
-            "<script src='/ui/hijack.js'></script>"
-            "<script>new ProvideHijack(document.getElementById('app'),"
-            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});</script>"
+            "<script type='module'>"
+            "import { ProvideHijack } from '/ui/hijack.js';"
+            "new ProvideHijack(document.getElementById('app'),"
+            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
+            "</script>"
             "</body></html>"
         )
 
@@ -137,59 +139,40 @@ class TestResumeOnReconnect:
     def test_auto_reconnect_sends_resume(
         self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]
     ) -> None:
-        """After WS drop, widget should auto-reconnect and send a resume message.
+        """After a page reload, the widget sends a resume message with the stored token.
 
-        We can verify this by checking:
-        1. Token stored before disconnect
-        2. After reconnect, the widget gets a new token (proving resume worked)
+        Proof of successful resume:
+        1. Token changes — server issued a new token on resume (not same as initial)
+        2. Old token is revoked in the store — only happens on successful resume
         """
         base_url, hub, store = resume_server
         worker_id = f"pw-reconnect-{_uid()}"
         page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
-        # Wait for initial connection
+        # Wait for initial connection and token storage
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting…'",
+            f"sessionStorage.getItem('uterm_resume_{worker_id}') !== null",
             timeout=5000,
         )
 
         token_before = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_before is not None
+        assert store.get(token_before) is not None  # token is live in store
 
-        # Force close the WebSocket from the browser side to trigger reconnect
-        page.evaluate("""
-            (() => {
-                const widgets = document.querySelectorAll('.provide-hijack');
-                for (const w of widgets) {
-                    // Access the widget instance via the global — constructor stores on window
-                    // Actually, we can just close all WebSockets
-                }
-                // Close all open WebSockets by finding the widget's _ws
-                // The widget is stored as a property on the container or accessible via the class
-                // Simpler: just kill all WebSockets
-                if (window._testWsCloseHack) return;
-                window._testWsCloseHack = true;
-                const origWS = WebSocket;
-                const sockets = [];
-                // Close any existing sockets by finding them in the widget
-            })()
-        """)
-
-        # A simpler approach: navigate away and back to force a new connection
-        page.goto("about:blank")
-        time.sleep(0.5)
+        # Reload the same page — sessionStorage persists (same origin, same tab),
+        # so the widget reads the stored token and sends a resume message.
         page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
-        # Wait for reconnection
+        # Wait for the resumed hello to arrive (new token stored in sessionStorage)
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting…'",
+            f"sessionStorage.getItem('uterm_resume_{worker_id}') !== {json.dumps(token_before)}",
             timeout=10000,
         )
 
-        # After reconnect, the widget should have stored a NEW resume token
-        # (either from initial hello or from resumed hello)
         token_after = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_after is not None
+        assert token_after != token_before  # server issued a new token → resume was processed
+        assert store.get(token_before) is None  # old token revoked — definitive proof of resume
 
     def test_resume_token_persists_across_navigation(
         self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]

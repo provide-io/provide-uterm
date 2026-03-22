@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tests.hijack.control_stream_helpers import decode_control_payloads
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
@@ -60,9 +61,7 @@ def test_acquire_pause_message_contains_hijack_id() -> None:
 
     # The pause message sent to the worker must include hijack_id
     mock_ws.send_text.assert_awaited()
-    import json as _json
-
-    sent_calls = [_json.loads(call.args[0]) for call in mock_ws.send_text.await_args_list]
+    sent_calls = decode_control_payloads([call.args[0] for call in mock_ws.send_text.await_args_list])
     pause_msgs = [m for m in sent_calls if m.get("type") == "control" and m.get("action") == "pause"]
     assert pause_msgs, "No pause control message sent to worker"
     assert pause_msgs[0].get("hijack_id") == hijack_id, "hijack_id missing from pause message"
@@ -72,8 +71,6 @@ def test_acquire_already_hijacked_does_not_send_resume() -> None:
     """Regression: compensating resume must NOT be sent when acquire fails due to
     already_hijacked.  set_hijacked is a boolean — sending resume would unpause the
     legitimate owner's session."""
-    import json as _json
-
     app, hub = make_app()
     mock_ws = AsyncMock()
 
@@ -92,7 +89,7 @@ def test_acquire_already_hijacked_does_not_send_resume() -> None:
 
     # Pause was sent (to check liveness), but no resume must follow — that would
     # unpause owner_a's active session.
-    sent_calls = [_json.loads(call.args[0]) for call in mock_ws.send_text.await_args_list]
+    sent_calls = decode_control_payloads([call.args[0] for call in mock_ws.send_text.await_args_list])
     resume_msgs = [m for m in sent_calls if m.get("type") == "control" and m.get("action") == "resume"]
     assert not resume_msgs, f"Spurious resume sent to worker while another owner holds the lease: {resume_msgs}"
 
@@ -136,7 +133,6 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
     """Round-7 fix 1: if an error fires after the pause is sent but before the
     session is committed, a compensating resume must be dispatched so the worker
     does not remain stuck in the paused state indefinitely."""
-    import json as _json
     from unittest.mock import patch
 
     app, hub = make_app()
@@ -154,7 +150,7 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
 
     assert r.status_code == 500
 
-    sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
+    sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
     pause_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "pause"]
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
     assert pause_msgs, "pause must have been sent to worker before the error"
@@ -168,7 +164,6 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
     """Round-7 fix 1: CancelledError after pause (simulating client disconnect)
     must trigger the compensating resume in the finally block."""
     import asyncio as _asyncio
-    import json as _json
     from unittest.mock import patch
 
     app, hub = make_app()
@@ -184,15 +179,13 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
     ):
         client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
 
-    sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
+    sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
     assert resume_msgs, "compensating resume must be sent on CancelledError after pause"
 
 
 def test_acquire_no_compensating_resume_on_success() -> None:
     """Round-7 fix 1: a successful acquire must NOT send an extra compensating resume."""
-    import json as _json
-
     app, hub = make_app()
     mock_ws = AsyncMock()
     hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
@@ -202,7 +195,7 @@ def test_acquire_no_compensating_resume_on_success() -> None:
 
     assert r.status_code == 200
 
-    sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
+    sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
     assert not resume_msgs, "no resume should be sent after a successful acquire"
 
@@ -211,8 +204,6 @@ def test_acquire_no_resume_on_race_loss() -> None:
     """When _try_acquire_rest_hijack returns (False, already_hijacked), no resume
     must be sent.  The pre-lock pause was a no-op (worker already paused); sending
     resume would unpause the legitimate owner's session."""
-    import json as _json
-
     app, hub = make_app()
     mock_ws = AsyncMock()
     existing_id = str(uuid.uuid4())
@@ -226,7 +217,7 @@ def test_acquire_no_resume_on_race_loss() -> None:
 
     assert r.status_code == 409
 
-    sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
+    sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
     assert not resume_msgs, f"resume must not be sent on already_hijacked race loss: {resume_msgs}"
 
@@ -356,7 +347,6 @@ def test_acquire_no_worker_race_sends_exactly_one_resume() -> None:
     call in the not-acquired branch is a no-op (worker_ws is None), which is
     correct — there is nobody to resume.
     """
-    import json as _json
     from unittest.mock import patch
 
     app, hub = make_app()
@@ -371,6 +361,6 @@ def test_acquire_no_worker_race_sends_exactly_one_resume() -> None:
 
     assert r.status_code == 409
 
-    sent = [_json.loads(c.args[0]) for c in mock_ws.send_text.await_args_list]
+    sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
     resumes = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
     assert len(resumes) == 1, f"exactly one resume expected when no_worker returned, got {len(resumes)}"

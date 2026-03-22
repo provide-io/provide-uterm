@@ -18,6 +18,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.server import config_from_mapping, create_server_app, default_server_config
 
 _TEST_SIGNING_KEY = "uterm-test-secret-32-byte-minimum-key"
@@ -357,7 +358,8 @@ class TestWorkerBearerTokenScope:
         with TestClient(app) as client:
             with (
                 pytest.raises(WebSocketDisconnect) as exc_info,
-                client.websocket_connect(
+                connect_test_ws(
+                    client,
                     "/ws/worker/test-worker/term",
                     headers={"Authorization": "Bearer wrong-token"},
                 ),
@@ -387,7 +389,8 @@ class TestWorkerBearerTokenScope:
         with TestClient(app) as client:
             with (
                 pytest.raises(WebSocketDisconnect) as exc_info,
-                client.websocket_connect(
+                connect_test_ws(
+                    client,
                     "/ws/browser/test-worker/term",
                     headers={"Authorization": f"Bearer {auth.worker_bearer_token}"},
                 ),

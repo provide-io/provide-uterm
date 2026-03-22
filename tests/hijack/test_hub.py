@@ -11,11 +11,11 @@ Atomic/TOCTOU regression tests and prune tests are in test_hijack_hub_atomic.py.
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import time
 from unittest.mock import AsyncMock
 
+from tests.hijack.control_stream_helpers import decode_control_payload
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
@@ -122,7 +122,7 @@ async def test_cleanup_sends_resume_to_worker() -> None:
     )
     await hub.cleanup_expired_hijack("bot1")
     mock_ws.send_text.assert_awaited_once()
-    sent_msg = json.loads(mock_ws.send_text.await_args[0][0])
+    sent_msg = decode_control_payload(mock_ws.send_text.await_args[0][0])
     assert sent_msg["action"] == "resume"
 
 
@@ -327,7 +327,7 @@ async def test_broadcast_hijack_state_rest_session_active() -> None:
     )
     await hub.broadcast_hijack_state("bot1")
     mock_ws.send_text.assert_awaited_once()
-    msg = json.loads(mock_ws.send_text.await_args[0][0])
+    msg = decode_control_payload(mock_ws.send_text.await_args[0][0])
     assert msg["hijacked"] is True
 
 

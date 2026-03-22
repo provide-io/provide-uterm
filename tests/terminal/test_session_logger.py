@@ -77,6 +77,32 @@ class TestSessionLogger:
         custom = [rec for rec in lines if rec["event"] == "custom"]
         assert custom[0]["data"]["key"] == "value"
 
+    async def test_log_wire_only_when_wire_mode_enabled(self, tmp_path: Path) -> None:
+        log_path = tmp_path / "wire-session.jsonl"
+        logger = SessionLogger(log_path, control_channel_mode="wire")
+        await logger.start(session_id="wire")
+        await logger.log_wire("send", "abc")
+        await logger.log_control("recv", {"type": "hello"})
+        await logger.stop()
+
+        lines = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+        events = [rec["event"] for rec in lines]
+        assert "wire_send" in events
+        assert "control_recv" in events
+
+    async def test_log_wire_excluded_by_default(self, tmp_path: Path) -> None:
+        log_path = tmp_path / "wire-default.jsonl"
+        logger = SessionLogger(log_path)
+        await logger.start(session_id="wire-default")
+        await logger.log_wire("send", "abc")
+        await logger.log_control("recv", {"type": "hello"})
+        await logger.stop()
+
+        lines = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+        events = [rec["event"] for rec in lines]
+        assert "wire_send" not in events
+        assert "control_recv" not in events
+
     async def test_context_included_in_records(self, tmp_path: Path) -> None:
         log_path = tmp_path / "session.jsonl"
         logger = SessionLogger(log_path)

@@ -11,12 +11,12 @@ Separated from test_hub.py to maintain file size limits (<500 LOC per file).
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import time
 from unittest.mock import AsyncMock
 
+from tests.hijack.control_stream_helpers import decode_control_payload
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import WorkerTermState
 
@@ -39,12 +39,12 @@ async def test_broadcast_hijack_state_owner_gets_me_others_get_other() -> None:
 
     await hub.broadcast_hijack_state("bot1")
 
-    owner_msg = json.loads(ws_owner.send_text.await_args[0][0])
+    owner_msg = decode_control_payload(ws_owner.send_text.await_args[0][0])
     assert owner_msg["owner"] == "me"
     assert owner_msg["type"] == "hijack_state"
     assert owner_msg["hijacked"] is True
 
-    other_msg = json.loads(ws_other.send_text.await_args[0][0])
+    other_msg = decode_control_payload(ws_other.send_text.await_args[0][0])
     assert other_msg["owner"] == "other"
     assert other_msg["hijacked"] is True
 
@@ -61,8 +61,8 @@ async def test_broadcast_hijack_state_no_hijack_owner_is_none() -> None:
 
     await hub.broadcast_hijack_state("bot1")
 
-    msg1 = json.loads(ws1.send_text.await_args[0][0])
-    msg2 = json.loads(ws2.send_text.await_args[0][0])
+    msg1 = decode_control_payload(ws1.send_text.await_args[0][0])
+    msg2 = decode_control_payload(ws2.send_text.await_args[0][0])
     assert msg1["owner"] is None
     assert msg2["owner"] is None
     assert msg1["hijacked"] is False

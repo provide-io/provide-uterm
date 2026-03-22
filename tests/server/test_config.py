@@ -228,6 +228,19 @@ def test_partial_recording_override_preserves_sibling_defaults() -> None:
     assert config.recording.directory == default_server_config().recording.directory
 
 
+def test_partial_recording_override_accepts_control_channel_mode() -> None:
+    config = config_from_mapping({"recording": {"control_channel_mode": "wire"}})
+
+    assert config.recording.control_channel_mode == "wire"
+    assert config.recording.max_bytes == default_server_config().recording.max_bytes
+    assert config.recording.directory == default_server_config().recording.directory
+
+
+def test_config_from_mapping_rejects_invalid_control_channel_mode() -> None:
+    with pytest.raises(ValueError, match="exclude.*wire"):
+        config_from_mapping({"recording": {"control_channel_mode": "bogus"}})
+
+
 @pytest.mark.parametrize("section", ["server", "auth", "ui", "recording"])
 def test_config_from_mapping_rejects_non_dict_known_section(section: str) -> None:
     # Malformed TOML (e.g. `server = []`) must raise ValueError, not TypeError.

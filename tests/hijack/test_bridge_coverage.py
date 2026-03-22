@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from unittest.mock import AsyncMock, MagicMock
 
+from tests.hijack.control_stream_helpers import decode_control_payload
+from provide.terminal.control_stream import encode_control
 from provide.terminal.hijack.bridge import TermBridge, _safe_int
 from provide.terminal.hijack.models import _safe_float
 
@@ -87,7 +88,7 @@ class TestSendLoopSerializationError:
         # Good message was sent; bad one was skipped (sentinel also sent but after _running=False)
         good_payloads = [p for p in sent_payloads if '"good"' in p]
         assert len(good_payloads) == 1
-        assert json.loads(good_payloads[0])["type"] == "good"
+        assert decode_control_payload(good_payloads[0])["type"] == "good"
 
 
 class TestBridgeErrorHandlers:
@@ -147,7 +148,7 @@ class TestRecvLoopCleanReturn:
                 nonlocal recv_call_count
                 recv_call_count += 1
                 if recv_call_count == 1:
-                    return json.dumps({"type": "snapshot_req"})
+                    return encode_control({"type": "snapshot_req"})
                 # Clean close triggers recv_loop to return normally
                 from websockets.exceptions import ConnectionClosedOK
                 from websockets.frames import Close

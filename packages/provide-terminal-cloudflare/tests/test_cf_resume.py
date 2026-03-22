@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import time
 from types import SimpleNamespace
@@ -15,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 from provide_terminal_cloudflare.api.ws_routes import handle_socket_message
 from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
+from provide_terminal_cloudflare.contracts import frame_json
 from provide_terminal_cloudflare.state.store import SqliteStateStore
 
 
@@ -131,6 +131,7 @@ class _MockRuntime:
             resume_ttl_s=300,
         )
         self.store = store
+        self.current_role = "admin"
 
     async def send_ws(self, ws: object, frame: dict) -> None:
         self._sent.append(frame)
@@ -148,7 +149,7 @@ class _MockRuntime:
         return str(id(ws))
 
     def _socket_browser_role(self, ws: object) -> str:
-        return "admin"
+        return self.current_role
 
 
 class TestWsRoutesResume:
@@ -160,7 +161,7 @@ class TestWsRoutesResume:
         """Valid resume token → updated hello with resumed=True."""
         store.create_resume_token("tok-abc", "w1", "admin", 300)
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "tok-abc"})
+        raw = frame_json("resume", token="tok-abc")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         # Should have sent: hello + hijack_state
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
@@ -176,7 +177,7 @@ class TestWsRoutesResume:
         store.create_resume_token("tok-exp", "w1", "admin", 0.001)
         time.sleep(0.02)
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "tok-exp"})
+        raw = frame_json("resume", token="tok-exp")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
         assert len(hellos) == 0
@@ -185,7 +186,7 @@ class TestWsRoutesResume:
         """Token from different worker → silently ignored."""
         store.create_resume_token("tok-wrong", "other-worker", "admin", 300)
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "tok-wrong"})
+        raw = frame_json("resume", token="tok-wrong")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
         assert len(hellos) == 0
@@ -193,14 +194,14 @@ class TestWsRoutesResume:
     async def test_resume_empty_token_ignored(self, runtime: _MockRuntime) -> None:
         """Empty token → silently ignored."""
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": ""})
+        raw = frame_json("resume", token="")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         assert len(runtime._sent) == 0
 
     async def test_resume_nonexistent_token_ignored(self, runtime: _MockRuntime) -> None:
         """Nonexistent token → silently ignored."""
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "nonexistent"})
+        raw = frame_json("resume", token="nonexistent")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         assert len(runtime._sent) == 0
 
@@ -208,7 +209,7 @@ class TestWsRoutesResume:
         """Valid resume should update ws attachment with restored role."""
         store.create_resume_token("tok-attach", "w1", "operator", 300)
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "tok-attach"})
+        raw = frame_json("resume", token="tok-attach")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         assert ws._attachment == "browser:operator:w1"
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
@@ -219,7 +220,7 @@ class TestWsRoutesResume:
         runtime.last_snapshot = {"type": "snapshot", "screen": "test"}
         store.create_resume_token("tok-snap", "w1", "admin", 300)
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "tok-snap"})
+        raw = frame_json("resume", token="tok-snap")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         # Should have: hello, hijack_state, snapshot
         types = [m.get("type") for m in runtime._sent]
@@ -236,7 +237,7 @@ class TestWsRoutesResume:
                 raise RuntimeError("attachment failed")
 
         ws = _BrokenWs()
-        raw = json.dumps({"type": "resume", "token": "tok-fail"})
+        raw = frame_json("resume", token="tok-fail")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
         assert len(hellos) == 1
@@ -246,7 +247,7 @@ class TestWsRoutesResume:
         """Valid resume → new token created in store."""
         store.create_resume_token("tok-new", "w1", "admin", 300)
         ws = _MockWs()
-        raw = json.dumps({"type": "resume", "token": "tok-new"})
+        raw = frame_json("resume", token="tok-new")
         await handle_socket_message(runtime, ws, raw, is_worker=False)
         hellos = [m for m in runtime._sent if m.get("type") == "hello"]
         new_token = hellos[0]["resume_token"]
@@ -255,3 +256,34 @@ class TestWsRoutesResume:
         record = store.get_resume_token(new_token)
         assert record is not None
         assert record["worker_id"] == "w1"
+
+    async def test_resume_does_not_escalate_above_current_role(
+        self, runtime: _MockRuntime, store: SqliteStateStore
+    ) -> None:
+        """Stored roles must not elevate beyond the current socket role."""
+        runtime.current_role = "viewer"
+        store.create_resume_token("tok-elev", "w1", "admin", 300)
+        ws = _MockWs()
+        raw = frame_json("resume", token="tok-elev")
+        await handle_socket_message(runtime, ws, raw, is_worker=False)
+        hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        assert len(hellos) == 1
+        assert hellos[0]["role"] == "viewer"
+        assert hellos[0]["can_hijack"] is False
+        assert ws._attachment == "browser:viewer:w1"
+        record = store.get_resume_token(hellos[0]["resume_token"])
+        assert record is not None
+        assert record["role"] == "viewer"
+
+    async def test_resume_preserves_lower_stored_role(self, runtime: _MockRuntime, store: SqliteStateStore) -> None:
+        """A lower stored role should survive resume when current auth is broader."""
+        runtime.current_role = "admin"
+        store.create_resume_token("tok-op", "w1", "operator", 300)
+        ws = _MockWs()
+        raw = frame_json("resume", token="tok-op")
+        await handle_socket_message(runtime, ws, raw, is_worker=False)
+        hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        assert len(hellos) == 1
+        assert hellos[0]["role"] == "operator"
+        assert hellos[0]["can_hijack"] is False
+        assert ws._attachment == "browser:operator:w1"

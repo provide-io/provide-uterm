@@ -10,10 +10,10 @@ dropped frame logging."""
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 from unittest.mock import MagicMock
 
+from tests.hijack.control_stream_helpers import decode_control_payload
 from provide.terminal.hijack.bridge import TermBridge, _to_ws_url
 
 
@@ -262,7 +262,7 @@ class TestSendSnapshot:
         await bridge._send_snapshot(ws)
 
         assert len(ws.sent) == 1
-        payload = json.loads(ws.sent[0])
+        payload = decode_control_payload(ws.sent[0])
         assert payload["type"] == "snapshot"
         assert payload["screen"] == "test"
 
@@ -285,7 +285,7 @@ class TestSendSnapshot:
         ws = MockWS()
         await bridge._send_snapshot(ws)
 
-        payload = json.loads(ws.sent[0])
+        payload = decode_control_payload(ws.sent[0])
         assert payload["screen"] == "test"
 
     async def test_send_snapshot_uses_latest_snapshot_when_no_emulator(self) -> None:
@@ -299,7 +299,7 @@ class TestSendSnapshot:
         ws = MockWS()
         await bridge._send_snapshot(ws)
 
-        payload = json.loads(ws.sent[0])
+        payload = decode_control_payload(ws.sent[0])
         assert payload["screen"] == "cached screen"
 
 

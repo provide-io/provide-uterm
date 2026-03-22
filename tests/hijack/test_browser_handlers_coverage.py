@@ -11,11 +11,11 @@ objects, isolating the handler logic without requiring a full ASGI server.
 
 from __future__ import annotations
 
-import json
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from tests.hijack.control_stream_helpers import decode_control_payload
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.routes.browser_handlers import handle_browser_message
@@ -52,7 +52,7 @@ class TestPingPong:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "ping"}, False)
         assert result is False
         ws.send_text.assert_called_once()
-        sent = json.loads(ws.send_text.call_args[0][0])
+        sent = decode_control_payload(ws.send_text.call_args[0][0])
         assert sent["type"] == "pong"
         assert "ts" in sent
 
@@ -62,7 +62,7 @@ class TestPingPong:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "ping"}, True)
         assert result is True
         ws.send_text.assert_called_once()
-        sent = json.loads(ws.send_text.call_args[0][0])
+        sent = decode_control_payload(ws.send_text.call_args[0][0])
         assert sent["type"] == "pong"
 
 
@@ -106,7 +106,7 @@ class TestHeartbeat:
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "heartbeat"}, True)
         # First call is heartbeat_ack; subsequent calls are hijack_state broadcasts.
         first_sent = ws.send_text.call_args_list[0][0][0]
-        payload = json.loads(first_sent)
+        payload = decode_control_payload(first_sent)
         assert payload["type"] == "heartbeat_ack"
         assert "lease_expires_at" in payload
 
@@ -127,7 +127,7 @@ class TestHijackRequest:
         result = await handle_browser_message(hub, ws, "w1", "operator", {"type": "hijack_request"}, False)
         assert result is False
         sent = ws.send_text.call_args[0][0]
-        assert "admin" in json.loads(sent)["message"].lower()
+        assert "admin" in decode_control_payload(sent)["message"].lower()
 
     async def test_hijack_request_rejected_in_open_mode(self) -> None:
         hub = _make_hub()
@@ -139,7 +139,7 @@ class TestHijackRequest:
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         assert result is False
         sent = ws.send_text.call_args[0][0]
-        assert "open" in json.loads(sent)["message"].lower()
+        assert "open" in decode_control_payload(sent)["message"].lower()
 
     async def test_hijack_request_fails_when_no_worker(self) -> None:
         hub = _make_hub()
@@ -194,9 +194,7 @@ class TestInput:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hi\r"}, False)
         worker_ws.send_text.assert_called()
-        sent = json.loads(worker_ws.send_text.call_args[0][0])
-        assert sent["type"] == "input"
-        assert sent["data"] == "hi\r"
+        assert worker_ws.send_text.call_args[0][0] == "hi\r"
 
     async def test_input_rejected_for_viewer(self) -> None:
         hub = _make_hub()
@@ -219,7 +217,7 @@ class TestInput:
             hub._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "x" * 20}, False)
         ws.send_text.assert_called()
-        err = json.loads(ws.send_text.call_args[0][0])
+        err = decode_control_payload(ws.send_text.call_args[0][0])
         assert err["type"] == "error"
         worker_ws.send_text.assert_not_called()
 

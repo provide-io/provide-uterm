@@ -43,6 +43,9 @@ Opt-in feature. Enabled on FastAPI by passing `resume_store` to `TermHub`; alway
 - Unsupported WS control paths must degrade to REST when `hijack_control=rest`.
 - If `hello.resume_supported` is `true` and a stored token exists, the client must send `{"type":"resume","token":"…"}` as its first message after connect.
 - The client must update its stored token on every hello (initial and resumed) — tokens are rotated on each resume.
+- FastAPI resume tokens are opaque session handles. By default they restore the
+  prior browser role from the token; consumers that need identity-aware resume
+  checks must provide `on_resume` validation when constructing `TermHub`.
 
 ## Accuracy note
 

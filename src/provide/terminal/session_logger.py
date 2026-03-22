@@ -13,7 +13,7 @@ import contextlib
 import json
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from provide.telemetry import get_logger
 
@@ -36,13 +36,20 @@ class SessionLogger:
         await logger.stop()
     """
 
-    def __init__(self, log_path: str | Path, max_bytes: int = 0) -> None:
+    def __init__(
+        self,
+        log_path: str | Path,
+        max_bytes: int = 0,
+        *,
+        control_channel_mode: Literal["exclude", "wire"] = "exclude",
+    ) -> None:
         self._log_path = Path(log_path)
         self._file: TextIOWrapper | None = None
         self._lock = asyncio.Lock()
         self._session_id: str | None = None
         self._context: dict[str, str] = {}
         self._max_bytes = max_bytes  # 0 = unlimited
+        self._control_channel_mode = control_channel_mode
         self._bytes_written = 0
         self._quota_warned = False
 
@@ -108,6 +115,25 @@ class SessionLogger:
     async def log_event(self, event: str, data: dict[str, Any]) -> None:
         """Log an arbitrary named event."""
         await self._write_event(event, data)
+
+    async def log_wire(self, direction: Literal["send", "recv"], text: str) -> None:
+        """Log a raw wire chunk when wire-mode recording is enabled."""
+        if self._control_channel_mode != "wire":
+            return
+        payload = text.encode("utf-8")
+        await self._write_event(
+            f"wire_{direction}",
+            {
+                "text": text,
+                "bytes_b64": base64.b64encode(payload).decode("ascii"),
+            },
+        )
+
+    async def log_control(self, direction: Literal["send", "recv"], control: dict[str, Any]) -> None:
+        """Log a decoded control frame when wire-mode recording is enabled."""
+        if self._control_channel_mode != "wire":
+            return
+        await self._write_event(f"control_{direction}", {"control": control})
 
     def set_context(self, context: dict[str, str]) -> None:
         """Set metadata context for subsequent log entries."""

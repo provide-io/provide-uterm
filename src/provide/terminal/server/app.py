@@ -22,7 +22,7 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
 from provide.telemetry import get_logger
 
-from provide.terminal.hijack.hub import TermHub
+from provide.terminal.hijack.hub import InMemoryResumeStore, ResumeSession, TermHub
 from provide.terminal.server.auth import (
     Principal,
     extract_bearer_token,
@@ -161,6 +161,17 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             logger.info("authn_denied surface=http")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
 
+    async def _on_resume(_token: str, session: ResumeSession) -> bool:
+        """Reject resume if the backing session no longer exists or has been recreated."""
+        if registry is None:  # pragma: no cover — always initialized before first WS connection
+            return True
+        session_def = await registry.get_definition(session.worker_id)
+        if session_def is None:
+            return False
+        # Guard against delete-and-recreate: if the session was created after
+        # this token was issued, it is a different session and the token is stale.
+        return not (session.wall_created_at > 0 and session_def.created_at.timestamp() > session.wall_created_at)
+
     async def _resolve_browser_role(ws: WebSocket, worker_id: str) -> str:
         principal = getattr(ws.state, "uterm_principal", None)
         if principal is None:
@@ -176,6 +187,8 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         resolve_browser_role=_resolve_browser_role,
         on_metric=_inc_metric,
         worker_token=config.auth.worker_bearer_token,
+        resume_store=InMemoryResumeStore(),
+        on_resume=_on_resume,
     )
     registry = SessionRegistry(
         config.sessions,

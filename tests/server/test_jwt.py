@@ -8,11 +8,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import socket
 import threading
 import time
 from typing import TYPE_CHECKING, Any
+from weakref import WeakKeyDictionary
 
 import httpx
 import jwt
@@ -20,6 +20,7 @@ import pytest
 import uvicorn
 import websockets
 
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk, encode_control, encode_data
 from provide.terminal.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
@@ -55,17 +56,44 @@ def _auth_headers(subject: str, roles: list[str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {_mint_token(subject, roles)}"}
 
 
+_WS_DECODERS: WeakKeyDictionary[Any, ControlStreamDecoder] = WeakKeyDictionary()
+_WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
+
+
 async def _drain_until(ws: Any, type_: str, timeout: float = 5.0) -> dict[str, Any] | None:
+    decoder = _WS_DECODERS.setdefault(ws, ControlStreamDecoder())
+    pending = _WS_PENDING.setdefault(ws, [])
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         try:
+            if pending:
+                msg = pending.pop(0)
+                if msg.get("type") == type_:
+                    return msg
+                continue
             raw = await asyncio.wait_for(ws.recv(), timeout=0.5)
-            msg = json.loads(raw)
+            events = decoder.feed(raw)
+            for event in events:
+                if isinstance(event, ControlChunk):
+                    pending.append(event.control)
+                elif isinstance(event, DataChunk):
+                    pending.append({"type": "term", "data": event.data})
+            if not pending:
+                continue
+            msg = pending.pop(0)
             if msg.get("type") == type_:
                 return msg
         except TimeoutError:
             continue
     return None
+
+
+async def _send_frame(ws: Any, payload: dict[str, Any]) -> None:
+    frame_type = payload.get("type")
+    if frame_type in {"input", "term"}:
+        await ws.send(encode_data(str(payload.get("data", ""))))
+        return
+    await ws.send(encode_control(payload))
 
 
 async def _wait_for_hijack_state(ws: Any, *, expected: bool, timeout: float = 5.0) -> dict[str, Any] | None:
@@ -174,7 +202,7 @@ class TestReferenceServerJwtE2E:
             assert viewer_hello is not None
             assert viewer_hello["role"] == "viewer"
             assert viewer_hello["can_hijack"] is False
-            await viewer_ws.send(json.dumps({"type": "hijack_request"}))
+            await _send_frame(viewer_ws, {"type": "hijack_request"})
             viewer_error = await _drain_until(viewer_ws, "error")
             assert viewer_error is not None
             assert "admin" in str(viewer_error.get("message", "")).lower()
@@ -186,7 +214,7 @@ class TestReferenceServerJwtE2E:
             assert admin_hello is not None
             assert admin_hello["role"] == "admin"
             assert admin_hello["can_hijack"] is True
-            await admin_ws.send(json.dumps({"type": "hijack_request"}))
+            await _send_frame(admin_ws, {"type": "hijack_request"})
             hijack_state = await _wait_for_hijack_state(admin_ws, expected=True)
             assert hijack_state is not None
             assert hijack_state["hijacked"] is True

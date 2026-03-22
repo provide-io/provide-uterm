@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.ratelimit import TokenBucket
 
@@ -83,13 +84,13 @@ class TestBrowserOversizedMessage:
         # min clamp is 1024, so use 1024 and send > 1024 bytes
         app, hub = _make_app(max_ws_message_bytes=1024)
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             # Set open mode so browser can send input
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 # Send oversized message (> 1024 bytes, dropped by handler)
@@ -118,13 +119,13 @@ class TestBrowserRateLimit:
     def test_rate_limited_browser_messages_dropped(self) -> None:
         app, hub = _make_app(browser_rate_limit_per_sec=2)
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             # Set open mode
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 # Exhaust the bucket (burst=2) with real input
@@ -163,13 +164,13 @@ class TestBrowserInputTooLong:
         app, hub = _make_app(max_input_chars=200)
         assert hub.max_input_chars == 200
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             # Set open mode so browser can send input
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 browser.send_json({"type": "input", "data": "a" * 201})
@@ -188,10 +189,10 @@ class TestWorkerOversizedMessage:
         # min clamp is 1024
         app, hub = _make_app(max_ws_message_bytes=1024)
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 # Send normal-sized term data (should go through)
@@ -218,10 +219,10 @@ class TestWorkerBursts:
     def test_worker_term_burst_not_dropped(self) -> None:
         app, hub = _make_app()
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 worker.send_json({"type": "term", "data": "1"})

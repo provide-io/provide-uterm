@@ -92,6 +92,7 @@ class RecordingConfig(ServerBaseModel):
     enabled_by_default: bool = False
     directory: Path = Path(".uterm-recordings")
     max_bytes: int = 0  # 0 = unlimited
+    control_channel_mode: Literal["exclude", "wire"] = "exclude"
 
     @field_validator("max_bytes")
     @classmethod

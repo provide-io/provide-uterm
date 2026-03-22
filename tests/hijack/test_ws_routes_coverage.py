@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from provide.terminal.client import connect_test_ws
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession, WorkerTermState
 
@@ -77,7 +78,7 @@ class TestStaleHijackOnWorkerReconnect:
             asyncio.run(_setup_stale())
 
             # Connect a new worker — should clear stale hijack (lines 58-61, 65-66)
-            with client.websocket_connect("/ws/worker/w1/term") as worker:
+            with connect_test_ws(client, "/ws/worker/w1/term") as worker:
                 _read_worker_snapshot_req(worker)
                 # The stale hijack should have been cleared
                 assert len(hijack_calls) == 1
@@ -97,10 +98,10 @@ class TestCompensatingResumeNoWorker:
         app, hub = _make_app("admin")
         resume_sent = []
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 # Patch _try_acquire_ws_hijack to return no_worker
@@ -142,10 +143,10 @@ class TestHijackStepSendFailure:
     def test_step_send_failure_returns_error(self) -> None:
         app, hub = _make_app("admin")
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 # Hijack first
@@ -183,14 +184,14 @@ class TestInputSendFailureOpenMode:
     def test_input_send_failure_returns_error(self) -> None:
         app, hub = _make_app("operator")
 
-        with TestClient(app) as client, client.websocket_connect("/ws/worker/w1/term") as worker:
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
 
             # Set open mode
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
             assert resp.status_code == 200
 
-            with client.websocket_connect("/ws/browser/w1/term") as browser:
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
                 _read_initial_browser(browser)
 
                 # Patch _send_worker to fail for input
@@ -215,7 +216,7 @@ class TestSnapshotFieldSafety:
     def _make_app_and_register(self) -> tuple[TestClient, TermHub, object]:
         app, hub = _make_app()
         client = TestClient(app, raise_server_exceptions=False)
-        worker = client.websocket_connect("/ws/worker/w1/term?token=x")
+        worker = connect_test_ws(client, "/ws/worker/w1/term?token=x")
         worker.__enter__()
         _read_worker_snapshot_req(worker)
         return client, hub, worker
@@ -227,7 +228,7 @@ class TestSnapshotFieldSafety:
         app, hub = _make_app()
         with (
             TestClient(app, raise_server_exceptions=False) as client,
-            client.websocket_connect("/ws/worker/w1/term?token=x") as worker,
+            connect_test_ws(client, "/ws/worker/w1/term?token=x") as worker,
         ):
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "snapshot", "screen": "hi", "cols": 80, "rows": 25, "ts": None})
@@ -242,7 +243,7 @@ class TestSnapshotFieldSafety:
         app, hub = _make_app()
         with (
             TestClient(app, raise_server_exceptions=False) as client,
-            client.websocket_connect("/ws/worker/w1/term?token=x") as worker,
+            connect_test_ws(client, "/ws/worker/w1/term?token=x") as worker,
         ):
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "snapshot", "screen": "hi", "cols": -10, "rows": 25, "ts": time.time()})
@@ -257,7 +258,7 @@ class TestSnapshotFieldSafety:
         app, hub = _make_app()
         with (
             TestClient(app, raise_server_exceptions=False) as client,
-            client.websocket_connect("/ws/worker/w1/term?token=x") as worker,
+            connect_test_ws(client, "/ws/worker/w1/term?token=x") as worker,
         ):
             _read_worker_snapshot_req(worker)
             worker.send_json({"type": "snapshot", "screen": "hi", "cols": 80, "rows": 0, "ts": time.time()})

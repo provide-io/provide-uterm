@@ -23,8 +23,8 @@ class TestReferenceServerPages:
         page.goto(f"{reference_server}/app/", wait_until="domcontentloaded")
 
         expect(page.get_by_text("Provide Terminal")).to_be_visible(timeout=5000)
-        expect(page.get_by_role("link", name="Operate")).to_be_visible(timeout=5000)
-        expect(page.get_by_role("link", name="Replay")).to_be_visible(timeout=5000)
+        expect(page.get_by_role("link", name="Operate").first).to_be_visible(timeout=5000)
+        expect(page.get_by_role("link", name="Replay").first).to_be_visible(timeout=5000)
         expect(page.get_by_role("link", name="Quick connect")).to_be_visible(timeout=5000)
         expect(page.get_by_role("button", name="Refresh")).to_be_visible(timeout=5000)
 
