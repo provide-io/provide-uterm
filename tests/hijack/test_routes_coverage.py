@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Coverage gap tests for routes/rest.py, routes/websockets.py, routes/browser_handlers.py — part 1.
 
 Covers REST route edge cases: rate limiting, empty keys, and hijack release flows.

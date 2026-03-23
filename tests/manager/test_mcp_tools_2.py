@@ -135,9 +135,9 @@ def _mock_http(ok: bool, data: dict) -> AsyncMock:
 class TestHttpModeSwarm:
     @pytest.mark.asyncio
     async def test_swarm_status_ok(self, http_app) -> None:
-        with _mock_http(True, {"total_bots": 3}):
+        with _mock_http(True, {"total_agents": 3}):
             result = await _call(http_app, "swarm_status")
-        assert result["total_bots"] == 3
+        assert result["total_agents"] == 3
 
     @pytest.mark.asyncio
     async def test_swarm_status_error(self, http_app) -> None:
@@ -219,9 +219,9 @@ class TestHttpModeSwarm:
 
     @pytest.mark.asyncio
     async def test_swarm_set_desired_ok(self, http_app) -> None:
-        with _mock_http(True, {"desired_bots": 5}):
+        with _mock_http(True, {"desired_agents": 5}):
             result = await _call(http_app, "swarm_set_desired", {"count": 5})
-        assert result["desired_bots"] == 5
+        assert result["desired_agents"] == 5
 
     @pytest.mark.asyncio
     async def test_swarm_set_desired_error(self, http_app) -> None:
@@ -230,93 +230,93 @@ class TestHttpModeSwarm:
         assert "error" in result
 
 
-class TestHttpModeBots:
+class TestHttpModeAgents:
     @pytest.mark.asyncio
-    async def test_bot_list_ok(self, http_app) -> None:
-        with _mock_http(True, {"total": 1, "bots": []}):
-            result = await _call(http_app, "bot_list")
+    async def test_agent_list_ok(self, http_app) -> None:
+        with _mock_http(True, {"total": 1, "agents": []}):
+            result = await _call(http_app, "agent_list")
         assert result["total"] == 1
 
     @pytest.mark.asyncio
-    async def test_bot_list_with_state_ok(self, http_app) -> None:
-        with _mock_http(True, {"total": 0, "bots": []}):
-            result = await _call(http_app, "bot_list", {"state": "running"})
+    async def test_agent_list_with_state_ok(self, http_app) -> None:
+        with _mock_http(True, {"total": 0, "agents": []}):
+            result = await _call(http_app, "agent_list", {"state": "running"})
         assert result["total"] == 0
 
     @pytest.mark.asyncio
-    async def test_bot_list_error(self, http_app) -> None:
+    async def test_agent_list_error(self, http_app) -> None:
         with _mock_http(False, {"error": "x"}):
-            result = await _call(http_app, "bot_list")
+            result = await _call(http_app, "agent_list")
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_bot_status_ok(self, http_app) -> None:
-        with _mock_http(True, {"bot_id": "bot_000", "state": "running"}):
-            result = await _call(http_app, "bot_status", {"bot_id": "bot_000"})
-        assert result["bot_id"] == "bot_000"
+    async def test_agent_status_ok(self, http_app) -> None:
+        with _mock_http(True, {"agent_id": "agent_000", "state": "running"}):
+            result = await _call(http_app, "agent_status", {"agent_id": "agent_000"})
+        assert result["agent_id"] == "agent_000"
 
     @pytest.mark.asyncio
-    async def test_bot_status_error(self, http_app) -> None:
+    async def test_agent_status_error(self, http_app) -> None:
         with _mock_http(False, {"error": "not found"}):
-            result = await _call(http_app, "bot_status", {"bot_id": "nope"})
+            result = await _call(http_app, "agent_status", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_bot_kill_ok(self, http_app) -> None:
-        with _mock_http(True, {"bot_id": "bot_000", "action": "kill"}):
-            result = await _call(http_app, "bot_kill", {"bot_id": "bot_000"})
+    async def test_agent_kill_ok(self, http_app) -> None:
+        with _mock_http(True, {"agent_id": "agent_000", "action": "kill"}):
+            result = await _call(http_app, "agent_kill", {"agent_id": "agent_000"})
         assert result["action"] == "kill"
 
     @pytest.mark.asyncio
-    async def test_bot_kill_error(self, http_app) -> None:
+    async def test_agent_kill_error(self, http_app) -> None:
         with _mock_http(False, {"error": "x"}):
-            result = await _call(http_app, "bot_kill", {"bot_id": "nope"})
+            result = await _call(http_app, "agent_kill", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_bot_pause_ok(self, http_app) -> None:
+    async def test_agent_pause_ok(self, http_app) -> None:
         with _mock_http(True, {"paused": True}):
-            result = await _call(http_app, "bot_pause", {"bot_id": "bot_000"})
+            result = await _call(http_app, "agent_pause", {"agent_id": "agent_000"})
         assert result["paused"] is True
 
     @pytest.mark.asyncio
-    async def test_bot_pause_error(self, http_app) -> None:
+    async def test_agent_pause_error(self, http_app) -> None:
         with _mock_http(False, {"error": "x"}):
-            result = await _call(http_app, "bot_pause", {"bot_id": "nope"})
+            result = await _call(http_app, "agent_pause", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_bot_resume_ok(self, http_app) -> None:
+    async def test_agent_resume_ok(self, http_app) -> None:
         with _mock_http(True, {"paused": False}):
-            result = await _call(http_app, "bot_resume", {"bot_id": "bot_000"})
+            result = await _call(http_app, "agent_resume", {"agent_id": "agent_000"})
         assert result["paused"] is False
 
     @pytest.mark.asyncio
-    async def test_bot_resume_error(self, http_app) -> None:
+    async def test_agent_resume_error(self, http_app) -> None:
         with _mock_http(False, {"error": "x"}):
-            result = await _call(http_app, "bot_resume", {"bot_id": "nope"})
+            result = await _call(http_app, "agent_resume", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_bot_restart_ok(self, http_app) -> None:
+    async def test_agent_restart_ok(self, http_app) -> None:
         with _mock_http(True, {"queued": True}):
-            result = await _call(http_app, "bot_restart", {"bot_id": "bot_000"})
+            result = await _call(http_app, "agent_restart", {"agent_id": "agent_000"})
         assert result["queued"] is True
 
     @pytest.mark.asyncio
-    async def test_bot_restart_error(self, http_app) -> None:
+    async def test_agent_restart_error(self, http_app) -> None:
         with _mock_http(False, {"error": "x"}):
-            result = await _call(http_app, "bot_restart", {"bot_id": "nope"})
+            result = await _call(http_app, "agent_restart", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_bot_events_ok(self, http_app) -> None:
-        with _mock_http(True, {"bot_id": "bot_000", "events": []}):
-            result = await _call(http_app, "bot_events", {"bot_id": "bot_000"})
-        assert result["bot_id"] == "bot_000"
+    async def test_agent_events_ok(self, http_app) -> None:
+        with _mock_http(True, {"agent_id": "agent_000", "events": []}):
+            result = await _call(http_app, "agent_events", {"agent_id": "agent_000"})
+        assert result["agent_id"] == "agent_000"
 
     @pytest.mark.asyncio
-    async def test_bot_events_error(self, http_app) -> None:
+    async def test_agent_events_error(self, http_app) -> None:
         with _mock_http(False, {"error": "x"}):
-            result = await _call(http_app, "bot_events", {"bot_id": "nope"})
+            result = await _call(http_app, "agent_events", {"agent_id": "nope"})
         assert "error" in result

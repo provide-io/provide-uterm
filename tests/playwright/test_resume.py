@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Playwright end-to-end tests for WebSocket session resumption.
 
 Uses a session-scoped TermHub with an InMemoryResumeStore so the widget

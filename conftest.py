@@ -1,3 +1,7 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 """Root conftest — copied by mutmut to mutants/conftest.py.
 
 When mutmut runs pytest from mutants/, this file ensures that

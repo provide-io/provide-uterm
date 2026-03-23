@@ -1,6 +1,7 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-
+#
 """Tests for provide.terminal.manager.process."""
 
 from __future__ import annotations
@@ -15,9 +16,9 @@ import pytest
 
 import provide.terminal.manager.process as process_module
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import SwarmManager
-from provide.terminal.manager.models import BotStatusBase
-from provide.terminal.manager.process import BotProcessManager
+from provide.terminal.manager.core import AgentManager
+from provide.terminal.manager.models import AgentStatusBase
+from provide.terminal.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -31,7 +32,7 @@ class FakeWorkerPlugin:
     def worker_module(self) -> str:
         return "test_worker_module"
 
-    def configure_worker_env(self, env, bot_status, manager, **kwargs):
+    def configure_worker_env(self, env, agent_status, manager, **kwargs):
         env["TEST_CUSTOM"] = "value"
 
 
@@ -46,52 +47,52 @@ def config(tmp_path):
 
 @pytest.fixture
 def manager(config):
-    return SwarmManager(config)
+    return AgentManager(config)
 
 
 @pytest.fixture
 def pm(manager, tmp_path):
-    pm = BotProcessManager(
+    pm = AgentProcessManager(
         manager,
         worker_registry={"test_game": FakeWorkerPlugin()},
         log_dir=str(tmp_path / "logs"),
     )
-    manager.bot_process_manager = pm
+    manager.agent_process_manager = pm
     return pm
 
 
-class TestBotIdManagement:
-    def test_parse_bot_index(self):
-        assert BotProcessManager._parse_bot_index("bot_000") == 0
-        assert BotProcessManager._parse_bot_index("bot_042") == 42
-        assert BotProcessManager._parse_bot_index("invalid") is None
-        assert BotProcessManager._parse_bot_index("") is None
-        assert BotProcessManager._parse_bot_index("bot_") is None
+class TestAgentIdManagement:
+    def test_parse_agent_index(self):
+        assert AgentProcessManager._parse_agent_index("agent_000") == 0
+        assert AgentProcessManager._parse_agent_index("agent_042") == 42
+        assert AgentProcessManager._parse_agent_index("invalid") is None
+        assert AgentProcessManager._parse_agent_index("") is None
+        assert AgentProcessManager._parse_agent_index("agent_") is None
 
-    def test_allocate_bot_id(self, pm, manager):
-        bid = pm.allocate_bot_id()
-        assert bid == "bot_000"
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000")
-        bid2 = pm.allocate_bot_id()
-        assert bid2 == "bot_001"
+    def test_allocate_agent_id(self, pm, manager):
+        bid = pm.allocate_agent_id()
+        assert bid == "agent_000"
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000")
+        bid2 = pm.allocate_agent_id()
+        assert bid2 == "agent_001"
 
-    def test_sync_next_bot_index(self, pm, manager):
-        manager.bots["bot_005"] = BotStatusBase(bot_id="bot_005")
-        manager.bots["bot_010"] = BotStatusBase(bot_id="bot_010")
-        idx = pm.sync_next_bot_index()
+    def test_sync_next_agent_index(self, pm, manager):
+        manager.agents["agent_005"] = AgentStatusBase(agent_id="agent_005")
+        manager.agents["agent_010"] = AgentStatusBase(agent_id="agent_010")
+        idx = pm.sync_next_agent_index()
         assert idx == 11
 
-    def test_note_bot_id(self, pm):
-        pm.note_bot_id("bot_050")
-        assert pm._next_bot_index == 51
-        pm.note_bot_id("invalid_id")
-        assert pm._next_bot_index == 51  # unchanged
+    def test_note_agent_id(self, pm):
+        pm.note_agent_id("agent_050")
+        assert pm._next_agent_index == 51
+        pm.note_agent_id("invalid_id")
+        assert pm._next_agent_index == 51  # unchanged
 
     def test_allocate_skips_existing(self, pm, manager):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000")
-        manager.bots["bot_001"] = BotStatusBase(bot_id="bot_001")
-        bid = pm.allocate_bot_id()
-        assert bid == "bot_002"
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000")
+        manager.agents["agent_001"] = AgentStatusBase(agent_id="agent_001")
+        bid = pm.allocate_agent_id()
+        assert bid == "agent_002"
 
 
 class TestCancelSpawn:
@@ -115,40 +116,40 @@ class TestCancelSpawn:
 class TestReleaseAccount:
     def test_no_pool(self, pm, manager):
         manager.account_pool = None
-        pm.release_bot_account("bot_000")  # should not raise
+        pm.release_agent_account("agent_000")  # should not raise
 
     def test_with_pool(self, pm, manager):
         pool = MagicMock()
-        pool.release_by_bot.return_value = True
+        pool.release_by_agent.return_value = True
         manager.account_pool = pool
-        pm.release_bot_account("bot_000")
-        pool.release_by_bot.assert_called_once_with(bot_id="bot_000", cooldown_s=0)
+        pm.release_agent_account("agent_000")
+        pool.release_by_agent.assert_called_once_with(agent_id="agent_000", cooldown_s=0)
 
     def test_pool_error(self, pm, manager):
         pool = MagicMock()
-        pool.release_by_bot.side_effect = RuntimeError("fail")
+        pool.release_by_agent.side_effect = RuntimeError("fail")
         manager.account_pool = pool
-        pm.release_bot_account("bot_000")  # should not raise
+        pm.release_agent_account("agent_000")  # should not raise
 
 
-class TestSpawnBot:
+class TestSpawnAgent:
     @pytest.mark.asyncio
-    async def test_max_bots_reached(self, pm, manager):
-        manager.max_bots = 0
-        with pytest.raises(RuntimeError, match="Max bots"):
-            await pm.spawn_bot("/config.yaml", "bot_000")
+    async def test_max_agents_reached(self, pm, manager):
+        manager.max_agents = 0
+        with pytest.raises(RuntimeError, match="Max agents"):
+            await pm.spawn_agent("/config.yaml", "agent_000")
 
     @pytest.mark.asyncio
     async def test_config_not_found(self, pm):
         with pytest.raises(RuntimeError, match="Config not found"):
-            await pm.spawn_bot("/nonexistent.yaml", "bot_000")
+            await pm.spawn_agent("/nonexistent.yaml", "agent_000")
 
     @pytest.mark.asyncio
     async def test_unknown_worker_type(self, pm, tmp_path):
         config = tmp_path / "test.yaml"
         config.write_text("worker_type: unknown_game\n")
         with pytest.raises(RuntimeError, match="Unknown worker_type"):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
     @pytest.mark.asyncio
     async def test_single_registry_fallback(self, pm, manager, tmp_path):
@@ -161,10 +162,10 @@ class TestSpawnBot:
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=mock_proc):
-            result = await pm.spawn_bot(str(config), "bot_000")
+            result = await pm.spawn_agent(str(config), "agent_000")
 
-        assert result == "bot_000"
-        assert manager.bots["bot_000"].state == "running"
+        assert result == "agent_000"
+        assert manager.agents["agent_000"].state == "running"
 
     @pytest.mark.asyncio
     async def test_spawn_success(self, pm, manager, tmp_path):
@@ -176,28 +177,28 @@ class TestSpawnBot:
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=mock_proc):
-            result = await pm.spawn_bot(str(config), "bot_000")
+            result = await pm.spawn_agent(str(config), "agent_000")
 
-        assert result == "bot_000"
-        assert "bot_000" in manager.bots
-        assert manager.bots["bot_000"].pid == 12345
-        assert manager.bots["bot_000"].state == "running"
+        assert result == "agent_000"
+        assert "agent_000" in manager.agents
+        assert manager.agents["agent_000"].pid == 12345
+        assert manager.agents["agent_000"].state == "running"
 
     @pytest.mark.asyncio
-    async def test_spawn_updates_existing_bot(self, pm, manager, tmp_path):
+    async def test_spawn_updates_existing_agent(self, pm, manager, tmp_path):
         config = tmp_path / "test.yaml"
         config.write_text("worker_type: test_game\n")
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="queued", pid=0)
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="queued", pid=0)
 
         mock_proc = MagicMock()
         mock_proc.pid = 9999
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=mock_proc):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert manager.bots["bot_000"].pid == 9999
-        assert manager.bots["bot_000"].state == "running"
+        assert manager.agents["agent_000"].pid == 9999
+        assert manager.agents["agent_000"].state == "running"
 
     @pytest.mark.asyncio
     async def test_spawn_process_failure(self, pm, manager, tmp_path):
@@ -209,7 +210,7 @@ class TestSpawnBot:
             patch.object(pm, "_spawn_process", side_effect=OSError("no such file")),
             pytest.raises(RuntimeError, match="Failed to spawn"),
         ):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
     @pytest.mark.asyncio
     async def test_spawn_bad_yaml_with_multiple_registries(self, pm, manager, tmp_path):
@@ -221,42 +222,42 @@ class TestSpawnBot:
 
         pm._worker_registry["other_game"] = MagicMock()
         with pytest.raises(RuntimeError, match="Unknown worker_type"):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
 
-class TestKillBot:
+class TestKillAgent:
     @pytest.mark.asyncio
     async def test_kill_unknown(self, pm, manager):
         manager.broadcast_status = AsyncMock()
-        await pm.kill_bot("nonexistent")
+        await pm.kill_agent("nonexistent")
         # Should not raise
 
     @pytest.mark.asyncio
     async def test_kill_terminates(self, pm, manager):
         mock_proc = MagicMock()
-        manager.processes["bot_000"] = mock_proc
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
+        manager.processes["agent_000"] = mock_proc
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
-            await pm.kill_bot("bot_000")
+            await pm.kill_agent("agent_000")
         mock_stop.assert_awaited_once_with(
-            bot_id="bot_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
+            agent_id="agent_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
         )
-        assert manager.bots["bot_000"].state == "stopped"
-        assert "bot_000" not in manager.processes
+        assert manager.agents["agent_000"].state == "stopped"
+        assert "agent_000" not in manager.processes
 
     @pytest.mark.asyncio
     async def test_kill_force_on_timeout(self, pm, manager):
         mock_proc = MagicMock()
-        manager.processes["bot_000"] = mock_proc
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
+        manager.processes["agent_000"] = mock_proc
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
-            await pm.kill_bot("bot_000")
+            await pm.kill_agent("agent_000")
         mock_stop.assert_awaited_once_with(
-            bot_id="bot_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
+            agent_id="agent_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
         )
 
 
@@ -268,7 +269,7 @@ class TestProcessTreeHelpers:
             patch("subprocess.Popen") as mock_popen,
         ):
             mock_popen.return_value = MagicMock(pid=123)
-            pm._spawn_process("bot_000", ["python", "-c", "pass"], {})
+            pm._spawn_process("agent_000", ["python", "-c", "pass"], {})
         assert mock_popen.call_args.kwargs["start_new_session"] is True
 
     def test_spawn_process_windows_sets_creationflags(self, pm, tmp_path):
@@ -286,7 +287,7 @@ class TestProcessTreeHelpers:
             patch.object(pm, "_wait_for_process_exit", new_callable=AsyncMock),
             patch.object(pm, "_signal_posix_process_group") as mock_signal,
         ):
-            await pm._stop_process_tree(bot_id="bot_000", process=proc)
+            await pm._stop_process_tree(agent_id="agent_000", process=proc)
         mock_signal.assert_called_once_with(321, process_module.signal.SIGTERM)
 
     @pytest.mark.asyncio
@@ -298,7 +299,7 @@ class TestProcessTreeHelpers:
             patch.object(pm, "_signal_posix_process_group") as mock_signal,
         ):
             mock_wait.side_effect = [TimeoutError, None]
-            await pm._stop_process_tree(bot_id="bot_000", process=proc)
+            await pm._stop_process_tree(agent_id="agent_000", process=proc)
         assert mock_signal.call_args_list == [
             call(654, process_module.signal.SIGTERM),
             call(654, process_module.signal.SIGKILL),
@@ -315,12 +316,12 @@ class TestProcessTreeHelpers:
             patch.object(pm, "_taskkill_process_tree", new_callable=AsyncMock) as mock_taskkill,
         ):
             mock_wait.return_value = None
-            await pm._stop_process_tree(bot_id="bot_000", process=proc)
+            await pm._stop_process_tree(agent_id="agent_000", process=proc)
         proc.terminate.assert_not_called()
         mock_taskkill.assert_awaited_once_with(987)
 
     @pytest.mark.asyncio
-    async def test_kill_bot_terminates_spawned_child_process_tree(self, pm, manager, tmp_path):
+    async def test_kill_agent_terminates_spawned_child_process_tree(self, pm, manager, tmp_path):
         parent_script = tmp_path / "parent.py"
         child_script = tmp_path / "child.py"
         child_pid_file = tmp_path / "child.pid"
@@ -351,12 +352,12 @@ class TestProcessTreeHelpers:
         )
 
         process = pm._spawn_process(
-            "bot_123",
+            "agent_123",
             [sys.executable, str(parent_script), str(child_script), str(heartbeat_file), str(child_pid_file)],
             dict(os.environ),
         )
-        manager.processes["bot_123"] = process
-        manager.bots["bot_123"] = BotStatusBase(bot_id="bot_123", state="running", pid=process.pid)
+        manager.processes["agent_123"] = process
+        manager.agents["agent_123"] = AgentStatusBase(agent_id="agent_123", state="running", pid=process.pid)
         manager.broadcast_status = AsyncMock()
 
         try:
@@ -375,12 +376,12 @@ class TestProcessTreeHelpers:
             second_mtime = heartbeat_file.stat().st_mtime_ns
             assert second_mtime > first_mtime, "child heartbeat did not advance before shutdown"
 
-            await pm.kill_bot("bot_123")
+            await pm.kill_agent("agent_123")
 
             stopped_mtime = heartbeat_file.stat().st_mtime_ns
             await asyncio.sleep(0.5 if os.name == "nt" else 0.25)
-            assert heartbeat_file.stat().st_mtime_ns == stopped_mtime, "child heartbeat kept advancing after kill_bot()"
+            assert heartbeat_file.stat().st_mtime_ns == stopped_mtime, "child heartbeat kept advancing after kill_agent()"
             assert process.poll() is not None
         finally:
             if process.poll() is None:
-                await pm._stop_process_tree(bot_id="bot_123", process=process)
+                await pm._stop_process_tree(agent_id="agent_123", process=process)

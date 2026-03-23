@@ -1,0 +1,31 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #121923;
+  --panel2: #182231;
+  --text: #d7e4f3;
+  --muted: #8ea2b8;
+  --accent: #31c48d;
+  --border: #213247;
+  --danger: #ef6b73;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Fira Code", monospace;
+  padding: 20px;
+}
+
+a {
+  color: #b7f7dd;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}

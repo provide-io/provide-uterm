@@ -61,7 +61,7 @@ def test_hijack_acquire_requires_worker_id(wrangler_server: str) -> None:
     # depending on auth config; either way it must not be 500.
     import urllib.error
 
-    url = f"{wrangler_server}/worker/test-bot/hijack/acquire"
+    url = f"{wrangler_server}/worker/test-agent/hijack/acquire"
     data = json.dumps({"owner": "e2e-test", "lease_s": 10}).encode()
     req = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": "application/json"})  # noqa: S310
     try:

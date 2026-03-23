@@ -4,9 +4,9 @@
 #
 """Mutation-killing tests for provide.terminal.manager.process — supplemental batch (part 2).
 
-Classes: TestSpawnBotStateUpdate, TestSpawnBotErrorPath, TestSpawnSwarmExtra.
-See test_process_mutation_killing_3.py for: TestSpawnProcessExtra, TestKillBotExtra,
-TestReleaseBotAccountExtra, TestLaunchQueuedBotExtra.
+Classes: TestSpawnAgentStateUpdate, TestSpawnAgentErrorPath, TestSpawnSwarmExtra.
+See test_process_mutation_killing_3.py for: TestSpawnProcessExtra, TestKillAgentExtra,
+TestReleaseAgentAccountExtra, TestLaunchQueuedAgentExtra.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import SwarmManager
-from provide.terminal.manager.models import BotStatusBase
-from provide.terminal.manager.process import BotProcessManager
+from provide.terminal.manager.core import AgentManager
+from provide.terminal.manager.models import AgentStatusBase
+from provide.terminal.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -30,7 +30,7 @@ class FakeWorkerPlugin:
     def worker_module(self) -> str:
         return "test_module"
 
-    def configure_worker_env(self, env, bot_status, manager, **kwargs):
+    def configure_worker_env(self, env, agent_status, manager, **kwargs):
         env["CONFIGURED"] = "yes"
 
 
@@ -47,17 +47,17 @@ def config(tmp_path):
 
 @pytest.fixture
 def manager(config):
-    return SwarmManager(config)
+    return AgentManager(config)
 
 
 @pytest.fixture
 def pm(manager, tmp_path):
-    pm = BotProcessManager(
+    pm = AgentProcessManager(
         manager,
         worker_registry={"test_game": FakeWorkerPlugin()},
         log_dir=str(tmp_path / "logs"),
     )
-    manager.bot_process_manager = pm
+    manager.agent_process_manager = pm
     return pm
 
 
@@ -71,35 +71,35 @@ def make_mock_proc(pid=42, returncode=0):
 
 
 # ---------------------------------------------------------------------------
-# spawn_bot — state update block for existing bots (mutmut_116-118, 132-133)
+# spawn_agent — state update block for existing agents (mutmut_116-118, 132-133)
 # ---------------------------------------------------------------------------
-class TestSpawnBotStateUpdate:
+class TestSpawnAgentStateUpdate:
     @pytest.mark.asyncio
     async def test_last_update_time_set_not_none(self, pm, manager, tmp_path):
         """mutmut_116: last_update_time = None."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="queued", pid=0)
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="queued", pid=0)
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert manager.bots["bot_000"].last_update_time is not None
-        assert manager.bots["bot_000"].last_update_time > 0
+        assert manager.agents["agent_000"].last_update_time is not None
+        assert manager.agents["agent_000"].last_update_time > 0
 
     @pytest.mark.asyncio
     async def test_started_at_set_not_none(self, pm, manager, tmp_path):
-        """mutmut_117: started_at = None for existing bot branch."""
+        """mutmut_117: started_at = None for existing agent branch."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="queued", pid=0)
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="queued", pid=0)
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert manager.bots["bot_000"].started_at is not None
+        assert manager.agents["agent_000"].started_at is not None
 
     @pytest.mark.asyncio
     async def test_stopped_at_set_to_none_not_empty_string(self, pm, manager, tmp_path):
@@ -107,27 +107,27 @@ class TestSpawnBotStateUpdate:
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="queued", pid=0, stopped_at=9999.0)
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="queued", pid=0, stopped_at=9999.0)
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert manager.bots["bot_000"].stopped_at is None
+        assert manager.agents["agent_000"].stopped_at is None
 
     @pytest.mark.asyncio
     async def test_process_stored_in_processes_not_none(self, pm, manager, tmp_path):
-        """mutmut_132: processes[bot_id] = None."""
+        """mutmut_132: processes[agent_id] = None."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         proc = make_mock_proc(pid=99)
         with patch.object(pm, "_spawn_process", return_value=proc):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert "bot_000" in manager.processes
-        assert manager.processes["bot_000"] is not None
-        assert manager.processes["bot_000"] is proc
+        assert "agent_000" in manager.processes
+        assert manager.processes["agent_000"] is not None
+        assert manager.processes["agent_000"] is proc
 
     @pytest.mark.asyncio
     async def test_last_spawn_config_set_after_spawn(self, pm, manager, tmp_path):
@@ -137,64 +137,64 @@ class TestSpawnBotStateUpdate:
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
         assert pm._last_spawn_config == str(config)
 
     @pytest.mark.asyncio
-    async def test_new_bot_config_set_in_else_branch(self, pm, manager, tmp_path):
-        """mutmut_127: config=config_path omitted from _bot_status_class call in else branch."""
+    async def test_new_agent_config_set_in_else_branch(self, pm, manager, tmp_path):
+        """mutmut_127: config=config_path omitted from _agent_status_class call in else branch."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert "bot_000" in manager.bots
-        assert manager.bots["bot_000"].config == str(config)
+        assert "agent_000" in manager.agents
+        assert manager.agents["agent_000"].config == str(config)
 
     @pytest.mark.asyncio
-    async def test_new_bot_started_at_set_in_else_branch(self, pm, manager, tmp_path):
+    async def test_new_agent_started_at_set_in_else_branch(self, pm, manager, tmp_path):
         """mutmut_129: started_at=None in else branch."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert manager.bots["bot_000"].started_at is not None
+        assert manager.agents["agent_000"].started_at is not None
 
     @pytest.mark.asyncio
-    async def test_new_bot_state_is_running(self, pm, manager, tmp_path):
+    async def test_new_agent_state_is_running(self, pm, manager, tmp_path):
         """mutmut_122 (config=None), verify state='running' in else branch."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
-        assert manager.bots["bot_000"].state == "running"
+        assert manager.agents["agent_000"].state == "running"
 
     @pytest.mark.asyncio
-    async def test_return_value_is_bot_id(self, pm, manager, tmp_path):
-        """spawn_bot must return the bot_id string."""
+    async def test_return_value_is_agent_id(self, pm, manager, tmp_path):
+        """spawn_agent must return the agent_id string."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         with patch.object(pm, "_spawn_process", return_value=make_mock_proc()):
-            result = await pm.spawn_bot(str(config), "bot_007")
+            result = await pm.spawn_agent(str(config), "agent_007")
 
-        assert result == "bot_007"
+        assert result == "agent_007"
 
 
 # ---------------------------------------------------------------------------
-# spawn_bot — error path log messages (mutmut_142-150)
+# spawn_agent — error path log messages (mutmut_142-150)
 # ---------------------------------------------------------------------------
-class TestSpawnBotErrorPath:
+class TestSpawnAgentErrorPath:
     @pytest.mark.asyncio
     async def test_spawn_failure_raises_runtime_error(self, pm, manager, tmp_path):
         """mutmut_142-150: logger.exception arg mutations — still raises."""
@@ -203,9 +203,9 @@ class TestSpawnBotErrorPath:
 
         with (
             patch.object(pm, "_spawn_process", side_effect=OSError("boom")),
-            pytest.raises(RuntimeError, match="Failed to spawn bot"),
+            pytest.raises(RuntimeError, match="Failed to spawn agent"),
         ):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
     @pytest.mark.asyncio
     async def test_spawn_failure_error_message_contains_original(self, pm, manager, tmp_path):
@@ -217,7 +217,7 @@ class TestSpawnBotErrorPath:
             patch.object(pm, "_spawn_process", side_effect=OSError("specific_error_xyz")),
             pytest.raises(RuntimeError) as exc_info,
         ):
-            await pm.spawn_bot(str(config), "bot_000")
+            await pm.spawn_agent(str(config), "agent_000")
 
         assert "specific_error_xyz" in str(exc_info.value)
 
@@ -233,32 +233,32 @@ class TestSpawnSwarmExtra:
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
-        with patch.object(pm, "spawn_bot", new_callable=AsyncMock, return_value="bot_000"):
-            await pm.spawn_swarm([str(config)], name_style="prefix", name_base="mybot")
+        with patch.object(pm, "spawn_agent", new_callable=AsyncMock, return_value="agent_000"):
+            await pm.spawn_swarm([str(config)], name_style="prefix", name_base="myagent")
 
         assert pm._spawn_name_style == "prefix"
-        assert pm._spawn_name_base == "mybot"
+        assert pm._spawn_name_base == "myagent"
 
     @pytest.mark.asyncio
-    async def test_pre_registers_bots_as_queued(self, pm, manager, tmp_path):
-        """mutmut_10/11: pre-registration of bots as 'queued'."""
+    async def test_pre_registers_agents_as_queued(self, pm, manager, tmp_path):
+        """mutmut_10/11: pre-registration of agents as 'queued'."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
         captured_before_spawn = {}
-        orig_spawn = pm.spawn_bot
+        orig_spawn = pm.spawn_agent
         called = [False]
 
         async def spy(cfg, bid):
             if not called[0]:
                 called[0] = True
-                for k, v in manager.bots.items():
+                for k, v in manager.agents.items():
                     captured_before_spawn[k] = v.state
             return await orig_spawn(cfg, bid)
 
         with (
-            patch.object(pm, "spawn_bot", side_effect=spy),
+            patch.object(pm, "spawn_agent", side_effect=spy),
             patch.object(pm, "_spawn_process", return_value=make_mock_proc()),
         ):
             await pm.spawn_swarm([str(config), str(config)], group_size=2)
@@ -268,20 +268,20 @@ class TestSpawnSwarmExtra:
             assert state == "queued"
 
     @pytest.mark.asyncio
-    async def test_next_bot_index_advanced_by_total(self, pm, manager, tmp_path):
-        """mutmut_14/17: base_index or _next_bot_index mutations."""
+    async def test_next_agent_index_advanced_by_total(self, pm, manager, tmp_path):
+        """mutmut_14/17: base_index or _next_agent_index mutations."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
 
-        with patch.object(pm, "spawn_bot", new_callable=AsyncMock, return_value="bot_000"):
+        with patch.object(pm, "spawn_agent", new_callable=AsyncMock, return_value="agent_000"):
             await pm.spawn_swarm([str(config), str(config), str(config)])
 
-        assert pm._next_bot_index >= 3
+        assert pm._next_agent_index >= 3
 
     @pytest.mark.asyncio
-    async def test_bot_ids_use_base_index_format(self, pm, manager, tmp_path):
-        """mutmut_21/22: bot_id = f'bot_{base_index + i:03d}' format."""
+    async def test_agent_ids_use_base_index_format(self, pm, manager, tmp_path):
+        """mutmut_21/22: agent_id = f'agent_{base_index + i:03d}' format."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
@@ -291,13 +291,13 @@ class TestSpawnSwarmExtra:
             spawned.append(bid)
             return bid
 
-        with patch.object(pm, "spawn_bot", side_effect=spy):
+        with patch.object(pm, "spawn_agent", side_effect=spy):
             await pm.spawn_swarm([str(config), str(config)], group_size=2)
 
         import re
 
         for bid in spawned:
-            assert re.match(r"^bot_\d{3}$", bid)
+            assert re.match(r"^agent_\d{3}$", bid)
 
     @pytest.mark.asyncio
     async def test_group_end_uses_min(self, pm, manager, tmp_path):
@@ -322,14 +322,14 @@ class TestSpawnSwarmExtra:
         manager.broadcast_status = AsyncMock()
 
         spawned_configs = []
-        orig_spawn = pm.spawn_bot
+        orig_spawn = pm.spawn_agent
 
         async def spy(cfg, bid):
             spawned_configs.append(cfg)
             return await orig_spawn(cfg, bid)
 
         with (
-            patch.object(pm, "spawn_bot", side_effect=spy),
+            patch.object(pm, "spawn_agent", side_effect=spy),
             patch.object(pm, "_spawn_process", return_value=make_mock_proc()),
         ):
             await pm.spawn_swarm(
@@ -343,8 +343,8 @@ class TestSpawnSwarmExtra:
         assert str(config_c) in spawned_configs
 
     @pytest.mark.asyncio
-    async def test_returns_spawned_bot_ids(self, pm, manager, tmp_path):
-        """mutmut_60-74: return value / bot_ids list mutations."""
+    async def test_returns_spawned_agent_ids(self, pm, manager, tmp_path):
+        """mutmut_60-74: return value / agent_ids list mutations."""
         config = tmp_path / "cfg.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
@@ -356,7 +356,7 @@ class TestSpawnSwarmExtra:
         for bid in result:
             import re
 
-            assert re.match(r"^bot_\d{3}$", bid)
+            assert re.match(r"^agent_\d{3}$", bid)
 
     @pytest.mark.asyncio
     async def test_sleep_between_groups(self, pm, manager, tmp_path):

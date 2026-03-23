@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Generic screen parsing utilities for BBS terminals.
 
 Provides reusable screen parsing functions that can be used across different

@@ -79,7 +79,7 @@ dev = [
     "fastapi>=0.110",
     "httpx>=0.27",
     "hypothesis>=6.151.9",
-    "memray>=1.0",
+    "memray>=1.0; sys_platform != 'win32'",
     "mutmut>=3.3.1",
     "mypy>=1.19",
     "pip-audit>=2.7.0",
@@ -229,7 +229,7 @@ invalid-argument-type = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,src/provide/terminal/frontend/assets/*.js"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,src/provide/terminal/frontend/assets/*.js,mutants"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans"
 
 [tool.bandit]

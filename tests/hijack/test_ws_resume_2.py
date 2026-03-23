@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """WebSocket session resumption integration tests (part 2).
 
 Tests role restoration, open-mode guard, broadcast, and callback flows.

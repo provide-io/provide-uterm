@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """TermHub: in-memory registry for terminal WebSocket connections.
 
 Requires the ``websocket`` extra::

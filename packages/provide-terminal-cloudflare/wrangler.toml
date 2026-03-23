@@ -23,6 +23,7 @@ watch_dir = "../../src/provide/terminal/frontend"
 port = 8788
 
 [vars]
+ENVIRONMENT = "production"
 AUTH_MODE = "jwt"
 JWT_JWKS_URL = "https://neurotic.cloudflareaccess.com/cdn-cgi/access/certs"
 JWT_ISSUER = "https://neurotic.cloudflareaccess.com"

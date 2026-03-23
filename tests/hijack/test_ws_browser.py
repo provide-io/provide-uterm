@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Browser WebSocket edge-case tests: ownership, lease-touch, no-worker errors.
 
 Split from test_hijack_ws.py to keep files under 500 LOC.

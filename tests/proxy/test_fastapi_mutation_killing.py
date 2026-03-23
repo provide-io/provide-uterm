@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Mutation-killing tests for provide.terminal.fastapi.
 
 Kills surviving mutations in mount_terminal_ui (path default, frontend dir

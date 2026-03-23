@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Worker-side terminal bridge to a Swarm Manager.
 
 Connects a running worker process to the manager WebSocket endpoint
@@ -114,8 +113,8 @@ class TermBridge:
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
 
-    def __init__(self, bot: Any, worker_id: str, manager_url: str, *, max_ws_message_bytes: int = 1_048_576) -> None:
-        self._bot = bot
+    def __init__(self, worker: Any, worker_id: str, manager_url: str, *, max_ws_message_bytes: int = 1_048_576) -> None:
+        self._worker = worker
         self._worker_id = worker_id
         self._manager_url = manager_url
         self._max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
@@ -127,7 +126,7 @@ class TermBridge:
 
     def attach_session(self) -> None:
         """Attach a watcher to the worker's current session to forward terminal output."""
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None or self._attached_session is session:
             return
         self._attached_session = session
@@ -309,7 +308,7 @@ class TermBridge:
             await self._set_hijacked(False)
 
     async def _send_snapshot(self, ws: Any) -> None:
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None:
             return
         with contextlib.suppress(AttributeError, RuntimeError):
@@ -338,7 +337,7 @@ class TermBridge:
             return
 
     async def _send_keys(self, data: str) -> None:
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None:
             return
         try:
@@ -347,7 +346,7 @@ class TermBridge:
             logger.debug("_send_keys failed: %s", exc)
 
     async def _request_step(self) -> None:
-        fn = getattr(self._bot, "request_step", None)
+        fn = getattr(self._worker, "request_step", None)
         if callable(fn):
             try:
                 await fn()
@@ -355,7 +354,7 @@ class TermBridge:
                 logger.debug("_request_step failed: %s", exc)
 
     async def _set_size(self, cols: int, rows: int) -> None:
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None:
             return
         try:
@@ -364,7 +363,7 @@ class TermBridge:
             logger.debug("_set_size failed: %s", exc)
 
     async def _set_hijacked(self, enabled: bool) -> None:
-        fn = getattr(self._bot, "set_hijacked", None)
+        fn = getattr(self._worker, "set_hijacked", None)
         if callable(fn):
             try:
                 await fn(enabled)

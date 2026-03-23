@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Application factory for the generic swarm manager."""
 
 from __future__ import annotations
@@ -15,17 +14,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from provide.telemetry import get_logger
 
 from provide.terminal.manager.auth import setup_auth
-from provide.terminal.manager.core import SwarmManager
-from provide.terminal.manager.process import BotProcessManager
+from provide.terminal.manager.core import AgentManager
+from provide.terminal.manager.process import AgentProcessManager
 from provide.terminal.manager.routes import router as swarm_router
 
 if TYPE_CHECKING:
     from provide.terminal.manager.config import ManagerConfig
-    from provide.terminal.manager.models import BotStatusBase
+    from provide.terminal.manager.models import AgentStatusBase
     from provide.terminal.manager.protocols import (
         AccountPoolPlugin,
         IdentityStorePlugin,
-        ManagedBotPlugin,
+        ManagedAgentPlugin,
         StatusUpdatePlugin,
         TimeseriesPlugin,
         WorkerRegistryPlugin,
@@ -37,24 +36,24 @@ logger = get_logger(__name__)
 def create_manager_app(
     config: ManagerConfig,
     *,
-    bot_status_class: type[BotStatusBase] | None = None,
+    agent_status_class: type[AgentStatusBase] | None = None,
     worker_registry: dict[str, WorkerRegistryPlugin] | None = None,
     account_pool: AccountPoolPlugin | None = None,
     identity_store: IdentityStorePlugin | None = None,
-    managed_bot: ManagedBotPlugin | None = None,
+    managed_agent: ManagedAgentPlugin | None = None,
     status_update: StatusUpdatePlugin | None = None,
     timeseries: TimeseriesPlugin | None = None,
     swarm_status_builder: Any | None = None,
     extra_routers: list[APIRouter] | None = None,
-) -> tuple[FastAPI, SwarmManager]:
-    """Create a FastAPI application wired to a generic SwarmManager.
+) -> tuple[FastAPI, AgentManager]:
+    """Create a FastAPI application wired to a generic AgentManager.
 
     Returns ``(app, manager)`` so the caller can further customise
     either before starting the server.
     """
-    manager = SwarmManager(
+    manager = AgentManager(
         config,
-        bot_status_class=bot_status_class,
+        agent_status_class=agent_status_class,
         account_pool=account_pool,
         identity_store=identity_store,
         status_update=status_update,
@@ -62,12 +61,12 @@ def create_manager_app(
         swarm_status_builder=swarm_status_builder,
     )
 
-    process_mgr = BotProcessManager(
+    process_mgr = AgentProcessManager(
         manager,
         worker_registry=worker_registry,
         log_dir=config.log_dir,
     )
-    manager.bot_process_manager = process_mgr
+    manager.agent_process_manager = process_mgr
 
     app = FastAPI(title=config.title)
     manager.app = app
@@ -88,8 +87,8 @@ def create_manager_app(
 
     # Wire state
     app.state.swarm_manager = manager
-    if managed_bot is not None:
-        app.state.managed_bot_plugin = managed_bot
+    if managed_agent is not None:
+        app.state.managed_agent_plugin = managed_agent
 
     # Include routes
     app.include_router(swarm_router)
@@ -112,6 +111,20 @@ def create_manager_app(
             logger.exception("websocket_error", error=str(e))
             async with manager._ws_lock:
                 manager.websocket_clients.discard(websocket)
+
+    # WebSocket endpoint for MCP client lifecycle tracking
+    @app.websocket("/ws/mcp-client")
+    async def mcp_client_endpoint(websocket: WebSocket) -> None:
+        await websocket.accept()
+        await manager.register_mcp_client(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            await manager.unregister_mcp_client(websocket)
+        except Exception as e:  # pragma: no cover
+            logger.exception("mcp_client_websocket_error", error=str(e))
+            await manager.unregister_mcp_client(websocket)
 
     # Load persisted state
     manager._load_state()

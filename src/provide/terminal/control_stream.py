@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Inline control stream framing for mixed terminal data and control messages."""
 
 from __future__ import annotations
@@ -90,40 +89,54 @@ class ControlStreamDecoder:
 
     def _drain(self, *, final: bool) -> list[ControlStreamChunk]:
         events: list[ControlStreamChunk] = []
-        data_parts: list[str] = []
+        buf = self._buffer
+        buf_len = len(buf)
         idx = 0
+        # Accumulate plain data parts (slices + escaped DLEs) to join later.
+        data_parts: list[str] = []
+        data_start = 0  # start of current plain-data slice
 
-        while idx < len(self._buffer):
-            current = self._buffer[idx]
-            if current != DLE:
-                data_parts.append(current)
+        def _flush_data() -> None:
+            """Emit accumulated plain data as a single DataChunk."""
+            nonlocal data_start
+            if data_start < idx:
+                data_parts.append(buf[data_start:idx])
+            if data_parts:
+                events.append(DataChunk("".join(data_parts)))
+                data_parts.clear()
+            data_start = idx
+
+        while idx < buf_len:
+            if buf[idx] != DLE:
                 idx += 1
                 continue
 
-            if idx + 1 >= len(self._buffer):
+            if idx + 1 >= buf_len:
                 if final:
                     raise ControlStreamProtocolError("truncated control frame")
                 break
 
-            next_char = self._buffer[idx + 1]
+            next_char = buf[idx + 1]
             if next_char == DLE:
+                # Escaped DLE: save data slice before it, add literal DLE
+                if data_start < idx:  # pragma: no cover — edge case: DLE at buffer boundary
+                    data_parts.append(buf[data_start:idx])
                 data_parts.append(DLE)
                 idx += 2
+                data_start = idx
                 continue
             if next_char != STX:
                 raise ControlStreamProtocolError("invalid control prefix")
 
-            if data_parts:
-                events.append(DataChunk("".join(data_parts)))
-                data_parts = []
+            _flush_data()
 
-            if len(self._buffer) - idx < _HEADER_BYTES:
+            if buf_len - idx < _HEADER_BYTES:
                 if final:
                     raise ControlStreamProtocolError("truncated control frame")
                 break
 
-            length_hex = self._buffer[idx + 2 : idx + 10]
-            separator = self._buffer[idx + 10]
+            length_hex = buf[idx + 2 : idx + 10]
+            separator = buf[idx + 10]
             if separator != ":" or any(char not in _HEX_DIGITS for char in length_hex):
                 raise ControlStreamProtocolError("invalid control header")
 
@@ -132,12 +145,12 @@ class ControlStreamDecoder:
                 raise ControlStreamProtocolError("control payload too large")
 
             frame_end = idx + _HEADER_BYTES + payload_bytes
-            if len(self._buffer) < frame_end:
+            if buf_len < frame_end:
                 if final:
                     raise ControlStreamProtocolError("truncated control frame")
                 break
 
-            payload_raw = self._buffer[idx + _HEADER_BYTES : frame_end]
+            payload_raw = buf[idx + _HEADER_BYTES : frame_end]
             try:
                 payload = json.loads(payload_raw)
             except json.JSONDecodeError as exc:
@@ -146,9 +159,13 @@ class ControlStreamDecoder:
                 raise ControlStreamProtocolError("control payload must be an object")
             events.append(ControlChunk(payload))
             idx = frame_end
+            data_start = idx
 
         if idx > 0:
-            self._buffer = self._buffer[idx:]
+            self._buffer = buf[idx:]
+        # Emit trailing plain data.
+        if data_start < idx:
+            data_parts.append(buf[data_start:idx])
         if data_parts:
             events.append(DataChunk("".join(data_parts)))
         return events

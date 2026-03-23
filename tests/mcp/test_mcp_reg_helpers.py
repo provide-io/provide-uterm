@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """MCP regression tests — helper/utility edge cases: unescape_keys,
 clean_snapshot, key escape integration, CLI, and __init__ re-exports.
 

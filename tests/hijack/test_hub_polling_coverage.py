@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Polling coverage and regression tests for TermHub — mutation coverage.
 
 Separated from test_hub.py to maintain file size limits (<500 LOC per file).

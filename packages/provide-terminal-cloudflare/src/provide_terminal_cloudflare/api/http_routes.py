@@ -7,15 +7,37 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import parse_qs, urlparse
 
-from provide.terminal.hijack.rest_helpers import (
-    MAX_EXPECT_REGEX_LEN,
-    PromptRegexError,
-    build_hijack_events_response,
-    build_hijack_snapshot_response,
-    compile_expect_regex,
-    extract_prompt_id,
-    snapshot_matches,
-)
+try:
+    from provide.terminal.hijack.rest_helpers import (
+        MAX_EXPECT_REGEX_LEN,
+        PromptRegexError,
+        build_hijack_events_response,
+        build_hijack_snapshot_response,
+        compile_expect_regex,
+        extract_prompt_id,
+        snapshot_matches,
+    )
+except (ImportError, ModuleNotFoundError):
+    # Fallback for Cloudflare Durable Objects validation phase where
+    # provide.terminal modules are not in the import path yet.
+    # These will be imported at runtime when actually needed.
+    MAX_EXPECT_REGEX_LEN = 10000  # type: ignore[assignment]
+    PromptRegexError = Exception  # type: ignore[assignment]
+
+    def build_hijack_events_response(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("Should not be called during validation")
+
+    def build_hijack_snapshot_response(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("Should not be called during validation")
+
+    def compile_expect_regex(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("Should not be called during validation")
+
+    def extract_prompt_id(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("Should not be called during validation")
+
+    def snapshot_matches(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("Should not be called during validation")
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.contracts import RuntimeProtocol

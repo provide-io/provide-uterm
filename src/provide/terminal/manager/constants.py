@@ -2,12 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Timing constants for the swarm manager."""
 
 from __future__ import annotations
 
-# How long to wait after a bot's last heartbeat before declaring it dead.
+# How long to wait after an agent's last heartbeat before declaring it dead.
 HEARTBEAT_TIMEOUT_S: float = 60.0
 
 # How often the manager persists swarm state to disk.

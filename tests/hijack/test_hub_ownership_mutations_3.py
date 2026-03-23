@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Mutation-killing tests for hijack/hub/ownership.py — part 2.
 
 Covers get_hijack_events_data, check_hijack_valid, prepare_browser_input mutations.

@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Integration tests for the terminal hijack REST routes — advanced tests.
 
 Covers: snapshot, events, step, and send guard constraint tests.  Basic

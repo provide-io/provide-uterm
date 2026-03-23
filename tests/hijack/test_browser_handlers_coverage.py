@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Direct unit tests for browser_handlers.handle_browser_message.
 
 These tests call handle_browser_message with a real TermHub and mock WebSocket

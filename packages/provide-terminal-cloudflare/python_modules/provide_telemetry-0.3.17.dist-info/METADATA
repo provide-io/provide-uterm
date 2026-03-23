@@ -1,0 +1,142 @@
+Metadata-Version: 2.4
+Name: provide-telemetry
+Version: 0.3.17
+Summary: Unified telemetry library for the Provide ecosystem
+Author-email: tim <code@tim.life>
+License-Expression: Apache-2.0
+Project-URL: Homepage, https://github.com/provide-io/provide-telemetry
+Project-URL: Repository, https://github.com/provide-io/provide-telemetry
+Project-URL: Issues, https://github.com/provide-io/provide-telemetry/issues
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSES/Apache-2.0.txt
+Requires-Dist: structlog>=24.0.0
+Provides-Extra: otel
+Requires-Dist: opentelemetry-api>=1.27.0; extra == "otel"
+Requires-Dist: opentelemetry-sdk>=1.27.0; extra == "otel"
+Requires-Dist: opentelemetry-exporter-otlp-proto-http>=1.27.0; extra == "otel"
+Requires-Dist: opentelemetry-instrumentation-logging>=0.61b0; extra == "otel"
+Provides-Extra: fastapi
+Requires-Dist: fastapi>=0.115.0; extra == "fastapi"
+Requires-Dist: starlette>=0.40.0; extra == "fastapi"
+Provides-Extra: all
+Requires-Dist: provide-telemetry[fastapi,otel]; extra == "all"
+Dynamic: license-file
+
+# provide-telemetry
+
+Unified telemetry package for the Provide ecosystem.
+
+## Install
+
+```bash
+pip install provide-telemetry
+```
+
+Optional extras:
+
+```bash
+pip install "provide-telemetry[otel]"
+```
+
+## API
+
+```python
+from provide.telemetry import (
+    setup_telemetry,
+    get_logger, logger,
+    trace, tracer, get_tracer,
+    counter, gauge, histogram, get_meter,
+    TelemetryMiddleware,
+)
+```
+
+## Runtime Config API
+
+- `update_runtime_config(config)` applies a config and returns the active runtime snapshot.
+- `reload_runtime_from_env()` reloads env config, applies it, and returns the active runtime snapshot.
+- `get_runtime_config()` returns a defensive copy of the active runtime snapshot.
+- `reconfigure_telemetry(config)` only applies hot runtime policy changes in-process; provider-changing OpenTelemetry reconfiguration requires a process restart once providers have been installed.
+
+## Quick Start
+
+```python
+from provide.telemetry import setup_telemetry, shutdown_telemetry, get_logger
+
+setup_telemetry()
+log = get_logger(__name__)
+log.info("app.start.ok", request_id="req-1")
+shutdown_telemetry()
+```
+
+## Environment Variables
+
+The most commonly set variables:
+
+- `PROVIDE_TELEMETRY_SERVICE_NAME` — service identity (default: `provide-service`)
+- `PROVIDE_LOG_LEVEL` — log level (default: `INFO`)
+- `PROVIDE_LOG_FORMAT` — renderer: `console`, `json`, or `pretty` (default: `console`)
+
+See the [Configuration Reference](docs/CONFIGURATION.md) for all 60+ environment variables with types and defaults.
+
+## Event Naming Rule
+
+Event names are strict: 3-5 dot-separated segments (last segment is status by convention).
+If you build names dynamically, use `provide.telemetry.event_name(*segments)`.
+
+```python
+from provide.telemetry import event_name, get_logger
+
+log = get_logger(__name__)
+log.info(event_name("auth", "login", "success"), user_id="u-123")
+log.info(event_name("auth", "login", "failed"), reason="bad_password")
+```
+
+## OpenObserve Quick Verification
+
+```bash
+export OPENOBSERVE_URL=http://localhost:5080/api/default
+export OPENOBSERVE_USER=user@example.com
+export OPENOBSERVE_PASSWORD=password
+export OPENOBSERVE_REQUIRED_SIGNALS=logs
+uv run --group dev --extra otel python examples/openobserve/01_emit_all_signals.py
+uv run --group dev --extra otel python examples/openobserve/02_verify_ingestion.py
+```
+
+Set `OPENOBSERVE_REQUIRED_SIGNALS=logs,metrics,traces` when your runtime has OTel extras and you want hard all-signal verification.
+
+Script references:
+
+- [Emit all signals example](https://github.com/provide-io/provide-telemetry/blob/main/examples/openobserve/01_emit_all_signals.py)
+- [Verify ingestion example](https://github.com/provide-io/provide-telemetry/blob/main/examples/openobserve/02_verify_ingestion.py)
+
+## Quality Guarantees
+
+- Baseline test gate runs at `100%` branch coverage (`--cov-branch`).
+- Mutation gate enforces `--min-mutation-score 100`.
+- Mutation policy is pinned in `.ci/pymutant-profiles.json` (`min_score: 1.0`, `max_drop_from_baseline: 0.0`) with baseline score in `.ci/pymutant-policy-baseline.json`.
+- CI validates linting, typing, security, compliance, examples, and integration slices.
+- Async-safe default exporter policy keeps retries/backoff at zero; non-zero async retry behavior is opt-in via `PROVIDE_EXPORTER_*_ALLOW_BLOCKING_EVENT_LOOP=true`.
+- Exporter timeout settings are enforced both in OTLP exporter construction and per-attempt resilience execution bounds.
+
+## Documentation Ownership
+
+- README: onboarding and first successful local/backend verification.
+- Operations: full CQ matrix, troubleshooting, and environment operations.
+- Conventions: event/schema rules and naming standards.
+- Release: packaging/tagging/publishing workflow.
+
+## Docs
+
+- [Configuration Reference](https://github.com/provide-io/provide-telemetry/blob/main/docs/CONFIGURATION.md)
+- [API Reference](https://github.com/provide-io/provide-telemetry/blob/main/docs/API.md)
+- [Internals](https://github.com/provide-io/provide-telemetry/blob/main/docs/INTERNALS.md)
+- [Operations Runbook](https://github.com/provide-io/provide-telemetry/blob/main/docs/OPERATIONS.md)
+- [Production Profiles](https://github.com/provide-io/provide-telemetry/blob/main/docs/PRODUCTION_PROFILES.md)
+- [Architecture](https://github.com/provide-io/provide-telemetry/blob/main/docs/ARCHITECTURE.md)
+- [Telemetry Conventions](https://github.com/provide-io/provide-telemetry/blob/main/docs/CONVENTIONS.md)
+- [Compliance Notes](https://github.com/provide-io/provide-telemetry/blob/main/docs/COMPLIANCE.md)
+- [Release Runbook](https://github.com/provide-io/provide-telemetry/blob/main/docs/RELEASE.md)
+- [Examples](https://github.com/provide-io/provide-telemetry/blob/main/examples/README.md)
+- [Main CI Workflow](https://github.com/provide-io/provide-telemetry/blob/main/.github/workflows/ci.yml)
+- [Release Workflow](https://github.com/provide-io/provide-telemetry/blob/main/.github/workflows/release.yml)

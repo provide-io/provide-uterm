@@ -2,7 +2,7 @@
 
 This change set hardens three internal areas without changing external HTTP, WS, CLI, or MCP contracts.
 
-## Bot lifecycle
+## Agent lifecycle
 
 - Worker subprocesses now launch in their own process session/group.
 - All manager teardown paths route through one shared stop helper.
@@ -11,7 +11,7 @@ This change set hardens three internal areas without changing external HTTP, WS,
 
 Operational impact:
 
-- A bot that spawns descendants is now torn down as a tree instead of only killing the direct parent PID.
+- An agent that spawns descendants is now torn down as a tree instead of only killing the direct parent PID.
 - The heartbeat timeout, bust-respawn, prune, and explicit kill paths now use the same shutdown behavior.
 
 ## Hijack REST parity
@@ -38,7 +38,7 @@ Operational impact:
 
 - Targeted manager, hijack, websocket, and Cloudflare tests pass.
 - Touched modules pass `mypy`.
-- A POSIX integration test verifies that `kill_bot()` stops a parent process and its spawned child subtree.
+- A POSIX integration test verifies that `kill_agent()` stops a parent process and its spawned child subtree.
 
 ## Known limitation
 

@@ -70,6 +70,11 @@ export class ProvideHijack {
   private _resumeToken: string | null = null;
   private _resumeSupported = false;
   private _mobileKeysVisible = false;
+  private _lastLocalEcho = "";
+  private _lastLocalEchoTimer: ReturnType<typeof setTimeout> | null = null;
+  private _activityFlashTimer: ReturnType<typeof setTimeout> | null = null;
+  private _indicatorStyleCache: string | null = null;
+  private _statusDotElement: HTMLElement | null = null;
   private _root: HTMLElement | null = null;
 
   /**
@@ -129,11 +134,21 @@ export class ProvideHijack {
   /** Tear down entirely: xterm, WebSocket, ResizeObserver, and DOM. */
   dispose(): void {
     this.disconnect(); // handles _ro, _heartbeatTimer, _ws, _reconnectTimer
+    if (this._lastLocalEchoTimer) {
+      clearTimeout(this._lastLocalEchoTimer);
+      this._lastLocalEchoTimer = null;
+    }
+    if (this._activityFlashTimer) {
+      clearTimeout(this._activityFlashTimer);
+      this._activityFlashTimer = null;
+    }
     if (this._term) {
       this._term.dispose();
       this._term = null;
     }
     this._fitAddon = null;
+    this._statusDotElement = null;
+    this._indicatorStyleCache = null;
     if (this._root?.parentNode) {
       this._root.parentNode.removeChild(this._root);
     }
@@ -308,6 +323,9 @@ export class ProvideHijack {
         return;
       }
       if (this._inputMode !== "open" && !this._hijackedByMe) return;
+      // Echo locally immediately and show activity indicator
+      this._echoInput(data);
+      // Send to server asynchronously
       this._wsSend({ type: "input", data });
     });
 
@@ -475,6 +493,72 @@ export class ProvideHijack {
     }
   }
 
+  /** Get the configured indicator style (cached, defaults to "dot"). */
+  private _getIndicatorStyle(): string {
+    if (this._indicatorStyleCache !== null) return this._indicatorStyleCache;
+    const VALID_STYLES = new Set(["dot", "pulse", "both"]);
+    try {
+      // Try localStorage first
+      const stored = localStorage.getItem("provide_hijack_indicator_style");
+      if (stored && VALID_STYLES.has(stored)) {
+        this._indicatorStyleCache = stored;
+        return stored;
+      }
+      // Fall back to environment variable
+      const envStr = (globalThis as Record<string, unknown>).HIJACK_INDICATOR_STYLE as string | undefined;
+      if (envStr && VALID_STYLES.has(envStr)) {
+        this._indicatorStyleCache = envStr;
+        return envStr;
+      }
+    } catch (_) {
+      // Ignore localStorage errors
+    }
+    this._indicatorStyleCache = "dot";
+    return "dot"; // safe default
+  }
+
+  /** Show activity indicator with the configured style (reuses DOM reference and timeout). */
+  private _showActivityIndicator(): void {
+    // Cache dot element on first use
+    if (!this._statusDotElement) {
+      this._statusDotElement = this._q("dot");
+    }
+    const dot = this._statusDotElement;
+    if (!dot) return;
+
+    // Clear any pending flash removal
+    if (this._activityFlashTimer) clearTimeout(this._activityFlashTimer);
+
+    // Flash the status dot green with glow
+    dot.classList.add("activity-flash");
+
+    // Schedule removal of animation class after 200ms (reuse single timeout)
+    this._activityFlashTimer = setTimeout(() => {
+      dot.classList.remove("activity-flash");
+      this._activityFlashTimer = null;
+    }, 200);
+  }
+
+  /** Echo input locally to xterm and show activity indicator. */
+  private _echoInput(data: string): void {
+    // Write keystroke immediately to xterm (optimistic echo)
+    try {
+      this._ensureTerm().write(data);
+    } catch (_) {
+      // If xterm write fails, just send to server
+    }
+    // Track the local echo to deduplicate server response
+    this._lastLocalEcho = data;
+    // Clear the tracking after 500ms (timeout in case server doesn't echo)
+    if (this._lastLocalEchoTimer) clearTimeout(this._lastLocalEchoTimer);
+    this._lastLocalEchoTimer = setTimeout(() => {
+      this._lastLocalEcho = "";
+      this._lastLocalEchoTimer = null;
+    }, 500);
+    // Show activity indicator
+    this._showActivityIndicator();
+  }
+
   private _buildMobileKeys(): void {
     const container = this._q("mobilekeys");
     if (!container) return;
@@ -495,6 +579,10 @@ export class ProvideHijack {
       btn.textContent = label;
       btn.addEventListener("click", () => {
         if (this._inputMode !== "open" && !this._hijackedByMe) return;
+        if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+        // Echo locally and show activity indicator
+        this._echoInput(data);
+        // Send to server asynchronously
         this._wsSend({ type: "input", data });
       });
       container.appendChild(btn);
@@ -508,8 +596,15 @@ export class ProvideHijack {
       case "term":
         this._workerOnline = true;
         if (msg.data) {
+          const incomingData = msg.data as string;
+          // Deduplicate: if this matches our local echo, skip rendering to avoid double-echo
+          if (incomingData === this._lastLocalEcho) {
+            this._lastLocalEcho = "";
+            // Still mark as online, but don't render
+            break;
+          }
           try {
-            this._ensureTerm().write(msg.data as string);
+            this._ensureTerm().write(incomingData);
           } catch (_) {}
         }
         break;
@@ -771,6 +866,9 @@ export class ProvideHijack {
         if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
         // Unescape \\r → \r, \\n → \n, \\t → \t, \\e → ESC
         const data = raw.replace(/\\r/g, "\r").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\e/g, "\x1b");
+        // Echo locally and show activity indicator
+        this._echoInput(data);
+        // Send to server asynchronously
         this._wsSend({ type: "input", data });
         inputField.value = "";
         try {
