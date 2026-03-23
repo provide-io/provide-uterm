@@ -1,6 +1,7 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-
+#
 """Additional route tests — plugin paths, config validation, edge cases."""
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from provide.terminal.manager.app import create_manager_app
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.models import BotStatusBase
+from provide.terminal.manager.models import AgentStatusBase
 from provide.terminal.manager.routes.spawn import _validate_config_path
 
 
@@ -98,148 +99,148 @@ class TestSpawnRoute:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total_bots"] == 1
-        assert manager.desired_bots == 1
+        assert data["total_agents"] == 1
+        assert manager.desired_agents == 1
 
 
-class TestKillBotWithProcess:
-    def test_kill_running_bot_with_process(self, client, manager):
+class TestKillAgentWithProcess:
+    def test_kill_running_agent_with_process(self, client, manager):
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
-        manager.processes["bot_000"] = mock_proc
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.desired_bots = 2
-        manager.kill_bot = AsyncMock()
-        resp = client.delete("/bot/bot_000")
+        manager.processes["agent_000"] = mock_proc
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.desired_agents = 2
+        manager.kill_agent = AsyncMock()
+        resp = client.delete("/agent/agent_000")
         assert resp.status_code == 200
-        assert manager.desired_bots == 1  # decremented
+        assert manager.desired_agents == 1  # decremented
 
 
 class TestPluginIntegration:
-    def test_bot_status_with_plugin(self, config):
+    def test_agent_status_with_plugin(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (None, None)
+        plugin.resolve_local_agent.return_value = (None, None)
         plugin.describe_runtime.return_value = None
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.get("/bot/bot_000/status")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.get("/agent/agent_000/status")
         assert resp.status_code == 200
 
-    def test_bot_details_with_plugin(self, config):
+    def test_agent_details_with_plugin(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.build_details.return_value = {"custom": True}
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.get("/bot/bot_000/details")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.get("/agent/agent_000/details")
         assert resp.status_code == 200
         assert resp.json()["custom"] is True
 
-    def test_set_goal_with_local_bot(self, config):
+    def test_set_goal_with_local_agent(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"ok": True})
         plugin.build_action_response.return_value = {"action": "set_goal", "applied": True}
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/set-goal?goal=trade")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/set-goal?goal=trade")
         assert resp.status_code == 200
 
     def test_set_goal_with_local_error(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"error": "not supported"})
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/set-goal?goal=trade")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/set-goal?goal=trade")
         assert resp.status_code == 400
 
-    def test_set_directive_with_local_bot(self, config):
+    def test_set_directive_with_local_agent(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"directive": "go", "turns": 5})
         plugin.build_action_response.return_value = {"action": "set_directive", "applied": True}
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/set-directive", json={"directive": "go", "turns": 5})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/set-directive", json={"directive": "go", "turns": 5})
         assert resp.status_code == 200
 
     def test_set_directive_with_local_error(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"error": "nope"})
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/set-directive", json={"directive": "go"})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/set-directive", json={"directive": "go"})
         assert resp.status_code == 400
 
-    def test_pause_with_local_bot(self, config):
+    def test_pause_with_local_agent(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"paused": True})
         plugin.build_action_response.return_value = {"action": "pause", "applied": True}
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/pause")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/pause")
         assert resp.status_code == 200
 
     def test_pause_with_local_error(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"error": "nope"})
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/pause")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/pause")
         assert resp.status_code == 400
 
-    def test_resume_with_local_bot(self, config):
+    def test_resume_with_local_agent(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"paused": False})
         plugin.build_action_response.return_value = {"action": "resume", "applied": True}
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running", paused=True)
-        resp = client.post("/bot/bot_000/resume")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running", paused=True)
+        resp = client.post("/agent/agent_000/resume")
         assert resp.status_code == 200
 
     def test_resume_with_local_error(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"error": "nope"})
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running", paused=True)
-        resp = client.post("/bot/bot_000/resume")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running", paused=True)
+        resp = client.post("/agent/agent_000/resume")
         assert resp.status_code == 400
 
-    def test_restart_with_local_bot(self, config):
+    def test_restart_with_local_agent(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"restarted": True})
         plugin.build_action_response.return_value = {"action": "restart", "applied": True}
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/restart")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/restart")
         assert resp.status_code == 200
 
     def test_restart_with_local_error(self, config):
         plugin = MagicMock()
-        plugin.resolve_local_bot.return_value = (MagicMock(), "sess_1")
+        plugin.resolve_local_agent.return_value = (MagicMock(), "sess_1")
         plugin.dispatch_command = AsyncMock(return_value={"error": "fail"})
-        app, manager = create_manager_app(config, managed_bot=plugin)
+        app, manager = create_manager_app(config, managed_agent=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/restart")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/restart")
         assert resp.status_code == 400
 
 
@@ -248,8 +249,8 @@ class TestStatusUpdateWithPlugin:
         plugin = MagicMock()
         app, manager = create_manager_app(config, status_update=plugin)
         client = TestClient(app)
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        resp = client.post("/bot/bot_000/status", json={"state": "recovering"})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/status", json={"state": "recovering"})
         assert resp.status_code == 200
         plugin.apply_update.assert_called_once()
 
@@ -258,29 +259,29 @@ class TestSessionDataWithPlugin:
     def test_identity_store_with_model_dump(self, config):
         store = MagicMock()
         record = MagicMock()
-        record.model_dump.return_value = {"bot_id": "bot_000", "sessions": []}
+        record.model_dump.return_value = {"agent_id": "agent_000", "sessions": []}
         store.load.return_value = record
         app, manager = create_manager_app(config, identity_store=store)
         client = TestClient(app)
-        resp = client.get("/bot/bot_000/session-data")
+        resp = client.get("/agent/agent_000/session-data")
         assert resp.status_code == 200
-        assert resp.json()["bot_id"] == "bot_000"
+        assert resp.json()["agent_id"] == "agent_000"
 
     def test_identity_store_with_dict(self, config):
         store = MagicMock()
         # Return a plain dict (no model_dump method)
-        plain_dict = {"bot_id": "bot_000"}
+        plain_dict = {"agent_id": "agent_000"}
         store.load.return_value = plain_dict
         app, manager = create_manager_app(config, identity_store=store)
         client = TestClient(app)
-        resp = client.get("/bot/bot_000/session-data")
+        resp = client.get("/agent/agent_000/session-data")
         assert resp.status_code == 200
 
 
-class TestBotEventsWithActions:
+class TestAgentEventsWithActions:
     def test_events_with_recent_actions(self, client, manager):
-        bot = BotStatusBase(
-            bot_id="bot_000",
+        agent = AgentStatusBase(
+            agent_id="agent_000",
             state="running",
             last_update_time=100.0,
             recent_actions=[
@@ -291,8 +292,8 @@ class TestBotEventsWithActions:
             error_type="TestError",
             error_message="test error",
         )
-        manager.bots["bot_000"] = bot
-        resp = client.get("/bot/bot_000/events")
+        manager.agents["agent_000"] = agent
+        resp = client.get("/agent/agent_000/events")
         assert resp.status_code == 200
         events = resp.json()["events"]
         assert len(events) == 3  # 2 actions + 1 error

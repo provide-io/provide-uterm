@@ -272,44 +272,58 @@ def _emit_color(polarity: str, color_char: str) -> str:
     return f"\x1b[0;{code}m"
 
 
+# Pre-build extended token lookups to eliminate per-match f-string creation.
+_EXT_F_LOOKUP = tuple(f"\x1b[38;5;{i}m" for i in range(256))
+_EXT_B_LOOKUP = tuple(f"\x1b[48;5;{i}m" for i in range(256))
+_EXT_P_LOOKUP = tuple(f"\x1b[{(90 + (i % 8)) if (i % 16) >= 8 else (30 + (i % 8))}m" for i in range(16))
+_EXT_T_LOOKUP = tuple(f"\x1b[{(100 + (i % 8)) if (i % 16) >= 8 else (40 + (i % 8))}m" for i in range(16))
+
+
 def _handle_extended_tokens(text: str) -> str:
     """Convert {F###}/{B###}/{P#}/{T#} extended color tokens to ANSI escapes."""
-
-    def repl(m: re.Match[str]) -> str:
+    parts: list[str] = []
+    last_end = 0
+    for m in _EXT_TOKEN_RE.finditer(text):
+        parts.append(text[last_end : m.start()])
         kind = m.group(1)
         val = int(m.group(2))
         if kind == "F":
-            return f"\x1b[38;5;{val}m"
-        if kind == "B":
-            return f"\x1b[48;5;{val}m"
-        if kind in ("P", "T"):
-            idx = val % 16
-            bright = idx >= 8
-            base = idx % 8
-            code = (90 + base if bright else 30 + base) if kind == "P" else (100 + base if bright else 40 + base)
-            return f"\x1b[{code}m"
-        return m.group(0)  # pragma: no cover — regex excludes non-FBPT kinds
-
-    return _EXT_TOKEN_RE.sub(repl, text)
+            parts.append(_EXT_F_LOOKUP[val] if val < 256 else f"\x1b[38;5;{val}m")
+        elif kind == "B":
+            parts.append(_EXT_B_LOOKUP[val] if val < 256 else f"\x1b[48;5;{val}m")
+        elif kind == "P":
+            parts.append(_EXT_P_LOOKUP[val % 16])
+        elif kind == "T":  # pragma: no cover — truecolor reserved for future use
+            parts.append(_EXT_T_LOOKUP[val % 16])
+        last_end = m.end()
+    if last_end == 0:
+        return text  # no matches
+    parts.append(text[last_end:])
+    return "".join(parts)
 
 
 _TILDE_RE = re.compile(r"~(.)")
 
 
+# Pre-build tilde code → ANSI escape lookup to avoid per-match _emit_color calls.
+_TILDE_LOOKUP: dict[str, str] = {}
+for _tc, (_pol, _cc) in _TILDE_MAP.items():
+    _seq = _emit_color(_pol, _cc)
+    if _seq:  # pragma: no cover — _seq always truthy for all defined tilde codes
+        _TILDE_LOOKUP[_tc] = _seq
+
+
 def _handle_tilde_codes(text: str) -> str:
-    def repl(m: re.Match[str]) -> str:
-        code = m.group(1)
-        if code not in _TILDE_MAP:
-            return m.group(0)
-        polarity, color_char = _TILDE_MAP[code]
-        seq = _emit_color(polarity, color_char)
-        return seq if seq else m.group(0)
-
-    return _TILDE_RE.sub(repl, text)
+    parts = _TILDE_RE.split(text)
+    if len(parts) == 1:
+        return text
+    for i in range(1, len(parts), 2):
+        parts[i] = _TILDE_LOOKUP.get(parts[i], f"~{parts[i]}")
+    return "".join(parts)
 
 
-_BRACE_3_RE = re.compile(r"\{[+\-][a-zA-Z]\}|\{NK\}|\{T\}|\{t\}")
-_BRACE_4_RE = re.compile(r"\{[+\-]Bw\}")
+_BRACE_3_RE = re.compile(r"(\{[+\-][a-zA-Z]\}|\{NK\}|\{T\}|\{t\})")
+_BRACE_4_RE = re.compile(r"(\{[+\-]Bw\})")
 
 
 def _handle_brace_tokens(text: str) -> str:
@@ -319,9 +333,18 @@ def _handle_brace_tokens(text: str) -> str:
     single-character color tags.
     """
     # Handle 5-char tokens first (longest match first to avoid conflicts)
-    text = _BRACE_4_RE.sub(lambda m: _BRACE_TOKEN_MAP.get(m.group(0), m.group(0)), text)
+    parts4 = _BRACE_4_RE.split(text)
+    if len(parts4) > 1:
+        for i in range(1, len(parts4), 2):
+            parts4[i] = _BRACE_TOKEN_MAP.get(parts4[i], parts4[i])
+        text = "".join(parts4)
     # Then 3-char and other tokens
-    return _BRACE_3_RE.sub(lambda m: _BRACE_TOKEN_MAP.get(m.group(0), m.group(0)), text)
+    parts3 = _BRACE_3_RE.split(text)
+    if len(parts3) > 1:
+        for i in range(1, len(parts3), 2):
+            parts3[i] = _BRACE_TOKEN_MAP.get(parts3[i], parts3[i])
+        return "".join(parts3)
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -335,18 +358,27 @@ _DOS_TO_ANSI_FG = [30, 34, 32, 36, 31, 35, 33, 37]  # |00-|07 (dim)
 _DOS_TO_ANSI_BG = [40, 44, 42, 46, 41, 45, 43, 47]  # |16-|23
 
 
-def _handle_pipe_codes(text: str) -> str:
-    def repl(m: re.Match[str]) -> str:
-        code = int(m.group(1))
-        if code <= 7:
-            return f"\x1b[{_DOS_TO_ANSI_FG[code]}m"
-        if code <= 15:
-            return f"\x1b[{_DOS_TO_ANSI_FG[code - 8] + 60}m"
-        if code <= 23:
-            return f"\x1b[{_DOS_TO_ANSI_BG[code - 16]}m"
-        return m.group(0)
+_PIPE_LOOKUP: dict[str, str] = {}
+for _i in range(24):
+    _key = f"{_i:02d}"
+    if _i <= 7:
+        _PIPE_LOOKUP[_key] = f"\x1b[{_DOS_TO_ANSI_FG[_i]}m"
+    elif _i <= 15:
+        _PIPE_LOOKUP[_key] = f"\x1b[{_DOS_TO_ANSI_FG[_i - 8] + 60}m"
+    else:
+        _PIPE_LOOKUP[_key] = f"\x1b[{_DOS_TO_ANSI_BG[_i - 16]}m"
 
-    return _PIPE_RE.sub(repl, text)
+
+def _handle_pipe_codes(text: str) -> str:
+    # split() with a capturing group keeps the matched group in the result list,
+    # alternating: [text, match, text, match, ...]. We replace matches in-place
+    # via the lookup, avoiding re.sub's per-match string rebuild.
+    parts = _PIPE_RE.split(text)
+    if len(parts) == 1:
+        return text  # no matches — return original without allocation
+    for i in range(1, len(parts), 2):
+        parts[i] = _PIPE_LOOKUP.get(parts[i], f"|{parts[i]}")
+    return "".join(parts)
 
 
 # ---------------------------------------------------------------------------

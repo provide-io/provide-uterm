@@ -23,12 +23,10 @@ classifiers = [
 ]
 dependencies = [
   "pyjwt>=2.9",
+  "provide-terminal>=0.3.0",
 ]
 
 [project.optional-dependencies]
-ui = [
-  "provide-terminal",
-]
 dev = [
   "pytest>=9.0",
   "pytest-asyncio>=1.3",

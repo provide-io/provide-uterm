@@ -38,7 +38,7 @@ def test_query_token_disabled_in_production_by_default() -> None:
 def test_session_runtime_extract_token_respects_query_policy() -> None:
     runtime = object.__new__(SessionRuntime)
     runtime.config = SimpleNamespace(jwt=SimpleNamespace(allow_query_token=False))
-    request = _Req("https://example.invalid/ws/browser/bot1/term?token=abc123")
+    request = _Req("https://example.invalid/ws/browser/agent1/term?token=abc123")
     assert runtime._extract_token(request) is None
 
 

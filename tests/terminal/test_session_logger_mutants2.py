@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Additional mutation-killing tests for SessionLogger (session_logger.py).
 
 Targets survived mutants not killed by test_session_logger_mutation_killing.py.

@@ -2,10 +2,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for manager/routes/bot_ops.py helper functions (part 2).
+"""Mutation-killing tests for manager/routes/agent_ops.py helper functions (part 2).
 
 Classes: TestCancelPendingCommandMutationKilling, TestBuildActionResponseMutationKilling,
-         TestBotOpsRouteMutationKilling.
+         TestAgentOpsRouteMutationKilling.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 
 from provide.terminal.manager.app import create_manager_app
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.models import BotStatusBase
-from provide.terminal.manager.routes.bot_ops import (
+from provide.terminal.manager.models import AgentStatusBase
+from provide.terminal.manager.routes.agent_ops import (
     _build_action_response,
     _cancel_pending_manager_command,
     _command_history_rows,
@@ -31,8 +31,8 @@ from provide.terminal.manager.routes.bot_ops import (
 
 
 @pytest.fixture
-def bot() -> BotStatusBase:
-    return BotStatusBase(bot_id="bot_001", state="running")
+def agent() -> AgentStatusBase:
+    return AgentStatusBase(agent_id="agent_001", state="running")
 
 
 @pytest.fixture
@@ -67,99 +67,99 @@ def manager(app_and_manager):
 
 
 class TestCancelPendingCommandMutationKilling:
-    def test_returns_none_when_no_pending(self, bot):
+    def test_returns_none_when_no_pending(self, agent):
         """Returns None when no pending command."""
-        result = _cancel_pending_manager_command(bot)
+        result = _cancel_pending_manager_command(agent)
         assert result is None
 
-    def test_returns_none_when_seq_zero(self, bot):
+    def test_returns_none_when_seq_zero(self, agent):
         """Returns None when pending_seq is 0 (mutmut_1: < 0 would return None for seq=0 but execute for seq=0)."""
-        bot.pending_command_seq = 0
-        bot.pending_command_type = None
-        result = _cancel_pending_manager_command(bot)
+        agent.pending_command_seq = 0
+        agent.pending_command_type = None
+        result = _cancel_pending_manager_command(agent)
         assert result is None
 
-    def test_returns_none_when_type_empty(self, bot):
+    def test_returns_none_when_type_empty(self, agent):
         """Returns None when pending_type is empty (mutmut_8 may skip type check)."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = ""
-        result = _cancel_pending_manager_command(bot)
+        agent.pending_command_seq = 1
+        agent.pending_command_type = ""
+        result = _cancel_pending_manager_command(agent)
         assert result is None
 
-    def test_cancel_returns_correct_seq(self, bot):
+    def test_cancel_returns_correct_seq(self, agent):
         """Cancelled dict has correct seq (mutmut_11)."""
-        bot.pending_command_seq = 3
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {"goal": "x"}
-        result = _cancel_pending_manager_command(bot)
+        agent.pending_command_seq = 3
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {"goal": "x"}
+        result = _cancel_pending_manager_command(agent)
         assert result is not None
         assert result["seq"] == 3
 
-    def test_cancel_returns_correct_type(self, bot):
+    def test_cancel_returns_correct_type(self, agent):
         """Cancelled dict has correct type (mutmut_14/15)."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = "set_directive"
-        bot.pending_command_payload = {}
-        result = _cancel_pending_manager_command(bot)
+        agent.pending_command_seq = 1
+        agent.pending_command_type = "set_directive"
+        agent.pending_command_payload = {}
+        result = _cancel_pending_manager_command(agent)
         assert result is not None
         assert result["type"] == "set_directive"
 
-    def test_cancel_returns_correct_payload(self, bot):
+    def test_cancel_returns_correct_payload(self, agent):
         """Cancelled dict has correct payload (mutmut_17)."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {"goal": "explore", "extra": 42}
-        result = _cancel_pending_manager_command(bot)
+        agent.pending_command_seq = 1
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {"goal": "explore", "extra": 42}
+        result = _cancel_pending_manager_command(agent)
         assert result is not None
         assert result["payload"] == {"goal": "explore", "extra": 42}
 
-    def test_cancel_returns_reason(self, bot):
+    def test_cancel_returns_reason(self, agent):
         """Cancelled dict has cancelled_reason (mutmut_21)."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {}
-        result = _cancel_pending_manager_command(bot, "test_reason")
+        agent.pending_command_seq = 1
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {}
+        result = _cancel_pending_manager_command(agent, "test_reason")
         assert result is not None
         assert result["cancelled_reason"] == "test_reason"
 
-    def test_cancel_clears_pending_seq(self, bot):
+    def test_cancel_clears_pending_seq(self, agent):
         """pending_command_seq reset to 0 after cancel (mutmut_24)."""
-        bot.pending_command_seq = 5
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {}
-        _cancel_pending_manager_command(bot)
-        assert bot.pending_command_seq == 0
+        agent.pending_command_seq = 5
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {}
+        _cancel_pending_manager_command(agent)
+        assert agent.pending_command_seq == 0
 
-    def test_cancel_clears_pending_type(self, bot):
+    def test_cancel_clears_pending_type(self, agent):
         """pending_command_type reset to None after cancel (mutmut_27-29)."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {}
-        _cancel_pending_manager_command(bot)
-        assert bot.pending_command_type is None
+        agent.pending_command_seq = 1
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {}
+        _cancel_pending_manager_command(agent)
+        assert agent.pending_command_type is None
 
-    def test_cancel_clears_pending_payload(self, bot):
+    def test_cancel_clears_pending_payload(self, agent):
         """pending_command_payload reset to {} after cancel."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {"goal": "x"}
-        _cancel_pending_manager_command(bot)
-        assert bot.pending_command_payload == {}
+        agent.pending_command_seq = 1
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {"goal": "x"}
+        _cancel_pending_manager_command(agent)
+        assert agent.pending_command_payload == {}
 
-    def test_cancel_default_reason(self, bot):
+    def test_cancel_default_reason(self, agent):
         """Default reason is 'operator_cancelled'."""
-        bot.pending_command_seq = 1
-        bot.pending_command_type = "set_goal"
-        bot.pending_command_payload = {}
-        result = _cancel_pending_manager_command(bot)
+        agent.pending_command_seq = 1
+        agent.pending_command_type = "set_goal"
+        agent.pending_command_payload = {}
+        result = _cancel_pending_manager_command(agent)
         assert result is not None
         assert result["cancelled_reason"] == "operator_cancelled"
 
-    def test_cancel_updates_history_to_cancelled(self, bot):
+    def test_cancel_updates_history_to_cancelled(self, agent):
         """History entry for the seq is updated to status=cancelled."""
-        _queue_manager_command(bot, "set_goal", {"goal": "x"})
-        _cancel_pending_manager_command(bot)
-        rows = _command_history_rows(bot)
+        _queue_manager_command(agent, "set_goal", {"goal": "x"})
+        _cancel_pending_manager_command(agent)
+        rows = _command_history_rows(agent)
         assert rows[0]["status"] == "cancelled"
 
 
@@ -172,7 +172,7 @@ class TestBuildActionResponseMutationKilling:
     def test_returns_all_fields_without_plugin(self):
         """Without plugin, returns dict with all required fields."""
         result = _build_action_response(
-            "bot_001",
+            "agent_001",
             "set_goal",
             "manager",
             applied=True,
@@ -180,7 +180,7 @@ class TestBuildActionResponseMutationKilling:
             result={"goal": "explore"},
             state="running",
         )
-        assert result["bot_id"] == "bot_001"
+        assert result["agent_id"] == "agent_001"
         assert result["action"] == "set_goal"
         assert result["source"] == "manager"
         assert result["applied"] is True
@@ -188,10 +188,10 @@ class TestBuildActionResponseMutationKilling:
         assert result["result"] == {"goal": "explore"}
         assert result["state"] == "running"
 
-    def test_bot_id_in_result(self):
-        """bot_id field present and correct (mutmut_27-28 may change it)."""
+    def test_agent_id_in_result(self):
+        """agent_id field present and correct (mutmut_27-28 may change it)."""
         result = _build_action_response(
-            "unique_bot_xyz",
+            "unique_agent_xyz",
             "action",
             "src",
             applied=False,
@@ -199,12 +199,12 @@ class TestBuildActionResponseMutationKilling:
             result={},
             state="idle",
         )
-        assert result["bot_id"] == "unique_bot_xyz"
+        assert result["agent_id"] == "unique_agent_xyz"
 
     def test_action_in_result(self):
         """action field present and correct."""
         result = _build_action_response(
-            "bot",
+            "agent",
             "custom_action_type",
             "src",
             applied=False,
@@ -217,7 +217,7 @@ class TestBuildActionResponseMutationKilling:
     def test_source_in_result(self):
         """source field present and correct."""
         result = _build_action_response(
-            "bot",
+            "agent",
             "act",
             "worker_queue_source",
             applied=False,
@@ -258,7 +258,7 @@ class TestBuildActionResponseMutationKilling:
         plugin = MagicMock()
         plugin.build_action_response.return_value = {"plugin_result": True}
         result = _build_action_response(
-            "bot",
+            "agent",
             "act",
             "src",
             applied=True,
@@ -268,7 +268,7 @@ class TestBuildActionResponseMutationKilling:
             plugin=plugin,
         )
         plugin.build_action_response.assert_called_once_with(
-            "bot", "act", "src", applied=True, queued=False, result={}, state="running"
+            "agent", "act", "src", applied=True, queued=False, result={}, state="running"
         )
         assert result == {"plugin_result": True}
 
@@ -278,13 +278,13 @@ class TestBuildActionResponseMutationKilling:
 # ---------------------------------------------------------------------------
 
 
-class TestBotOpsRouteMutationKilling:
+class TestAgentOpsRouteMutationKilling:
     def test_cancel_command_with_pending(self, client, manager):
         """cancel-command route updates history and returns cancelled info."""
-        manager.bots["bot_A"] = BotStatusBase(bot_id="bot_A", state="running")
-        _queue_manager_command(manager.bots["bot_A"], "set_goal", {"goal": "test"})
+        manager.agents["agent_A"] = AgentStatusBase(agent_id="agent_A", state="running")
+        _queue_manager_command(manager.agents["agent_A"], "set_goal", {"goal": "test"})
 
-        resp = client.post("/bot/bot_A/cancel-command")
+        resp = client.post("/agent/agent_A/cancel-command")
         assert resp.status_code == 200
         data = resp.json()
         assert data["applied"] is True
@@ -292,18 +292,18 @@ class TestBotOpsRouteMutationKilling:
 
     def test_set_goal_queues_command(self, client, manager):
         """set-goal route queues a command and returns queued info."""
-        manager.bots["bot_B"] = BotStatusBase(bot_id="bot_B", state="running")
-        resp = client.post("/bot/bot_B/set-goal?goal=conquer")
+        manager.agents["agent_B"] = AgentStatusBase(agent_id="agent_B", state="running")
+        resp = client.post("/agent/agent_B/set-goal?goal=conquer")
         assert resp.status_code == 200
         data = resp.json()
         assert data["queued"] is True
-        assert data["bot_id"] == "bot_B"
+        assert data["agent_id"] == "agent_B"
         assert data["action"] == "set_goal"
 
     def test_set_directive_queues_command(self, client, manager):
         """set-directive route queues a command."""
-        manager.bots["bot_C"] = BotStatusBase(bot_id="bot_C", state="running")
-        resp = client.post("/bot/bot_C/set-directive", json={"directive": "be cautious", "turns": 5})
+        manager.agents["agent_C"] = AgentStatusBase(agent_id="agent_C", state="running")
+        resp = client.post("/agent/agent_C/set-directive", json={"directive": "be cautious", "turns": 5})
         assert resp.status_code == 200
         data = resp.json()
         assert data["queued"] is True
@@ -311,54 +311,54 @@ class TestBotOpsRouteMutationKilling:
 
     def test_cancel_command_no_pending_returns_not_applied(self, client, manager):
         """cancel-command with no pending returns applied=False."""
-        manager.bots["bot_D"] = BotStatusBase(bot_id="bot_D", state="running")
-        resp = client.post("/bot/bot_D/cancel-command")
+        manager.agents["agent_D"] = AgentStatusBase(agent_id="agent_D", state="running")
+        resp = client.post("/agent/agent_D/cancel-command")
         assert resp.status_code == 200
         data = resp.json()
         assert data["applied"] is False
 
-    def test_kill_bot_with_process_desired_bots_zero_not_decremented(self, client, manager):
-        """Branch 375->377 (False): desired_bots==0 when killing a bot with a process.
+    def test_kill_agent_with_process_desired_agents_zero_not_decremented(self, client, manager):
+        """Branch 375->377 (False): desired_agents==0 when killing an agent with a process.
 
-        Line 375: `if manager.desired_bots > 0:` is False — desired_bots stays 0,
+        Line 375: `if manager.desired_agents > 0:` is False — desired_agents stays 0,
         not decremented further. The kill response is still returned normally.
         """
         from unittest.mock import MagicMock, patch
 
-        from provide.terminal.manager.process import BotProcessManager
+        from provide.terminal.manager.process import AgentProcessManager
 
-        manager.bots["bot_E"] = BotStatusBase(bot_id="bot_E", state="running")
+        manager.agents["agent_E"] = AgentStatusBase(agent_id="agent_E", state="running")
         proc = MagicMock()
         proc.poll.return_value = None
-        manager.processes["bot_E"] = proc
-        manager.desired_bots = 0  # already zero — branch 375->377 is False
+        manager.processes["agent_E"] = proc
+        manager.desired_agents = 0  # already zero — branch 375->377 is False
 
-        with patch.object(BotProcessManager, "_stop_process_tree", return_value=None):
-            resp = client.delete("/bot/bot_E")
+        with patch.object(AgentProcessManager, "_stop_process_tree", return_value=None):
+            resp = client.delete("/agent/agent_E")
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["applied"] is True
-        # desired_bots was 0 and was NOT decremented (stays 0)
-        assert manager.desired_bots == 0
+        # desired_agents was 0 and was NOT decremented (stays 0)
+        assert manager.desired_agents == 0
 
-    def test_kill_bot_with_process_desired_bots_positive_decremented(self, client, manager):
-        """Branch 375->377 (True): desired_bots>0 when killing a bot with a process.
+    def test_kill_agent_with_process_desired_agents_positive_decremented(self, client, manager):
+        """Branch 375->377 (True): desired_agents>0 when killing an agent with a process.
 
-        Contrasting test: desired_bots=3, kill removes one → desired_bots decremented to 2.
+        Contrasting test: desired_agents=3, kill removes one → desired_agents decremented to 2.
         """
         from unittest.mock import MagicMock, patch
 
-        from provide.terminal.manager.process import BotProcessManager
+        from provide.terminal.manager.process import AgentProcessManager
 
-        manager.bots["bot_F"] = BotStatusBase(bot_id="bot_F", state="running")
+        manager.agents["agent_F"] = AgentStatusBase(agent_id="agent_F", state="running")
         proc = MagicMock()
         proc.poll.return_value = None
-        manager.processes["bot_F"] = proc
-        manager.desired_bots = 3
+        manager.processes["agent_F"] = proc
+        manager.desired_agents = 3
 
-        with patch.object(BotProcessManager, "_stop_process_tree", return_value=None):
-            resp = client.delete("/bot/bot_F")
+        with patch.object(AgentProcessManager, "_stop_process_tree", return_value=None):
+            resp = client.delete("/agent/agent_F")
 
         assert resp.status_code == 200
-        assert manager.desired_bots == 2
+        assert manager.desired_agents == 2

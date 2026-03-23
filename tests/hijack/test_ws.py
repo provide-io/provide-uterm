@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """WebSocket integration tests for the terminal hijack hub routes.
 
 Uses FastAPI's synchronous TestClient with nested websocket_connect() calls so that

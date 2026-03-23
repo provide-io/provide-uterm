@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Generic JSONL timeseries storage and I/O."""
 
 from __future__ import annotations
@@ -122,17 +121,17 @@ class TimeseriesManager:
             return rows
         latest_epoch_start = 0
         prev_turns = int(rows[0].get("total_turns") or 0)
-        prev_bots = int(rows[0].get("total_bots") or 0)
+        prev_agents = int(rows[0].get("total_agents") or 0)
         for idx, row in enumerate(rows[1:], start=1):
             cur_turns = int(row.get("total_turns") or 0)
-            cur_bots = int(row.get("total_bots") or 0)
+            cur_agents = int(row.get("total_agents") or 0)
             turn_drop = prev_turns - cur_turns
             drop_threshold = max(EPOCH_TURN_DROP_MIN, int(prev_turns * EPOCH_TURN_DROP_RATIO))
             hard_turn_reset = turn_drop > drop_threshold
-            if hard_turn_reset or (prev_bots > 0 and cur_bots == 0):
+            if hard_turn_reset or (prev_agents > 0 and cur_agents == 0):
                 latest_epoch_start = idx
             prev_turns = cur_turns
-            prev_bots = cur_bots
+            prev_agents = cur_agents
         return rows[latest_epoch_start:]
 
     def _build_row(self, status: Any, reason: str) -> dict[str, Any]:
@@ -143,7 +142,7 @@ class TimeseriesManager:
         return {
             "ts": time.time(),
             "reason": reason,
-            "total_bots": status.total_bots,
+            "total_agents": status.total_agents,
             "running": status.running,
             "completed": status.completed,
             "errors": status.errors,

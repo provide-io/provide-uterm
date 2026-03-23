@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Plugin boundary protocols for the generic swarm manager.
 
 Games implement these protocols (duck typing) and pass instances to
@@ -14,19 +13,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from provide.terminal.manager.models import BotStatusBase
+    from provide.terminal.manager.models import AgentStatusBase
 
 
 @runtime_checkable
 class AccountPoolPlugin(Protocol):
     """Manages a cross-process account pool with lease/cooldown semantics."""
 
-    def release_by_bot(self, *, bot_id: str, cooldown_s: int = 0) -> bool:
-        """Release the account leased by *bot_id*; return True if released."""
+    def release_by_agent(self, *, agent_id: str, cooldown_s: int = 0) -> bool:
+        """Release the account leased by *agent_id*; return ``True`` if released."""
         ...
 
-    def mark_account_bust(self, *, bot_id: str) -> None:
-        """Mark the account held by *bot_id* as busted."""
+    def mark_account_bust(self, *, agent_id: str) -> None:
+        """Mark the account held by the agent as busted."""
         ...
 
     def summary(self) -> dict[str, Any]:
@@ -40,10 +39,10 @@ class AccountPoolPlugin(Protocol):
 
 @runtime_checkable
 class IdentityStorePlugin(Protocol):
-    """Persistent per-bot credentials and session history."""
+    """Persistent per-agent credentials and session history."""
 
-    def load(self, bot_id: str) -> Any | None:
-        """Load a bot record by ID (or None if absent)."""
+    def load(self, agent_id: str) -> Any | None:
+        """Load an agent record by ID (or ``None`` if absent)."""
         ...
 
     def list_records(self) -> list[Any]:
@@ -52,24 +51,24 @@ class IdentityStorePlugin(Protocol):
 
 
 @runtime_checkable
-class ManagedBotPlugin(Protocol):
-    """Local in-process bot resolution and command dispatch."""
+class ManagedAgentPlugin(Protocol):
+    """Local in-process agent resolution and command dispatch."""
 
-    def resolve_local_bot(self, bot_status: BotStatusBase) -> tuple[Any | None, str | None]:
-        """Return ``(bot_instance, session_id)`` or ``(None, None)``."""
+    def resolve_local_agent(self, agent_status: AgentStatusBase) -> tuple[Any | None, str | None]:
+        """Return ``(agent_instance, session_id)`` or ``(None, None)``."""
         ...
 
-    async def dispatch_command(self, bot: Any, command: str, **kwargs: Any) -> dict[str, Any]:
-        """Execute a manager command on a local bot instance."""
+    async def dispatch_command(self, agent: Any, command: str, **kwargs: Any) -> dict[str, Any]:
+        """Execute a manager command on a local agent instance."""
         ...
 
-    def build_details(self, bot_status: BotStatusBase, bot: Any | None, session_id: str | None) -> dict[str, Any]:
-        """Build a unified managed-bot details view."""
+    def build_details(self, agent_status: AgentStatusBase, agent: Any | None, session_id: str | None) -> dict[str, Any]:
+        """Build a unified managed-agent details view."""
         ...
 
     def build_action_response(
         self,
-        bot_id: str,
+        agent_id: str,
         action: str,
         source: str,
         *,
@@ -81,7 +80,7 @@ class ManagedBotPlugin(Protocol):
         """Normalise a control action result."""
         ...
 
-    def describe_runtime(self, bot: Any | None, session_id: str | None) -> dict[str, Any] | None:
+    def describe_runtime(self, agent: Any | None, session_id: str | None) -> dict[str, Any] | None:
         """Return local runtime capabilities, or None."""
         ...
 
@@ -90,8 +89,8 @@ class ManagedBotPlugin(Protocol):
 class StatusUpdatePlugin(Protocol):
     """Merges game-specific fields from a worker status report."""
 
-    def apply_update(self, bot: BotStatusBase, payload: dict[str, Any], manager: Any) -> None:
-        """Apply game-specific fields from *payload* onto *bot*."""
+    def apply_update(self, agent: AgentStatusBase, payload: dict[str, Any], manager: Any) -> None:
+        """Apply game-specific fields from *payload* onto *agent*."""
         ...
 
 
@@ -125,14 +124,14 @@ class WorkerRegistryPlugin(Protocol):
     def configure_worker_env(
         self,
         env: dict[str, str],
-        bot_status: BotStatusBase,
+        agent_status: AgentStatusBase,
         manager: Any,
         *,
         raw_config: dict[str, Any] | None = None,
     ) -> None:
         """Inject game-specific environment variables before spawning.
 
-        *raw_config* is the raw YAML dict for the bot's config file, allowing
+        *raw_config* is the raw YAML dict for the agent's config file, allowing
         plugins to read game-specific keys without the generic manager needing
         to know about them.
         """

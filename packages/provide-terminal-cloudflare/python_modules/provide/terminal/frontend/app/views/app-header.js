@@ -1,0 +1,21 @@
+function escapeHtml(value) {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+export function renderAppHeader(bootstrap, active) {
+    const safeAppPath = escapeHtml(bootstrap.app_path);
+    const isDashboard = active === "dashboard";
+    const isConnect = active === "connect";
+    return `
+    <header class="app-header card">
+      <nav class="app-nav">
+        <a class="app-nav-link${isDashboard ? " active" : ""}" href="${safeAppPath}/">Dashboard</a>
+        <a class="app-nav-link${isConnect ? " active" : ""}" href="${safeAppPath}/connect">Quick Connect</a>
+      </nav>
+    </header>
+  `;
+}

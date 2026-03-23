@@ -3,14 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""Generic swarm manager for bot orchestration.
+"""Generic swarm manager for agent orchestration.
 
 Public API::
 
-    from provide.terminal.manager import create_manager_app, ManagerConfig, SwarmManager
-    from provide.terminal.manager.models import BotStatusBase, SwarmStatus, SpawnBatchRequest
+    from provide.terminal.manager import create_manager_app, ManagerConfig, AgentManager
+    from provide.terminal.manager.models import AgentStatusBase, SwarmStatus, SpawnBatchRequest
     from provide.terminal.manager.protocols import (
-        AccountPoolPlugin, IdentityStorePlugin, ManagedBotPlugin,
+        AccountPoolPlugin, IdentityStorePlugin, ManagedAgentPlugin,
         StatusUpdatePlugin, TimeseriesPlugin, WorkerRegistryPlugin,
     )
 
@@ -21,13 +21,13 @@ from __future__ import annotations
 
 from provide.terminal.manager.app import create_manager_app
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import SwarmManager
-from provide.terminal.manager.models import BotStatusBase, SwarmStatus
+from provide.terminal.manager.core import AgentManager
+from provide.terminal.manager.models import AgentStatusBase, SwarmStatus
 
 __all__ = [
-    "BotStatusBase",
+    "AgentManager",
+    "AgentStatusBase",
     "ManagerConfig",
-    "SwarmManager",
     "SwarmStatus",
     "create_manager_app",
 ]

@@ -45,6 +45,22 @@
 .provide-hijack .hijack-status-dot.warn { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
 .provide-hijack .hijack-status-dot.bad  { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
 
+/* ── Activity indicator animations ── */
+.provide-hijack .hijack-status-dot.activity-flash {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: activity-flash 200ms ease-out;
+}
+
+@keyframes activity-flash {
+  0% {
+    box-shadow: 0 0 12px #22c55e;
+  }
+  100% {
+    box-shadow: 0 0 2px #22c55e;
+  }
+}
+
 .provide-hijack .hijack-controls {
   display: flex;
   gap: 4px;

@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """End-to-end integration tests using real WebSocket connections against a live uvicorn TermHub.
 
 These tests exercise the full network stack (HTTP upgrade, asyncio WS protocol)

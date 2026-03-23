@@ -2,8 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
-"""Bot process management for the generic swarm manager."""
+"""Agent process management for the generic swarm manager."""
 
 from __future__ import annotations
 
@@ -23,7 +22,7 @@ import yaml  # type: ignore[import-untyped]
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
-    from provide.terminal.manager.core import SwarmManager
+    from provide.terminal.manager.core import AgentManager
     from provide.terminal.manager.protocols import WorkerRegistryPlugin
 
 from provide.terminal.manager._monitor import (
@@ -36,7 +35,7 @@ from provide.terminal.manager._monitor import (
 )
 
 logger = get_logger(__name__)
-_BOT_ID_RE = re.compile(r"^bot_(\d+)$")
+_AGENT_ID_RE = re.compile(r"^agent_(\d+)$")
 
 
 class _PopenPlatformKwargs(TypedDict, total=False):
@@ -66,12 +65,12 @@ _WORKER_ENV_PASSTHROUGH = frozenset(
 )
 
 
-class BotProcessManager:
-    """Manages bot process spawning, monitoring, and termination."""
+class AgentProcessManager:
+    """Manages agent process spawning, monitoring, and termination."""
 
     def __init__(
         self,
-        manager: SwarmManager,
+        manager: AgentManager,
         *,
         worker_registry: dict[str, WorkerRegistryPlugin] | None = None,
         log_dir: str = "",
@@ -82,39 +81,39 @@ class BotProcessManager:
         self._spawn_tasks: list[asyncio.Task[Any]] = []
         self._queued_since: dict[str, float] = {}
         self._queued_launch_delay: float = 30.0
-        self._next_bot_index: int = 0
+        self._next_agent_index: int = 0
         self._spawn_name_style: str = "random"
         self._spawn_name_base: str = ""
         self._last_spawn_config: str | None = None
 
     @staticmethod
-    def _parse_bot_index(bot_id: str) -> int | None:
-        match = _BOT_ID_RE.match(str(bot_id or "").strip())
+    def _parse_agent_index(agent_id: str) -> int | None:
+        match = _AGENT_ID_RE.match(str(agent_id or "").strip())
         if not match:
             return None
         return int(match.group(1))
 
-    def sync_next_bot_index(self) -> int:
+    def sync_next_agent_index(self) -> int:
         max_seen = -1
-        for known_id in set(self.manager.bots) | set(self.manager.processes):
-            idx = self._parse_bot_index(known_id)
+        for known_id in set(self.manager.agents) | set(self.manager.processes):
+            idx = self._parse_agent_index(known_id)
             if idx is not None:
                 max_seen = max(max_seen, idx)
-        self._next_bot_index = max(self._next_bot_index, max_seen + 1)
-        return self._next_bot_index
+        self._next_agent_index = max(self._next_agent_index, max_seen + 1)
+        return self._next_agent_index
 
-    def note_bot_id(self, bot_id: str) -> None:
-        idx = self._parse_bot_index(bot_id)
+    def note_agent_id(self, agent_id: str) -> None:
+        idx = self._parse_agent_index(agent_id)
         if idx is None:
             return
-        self._next_bot_index = max(self._next_bot_index, idx + 1)
+        self._next_agent_index = max(self._next_agent_index, idx + 1)
 
-    def allocate_bot_id(self) -> str:
-        idx = self.sync_next_bot_index()
+    def allocate_agent_id(self) -> str:
+        idx = self.sync_next_agent_index()
         while True:
-            candidate = f"bot_{idx:03d}"
-            if candidate not in self.manager.bots and candidate not in self.manager.processes:
-                self._next_bot_index = idx + 1
+            candidate = f"agent_{idx:03d}"
+            if candidate not in self.manager.agents and candidate not in self.manager.processes:
+                self._next_agent_index = idx + 1
                 return candidate
             idx += 1
 
@@ -152,14 +151,14 @@ class BotProcessManager:
         )
         self._spawn_tasks.append(task)
 
-    async def spawn_bot(self, config_path: str, bot_id: str) -> str:
-        self.note_bot_id(bot_id)
-        if len(self.manager.bots) >= self.manager.max_bots:
-            raise RuntimeError(f"Max bots ({self.manager.max_bots}) reached")
+    async def spawn_agent(self, config_path: str, agent_id: str) -> str:
+        self.note_agent_id(agent_id)
+        if len(self.manager.agents) >= self.manager.max_agents:
+            raise RuntimeError(f"Max agents ({self.manager.max_agents}) reached")
         if not Path(config_path).exists():
             raise RuntimeError(f"Config not found: {config_path}")
 
-        logger.info("spawning_bot", bot_id=bot_id, config_path=config_path)
+        logger.info("spawning_agent", agent_id=agent_id, config_path=config_path)
 
         worker_type = "default"
         raw: dict[str, Any] = {}
@@ -182,54 +181,54 @@ class BotProcessManager:
                 )
         worker_module = registry_entry.worker_module
 
-        cmd = [sys.executable, "-m", worker_module, "--config", config_path, "--bot-id", bot_id]
+        cmd = [sys.executable, "-m", worker_module, "--config", config_path, "--agent-id", agent_id]
 
         try:
             env_prefix = self.manager.config.worker_env_prefix
             env = {k: v for k, v in os.environ.items() if k.startswith(env_prefix) or k in _WORKER_ENV_PASSTHROUGH}
 
-            bot_entry = self.manager.bots.get(bot_id)
+            agent_entry = self.manager.agents.get(agent_id)
             if self._spawn_name_style:
                 env[f"{env_prefix}NAME_STYLE"] = self._spawn_name_style
             if self._spawn_name_base:
                 env[f"{env_prefix}NAME_BASE"] = self._spawn_name_base
 
             # Let the game plugin inject additional env vars (incl. game-specific fields).
-            if bot_entry is not None:
-                registry_entry.configure_worker_env(env, bot_entry, self.manager, raw_config=raw)
+            if agent_entry is not None:
+                registry_entry.configure_worker_env(env, agent_entry, self.manager, raw_config=raw)
 
-            process = await asyncio.to_thread(self._spawn_process, bot_id, cmd, env)
+            process = await asyncio.to_thread(self._spawn_process, agent_id, cmd, env)
 
             async with self.manager._state_lock:
-                if bot_id in self.manager.bots:
-                    self.manager.bots[bot_id].pid = process.pid
-                    self.manager.bots[bot_id].state = "running"
-                    self.manager.bots[bot_id].last_update_time = time.time()
-                    self.manager.bots[bot_id].started_at = time.time()
-                    self.manager.bots[bot_id].stopped_at = None
+                if agent_id in self.manager.agents:
+                    self.manager.agents[agent_id].pid = process.pid
+                    self.manager.agents[agent_id].state = "running"
+                    self.manager.agents[agent_id].last_update_time = time.time()
+                    self.manager.agents[agent_id].started_at = time.time()
+                    self.manager.agents[agent_id].stopped_at = None
                 else:
-                    self.manager.bots[bot_id] = self.manager._bot_status_class(
-                        bot_id=bot_id,
+                    self.manager.agents[agent_id] = self.manager._agent_status_class(
+                        agent_id=agent_id,
                         pid=process.pid,
                         config=config_path,
                         state="running",
                         started_at=time.time(),
                     )
-                self.manager.processes[bot_id] = process
+                self.manager.processes[agent_id] = process
 
             self._last_spawn_config = config_path
-            logger.info("bot_spawned", bot_id=bot_id, pid=process.pid)
+            logger.info("agent_spawned", agent_id=agent_id, pid=process.pid)
             await self.manager.broadcast_status()
-            return bot_id
+            return agent_id
 
         except Exception as e:
-            logger.exception("bot_spawn_failed", bot_id=bot_id, error=str(e))
-            raise RuntimeError(f"Failed to spawn bot: {e}") from e
+            logger.exception("agent_spawn_failed", agent_id=agent_id, error=str(e))
+            raise RuntimeError(f"Failed to spawn agent: {e}") from e
 
-    def _spawn_process(self, bot_id: str, cmd: list[str], env: dict[str, str]) -> subprocess.Popen[bytes]:
+    def _spawn_process(self, agent_id: str, cmd: list[str], env: dict[str, str]) -> subprocess.Popen[bytes]:
         log_dir = Path(self._log_dir) if self._log_dir else Path("logs/workers")
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / f"{bot_id}.log"
+        log_file = log_dir / f"{agent_id}.log"
         log_handle = log_file.open("a")
         try:
             proc = subprocess.Popen(  # noqa: S603
@@ -284,7 +283,7 @@ class BotProcessManager:
     async def _stop_process_tree(
         self,
         *,
-        bot_id: str,
+        agent_id: str,
         process: subprocess.Popen[bytes] | None = None,
         pid: int | None = None,
         timeout_s: float = _STOP_TIMEOUT_S,
@@ -300,7 +299,7 @@ class BotProcessManager:
             else:
                 with contextlib.suppress(OSError, ProcessLookupError):
                     self._signal_posix_process_group(resolved_pid, signal.SIGKILL)
-            logger.warning("bot_force_killed", bot_id=bot_id)
+            logger.warning("agent_force_killed", agent_id=agent_id)
             return
 
         if os.name == "nt":
@@ -314,7 +313,7 @@ class BotProcessManager:
 
         try:
             await self._wait_for_process_exit(process, timeout_s)
-            logger.info("bot_terminated", bot_id=bot_id)
+            logger.info("agent_terminated", agent_id=agent_id)
             return
         except TimeoutError:
             pass
@@ -324,7 +323,7 @@ class BotProcessManager:
                 self._signal_posix_process_group(resolved_pid, signal.SIGKILL)
         with contextlib.suppress(TimeoutError, OSError, RuntimeError):
             await self._wait_for_process_exit(process, 1.0)
-        logger.warning("bot_force_killed", bot_id=bot_id)
+        logger.warning("agent_force_killed", agent_id=agent_id)
 
     async def spawn_swarm(
         self,
@@ -334,21 +333,21 @@ class BotProcessManager:
         name_style: str = "random",
         name_base: str = "",
     ) -> list[str]:
-        bot_ids: list[str] = []
+        agent_ids: list[str] = []
         total = len(config_paths)
 
         self._spawn_name_style = name_style
         self._spawn_name_base = name_base
 
-        # Pre-register all bots as queued.
+        # Pre-register all agents as queued.
         async with self.manager._state_lock:
-            base_index = self.sync_next_bot_index()
-            self._next_bot_index = base_index + total
+            base_index = self.sync_next_agent_index()
+            self._next_agent_index = base_index + total
         for i, config in enumerate(config_paths):
-            bot_id = f"bot_{base_index + i:03d}"
-            if bot_id not in self.manager.bots:  # pragma: no branch
-                self.manager.bots[bot_id] = self.manager._bot_status_class(
-                    bot_id=bot_id,
+            agent_id = f"agent_{base_index + i:03d}"
+            if agent_id not in self.manager.agents:  # pragma: no branch
+                self.manager.agents[agent_id] = self.manager._agent_status_class(
+                    agent_id=agent_id,
                     pid=0,
                     config=config,
                     state="queued",
@@ -360,59 +359,59 @@ class BotProcessManager:
             group_configs = config_paths[group_start:group_end]
 
             for i, config in enumerate(group_configs):
-                bid = f"bot_{base_index + group_start + i:03d}"
+                bid = f"agent_{base_index + group_start + i:03d}"
                 try:
-                    await self.spawn_bot(config, bid)
-                    bot_ids.append(bid)
+                    await self.spawn_agent(config, bid)
+                    agent_ids.append(bid)
                 except Exception as e:
-                    logger.exception("bot_spawn_failed_in_group", bot_id=bid, config=config, error=str(e))
+                    logger.exception("agent_spawn_failed_in_group", agent_id=bid, config=config, error=str(e))
 
             if group_end < total:
                 await asyncio.sleep(group_delay)
 
-        logger.info("swarm_spawn_complete", started=len(bot_ids), total=total)
-        return bot_ids
+        logger.info("swarm_spawn_complete", started=len(agent_ids), total=total)
+        return agent_ids
 
-    async def kill_bot(self, bot_id: str) -> None:
+    async def kill_agent(self, agent_id: str) -> None:
         async with self.manager._state_lock:
-            if bot_id not in self.manager.processes:
+            if agent_id not in self.manager.processes:
                 return
-            process = self.manager.processes[bot_id]
+            process = self.manager.processes[agent_id]
 
-        await self._stop_process_tree(bot_id=bot_id, process=process, timeout_s=_STOP_TIMEOUT_S)
+        await self._stop_process_tree(agent_id=agent_id, process=process, timeout_s=_STOP_TIMEOUT_S)
 
         async with self.manager._state_lock:
-            if bot_id in self.manager.bots:
-                self.manager.bots[bot_id].state = "stopped"
-                self.manager.bots[bot_id].stopped_at = time.time()
-            self.manager.processes.pop(bot_id, None)
-        self.release_bot_account(bot_id)
+            if agent_id in self.manager.agents:
+                self.manager.agents[agent_id].state = "stopped"
+                self.manager.agents[agent_id].stopped_at = time.time()
+            self.manager.processes.pop(agent_id, None)
+        self.release_agent_account(agent_id)
         await self.manager.broadcast_status()
 
-    def release_bot_account(self, bot_id: str) -> None:
+    def release_agent_account(self, agent_id: str) -> None:
         pool = self.manager.account_pool
         if pool is None:
             return
         try:
-            released = pool.release_by_bot(bot_id=bot_id, cooldown_s=0)
+            released = pool.release_by_agent(agent_id=agent_id, cooldown_s=0)
             if released:
-                logger.info("manager_released_account", bot_id=bot_id)
+                logger.info("manager_released_account", agent_id=agent_id)
         except Exception as e:
-            logger.warning("account_release_failed", bot_id=bot_id, error=str(e))
+            logger.warning("account_release_failed", agent_id=agent_id, error=str(e))
 
-    async def _launch_queued_bot(self, bot_id: str, config: str) -> None:
+    async def _launch_queued_agent(self, agent_id: str, config: str) -> None:
         try:
-            await self.spawn_bot(config, bot_id)
+            await self.spawn_agent(config, agent_id)
         except Exception as e:
-            logger.exception("stale_queued_bot_launch_failed", bot_id=bot_id, error=str(e))
-            if bot_id in self.manager.bots:
-                self.manager.bots[bot_id].state = "error"
-                self.manager.bots[bot_id].error_message = f"Launch failed: {e}"
-                self.manager.bots[bot_id].exit_reason = "launch_failed"
+            logger.exception("stale_queued_agent_launch_failed", agent_id=agent_id, error=str(e))
+            if agent_id in self.manager.agents:
+                self.manager.agents[agent_id].state = "error"
+                self.manager.agents[agent_id].error_message = f"Launch failed: {e}"
+                self.manager.agents[agent_id].exit_reason = "launch_failed"
             await self.manager.broadcast_status()
 
     async def monitor_processes(self) -> None:
-        """Monitor bot processes for crashes or completion."""
+        """Monitor agent processes for crashes or completion."""
         while True:
             await _handle_exited_processes(self)
             self._spawn_tasks = [t for t in self._spawn_tasks if not t.done()]

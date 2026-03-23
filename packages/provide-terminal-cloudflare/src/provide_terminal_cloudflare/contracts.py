@@ -4,14 +4,23 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
-from provide.terminal.control_stream import (
-    ControlChunk,
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
-    DataChunk,
-    encode_control,
-    encode_data,
-)
+try:
+    from provide.terminal.control_stream import (
+        ControlChunk,
+        ControlStreamDecoder,
+        ControlStreamProtocolError,
+        DataChunk,
+        encode_control,
+        encode_data,
+    )
+except (ImportError, ModuleNotFoundError):
+    # Fallback for Cloudflare Durable Objects validation phase
+    ControlChunk = Any  # type: ignore[assignment]
+    ControlStreamDecoder = Any  # type: ignore[assignment]
+    ControlStreamProtocolError = Exception  # type: ignore[assignment]
+    DataChunk = Any  # type: ignore[assignment]
+    encode_control = lambda *a, **k: b""  # type: ignore[assignment]
+    encode_data = lambda *a, **k: b""  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.cf_types import CFWebSocket

@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""FastMCP tools for managing a bot swarm.
+"""FastMCP tools for managing an agent swarm.
 
 Supports two modes:
 
-- **Direct** (in-process): pass a ``SwarmManager`` instance.
+- **Direct** (in-process): pass an ``AgentManager`` instance.
 - **HTTP** (out-of-process): pass a ``base_url`` for the running manager.
 
 Usage::
@@ -20,12 +20,13 @@ Usage::
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable  # noqa: TC003
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
-    from provide.terminal.manager.core import SwarmManager
+    from provide.terminal.manager.core import AgentManager
 
 TOOL_COUNT = 15
 
@@ -46,16 +47,19 @@ async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) ->
 
 
 def create_manager_mcp_tools(
-    manager: SwarmManager | None = None,
+    manager: AgentManager | None = None,
     *,
     base_url: str | None = None,
+    on_first_http: Callable[[], Awaitable[None]] | None = None,
 ) -> FastMCP:
     """Create a FastMCP app with generic swarm management tools.
 
     Args:
-        manager: SwarmManager instance for direct in-process calls.
+        manager: AgentManager instance for direct in-process calls.
         base_url: HTTP base URL (e.g. ``"http://localhost:2272"``) for
             out-of-process calls.  Ignored when *manager* is provided.
+        on_first_http: Async callback invoked once before the first HTTP
+            request.  Useful for auto-starting the manager process.
 
     Raises:
         ValueError: If neither *manager* nor *base_url* is provided.
@@ -67,9 +71,15 @@ def create_manager_mcp_tools(
 
     mcp = _FastMCP("provide-terminal-manager")
 
+    _http_initialized = False
+
     async def _http(method: str, path: str, **kw: Any) -> tuple[bool, dict[str, Any]]:
+        nonlocal _http_initialized
         if base_url is None:  # pragma: no cover — only reachable when base_url is set
             raise RuntimeError("base_url is required for HTTP mode")
+        if not _http_initialized and on_first_http is not None:
+            _http_initialized = True
+            await on_first_http()
         return await _http_request(base_url, method, path, **kw)
 
     # ------------------------------------------------------------------
@@ -78,7 +88,7 @@ def create_manager_mcp_tools(
 
     @mcp.tool()
     async def swarm_status() -> dict[str, Any]:
-        """Get current swarm status: bot counts by state, desired bots, pause state, uptime."""
+        """Get current swarm status: agent counts by state, desired agents, pause state, uptime."""
         if manager is not None:
             return manager.get_swarm_status().model_dump()
         ok, data = await _http("GET", "/swarm/status")
@@ -92,7 +102,7 @@ def create_manager_mcp_tools(
         name_style: str = "random",
         name_base: str = "",
     ) -> dict[str, Any]:
-        """Spawn a batch of bots from config files with staggered groups."""
+        """Spawn a batch of agents from config files with staggered groups."""
         if manager is not None:
             total = len(config_paths)
             await manager.start_spawn_swarm(
@@ -103,17 +113,17 @@ def create_manager_mcp_tools(
                 name_style=name_style,
                 name_base=name_base,
             )
-            manager.desired_bots = total
-            manager.bot_process_manager.sync_next_bot_index()
+            manager.desired_agents = total
+            manager.agent_process_manager.sync_next_agent_index()
             groups = (total + group_size - 1) // group_size
             return {
                 "status": "spawning",
-                "total_bots": total,
+                "total_agents": total,
                 "group_size": group_size,
                 "group_delay": group_delay,
                 "total_groups": groups,
                 "estimated_time_seconds": (groups - 1) * group_delay if groups > 1 else 0,
-                "desired_bots": total,
+                "desired_agents": total,
             }
         ok, data = await _http(
             "POST",
@@ -130,7 +140,7 @@ def create_manager_mcp_tools(
 
     @mcp.tool()
     async def swarm_pause() -> dict[str, Any]:
-        """Pause the entire swarm — marks active bots as paused."""
+        """Pause the entire swarm — marks active agents as paused."""
         if manager is not None:
             return await manager.pause_swarm()
         ok, data = await _http("POST", "/swarm/pause")
@@ -146,7 +156,7 @@ def create_manager_mcp_tools(
 
     @mcp.tool()
     async def swarm_kill_all() -> dict[str, Any]:
-        """Cancel pending spawns and terminate all running bot processes."""
+        """Cancel pending spawns and terminate all running agent processes."""
         if manager is not None:
             return await manager.kill_all()
         ok, data = await _http("POST", "/swarm/kill-all")
@@ -154,7 +164,7 @@ def create_manager_mcp_tools(
 
     @mcp.tool()
     async def swarm_clear() -> dict[str, Any]:
-        """Kill all processes and remove all bot registrations."""
+        """Kill all processes and remove all agent registrations."""
         if manager is not None:
             return await manager.clear_swarm()
         ok, data = await _http("POST", "/swarm/clear")
@@ -162,7 +172,7 @@ def create_manager_mcp_tools(
 
     @mcp.tool()
     async def swarm_prune() -> dict[str, Any]:
-        """Remove bots in terminal states (stopped/error/completed)."""
+        """Remove agents in terminal states (stopped/error/completed)."""
         if manager is not None:
             return await manager.prune_dead()
         ok, data = await _http("POST", "/swarm/prune")
@@ -170,124 +180,124 @@ def create_manager_mcp_tools(
 
     @mcp.tool()
     async def swarm_set_desired(count: int) -> dict[str, Any]:
-        """Set the desired bot count for auto-scaling enforcement."""
+        """Set the desired agent count for auto-scaling enforcement."""
         if manager is not None:
-            manager.desired_bots = count
+            manager.desired_agents = count
             await manager.broadcast_status()
-            return {"desired_bots": count}
+            return {"desired_agents": count}
         ok, data = await _http("POST", "/swarm/desired", json={"count": count})
         return data if ok else {"error": data.get("error", "Failed to set desired")}
 
     # ------------------------------------------------------------------
-    # Per-bot tools
+    # Per-agent tools
     # ------------------------------------------------------------------
 
     @mcp.tool()
-    async def bot_list(state: str | None = None) -> dict[str, Any]:
-        """List all bots, optionally filtered by state."""
+    async def agent_list(state: str | None = None) -> dict[str, Any]:
+        """List all agents, optionally filtered by state."""
         if manager is not None:
-            bots = list(manager.bots.values())
+            agents = list(manager.agents.values())
             if state:
-                bots = [b for b in bots if b.state == state]
-            return {"total": len(bots), "bots": [b.model_dump() for b in bots]}
+                agents = [b for b in agents if b.state == state]
+            return {"total": len(agents), "agents": [b.model_dump() for b in agents]}
         params: dict[str, Any] = {}
         if state:
             params["state"] = state
-        ok, data = await _http("GET", "/bots", params=params or None)
-        return data if ok else {"error": data.get("error", "Failed to list bots")}
+        ok, data = await _http("GET", "/agents", params=params or None)
+        return data if ok else {"error": data.get("error", "Failed to list agents")}
 
     @mcp.tool()
-    async def bot_status(bot_id: str) -> dict[str, Any]:
-        """Get status of a single bot."""
+    async def agent_status(agent_id: str) -> dict[str, Any]:
+        """Get status of a single agent."""
         if manager is not None:
-            bot = manager.bots.get(bot_id)
-            if bot is None:
-                return {"error": f"Bot {bot_id} not found"}
-            return bot.model_dump()
-        ok, data = await _http("GET", f"/bot/{bot_id}/status")
-        return data if ok else {"error": data.get("error", f"Bot {bot_id} not found")}
+            agent = manager.agents.get(agent_id)
+            if agent is None:
+                return {"error": f"Agent {agent_id} not found"}
+            return agent.model_dump()
+        ok, data = await _http("GET", f"/agent/{agent_id}/status")
+        return data if ok else {"error": data.get("error", f"Agent {agent_id} not found")}
 
     @mcp.tool()
-    async def bot_kill(bot_id: str) -> dict[str, Any]:
-        """Terminate a bot process and remove it."""
+    async def agent_kill(agent_id: str) -> dict[str, Any]:
+        """Terminate an agent process and remove it."""
         if manager is not None:
-            if bot_id not in manager.bots:
-                return {"error": f"Bot {bot_id} not found"}
-            bot = manager.bots[bot_id]
-            if bot_id in manager.processes:
-                await manager.kill_bot(bot_id)
+            if agent_id not in manager.agents:
+                return {"error": f"Agent {agent_id} not found"}
+            agent = manager.agents[agent_id]
+            if agent_id in manager.processes:
+                await manager.kill_agent(agent_id)
             else:
-                bot.state = "stopped"
-            if manager.desired_bots > 0:
-                manager.desired_bots = max(0, manager.desired_bots - 1)
+                agent.state = "stopped"
+            if manager.desired_agents > 0:
+                manager.desired_agents = max(0, manager.desired_agents - 1)
             await manager.broadcast_status()
-            return {"bot_id": bot_id, "action": "kill", "state": bot.state}
-        ok, data = await _http("DELETE", f"/bot/{bot_id}")
-        return data if ok else {"error": data.get("error", f"Failed to kill {bot_id}")}
+            return {"agent_id": agent_id, "action": "kill", "state": agent.state}
+        ok, data = await _http("DELETE", f"/agent/{agent_id}")
+        return data if ok else {"error": data.get("error", f"Failed to kill {agent_id}")}
 
     @mcp.tool()
-    async def bot_pause(bot_id: str) -> dict[str, Any]:
-        """Pause a single bot."""
+    async def agent_pause(agent_id: str) -> dict[str, Any]:
+        """Pause a single agent."""
         if manager is not None:
-            bot = manager.bots.get(bot_id)
-            if bot is None:
-                return {"error": f"Bot {bot_id} not found"}
-            bot.paused = True
+            agent = manager.agents.get(agent_id)
+            if agent is None:
+                return {"error": f"Agent {agent_id} not found"}
+            agent.paused = True
             await manager.broadcast_status()
-            return {"bot_id": bot_id, "action": "pause", "paused": True}
-        ok, data = await _http("POST", f"/bot/{bot_id}/pause")
-        return data if ok else {"error": data.get("error", f"Failed to pause {bot_id}")}
+            return {"agent_id": agent_id, "action": "pause", "paused": True}
+        ok, data = await _http("POST", f"/agent/{agent_id}/pause")
+        return data if ok else {"error": data.get("error", f"Failed to pause {agent_id}")}
 
     @mcp.tool()
-    async def bot_resume(bot_id: str) -> dict[str, Any]:
-        """Resume a paused bot."""
+    async def agent_resume(agent_id: str) -> dict[str, Any]:
+        """Resume a paused agent."""
         if manager is not None:
-            bot = manager.bots.get(bot_id)
-            if bot is None:
-                return {"error": f"Bot {bot_id} not found"}
-            bot.paused = False
+            agent = manager.agents.get(agent_id)
+            if agent is None:
+                return {"error": f"Agent {agent_id} not found"}
+            agent.paused = False
             await manager.broadcast_status()
-            return {"bot_id": bot_id, "action": "resume", "paused": False}
-        ok, data = await _http("POST", f"/bot/{bot_id}/resume")
-        return data if ok else {"error": data.get("error", f"Failed to resume {bot_id}")}
+            return {"agent_id": agent_id, "action": "resume", "paused": False}
+        ok, data = await _http("POST", f"/agent/{agent_id}/resume")
+        return data if ok else {"error": data.get("error", f"Failed to resume {agent_id}")}
 
     @mcp.tool()
-    async def bot_restart(bot_id: str) -> dict[str, Any]:
-        """Queue a restart command for a bot."""
+    async def agent_restart(agent_id: str) -> dict[str, Any]:
+        """Queue a restart command for an agent."""
         if manager is not None:
-            from provide.terminal.manager.routes.bot_ops import _queue_manager_command
+            from provide.terminal.manager.routes.agent_ops import _queue_manager_command
 
-            bot = manager.bots.get(bot_id)
-            if bot is None:
-                return {"error": f"Bot {bot_id} not found"}
-            queued = _queue_manager_command(bot, "restart", {})
+            agent = manager.agents.get(agent_id)
+            if agent is None:
+                return {"error": f"Agent {agent_id} not found"}
+            queued = _queue_manager_command(agent, "restart", {})
             await manager.broadcast_status()
-            return {"bot_id": bot_id, "action": "restart", "queued": True, "command": queued}
-        ok, data = await _http("POST", f"/bot/{bot_id}/restart")
-        return data if ok else {"error": data.get("error", f"Failed to restart {bot_id}")}
+            return {"agent_id": agent_id, "action": "restart", "queued": True, "command": queued}
+        ok, data = await _http("POST", f"/agent/{agent_id}/restart")
+        return data if ok else {"error": data.get("error", f"Failed to restart {agent_id}")}
 
     @mcp.tool()
-    async def bot_events(bot_id: str) -> dict[str, Any]:
-        """Get recent events (actions, errors, status changes) for a bot."""
+    async def agent_events(agent_id: str) -> dict[str, Any]:
+        """Get recent events (actions, errors, status changes) for an agent."""
         if manager is not None:
-            bot = manager.bots.get(bot_id)
-            if bot is None:
-                return {"error": f"Bot {bot_id} not found"}
+            agent = manager.agents.get(agent_id)
+            if agent is None:
+                return {"error": f"Agent {agent_id} not found"}
             events: list[dict[str, Any]] = [
                 {"type": "action", **action} if isinstance(action, dict) else {"type": "action", "name": action}
-                for action in getattr(bot, "recent_actions", None) or []
+                for action in getattr(agent, "recent_actions", None) or []
             ]
-            if bot.error_message:
+            if agent.error_message:
                 events.append(
                     {
                         "type": "error",
-                        "message": bot.error_message,
-                        "error_type": getattr(bot, "error_type", None),
-                        "timestamp": getattr(bot, "error_timestamp", None),
+                        "message": agent.error_message,
+                        "error_type": getattr(agent, "error_type", None),
+                        "timestamp": getattr(agent, "error_timestamp", None),
                     }
                 )
-            return {"bot_id": bot_id, "state": bot.state, "events": events}
-        ok, data = await _http("GET", f"/bot/{bot_id}/events")
-        return data if ok else {"error": data.get("error", f"Failed to get events for {bot_id}")}
+            return {"agent_id": agent_id, "state": agent.state, "events": events}
+        ok, data = await _http("GET", f"/agent/{agent_id}/events")
+        return data if ok else {"error": data.get("error", f"Failed to get events for {agent_id}")}
 
     return mcp

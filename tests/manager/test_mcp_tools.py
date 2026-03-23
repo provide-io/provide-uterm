@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import SwarmManager
+from provide.terminal.manager.core import AgentManager
 from provide.terminal.manager.mcp_tools import TOOL_COUNT, create_manager_mcp_tools
-from provide.terminal.manager.models import BotStatusBase
-from provide.terminal.manager.process import BotProcessManager
+from provide.terminal.manager.models import AgentStatusBase
+from provide.terminal.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -26,7 +26,7 @@ class FakeWorkerPlugin:
     def worker_module(self) -> str:
         return "fake.worker"
 
-    def configure_worker_env(self, env, bot_status, manager, **kwargs):
+    def configure_worker_env(self, env, agent_status, manager, **kwargs):
         pass
 
 
@@ -42,19 +42,19 @@ def config(tmp_path):
 
 @pytest.fixture
 def manager(config):
-    mgr = SwarmManager(config)
+    mgr = AgentManager(config)
     mgr.broadcast_status = AsyncMock()
     return mgr
 
 
 @pytest.fixture
 def pm(manager, tmp_path):
-    pm = BotProcessManager(
+    pm = AgentProcessManager(
         manager,
         worker_registry={"test_game": FakeWorkerPlugin()},
         log_dir=str(tmp_path / "logs"),
     )
-    manager.bot_process_manager = pm
+    manager.agent_process_manager = pm
     return pm
 
 
@@ -101,6 +101,33 @@ class TestFactory:
         tools = await app.list_tools()
         assert len(tools) == TOOL_COUNT
 
+    @pytest.mark.asyncio
+    async def test_on_first_http_callback_invoked(self):
+        """Test that on_first_http callback is invoked before first HTTP request."""
+        from unittest.mock import AsyncMock, patch
+
+        callback_mock = AsyncMock()
+
+        with patch("provide.terminal.manager.mcp_tools._http_request") as mock_http_request:
+            # Mock the HTTP request to return swarm status
+            mock_http_request.return_value = (
+                True,
+                {"total_agents": 0, "running_agents": 0, "error_agents": 0, "paused": False},
+            )
+
+            app = create_manager_mcp_tools(base_url="http://localhost:9999", on_first_http=callback_mock)
+
+            # Call a tool that makes an HTTP request
+            result = await _call(app, "swarm_status")
+
+            # Callback should have been invoked once
+            assert callback_mock.call_count == 1
+            assert result["total_agents"] == 0
+
+            # Call again to ensure callback is not invoked twice
+            result = await _call(app, "swarm_status")
+            assert callback_mock.call_count == 1
+
 
 # ---------------------------------------------------------------------------
 # Swarm-level tools
@@ -110,15 +137,15 @@ class TestFactory:
 class TestSwarmStatus:
     @pytest.mark.asyncio
     async def test_returns_status_dict(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         result = await _call(mcp_app, "swarm_status")
-        assert result["total_bots"] == 1
+        assert result["total_agents"] == 1
 
 
 class TestSwarmPause:
     @pytest.mark.asyncio
     async def test_pauses_swarm(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         result = await _call(mcp_app, "swarm_pause")
         assert result["paused"] is True
         assert manager.swarm_paused is True
@@ -128,22 +155,22 @@ class TestSwarmResume:
     @pytest.mark.asyncio
     async def test_resumes_swarm(self, mcp_app, manager, pm):
         manager.swarm_paused = True
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.bots["bot_000"].paused = True
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.agents["agent_000"].paused = True
         result = await _call(mcp_app, "swarm_resume")
         assert result["paused"] is False
-        assert manager.bots["bot_000"].paused is False
+        assert manager.agents["agent_000"].paused is False
 
 
 class TestSwarmKillAll:
     @pytest.mark.asyncio
     async def test_kills_all(self, mcp_app, manager, pm):
         manager.cancel_spawn = AsyncMock(return_value=False)
-        manager.kill_bot = AsyncMock()
+        manager.kill_agent = AsyncMock()
         proc = MagicMock()
         proc.pid = 1
-        manager.processes["bot_000"] = proc
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
+        manager.processes["agent_000"] = proc
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         result = await _call(mcp_app, "swarm_kill_all")
         assert result["count"] == 1
 
@@ -152,18 +179,18 @@ class TestSwarmClear:
     @pytest.mark.asyncio
     async def test_clears_all(self, mcp_app, manager, pm):
         manager.cancel_spawn = AsyncMock(return_value=False)
-        manager.kill_bot = AsyncMock()
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
+        manager.kill_agent = AsyncMock()
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         result = await _call(mcp_app, "swarm_clear")
         assert result["cleared"] == 1
-        assert len(manager.bots) == 0
+        assert len(manager.agents) == 0
 
 
 class TestSwarmPrune:
     @pytest.mark.asyncio
     async def test_prunes_dead(self, mcp_app, manager, pm):
-        manager.bots["bot_live"] = BotStatusBase(bot_id="bot_live", state="running")
-        manager.bots["bot_dead"] = BotStatusBase(bot_id="bot_dead", state="error")
+        manager.agents["agent_live"] = AgentStatusBase(agent_id="agent_live", state="running")
+        manager.agents["agent_dead"] = AgentStatusBase(agent_id="agent_dead", state="error")
         result = await _call(mcp_app, "swarm_prune")
         assert result["pruned"] == 1
         assert result["remaining"] == 1
@@ -173,102 +200,102 @@ class TestSwarmSetDesired:
     @pytest.mark.asyncio
     async def test_sets_desired(self, mcp_app, manager, pm):
         result = await _call(mcp_app, "swarm_set_desired", {"count": 10})
-        assert result["desired_bots"] == 10
-        assert manager.desired_bots == 10
+        assert result["desired_agents"] == 10
+        assert manager.desired_agents == 10
 
 
 # ---------------------------------------------------------------------------
-# Per-bot tools
+# Per-agent tools
 # ---------------------------------------------------------------------------
 
 
-class TestBotList:
+class TestAgentList:
     @pytest.mark.asyncio
-    async def test_lists_all_bots(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.bots["bot_001"] = BotStatusBase(bot_id="bot_001", state="error")
-        result = await _call(mcp_app, "bot_list")
+    async def test_lists_all_agents(self, mcp_app, manager, pm):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.agents["agent_001"] = AgentStatusBase(agent_id="agent_001", state="error")
+        result = await _call(mcp_app, "agent_list")
         assert result["total"] == 2
 
     @pytest.mark.asyncio
     async def test_filters_by_state(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.bots["bot_001"] = BotStatusBase(bot_id="bot_001", state="error")
-        result = await _call(mcp_app, "bot_list", {"state": "running"})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.agents["agent_001"] = AgentStatusBase(agent_id="agent_001", state="error")
+        result = await _call(mcp_app, "agent_list", {"state": "running"})
         assert result["total"] == 1
-        assert result["bots"][0]["bot_id"] == "bot_000"
+        assert result["agents"][0]["agent_id"] == "agent_000"
 
 
-class TestBotStatus:
+class TestAgentStatus:
     @pytest.mark.asyncio
-    async def test_returns_bot(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        result = await _call(mcp_app, "bot_status", {"bot_id": "bot_000"})
-        assert result["bot_id"] == "bot_000"
+    async def test_returns_agent(self, mcp_app, manager, pm):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        result = await _call(mcp_app, "agent_status", {"agent_id": "agent_000"})
+        assert result["agent_id"] == "agent_000"
         assert result["state"] == "running"
 
     @pytest.mark.asyncio
     async def test_not_found(self, mcp_app, manager, pm):
-        result = await _call(mcp_app, "bot_status", {"bot_id": "nope"})
+        result = await _call(mcp_app, "agent_status", {"agent_id": "nope"})
         assert "error" in result
 
 
-class TestBotKill:
+class TestAgentKill:
     @pytest.mark.asyncio
-    async def test_kills_bot(self, mcp_app, manager, pm):
-        manager.kill_bot = AsyncMock()
+    async def test_kills_agent(self, mcp_app, manager, pm):
+        manager.kill_agent = AsyncMock()
         proc = MagicMock()
         proc.pid = 1
-        manager.processes["bot_000"] = proc
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.desired_bots = 5
-        result = await _call(mcp_app, "bot_kill", {"bot_id": "bot_000"})
+        manager.processes["agent_000"] = proc
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.desired_agents = 5
+        result = await _call(mcp_app, "agent_kill", {"agent_id": "agent_000"})
         assert result["action"] == "kill"
-        assert manager.desired_bots == 4
+        assert manager.desired_agents == 4
 
 
-class TestBotPause:
+class TestAgentPause:
     @pytest.mark.asyncio
-    async def test_pauses_bot(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        result = await _call(mcp_app, "bot_pause", {"bot_id": "bot_000"})
+    async def test_pauses_agent(self, mcp_app, manager, pm):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        result = await _call(mcp_app, "agent_pause", {"agent_id": "agent_000"})
         assert result["paused"] is True
-        assert manager.bots["bot_000"].paused is True
+        assert manager.agents["agent_000"].paused is True
 
 
-class TestBotResume:
+class TestAgentResume:
     @pytest.mark.asyncio
-    async def test_resumes_bot(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.bots["bot_000"].paused = True
-        result = await _call(mcp_app, "bot_resume", {"bot_id": "bot_000"})
+    async def test_resumes_agent(self, mcp_app, manager, pm):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.agents["agent_000"].paused = True
+        result = await _call(mcp_app, "agent_resume", {"agent_id": "agent_000"})
         assert result["paused"] is False
-        assert manager.bots["bot_000"].paused is False
+        assert manager.agents["agent_000"].paused is False
 
 
-class TestBotRestart:
+class TestAgentRestart:
     @pytest.mark.asyncio
     async def test_queues_restart(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        result = await _call(mcp_app, "bot_restart", {"bot_id": "bot_000"})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        result = await _call(mcp_app, "agent_restart", {"agent_id": "agent_000"})
         assert result["queued"] is True
-        assert manager.bots["bot_000"].pending_command_type == "restart"
+        assert manager.agents["agent_000"].pending_command_type == "restart"
 
 
 class TestSwarmSpawnBatch:
     @pytest.mark.asyncio
     async def test_spawns_batch(self, mcp_app, manager, pm, tmp_path):
-        cfg = tmp_path / "bot.yaml"
+        cfg = tmp_path / "agent.yaml"
         cfg.write_text("worker_type: default\n")
         manager.start_spawn_swarm = AsyncMock()
         result = await _call(mcp_app, "swarm_spawn_batch", {"config_paths": [str(cfg)], "group_size": 1})
         assert result["status"] == "spawning"
-        assert result["total_bots"] == 1
-        assert manager.desired_bots == 1
+        assert result["total_agents"] == 1
+        assert manager.desired_agents == 1
 
     @pytest.mark.asyncio
     async def test_calculates_groups(self, mcp_app, manager, pm, tmp_path):
-        cfg = tmp_path / "bot.yaml"
+        cfg = tmp_path / "agent.yaml"
         cfg.write_text("worker_type: default\n")
         manager.start_spawn_swarm = AsyncMock()
         result = await _call(mcp_app, "swarm_spawn_batch", {"config_paths": [str(cfg)] * 3, "group_size": 2})
@@ -276,59 +303,59 @@ class TestSwarmSpawnBatch:
         assert result["estimated_time_seconds"] > 0
 
 
-class TestBotKillErrors:
+class TestAgentKillErrors:
     @pytest.mark.asyncio
     async def test_not_found(self, mcp_app, manager, pm):
-        result = await _call(mcp_app, "bot_kill", {"bot_id": "nope"})
+        result = await _call(mcp_app, "agent_kill", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
     async def test_kill_no_process(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        manager.desired_bots = 0  # don't decrement
-        result = await _call(mcp_app, "bot_kill", {"bot_id": "bot_000"})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        manager.desired_agents = 0  # don't decrement
+        result = await _call(mcp_app, "agent_kill", {"agent_id": "agent_000"})
         assert result["state"] == "stopped"
 
 
-class TestBotPauseErrors:
+class TestAgentPauseErrors:
     @pytest.mark.asyncio
     async def test_not_found(self, mcp_app, manager, pm):
-        result = await _call(mcp_app, "bot_pause", {"bot_id": "nope"})
+        result = await _call(mcp_app, "agent_pause", {"agent_id": "nope"})
         assert "error" in result
 
 
-class TestBotResumeErrors:
+class TestAgentResumeErrors:
     @pytest.mark.asyncio
     async def test_not_found(self, mcp_app, manager, pm):
-        result = await _call(mcp_app, "bot_resume", {"bot_id": "nope"})
+        result = await _call(mcp_app, "agent_resume", {"agent_id": "nope"})
         assert "error" in result
 
 
-class TestBotRestartErrors:
+class TestAgentRestartErrors:
     @pytest.mark.asyncio
     async def test_not_found(self, mcp_app, manager, pm):
-        result = await _call(mcp_app, "bot_restart", {"bot_id": "nope"})
+        result = await _call(mcp_app, "agent_restart", {"agent_id": "nope"})
         assert "error" in result
 
 
-class TestBotEvents:
+class TestAgentEvents:
     @pytest.mark.asyncio
     async def test_returns_events(self, mcp_app, manager, pm):
-        bot = BotStatusBase(bot_id="bot_000", state="error", error_message="something broke")
-        bot.recent_actions = [{"name": "trade", "time": 1.0}]
-        manager.bots["bot_000"] = bot
-        result = await _call(mcp_app, "bot_events", {"bot_id": "bot_000"})
+        agent = AgentStatusBase(agent_id="agent_000", state="error", error_message="something broke")
+        agent.recent_actions = [{"name": "trade", "time": 1.0}]
+        manager.agents["agent_000"] = agent
+        result = await _call(mcp_app, "agent_events", {"agent_id": "agent_000"})
         assert result["state"] == "error"
         assert len(result["events"]) == 2  # 1 action + 1 error
 
     @pytest.mark.asyncio
     async def test_not_found(self, mcp_app, manager, pm):
-        result = await _call(mcp_app, "bot_events", {"bot_id": "nope"})
+        result = await _call(mcp_app, "agent_events", {"agent_id": "nope"})
         assert "error" in result
 
     @pytest.mark.asyncio
     async def test_no_error_message(self, mcp_app, manager, pm):
-        manager.bots["bot_000"] = BotStatusBase(bot_id="bot_000", state="running")
-        result = await _call(mcp_app, "bot_events", {"bot_id": "bot_000"})
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        result = await _call(mcp_app, "agent_events", {"agent_id": "agent_000"})
         assert result["state"] == "running"
         assert result["events"] == []

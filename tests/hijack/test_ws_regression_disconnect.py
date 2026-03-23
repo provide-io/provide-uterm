@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Worker-disconnect critical regression tests (split from test_hijack_ws_regression.py).
 
 Covers: browser worker_disconnected notification, stale REST/WS lease clearing on

@@ -6,13 +6,13 @@
 
 Wraps :mod:`httpx.AsyncClient` to provide typed methods for every hijack
 and session endpoint.  Returns ``tuple[bool, dict]`` from each call —
-matching the bbsbot ``_manager_request()`` convention for zero-effort
+matching the agent ``_manager_request()`` convention for zero-effort
 migration.
 
 Usage::
 
     async with HijackClient("http://localhost:8780") as c:
-        ok, data = await c.acquire("worker-1", owner="bot")
+        ok, data = await c.acquire("worker-1", owner="agent")
         if ok:
             ok, snap = await c.snapshot("worker-1", data["hijack_id"])
 """
@@ -39,7 +39,7 @@ class HijackClient:
         Root URL of the provide-terminal server (e.g. ``http://localhost:8780``).
     entity_prefix:
         Path prefix for worker endpoints.  ``"/worker"`` for provide-terminal,
-        ``"/bot"`` for bbsbot compatibility.
+        ``"/agent"`` for agent compatibility.
     timeout:
         Default request timeout in seconds.
     headers:

@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Targeted tests for websockets.py edge paths (ws:58-61, 65-66, 286, 323, 386)."""
 
 from __future__ import annotations

@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Regression tests for the terminal hijack REST routes.
 
 Covers: Round-3 hijack ID propagation, Fix-A event loop safety, Round-7

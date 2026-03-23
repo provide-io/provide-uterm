@@ -1,0 +1,4 @@
+[console_scripts]
+uterm = provide.terminal.cli:main
+uterm-mcp = provide.terminal.mcp.cli:main
+uterm-server = provide.terminal.server.cli:main

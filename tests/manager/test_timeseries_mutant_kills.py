@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Mutation-killing tests for manager/timeseries/manager.py."""
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ from provide.terminal.manager.timeseries.manager import TimeseriesManager
 
 
 def _make_status(
-    total_bots: int = 5,
+    total_agents: int = 5,
     running: int = 3,
     completed: int = 1,
     errors: int = 0,
@@ -26,7 +25,7 @@ def _make_status(
     uptime_seconds: float = 100.0,
 ) -> MagicMock:
     s = MagicMock()
-    s.total_bots = total_bots
+    s.total_agents = total_agents
     s.running = running
     s.completed = completed
     s.errors = errors
@@ -285,25 +284,25 @@ class TestTrimToLatestEpoch:
         assert result == []
 
     def test_single_row_returns_as_is(self) -> None:
-        row = {"total_turns": 10, "total_bots": 2}
+        row = {"total_turns": 10, "total_agents": 2}
         result = TimeseriesManager.trim_to_latest_epoch([row])
         assert result == [row]
 
     def test_continuous_run_returns_all(self) -> None:
         """Monotonically increasing turns — no epoch break."""
-        rows = [{"total_turns": i * 10, "total_bots": 3} for i in range(1, 6)]
+        rows = [{"total_turns": i * 10, "total_agents": 3} for i in range(1, 6)]
         result = TimeseriesManager.trim_to_latest_epoch(rows)
         assert len(result) == 5
 
     def test_turn_reset_triggers_new_epoch(self) -> None:
         """A big drop in turns signals a new epoch; only return from that point."""
         rows = [
-            {"total_turns": 100, "total_bots": 3},
-            {"total_turns": 110, "total_bots": 3},
-            {"total_turns": 120, "total_bots": 3},
+            {"total_turns": 100, "total_agents": 3},
+            {"total_turns": 110, "total_agents": 3},
+            {"total_turns": 120, "total_agents": 3},
             # epoch break: turns drop drastically
-            {"total_turns": 5, "total_bots": 3},
-            {"total_turns": 10, "total_bots": 3},
+            {"total_turns": 5, "total_agents": 3},
+            {"total_turns": 10, "total_agents": 3},
         ]
         result = TimeseriesManager.trim_to_latest_epoch(rows)
         # Should return from the drop point
@@ -311,14 +310,14 @@ class TestTrimToLatestEpoch:
         assert result[0]["total_turns"] == 5
 
     def test_bot_count_zero_triggers_new_epoch(self) -> None:
-        """Bot count dropping to 0 after being non-zero triggers epoch break."""
+        """Agent count dropping to 0 after being non-zero triggers epoch break."""
         rows = [
-            {"total_turns": 10, "total_bots": 3},
-            {"total_turns": 20, "total_bots": 0},
-            {"total_turns": 30, "total_bots": 2},
+            {"total_turns": 10, "total_agents": 3},
+            {"total_turns": 20, "total_agents": 0},
+            {"total_turns": 30, "total_agents": 2},
         ]
         result = TimeseriesManager.trim_to_latest_epoch(rows)
-        assert result[0]["total_bots"] == 0
+        assert result[0]["total_agents"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -347,13 +346,13 @@ class TestBuildRow:
         assert call_args[1] == "startup"
 
     def test_without_plugin_returns_basic_fields(self, tmp_path: Path) -> None:
-        """Default row has ts/reason/total_bots/running/completed/errors/stopped/uptime."""
+        """Default row has ts/reason/total_agents/running/completed/errors/stopped/uptime."""
         mgr = _make_mgr(tmp_path, plugin=None)
-        status = _make_status(total_bots=7, running=4)
+        status = _make_status(total_agents=7, running=4)
         row = mgr._build_row(status, "interval")
         assert "ts" in row
         assert row["reason"] == "interval"
-        assert row["total_bots"] == 7
+        assert row["total_agents"] == 7
         assert row["running"] == 4
 
 
@@ -374,7 +373,7 @@ class TestWriteSample:
     def test_write_sample_uses_build_row(self, tmp_path: Path) -> None:
         """mut_2: build_row(None, reason) — status arg not None."""
         mgr = _make_mgr(tmp_path)
-        status = _make_status(total_bots=9)
+        status = _make_status(total_agents=9)
 
         original_build_row = mgr._build_row
         captured: list[Any] = []

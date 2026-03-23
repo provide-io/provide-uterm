@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Swarm manager data models and static file handler."""
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
     from starlette.types import Scope
 
 __all__ = [
-    "BotStatusBase",
+    "AgentStatusBase",
     "DashboardStaticFiles",
     "SpawnBatchRequest",
     "SwarmStatus",
@@ -41,15 +40,15 @@ class DashboardStaticFiles(StaticFiles):
         return response
 
 
-class BotStatusBase(BaseModel):
-    """Game-agnostic status fields shared by all bot types.
+class AgentStatusBase(BaseModel):
+    """Game-agnostic status fields shared by all agent types.
 
     Each game extends this with game-specific status fields.
-    The ``state`` field tracks the bot's life-cycle: queued, running,
+    The ``state`` field tracks the agent's life-cycle: queued, running,
     paused, completed, or error.
     """
 
-    bot_id: str
+    agent_id: str
     session_id: str | None = None
     state: str = "unknown"
     pid: int | None = None
@@ -86,7 +85,7 @@ class SwarmStatus(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    total_bots: int
+    total_agents: int
     running: int
     completed: int
     errors: int
@@ -97,12 +96,12 @@ class SwarmStatus(BaseModel):
     timeseries_samples: int = 0
     swarm_paused: bool = False
     bust_respawn: bool = False
-    desired_bots: int = 0
-    bots: list[dict[str, Any]]
+    desired_agents: int = 0
+    agents: list[Any]
 
 
 class SpawnBatchRequest(BaseModel):
-    """Request body for batch spawning bots."""
+    """Request body for batch spawning agents."""
 
     config_paths: list[str] = Field(min_length=1)
     group_size: int = Field(default=1, gt=0)

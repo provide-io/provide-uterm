@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Targeted tests to cover hub.py, routes_rest.py, and routes_ws.py edge paths."""
 
 from __future__ import annotations

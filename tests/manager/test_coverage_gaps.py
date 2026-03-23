@@ -1,6 +1,7 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-
+#
 """Coverage tests for manager core, app, and CLI gaps."""
 
 from __future__ import annotations
@@ -12,8 +13,8 @@ from fastapi.testclient import TestClient
 
 from provide.terminal.manager.app import create_manager_app
 from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import SwarmManager
-from provide.terminal.manager.models import BotStatusBase
+from provide.terminal.manager.core import AgentManager
+from provide.terminal.manager.models import AgentStatusBase
 
 
 @pytest.fixture
@@ -29,33 +30,33 @@ def config(tmp_path):
 
 @pytest.fixture
 def manager(config):
-    return SwarmManager(config)
+    return AgentManager(config)
 
 
-class TestCoreLoadStateSkipsBadBot:
-    """Cover lines 232-233: bot_state_load_skipped warning."""
+class TestCoreLoadStateSkipsBadAgent:
+    """Cover lines 232-233: agent_state_load_skipped warning."""
 
-    def test_load_state_skips_bot_with_bad_data(self, manager, tmp_path):
+    def test_load_state_skips_agent_with_bad_data(self, manager, tmp_path):
         state = {
-            "bots": {
-                "bot_bad": {"bot_id": 12345},  # bot_id must be str
+            "agents": {
+                "agent_bad": {"agent_id": 12345},  # agent_id must be str
             },
         }
         manager._write_state(state)
         manager._load_state()
-        assert "bot_bad" not in manager.bots
+        assert "agent_bad" not in manager.agents
 
-    def test_load_state_skips_already_known_bot(self, manager, tmp_path):
-        """arc 223->221: bot_id already in bots → skip the if block, state not overwritten."""
-        manager.bots["bot_known"] = BotStatusBase(bot_id="bot_known", state="running")
+    def test_load_state_skips_already_known_agent(self, manager, tmp_path):
+        """arc 223->221: agent_id already in agents → skip the if block, state not overwritten."""
+        manager.agents["agent_known"] = AgentStatusBase(agent_id="agent_known", state="running")
         state = {
-            "bots": {
-                "bot_known": {"bot_id": "bot_known", "state": "stopped"},
+            "agents": {
+                "agent_known": {"agent_id": "agent_known", "state": "stopped"},
             },
         }
         manager._write_state(state)
         manager._load_state()
-        assert manager.bots["bot_known"].state == "running"
+        assert manager.agents["agent_known"].state == "running"
 
 
 class TestCoreRunMethod:
@@ -64,10 +65,10 @@ class TestCoreRunMethod:
     @pytest.mark.asyncio
     async def test_run_starts_and_stops(self, config, tmp_path):
         config.state_file = str(tmp_path / "state.json")
-        mgr = SwarmManager(config)
+        mgr = AgentManager(config)
         pm_mock = MagicMock()
         pm_mock.monitor_processes = AsyncMock()
-        mgr.bot_process_manager = pm_mock
+        mgr.agent_process_manager = pm_mock
         mgr.timeseries_manager.loop = AsyncMock()
 
         mock_server = AsyncMock()
@@ -80,10 +81,10 @@ class TestCoreRunMethod:
     @pytest.mark.asyncio
     async def test_run_shuts_down_hub(self, config, tmp_path):
         config.state_file = str(tmp_path / "state.json")
-        mgr = SwarmManager(config)
+        mgr = AgentManager(config)
         pm_mock = MagicMock()
         pm_mock.monitor_processes = AsyncMock()
-        mgr.bot_process_manager = pm_mock
+        mgr.agent_process_manager = pm_mock
         mgr.timeseries_manager.loop = AsyncMock()
 
         mock_hub = AsyncMock()

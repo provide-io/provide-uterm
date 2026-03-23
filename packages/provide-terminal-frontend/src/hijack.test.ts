@@ -746,3 +746,91 @@ describe("mobileKeys=false option", () => {
     expect(container.querySelectorAll(".mkey")).toHaveLength(0);
   });
 });
+
+// ── Local echo and activity indicator ─────────────────────────────────────────
+
+describe("local echo and activity indicator", () => {
+  it("widget has local echo tracking state variables", () => {
+    const { widget } = makeWidget();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = widget as any;
+
+    // Verify state variables exist for local echo feature
+    expect(w._lastLocalEcho).toBeDefined();
+    expect(w._lastLocalEchoTimer).toBeNull();
+    expect(w._activityFlashTimer).toBeNull();
+    expect(w._indicatorStyleCache).toBeNull();
+    expect(w._statusDotElement).toBeNull();
+  });
+
+  it("mobile key buttons send input (tests local echo code path)", () => {
+    const { container } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "hello", hijacked: true, hijacked_by_me: true });
+
+    // Find and click ESC button (which calls _echoInput internally)
+    const escBtn = Array.from(container.querySelectorAll(".mkey")).find(
+      (b) => b.textContent === "ESC",
+    ) as HTMLButtonElement;
+
+    const sentBefore = getWs().sent.length;
+    escBtn.click();
+
+    // Should have sent input message (proves _echoInput and _wsSend were called)
+    const newMessages = getWs().sent.slice(sentBefore);
+    expect(newMessages.some((f) => f.includes("\x1b"))).toBe(true);
+  });
+
+  it("text input field sends input (tests local echo code path)", () => {
+    const { container } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "hello", hijacked: true, hijacked_by_me: true });
+
+    const field = q(container, "inputfield") as HTMLInputElement;
+    field.value = "test";
+
+    const sentBefore = getWs().sent.length;
+    (q(container, "inputsend") as HTMLButtonElement).click();
+
+    // Should have sent input message (proves _echoInput and _wsSend were called)
+    const newMessages = getWs().sent.slice(sentBefore);
+    expect(newMessages.some((f) => f.includes("test"))).toBe(true);
+  });
+
+  it("dispose clears local echo and activity flash timers", () => {
+    const { widget } = makeWidget();
+    getWs().open();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = widget as any;
+
+    // Set up timers
+    w._lastLocalEchoTimer = setTimeout(() => {}, 500);
+    w._activityFlashTimer = setTimeout(() => {}, 200);
+
+    // Dispose should clear them
+    widget.dispose();
+
+    // After dispose, timers should be null and cache cleared
+    expect(w._lastLocalEchoTimer).toBeNull();
+    expect(w._activityFlashTimer).toBeNull();
+    expect(w._statusDotElement).toBeNull();
+    expect(w._indicatorStyleCache).toBeNull();
+  });
+
+  it("indicator style caching works on repeated access", () => {
+    const { widget } = makeWidget();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = widget as any;
+
+    // First call caches the style
+    const style1 = w._getIndicatorStyle();
+    expect(w._indicatorStyleCache).toBe(style1);
+
+    // Second call returns cached value (no localStorage access)
+    const style2 = w._getIndicatorStyle();
+    expect(style2).toBe(style1);
+    expect(w._indicatorStyleCache).toBe(style1);
+  });
+});

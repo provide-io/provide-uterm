@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Pydantic configuration model for the swarm manager."""
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ class ManagerConfig(BaseModel):
     title: str = "Swarm Manager"
     host: str = "127.0.0.1"
     port: int = 2272
-    max_bots: int = 200
+    max_agents: int = 200
     log_level: str = "info"
 
     # File paths (relative or absolute).
@@ -47,6 +46,10 @@ class ManagerConfig(BaseModel):
 
     # Worker env-var prefix forwarded to subprocesses.
     worker_env_prefix: str = "UTERM_"
+
+    # Auto-shutdown when all MCP clients disconnect and no agents are active.
+    auto_shutdown_enabled: bool = False
+    auto_shutdown_grace_s: float = 30.0
 
     # Paths that never require auth.
     auth_public_paths: list[str] = Field(

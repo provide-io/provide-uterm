@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Second-pass coverage gap tests for remaining missing branches."""
 
 from __future__ import annotations
@@ -72,7 +71,7 @@ class TestBridgeInvalidUriFixed:
         bot.set_hijacked = AsyncMock()
 
         bridge = TermBridge.__new__(TermBridge)
-        bridge._bot = bot
+        bridge._worker = bot
         bridge._worker_id = "w1"
         bridge._manager_url = "not-a-valid-url"
         bridge._max_ws_message_bytes = 1024 * 1024
