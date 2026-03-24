@@ -24,20 +24,21 @@ except (ImportError, ModuleNotFoundError):
     MAX_EXPECT_REGEX_LEN = 10000  # type: ignore[assignment]
     PromptRegexError = Exception  # type: ignore[assignment]
 
-    def build_hijack_events_response(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def build_hijack_events_response(*_args, **_kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("Should not be called during validation")
 
-    def build_hijack_snapshot_response(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def build_hijack_snapshot_response(*_args, **_kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("Should not be called during validation")
 
-    def compile_expect_regex(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def compile_expect_regex(*_args, **_kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("Should not be called during validation")
 
-    def extract_prompt_id(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def extract_prompt_id(*_args, **_kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("Should not be called during validation")
 
-    def snapshot_matches(*args, **kwargs):  # type: ignore[no-untyped-def]
+    def snapshot_matches(*_args, **_kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("Should not be called during validation")
+
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.contracts import RuntimeProtocol
@@ -474,5 +475,30 @@ async def _handle_session_route(
             return json_response({"error": "no_worker"}, status=409)
         analysis = await _wait_for_analysis(runtime, timeout_ms=5_000)
         return json_response({"ok": True, "analysis": analysis, "worker_id": runtime.worker_id})
+
+    if sub == "" and method == "DELETE":
+        role = await runtime.browser_role_for_request(request)
+        if role not in {"operator", "admin"}:
+            return json_response({"error": "operator or admin role required"}, status=403)
+        # Close any active worker connection.
+        worker_ws = runtime.worker_ws
+        if worker_ws is not None:
+            with contextlib.suppress(Exception):
+                worker_ws.close(1001, "session deleted")
+        return json_response({"ok": True, "session_id": runtime.worker_id, "deleted": True})
+
+    if sub == "restart" and method == "POST":
+        role = await runtime.browser_role_for_request(request)
+        if role not in {"operator", "admin"}:
+            return json_response({"error": "operator or admin role required"}, status=403)
+        # Clear in-memory terminal state so a fresh worker starts clean.
+        runtime.last_snapshot = None
+        # If a worker is connected, close its socket — the Python bridge will
+        # reconnect and restart the underlying connector automatically.
+        worker_ws = runtime.worker_ws
+        if worker_ws is not None:
+            with contextlib.suppress(Exception):
+                worker_ws.close(1001, "restart requested")
+        return json_response({**_session_status_item(runtime), "restarted": True})
 
     return json_response({"error": "not_found", "path": path}, status=404)

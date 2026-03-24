@@ -14,9 +14,9 @@ DIST = ROOT / "dist"
 
 def _expected_frontend_files() -> tuple[str, ...]:
     """Discover all frontend files from the source tree at build time."""
-    frontend = ROOT / "src" / "provide" / "terminal" / "frontend"
+    frontend = ROOT / "packages" / "provide-terminal" / "src" / "provide" / "terminal" / "frontend"
     return tuple(
-        str(p.relative_to(ROOT / "src")).replace("\\", "/")
+        str(p.relative_to(ROOT / "packages" / "provide-terminal" / "src")).replace("\\", "/")
         for p in frontend.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts and not p.name.startswith(".")
     )
@@ -55,7 +55,7 @@ def main() -> int:
 
     required = _expected_frontend_files()
     if not required:
-        raise RuntimeError("no frontend files found in src/provide/terminal/frontend/")
+        raise RuntimeError("no frontend files found in packages/provide-terminal/src/provide/terminal/frontend/")
 
     wheel_members = _wheel_members(wheels[-1])
     sdist_members = _sdist_members(sdists[-1])

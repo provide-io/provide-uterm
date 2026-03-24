@@ -197,7 +197,9 @@ async def _handle_desired_state(pm: AgentProcessManager) -> None:
         excess = -deficit
         to_kill = sorted(active_agents, key=lambda b: b.agent_id, reverse=True)[:excess]
         for agent in to_kill:
-            logger.info("desired_state_killing", agent_id=agent.agent_id, excess=excess, desired=pm.manager.desired_agents)
+            logger.info(
+                "desired_state_killing", agent_id=agent.agent_id, excess=excess, desired=pm.manager.desired_agents
+            )
             with contextlib.suppress(OSError, ProcessLookupError, RuntimeError):
                 await pm.manager.kill_agent(agent.agent_id)
             with contextlib.suppress(OSError, RuntimeError):

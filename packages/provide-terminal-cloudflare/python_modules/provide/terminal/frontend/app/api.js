@@ -1,3 +1,7 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 import { apiJson } from "../server-common.js";
 function normalizeMode(value) {
     return value === "hijack" ? "hijack" : "open";
@@ -57,6 +61,9 @@ export async function clearSession(sessionId) {
 }
 export async function restartSession(sessionId) {
     return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/restart`, "POST"));
+}
+export async function deleteSession(sessionId) {
+    await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}`, "DELETE");
 }
 export async function analyzeSession(sessionId) {
     const result = await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/analyze`, "POST");

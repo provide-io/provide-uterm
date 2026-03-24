@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import base64
+import json
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-
-import jwt
-from jwt import InvalidTokenError
 
 # Module-level JWKS cache: url → (fetched_at, jwks_dict).
 # Avoids a network round-trip on every authenticated request within the same
@@ -13,6 +12,22 @@ from jwt import InvalidTokenError
 # in different isolates), so the TTL only matters within a single long-lived isolate.
 _JWKS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _JWKS_CACHE_TTL_S: float = 60.0
+
+# Detect CF Workers (Pyodide) runtime once at import time.
+_IN_CF_RUNTIME = False
+_js_crypto: Any = None
+_to_js: Any = None
+_js_object: Any = None
+try:
+    import js as _js_mod  # type: ignore[import-not-found]  # pragma: no cover
+
+    _js_crypto = _js_mod.crypto  # pragma: no cover
+    _js_object = _js_mod.Object  # pragma: no cover
+    from pyodide.ffi import to_js as _to_js  # type: ignore[import-not-found]  # pragma: no cover
+
+    _IN_CF_RUNTIME = True  # pragma: no cover
+except ImportError:
+    pass
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.config import JwtConfig
@@ -30,13 +45,31 @@ class Principal:
     roles: tuple[str, ...]
 
 
+def _b64url_decode(data: str) -> bytes:
+    """Decode base64url without padding."""
+    padding = 4 - len(data) % 4
+    if padding != 4:
+        data += "=" * padding
+    return base64.urlsafe_b64decode(data)
+
+
+def _parse_jwt_parts(token: str) -> tuple[dict[str, Any], dict[str, Any], bytes, bytes]:
+    """Split a JWT into (header, payload, signature, signing_input)."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise JwtValidationError("malformed JWT: expected 3 parts")
+    header = json.loads(_b64url_decode(parts[0]))
+    payload = json.loads(_b64url_decode(parts[1]))
+    signature = _b64url_decode(parts[2])
+    signing_input = f"{parts[0]}.{parts[1]}".encode()
+    return header, payload, signature, signing_input
+
+
 async def _fetch_jwks(url: str) -> dict[str, Any]:
     """Fetch JWKS data, with a per-isolate in-memory TTL cache.
 
     In Cloudflare Workers, uses the native ``js.fetch`` (async, non-blocking).
     Outside CF (tests / local dev), falls back to ``urllib`` as a last resort.
-    The cache avoids a network round-trip on every authenticated request within
-    the same isolate lifetime.
     """
     now = time.monotonic()
     cached = _JWKS_CACHE.get(url)
@@ -53,7 +86,6 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
         response = await _js_fetch(url)  # pragma: no cover
         result: dict[str, Any] = (await response.json()).to_py()  # pragma: no cover
     except ImportError:
-        import json
         import urllib.request
 
         _req = urllib.request.Request(url, headers={"User-Agent": "provide-terminal/1.0"})  # noqa: S310
@@ -64,19 +96,120 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
     return result
 
 
+def _find_jwk(jwks_data: dict[str, Any], kid: str | None, alg: str | None) -> dict[str, Any]:
+    """Find a matching JWK from JWKS data by kid or algorithm."""
+    keys = jwks_data.get("keys", [])
+    if not keys:
+        raise JwtValidationError("JWKS contains no keys")
+    for key in keys:
+        if kid is not None:
+            if key.get("kid") == kid:
+                return key
+        else:
+            key_alg = key.get("alg")
+            if alg is None or key_alg is None or key_alg == alg:
+                return key
+    raise JwtValidationError("no matching key found in JWKS")
+
+
+async def _verify_web_crypto(token: str, config: JwtConfig) -> dict[str, Any]:
+    """Verify and decode a JWT using the Web Crypto API (CF Workers / Pyodide).
+
+    Returns the validated claims dict.
+    """
+    header, payload, signature, signing_input = _parse_jwt_parts(token)
+
+    alg = header.get("alg")
+    if alg not in config.algorithms:
+        raise JwtValidationError(f"unsupported algorithm: {alg}")
+
+    if alg != "RS256":
+        raise JwtValidationError(f"Web Crypto path only supports RS256, got {alg}")
+
+    if not config.jwks_url:
+        raise JwtValidationError("Web Crypto verification requires jwks_url")
+
+    jwks_data = await _fetch_jwks(config.jwks_url)
+    jwk_dict = _find_jwk(jwks_data, header.get("kid"), alg)
+
+    algo_obj = _to_js({"name": "RSASSA-PKCS1-v1_5", "hash": "SHA-256"}, dict_converter=_js_object.fromEntries)  # type: ignore[name-defined]  # pragma: no cover
+    crypto_key = await _js_crypto.subtle.importKey(  # pragma: no cover
+        "jwk",
+        _to_js(jwk_dict, dict_converter=_js_object.fromEntries),  # type: ignore[name-defined]
+        algo_obj,
+        False,
+        _to_js(["verify"]),
+    )
+
+    valid = await _js_crypto.subtle.verify(  # pragma: no cover
+        "RSASSA-PKCS1-v1_5",
+        crypto_key,
+        _to_js(signature),
+        _to_js(signing_input),
+    )
+    if not valid:  # pragma: no cover
+        raise JwtValidationError("signature verification failed")
+
+    _validate_claims(payload, config)
+    return payload
+
+
+def _validate_claims(payload: dict[str, Any], config: JwtConfig) -> None:
+    """Validate standard JWT claims (exp, nbf, iss, aud)."""
+    now = time.time()
+    leeway = max(0, int(config.clock_skew_seconds))
+    _check_exp(payload, now, leeway)
+    _check_nbf(payload, now, leeway)
+    _check_issuer(payload, config)
+    _check_audience(payload, config)
+
+
+def _check_exp(payload: dict[str, Any], now: float, leeway: int) -> None:
+    exp = payload.get("exp")
+    if exp is None:
+        raise JwtValidationError("missing exp claim")
+    if now > exp + leeway:
+        raise JwtValidationError("token has expired")
+
+
+def _check_nbf(payload: dict[str, Any], now: float, leeway: int) -> None:
+    nbf = payload.get("nbf")
+    if nbf is not None and now < nbf - leeway:
+        raise JwtValidationError("token not yet valid")
+
+
+def _check_issuer(payload: dict[str, Any], config: JwtConfig) -> None:
+    if config.issuer and payload.get("iss") != config.issuer:
+        raise JwtValidationError("invalid issuer")
+
+
+def _check_audience(payload: dict[str, Any], config: JwtConfig) -> None:
+    if not config.audience:
+        return
+    aud = payload.get("aud")
+    expected = config.audience
+    if isinstance(aud, list):
+        if expected not in aud:
+            raise JwtValidationError("invalid audience")
+    elif aud != expected:
+        raise JwtValidationError("invalid audience")
+
+
 async def _resolve_signing_key(token: str, config: JwtConfig) -> Any:
     """Return the signing key to use for *token* based on *config*.
 
     Supports both static PEM keys and JWKS URLs (key rotation / RS256 / ES256).
     Uses async HTTP for JWKS so the V8 isolate is never blocked.
     """
+    import jwt as _jwt
+
     if config.jwks_url:
         jwks_data = await _fetch_jwks(config.jwks_url)
         try:
-            jwks = jwt.PyJWKSet.from_dict(jwks_data)
+            jwks = _jwt.PyJWKSet.from_dict(jwks_data)
         except Exception as exc:
             raise JwtValidationError(f"no matching key found in JWKS: {exc}") from exc
-        headers = jwt.get_unverified_header(token)
+        headers = _jwt.get_unverified_header(token)
         kid = headers.get("kid")
         alg = headers.get("alg")
         for key in jwks.keys:
@@ -84,7 +217,6 @@ async def _resolve_signing_key(token: str, config: JwtConfig) -> Any:
                 if key.key_id == kid:
                     return key.key
             else:
-                # No kid: match by algorithm to avoid returning an incompatible key.
                 key_alg = getattr(key, "algorithm_name", None)
                 if alg is None or key_alg is None or key_alg == alg:
                     return key.key
@@ -94,24 +226,16 @@ async def _resolve_signing_key(token: str, config: JwtConfig) -> Any:
     raise JwtValidationError("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode")
 
 
-async def decode_jwt(token: str, config: JwtConfig) -> Principal:
-    if config.mode in {"none", "dev"}:
-        return Principal(subject_id="dev", roles=("admin",))
-    if not config.public_key_pem and not config.jwks_url:
-        raise JwtValidationError("missing jwt public key")
+async def _verify_pyjwt(token: str, config: JwtConfig) -> dict[str, Any]:
+    """Verify and decode a JWT using PyJWT (tests / local dev)."""
+    import jwt
+    from jwt import InvalidTokenError
 
-    try:
-        key = await _resolve_signing_key(token, config)
-    except JwtValidationError:
-        raise
-    except Exception as exc:
-        raise JwtValidationError(f"failed to resolve signing key: {exc}") from exc
+    key = await _resolve_signing_key(token, config)
 
     options = {
         "verify_aud": bool(config.audience),
         "verify_iss": bool(config.issuer),
-        # Match FastAPI: only sub+exp required so Auth0/Google/Azure AD tokens
-        # that omit iat/nbf are accepted without config changes.
         "require": ["sub", "exp"],
     }
     try:
@@ -127,40 +251,60 @@ async def decode_jwt(token: str, config: JwtConfig) -> Principal:
     except InvalidTokenError as exc:
         raise JwtValidationError(str(exc)) from exc
 
+    return claims
+
+
+async def decode_jwt(token: str, config: JwtConfig) -> Principal:
+    if config.mode in {"none", "dev"}:
+        return Principal(subject_id="dev", roles=("admin",))
+    if not config.public_key_pem and not config.jwks_url:
+        raise JwtValidationError("missing jwt public key")
+
+    try:
+        if _IN_CF_RUNTIME:
+            claims = await _verify_web_crypto(token, config)  # pragma: no cover
+        else:
+            claims = await _verify_pyjwt(token, config)
+    except JwtValidationError:
+        raise
+    except Exception as exc:
+        raise JwtValidationError(f"failed to verify token: {exc}") from exc
+
     sub = str(claims.get("sub") or "")
     if not sub:
         raise JwtValidationError("missing sub")
 
-    roles_claim = getattr(config, "jwt_roles_claim", "roles")
-    scopes_claim = getattr(config, "jwt_scopes_claim", "scope")
+    roles = _extract_roles(claims, config)
+    return Principal(subject_id=sub, roles=roles)
 
-    raw_roles = claims.get(roles_claim, [])
-    if isinstance(raw_roles, str):
-        roles = tuple(part.strip() for part in raw_roles.split(",") if part.strip())
-    elif isinstance(raw_roles, list):
-        roles = tuple(str(role) for role in raw_roles)
-    else:
-        roles = ()
 
-    # Fall back to scope claim when no roles are present (e.g. Auth0 machine-to-machine tokens).
-    if not roles:
-        raw_scope = claims.get(scopes_claim, "")
-        if isinstance(raw_scope, str) and raw_scope:
-            roles = tuple(part.strip() for part in raw_scope.split() if part.strip())
+def _parse_roles_claim(raw: object) -> tuple[str, ...]:
+    """Parse a roles claim value (string, list, or other) into a tuple."""
+    if isinstance(raw, str):
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
+    if isinstance(raw, list):
+        return tuple(str(role) for role in raw)
+    return ()
 
-    # Apply group→role mapping when configured (e.g. JWT_ROLE_MAP={"engineering":"admin"}).
-    # Each role value is looked up in the map; unrecognised values pass through unchanged.
+
+def _apply_role_map(roles: tuple[str, ...], config: JwtConfig) -> tuple[str, ...]:
+    """Apply group→role mapping and default role fallback."""
     role_map: dict[str, str] = getattr(config, "jwt_role_map", {}) or {}
     if role_map:
         roles = tuple(role_map.get(r, r) for r in roles)
-
-    # If still no roles (e.g. CF Access JWTs which omit roles by default),
-    # assign the configured default role so operators don't end up as viewers.
     if not roles:
-        default_role = getattr(config, "jwt_default_role", "viewer") or "viewer"
-        roles = (default_role,)
+        roles = (getattr(config, "jwt_default_role", "viewer") or "viewer",)
+    return roles
 
-    return Principal(subject_id=sub, roles=roles)
+
+def _extract_roles(claims: dict[str, Any], config: JwtConfig) -> tuple[str, ...]:
+    """Extract roles from JWT claims with fallback to scopes."""
+    roles = _parse_roles_claim(claims.get(getattr(config, "jwt_roles_claim", "roles"), []))
+    if not roles:
+        raw_scope = claims.get(getattr(config, "jwt_scopes_claim", "scope"), "")
+        if isinstance(raw_scope, str) and raw_scope:
+            roles = tuple(part.strip() for part in raw_scope.split() if part.strip())
+    return _apply_role_map(roles, config)
 
 
 def resolve_role(principal: Principal) -> str:

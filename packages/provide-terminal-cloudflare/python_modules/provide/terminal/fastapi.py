@@ -66,6 +66,7 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for WebSocket support: pip install 'provide-terminal[websocket]'") from _e
 
+from provide.terminal.defaults import TerminalDefaults
 from provide.terminal.transports.websocket import WebSocketStreamReader, WebSocketStreamWriter
 
 if TYPE_CHECKING:
@@ -94,7 +95,7 @@ SessionHandler = Callable[
 def create_ws_terminal_router(
     session_handler: SessionHandler,
     *,
-    path: str = "/ws/terminal",
+    path: str = TerminalDefaults.PROXY_WS_PATH,
 ) -> APIRouter:
     """Create a FastAPI router with a generic WebSocket terminal endpoint.
 
@@ -181,7 +182,7 @@ class WsTerminalProxy:
         self._port = port
         self._transport_factory = transport_factory
 
-    def create_router(self, path: str = "/ws/terminal") -> APIRouter:
+    def create_router(self, path: str = TerminalDefaults.PROXY_WS_PATH) -> APIRouter:
         """Return a :class:`fastapi.APIRouter` that proxies WS connections.
 
         Args:

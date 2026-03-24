@@ -7,7 +7,7 @@
 Usage::
 
     uterm-mcp --url http://localhost:8780
-    uterm-mcp --url http://localhost:8780 --entity-prefix /bot
+    uterm-mcp --url http://localhost:8780 --entity-prefix /agent
     uterm-mcp --url http://localhost:8780 --header Authorization:"Bearer tok"
 """
 

@@ -1,0 +1,57 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provide-shell"
+dynamic = ["version"]
+description = "Standalone Python REPL shell — usable independently of provide-terminal"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+authors = [
+  {name = "MindTenet LLC"},
+]
+dependencies = []
+
+[project.optional-dependencies]
+terminal = ["provide-terminal>=0.3.0"]
+
+[project.scripts]
+ushell = "provide.shell.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-ra",
+    "--cov=provide.shell",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+]
+
+[tool.coverage.run]
+source = ["provide.shell"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true

@@ -87,9 +87,10 @@ export function renderConnect(root, bootstrap) {
           <div class="field">
             <label for="connect-type">Connection type</label>
             <select id="connect-type">
+              <option value="ushell">Ushell (built-in shell)</option>
               <option value="ssh">SSH</option>
               <option value="telnet">Telnet</option>
-              <option value="shell">Local Shell</option>
+              <option value="websocket">WebSocket</option>
             </select>
           </div>
           <div class="field">

@@ -18,17 +18,27 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: #141920;
   border-bottom: 1px solid #1e2530;
   flex-shrink: 0;
-  flex-wrap: wrap;
-  min-height: 38px;
+  flex-wrap: nowrap;
+  height: 30px;
+}
+
+.provide-hijack .hijack-title {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: #7a9ab8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .provide-hijack .hijack-status {
   font-size: 12px;
-  min-width: 150px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -41,24 +51,49 @@
   background: #444;
   flex-shrink: 0;
 }
-.provide-hijack .hijack-status-dot.live { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
+.provide-hijack .hijack-status-dot.live { background: #22c55e; box-shadow: 0 0 4px #22c55e; animation: live-pulse 2s ease-in-out infinite; }
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 2px #22c55e; }
+  50%       { box-shadow: 0 0 7px #22c55e; }
+}
 .provide-hijack .hijack-status-dot.warn { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
 .provide-hijack .hijack-status-dot.bad  { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
 
+/* ── Activity indicator animations ── */
+.provide-hijack .hijack-status-dot.activity-flash {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: activity-flash 200ms ease-out;
+}
+
+@keyframes activity-flash {
+  0% {
+    box-shadow: 0 0 12px #22c55e;
+  }
+  100% {
+    box-shadow: 0 0 2px #22c55e;
+  }
+}
+
 .provide-hijack .hijack-controls {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  border-left: 1px solid #1e2530;
+  margin-left: 4px;
+  padding-left: 6px;
 }
 
 .provide-hijack .hbtn {
-  padding: 3px 10px;
-  border-radius: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
   border: 1px solid #2a3040;
   background: #1e2530;
   color: #ccc;
-  font-size: 12px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
@@ -100,6 +135,14 @@
   flex-shrink: 0;
 }
 .provide-hijack .hijack-input-row.visible { display: flex; }
+.provide-hijack .hijack-input-row::before {
+  content: '$';
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: #22c55e;
+  padding: 0 4px 0 8px;
+  flex-shrink: 0;
+}
 .provide-hijack .hijack-input-field {
   flex: 1;
   background: #0d1117;
@@ -107,11 +150,11 @@
   border-radius: 4px;
   color: #e2e8f0;
   font-family: 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 12px;
+  font-size: 13px;
   padding: 3px 8px;
   outline: none;
 }
-.provide-hijack .hijack-input-field:focus { border-color: #22c55e66; }
+.provide-hijack .hijack-input-field:focus { border-left: 2px solid #22c55e; border-color: #22c55e66; }
 .provide-hijack .hijack-input-send {
   padding: 3px 10px;
   border-radius: 4px;
@@ -148,9 +191,9 @@
 .provide-hijack .hijack-analysis summary:hover { color: #8899aa; }
 .provide-hijack .hijack-analysis pre {
   margin: 0;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: #8899aa;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #99aabb;
   white-space: pre-wrap;
   word-break: break-all;
   font-family: 'Fira Code', 'Cascadia Code', monospace;
@@ -160,6 +203,10 @@
 .provide-hijack .hijack-analysis::-webkit-scrollbar { width: 5px; }
 .provide-hijack .hijack-analysis::-webkit-scrollbar-track { background: transparent; }
 .provide-hijack .hijack-analysis::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 3px; }
+
+.provide-hijack .hijack-terminal::-webkit-scrollbar { width: 4px; }
+.provide-hijack .hijack-terminal::-webkit-scrollbar-track { background: transparent; }
+.provide-hijack .hijack-terminal::-webkit-scrollbar-thumb { background: rgba(100,120,150,0.3); border-radius: 2px; }
 
 /* ── Mobile key toolbar ── */
 .provide-hijack .mobile-keys {

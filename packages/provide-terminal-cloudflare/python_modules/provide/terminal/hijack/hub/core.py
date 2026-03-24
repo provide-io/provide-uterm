@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """TermHub: in-memory registry for terminal WebSocket connections.
 
 Requires the ``websocket`` extra::
@@ -14,10 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 import time
 from collections.abc import Awaitable, Callable, Coroutine
-from typing import Any
+from typing import Any, cast
 
 from provide.telemetry import get_logger
 
@@ -26,9 +24,12 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for TermHub: pip install 'provide-terminal[websocket]'") from _e
 
+from provide.terminal.control_stream import encode_control, encode_data
+from provide.terminal.hijack.frames import HijackStateFrame, make_hijack_state_frame, make_worker_disconnected_frame
 from provide.terminal.hijack.hub.connections import _ConnectionMixin
 from provide.terminal.hijack.hub.ownership import _HijackOwnershipMixin
 from provide.terminal.hijack.hub.polling import _PollingMixin
+from provide.terminal.hijack.hub.resume import ResumeSession, ResumeTokenStore
 from provide.terminal.hijack.models import WorkerTermState
 from provide.terminal.hijack.ratelimit import TokenBucket
 
@@ -38,6 +39,19 @@ HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
 BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]
 MetricCallback = Callable[[str, int], None]
 WorkerEmptyCallback = Callable[[str], Coroutine[Any, Any, None]]
+ResumeCallback = Callable[[str, ResumeSession], Awaitable[bool]]
+
+
+def _encode_browser_frame(msg: dict[str, Any]) -> str:
+    if str(msg.get("type") or "") == "term":
+        return encode_data(str(msg.get("data") or ""))
+    return encode_control(msg)
+
+
+def _encode_worker_frame(msg: dict[str, Any]) -> str:
+    if str(msg.get("type") or "") == "input":
+        return encode_data(str(msg.get("data") or ""))
+    return encode_control(msg)
 
 
 class BrowserRoleResolutionError(RuntimeError):
@@ -74,6 +88,9 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         rest_send_rate_limit_per_sec: float = 20,
         worker_token: str | None = None,
         event_deque_maxlen: int = 2000,
+        resume_store: ResumeTokenStore | None = None,
+        resume_ttl_s: float = 300,
+        on_resume: ResumeCallback | None = None,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -94,6 +111,10 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._rest_acquire_per_client: dict[str, TokenBucket] = {}
         self._rest_send_per_client: dict[str, TokenBucket] = {}
         self._event_deque_maxlen = max(1, int(event_deque_maxlen))
+        self._resume_store = resume_store
+        self._resume_ttl_s = max(1.0, float(resume_ttl_s))
+        self._on_resume = on_resume
+        self._ws_to_resume_token: dict[WebSocket, str] = {}
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
@@ -202,7 +223,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 return
             browsers = list(st.browsers.keys())
         dead: set[WebSocket] = set()
-        payload = json.dumps(msg, ensure_ascii=True)
+        payload = _encode_browser_frame(msg)
         for ws in browsers:
             try:
                 await ws.send_text(payload)
@@ -236,15 +257,16 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 owner = "other"
             else:
                 owner = None
-            payload = json.dumps(
-                {
-                    "type": "hijack_state",
-                    "hijacked": is_hijacked,
-                    "owner": owner,
-                    "lease_expires_at": lease_expires_at,
-                    "input_mode": input_mode,
-                },
-                ensure_ascii=True,
+            payload = encode_control(
+                cast(
+                    "dict[str, Any]",
+                    make_hijack_state_frame(
+                        hijacked=is_hijacked,
+                        owner=owner,
+                        lease_expires_at=lease_expires_at,
+                        input_mode=input_mode,
+                    ),
+                )
             )
             try:
                 await ws.send_text(payload)
@@ -321,7 +343,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 return False
             ws = st.worker_ws
         try:
-            await ws.send_text(json.dumps(msg, ensure_ascii=True))
+            await ws.send_text(_encode_worker_frame(msg))
             return True
         except Exception as exc:
             logger.debug("send_worker_failed worker_id=%s: %s", worker_id, exc)
@@ -341,18 +363,17 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 del self._workers[worker_id]
                 logger.debug("pruned idle worker_id=%s", worker_id)
 
-    async def hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> dict[str, Any]:
+    async def hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> HijackStateFrame:
         """Build a hijack_state dict for *ws*, setting owner='me' if *ws* holds the lease."""
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
-                return {
-                    "type": "hijack_state",
-                    "hijacked": False,
-                    "owner": None,
-                    "lease_expires_at": None,
-                    "input_mode": "hijack",
-                }
+                return make_hijack_state_frame(
+                    hijacked=False,
+                    owner=None,
+                    lease_expires_at=None,
+                    input_mode="hijack",
+                )
             is_dashboard = self.is_dashboard_hijack_active(st)
             is_rest = self.has_valid_rest_lease(st)
             is_h = is_dashboard or is_rest
@@ -368,13 +389,12 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 owner = "other"
             else:
                 owner = None
-        return {
-            "type": "hijack_state",
-            "hijacked": is_h,
-            "owner": owner,
-            "lease_expires_at": lease_expires_at,
-            "input_mode": input_mode,
-        }
+        return make_hijack_state_frame(
+            hijacked=is_h,
+            owner=owner,
+            lease_expires_at=lease_expires_at,
+            input_mode=input_mode,
+        )
 
     async def set_input_mode(self, worker_id: str, mode: str) -> tuple[bool, str | None]:
         """Set input_mode under lock. Rejects if active hijack when switching to "open".
@@ -419,7 +439,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             logger.debug("disconnect_worker close error worker_id=%s: %s", worker_id, exc)
         await self.broadcast(
             worker_id,
-            {"type": "worker_disconnected", "worker_id": worker_id, "ts": time.time()},
+            cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)),
         )
         if was_hijacked:
             self.notify_hijack_changed(worker_id, enabled=False, owner=None)

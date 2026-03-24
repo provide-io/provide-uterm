@@ -62,6 +62,9 @@ export async function clearSession(sessionId) {
 export async function restartSession(sessionId) {
     return normalizeSessionStatus(await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/restart`, "POST"));
 }
+export async function deleteSession(sessionId) {
+    await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}`, "DELETE");
+}
 export async function analyzeSession(sessionId) {
     const result = await apiJson(`/api/sessions/${encodeURIComponent(sessionId)}/analyze`, "POST");
     return result.analysis;

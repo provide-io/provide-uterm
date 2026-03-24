@@ -16,6 +16,7 @@ try:
     from provide_terminal_cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
     from provide_terminal_cloudflare.do._session_runtime_io import _SessionRuntimeIoMixin
+    from provide_terminal_cloudflare.do.ushell import init_ushell, on_browser_connected
     from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
     from provide_terminal_cloudflare.state.registry import update_kv_session
     from provide_terminal_cloudflare.state.store import SqliteStateStore
@@ -28,6 +29,7 @@ except Exception:
     from cf_types import CFWebSocket, DurableObject, Response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
     from do._session_runtime_io import _SessionRuntimeIoMixin  # type: ignore[import-not-found]
+    from do.ushell import init_ushell, on_browser_connected  # type: ignore[import-not-found]
     from do.ws_helpers import _WsHelperMixin  # type: ignore[import-not-found]
     from state.registry import update_kv_session  # type: ignore[import-not-found]
     from state.store import SqliteStateStore  # type: ignore[import-not-found]
@@ -58,6 +60,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
+
+        # ushell — set for sessions whose worker_id starts with "ushell-".
+        self._ushell: Any = None  # UshellConnector | None
+        self._ushell_started: bool = False
 
         self._restore_state()
 
@@ -260,6 +266,8 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
 
             # Send hello in fetch() before 101 — webSocketOpen() may be dropped after hibernation.
             if socket_role == "browser":
+                # Initialize ushell connector if this is an ushell-* session.
+                init_ushell(self)
                 # Issue a resume token for this browser session
                 resume_token = secrets.token_urlsafe(32)
                 resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
@@ -270,7 +278,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                             {
                                 "type": "hello",
                                 "worker_id": self.worker_id,
-                                "worker_online": self.worker_ws is not None,
+                                "worker_online": self.worker_ws is not None or self._ushell is not None,
                                 "can_hijack": browser_role == "admin",
                                 "input_mode": self.input_mode,
                                 "role": browser_role,
@@ -320,7 +328,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 {
                     "type": "hello",
                     "worker_id": self.worker_id,
-                    "worker_online": self.worker_ws is not None,
+                    "worker_online": self.worker_ws is not None or self._ushell is not None,
                     # can_hijack and role reflect the JWT-resolved browser role.
                     "can_hijack": browser_role == "admin",
                     "input_mode": self.input_mode,
@@ -335,6 +343,8 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             await self.send_hijack_state(ws)
             if self.last_snapshot is not None:
                 await self.send_ws(ws, self.last_snapshot)
+            # For ushell sessions, broadcast worker_connected + welcome on first browser join.
+            await on_browser_connected(self)
 
     async def webSocketMessage(self, ws: CFWebSocket, message: Any) -> None:  # noqa: N802
         role = self._socket_role(ws)

@@ -370,6 +370,29 @@
   z-index: 10;
 }
 
+/* ══════════════════════════════════════
+   Theme D: Code — VS Code panel style
+   ══════════════════════════════════════ */
+.provide-terminal.theme-code .terminal-frame {
+  background: #0d1117;
+}
+.provide-terminal.theme-code .frame-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 30px;
+  background: #181c20;
+  border-bottom: 1px solid #1e2530;
+}
+.provide-terminal.theme-code .frame-header-title {
+  font-size: 11px;
+  color: #7a9ab8;
+  font-family: 'Fira Code', monospace;
+}
+.provide-terminal.theme-code .frame-status { display: flex; }
+.provide-terminal.theme-code .screen-inset { overflow: hidden; }
+
 /* ── Loading Overlay ── */
 .provide-terminal .loading {
   position: absolute;

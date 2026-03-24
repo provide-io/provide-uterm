@@ -98,6 +98,10 @@ class _SessionRuntimeIoMixin:
     # ------------------------------------------------------------------
 
     async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool:
+        # ushell acknowledges control frames as no-ops (always returns True).
+        if self._ushell is not None:  # type: ignore[attr-defined]
+            await self._ushell.handle_control(action)  # type: ignore[attr-defined]
+            return True
         if self.worker_ws is None:  # type: ignore[attr-defined]
             return False
         await self.send_ws(  # type: ignore[attr-defined]
@@ -107,6 +111,12 @@ class _SessionRuntimeIoMixin:
         return True
 
     async def push_worker_input(self, data: str) -> bool:
+        # Route input to ushell when active; fall back to external worker WS.
+        if self._ushell is not None:  # type: ignore[attr-defined]
+            frames = await self._ushell.handle_input(data)  # type: ignore[attr-defined]
+            for frame in frames:
+                await self.broadcast_to_browsers(frame)
+            return True
         if self.worker_ws is None:  # type: ignore[attr-defined]
             return False
         await self.send_ws(self.worker_ws, {"type": "input", "data": data, "ts": time.time()})  # type: ignore[attr-defined]
@@ -143,6 +153,7 @@ class _SessionRuntimeIoMixin:
         elif frame_type == "snapshot":
             screen = payload.get("screen")
             text_payload = str(screen) if screen is not None else ""
+            self.last_snapshot = payload  # type: ignore[attr-defined]
         elif frame_type == "worker_connected":
             text_payload = "\r\n[worker connected]\r\n"
         elif frame_type == "worker_disconnected":
@@ -167,7 +178,7 @@ class _SessionRuntimeIoMixin:
             with contextlib.suppress(Exception):
                 await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
             await self.broadcast_hijack_state()
-        if self.worker_ws is not None:  # type: ignore[attr-defined]
+        if self.worker_ws is not None or self._ushell is not None:  # type: ignore[attr-defined]
             await update_kv_session(
                 self.env,  # type: ignore[attr-defined]
                 self.worker_id,  # type: ignore[attr-defined]

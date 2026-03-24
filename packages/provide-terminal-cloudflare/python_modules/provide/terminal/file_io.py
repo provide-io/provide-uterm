@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """File I/O helpers for loading BBS screen files and color palettes."""
 
 from __future__ import annotations

@@ -1,3 +1,7 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 import { quickConnect } from "../api.js";
 import { renderAppHeader } from "./app-header.js";
 function escapeHtml(value) {
@@ -83,9 +87,10 @@ export function renderConnect(root, bootstrap) {
           <div class="field">
             <label for="connect-type">Connection type</label>
             <select id="connect-type">
+              <option value="ushell">Ushell (built-in shell)</option>
               <option value="ssh">SSH</option>
               <option value="telnet">Telnet</option>
-              <option value="shell">Local Shell</option>
+              <option value="websocket">WebSocket</option>
             </select>
           </div>
           <div class="field">

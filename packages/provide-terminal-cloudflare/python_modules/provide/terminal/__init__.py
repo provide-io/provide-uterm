@@ -17,17 +17,19 @@ except PackageNotFoundError:  # pragma: no cover
 from provide.terminal.ansi import (
     BOLD,
     CLEAR_SCREEN,
-    COLOR_MAP,
     DEFAULT_PALETTE,
     DEFAULT_RGB,
     RESET,
-    colorize,
+    normalize_colors,
     preview_ansi,
-    strip_colors,
+    register_color_dialect,
+    registered_dialects,
+    unregister_color_dialect,
     upgrade_to_256,
     upgrade_to_truecolor,
 )
 from provide.terminal.file_io import load_ans, load_palette, load_txt
+from provide.terminal.line_editor import LineEditor
 from provide.terminal.screen import (
     clean_screen_for_display,
     decode_cp437,
@@ -43,21 +45,24 @@ from provide.terminal.screen import (
 __all__ = [
     "__version__",
     # ansi
-    "COLOR_MAP",
     "CLEAR_SCREEN",
     "BOLD",
     "RESET",
     "DEFAULT_PALETTE",
     "DEFAULT_RGB",
-    "colorize",
-    "strip_colors",
+    "normalize_colors",
     "preview_ansi",
+    "register_color_dialect",
+    "unregister_color_dialect",
+    "registered_dialects",
     "upgrade_to_256",
     "upgrade_to_truecolor",
     # file_io
     "load_ans",
     "load_txt",
     "load_palette",
+    # line_editor
+    "LineEditor",
     # screen
     "strip_ansi",
     "normalize_terminal_text",

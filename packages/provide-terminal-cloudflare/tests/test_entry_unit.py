@@ -164,44 +164,42 @@ async def test_default_fetch_worker_route_with_binding_calls_stub() -> None:
 
 
 async def test_default_fetch_app_path() -> None:
-    """/app → read_asset_text('terminal.html') with <base href="/assets/"> injected."""
+    """/app → SPA dashboard shell."""
     d = _make_default()
-    with patch("provide_terminal_cloudflare.entry.read_asset_text", return_value="<head><title>T</title>") as mock_rat:
-        resp = await d.fetch(_req("/app"))
-    mock_rat.assert_called_once_with("terminal.html")
+    resp = await d.fetch(_req("/app"))
     assert resp.status == 200
-    assert '<base href="/assets/">' in str(resp.body)
+    assert "dashboard" in str(resp.body)
 
 
 async def test_default_fetch_app_slash_path() -> None:
-    """/app/ → same base-tag injection as /app."""
+    """/app/ → SPA dashboard shell."""
     d = _make_default()
-    with patch("provide_terminal_cloudflare.entry.read_asset_text", return_value="<head><title>T</title>") as mock_rat:
-        resp = await d.fetch(_req("/app/"))
-    mock_rat.assert_called_once_with("terminal.html")
+    resp = await d.fetch(_req("/app/"))
     assert resp.status == 200
+    assert "dashboard" in str(resp.body)
 
 
-async def test_default_fetch_app_path_fallback() -> None:
-    """/app falls back to serve_asset when read_asset_text returns None."""
+async def test_default_fetch_spa_routes() -> None:
+    """SPA routes serve correct page_kind in bootstrap JSON."""
     d = _make_default()
-    mock_resp = Response(body="terminal", status=200)
-    with (
-        patch("provide_terminal_cloudflare.entry.read_asset_text", return_value=None),
-        patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp) as mock_sa,
-    ):
-        resp = await d.fetch(_req("/app"))
-    mock_sa.assert_called_once_with("terminal.html")
-    assert resp.status == 200
+    for path, expected_kind in [
+        ("/", "dashboard"),
+        ("/app/connect", "connect"),
+        ("/app/session/test-123", "session"),
+        ("/app/operator/test-123", "operator"),
+        ("/app/replay/test-123", "replay"),
+    ]:
+        resp = await d.fetch(_req(path))
+        assert resp.status == 200, f"{path} returned {resp.status}"
+        assert expected_kind in str(resp.body), f"{path} missing {expected_kind}"
 
 
 async def test_default_fetch_root_path() -> None:
-    """Lines 69-70: / → serve_asset('hijack.html')."""
+    """/ → SPA dashboard."""
     d = _make_default()
-    mock_resp = Response(body="hijack", status=200)
-    with patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp) as mock_sa:
-        await d.fetch(_req("/"))
-    mock_sa.assert_called_once_with("hijack.html")
+    resp = await d.fetch(_req("/"))
+    assert resp.status == 200
+    assert "dashboard" in str(resp.body)
 
 
 async def test_default_fetch_unknown_path_returns_404() -> None:

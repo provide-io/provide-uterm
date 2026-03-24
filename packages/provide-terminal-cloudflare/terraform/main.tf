@@ -42,3 +42,16 @@ resource "cloudflare_workers_kv_namespace" "session_registry_preview" {
 #   preview_id = "<kv_namespace_preview_id output>"
 #
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Custom domain: uterm.neurotic.org
+# Maps the undef-terminal-cloudflare worker to a subdomain for easier access.
+# ---------------------------------------------------------------------------
+
+resource "cloudflare_workers_custom_domain" "uterm" {
+  account_id  = var.cloudflare_account_id
+  zone_id     = var.cloudflare_zone_id
+  hostname    = "uterm.neurotic.org"
+  service     = var.worker_name
+  environment = var.environment
+}

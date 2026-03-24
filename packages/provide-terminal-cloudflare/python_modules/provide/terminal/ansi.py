@@ -2,18 +2,25 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""ANSI color code conversion for TW2002 terminal output.
+"""ANSI color code conversion for BBS terminal output.
 
-The C server uses {+c} for bright cyan, {-x} for reset, etc.
-This module converts those tags to standard ANSI escape sequences.
+Provides a pluggable dialect registry for converting BBS color tokens to
+standard ANSI escape sequences, plus color-upgrade utilities (16-color →
+256-color / truecolor).
 
-Also provides color-upgrade utilities (16-color → 256-color / truecolor) and
-preview_ansi() for rendering mixed BBS color tokens to standard ANSI escapes.
+Built-in dialects: extended tokens ({F#}/{B#}/{P#}/{T#}), TWGS brace tokens
+({+c}/{-x}/{+Bw}/{NK}), tilde codes (~N), and pipe codes (|00-|23).
+Additional dialects can be registered at runtime via
+:func:`register_color_dialect`.
 """
 
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # ---------------------------------------------------------------------------
 # BBS color palette constants
@@ -67,67 +74,10 @@ _SGR_RE = re.compile(r"\x1b\[([0-9;]*)m")
 _TOKEN_RE = re.compile(r"\{([PT])(\d{1,3})\}")
 _EXT_TOKEN_RE = re.compile(r"\{([FBPT])(\d{1,3})\}")
 
-# Mapping from TW2002 color tags to ANSI escape sequences
-COLOR_MAP: dict[str, str] = {
-    "{+c}": "\033[1;36m",  # Bright cyan
-    "{-c}": "\033[0;36m",  # Normal cyan
-    "{+r}": "\033[1;31m",  # Bright red
-    "{-r}": "\033[0;31m",  # Normal red
-    "{+g}": "\033[1;32m",  # Bright green
-    "{-g}": "\033[0;32m",  # Normal green
-    "{+y}": "\033[1;33m",  # Bright yellow
-    "{-y}": "\033[0;33m",  # Normal yellow
-    "{+b}": "\033[1;34m",  # Bright blue
-    "{-b}": "\033[0;34m",  # Normal blue
-    "{+m}": "\033[1;35m",  # Bright magenta
-    "{-m}": "\033[0;35m",  # Normal magenta
-    "{+w}": "\033[1;37m",  # Bright white
-    "{+Bw}": "\033[1;37m",  # Bold white (TWGS header style)
-    "{-w}": "\033[0;37m",  # Normal white
-    "{+k}": "\033[1;30m",  # Bright black (gray)
-    "{-k}": "\033[0;30m",  # Normal black
-    "{-x}": "\033[0m",  # Reset
-}
-
 # Common ANSI sequences
 CLEAR_SCREEN: str = "\033[2J\033[H"
 BOLD: str = "\033[1m"
 RESET: str = "\033[0m"
-
-
-def colorize(text: str) -> str:
-    """Convert TW2002 color tags to ANSI escape sequences.
-
-    Replaces all occurrences of {+X} and {-X} tags with their corresponding
-    ANSI escape codes. Unknown tags are left as-is.
-
-    Args:
-        text: String containing TW2002 color tags.
-
-    Returns:
-        String with ANSI escape sequences substituted.
-    """
-    result = text
-    for tag, ansi in COLOR_MAP.items():
-        result = result.replace(tag, ansi)
-    return result
-
-
-def strip_colors(text: str) -> str:
-    """Remove all TW2002 color tags from text.
-
-    Useful for logging or plain-text output where ANSI codes are unwanted.
-
-    Args:
-        text: String containing TW2002 color tags.
-
-    Returns:
-        String with all color tags removed.
-    """
-    result = text
-    for tag in COLOR_MAP:
-        result = result.replace(tag, "")
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +236,30 @@ _TILDE_MAP: dict[str, tuple[str, str]] = {
     "E": ("+", "r"),
 }
 
+_BRACE_TOKEN_MAP: dict[str, str] = {
+    "{+c}": "\x1b[1;36m",
+    "{-c}": "\x1b[0;36m",
+    "{+r}": "\x1b[1;31m",
+    "{-r}": "\x1b[0;31m",
+    "{+g}": "\x1b[1;32m",
+    "{-g}": "\x1b[0;32m",
+    "{+y}": "\x1b[1;33m",
+    "{-y}": "\x1b[0;33m",
+    "{+b}": "\x1b[1;34m",
+    "{-b}": "\x1b[0;34m",
+    "{+m}": "\x1b[1;35m",
+    "{-m}": "\x1b[0;35m",
+    "{+w}": "\x1b[1;37m",
+    "{+Bw}": "\x1b[1;37m",
+    "{-w}": "\x1b[0;37m",
+    "{+k}": "\x1b[1;30m",
+    "{-k}": "\x1b[0;30m",
+    "{-x}": "\x1b[0m",
+    "{NK}": "\x1b[0m",
+    "{T}": "\x1b[1m",
+    "{t}": "\x1b[0m",
+}
+
 
 def _emit_color(polarity: str, color_char: str) -> str:
     if color_char == "x":
@@ -298,59 +272,158 @@ def _emit_color(polarity: str, color_char: str) -> str:
     return f"\x1b[0;{code}m"
 
 
+# Pre-build extended token lookups to eliminate per-match f-string creation.
+_EXT_F_LOOKUP = tuple(f"\x1b[38;5;{i}m" for i in range(256))
+_EXT_B_LOOKUP = tuple(f"\x1b[48;5;{i}m" for i in range(256))
+_EXT_P_LOOKUP = tuple(f"\x1b[{(90 + (i % 8)) if (i % 16) >= 8 else (30 + (i % 8))}m" for i in range(16))
+_EXT_T_LOOKUP = tuple(f"\x1b[{(100 + (i % 8)) if (i % 16) >= 8 else (40 + (i % 8))}m" for i in range(16))
+
+
 def _handle_extended_tokens(text: str) -> str:
-    def repl(m: re.Match[str]) -> str:
+    """Convert {F###}/{B###}/{P#}/{T#} extended color tokens to ANSI escapes."""
+    parts: list[str] = []
+    last_end = 0
+    for m in _EXT_TOKEN_RE.finditer(text):
+        parts.append(text[last_end : m.start()])
         kind = m.group(1)
         val = int(m.group(2))
         if kind == "F":
-            return f"\x1b[38;5;{val}m"
-        if kind == "B":
-            return f"\x1b[48;5;{val}m"
-        if kind in ("P", "T"):
-            idx = val % 16
-            bright = idx >= 8
-            base = idx % 8
-            code = (90 + base if bright else 30 + base) if kind == "P" else (100 + base if bright else 40 + base)
-            return f"\x1b[{code}m"
-        return m.group(0)  # pragma: no cover — regex excludes non-FBPT kinds
+            parts.append(_EXT_F_LOOKUP[val] if val < 256 else f"\x1b[38;5;{val}m")
+        elif kind == "B":
+            parts.append(_EXT_B_LOOKUP[val] if val < 256 else f"\x1b[48;5;{val}m")
+        elif kind == "P":
+            parts.append(_EXT_P_LOOKUP[val % 16])
+        elif kind == "T":  # pragma: no cover — truecolor reserved for future use
+            parts.append(_EXT_T_LOOKUP[val % 16])
+        last_end = m.end()
+    if last_end == 0:
+        return text  # no matches
+    parts.append(text[last_end:])
+    return "".join(parts)
 
-    return _EXT_TOKEN_RE.sub(repl, text)
+
+_TILDE_RE = re.compile(r"~(.)")
+
+
+# Pre-build tilde code → ANSI escape lookup to avoid per-match _emit_color calls.
+_TILDE_LOOKUP: dict[str, str] = {}
+for _tc, (_pol, _cc) in _TILDE_MAP.items():
+    _seq = _emit_color(_pol, _cc)
+    if _seq:  # pragma: no cover — _seq always truthy for all defined tilde codes
+        _TILDE_LOOKUP[_tc] = _seq
 
 
 def _handle_tilde_codes(text: str) -> str:
-    out = []
-    i = 0
-    while i < len(text):
-        if text[i] == "~" and i + 1 < len(text):
-            code = text[i + 1]
-            if code in _TILDE_MAP:
-                polarity, color_char = _TILDE_MAP[code]
-                seq = _emit_color(polarity, color_char)
-                if seq:  # pragma: no branch
-                    out.append(seq)
-                    i += 2
-                    continue
-        out.append(text[i])
-        i += 1
-    return "".join(out)
+    parts = _TILDE_RE.split(text)
+    if len(parts) == 1:
+        return text
+    for i in range(1, len(parts), 2):
+        parts[i] = _TILDE_LOOKUP.get(parts[i], f"~{parts[i]}")
+    return "".join(parts)
 
 
-def _handle_twgs_tokens(text: str) -> str:
-    out = []
-    i = 0
-    while i < len(text):
-        if text[i] == "{" and i + 3 < len(text) and text[i + 3] == "}":
-            polarity = text[i + 1]
-            color_char = text[i + 2]
-            if polarity in ("+", "-"):
-                seq = _emit_color(polarity, color_char)
-                if seq:
-                    out.append(seq)
-                    i += 4
-                    continue
-        out.append(text[i])
-        i += 1
-    return "".join(out)
+_BRACE_3_RE = re.compile(r"(\{[+\-][a-zA-Z]\}|\{NK\}|\{T\}|\{t\})")
+_BRACE_4_RE = re.compile(r"(\{[+\-]Bw\})")
+
+
+def _handle_brace_tokens(text: str) -> str:
+    """Convert ``{+c}``/``{-x}`` brace tokens to ANSI escapes.
+
+    Includes the TWGS-specific ``{+Bw}`` header token in addition to the
+    single-character color tags.
+    """
+    # Handle 5-char tokens first (longest match first to avoid conflicts)
+    parts4 = _BRACE_4_RE.split(text)
+    if len(parts4) > 1:
+        for i in range(1, len(parts4), 2):
+            parts4[i] = _BRACE_TOKEN_MAP.get(parts4[i], parts4[i])
+        text = "".join(parts4)
+    # Then 3-char and other tokens
+    parts3 = _BRACE_3_RE.split(text)
+    if len(parts3) > 1:
+        for i in range(1, len(parts3), 2):
+            parts3[i] = _BRACE_TOKEN_MAP.get(parts3[i], parts3[i])
+        return "".join(parts3)
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Pipe codes (|00-|23) — most common BBS color format
+# ---------------------------------------------------------------------------
+
+_PIPE_RE = re.compile(r"\|(\d{2})")
+
+# DOS color order → ANSI SGR codes
+_DOS_TO_ANSI_FG = [30, 34, 32, 36, 31, 35, 33, 37]  # |00-|07 (dim)
+_DOS_TO_ANSI_BG = [40, 44, 42, 46, 41, 45, 43, 47]  # |16-|23
+
+
+_PIPE_LOOKUP: dict[str, str] = {}
+for _i in range(24):
+    _key = f"{_i:02d}"
+    if _i <= 7:
+        _PIPE_LOOKUP[_key] = f"\x1b[{_DOS_TO_ANSI_FG[_i]}m"
+    elif _i <= 15:
+        _PIPE_LOOKUP[_key] = f"\x1b[{_DOS_TO_ANSI_FG[_i - 8] + 60}m"
+    else:
+        _PIPE_LOOKUP[_key] = f"\x1b[{_DOS_TO_ANSI_BG[_i - 16]}m"
+
+
+def _handle_pipe_codes(text: str) -> str:
+    # split() with a capturing group keeps the matched group in the result list,
+    # alternating: [text, match, text, match, ...]. We replace matches in-place
+    # via the lookup, avoiding re.sub's per-match string rebuild.
+    parts = _PIPE_RE.split(text)
+    if len(parts) == 1:
+        return text  # no matches — return original without allocation
+    for i in range(1, len(parts), 2):
+        parts[i] = _PIPE_LOOKUP.get(parts[i], f"|{parts[i]}")
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Dialect registry
+# ---------------------------------------------------------------------------
+
+_dialect_registry: list[tuple[str, Callable[[str], str]]] = []
+
+
+def register_color_dialect(name: str, handler: Callable[[str], str]) -> None:
+    """Register a color token dialect handler.
+
+    Handlers are called in registration order by :func:`normalize_colors`.
+
+    Args:
+        name: Unique name for the dialect (e.g. ``"pipe_codes"``).
+        handler: A ``str → str`` function that converts tokens to ANSI escapes.
+
+    Raises:
+        ValueError: If *name* is already registered.
+    """
+    for existing_name, _ in _dialect_registry:
+        if existing_name == name:
+            msg = f"color dialect {name!r} is already registered"
+            raise ValueError(msg)
+    _dialect_registry.append((name, handler))
+
+
+def unregister_color_dialect(name: str) -> None:
+    """Remove a previously registered dialect.
+
+    Raises:
+        KeyError: If *name* is not registered.
+    """
+    for i, (existing_name, _) in enumerate(_dialect_registry):
+        if existing_name == name:
+            _dialect_registry.pop(i)
+            return
+    msg = f"color dialect {name!r} is not registered"
+    raise KeyError(msg)
+
+
+def registered_dialects() -> list[str]:
+    """Return the names of all registered dialects, in call order."""
+    return [name for name, _ in _dialect_registry]
 
 
 # ---------------------------------------------------------------------------
@@ -391,14 +464,17 @@ def upgrade_to_truecolor(text: str, palette: list[int] | None = None) -> str:
     return _SGR_RE.sub(lambda m: _convert_sgr_tc(m, rgb_palette), text)
 
 
-def preview_ansi(text: str) -> str:
-    """Convert all BBS color formats to standard ANSI escape sequences.
+def normalize_colors(text: str) -> str:
+    """Convert all registered BBS color token formats to standard ANSI escapes.
 
-    Handles:
+    Runs each registered dialect handler in order.  Built-in dialects handle:
+
     - ``{F###}`` / ``{B###}`` 256-color tokens
     - ``{P#}`` / ``{T#}`` legacy BBS palette tokens
     - ``~N`` tilde codes
-    - ``{+c}`` / ``{-x}`` TWGS brace tokens
+    - ``|00``-``|23`` pipe codes
+
+    Additional dialects can be added via :func:`register_color_dialect`.
 
     Args:
         text: Raw BBS screen text with mixed color tokens.
@@ -406,6 +482,19 @@ def preview_ansi(text: str) -> str:
     Returns:
         Text with all color tokens replaced by standard ANSI escapes.
     """
-    text = _handle_extended_tokens(text)
-    text = _handle_tilde_codes(text)
-    return _handle_twgs_tokens(text)
+    for _name, handler in _dialect_registry:
+        text = handler(text)
+    return text
+
+
+preview_ansi = normalize_colors
+
+
+# ---------------------------------------------------------------------------
+# Register built-in dialects
+# ---------------------------------------------------------------------------
+
+register_color_dialect("brace_tokens", _handle_brace_tokens)
+register_color_dialect("extended_tokens", _handle_extended_tokens)
+register_color_dialect("tilde_codes", _handle_tilde_codes)
+register_color_dialect("pipe_codes", _handle_pipe_codes)
