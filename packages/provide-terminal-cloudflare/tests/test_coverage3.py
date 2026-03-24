@@ -19,6 +19,20 @@ from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt,
 from provide_terminal_cloudflare.config import JwtConfig
 from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
 
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder
+
+
+def _decode_control_frames(messages: list[str]) -> list[dict]:
+    """Decode a list of control-stream-encoded messages into plain dicts."""
+    result = []
+    for raw in messages:
+        decoder = ControlStreamDecoder()
+        events = decoder.feed(raw)
+        events.extend(decoder.finish())
+        result.extend(e.control for e in events if isinstance(e, ControlChunk))
+    return result
+
+
 _KEY = "test-secret-key-32-bytes-minimum!"
 
 
@@ -140,7 +154,7 @@ async def test_decode_jwt_unexpected_signing_key_error_wrapped() -> None:
             "provide_terminal_cloudflare.auth.jwt._resolve_signing_key",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
-        pytest.raises(JwtValidationError, match="failed to resolve signing key"),
+        pytest.raises(JwtValidationError, match="failed to verify token"),
     ):
         await decode_jwt(token, config)
 
@@ -325,7 +339,7 @@ async def test_websocket_open_browser_sends_last_snapshot() -> None:
     ws = _AsyncWs(attachment="browser:admin:test-worker")
     await rt.webSocketOpen(ws)
 
-    sent = [json.loads(m) for m in ws.sent]
+    sent = _decode_control_frames(ws.sent)
     types = [m["type"] for m in sent]
     assert "hello" in types
     assert "snapshot" in types

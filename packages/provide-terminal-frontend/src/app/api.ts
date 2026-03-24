@@ -81,6 +81,10 @@ export async function restartSession(sessionId: string): Promise<SessionSummary>
   );
 }
 
+export async function deleteSession(sessionId: string): Promise<void> {
+  await apiJson<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(sessionId)}`, "DELETE");
+}
+
 export async function analyzeSession(sessionId: string): Promise<string> {
   const result = await apiJson<AnalysisResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/analyze`, "POST");
   return result.analysis;

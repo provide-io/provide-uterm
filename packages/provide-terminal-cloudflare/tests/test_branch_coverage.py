@@ -432,7 +432,7 @@ async def test_alarm_worker_connected_no_set_alarm() -> None:
     rt.worker_ws = ws_stub
 
     mock_kv = AsyncMock()
-    with patch("provide_terminal_cloudflare.do.session_runtime.update_kv_session", mock_kv):
+    with patch("provide_terminal_cloudflare.do._session_runtime_io.update_kv_session", mock_kv):
         await rt.alarm()
 
     mock_kv.assert_awaited_once()

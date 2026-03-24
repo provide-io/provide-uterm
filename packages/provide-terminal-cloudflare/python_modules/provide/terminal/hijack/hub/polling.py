@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Snapshot polling mixin for TermHub.
 
 Extracted from ``core.py`` to keep file sizes under 500 LOC.
@@ -16,7 +15,13 @@ import re
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.terminal.hijack.models import extract_prompt_id
+from provide.terminal.hijack.rest_helpers import (
+    PromptRegexError,
+    compile_expect_regex,
+)
+from provide.terminal.hijack.rest_helpers import (
+    snapshot_matches as shared_snapshot_matches,
+)
 
 if TYPE_CHECKING:
     from provide.terminal.hijack.models import WorkerTermState
@@ -33,11 +38,7 @@ class _PollingMixin:
         expect_regex: re.Pattern[str] | None,
     ) -> bool:
         """Return True if *snapshot* satisfies the prompt-id and/or regex guard."""
-        if snapshot is None:
-            return False
-        if expect_prompt_id and extract_prompt_id(snapshot) != expect_prompt_id:
-            return False
-        return not (expect_regex is not None and not expect_regex.search(str(snapshot.get("screen", ""))))
+        return shared_snapshot_matches(snapshot, expect_prompt_id=expect_prompt_id, expect_regex=expect_regex)
 
     async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
         """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""
@@ -72,9 +73,9 @@ class _PollingMixin:
         regex_obj: re.Pattern[str] | None = None
         if expect_regex:
             try:
-                regex_obj = re.compile(expect_regex, re.IGNORECASE | re.MULTILINE)
-            except re.error as exc:
-                return False, None, f"invalid expect_regex: {exc}"
+                regex_obj = compile_expect_regex(expect_regex, flags=re.IGNORECASE | re.MULTILINE)
+            except PromptRegexError as exc:
+                return False, None, str(exc)
 
         if not expect_prompt_id and regex_obj is None:
             async with self._lock:  # type: ignore[attr-defined]

@@ -17,3 +17,8 @@ output "wrangler_kv_block" {
     preview_id = "${cloudflare_workers_kv_namespace.session_registry_preview.id}"
   EOT
 }
+
+output "uterm_custom_domain" {
+  description = "Custom domain for undef-terminal-cloudflare worker."
+  value       = cloudflare_workers_custom_domain.uterm.hostname
+}

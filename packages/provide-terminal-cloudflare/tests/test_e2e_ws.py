@@ -26,6 +26,8 @@ import uuid
 import pytest
 import websockets
 
+from provide.terminal.control_stream import encode_control
+
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-terminal-e2e-test/1.0"
 
@@ -114,12 +116,12 @@ async def test_browser_receives_snapshot_after_worker_sends(wrangler_server: str
     worker_id = _new_worker_id()
     worker_uri = f"{base_ws}/ws/worker/{worker_id}/term"
     browser_uri = f"{base_ws}/ws/browser/{worker_id}/term"
-    snapshot_payload = json.dumps({"type": "snapshot", "screen": "hello-e2e", "ts": time.time()})
+    snapshot_frame = encode_control({"type": "snapshot", "screen": "hello-e2e", "ts": time.time()})
 
     async with websockets.connect(worker_uri) as worker_ws, websockets.connect(browser_uri) as browser_ws:
         # Drain the hello frame (sent synchronously in fetch() before 101).
         await _drain_until(browser_ws, "hello", max_frames=3)
-        await worker_ws.send(snapshot_payload)
+        await worker_ws.send(snapshot_frame)
         received = await _drain_until(browser_ws, "snapshot", max_frames=5)
 
     assert received is not None, "browser did not receive snapshot frame"
@@ -239,10 +241,10 @@ async def test_hijack_snapshot_endpoint(wrangler_server: str) -> None:
     """Worker sends snapshot → GET /hijack/{id}/snapshot returns it."""
     base_ws = _base_ws(wrangler_server)
     worker_id = _new_worker_id()
-    snapshot_payload = json.dumps({"type": "snapshot", "screen": "snapshot-e2e-content", "ts": time.time()})
+    snapshot_frame = encode_control({"type": "snapshot", "screen": "snapshot-e2e-content", "ts": time.time()})
 
     async with websockets.connect(f"{base_ws}/ws/worker/{worker_id}/term") as worker_ws:
-        await worker_ws.send(snapshot_payload)
+        await worker_ws.send(snapshot_frame)
         await asyncio.sleep(0.5)
 
         status1, body1 = _http_post(

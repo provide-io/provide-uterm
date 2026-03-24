@@ -48,7 +48,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy strict
-        entry: mypy src/
+        entry: mypy packages/provide-terminal/src/
         language: python
         language_version: python3.11
         additional_dependencies:
@@ -70,7 +70,7 @@ repos:
 
       - id: ty
         name: ty check
-        entry: ty check src/
+        entry: ty check packages/provide-terminal/src/
         language: python
         language_version: python3.11
         additional_dependencies:
@@ -92,7 +92,7 @@ repos:
 
       - id: bandit
         name: bandit
-        entry: bandit -r src/ -ll
+        entry: bandit -r packages/provide-terminal/src/ -ll
         language: python
         language_version: python3.11
         additional_dependencies:

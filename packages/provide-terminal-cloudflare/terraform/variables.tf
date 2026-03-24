@@ -20,3 +20,8 @@ variable "environment" {
   type        = string
   default     = "production"
 }
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare zone ID for neurotic.org (found in domain settings)."
+  type        = string
+}

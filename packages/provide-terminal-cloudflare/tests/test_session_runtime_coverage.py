@@ -20,6 +20,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
 
+from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder
+
+
+def _decode_control(raw: str) -> dict:
+    decoder = ControlStreamDecoder()
+    events = decoder.feed(raw)
+    events.extend(decoder.finish())
+    ctrl = [e.control for e in events if isinstance(e, ControlChunk)]
+    assert len(ctrl) == 1, f"expected 1 control frame, got {len(ctrl)}"
+    return ctrl[0]
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (mirrors test_session_runtime_unit.py)
 # ---------------------------------------------------------------------------
@@ -114,7 +126,7 @@ def test_lazy_init_worker_id_url_raises_returns_early() -> None:
 
 async def test_request_json_oversized_body_returns_empty() -> None:
     """request_json returns {} when body exceeds _MAX_REQUEST_BODY (no crash, no OOM)."""
-    from provide_terminal_cloudflare.do.session_runtime import _MAX_REQUEST_BODY
+    from provide_terminal_cloudflare.do._session_runtime_io import _MAX_REQUEST_BODY
 
     rt = _make_runtime()
 
@@ -148,7 +160,7 @@ async def test_fetch_websocket_browser_upgrade() -> None:
     assert resp.web_socket is client
     # hello frame sent synchronously in fetch()
     assert server.send.called
-    hello = __import__("json").loads(server.send.call_args[0][0])
+    hello = _decode_control(server.send.call_args[0][0])
     assert hello["type"] == "hello"
     assert hello["role"] == "admin"  # dev mode
 

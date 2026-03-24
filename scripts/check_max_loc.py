@@ -69,8 +69,8 @@ def main() -> int:
         "--roots",
         nargs="+",
         default=[
-            "src",
-            "tests",
+            "packages/provide-terminal/src",
+            "packages/provide-terminal/tests",
             "scripts",
             "packages/provide-terminal-cloudflare/src",
             "packages/provide-terminal-cloudflare/tests",

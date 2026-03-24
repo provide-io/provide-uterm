@@ -1,4 +1,8 @@
-import { restartSession } from "../api.js";
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+import { deleteSession, restartSession } from "../api.js";
 import { loadDashboardState, summarizeSessions } from "../state.js";
 import { renderAppHeader } from "./app-header.js";
 function escapeHtml(value) {
@@ -28,7 +32,7 @@ function sectionMarkup(title, sessions, appPath) {
           <article class="session-card ${session.connected ? "live" : ""} ${session.lastError ? "error" : ""}" data-session-id="${escapeHtml(session.sessionId)}">
             <div class="session-header">
               <div>
-                <div class="session-title">${escapeHtml(session.displayName)}</div>
+                <a class="session-title" href="${safeAppPath}/operator/${encodeURIComponent(session.sessionId)}">${escapeHtml(session.displayName)}</a>
                 <div class="small">${escapeHtml(session.sessionId)} • ${escapeHtml(session.connectorType)}</div>
               </div>
               <div class="session-badges">
@@ -38,15 +42,15 @@ function sectionMarkup(title, sessions, appPath) {
                 <span class="status-chip ${session.connected ? "ok" : session.lastError ? "error" : "info"}">${session.connected ? "Live" : session.lastError ? "Error" : "Stopped"}</span>
               </div>
             </div>
-            <div class="small">Mode: ${escapeHtml(session.inputMode)} • State: ${escapeHtml(session.lifecycleState)}</div>
             ${session.tags.length > 0
         ? `<div class="tag-list">${session.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>`
         : ""}
             <div class="toolbar">
-              <a class="btn" href="${safeAppPath}/operator/${encodeURIComponent(session.sessionId)}">Operator</a>
-              <a class="btn" href="${safeAppPath}/session/${encodeURIComponent(session.sessionId)}">User view</a>
+              <a class="btn" href="${safeAppPath}/operator/${encodeURIComponent(session.sessionId)}">Control</a>
+              <a class="btn" href="${safeAppPath}/session/${encodeURIComponent(session.sessionId)}">Watch</a>
               <a class="btn" href="${safeAppPath}/replay/${encodeURIComponent(session.sessionId)}">Replay</a>
               <button class="btn btn-restart" data-session-id="${escapeHtml(session.sessionId)}">Restart</button>
+              <button class="btn btn-delete" data-session-id="${escapeHtml(session.sessionId)}">Delete</button>
             </div>
           </article>
         `)
@@ -61,7 +65,6 @@ export async function renderDashboard(root, bootstrap) {
     <div class="page">
       ${renderAppHeader(bootstrap, "dashboard")}
       <section class="card stack">
-        <div class="small">Reference implementation</div>
         <h1>${safeTitle}</h1>
         <div class="toolbar">
           <button id="dashboard-refresh" class="btn">Refresh</button>
@@ -82,9 +85,9 @@ export async function renderDashboard(root, bootstrap) {
             statusEl.className = "status-chip ok";
             statusEl.textContent = `${sessions.length} session(s) loaded`;
             contentEl.innerHTML = [
-                sectionMarkup("Running", groups.running, bootstrap.app_path),
-                sectionMarkup("Stopped", groups.stopped, bootstrap.app_path),
-                sectionMarkup("Degraded", groups.degraded, bootstrap.app_path),
+                sectionMarkup("Active", groups.running, bootstrap.app_path),
+                sectionMarkup("Idle", groups.stopped, bootstrap.app_path),
+                sectionMarkup("Error", groups.degraded, bootstrap.app_path),
             ].join("");
         }
         catch (error) {
@@ -97,22 +100,42 @@ export async function renderDashboard(root, bootstrap) {
         void loadSessions(status, content);
     });
     content.addEventListener("click", (e) => {
-        const btn = e.target.closest(".btn-restart");
-        if (!btn)
+        const target = e.target;
+        const restartBtn = target.closest(".btn-restart");
+        if (restartBtn) {
+            const sid = restartBtn.dataset.sessionId;
+            if (!sid)
+                return;
+            restartBtn.disabled = true;
+            restartBtn.textContent = "…";
+            void restartSession(sid)
+                .then(() => loadSessions(status, content))
+                .catch((err) => {
+                restartBtn.disabled = false;
+                restartBtn.textContent = "Restart";
+                status.className = "status-chip error";
+                status.textContent = `Restart failed: ${String(err)}`;
+            });
             return;
-        const sid = btn.dataset.sessionId;
-        if (!sid)
-            return;
-        btn.disabled = true;
-        btn.textContent = "…";
-        void restartSession(sid)
-            .then(() => loadSessions(status, content))
-            .catch((err) => {
-            btn.disabled = false;
-            btn.textContent = "Restart";
-            status.className = "status-chip error";
-            status.textContent = `Restart failed: ${String(err)}`;
-        });
+        }
+        const deleteBtn = target.closest(".btn-delete");
+        if (deleteBtn) {
+            const sid = deleteBtn.dataset.sessionId;
+            if (!sid)
+                return;
+            if (!window.confirm(`Delete session "${sid}"? This cannot be undone.`))
+                return;
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = "…";
+            void deleteSession(sid)
+                .then(() => loadSessions(status, content))
+                .catch((err) => {
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = "Delete";
+                status.className = "status-chip error";
+                status.textContent = `Delete failed: ${String(err)}`;
+            });
+        }
     });
     await loadSessions(status, content);
 }

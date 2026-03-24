@@ -61,6 +61,7 @@ class MockTerminal {
   disposed = false;
   focused = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   addon: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _onData: ((data: string) => void) | null = null;
@@ -80,6 +81,7 @@ class MockTerminal {
     this.disposed = true;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   loadAddon(a: any): void {
     this.addon = a;
   }
@@ -130,9 +132,9 @@ beforeEach(() => {
   instances = [];
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", MockWebSocket);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).Terminal = MockTerminal;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).FitAddon = { FitAddon: MockFitAddon };
 });
 
@@ -439,7 +441,7 @@ describe("message dispatch", () => {
     getWs().open();
     sendMessage({ type: "hello", worker_online: true });
     sendMessage({ type: "worker_disconnected" });
-    expect(q(container, "statustext")?.textContent).toBe("Worker offline");
+    expect(q(container, "statustext")?.textContent).toBe("Waking…");
   });
 
   it("input_mode_changed updates status", () => {
@@ -453,6 +455,7 @@ describe("message dispatch", () => {
   it("heartbeat_ack is a no-op", () => {
     const { container } = makeWidget();
     getWs().open();
+    sendMessage({ type: "worker_connected" });
     sendMessage({ type: "heartbeat_ack" });
     expect(q(container, "statustext")?.textContent).toBe("Connected (watching)");
   });
@@ -752,14 +755,11 @@ describe("mobileKeys=false option", () => {
 describe("local echo and activity indicator", () => {
   it("widget has local echo tracking state variables", () => {
     const { widget } = makeWidget();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
-    // Verify state variables exist for local echo feature
-    expect(w._lastLocalEcho).toBeDefined();
-    expect(w._lastLocalEchoTimer).toBeNull();
+    // Verify state variables exist for activity indicator feature
     expect(w._activityFlashTimer).toBeNull();
-    expect(w._indicatorStyleCache).toBeNull();
     expect(w._statusDotElement).toBeNull();
   });
 
@@ -801,36 +801,17 @@ describe("local echo and activity indicator", () => {
     const { widget } = makeWidget();
     getWs().open();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
-    // Set up timers
-    w._lastLocalEchoTimer = setTimeout(() => {}, 500);
+    // Set up timer
     w._activityFlashTimer = setTimeout(() => {}, 200);
 
-    // Dispose should clear them
+    // Dispose should clear it
     widget.dispose();
 
-    // After dispose, timers should be null and cache cleared
-    expect(w._lastLocalEchoTimer).toBeNull();
+    // After dispose, timers should be null
     expect(w._activityFlashTimer).toBeNull();
     expect(w._statusDotElement).toBeNull();
-    expect(w._indicatorStyleCache).toBeNull();
-  });
-
-  it("indicator style caching works on repeated access", () => {
-    const { widget } = makeWidget();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = widget as any;
-
-    // First call caches the style
-    const style1 = w._getIndicatorStyle();
-    expect(w._indicatorStyleCache).toBe(style1);
-
-    // Second call returns cached value (no localStorage access)
-    const style2 = w._getIndicatorStyle();
-    expect(style2).toBe(style1);
-    expect(w._indicatorStyleCache).toBe(style1);
   });
 });

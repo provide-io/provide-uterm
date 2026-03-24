@@ -48,3 +48,4 @@ mutants/
 .pymutant-strict-campaign.json
 .wrangler
 memray-output/
+.worktrees/

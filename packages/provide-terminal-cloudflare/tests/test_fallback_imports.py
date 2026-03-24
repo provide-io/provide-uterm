@@ -204,8 +204,10 @@ def test_session_runtime_module_level_fallback() -> None:
     from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator, HijackSession
     from provide_terminal_cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide_terminal_cloudflare.config import CloudflareConfig
+    from provide_terminal_cloudflare.do._session_runtime_io import _SessionRuntimeIoMixin
     from provide_terminal_cloudflare.do.persistence import clear_lease as _clear_lease
     from provide_terminal_cloudflare.do.persistence import persist_lease as _persist_lease
+    from provide_terminal_cloudflare.do.ushell import init_ushell, on_browser_connected
     from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
     from provide_terminal_cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
@@ -235,9 +237,16 @@ def test_session_runtime_module_level_fallback() -> None:
     _config_mod = ModuleType("config")
     _config_mod.CloudflareConfig = CloudflareConfig  # type: ignore[attr-defined]
 
+    do_io = ModuleType("do._session_runtime_io")
+    do_io._SessionRuntimeIoMixin = _SessionRuntimeIoMixin  # type: ignore[attr-defined]
+
     do_persistence = ModuleType("do.persistence")
     do_persistence.clear_lease = _clear_lease  # type: ignore[attr-defined]
     do_persistence.persist_lease = _persist_lease  # type: ignore[attr-defined]
+
+    do_ushell = ModuleType("do.ushell")
+    do_ushell.init_ushell = init_ushell  # type: ignore[attr-defined]
+    do_ushell.on_browser_connected = on_browser_connected  # type: ignore[attr-defined]
 
     do_ws = ModuleType("do.ws_helpers")
     do_ws._WsHelperMixin = _WsHelperMixin  # type: ignore[attr-defined]
@@ -261,7 +270,9 @@ def test_session_runtime_module_level_fallback() -> None:
         "cf_types": cf,
         "config": _config_mod,
         "do": ModuleType("do"),
+        "do._session_runtime_io": do_io,
         "do.persistence": do_persistence,
+        "do.ushell": do_ushell,
         "do.ws_helpers": do_ws,
         "state": ModuleType("state"),
         "state.registry": state_reg,

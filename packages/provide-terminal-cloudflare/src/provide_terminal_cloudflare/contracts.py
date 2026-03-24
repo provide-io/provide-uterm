@@ -19,8 +19,13 @@ except (ImportError, ModuleNotFoundError):
     ControlStreamDecoder = Any  # type: ignore[assignment]
     ControlStreamProtocolError = Exception  # type: ignore[assignment]
     DataChunk = Any  # type: ignore[assignment]
-    encode_control = lambda *a, **k: b""  # type: ignore[assignment]
-    encode_data = lambda *a, **k: b""  # type: ignore[assignment]
+
+    def encode_control(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
+        return b""
+
+    def encode_data(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
+        return b""
+
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.cf_types import CFWebSocket
@@ -354,6 +359,8 @@ class RuntimeProtocol(Protocol):
     last_snapshot: Any
     last_analysis: Any
     browser_hijack_owner: dict[str, str]
+    _ushell: Any  # UshellConnector | None
+    _ushell_started: bool
 
     async def browser_role_for_request(self, request: object) -> str: ...
     async def request_json(self, request: object) -> dict[str, object]: ...

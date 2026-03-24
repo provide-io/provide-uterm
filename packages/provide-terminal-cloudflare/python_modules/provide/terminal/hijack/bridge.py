@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """Worker-side terminal bridge to a Swarm Manager.
 
 Connects a running worker process to the manager WebSocket endpoint
@@ -23,12 +22,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import time
 from typing import Any, Protocol, runtime_checkable
 
 from provide.telemetry import get_logger
 
+from provide.terminal.control_stream import (
+    ControlStreamDecoder,
+    ControlStreamProtocolError,
+    DataChunk,
+    encode_control,
+    encode_data,
+)
 from provide.terminal.hijack.models import _safe_int
 
 logger = get_logger(__name__)
@@ -46,6 +51,12 @@ def _to_ws_url(manager_url: str, path: str) -> str:
     elif base.startswith("http://"):
         base = "ws://" + base[len("http://") :]
     return base + path
+
+
+def _encode_bridge_frame(msg: dict[str, Any]) -> str:
+    if str(msg.get("type") or "") == "term":
+        return encode_data(str(msg.get("data") or ""))
+    return encode_control(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -102,8 +113,8 @@ class TermBridge:
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
 
-    def __init__(self, bot: Any, worker_id: str, manager_url: str, *, max_ws_message_bytes: int = 1_048_576) -> None:
-        self._bot = bot
+    def __init__(self, worker: Any, worker_id: str, manager_url: str, *, max_ws_message_bytes: int = 1_048_576) -> None:
+        self._worker = worker
         self._worker_id = worker_id
         self._manager_url = manager_url
         self._max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
@@ -115,7 +126,7 @@ class TermBridge:
 
     def attach_session(self) -> None:
         """Attach a watcher to the worker's current session to forward terminal output."""
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None or self._attached_session is session:
             return
         self._attached_session = session
@@ -233,7 +244,7 @@ class TermBridge:
             msg = await self._send_q.get()
             try:
                 try:
-                    payload = json.dumps(msg, ensure_ascii=True)
+                    payload = _encode_bridge_frame(msg)
                 except Exception as exc:
                     # Serialization failure: skip the bad message rather than
                     # tearing down the connection and triggering reconnect churn.
@@ -255,6 +266,7 @@ class TermBridge:
                 self._send_q.task_done()
 
     async def _recv_loop(self, ws: Any) -> None:
+        decoder = ControlStreamDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
         try:
             while self._running:
                 try:
@@ -263,28 +275,31 @@ class TermBridge:
                     logger.debug("_recv_loop recv error worker_id=%s: %s", self._worker_id, exc)
                     return
                 try:
-                    msg = json.loads(raw)
-                except Exception:  # nosec B112
-                    continue
-                mtype = msg.get("type")
-                if mtype == "snapshot_req":
-                    await self._send_snapshot(ws)
-                elif mtype == "control":
-                    action = msg.get("action")
-                    if action == "pause":
-                        await self._set_hijacked(True)
-                    elif action == "resume":
-                        await self._set_hijacked(False)
-                    elif action == "step":
-                        await self._request_step()
-                elif mtype == "input":
-                    data = msg.get("data", "")
-                    if data:
-                        await self._send_keys(data)
-                elif mtype == "resize":
-                    await self._set_size(
-                        _safe_int(msg.get("cols"), 80, min_val=1), _safe_int(msg.get("rows"), 25, min_val=1)
-                    )
+                    events = decoder.feed(raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace"))
+                except ControlStreamProtocolError as exc:
+                    logger.debug("_recv_loop bad stream worker_id=%s: %s", self._worker_id, exc)
+                    return
+                for event in events:
+                    if isinstance(event, DataChunk):
+                        if event.data:  # pragma: no branch
+                            await self._send_keys(event.data)
+                        continue
+                    msg = event.control
+                    mtype = msg.get("type")
+                    if mtype == "snapshot_req":
+                        await self._send_snapshot(ws)
+                    elif mtype == "control":
+                        action = msg.get("action")
+                        if action == "pause":
+                            await self._set_hijacked(True)
+                        elif action == "resume":
+                            await self._set_hijacked(False)
+                        elif action == "step":
+                            await self._request_step()
+                    elif mtype == "resize":
+                        await self._set_size(
+                            _safe_int(msg.get("cols"), 80, min_val=1), _safe_int(msg.get("rows"), 25, min_val=1)
+                        )
         finally:
             # Ensure the worker is never left permanently paused if the connection
             # drops while a hijack was active.  The hub clears its own hijack
@@ -293,7 +308,7 @@ class TermBridge:
             await self._set_hijacked(False)
 
     async def _send_snapshot(self, ws: Any) -> None:
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None:
             return
         with contextlib.suppress(AttributeError, RuntimeError):
@@ -302,7 +317,7 @@ class TermBridge:
             emulator = getattr(session, "emulator", None)
             snapshot = (emulator.get_snapshot() if emulator else None) or self._latest_snapshot or {}
             await ws.send(
-                json.dumps(
+                encode_control(
                     {
                         "type": "snapshot",
                         "screen": snapshot.get("screen", ""),
@@ -314,8 +329,7 @@ class TermBridge:
                         "has_trailing_space": bool(snapshot.get("has_trailing_space", False)),
                         "prompt_detected": snapshot.get("prompt_detected"),
                         "ts": time.time(),
-                    },
-                    ensure_ascii=True,
+                    }
                 )
             )
         except Exception as exc:
@@ -323,7 +337,7 @@ class TermBridge:
             return
 
     async def _send_keys(self, data: str) -> None:
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None:
             return
         try:
@@ -332,7 +346,7 @@ class TermBridge:
             logger.debug("_send_keys failed: %s", exc)
 
     async def _request_step(self) -> None:
-        fn = getattr(self._bot, "request_step", None)
+        fn = getattr(self._worker, "request_step", None)
         if callable(fn):
             try:
                 await fn()
@@ -340,7 +354,7 @@ class TermBridge:
                 logger.debug("_request_step failed: %s", exc)
 
     async def _set_size(self, cols: int, rows: int) -> None:
-        session = getattr(self._bot, "session", None)
+        session = getattr(self._worker, "session", None)
         if session is None:
             return
         try:
@@ -349,7 +363,7 @@ class TermBridge:
             logger.debug("_set_size failed: %s", exc)
 
     async def _set_hijacked(self, enabled: bool) -> None:
-        fn = getattr(self._bot, "set_hijacked", None)
+        fn = getattr(self._worker, "set_hijacked", None)
         if callable(fn):
             try:
                 await fn(enabled)

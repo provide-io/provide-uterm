@@ -3,72 +3,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "provide-terminal"
-dynamic = ["version"]
-description = "Shared terminal I/O primitives for the provide ecosystem"
-readme = "README.md"
-requires-python = ">=3.11"
-license = "AGPL-3.0-or-later"
-authors = [
-  {name = "MindTenet LLC"},
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: System :: Networking",
-    "Topic :: Terminals",
-    "Framework :: FastAPI",
-]
-dependencies = ["provide-telemetry>=0.3"]
-
-[project.urls]
-Homepage = "https://github.com/provide-io/provide-terminal"
-Repository = "https://github.com/provide-io/provide-terminal"
-
-[project.optional-dependencies]
-websocket = ["fastapi>=0.110", "websockets>=12.0"]
-ssh       = ["asyncssh>=2.14"]
-emulator  = ["pyte>=0.8"]
-server    = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9"]
-cli       = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0"]
-client    = ["httpx>=0.27"]
-manager   = ["fastapi>=0.110", "uvicorn>=0.24", "pyyaml>=6.0"]
-all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0", "pyjwt>=2.9", "httpx>=0.27", "fastmcp>=2.0", "pyyaml>=6.0"]
-mcp = [
-    "fastmcp>=2.0",
+[tool.uv.workspace]
+members = [
+    "packages/provide-terminal",
+    "packages/provide-terminal-cloudflare",
+    "packages/provide-shell",
 ]
 
-[project.scripts]
-uterm = "provide.terminal.cli:main"
-uterm-server = "provide.terminal.server.cli:main"
-uterm-mcp = "provide.terminal.mcp.cli:main"
-uterm-manager = "provide.terminal.manager.cli:main"
-
-[tool.setuptools.dynamic]
-version = {file = "VERSION"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-"provide.terminal" = [
-    "py.typed",
-    "frontend/*",
-    "frontend/app/*.js",
-    "frontend/app/views/*.js",
-    "frontend/app/widgets/*.js",
-    "frontend/.vite/*",
-    "frontend/assets/*",
-]
+[tool.uv.sources]
+provide-terminal = { workspace = true }
+provide-terminal-cloudflare = { workspace = true }
+provide-shell = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -107,36 +52,6 @@ dev = [
     "fastmcp>=2.0",
 ]
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
-testpaths = ["tests"]
-filterwarnings = [
-    "ignore:websockets\\.legacy is deprecated; see .*:DeprecationWarning:websockets\\.legacy",
-    "ignore:websockets\\.server\\.WebSocketServerProtocol is deprecated:DeprecationWarning:uvicorn\\.protocols\\.websockets\\.websockets_impl",
-    "ignore:remove second argument of ws_handler:DeprecationWarning:websockets\\.legacy\\.server",
-]
-markers = [
-    "playwright: browser-based UI tests (deselected by default, run with -m playwright)",
-    "mutant: mutation-testing and mutmut-focused tests (deselected by default)",
-    "memray: memory profiling and allocation stress tests (deselected by default, run with -m memray)",
-    "slow: slow tests >10s (deselected by default)",
-]
-addopts = [
-    "--import-mode=importlib",
-    "-v",
-    "--strict-markers",
-    "--strict-config",
-    "--tb=short",
-    "-ra",
-    "-m",
-    "not playwright and not memray and not slow",
-    "--cov=provide.terminal",
-    "--cov-branch",
-    "--cov-report=term-missing",
-    "--cov-fail-under=100",
-]
-
 [tool.ruff]
 line-length = 120
 target-version = "py311"
@@ -149,46 +64,15 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",
-    "W",
-    "F",
-    "I",
-    "N",
-    "UP",
-    "B",
-    "C4",
-    "SIM",
-    "TCH",
-    "PTH",
-    "DTZ",
-    "ICN",
-    "ISC",
-    "PERF",
-    "PIE",
-    "RET",
-    "RSE",
-    "TID",
-    "S",
-    "ARG",
-    "RUF",
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
+    "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
 ]
 ignore = ["E501", "S104", "S112", "S311"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "RUF022"]
-"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 "tests_mutation/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
-"packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
-
-[tool.coverage.run]
-source = ["provide.terminal"]
-omit = ["tests/*"]
-branch = true
-
-[tool.coverage.report]
-fail_under = 100
-show_missing = true
-skip_covered = false
+"packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -206,76 +90,48 @@ follow_imports = "normal"
 ignore_missing_imports = false
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["src"]
+mypy_path = ["packages/provide-terminal/src", "packages/provide-shell/src"]
 
 [[tool.mypy.overrides]]
-module = [
-    "provide.telemetry",
-    "provide.telemetry.*",
-    "structlog",
-    "structlog.*",
-]
+module = ["provide.telemetry", "provide.telemetry.*", "structlog", "structlog.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# provide.terminal.shell shims re-export from provide.shell.*; ty needs type: ignore
+# here but mypy resolves the import via mypy_path — suppress the unused-ignore warning.
+module = [
+    "provide.terminal.shell._commands",
+    "provide.terminal.shell._connector",
+    "provide.terminal.shell._output",
+    "provide.terminal.shell._repl",
+    "provide.terminal.shell._sandbox",
+]
+warn_unused_ignores = false
 
 [tool.ty.environment]
 python-version = "3.11"
 
 [tool.ty.rules]
-# FastAPI/Starlette add_middleware(CORSMiddleware, ...) is the documented
-# pattern; ty incorrectly rejects it due to incomplete starlette stubs.
 invalid-argument-type = "ignore"
-# asyncio.create_task(Awaitable[T]) requires a type: ignore[arg-type] for mypy;
-# ty does not see the same error and reports the suppression as unused.
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,src/provide/terminal/frontend/assets/*.js,mutants"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,mutants"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans"
 
 [tool.bandit]
 exclude_dirs = [
-    "tests",
+    "packages/provide-terminal/tests",
     "packages/provide-terminal-cloudflare/python_modules",
     "packages/provide-terminal-cloudflare/node_modules",
+    "packages/provide-shell/tests",
 ]
 
 [tool.vulture]
 min_confidence = 80
-paths = ["src", "tests"]
+paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests", "packages/provide-shell/src"]
 
 [tool.xenon]
 max_absolute = "C"
 max_modules = "B"
 max_average = "A"
-
-[tool.mutmut]
-max_children = 6
-paths_to_mutate = ["src/provide/terminal/"]
-tests_dir = ["tests/", "tests_mutation/"]
-also_copy = ["scripts/"]
-do_not_mutate = [
-    "src/provide/terminal/frontend/",
-    "src/provide/terminal/transports/",
-    "src/provide/terminal/gateway.py",
-    "src/provide/terminal/server/connectors/",
-]
-pytest_add_cli_args = ["--no-cov", "--timeout=30"]
-pytest_add_cli_args_test_selection = [
-    "-m",
-    "not playwright",
-    "--ignore=tests/example/test_server_e2e.py",
-    "--ignore=tests/hijack/test_hypothesis.py",
-    "--ignore=tests/hijack/test_hypothesis_ordering.py",
-    "--ignore=tests/e2e",
-]
-
-[tool.uv.workspace]
-members = [
-    ".",
-    "packages/provide-terminal-cloudflare",
-]
-
-[tool.uv.sources]
-provide-telemetry = { path = "/REDACTED_ABS_PATH", editable = true }
-provide-terminal = { workspace = true }
-provide-terminal-cloudflare = { workspace = true }

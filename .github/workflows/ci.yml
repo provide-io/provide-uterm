@@ -46,16 +46,16 @@ jobs:
       - run: uv run python scripts/check_max_loc.py --max-lines 500 --baseline .ci/max-loc-baseline.json
       - run: uv run python scripts/check_spdx_headers.py
       - run: uv run python scripts/check_event_literals.py
-      - run: uv run ruff format --check src tests scripts
-      - run: uv run ruff check src tests scripts
-      - run: uv run mypy src/
-      - run: uv run ty check src/
-      - run: uv run bandit -r src/ -ll
-      - run: uv run xenon --max-absolute C --max-modules B --max-average A src/
-      - run: uv run vulture src/ tests/ --ignore-names "since,password,kw,exc_type,tb"
+      - run: uv run ruff format --check packages/provide-terminal/src packages/provide-terminal/tests scripts
+      - run: uv run ruff check packages/provide-terminal/src packages/provide-terminal/tests scripts
+      - run: uv run mypy packages/provide-terminal/src/
+      - run: uv run ty check packages/provide-terminal/src/
+      - run: uv run bandit -r packages/provide-terminal/src/ -ll
+      - run: uv run xenon --max-absolute B --max-modules B --max-average A packages/provide-terminal/src/
+      - run: uv run vulture packages/provide-terminal/src/ packages/provide-terminal/tests/ --ignore-names "since,password,kw,exc_type,tb"
       - run: uv run python -m pip_audit --path .
       - run: uv run python scripts/check_licenses.py
-      - run: uv run python scripts/run_pytest_gate.py -q --ignore=tests/playwright/test_example.py --ignore=tests/playwright/test_frontend_coverage.py
+      - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-terminal/tests/playwright/test_example.py --ignore=packages/provide-terminal/tests/playwright/test_frontend_coverage.py
       - run: uv run pytest -q packages/provide-terminal-cloudflare/tests
       - run: uv run python scripts/verify_package_artifacts.py
 
@@ -69,7 +69,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --group dev
-      - run: uv run pytest tests/manager/test_process.py -q -k kill_bot_terminates_spawned_child_process_tree --no-cov -vv
+      - run: uv run pytest packages/provide-terminal/tests/manager/test_process.py -q -k kill_bot_terminates_spawned_child_process_tree --no-cov -vv
 
   mutation-gate:
     runs-on: ubuntu-latest
@@ -119,7 +119,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --group dev
-      - run: uv build
+      - run: uv build --package provide-terminal
       - run: uvx --from twine twine check dist/*
 
   performance-smoke:
@@ -146,7 +146,7 @@ jobs:
           python-version: "3.11"
       - run: uv sync --group dev
       - name: Run memray stress tests
-        run: uv run pytest tests/memray/ -m memray -v --tb=short --no-cov
+        run: uv run pytest packages/provide-terminal/tests/memray/ -m memray -v --tb=short --no-cov
       - name: Upload memray artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -68,12 +68,10 @@ export class ProvideHijack {
   private _hijackStepSupported = true;
   private _restHijackId: string | null = null;
   private _resumeToken: string | null = null;
-  private _resumeSupported = false;
   private _mobileKeysVisible = false;
-  private _lastLocalEcho = "";
-  private _lastLocalEchoTimer: ReturnType<typeof setTimeout> | null = null;
+  private _wakingTimer: ReturnType<typeof setTimeout> | null = null;
+  private _wakingTimedOut = false;
   private _activityFlashTimer: ReturnType<typeof setTimeout> | null = null;
-  private _indicatorStyleCache: string | null = null;
   private _statusDotElement: HTMLElement | null = null;
   private _root: HTMLElement | null = null;
 
@@ -134,10 +132,7 @@ export class ProvideHijack {
   /** Tear down entirely: xterm, WebSocket, ResizeObserver, and DOM. */
   dispose(): void {
     this.disconnect(); // handles _ro, _heartbeatTimer, _ws, _reconnectTimer
-    if (this._lastLocalEchoTimer) {
-      clearTimeout(this._lastLocalEchoTimer);
-      this._lastLocalEchoTimer = null;
-    }
+    this._stopReconnectAnim();
     if (this._activityFlashTimer) {
       clearTimeout(this._activityFlashTimer);
       this._activityFlashTimer = null;
@@ -148,7 +143,6 @@ export class ProvideHijack {
     }
     this._fitAddon = null;
     this._statusDotElement = null;
-    this._indicatorStyleCache = null;
     if (this._root?.parentNode) {
       this._root.parentNode.removeChild(this._root);
     }
@@ -228,7 +222,7 @@ export class ProvideHijack {
   private _buildDOM(): void {
     const p = (id: string) => `h-${this._uid}-${id}`; // ID prefix helper
     const workerId = this._config.workerId ?? "";
-    const title = this._config.title ?? (workerId ? `Terminal: ${workerId}` : "Terminal");
+    const title = this._config.title ?? (workerId ? workerId : "Terminal");
     const showAnalysis = this._config.showAnalysis;
 
     const root = document.createElement("div");
@@ -241,12 +235,12 @@ export class ProvideHijack {
           <span id="${p("statustext")}">Connecting…</span>
         </span>
         <div class="hijack-controls">
-          <button class="hbtn primary" id="${p("hijack")}" disabled>Hijack</button>
-          <button class="hbtn" id="${p("step")}" disabled>Step</button>
-          <button class="hbtn danger" id="${p("release")}" disabled>Release</button>
-          <button class="hbtn" id="${p("resync")}" disabled title="Request snapshot">⟳ Resync</button>
-          <button class="hbtn" id="${p("analyze")}" disabled>Analyze</button>
-          <button class="hbtn" id="${p("kbdtoggle")}" title="Mobile key toolbar">⌨</button>
+          <button class="hbtn primary" id="${p("hijack")}" disabled title="Take exclusive control">Hijack</button>
+          <button class="hbtn" id="${p("step")}" disabled title="Send one step, then pause">Step</button>
+          <button class="hbtn danger" id="${p("release")}" disabled title="Release hijack control">Release</button>
+          <button class="hbtn" id="${p("resync")}" disabled title="Request full screen snapshot">⟳ Resync</button>
+          <button class="hbtn" id="${p("analyze")}" disabled title="AI-readable screen description">Analyze</button>
+          <button class="hbtn" id="${p("kbdtoggle")}" title="Toggle mobile key toolbar">⌨</button>
         </div>
         <span class="hijack-prompt" id="${p("prompt")}" title="Current prompt ID"></span>
       </div>
@@ -278,7 +272,7 @@ export class ProvideHijack {
 
   private _ensureTerm(): XTerminal {
     if (this._term) return this._term;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: window global access
     const terminalCtor = (window as any).Terminal as (new (opts: Record<string, unknown>) => XTerminal) | undefined;
     if (!terminalCtor) throw new Error("xterm.js not loaded");
 
@@ -291,11 +285,15 @@ export class ProvideHijack {
       fontSize: 13,
       theme: { background: "#0b0f14" },
       allowTransparency: true,
+      scrollback: 10000,
+      scrollOnUserInput: true,
+      overviewRulerWidth: 15,
     });
     this._term.open(termDiv);
     this._term.focus();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: window global access
     const fitAddonGlobal = ((window as any).FitAddon ?? (globalThis as any).FitAddon) as
       | { FitAddon: new () => FitAddonInstance }
       | undefined;
@@ -315,16 +313,25 @@ export class ProvideHijack {
       this._ro.observe(termDiv);
     }
 
+    // Load WebLinksAddon if available
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: window global access
+    const webLinksAddonGlobal = (window as any).WebLinksAddon ?? (globalThis as any).WebLinksAddon;
+    if (webLinksAddonGlobal) {
+      try {
+        this._term.loadAddon(new webLinksAddonGlobal.WebLinksAddon());
+      } catch (_) {}
+    }
+
     // Forward keyboard input to WS when hijacked or in open mode
     this._term.onData((data: string) => {
       if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
         this._nudgeReconnect();
-        this._startReconnectAnim();
         return;
       }
       if (this._inputMode !== "open" && !this._hijackedByMe) return;
-      // Echo locally immediately and show activity indicator
-      this._echoInput(data);
+      // Show activity indicator (no local echo — let server echo drive the display)
+      this._showActivityIndicator();
       // Send to server asynchronously
       this._wsSend({ type: "input", data });
     });
@@ -388,7 +395,16 @@ export class ProvideHijack {
       if (ws !== this._ws) return; // stale handler: a newer socket already replaced this one
       this._stopReconnectAnim();
       this._reconnectAttempt = 0;
-      this._setStatus("live", "Connected (watching)");
+      this._wakingTimedOut = false;
+      if (this._wakingTimer) clearTimeout(this._wakingTimer);
+      this._wakingTimer = setTimeout(() => {
+        this._wakingTimer = null;
+        if (!this._workerOnline && this._ws?.readyState === WebSocket.OPEN) {
+          this._wakingTimedOut = true;
+          this._updateStatus();
+        }
+      }, 10_000);
+      this._setStatus("warn", "Waking…");
       this._updateButtons();
       // Attempt session resumption if we have a stored token
       const storedToken = this._resumeToken ?? this._loadResumeToken();
@@ -421,6 +437,11 @@ export class ProvideHijack {
     ws.onclose = () => {
       if (ws !== this._ws) return; // stale handler from a replaced socket
       this._clearHeartbeat();
+      if (this._wakingTimer) {
+        clearTimeout(this._wakingTimer);
+        this._wakingTimer = null;
+      }
+      this._wakingTimedOut = false;
       this._hijacked = false;
       this._hijackedByMe = false;
       this._canHijack = false;
@@ -450,6 +471,7 @@ export class ProvideHijack {
     const delaySec = delays[Math.min(attempt, delays.length - 1)] ?? 30;
     this._reconnectAttempt = attempt + 1;
     this._setStatus("bad", `Reconnecting in ${delaySec}s…`);
+    this._startReconnectAnim();
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;
       this._connectWs();
@@ -493,30 +515,6 @@ export class ProvideHijack {
     }
   }
 
-  /** Get the configured indicator style (cached, defaults to "dot"). */
-  private _getIndicatorStyle(): string {
-    if (this._indicatorStyleCache !== null) return this._indicatorStyleCache;
-    const VALID_STYLES = new Set(["dot", "pulse", "both"]);
-    try {
-      // Try localStorage first
-      const stored = localStorage.getItem("provide_hijack_indicator_style");
-      if (stored && VALID_STYLES.has(stored)) {
-        this._indicatorStyleCache = stored;
-        return stored;
-      }
-      // Fall back to environment variable
-      const envStr = (globalThis as Record<string, unknown>).HIJACK_INDICATOR_STYLE as string | undefined;
-      if (envStr && VALID_STYLES.has(envStr)) {
-        this._indicatorStyleCache = envStr;
-        return envStr;
-      }
-    } catch (_) {
-      // Ignore localStorage errors
-    }
-    this._indicatorStyleCache = "dot";
-    return "dot"; // safe default
-  }
-
   /** Show activity indicator with the configured style (reuses DOM reference and timeout). */
   private _showActivityIndicator(): void {
     // Cache dot element on first use
@@ -539,25 +537,9 @@ export class ProvideHijack {
     }, 200);
   }
 
-  /** Echo input locally to xterm and show activity indicator. */
-  private _echoInput(data: string): void {
-    // Write keystroke immediately to xterm (optimistic echo)
-    try {
-      this._ensureTerm().write(data);
-    } catch (_) {
-      // If xterm write fails, just send to server
-    }
-    // Track the local echo to deduplicate server response
-    this._lastLocalEcho = data;
-    // Clear the tracking after 500ms (timeout in case server doesn't echo)
-    if (this._lastLocalEchoTimer) clearTimeout(this._lastLocalEchoTimer);
-    this._lastLocalEchoTimer = setTimeout(() => {
-      this._lastLocalEcho = "";
-      this._lastLocalEchoTimer = null;
-    }, 500);
-    // Show activity indicator
-    this._showActivityIndicator();
-  }
+  // _echoInput removed: server echo drives the terminal display.
+  // Local echo caused double-rendering because the dedup (exact string match)
+  // fails when the remote host wraps the echo in ANSI sequences.
 
   private _buildMobileKeys(): void {
     const container = this._q("mobilekeys");
@@ -580,9 +562,7 @@ export class ProvideHijack {
       btn.addEventListener("click", () => {
         if (this._inputMode !== "open" && !this._hijackedByMe) return;
         if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
-        // Echo locally and show activity indicator
-        this._echoInput(data);
-        // Send to server asynchronously
+        this._showActivityIndicator();
         this._wsSend({ type: "input", data });
       });
       container.appendChild(btn);
@@ -596,15 +576,8 @@ export class ProvideHijack {
       case "term":
         this._workerOnline = true;
         if (msg.data) {
-          const incomingData = msg.data as string;
-          // Deduplicate: if this matches our local echo, skip rendering to avoid double-echo
-          if (incomingData === this._lastLocalEcho) {
-            this._lastLocalEcho = "";
-            // Still mark as online, but don't render
-            break;
-          }
           try {
-            this._ensureTerm().write(incomingData);
+            this._ensureTerm().write(msg.data as string);
           } catch (_) {}
         }
         break;
@@ -648,8 +621,6 @@ export class ProvideHijack {
         const stepSupported =
           (msg.hijack_step_supported as boolean | undefined) ?? (caps?.hijack_step_supported as boolean | undefined);
         this._hijackStepSupported = stepSupported !== false;
-        const resumeSupported = msg.resume_supported as boolean | undefined;
-        if (resumeSupported !== undefined) this._resumeSupported = !!resumeSupported;
         const resumeToken = msg.resume_token as string | undefined;
         if (resumeToken) {
           this._resumeToken = resumeToken;
@@ -661,6 +632,11 @@ export class ProvideHijack {
       }
 
       case "worker_connected":
+        if (this._wakingTimer) {
+          clearTimeout(this._wakingTimer);
+          this._wakingTimer = null;
+        }
+        this._wakingTimedOut = false;
         this._workerOnline = true;
         this._updateStatus();
         this._updateButtons();
@@ -685,6 +661,11 @@ export class ProvideHijack {
       }
 
       case "worker_disconnected":
+        if (this._wakingTimer) {
+          clearTimeout(this._wakingTimer);
+          this._wakingTimer = null;
+        }
+        this._wakingTimedOut = false;
         this._workerOnline = false;
         this._hijacked = false;
         this._hijackedByMe = false;
@@ -724,17 +705,21 @@ export class ProvideHijack {
   private _updateStatus(): void {
     const connected = !!(this._ws && this._ws.readyState === WebSocket.OPEN);
     if (!connected) {
-      this._setStatus("bad", "Disconnected");
-    } else if (this._hijackedByMe) {
-      this._setStatus("warn", "Hijacked (you)");
-    } else if (this._hijacked) {
-      this._setStatus("bad", "Hijacked (other)");
+      this._setStatus("bad", "Disconnected"); // red — WS down
     } else if (!this._workerOnline) {
-      this._setStatus("bad", "Worker offline");
+      if (this._wakingTimedOut) {
+        this._setStatus("bad", "Offline"); // red — worker never came online
+      } else {
+        this._setStatus("warn", "Waking…"); // orange — connected but worker not yet online
+      }
+    } else if (this._hijackedByMe) {
+      this._setStatus("live", "Hijacked (you)"); // green — active hijack by this browser
+    } else if (this._hijacked) {
+      this._setStatus("warn", "Hijacked (other)"); // orange — someone else has control
     } else if (this._inputMode === "open") {
-      this._setStatus("live", "Connected (shared)");
+      this._setStatus("live", "Connected (shared)"); // green — active
     } else {
-      this._setStatus("live", "Connected (watching)");
+      this._setStatus("live", "Connected (watching)"); // green — active
     }
 
     // Show/hide text-input row based on whether we can send input
@@ -866,9 +851,7 @@ export class ProvideHijack {
         if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
         // Unescape \\r → \r, \\n → \n, \\t → \t, \\e → ESC
         const data = raw.replace(/\\r/g, "\r").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\e/g, "\x1b");
-        // Echo locally and show activity indicator
-        this._echoInput(data);
-        // Send to server asynchronously
+        this._showActivityIndicator();
         this._wsSend({ type: "input", data });
         inputField.value = "";
         try {
@@ -887,5 +870,5 @@ export class ProvideHijack {
 }
 
 // ── Global exposure for CDN / script-tag use ──────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: window global access
 if (typeof window !== "undefined") (window as any).ProvideHijack = ProvideHijack;

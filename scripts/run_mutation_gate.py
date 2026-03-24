@@ -28,7 +28,7 @@ CONFIG_FILES: Final[tuple[str, ...]] = (
     "pytest.ini",
 )
 MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = ("--randomly-dont-reorganize",)
-DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = ("src/provide/terminal/",)
+DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = ("packages/provide-terminal/src/provide/terminal/",)
 
 
 def _uv_mutmut_cmd(python_version: str | None, *args: str) -> list[str]:

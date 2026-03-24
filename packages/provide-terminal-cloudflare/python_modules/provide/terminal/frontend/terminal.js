@@ -1,6 +1,10 @@
 "use strict";
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 const DEFAULTS = {
-    theme: "crt",
+    theme: "code",
     cols: 80,
     rows: 25,
     fontSize: 14,
@@ -16,6 +20,7 @@ const THEME_DEFAULTS = {
     crt: { scanlines: true, vignette: true, glow: false },
     bbs: { scanlines: false, vignette: false, glow: false },
     glass: { scanlines: false, vignette: false, glow: true },
+    code: { scanlines: false, vignette: false, glow: false },
 };
 let cssInjected = false;
 let instanceCount = 0;
@@ -32,7 +37,7 @@ function injectCss() {
     document.head.appendChild(link);
 }
 function asThemeName(value) {
-    return value === "bbs" || value === "glass" ? value : "crt";
+    return value === "bbs" || value === "glass" || value === "crt" ? value : "code";
 }
 class ProvideTerminal {
     constructor(container, config = {}) {
@@ -109,6 +114,7 @@ class ProvideTerminal {
       <div class="settings-panel" id="settingsPanel-${this.uid}">
         <h3>Theme</h3>
         <div class="theme-options">
+          <button class="theme-btn" data-theme="code">Code</button>
           <button class="theme-btn" data-theme="crt">CRT</button>
           <button class="theme-btn" data-theme="bbs">BBS/DOS</button>
           <button class="theme-btn" data-theme="glass">Glass</button>
@@ -303,7 +309,7 @@ class ProvideTerminal {
     applyThemeClasses() {
         if (this.root === null)
             return;
-        this.root.classList.remove("theme-crt", "theme-bbs", "theme-glass", "fx-scanlines", "fx-vignette", "fx-glow");
+        this.root.classList.remove("theme-crt", "theme-bbs", "theme-glass", "theme-code", "fx-scanlines", "fx-vignette", "fx-glow");
         this.root.classList.add(`theme-${this.settings.theme}`);
         if (this.settings.scanlines)
             this.root.classList.add("fx-scanlines");
