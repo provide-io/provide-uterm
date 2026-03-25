@@ -67,6 +67,15 @@ def _unescape_keys(raw: str) -> str:
     return "".join(out)
 
 
+def _trim_tail(screen: str, tail_lines: int | None) -> str:
+    """Trim *screen* to the last *tail_lines* lines (no-op when tail_lines is unset)."""
+    if tail_lines is not None and tail_lines > 0:
+        lines = screen.splitlines()
+        if len(lines) > tail_lines:
+            return "\n".join(lines[-tail_lines:])
+    return screen
+
+
 def _clean_snapshot(
     snapshot: dict[str, Any],
     output: str,
@@ -94,11 +103,7 @@ def _clean_snapshot(
             if len(lines) > tail_lines:
                 return {**snapshot, "screen": "\n".join(lines[-tail_lines:])}
         return snapshot
-    screen = strip_ansi(snapshot.get("screen", ""))
-    if tail_lines is not None and tail_lines > 0:
-        lines = screen.splitlines()
-        if len(lines) > tail_lines:
-            screen = "\n".join(lines[-tail_lines:])
+    screen = _trim_tail(strip_ansi(snapshot.get("screen", "")), tail_lines)
     if output == "text":
         return {"screen": screen}
     # rendered: visual grid intact, strip ANSI, include layout metadata

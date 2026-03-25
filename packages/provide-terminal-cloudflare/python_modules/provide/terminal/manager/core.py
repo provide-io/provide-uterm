@@ -326,6 +326,16 @@ class AgentManager:
             with contextlib.suppress(OSError):
                 tmp.unlink(missing_ok=True)
 
+    def _restore_agent(self, agent_id: str, agent_data: dict[str, Any]) -> None:
+        """Restore one agent from saved state if not already present."""
+        if agent_id not in self.agents:
+            saved_state = agent_data.get("state", "stopped")
+            if saved_state in ("running", "disconnected", "queued"):
+                agent_data["state"] = "stopped"
+            if "agent_id" not in agent_data:
+                agent_data["agent_id"] = agent_id
+            self.agents[agent_id] = self._agent_status_class.model_validate(agent_data)
+
     def _load_state(self) -> None:
         """Load swarm state from file if it exists."""
         if not self.state_file or not Path(self.state_file).exists():
@@ -341,13 +351,7 @@ class AgentManager:
                     self.bust_respawn = bool(state["bust_respawn"])
                 for agent_id, agent_data in state.get("agents", {}).items():
                     try:
-                        if agent_id not in self.agents:
-                            saved_state = agent_data.get("state", "stopped")
-                            if saved_state in ("running", "disconnected", "queued"):
-                                agent_data["state"] = "stopped"
-                            if "agent_id" not in agent_data:
-                                agent_data["agent_id"] = agent_id
-                            self.agents[agent_id] = self._agent_status_class.model_validate(agent_data)
+                        self._restore_agent(agent_id, agent_data)
                     except Exception as agent_err:
                         logger.warning("agent_state_load_skipped", agent_id=agent_id, error=str(agent_err))
                 logger.info(

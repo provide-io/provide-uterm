@@ -25,9 +25,9 @@ except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for hijack routes: pip install 'provide-terminal[websocket]'") from _e
 
 
-from provide.terminal.control_stream import (
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     DataChunk,
     encode_control,
 )
@@ -96,7 +96,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         await hub.request_snapshot(worker_id)
 
         cleanup_task = asyncio.create_task(_periodic_hijack_cleanup(hub, worker_id, _WORKER_HIJACK_CLEANUP_INTERVAL_S))
-        decoder = ControlStreamDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
+        decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
         try:
             while True:
                 raw = await websocket.receive_text()
@@ -109,7 +109,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     break
                 try:
                     events = decoder.feed(raw)
-                except ControlStreamProtocolError as exc:
+                except ControlChannelProtocolError as exc:
                     logger.warning("ws_worker_bad_stream worker_id=%s: %s", worker_id, exc)
                     with suppress(Exception):
                         await websocket.close(code=1003, reason=str(exc))
@@ -289,7 +289,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             await hub.request_snapshot(worker_id)
 
         cleanup_task = asyncio.create_task(_periodic_hijack_cleanup(hub, worker_id, _BROWSER_HIJACK_CLEANUP_INTERVAL_S))
-        decoder = ControlStreamDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
+        decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
         try:
             _browser_bucket = TokenBucket(hub.browser_rate_limit_per_sec)
             while True:
@@ -299,7 +299,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     continue
                 try:
                     events = decoder.feed(raw)
-                except ControlStreamProtocolError as exc:
+                except ControlChannelProtocolError as exc:
                     logger.warning("ws_browser_bad_stream worker_id=%s: %s", worker_id, exc)
                     with suppress(Exception):
                         await websocket.close(code=1003, reason=str(exc))

@@ -69,7 +69,7 @@ def _raw(frame_type: str, **kwargs) -> str:
 
 
 async def test_protocol_error_sends_error_frame() -> None:
-    """Malformed control stream → ProtocolError → error frame sent to ws."""
+    """Malformed control channel → ProtocolError → error frame sent to ws."""
     runtime = _Runtime()
     ws = _Ws()
     await handle_socket_message(runtime, ws, "\x10X", is_worker=False)

@@ -19,7 +19,7 @@ import pytest
 import uvicorn
 import websockets
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk, encode_control, encode_data
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
 from provide.terminal.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
@@ -55,12 +55,12 @@ def _auth_headers(subject: str, roles: list[str]) -> dict[str, str]:
     return {"Authorization": f"Bearer {_mint_token(subject, roles)}"}
 
 
-_WS_DECODERS: WeakKeyDictionary[Any, ControlStreamDecoder] = WeakKeyDictionary()
+_WS_DECODERS: WeakKeyDictionary[Any, ControlChannelDecoder] = WeakKeyDictionary()
 _WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
 
 
 async def _drain_until(ws: Any, type_: str, timeout: float = 5.0) -> dict[str, Any] | None:
-    decoder = _WS_DECODERS.setdefault(ws, ControlStreamDecoder())
+    decoder = _WS_DECODERS.setdefault(ws, ControlChannelDecoder())
     pending = _WS_PENDING.setdefault(ws, [])
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:

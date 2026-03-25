@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import (
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     DataChunk,
     encode_control,
     encode_data,
@@ -209,79 +209,103 @@ class HostedSessionRuntime:
         if self._logger is not None:
             await self._logger.log_control("recv", msg)
 
+    async def _send_outbound_frame(self, ws: Any, outbound: dict[str, Any]) -> None:
+        """Encode and send one outbound frame, logging wire and snapshot events."""
+        payload = _encode_runtime_frame(outbound)
+        await ws.send(payload)
+        await self._log_wire_send(payload, outbound)
+        if outbound.get("type") == "snapshot":
+            await self._log_snapshot(outbound)
+
+    async def _process_control_msg(
+        self,
+        connector: Any,
+        responses: list[dict[str, Any]],
+        message: dict[str, Any],
+    ) -> None:
+        """Dispatch a single decoded control message to the connector."""
+        await self._log_control_recv(message)
+        mtype = message.get("type")
+        if mtype == "snapshot_req":
+            responses.append(await connector.get_snapshot())
+        elif mtype == "analyze_req":
+            responses.append(
+                {
+                    "type": "analysis",
+                    "formatted": await connector.get_analysis(),
+                    "ts": time.time(),
+                }
+            )
+        elif mtype == "control":
+            responses.extend(await connector.handle_control(str(message.get("action", ""))))
+
+    async def _process_inbound(
+        self,
+        ws: Any,
+        connector: Any,
+        decoder: ControlChannelDecoder,
+        raw_text: str,
+    ) -> None:
+        """Decode inbound data, dispatch events, and send responses."""
+        await self._log_wire_recv(raw_text)
+        try:
+            events = decoder.feed(raw_text)
+        except ControlChannelProtocolError as exc:
+            raise RuntimeError(f"invalid control channel: {exc}") from exc
+        responses: list[dict[str, Any]] = []
+        for event in events:
+            if isinstance(event, DataChunk):
+                await self._log_send(event.data)
+                responses.extend(await connector.handle_input(event.data))
+                continue
+            await self._process_control_msg(connector, responses, event.control)
+        for outbound in responses:
+            await self._send_outbound_frame(ws, outbound)
+
     async def _bridge_session(self, ws: Any) -> None:
         connector = self._connector
         if connector is None:
             raise RuntimeError("connector unavailable")
-        decoder = ControlStreamDecoder(max_control_payload_bytes=1_048_576)
+        decoder = ControlChannelDecoder(max_control_payload_bytes=1_048_576)
         self._state = "running"
         self._connected = True
         await self._enqueue_messages(await connector.set_mode(self.definition.input_mode))
         await self._enqueue_messages([await connector.get_snapshot()])
         await self._log_event("runtime_started", {"session_id": self.definition.session_id})
 
-        while not self._stop.is_set():
-            if self._queue is not None and not self._queue.empty():
-                outbound = await self._queue.get()
-                payload = _encode_runtime_frame(outbound)
-                await ws.send(payload)
-                await self._log_wire_send(payload, outbound)
-                if outbound.get("type") == "snapshot":
-                    await self._log_snapshot(outbound)
-                continue
-            recv_task = asyncio.create_task(ws.recv())
-            poll_task = asyncio.create_task(connector.poll_messages())
-            done, pending = await asyncio.wait({recv_task, poll_task}, timeout=0.5, return_when=asyncio.FIRST_COMPLETED)
-            await _cancel_and_wait(cast("set[asyncio.Task[object]]", pending))
-            if not done:
-                continue
-            if poll_task in done:
-                for outbound in poll_task.result():
-                    payload = _encode_runtime_frame(outbound)
-                    await ws.send(payload)
-                    await self._log_wire_send(payload, outbound)
-                    if outbound.get("type") == "snapshot":
-                        await self._log_snapshot(outbound)
+        recv_task: asyncio.Task[Any] | None = None
+        try:
+            while not self._stop.is_set():
+                if self._queue is not None and not self._queue.empty():
+                    outbound = await self._queue.get()
+                    await self._send_outbound_frame(ws, outbound)
+                    continue
+                # Reuse recv_task across iterations so a fast-returning poll_messages()
+                # (e.g. ShellSessionConnector returning [] immediately) does not cancel
+                # and discard it before it has a chance to read inbound data.
+                if recv_task is None or recv_task.done():
+                    recv_task = asyncio.create_task(ws.recv())
+                poll_task = asyncio.create_task(connector.poll_messages())
+                done, _ = await asyncio.wait({recv_task, poll_task}, timeout=0.5, return_when=asyncio.FIRST_COMPLETED)
+                await _cancel_and_wait({cast("asyncio.Task[object]", poll_task)})
+                if not done:
+                    continue
+                if poll_task in done:
+                    for outbound in poll_task.result():
+                        await self._send_outbound_frame(ws, outbound)
+                if recv_task in done:
+                    try:
+                        raw = recv_task.result()
+                    except asyncio.CancelledError:
+                        break
+                    recv_task = None
+                    raw_text = raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace")
+                    await self._process_inbound(ws, connector, decoder, raw_text)
+        finally:
+            if recv_task is not None and not recv_task.done():
+                recv_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await recv_task
-                continue
-
-            raw = recv_task.result()
-            with contextlib.suppress(asyncio.CancelledError):
-                await poll_task
-            raw_text = raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace")
-            await self._log_wire_recv(raw_text)
-            try:
-                events = decoder.feed(raw_text)
-            except ControlStreamProtocolError as exc:
-                raise RuntimeError(f"invalid control stream: {exc}") from exc
-            responses: list[dict[str, Any]] = []
-            for event in events:
-                if isinstance(event, DataChunk):
-                    await self._log_send(event.data)
-                    responses.extend(await connector.handle_input(event.data))
-                    continue
-                message = event.control
-                await self._log_control_recv(message)
-                mtype = message.get("type")
-                if mtype == "snapshot_req":
-                    responses.append(await connector.get_snapshot())
-                elif mtype == "analyze_req":
-                    responses.append(
-                        {
-                            "type": "analysis",
-                            "formatted": await connector.get_analysis(),
-                            "ts": time.time(),
-                        }
-                    )
-                elif mtype == "control":
-                    responses.extend(await connector.handle_control(str(message.get("action", ""))))
-            for outbound in responses:
-                payload = _encode_runtime_frame(outbound)
-                await ws.send(payload)
-                await self._log_wire_send(payload, outbound)
-                if outbound.get("type") == "snapshot":
-                    await self._log_snapshot(outbound)
 
     async def _run(self) -> None:
         import websockets

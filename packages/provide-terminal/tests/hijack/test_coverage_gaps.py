@@ -5,13 +5,13 @@
 """Coverage gap tests for hijack subsystem.
 
 Targets:
-- hijack/bridge.py lines 280-282: ControlStreamProtocolError in _recv_loop → return
+- hijack/bridge.py lines 280-282: ControlChannelProtocolError in _recv_loop → return
 - hijack/bridge.py lines 285->287: DataChunk with empty data → skip send_keys
 - hijack/rest_helpers.py line 49: compile_expect_regex with falsy/empty → return None
 - hijack/routes/browser_handlers.py branch 262->273: resume reclaim fails when hijack already active
-- hijack/routes/websockets.py lines 112-116: ControlStreamProtocolError in worker handler → close 1003
+- hijack/routes/websockets.py lines 112-116: ControlChannelProtocolError in worker handler → close 1003
 - hijack/routes/websockets.py lines 119->124: DataChunk with empty data → continue (no broadcast)
-- hijack/routes/websockets.py lines 302-306: ControlStreamProtocolError in browser handler → close 1003
+- hijack/routes/websockets.py lines 302-306: ControlChannelProtocolError in browser handler → close 1003
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.terminal.client import connect_test_ws
-from provide.terminal.control_stream import ControlStreamProtocolError, encode_data
+from provide.terminal.control_channel import ControlChannelProtocolError, encode_data
 from provide.terminal.hijack.bridge import TermBridge
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import WorkerTermState
@@ -115,15 +115,15 @@ class TestCompileExpectRegexFalsy:
 
 
 # ---------------------------------------------------------------------------
-# hijack/bridge.py lines 280-282: ControlStreamProtocolError in _recv_loop → return
+# hijack/bridge.py lines 280-282: ControlChannelProtocolError in _recv_loop → return
 # ---------------------------------------------------------------------------
 
 
 class TestBridgeRecvLoopProtocolError:
-    """Lines 280-282: ControlStreamProtocolError while decoding a received frame → return from _recv_loop."""
+    """Lines 280-282: ControlChannelProtocolError while decoding a received frame → return from _recv_loop."""
 
     async def test_protocol_error_causes_recv_loop_return(self) -> None:
-        """When decoder.feed raises ControlStreamProtocolError, _recv_loop returns (not crash)."""
+        """When decoder.feed raises ControlChannelProtocolError, _recv_loop returns (not crash)."""
         bot = MagicMock()
         bot.session = None
         bot.set_hijacked = AsyncMock()
@@ -131,16 +131,16 @@ class TestBridgeRecvLoopProtocolError:
         bridge = TermBridge(bot, "w1", "http://localhost:8080")
         bridge._running = True  # must be True or while loop exits immediately
 
-        from provide.terminal.control_stream import ControlStreamDecoder
+        from provide.terminal.control_channel import ControlChannelDecoder
 
         call_count = 0
-        original_feed = ControlStreamDecoder.feed
+        original_feed = ControlChannelDecoder.feed
 
         def patched_feed(self, data):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise ControlStreamProtocolError("bad frame")
+                raise ControlChannelProtocolError("bad frame")
             return original_feed(self, data)
 
         class _FakeWs:
@@ -156,8 +156,8 @@ class TestBridgeRecvLoopProtocolError:
                 return msg
 
         ws = _FakeWs()
-        with patch.object(ControlStreamDecoder, "feed", patched_feed):
-            # _recv_loop should return after the ControlStreamProtocolError (not loop further)
+        with patch.object(ControlChannelDecoder, "feed", patched_feed):
+            # _recv_loop should return after the ControlChannelProtocolError (not loop further)
             await bridge._recv_loop(ws)
 
         # set_hijacked(False) is called in the finally block
@@ -214,16 +214,16 @@ class TestBridgeRecvLoopEmptyDataChunk:
 
 
 # ---------------------------------------------------------------------------
-# hijack/routes/websockets.py lines 112-116: ControlStreamProtocolError in worker → close 1003
+# hijack/routes/websockets.py lines 112-116: ControlChannelProtocolError in worker → close 1003
 # ---------------------------------------------------------------------------
 
 
 class TestWorkerWsBadStream:
-    """Lines 112-116: Worker WS sends a message that fails control stream decode → close(1003)."""
+    """Lines 112-116: Worker WS sends a message that fails control channel decode → close(1003)."""
 
     def test_bad_stream_closes_with_1003(self) -> None:
-        """A worker that sends an unparsable control stream message triggers close(1003)."""
-        from provide.terminal.control_stream import ControlStreamDecoder
+        """A worker that sends an unparsable control channel message triggers close(1003)."""
+        from provide.terminal.control_channel import ControlChannelDecoder
 
         app, hub = _make_app("admin")
 
@@ -238,10 +238,10 @@ class TestWorkerWsBadStream:
             # Patch decoder to raise on feed
 
             def bad_feed(self, data):
-                raise ControlStreamProtocolError("injected error")
+                raise ControlChannelProtocolError("injected error")
 
-            with patch.object(ControlStreamDecoder, "feed", bad_feed):
-                # Send a message — decoder.feed will raise ControlStreamProtocolError
+            with patch.object(ControlChannelDecoder, "feed", bad_feed):
+                # Send a message — decoder.feed will raise ControlChannelProtocolError
                 worker.send_text("bad stream data")
                 # Worker connection should be closed by the server
                 # The TestClient will raise on next receive or show disconnect
@@ -295,16 +295,16 @@ class TestWorkerWsEmptyDataChunk:
 
 
 # ---------------------------------------------------------------------------
-# hijack/routes/websockets.py lines 302-306: ControlStreamProtocolError in browser → close 1003
+# hijack/routes/websockets.py lines 302-306: ControlChannelProtocolError in browser → close 1003
 # ---------------------------------------------------------------------------
 
 
 class TestBrowserWsBadStream:
-    """Lines 302-306: Browser WS sends a message that fails control stream decode → close(1003)."""
+    """Lines 302-306: Browser WS sends a message that fails control channel decode → close(1003)."""
 
     def test_browser_bad_stream_closes_connection(self) -> None:
-        """A browser that sends an unparsable control stream message → server closes with 1003."""
-        from provide.terminal.control_stream import ControlStreamDecoder
+        """A browser that sends an unparsable control channel message → server closes with 1003."""
+        from provide.terminal.control_channel import ControlChannelDecoder
 
         app, hub = _make_app("admin")
 
@@ -319,9 +319,9 @@ class TestBrowserWsBadStream:
 
                 # Patch decoder to raise on feed
                 def bad_feed(self, data):
-                    raise ControlStreamProtocolError("browser injected error")
+                    raise ControlChannelProtocolError("browser injected error")
 
-                with patch.object(ControlStreamDecoder, "feed", bad_feed):
+                with patch.object(ControlChannelDecoder, "feed", bad_feed):
                     browser.send_text("corrupt browser data")
                     # Server closes the browser connection with 1003
                     try:

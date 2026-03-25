@@ -235,3 +235,67 @@ class TestShellSessionConnector:
 
 
 # (TelnetSessionConnector and SshSessionConnector tests moved to test_connectors_2.py)
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+
+def test_registry_known_types_derived_from_registry() -> None:
+    from provide.terminal.server.connectors.registry import registered_types
+
+    from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
+
+    # KNOWN_CONNECTOR_TYPES is a snapshot taken at import time; the live registry
+    # may have additional test-registered types, so check subset rather than equality.
+    assert registered_types() >= KNOWN_CONNECTOR_TYPES
+
+
+def test_registry_build_connector_unknown_raises() -> None:
+    from provide.terminal.server.connectors.registry import build_connector
+
+    with pytest.raises(ValueError, match="unsupported connector_type"):
+        build_connector("sid", "name", "nonexistent", {})
+
+
+def test_registry_register_and_build() -> None:
+
+    from provide.terminal.server.connectors.registry import build_connector, register_connector
+
+    from provide.terminal.server.connectors.base import SessionConnector
+
+    class _Fake(SessionConnector):
+        def __init__(self, sid: str, name: str, cfg: dict[str, Any]) -> None: ...
+
+        async def start(self) -> None: ...
+
+        async def stop(self) -> None: ...
+
+        def is_connected(self) -> bool:
+            return False
+
+        async def poll_messages(self) -> list[dict[str, Any]]:
+            return []
+
+        async def handle_input(self, data: str) -> list[dict[str, Any]]:
+            return []
+
+        async def handle_control(self, action: str) -> list[dict[str, Any]]:
+            return []
+
+        async def get_snapshot(self) -> dict[str, Any]:
+            return {}
+
+        async def get_analysis(self) -> str:
+            return ""
+
+        async def set_mode(self, mode: str) -> list[dict[str, Any]]:
+            return []
+
+        async def clear(self) -> list[dict[str, Any]]:
+            return []
+
+    register_connector("_test_fake", _Fake)
+    inst = build_connector("s", "n", "_test_fake", {})
+    assert isinstance(inst, _Fake)

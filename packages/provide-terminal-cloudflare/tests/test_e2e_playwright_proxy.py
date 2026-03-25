@@ -55,7 +55,7 @@ _OPEN_WS_JS = """\
         'overflow-y:auto\">(waiting for frames)</pre>';
 
     window.__wsFrames = [];
-    // Strip control-stream framing: DLE(0x10) STX(0x02) {8 hex chars}:{json}
+    // Strip control-channel framing: DLE(0x10) STX(0x02) {8 hex chars}:{json}
     function decodeFrame(raw) {
         if (raw.charCodeAt(0) === 0x10 && raw.charCodeAt(1) === 0x02) {
             var colon = raw.indexOf(':', 2);

@@ -18,7 +18,7 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.terminal.control_stream import encode_control, encode_data
+from provide.terminal.control_channel import encode_control, encode_data
 
 if TYPE_CHECKING:
     from provide_terminal_cloudflare.cf_types import CFWebSocket

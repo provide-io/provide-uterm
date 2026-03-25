@@ -151,6 +151,49 @@ class AgentProcessManager:
         )
         self._spawn_tasks.append(task)
 
+    async def _load_worker_type(self, config_path: str) -> tuple[str, dict[str, Any]]:
+        """Load worker_type and raw config dict from a YAML config file."""
+        raw: dict[str, Any] = {}
+        try:
+            raw_text = await asyncio.to_thread(Path(config_path).read_text)
+            raw = yaml.safe_load(raw_text) or {}
+            worker_type = str(raw.get("worker_type", "default") or "default")
+        except Exception as exc:
+            logger.warning("worker_type_read_failed", config_path=config_path, error=str(exc))
+            worker_type = "default"
+        return worker_type, raw
+
+    def _get_registry_entry(self, worker_type: str, config_path: str) -> Any:
+        """Resolve the worker registry entry for *worker_type*.
+
+        Falls back to the sole registered entry when worker_type is 'default'.
+        """
+        registry_entry = self._worker_registry.get(worker_type)
+        if registry_entry is None:
+            if len(self._worker_registry) == 1 and worker_type == "default":
+                return next(iter(self._worker_registry.values()))
+            raise RuntimeError(
+                f"Unknown worker_type {worker_type!r} in {config_path}. Registered: {sorted(self._worker_registry)}"
+            )
+        return registry_entry
+
+    def _build_worker_env(
+        self,
+        env_prefix: str,
+        agent_entry: Any,
+        registry_entry: Any,
+        raw_config: dict[str, Any],
+    ) -> dict[str, str]:
+        """Build the environment dict for a worker subprocess."""
+        env = {k: v for k, v in os.environ.items() if k.startswith(env_prefix) or k in _WORKER_ENV_PASSTHROUGH}
+        if self._spawn_name_style:
+            env[f"{env_prefix}NAME_STYLE"] = self._spawn_name_style
+        if self._spawn_name_base:
+            env[f"{env_prefix}NAME_BASE"] = self._spawn_name_base
+        if agent_entry is not None:
+            registry_entry.configure_worker_env(env, agent_entry, self.manager, raw_config=raw_config)
+        return env
+
     async def spawn_agent(self, config_path: str, agent_id: str) -> str:
         self.note_agent_id(agent_id)
         if len(self.manager.agents) >= self.manager.max_agents:
@@ -160,42 +203,16 @@ class AgentProcessManager:
 
         logger.info("spawning_agent", agent_id=agent_id, config_path=config_path)
 
-        worker_type = "default"
-        raw: dict[str, Any] = {}
-        try:
-            raw_text = await asyncio.to_thread(Path(config_path).read_text)
-            raw = yaml.safe_load(raw_text) or {}
-            worker_type = str(raw.get("worker_type", "default") or "default")
-        except Exception as exc:
-            logger.warning("worker_type_read_failed", config_path=config_path, error=str(exc))
-
-        registry_entry = self._worker_registry.get(worker_type)
-        if registry_entry is None:
-            # Single-registry fallback: if only one worker type is registered and the
-            # config has no worker_type key, use that sole entry automatically.
-            if len(self._worker_registry) == 1 and worker_type == "default":
-                registry_entry = next(iter(self._worker_registry.values()))
-            else:
-                raise RuntimeError(
-                    f"Unknown worker_type {worker_type!r} in {config_path}. Registered: {sorted(self._worker_registry)}"
-                )
+        worker_type, raw = await self._load_worker_type(config_path)
+        registry_entry = self._get_registry_entry(worker_type, config_path)
         worker_module = registry_entry.worker_module
 
         cmd = [sys.executable, "-m", worker_module, "--config", config_path, "--agent-id", agent_id]
 
         try:
             env_prefix = self.manager.config.worker_env_prefix
-            env = {k: v for k, v in os.environ.items() if k.startswith(env_prefix) or k in _WORKER_ENV_PASSTHROUGH}
-
             agent_entry = self.manager.agents.get(agent_id)
-            if self._spawn_name_style:
-                env[f"{env_prefix}NAME_STYLE"] = self._spawn_name_style
-            if self._spawn_name_base:
-                env[f"{env_prefix}NAME_BASE"] = self._spawn_name_base
-
-            # Let the game plugin inject additional env vars (incl. game-specific fields).
-            if agent_entry is not None:
-                registry_entry.configure_worker_env(env, agent_entry, self.manager, raw_config=raw)
+            env = self._build_worker_env(env_prefix, agent_entry, registry_entry, raw)
 
             process = await asyncio.to_thread(self._spawn_process, agent_id, cmd, env)
 

@@ -27,9 +27,9 @@ from typing import Any, Protocol, runtime_checkable
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import (
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     DataChunk,
     encode_control,
     encode_data,
@@ -266,7 +266,7 @@ class TermBridge:
                 self._send_q.task_done()
 
     async def _recv_loop(self, ws: Any) -> None:
-        decoder = ControlStreamDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
+        decoder = ControlChannelDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
         try:
             while self._running:
                 try:
@@ -276,7 +276,7 @@ class TermBridge:
                     return
                 try:
                     events = decoder.feed(raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace"))
-                except ControlStreamProtocolError as exc:
+                except ControlChannelProtocolError as exc:
                     logger.debug("_recv_loop bad stream worker_id=%s: %s", self._worker_id, exc)
                     return
                 for event in events:

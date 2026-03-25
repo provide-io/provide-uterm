@@ -26,14 +26,14 @@ from provide.telemetry.health import increment_dropped, set_queue_depth
 Signal = str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class QueuePolicy:
     logs_maxsize: int = 0
     traces_maxsize: int = 0
     metrics_maxsize: int = 0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class QueueTicket:
     signal: Signal
     token: int

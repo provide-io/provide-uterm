@@ -74,7 +74,7 @@ Memory profiling tests (memray) run with `--no-cov` to avoid inflating coverage 
 
 ## Memory Profiling
 
-Memory profiling uses [memray](https://github.com/bloomberg/memray) to detect allocation regressions in hot-path components (ANSI color processing, ControlStream buffering, TermHub event management).
+Memory profiling uses [memray](https://github.com/bloomberg/memray) to detect allocation regressions in hot-path components (ANSI color processing, ControlChannel buffering, TermHub event management).
 
 ### Running Memory Tests Locally
 

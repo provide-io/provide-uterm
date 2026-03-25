@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tests.hijack.control_stream_helpers import decode_control_payload
+from tests.hijack.control_channel_helpers import decode_control_payload
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.hijack.models import HijackSession, WorkerTermState
 

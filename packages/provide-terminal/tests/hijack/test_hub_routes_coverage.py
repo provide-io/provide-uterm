@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from tests.hijack.control_stream_helpers import decode_control_payload, decode_control_payloads
+from tests.hijack.control_channel_helpers import decode_control_payload, decode_control_payloads
 from provide.terminal.hijack.hub import TermHub
 
 

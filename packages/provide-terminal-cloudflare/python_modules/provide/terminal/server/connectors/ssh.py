@@ -47,10 +47,9 @@ class SshSessionConnector(SessionConnector):
         }
     )
 
-    def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
-        unknown = set(config) - self._VALID_CONFIG_KEYS
-        if unknown:
-            raise ValueError(f"unknown ssh connector_config keys: {sorted(unknown)}")
+    @staticmethod
+    def _load_client_keys(config: dict[str, Any]) -> list[Any]:
+        """Build the list of SSH client keys from the connector config."""
         raw_client_keys = config.get("client_keys")
         client_keys: list[Any] = []
         if raw_client_keys is not None:
@@ -69,6 +68,13 @@ class SshSessionConnector(SessionConnector):
             else:
                 imported_key = asyncssh.import_private_key(str(key_data).encode("utf-8"))
             client_keys.append(imported_key)
+        return client_keys
+
+    def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
+        unknown = set(config) - self._VALID_CONFIG_KEYS
+        if unknown:
+            raise ValueError(f"unknown ssh connector_config keys: {sorted(unknown)}")
+        client_keys = SshSessionConnector._load_client_keys(config)
         self._session_id = session_id
         self._display_name = display_name
         self._host = str(config.get("host", TerminalDefaults.TELNET_HOST))
@@ -243,3 +249,8 @@ class SshSessionConnector(SessionConnector):
             self._paused = False
         self._banner = f"Input mode set to {'Shared input' if mode == 'open' else 'Exclusive hijack'}."
         return [self._hello(), self._snapshot()]
+
+
+from provide.terminal.server.connectors.registry import register_connector  # noqa: E402
+
+register_connector("ssh", SshSessionConnector)

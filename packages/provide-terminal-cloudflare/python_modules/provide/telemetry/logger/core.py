@@ -22,6 +22,7 @@ from provide.telemetry.logger.processors import (
     add_standard_fields,
     apply_sampling,
     enforce_event_schema,
+    make_level_filter,
     merge_runtime_context,
     sanitize_sensitive_fields,
 )
@@ -29,6 +30,15 @@ from provide.telemetry.resilience import run_with_resilience
 
 TRACE = 5
 logging.addLevelName(TRACE, "TRACE")
+
+_LEVEL_NAME_TO_NUMERIC: dict[str, int] = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+    "TRACE": TRACE,
+}
 
 
 def _get_level(level: str) -> int:
@@ -38,6 +48,52 @@ def _get_level(level: str) -> int:
     if isinstance(mapped, int):
         return mapped
     return logging.INFO
+
+
+def _make_filtering_bound_logger(level: int) -> type:
+    """Create a FilteringBoundLogger with zero-cost level guards and .trace().
+
+    Extends structlog's FilteringBoundLogger with:
+    - ``.trace()`` — routes through ``.debug(_trace=True)`` when TRACE is active
+    - ``.is_debug_enabled()`` / ``.is_trace_enabled()`` — O(1) level checks
+      for guarding expensive argument construction
+    - Permissive no-op — accepts ``log.debug(key=val)`` without event string
+    """
+    structlog_level = max(level, logging.DEBUG)
+    cls = structlog.make_filtering_bound_logger(structlog_level)
+
+    # Permissive no-op for filtered methods (accepts any args/kwargs)
+    _standard_levels = {
+        "debug": logging.DEBUG,
+        "info": logging.INFO,
+        "warning": logging.WARNING,
+        "error": logging.ERROR,
+        "critical": logging.CRITICAL,  # pragma: no mutate
+    }
+
+    def _permissive_nop(*_args: Any, **_kw: Any) -> None:
+        return None
+
+    for method_name, method_level in _standard_levels.items():
+        if method_level < structlog_level:
+            setattr(cls, method_name, _permissive_nop)
+
+    # .trace() — forwards through debug() with _trace marker when TRACE active
+    if level <= TRACE:
+
+        def _trace(self: Any, event: str, **kw: Any) -> None:
+            self.debug(event, _trace=True, **kw)
+    else:
+        _trace = _permissive_nop
+    cls.trace = _trace  # type: ignore[attr-defined]
+
+    # .is_debug_enabled() / .is_trace_enabled() — baked in at class creation
+    _debug_ok = level <= logging.DEBUG
+    _trace_ok = level <= TRACE
+    cls.is_debug_enabled = lambda _self: _debug_ok  # type: ignore[attr-defined]
+    cls.is_trace_enabled = lambda _self: _trace_ok  # type: ignore[attr-defined]
+
+    return cls
 
 
 _configured = False
@@ -123,9 +179,17 @@ def configure_logging(config: TelemetryConfig, *, force: bool = False) -> None: 
             return
 
         level = _get_level(config.logging.level)
-        structlog_level = max(level, logging.DEBUG)
         handlers = _build_handlers(config, level)
         logging.basicConfig(level=level, handlers=handlers, format="%(message)s", force=True)
+
+        # Compute effective level for FilteringBoundLogger: min of default
+        # and all module-level overrides so overridden modules reach the
+        # _LevelFilter processor which evaluates per-module thresholds.
+        effective_level = level
+        for module_level_str in config.logging.module_levels.values():
+            module_numeric = _LEVEL_NAME_TO_NUMERIC.get(module_level_str, logging.INFO)  # pragma: no mutate
+            if module_numeric < effective_level:  # pragma: no mutate
+                effective_level = module_numeric
 
         processors: list[Any] = [
             structlog.contextvars.merge_contextvars,
@@ -143,6 +207,11 @@ def configure_logging(config: TelemetryConfig, *, force: bool = False) -> None: 
                 sanitize_sensitive_fields(config.logging.sanitize),
             ]
         )
+
+        # Per-module level filter — placed late so enrichment processors
+        # run first.  Only added when module_levels are configured.
+        if config.logging.module_levels:
+            processors.append(make_level_filter(config.logging.level, config.logging.module_levels))
 
         if config.logging.include_caller:
             processors.append(
@@ -173,7 +242,7 @@ def configure_logging(config: TelemetryConfig, *, force: bool = False) -> None: 
 
         structlog.configure(
             processors=processors,
-            wrapper_class=structlog.make_filtering_bound_logger(structlog_level),
+            wrapper_class=_make_filtering_bound_logger(effective_level),
             logger_factory=structlog.stdlib.LoggerFactory(),
             cache_logger_on_first_use=False,
         )
@@ -222,7 +291,40 @@ def get_logger(name: str | None = None) -> _TraceWrapper:
     return _TraceWrapper(structlog.get_logger(name or "provide"))
 
 
+def is_debug_enabled() -> bool:
+    """Standalone check if debug-level logging is enabled.
+
+    Use to guard expensive argument construction::
+
+        from provide.telemetry.logger import is_debug_enabled
+        if is_debug_enabled():
+            logger.debug("result", payload=model.model_dump_json())
+    """
+    active = _active_config
+    if active is None:
+        return True  # unconfigured — let everything through
+    return _get_level(active.logging.level) <= logging.DEBUG
+
+
+def is_trace_enabled() -> bool:
+    """Standalone check if trace-level logging is enabled."""
+    active = _active_config
+    if active is None:
+        return True
+    return _get_level(active.logging.level) <= TRACE
+
+
 class _TraceWrapper:
+    """Thin wrapper that forwards to the structlog bound logger.
+
+    The custom FilteringBoundLogger (from ``_make_filtering_bound_logger``)
+    already provides ``.trace()``, ``.is_debug_enabled()``, and
+    ``.is_trace_enabled()`` — this wrapper just preserves the return type
+    on ``.bind()``.
+    """
+
+    __slots__ = ("_logger",)
+
     def __init__(self, logger: Any) -> None:
         self._logger = logger
 
@@ -230,9 +332,13 @@ class _TraceWrapper:
         return getattr(self._logger, item)
 
     def trace(self, event: str, **kwargs: Any) -> None:
-        active = _active_config  # atomic ref read under GIL; no lock needed
-        if active is not None and active.logging.level == "TRACE":
-            self._logger.debug(event, _trace=True, **kwargs)
+        self._logger.trace(event, **kwargs)
+
+    def is_debug_enabled(self) -> bool:
+        return bool(self._logger.is_debug_enabled())
+
+    def is_trace_enabled(self) -> bool:
+        return bool(self._logger.is_trace_enabled())
 
     def bind(self, **kwargs: Any) -> _TraceWrapper:
         return _TraceWrapper(self._logger.bind(**kwargs))
@@ -247,6 +353,12 @@ class _LazyLogger:
 
     def trace(self, event: str, **kwargs: Any) -> None:
         self._resolve().trace(event, **kwargs)
+
+    def is_debug_enabled(self) -> bool:
+        return self._resolve().is_debug_enabled()
+
+    def is_trace_enabled(self) -> bool:
+        return self._resolve().is_trace_enabled()
 
     def bind(self, **kwargs: Any) -> _TraceWrapper:
         return self._resolve().bind(**kwargs)

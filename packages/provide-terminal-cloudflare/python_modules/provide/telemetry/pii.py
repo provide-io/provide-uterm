@@ -25,7 +25,7 @@ from typing import Any, Literal
 MaskMode = Literal["drop", "redact", "hash", "truncate"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PIIRule:
     path: tuple[str, ...]
     mode: MaskMode = "redact"
@@ -53,16 +53,22 @@ def get_pii_rules() -> tuple[PIIRule, ...]:
         return tuple(_rules)
 
 
+_REDACTED = "***"
+_TRUNCATION_SUFFIX = "..."
+
+
 def _mask(value: Any, mode: MaskMode, truncate_to: int) -> Any:
     if mode == "drop":
         return None
     if mode == "redact":
-        return "***"
+        return _REDACTED
     if mode == "hash":
         return hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:12]  # pragma: no mutate
     text = str(value)
     limit = max(0, truncate_to)
-    return text[:limit] + ("..." if len(text) > limit else "")
+    if len(text) <= limit:
+        return text
+    return text[:limit] + _TRUNCATION_SUFFIX
 
 
 def _match(path: tuple[str, ...], target: tuple[str, ...]) -> bool:
@@ -101,7 +107,7 @@ def _apply_default_sensitive_key_redaction(
                 if key in rule_targeted_keys or value != orig_value:
                     output[key] = value
                 else:
-                    output[key] = "***"
+                    output[key] = _REDACTED
             else:
                 output[key] = _apply_default_sensitive_key_redaction(value, orig_value, rule_targeted_keys)
         return output

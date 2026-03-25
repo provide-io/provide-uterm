@@ -27,9 +27,9 @@ from typing import Any, Protocol, runtime_checkable
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import (
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     DataChunk,
     encode_control,
     encode_data,
@@ -163,6 +163,52 @@ class TermBridge:
 
     _RECONNECT_BACKOFF: tuple[int, ...] = (1, 2, 5, 10, 30)
 
+    async def _handle_permanent_error(self, exc: Exception, status: Any) -> bool:
+        """Check if an exception is a permanent/auth error that should stop retrying.
+
+        Returns True if it is a permanent error (and sets ``_running`` to False).
+        """
+        if status in (401, 403, 404):
+            logger.error(
+                "term_bridge_permanent_error worker_id=%s status=%s — stopping reconnect",
+                self._worker_id,
+                status,
+            )
+            self._running = False
+            return True
+        if _InvalidURI is not None and isinstance(exc, _InvalidURI):
+            logger.error(
+                "term_bridge_permanent_error worker_id=%s error=%s — malformed URL, stopping reconnect",
+                self._worker_id,
+                exc,
+            )
+            self._running = False
+            return True
+        return False
+
+    async def _handle_connection(self, ws: Any) -> None:
+        """Handle one connection lifetime: create recv/send tasks and wait for completion."""
+        send_task = asyncio.create_task(self._send_loop(ws))
+        recv_task = asyncio.create_task(self._recv_loop(ws))
+        # Use FIRST_COMPLETED so a normal recv-loop return (connection
+        # closed cleanly) cancels the send-loop rather than leaving it
+        # blocked forever on queue.get().
+        try:
+            done, pending = await asyncio.wait({send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
+        except asyncio.CancelledError:
+            send_task.cancel()
+            recv_task.cancel()
+            await asyncio.gather(send_task, recv_task, return_exceptions=True)
+            raise
+        for t in pending:
+            t.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        for t in done:
+            if not t.cancelled():  # pragma: no branch
+                exc = t.exception()
+                if exc:
+                    raise exc
+
     async def _run(self) -> None:
         try:
             import websockets
@@ -175,31 +221,11 @@ class TermBridge:
 
         attempt = 0
         while self._running:
-            send_task: asyncio.Task[None] | None = None
-            recv_task: asyncio.Task[None] | None = None
             try:
                 async with websockets.connect(url, max_size=self._max_ws_message_bytes) as ws:
                     attempt = 0  # reset backoff on successful connect
-                    send_task = asyncio.create_task(self._send_loop(ws))
-                    recv_task = asyncio.create_task(self._recv_loop(ws))
-                    # Use FIRST_COMPLETED so a normal recv-loop return (connection
-                    # closed cleanly) cancels the send-loop rather than leaving it
-                    # blocked forever on queue.get().
-                    done, pending = await asyncio.wait({send_task, recv_task}, return_when=asyncio.FIRST_COMPLETED)
-                    for t in pending:
-                        t.cancel()
-                    await asyncio.gather(*pending, return_exceptions=True)
-                    for t in done:
-                        if not t.cancelled():  # pragma: no branch
-                            exc = t.exception()
-                            if exc:
-                                raise exc
+                    await self._handle_connection(ws)
             except asyncio.CancelledError:
-                tasks = [task for task in (send_task, recv_task) if task is not None]
-                for task in tasks:
-                    task.cancel()
-                if tasks:  # pragma: no branch
-                    await asyncio.gather(*tasks, return_exceptions=True)
                 return
             except Exception as exc:
                 logger.warning(
@@ -213,21 +239,7 @@ class TermBridge:
                 _status = getattr(exc, "status_code", None) or getattr(
                     getattr(exc, "response", None), "status_code", None
                 )
-                if _status in (401, 403, 404):
-                    logger.error(
-                        "term_bridge_permanent_error worker_id=%s status=%s — stopping reconnect",
-                        self._worker_id,
-                        _status,
-                    )
-                    self._running = False
-                    break
-                if _InvalidURI is not None and isinstance(exc, _InvalidURI):
-                    logger.error(
-                        "term_bridge_permanent_error worker_id=%s error=%s — malformed URL, stopping reconnect",
-                        self._worker_id,
-                        exc,
-                    )
-                    self._running = False
+                if await self._handle_permanent_error(exc, _status):
                     break
 
             if not self._running:
@@ -265,8 +277,24 @@ class TermBridge:
                 # queue.join() never deadlocks if used as a shutdown fence.
                 self._send_q.task_done()
 
+    async def _dispatch_control_msg(self, msg: dict[str, Any], ws: Any) -> None:
+        """Handle the mtype dispatch for one control message from the hub."""
+        mtype = msg.get("type")
+        if mtype == "snapshot_req":
+            await self._send_snapshot(ws)
+        elif mtype == "control":
+            action = msg.get("action")
+            if action == "pause":
+                await self._set_hijacked(True)
+            elif action == "resume":
+                await self._set_hijacked(False)
+            elif action == "step":
+                await self._request_step()
+        elif mtype == "resize":
+            await self._set_size(_safe_int(msg.get("cols"), 80, min_val=1), _safe_int(msg.get("rows"), 25, min_val=1))
+
     async def _recv_loop(self, ws: Any) -> None:
-        decoder = ControlStreamDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
+        decoder = ControlChannelDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
         try:
             while self._running:
                 try:
@@ -276,7 +304,7 @@ class TermBridge:
                     return
                 try:
                     events = decoder.feed(raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace"))
-                except ControlStreamProtocolError as exc:
+                except ControlChannelProtocolError as exc:
                     logger.debug("_recv_loop bad stream worker_id=%s: %s", self._worker_id, exc)
                     return
                 for event in events:
@@ -284,22 +312,7 @@ class TermBridge:
                         if event.data:  # pragma: no branch
                             await self._send_keys(event.data)
                         continue
-                    msg = event.control
-                    mtype = msg.get("type")
-                    if mtype == "snapshot_req":
-                        await self._send_snapshot(ws)
-                    elif mtype == "control":
-                        action = msg.get("action")
-                        if action == "pause":
-                            await self._set_hijacked(True)
-                        elif action == "resume":
-                            await self._set_hijacked(False)
-                        elif action == "step":
-                            await self._request_step()
-                    elif mtype == "resize":
-                        await self._set_size(
-                            _safe_int(msg.get("cols"), 80, min_val=1), _safe_int(msg.get("rows"), 25, min_val=1)
-                        )
+                    await self._dispatch_control_msg(event.control, ws)
         finally:
             # Ensure the worker is never left permanently paused if the connection
             # drops while a hijack was active.  The hub clears its own hijack

@@ -269,3 +269,8 @@ class ShellSessionConnector(SessionConnector):
         self._banner = f"Input mode set to {self._mode_label()}."
         self._append("system", f"mode: {self._mode_label()}")
         return [self._hello(), self._snapshot()]
+
+
+from provide.terminal.server.connectors.registry import register_connector  # noqa: E402
+
+register_connector("shell", ShellSessionConnector)

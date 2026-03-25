@@ -40,6 +40,19 @@ class _HijackOwnershipMixin:
     _workers: dict[str, WorkerTermState]
     _dashboard_hijack_lease_s: int
 
+    @staticmethod
+    def _compute_lease_expirations(st: Any, now: float) -> tuple[bool, bool]:
+        """Return ``(browser_expired, rest_expired)`` without mutating state.
+
+        *browser_expired* is True when the dashboard WS owner lease has lapsed.
+        *rest_expired* is True when the REST hijack session lease has lapsed.
+        """
+        rest_expired = st.hijack_session is not None and st.hijack_session.lease_expires_at <= now
+        browser_expired = (
+            st.hijack_owner is not None and st.hijack_owner_expires_at is not None and st.hijack_owner_expires_at <= now
+        )
+        return browser_expired, rest_expired
+
     async def _expire_leases_under_lock(self, worker_id: str, now: float) -> tuple[bool, bool, bool] | None:
         """Expire stale leases under lock; returns (rest_expired, dashboard_expired, should_resume) or None."""
         async with self._lock:
@@ -48,19 +61,13 @@ class _HijackOwnershipMixin:
                 return None
             if st.hijack_session is None and st.hijack_owner is None:
                 return None
-            rest_expired = False
-            dashboard_expired = False
-            if st.hijack_session is not None and st.hijack_session.lease_expires_at <= now:
+            browser_expired, rest_expired = self._compute_lease_expirations(st, now)
+            dashboard_expired = browser_expired
+            if rest_expired:
                 st.hijack_session = None
-                rest_expired = True
-            if (
-                st.hijack_owner is not None
-                and st.hijack_owner_expires_at is not None
-                and st.hijack_owner_expires_at <= now
-            ):
+            if dashboard_expired:
                 st.hijack_owner = None
                 st.hijack_owner_expires_at = None
-                dashboard_expired = True
             should_resume = (
                 (rest_expired or dashboard_expired) and st.hijack_owner is None and st.hijack_session is None
             )

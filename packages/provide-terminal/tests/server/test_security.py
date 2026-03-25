@@ -243,6 +243,12 @@ async def test_cancel_and_wait_cancels_and_drains_pending_tasks() -> None:
     assert task.cancelled()
 
 
+@pytest.mark.asyncio
+async def test_cancel_and_wait_empty_set_is_noop() -> None:
+    """Line 42->exit: calling _cancel_and_wait with an empty set does nothing."""
+    await _cancel_and_wait(set())
+
+
 # ---------------------------------------------------------------------------
 # Third-review regression tests
 # ---------------------------------------------------------------------------

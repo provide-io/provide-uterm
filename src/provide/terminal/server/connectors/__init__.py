@@ -19,6 +19,7 @@ __all__ = [
     "ShellSessionConnector",
     "SshSessionConnector",
     "TelnetSessionConnector",
+    "UshellConnector",
     "WebSocketSessionConnector",
     "build_connector",
 ]
@@ -36,7 +37,7 @@ with contextlib.suppress(ImportError):
 # Connector types recognised by build_connector().  Used by the registry to
 # validate connector_type at session-creation time so callers get a 422 instead
 # of discovering the error asynchronously via lifecycle_state == "error".
-KNOWN_CONNECTOR_TYPES: frozenset[str] = frozenset({"shell", "telnet", "ssh", "websocket"})
+KNOWN_CONNECTOR_TYPES: frozenset[str] = frozenset({"shell", "telnet", "ssh", "websocket", "ushell"})
 
 
 def build_connector(
@@ -57,4 +58,8 @@ def build_connector(
         from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
 
         return WebSocketSessionConnector(session_id, display_name, config)
+    if connector_type == "ushell":
+        from provide.shell.terminal._connector import UshellConnector
+
+        return UshellConnector(session_id, display_name, config)
     raise ValueError(f"unsupported connector_type: {connector_type}")

@@ -144,7 +144,13 @@ class SessionRegistry:
         async with self._lock:
             return self._sessions.get(session_id)
 
-    async def create_session(self, payload: dict[str, Any]) -> SessionRuntimeStatus:
+    @staticmethod
+    def _validate_create_payload(payload: dict[str, Any]) -> tuple[str, str, str, str]:
+        """Validate and extract core fields from a session creation payload.
+
+        Raises SessionValidationError on invalid input.
+        Returns (session_id, connector_type_raw, input_mode_raw, visibility_raw).
+        """
         session_id = str(payload["session_id"])
         if not re.match(r"^[\w\-]+$", session_id):
             raise SessionValidationError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
@@ -161,6 +167,10 @@ class SessionRegistry:
             raise SessionValidationError(
                 f"visibility must be 'public', 'operator', or 'private', got: {visibility_raw!r}"
             )
+        return session_id, connector_type_raw, input_mode_raw, visibility_raw
+
+    async def create_session(self, payload: dict[str, Any]) -> SessionRuntimeStatus:
+        session_id, connector_type_raw, input_mode_raw, visibility_raw = self._validate_create_payload(payload)
         session = SessionDefinition(
             session_id=session_id,
             display_name=str(payload.get("display_name", session_id)),

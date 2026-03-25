@@ -144,3 +144,8 @@ class TelnetSessionConnector(SessionConnector):
             self._paused = False
         self._banner = f"Input mode set to {'Shared input' if mode == 'open' else 'Exclusive hijack'}."
         return [self._hello(), self._snapshot()]
+
+
+from provide.terminal.server.connectors.registry import register_connector  # noqa: E402
+
+register_connector("telnet", TelnetSessionConnector)

@@ -179,6 +179,13 @@ class TestCtrlUK:
         result = await ed.process_char("\x15")
         assert result is None  # doesn't complete a line
 
+    async def test_ctrl_k_without_on_write(self) -> None:
+        ed = LineEditor()
+        await ed.process_char("a")
+        result = await ed.process_char("\x0b")
+        assert result is None
+        assert ed.get_buffer() == ""
+
 
 # ---------------------------------------------------------------------------
 # Regular characters + max_length

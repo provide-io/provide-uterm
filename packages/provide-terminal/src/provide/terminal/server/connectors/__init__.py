@@ -8,10 +8,11 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+
+from provide.terminal.server.connectors.registry import build_connector, register_connector, registered_types
 
 from provide.terminal.server.connectors.base import SessionConnector
-from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+from provide.terminal.server.connectors.telnet import TelnetSessionConnector  # registers "telnet"
 
 __all__ = [
     "KNOWN_CONNECTOR_TYPES",
@@ -19,42 +20,23 @@ __all__ = [
     "ShellSessionConnector",
     "SshSessionConnector",
     "TelnetSessionConnector",
+    "UshellConnector",
     "WebSocketSessionConnector",
     "build_connector",
 ]
 
-# ShellSessionConnector and SshSessionConnector are conditionally imported
-# at module level for __all__ discoverability; callers that need them at
-# runtime should catch ImportError if their deps are absent.
 with contextlib.suppress(ImportError):
-    from provide.terminal.server.connectors.shell import ShellSessionConnector
+    from provide.terminal.server.connectors.shell import ShellSessionConnector  # registers "shell"
 with contextlib.suppress(ImportError):
-    from provide.terminal.server.connectors.ssh import SshSessionConnector
+    from provide.terminal.server.connectors.ssh import SshSessionConnector  # registers "ssh"
 with contextlib.suppress(ImportError):
-    from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
+    from provide.terminal.server.connectors.websocket import WebSocketSessionConnector  # registers "websocket"
+with contextlib.suppress(ImportError):
+    # register_connector is always available (from our own registry.py);
+    # only the UshellConnector import is optional — it requires provide-shell installed.
+    from provide.shell.terminal._connector import UshellConnector
 
-# Connector types recognised by build_connector().  Used by the registry to
-# validate connector_type at session-creation time so callers get a 422 instead
-# of discovering the error asynchronously via lifecycle_state == "error".
-KNOWN_CONNECTOR_TYPES: frozenset[str] = frozenset({"shell", "telnet", "ssh", "websocket"})
+    register_connector("ushell", UshellConnector)
 
-
-def build_connector(
-    session_id: str, display_name: str, connector_type: str, config: dict[str, Any]
-) -> SessionConnector:
-    """Instantiate a built-in connector by type."""
-    if connector_type == "shell":
-        from provide.terminal.server.connectors.shell import ShellSessionConnector
-
-        return ShellSessionConnector(session_id, display_name, config)
-    if connector_type == "telnet":
-        return TelnetSessionConnector(session_id, display_name, config)
-    if connector_type == "ssh":
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
-
-        return SshSessionConnector(session_id, display_name, config)
-    if connector_type == "websocket":
-        from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
-
-        return WebSocketSessionConnector(session_id, display_name, config)
-    raise ValueError(f"unsupported connector_type: {connector_type}")
+# Derived from the registry — reflects whatever connectors are available in this env.
+KNOWN_CONNECTOR_TYPES: frozenset[str] = registered_types()

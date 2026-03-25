@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from provide.terminal.detection.input_type import auto_detect_input_type
+
 from provide.terminal.detection.detector import PromptDetector
 
 
@@ -81,8 +83,7 @@ def test_diagnostics_no_match(snap_factory) -> None:
 
 
 def test_auto_detect_input_type() -> None:
-    d = PromptDetector([])
-    result = d.auto_detect_input_type("Press any key to continue")
+    result = auto_detect_input_type("Press any key to continue")
     assert isinstance(result, str)
 
 
@@ -354,47 +355,43 @@ def test_detect_with_diagnostics_empty_screen() -> None:
 
 
 def test_auto_detect_input_type_any_key() -> None:
-    d = PromptDetector([])
-    assert d.auto_detect_input_type("Press any key to continue") == "any_key"
-    assert d.auto_detect_input_type("Press a key now") == "any_key"
-    assert d.auto_detect_input_type("Hit any key") == "any_key"
-    assert d.auto_detect_input_type("Strike any key") == "any_key"
-    assert d.auto_detect_input_type("<more> text") == "any_key"
-    assert d.auto_detect_input_type("[more] pages") == "any_key"
-    assert d.auto_detect_input_type("-- more --") == "any_key"
+    assert auto_detect_input_type("Press any key to continue") == "any_key"
+    assert auto_detect_input_type("Press a key now") == "any_key"
+    assert auto_detect_input_type("Hit any key") == "any_key"
+    assert auto_detect_input_type("Strike any key") == "any_key"
+    assert auto_detect_input_type("<more> text") == "any_key"
+    assert auto_detect_input_type("[more] pages") == "any_key"
+    assert auto_detect_input_type("-- more --") == "any_key"
 
 
 def test_auto_detect_input_type_single_key() -> None:
-    d = PromptDetector([])
-    assert d.auto_detect_input_type("Continue? (y/n)") == "single_key"
-    assert d.auto_detect_input_type("Proceed (yes/no)") == "single_key"
-    assert d.auto_detect_input_type("Are you sure? Continue?") == "single_key"
-    assert d.auto_detect_input_type("Quit?") == "single_key"
-    assert d.auto_detect_input_type("Abort?") == "single_key"
-    assert d.auto_detect_input_type("Retry?") == "single_key"
-    assert d.auto_detect_input_type("Delete [y/n]") == "single_key"
-    assert d.auto_detect_input_type("(q)uit") == "single_key"
-    assert d.auto_detect_input_type("(a)bort") == "single_key"
+    assert auto_detect_input_type("Continue? (y/n)") == "single_key"
+    assert auto_detect_input_type("Proceed (yes/no)") == "single_key"
+    assert auto_detect_input_type("Are you sure? Continue?") == "single_key"
+    assert auto_detect_input_type("Quit?") == "single_key"
+    assert auto_detect_input_type("Abort?") == "single_key"
+    assert auto_detect_input_type("Retry?") == "single_key"
+    assert auto_detect_input_type("Delete [y/n]") == "single_key"
+    assert auto_detect_input_type("(q)uit") == "single_key"
+    assert auto_detect_input_type("(a)bort") == "single_key"
 
 
 def test_auto_detect_input_type_multi_key_keywords() -> None:
-    d = PromptDetector([])
-    assert d.auto_detect_input_type("Please enter your choice") == "multi_key"
-    assert d.auto_detect_input_type("Type your message here") == "multi_key"
-    assert d.auto_detect_input_type("Input required") == "multi_key"
-    assert d.auto_detect_input_type("Name: ") == "multi_key"
-    assert d.auto_detect_input_type("Password: ") == "multi_key"
-    assert d.auto_detect_input_type("Username: ") == "multi_key"
-    assert d.auto_detect_input_type("Choose: ") == "multi_key"
-    assert d.auto_detect_input_type("Select: ") == "multi_key"
-    assert d.auto_detect_input_type("Command: ") == "multi_key"
-    assert d.auto_detect_input_type("Search: ") == "multi_key"
+    assert auto_detect_input_type("Please enter your choice") == "multi_key"
+    assert auto_detect_input_type("Type your message here") == "multi_key"
+    assert auto_detect_input_type("Input required") == "multi_key"
+    assert auto_detect_input_type("Name: ") == "multi_key"
+    assert auto_detect_input_type("Password: ") == "multi_key"
+    assert auto_detect_input_type("Username: ") == "multi_key"
+    assert auto_detect_input_type("Choose: ") == "multi_key"
+    assert auto_detect_input_type("Select: ") == "multi_key"
+    assert auto_detect_input_type("Command: ") == "multi_key"
+    assert auto_detect_input_type("Search: ") == "multi_key"
 
 
 def test_auto_detect_input_type_default_multi_key() -> None:
     """Default fallback returns multi_key."""
-    d = PromptDetector([])
-    assert d.auto_detect_input_type("Some random text with no known prompt phrases") == "multi_key"
+    assert auto_detect_input_type("Some random text with no known prompt phrases") == "multi_key"
 
 
 # ---------------------------------------------------------------------------

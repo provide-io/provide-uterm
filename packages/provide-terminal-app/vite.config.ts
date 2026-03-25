@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: "",
   build: {
-    outDir: "../../src/provide/terminal/frontend",
+    outDir: "../../packages/provide-terminal/src/provide/terminal/frontend",
     emptyOutDir: false,
     manifest: true,
     rollupOptions: {

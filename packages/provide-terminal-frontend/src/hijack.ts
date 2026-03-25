@@ -18,7 +18,7 @@
 
 import {
   _RECONNECT_ANIM_FRAMES,
-  ControlStreamDecoder,
+  ControlChannelDecoder,
   encodeWsFrame,
   type FitAddonInstance,
   type HijackConfig,
@@ -49,7 +49,7 @@ export class ProvideHijack {
   private readonly _config: ResolvedConfig;
   private readonly _uid: number;
   private readonly _workerId: string;
-  private readonly _wsDecoder: ControlStreamDecoder;
+  private readonly _wsDecoder: ControlChannelDecoder;
 
   private _ws: WebSocket | null = null;
   private _term: XTerminal | null = null;
@@ -93,10 +93,11 @@ export class ProvideHijack {
       heartbeatInterval: config.heartbeatInterval ?? 5000,
       mobileKeys: config.mobileKeys ?? true,
       role: config.role,
+      onResize: config.onResize,
     };
     this._uid = ++_hijackInstanceCount;
     this._workerId = config.workerId ?? "default";
-    this._wsDecoder = new ControlStreamDecoder();
+    this._wsDecoder = new ControlChannelDecoder();
 
     _injectHijackCSS();
     this._buildDOM();
@@ -303,11 +304,17 @@ export class ProvideHijack {
       requestAnimationFrame(() => {
         try {
           this._fitAddon?.fit();
+          if (this._term && this._term.cols > 0 && this._term.rows > 0) {
+            this._config.onResize?.(this._term.cols, this._term.rows);
+          }
         } catch (_) {}
       });
       this._ro = new ResizeObserver(() => {
         try {
           this._fitAddon?.fit();
+          if (this._term && this._term.cols > 0 && this._term.rows > 0) {
+            this._config.onResize?.(this._term.cols, this._term.rows);
+          }
         } catch (_) {}
       });
       this._ro.observe(termDiv);

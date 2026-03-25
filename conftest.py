@@ -21,3 +21,20 @@ if os.environ.get("MUTANT_UNDER_TEST"):
     if _mutated_src.exists():
         # Prepend mutants/src so mutated copies take priority over the editable install.
         sys.path.insert(0, str(_mutated_src))
+
+    # mutmut calls set_start_method('fork') in the parent process; the forked
+    # pytest worker inherits the already-set context, so the trampoline's second
+    # call to set_start_method('fork') raises RuntimeError.  Suppress it.
+    # multiprocessing.set_start_method is a module-level bound method captured
+    # at import time, so we must patch the module attribute directly.
+    import multiprocessing as _mp
+
+    _orig_set_start = _mp.set_start_method
+
+    def _safe_set_start(method: str, force: bool = False) -> None:
+        import contextlib
+
+        with contextlib.suppress(RuntimeError):
+            _orig_set_start(method, force=force)
+
+    _mp.set_start_method = _safe_set_start  # type: ignore[attr-defined]

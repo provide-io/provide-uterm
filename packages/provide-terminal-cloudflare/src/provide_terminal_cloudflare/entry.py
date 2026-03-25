@@ -10,13 +10,13 @@ from urllib.parse import urlparse
 # detects Default/SessionRuntime as registered event handlers.
 _DurableObject: type = object  # type: ignore[assignment]
 try:
-    from workers import DurableObject as _DurableObject  # type: ignore[import-not-found]
-    from workers import (
+    from workers import DurableObject as _DurableObject  # type: ignore[import-not-found]  # pragma: no cover
+    from workers import (  # pragma: no cover
         Response,  # type: ignore[import-not-found]
         WorkerEntrypoint,  # type: ignore[import-not-found]
     )
 except ImportError:
-    # Outside CF runtime (tests / local dev): defer to cf_types (loaded below).
+    # Outside CF runtime (tests / local dev): stubs loaded below from cf_types.
     Response = None  # type: ignore[assignment]
     WorkerEntrypoint = None  # type: ignore[assignment]
 
@@ -43,14 +43,15 @@ try:
         decode_jwt,
         extract_bearer_or_cookie,
     )
-    from provide_terminal_cloudflare.cf_types import json_response
+    from provide_terminal_cloudflare.cf_types import (  # type: ignore[assignment,no-redef]
+        Response,
+        WorkerEntrypoint,
+        json_response,
+    )
     from provide_terminal_cloudflare.config import CloudflareConfig
     from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
     from provide_terminal_cloudflare.state.registry import delete_kv_session, list_kv_sessions
     from provide_terminal_cloudflare.ui.assets import read_asset_text, serve_asset
-
-    if Response is None:  # workers module wasn't available (test env)
-        from provide_terminal_cloudflare.cf_types import Response, WorkerEntrypoint  # type: ignore[assignment,no-redef]
 except Exception:
     try:
         from auth.jwt import (  # type: ignore[import-not-found]
@@ -58,19 +59,22 @@ except Exception:
             decode_jwt,
             extract_bearer_or_cookie,
         )
-        from cf_types import json_response  # type: ignore[import-not-found]
+        from cf_types import (  # type: ignore[assignment,no-redef,import-not-found]
+            Response,
+            WorkerEntrypoint,
+            json_response,
+        )
         from config import CloudflareConfig  # type: ignore[import-not-found]
         from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]
         from state.registry import delete_kv_session, list_kv_sessions  # type: ignore[import-not-found]
         from ui.assets import read_asset_text, serve_asset  # type: ignore[import-not-found]
-
-        if Response is None:  # workers module wasn't available
-            from cf_types import Response, WorkerEntrypoint  # type: ignore[assignment,no-redef,import-not-found]
-    except Exception:
+    except Exception as _exc2:  # pragma: no cover — Pyodide validation phase only
         # Last resort for Pyodide validation phase — stubs for non-handler imports.
         # WorkerEntrypoint/Response/DurableObject are imported directly from workers
         # above, so handler registration always succeeds.
-        _import_error = f"paths={sys.path[:5]}"
+        import traceback as _tb
+
+        _import_error = _tb.format_exc()
         JwtValidationError = Exception  # type: ignore[assignment]
 
         def decode_jwt(*_a: object, **_k: object) -> None:  # type: ignore[assignment]
@@ -84,7 +88,7 @@ except Exception:
 
         CloudflareConfig = object  # type: ignore[assignment]
 
-        class SessionRuntime(_DurableObject):  # type: ignore[assignment]  # pragma: no cover
+        class SessionRuntime(_DurableObject):  # type: ignore[assignment]
             """Stub DO for validation phase — real impl loaded at runtime."""
 
             async def fetch(self, _request):  # type: ignore[override]
@@ -183,12 +187,36 @@ def _spa_response(page_kind: str, **extra_bootstrap: object) -> Response:
     return Response(html, status=200, headers={"content-type": "text/html; charset=utf-8"})
 
 
+def _has_cf_service_token(request: object) -> bool:
+    """Check if request carries CF Access service token headers.
+
+    When a Service Auth policy matches, CF Access validates the token and
+    forwards the request.  The presence of CF-Access-Client-Id means CF
+    Access already approved the request — the worker can trust it.
+
+    In Pyodide, request.headers is a JS Headers proxy.  .get() may return
+    a JS string or None.  We stringify and check length to be safe.
+    """
+    try:
+        headers = request.headers  # type: ignore[union-attr]
+        for name in ("cf-access-client-id", "CF-Access-Client-Id"):
+            val = str(headers.get(name) or "")
+            if val.endswith(".access"):
+                return True
+    except Exception:  # noqa: S110
+        pass
+    return False
+
+
 async def _require_jwt(request: object, config: CloudflareConfig) -> Response | None:
     """Return a 401 Response if JWT auth fails, or ``None`` if auth passes.
 
-    Skipped when auth mode is not ``jwt``.
+    Skipped when auth mode is not ``jwt``, or when a CF Access service
+    token is present (already validated by CF Access Service Auth policy).
     """
     if config.jwt.mode != "jwt":
+        return None
+    if _has_cf_service_token(request):
         return None
     token = extract_bearer_or_cookie(request)
     if not token:
@@ -332,6 +360,10 @@ async def _as_future(value: Response) -> Response:
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         if not hasattr(self, "_config"):
+            if _import_error:  # pragma: no cover
+                import logging as _l  # pragma: no cover
+
+                _l.getLogger(__name__).error("IMPORT_FALLBACK:\n%s", _import_error)  # pragma: no cover
             self._config = CloudflareConfig.from_env(self.env)
         return await _route_request(request, self.env, self._config)
 

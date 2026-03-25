@@ -12,16 +12,72 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
+    import subprocess
+
     from provide.terminal.manager.process import AgentProcessManager
 
 logger = get_logger(__name__)
 
 _STOP_TIMEOUT_S = 5.0
+
+
+def _set_agent_exit_state(agent: Any, exit_code: int) -> None:
+    """Update agent state fields based on process exit code."""
+    if exit_code == 0:
+        if agent.state == "error" or agent.error_message:
+            agent.state = "error"
+            if not agent.exit_reason:
+                agent.exit_reason = "reported_error_then_exit_0"
+        else:
+            agent.state = "completed"
+            agent.completed_at = time.time()
+            agent.stopped_at = time.time()
+            if not agent.exit_reason:
+                agent.exit_reason = "target_reached"
+    else:
+        agent.state = "error"
+        if not agent.exit_reason:
+            agent.exit_reason = f"exit_code_{exit_code}"
+        if not agent.error_message:
+            agent.error_message = f"Process exited with code {exit_code}"
+        agent.stopped_at = time.time()
+
+
+async def _prune_terminal_agents(
+    pm: AgentProcessManager,
+) -> tuple[list[tuple[str, subprocess.Popen[bytes]]], list[Any]]:
+    """Remove terminal-state agents; return (stop_requests, dead_agents)."""
+
+    terminal_states = {"error", "stopped", "completed"}
+    prune_stop_requests: list[tuple[str, subprocess.Popen[bytes]]] = []
+    async with pm.manager._state_lock:
+        dead_agents = [b for b in pm.manager.agents.values() if b.state in terminal_states]
+        for dead in dead_agents:
+            with contextlib.suppress(OSError, RuntimeError):
+                pm.release_agent_account(dead.agent_id)
+            if (proc := pm.manager.processes.pop(dead.agent_id, None)) is not None:
+                prune_stop_requests.append((dead.agent_id, proc))
+            pm.manager.agents.pop(dead.agent_id, None)
+    return prune_stop_requests, dead_agents
+
+
+def _collect_spawn_configs(
+    active_agents: list[Any],
+    dead_agents: list[Any],
+    last_config: Any,
+) -> list[Any]:
+    """Collect available spawn configs from active agents, dead agents, or last known config."""
+    configs = [b.config for b in active_agents if b.config]
+    if not configs:
+        configs = [b.config for b in dead_agents if b.config]
+    if not configs and last_config:
+        configs = [last_config]
+    return configs
 
 
 async def _handle_exited_processes(pm: AgentProcessManager) -> None:
@@ -36,24 +92,7 @@ async def _handle_exited_processes(pm: AgentProcessManager) -> None:
             if agent is None:
                 pm.manager.processes.pop(agent_id, None)
                 continue
-            if exit_code == 0:
-                if agent.state == "error" or agent.error_message:
-                    agent.state = "error"
-                    if not agent.exit_reason:
-                        agent.exit_reason = "reported_error_then_exit_0"
-                else:
-                    agent.state = "completed"
-                    agent.completed_at = time.time()
-                    agent.stopped_at = time.time()
-                    if not agent.exit_reason:
-                        agent.exit_reason = "target_reached"
-            else:
-                agent.state = "error"
-                if not agent.exit_reason:
-                    agent.exit_reason = f"exit_code_{exit_code}"
-                if not agent.error_message:
-                    agent.error_message = f"Process exited with code {exit_code}"
-                agent.stopped_at = time.time()
+            _set_agent_exit_state(agent, exit_code)
             pm.manager.processes.pop(agent_id, None)
         pm.release_agent_account(agent_id)
         await pm.manager.broadcast_status()
@@ -64,7 +103,6 @@ async def _handle_heartbeat_timeouts(pm: AgentProcessManager) -> None:
     now = time.time()
     heartbeat_timeout = pm.manager.config.heartbeat_timeout_s
     heartbeat_timed_out: list[str] = []
-    import subprocess  # noqa: TC003
 
     heartbeat_stop_requests: list[tuple[str, subprocess.Popen[bytes]]] = []
     async with pm.manager._state_lock:
@@ -120,7 +158,6 @@ async def _handle_bust_respawn(pm: AgentProcessManager) -> None:
     if not pm.manager.bust_respawn or pm.manager.swarm_paused:
         return
     now = time.time()
-    import subprocess  # noqa: TC003
 
     bust_stop_requests: list[tuple[str, subprocess.Popen[bytes] | None, int | None]] = []
     for agent in list(pm.manager.agents.values()):
@@ -142,68 +179,65 @@ async def _handle_bust_respawn(pm: AgentProcessManager) -> None:
     await pm.manager.broadcast_status()
 
 
+async def _spawn_to_desired(
+    pm: AgentProcessManager,
+    deficit: int,
+    active_agents: list[Any],
+    dead_agents: list[Any],
+) -> None:
+    """Spawn *deficit* new agents to reach the desired count."""
+    configs_available = _collect_spawn_configs(active_agents, dead_agents, pm._last_spawn_config)
+    for _ in range(deficit):
+        if not configs_available:
+            break
+        config = configs_available[0]
+        async with pm.manager._state_lock:
+            new_agent_id = pm.allocate_agent_id()
+            if new_agent_id not in pm.manager.agents:  # pragma: no branch
+                pm.manager.agents[new_agent_id] = pm.manager._agent_status_class(
+                    agent_id=new_agent_id,
+                    pid=0,
+                    config=config,
+                    state="queued",
+                )
+        logger.info(
+            "desired_state_spawning",
+            agent_id=new_agent_id,
+            deficit=deficit,
+            desired=pm.manager.desired_agents,
+        )
+        task = asyncio.create_task(pm._launch_queued_agent(new_agent_id, config))
+        pm._spawn_tasks.append(task)
+
+
+async def _kill_excess(pm: AgentProcessManager, excess: int, active_agents: list[Any]) -> None:
+    """Kill *excess* agents to trim down to the desired count."""
+    to_kill = sorted(active_agents, key=lambda b: b.agent_id, reverse=True)[:excess]
+    for agent in to_kill:
+        logger.info("desired_state_killing", agent_id=agent.agent_id, excess=excess, desired=pm.manager.desired_agents)
+        with contextlib.suppress(OSError, ProcessLookupError, RuntimeError):
+            await pm.manager.kill_agent(agent.agent_id)
+        with contextlib.suppress(OSError, RuntimeError):
+            pm.release_agent_account(agent.agent_id)
+        async with pm.manager._state_lock:
+            pm.manager.agents.pop(agent.agent_id, None)
+            pm.manager.processes.pop(agent.agent_id, None)
+
+
 async def _handle_desired_state(pm: AgentProcessManager) -> None:
     """Enforce the desired agent count: spawn deficits, kill excesses."""
     if pm.manager.desired_agents <= 0 or pm.manager.swarm_paused:
         return
-    import subprocess  # noqa: TC003
-
     active_states = {"running", "queued", "recovering", "blocked"}
-    terminal_states = {"error", "stopped", "completed"}
-    prune_stop_requests: list[tuple[str, subprocess.Popen[bytes]]] = []
 
+    prune_stop_requests, dead_agents = await _prune_terminal_agents(pm)
     async with pm.manager._state_lock:
-        dead_agents = [b for b in pm.manager.agents.values() if b.state in terminal_states]
-        for dead in dead_agents:
-            with contextlib.suppress(OSError, RuntimeError):
-                pm.release_agent_account(dead.agent_id)
-            if (proc := pm.manager.processes.pop(dead.agent_id, None)) is not None:
-                prune_stop_requests.append((dead.agent_id, proc))
-            pm.manager.agents.pop(dead.agent_id, None)
-
         active_agents = [b for b in pm.manager.agents.values() if b.state in active_states]
-        active_count = len(active_agents)
-        deficit = pm.manager.desired_agents - active_count
+        deficit = pm.manager.desired_agents - len(active_agents)
 
     if deficit > 0:
-        configs_available = [b.config for b in active_agents if b.config]
-        if not configs_available:
-            configs_available = [b.config for b in dead_agents if b.config]
-        if not configs_available and pm._last_spawn_config:
-            configs_available = [pm._last_spawn_config]
-        for _ in range(deficit):
-            if not configs_available:
-                break
-            config = configs_available[0]
-            async with pm.manager._state_lock:
-                new_agent_id = pm.allocate_agent_id()
-                if new_agent_id not in pm.manager.agents:  # pragma: no branch
-                    pm.manager.agents[new_agent_id] = pm.manager._agent_status_class(
-                        agent_id=new_agent_id,
-                        pid=0,
-                        config=config,
-                        state="queued",
-                    )
-            logger.info(
-                "desired_state_spawning",
-                agent_id=new_agent_id,
-                deficit=deficit,
-                desired=pm.manager.desired_agents,
-            )
-            task = asyncio.create_task(pm._launch_queued_agent(new_agent_id, config))
-            pm._spawn_tasks.append(task)
-
+        await _spawn_to_desired(pm, deficit, active_agents, dead_agents)
     elif deficit < 0:
-        excess = -deficit
-        to_kill = sorted(active_agents, key=lambda b: b.agent_id, reverse=True)[:excess]
-        for agent in to_kill:
-            logger.info("desired_state_killing", agent_id=agent.agent_id, excess=excess, desired=pm.manager.desired_agents)
-            with contextlib.suppress(OSError, ProcessLookupError, RuntimeError):
-                await pm.manager.kill_agent(agent.agent_id)
-            with contextlib.suppress(OSError, RuntimeError):
-                pm.release_agent_account(agent.agent_id)
-            async with pm.manager._state_lock:
-                pm.manager.agents.pop(agent.agent_id, None)
-                pm.manager.processes.pop(agent.agent_id, None)
+        await _kill_excess(pm, -deficit, active_agents)
     for agent_id, proc in prune_stop_requests:
         await pm._stop_process_tree(agent_id=agent_id, process=proc, timeout_s=_STOP_TIMEOUT_S)

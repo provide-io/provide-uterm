@@ -30,11 +30,14 @@ dependencies = [
 dev = [
   "pytest>=9.0",
   "pytest-asyncio>=1.3",
+  "pytest-cov>=6.0",
   "pytest-playwright>=0.5",
   "ruff>=0.15",
   "mypy>=1.19",
   "workers-py>=0.4.0",
   "websockets>=16.0",
+  "provide-shell>=0.1.0",
+  "cryptography>=44.0",
 ]
 
 [project.urls]
@@ -73,6 +76,9 @@ branch = true
 fail_under = 100
 show_missing = true
 skip_covered = false
+
+[tool.uv.sources]
+provide-shell = { path = "../../packages/provide-shell", editable = true }
 
 [tool.mutmut]
 paths_to_mutate = ["src/"]

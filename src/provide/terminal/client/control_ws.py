@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""First-class inline control-stream WebSocket clients."""
+"""First-class inline control-channel WebSocket clients."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk, encode_control, encode_data
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
 
 WsRole = Literal["browser", "worker"]
 
@@ -29,7 +29,7 @@ class LogicalFrameDecoder:
 
     def __init__(self, *, role: WsRole) -> None:
         self._role = role
-        self._decoder = ControlStreamDecoder()
+        self._decoder = ControlChannelDecoder()
 
     def feed(self, raw: str) -> list[dict[str, Any]]:
         frames: list[dict[str, Any]] = []

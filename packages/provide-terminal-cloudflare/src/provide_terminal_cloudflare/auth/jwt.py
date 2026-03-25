@@ -112,7 +112,9 @@ def _find_jwk(jwks_data: dict[str, Any], kid: str | None, alg: str | None) -> di
     raise JwtValidationError("no matching key found in JWKS")
 
 
-async def _verify_web_crypto(token: str, config: JwtConfig) -> dict[str, Any]:
+async def _verify_web_crypto(
+    token: str, config: JwtConfig
+) -> dict[str, Any]:  # pragma: no cover — requires Pyodide runtime
     """Verify and decode a JWT using the Web Crypto API (CF Workers / Pyodide).
 
     Returns the validated claims dict.
@@ -271,10 +273,16 @@ async def decode_jwt(token: str, config: JwtConfig) -> Principal:
         raise JwtValidationError(f"failed to verify token: {exc}") from exc
 
     sub = str(claims.get("sub") or "")
+    # CF Access service token JWTs have sub="" but common_name set to the client ID.
+    is_service_token = False
+    if not sub:
+        sub = str(claims.get("common_name") or "")
+        is_service_token = bool(sub)
     if not sub:
         raise JwtValidationError("missing sub")
 
-    roles = _extract_roles(claims, config)
+    # Service tokens get admin role — they represent trusted automation, not end users.
+    roles = ("admin",) if is_service_token else _extract_roles(claims, config)
     return Principal(subject_id=sub, roles=roles)
 
 

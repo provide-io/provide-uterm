@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import (
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     ControlChunk,
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
     DataChunk,
     encode_control,
     encode_data,
@@ -80,10 +80,10 @@ async def _handle_ws_control(
 ) -> bool:
     """Return True if *message* is a gateway control frame (intercept it)."""
     try:
-        decoder = ControlStreamDecoder()
+        decoder = ControlChannelDecoder()
         events = decoder.feed(message)
         events.extend(decoder.finish())
-    except ControlStreamProtocolError:
+    except ControlChannelProtocolError:
         try:
             data = json.loads(message)
         except (json.JSONDecodeError, ValueError):
@@ -231,7 +231,7 @@ async def _ws_to_tcp(
     color_mode: str = "passthrough",
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
 
     async def _write_fn(data: bytes) -> None:
         writer.write(data)
@@ -241,7 +241,7 @@ async def _ws_to_tcp(
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
-            except ControlStreamProtocolError:
+            except ControlChannelProtocolError:
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
@@ -314,7 +314,7 @@ async def _ws_to_ssh(
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
     stdout = process.stdout  # type: ignore[attr-defined]
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
 
     async def _write_fn(data: bytes) -> None:
         stdout.write(data.decode("utf-8", errors="replace"))
@@ -323,7 +323,7 @@ async def _ws_to_ssh(
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
-            except ControlStreamProtocolError:
+            except ControlChannelProtocolError:
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):

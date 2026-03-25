@@ -126,6 +126,85 @@ class ShellSessionConnector(SessionConnector):
     async def poll_messages(self) -> list[dict[str, Any]]:
         return []
 
+    async def _cmd_mode(self, arg: str) -> list[dict[str, Any]]:
+        """Handle /mode command."""
+        mode = arg.lower()
+        if mode not in {"open", "hijack"}:
+            self._banner = "Usage: /mode open|hijack"
+            self._append("system", "usage: /mode open|hijack")
+            return [self._snapshot()]
+        return await self.set_mode(mode)
+
+    async def _cmd_nick(self, arg: str) -> list[dict[str, Any]]:
+        """Handle /nick command."""
+        if not arg:
+            self._banner = "Usage: /nick <name>"
+            self._append("system", "usage: /nick <name>")
+            return [self._snapshot()]
+        self._nickname = arg[:24]
+        self._banner = f"Nickname set to {self._nickname}."
+        self._append("system", f"nickname: {self._nickname}")
+        return [self._snapshot()]
+
+    async def _cmd_say(self, arg: str) -> list[dict[str, Any]]:
+        """Handle /say command."""
+        if not arg:
+            self._banner = "Usage: /say <text>"
+            self._append("system", "usage: /say <text>")
+            return [self._snapshot()]
+        self._banner = "Message appended."
+        self._append("user", f"{self._nickname}: {arg}")
+        return [self._snapshot()]
+
+    async def _handle_simple_commands(self, command: str) -> list[dict[str, Any]] | None:
+        """Handle slash commands that need no argument. Returns None if command not recognized."""
+        if command == "/help":
+            self._banner = "Command help printed below."
+            self._append(
+                "system",
+                "Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset",
+            )
+            return [self._snapshot()]
+        if command == "/clear":
+            self._transcript = deque(maxlen=10)
+            self._banner = "Transcript cleared."
+            return [self._snapshot()]
+        if command == "/status":
+            self._banner = "Session status printed below."
+            self._append("system", f"mode={self._input_mode} paused={self._paused} turns={self._turns}")
+            return [self._snapshot()]
+        if command == "/shell":
+            self._banner = "Shell response appended."
+            self._append("session", "This hosted server is the reference implementation.")
+            return [self._snapshot()]
+        if command == "/reset":
+            self._reset_state()
+            self._banner = "Session reset."
+            return [self._hello(), self._snapshot()]
+        return None
+
+    async def _handle_arg_commands(self, command: str, arg: str) -> list[dict[str, Any]] | None:
+        """Handle slash commands that take an argument. Returns None if not recognized."""
+        if command == "/mode":
+            return await self._cmd_mode(arg)
+        if command == "/nick":
+            return await self._cmd_nick(arg)
+        if command == "/say":
+            return await self._cmd_say(arg)
+        return None
+
+    async def _handle_slash_command(self, command: str, arg: str) -> list[dict[str, Any]]:
+        """Dispatch a slash command to the appropriate handler."""
+        result = await self._handle_simple_commands(command)
+        if result is not None:
+            return result
+        result = await self._handle_arg_commands(command, arg)
+        if result is not None:
+            return result
+        self._banner = f"Unknown command: {command}"
+        self._append("system", f"unknown command: {command}")
+        return [self._snapshot()]
+
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         text = self._normalize_input(data)
         if not text:
@@ -136,56 +215,7 @@ class ShellSessionConnector(SessionConnector):
             command, _, rest = text.partition(" ")
             arg = rest.strip()
             self._last_command = command
-            if command == "/help":
-                self._banner = "Command help printed below."
-                self._append(
-                    "system",
-                    "Commands: /help /clear /mode open|hijack /status /nick <name> /say <text> /shell /reset",
-                )
-                return [self._snapshot()]
-            if command == "/clear":
-                self._transcript = deque(maxlen=10)
-                self._banner = "Transcript cleared."
-                return [self._snapshot()]
-            if command == "/mode":
-                mode = arg.lower()
-                if mode not in {"open", "hijack"}:
-                    self._banner = "Usage: /mode open|hijack"
-                    self._append("system", "usage: /mode open|hijack")
-                    return [self._snapshot()]
-                return await self.set_mode(mode)
-            if command == "/status":
-                self._banner = "Session status printed below."
-                self._append("system", f"mode={self._input_mode} paused={self._paused} turns={self._turns}")
-                return [self._snapshot()]
-            if command == "/nick":
-                if not arg:
-                    self._banner = "Usage: /nick <name>"
-                    self._append("system", "usage: /nick <name>")
-                    return [self._snapshot()]
-                self._nickname = arg[:24]
-                self._banner = f"Nickname set to {self._nickname}."
-                self._append("system", f"nickname: {self._nickname}")
-                return [self._snapshot()]
-            if command == "/say":
-                if not arg:
-                    self._banner = "Usage: /say <text>"
-                    self._append("system", "usage: /say <text>")
-                    return [self._snapshot()]
-                self._banner = "Message appended."
-                self._append("user", f"{self._nickname}: {arg}")
-                return [self._snapshot()]
-            if command == "/shell":
-                self._banner = "Shell response appended."
-                self._append("session", "This hosted server is the reference implementation.")
-                return [self._snapshot()]
-            if command == "/reset":
-                self._reset_state()
-                self._banner = "Session reset."
-                return [self._hello(), self._snapshot()]
-            self._banner = f"Unknown command: {command}"
-            self._append("system", f"unknown command: {command}")
-            return [self._snapshot()]
+            return await self._handle_slash_command(command, arg)
         self._banner = "Input accepted."
         self._append("user", f"{self._nickname}: {text}")
         self._append("session", f'session: received "{text}"')
@@ -239,3 +269,8 @@ class ShellSessionConnector(SessionConnector):
         self._banner = f"Input mode set to {self._mode_label()}."
         self._append("system", f"mode: {self._mode_label()}")
         return [self._hello(), self._snapshot()]
+
+
+from provide.terminal.server.connectors.registry import register_connector  # noqa: E402
+
+register_connector("shell", ShellSessionConnector)

@@ -45,6 +45,7 @@ class LoggingConfig:
     pretty_key_color: str = "dim"
     pretty_value_color: str = ""
     pretty_fields: tuple[str, ...] = ()
+    module_levels: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.level = _normalize_level(self.level)
@@ -164,6 +165,7 @@ class TelemetryConfig:
                 pretty_key_color=data.get("PROVIDE_LOG_PRETTY_KEY_COLOR", "dim"),
                 pretty_value_color=data.get("PROVIDE_LOG_PRETTY_VALUE_COLOR", ""),
                 pretty_fields=tuple(f.strip() for f in data.get("PROVIDE_LOG_PRETTY_FIELDS", "").split(",") if f.strip()),
+                module_levels=_parse_module_levels(data.get("PROVIDE_LOG_MODULE_LEVELS", "")),
             ),
             tracing=TracingConfig(
                 enabled=_parse_bool(data.get("PROVIDE_TRACE_ENABLED"), True),
@@ -290,6 +292,26 @@ def _parse_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_module_levels(raw: str) -> dict[str, str]:
+    """Parse ``module=LEVEL,module2=LEVEL2`` into a dict.
+
+    Example: ``PROVIDE_LOG_MODULE_LEVELS="provide.server=DEBUG,asyncio=WARNING"``
+    """
+    if not raw or not raw.strip():  # pragma: no mutate
+        return {}
+    result: dict[str, str] = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if "=" not in pair:
+            continue
+        module, level_str = pair.split("=", 1)
+        module = module.strip()
+        level_str = _normalize_level(level_str.strip())
+        if module:
+            result[module] = level_str
+    return result
 
 
 def _parse_env_float(value: str, field: str) -> float:

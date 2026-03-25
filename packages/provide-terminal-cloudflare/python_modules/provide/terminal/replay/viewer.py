@@ -10,7 +10,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 from provide.telemetry import get_logger
 
@@ -24,6 +24,25 @@ def _clear_screen(output: IO[str]) -> None:
 def _render_screen(screen: str, output: IO[str]) -> None:
     _clear_screen(output)
     print(screen, end="", file=output)
+
+
+def _render_frame(
+    record: dict[str, Any],
+    last_ts: float | None,
+    out: IO[str],
+    *,
+    speed: float,
+    step: bool,
+) -> float | None:
+    """Render one log frame and return the updated last_ts."""
+    if last_ts is not None and not step:
+        delta = (record.get("ts", last_ts) - last_ts) / min(max(speed, 0.01), 100.0)
+        if delta > 0:
+            time.sleep(delta)
+    _render_screen(record.get("data", {}).get("screen", ""), out)
+    if step:
+        input("-- next --")
+    return record.get("ts", last_ts)
 
 
 def replay_log(
@@ -57,17 +76,8 @@ def replay_log(
             except json.JSONDecodeError:
                 logger.warning("replay_log corrupt line skipped path=%s line=%d", log_path, lineno)
                 continue
-            event = record.get("event")
-            if event not in wanted:
+            if record.get("event") not in wanted:
                 continue
-            screen = record.get("data", {}).get("screen")
-            if screen is None:
+            if record.get("data", {}).get("screen") is None:
                 continue
-            if last_ts is not None and not step:
-                delta = (record.get("ts", last_ts) - last_ts) / min(max(speed, 0.01), 100.0)
-                if delta > 0:
-                    time.sleep(delta)
-            _render_screen(screen, out)
-            if step:
-                input("-- next --")
-            last_ts = record.get("ts", last_ts)
+            last_ts = _render_frame(record, last_ts, out, speed=speed, step=step)

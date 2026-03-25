@@ -53,7 +53,7 @@ def _make_runtime(worker_id: str = "test-worker", mode: str = "dev"):
 
 async def test_wait_for_prompt_snapshot_none_during_poll() -> None:
     """Cover the `if snapshot:` false branch — snapshot stays None inside the loop."""
-    from provide_terminal_cloudflare.api.http_routes import _wait_for_prompt
+    from provide_terminal_cloudflare.api.http_routes._shared import _wait_for_prompt
 
     class _NoSnapshotRuntime:
         last_snapshot = None  # always None

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.control_stream import encode_control, encode_data
+from provide.terminal.control_channel import encode_control, encode_data
 from provide.terminal.hijack.bridge import TermBridge, _to_ws_url
 
 # ---------------------------------------------------------------------------

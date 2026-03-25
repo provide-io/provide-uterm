@@ -74,30 +74,35 @@ class TimeseriesManager:
             "error": "no timeseries plugin configured",
         }
 
+    def _read_tail_bytes(self, capped: int) -> bytes:
+        """Read the raw bytes from the tail of the timeseries file."""
+        with self.path.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+            if pos <= 0:
+                return b""
+            chunk_size = 64 * 1024
+            target_lines = capped + 32
+            buf = b""
+            newline_count = 0
+            while pos > 0 and newline_count < target_lines:
+                read_size = min(chunk_size, pos)
+                pos -= read_size
+                f.seek(pos, os.SEEK_SET)
+                chunk = f.read(read_size)
+                if not chunk:  # pragma: no cover — defensive
+                    break
+                buf = chunk + buf
+                newline_count = buf.count(b"\n")
+        return buf
+
     def read_tail(self, limit: int) -> list[dict[str, Any]]:
         """Read up to *limit* most recent JSONL rows efficiently."""
         capped = max(1, int(limit))
         if not self.path.exists():
             return []
         try:
-            with self.path.open("rb") as f:
-                f.seek(0, os.SEEK_END)
-                pos = f.tell()
-                if pos <= 0:
-                    return []
-                chunk_size = 64 * 1024
-                target_lines = capped + 32
-                buf = b""
-                newline_count = 0
-                while pos > 0 and newline_count < target_lines:
-                    read_size = min(chunk_size, pos)
-                    pos -= read_size
-                    f.seek(pos, os.SEEK_SET)
-                    chunk = f.read(read_size)
-                    if not chunk:  # pragma: no cover — defensive; read(n>0) at valid pos never returns empty
-                        break
-                    buf = chunk + buf
-                    newline_count = buf.count(b"\n")
+            buf = self._read_tail_bytes(capped)
         except Exception:
             return []
 

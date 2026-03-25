@@ -78,6 +78,43 @@ class LineEditor:
         self.on_write = on_write
         self.buffer = ""
 
+    async def _emit(self, text: str) -> None:
+        """Write to terminal if output callback is set."""
+        if self.on_write:
+            await self.on_write(text)
+
+    async def _apply_cursor_shortcut(self, ch: str) -> bool:
+        """Handle Ctrl+A/E cursor movement shortcuts. Returns True if handled."""
+        if ch == "\x01":  # Ctrl+A: move to beginning of line
+            if self.buffer:
+                await self._emit("\x1b[H")
+            return True
+        if ch == "\x05":  # Ctrl+E: move to end of line
+            if self.buffer:
+                await self._emit(f"\x1b[{len(self.buffer)}G")
+            return True
+        return False
+
+    async def _apply_clear_shortcut(self, ch: str) -> bool:
+        """Handle Ctrl+U/K line-clear shortcuts. Returns True if handled."""
+        if ch == "\x15":  # Ctrl+U: delete entire line
+            if self.buffer:
+                self.buffer = ""
+                if self.on_write:
+                    await self.on_write("\x1b[2K\r")
+            return True
+        if ch == "\x0b":  # Ctrl+K: delete to end of line
+            if self.buffer:
+                self.buffer = ""
+                if self.on_write:
+                    await self.on_write("\x1b[K")
+            return True
+        return False
+
+    async def _apply_edit_shortcut(self, ch: str) -> bool:
+        """Handle Ctrl+A/E/U/K readline shortcuts. Returns True if the character was handled."""
+        return await self._apply_cursor_shortcut(ch) or await self._apply_clear_shortcut(ch)
+
     async def process_char(self, ch: str) -> str | None:
         """Process a single character.
 
@@ -87,56 +124,21 @@ class LineEditor:
         Returns:
             Completed line if Enter was pressed, None otherwise.
         """
-        # Enter/Return: line is complete
         if ch in ("\r", "\n"):
             result = self.buffer
             self.buffer = ""
-            if self.on_write:
-                await self.on_write("\r\n")
+            await self._emit("\r\n")
             return result
-
-        # Backspace/Delete: remove last character
         if ch in ("\x7f", "\x08"):
             if self.buffer:
                 self.buffer = self.buffer[:-1]
-                if self.on_write:
-                    await self.on_write("\x08 \x08")
+                await self._emit("\x08 \x08")
             return None
-
-        # Ctrl+A: move to beginning of line
-        if ch == "\x01":
-            if self.buffer and self.on_write:
-                await self.on_write("\x1b[H")
+        if await self._apply_edit_shortcut(ch):
             return None
-
-        # Ctrl+E: move to end of line
-        if ch == "\x05":
-            if self.buffer and self.on_write:
-                await self.on_write(f"\x1b[{len(self.buffer)}G")
-            return None
-
-        # Ctrl+U: delete from start to cursor (delete entire line)
-        if ch == "\x15":
-            if self.buffer and self.on_write:
-                self.buffer = ""
-                await self.on_write("\x1b[2K\r")
-            return None
-
-        # Ctrl+K: delete from cursor to end of line
-        if ch == "\x0b":
-            if self.buffer and self.on_write:
-                self.buffer = ""
-                await self.on_write("\x1b[K")
-            return None
-
-        # Regular character: add to buffer if under limit
         if len(self.buffer) < self.max_length:
             self.buffer += ch
-            if self.on_write:
-                if self.password_mode:
-                    await self.on_write("*")
-                else:
-                    await self.on_write(ch)
+            await self._emit("*" if self.password_mode else ch)
         return None
 
     def reset(self) -> None:
