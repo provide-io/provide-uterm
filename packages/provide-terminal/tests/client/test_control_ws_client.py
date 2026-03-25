@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for inline control-stream WebSocket clients."""
+"""Tests for inline control-channel WebSocket clients."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from provide.terminal.client.control_ws import (
     SyncInlineWebSocketClient,
     encode_logical_frame,
 )
-from provide.terminal.control_stream import encode_control, encode_data
+from provide.terminal.control_channel import encode_control, encode_data
 
 
 def test_encode_logical_frame_uses_data_channel_for_term_and_input() -> None:

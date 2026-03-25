@@ -77,6 +77,13 @@ async def test_poll_messages_connected():
     assert PROMPT in frames[1]["data"]
 
 
+async def test_poll_messages_idle_after_first_call():
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()
+    assert await conn.poll_messages() == []
+
+
 # ---------------------------------------------------------------------------
 # handle_input
 # ---------------------------------------------------------------------------

@@ -41,6 +41,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm run build:frontend
       - run: uv sync --group dev
       - run: uv run playwright install chromium
       - run: uv run python scripts/check_max_loc.py --max-lines 500 --baseline .ci/max-loc-baseline.json
@@ -56,6 +61,16 @@ jobs:
       - run: uv run python -m pip_audit --path .
       - run: uv run python scripts/check_licenses.py
       - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-terminal/tests/playwright/test_example.py --ignore=packages/provide-terminal/tests/playwright/test_frontend_coverage.py
+      - name: Check provide.shell vendor tree
+        run: |
+          if [ ! -d "packages/provide-terminal-cloudflare/python_modules/provide/shell" ]; then
+            echo "ERROR: provide.shell missing from CF vendor tree"
+            exit 1
+          fi
+          if [ -z "$(find packages/provide-terminal-cloudflare/python_modules/provide/shell -name '*.py' -print -quit)" ]; then
+            echo "ERROR: provide.shell vendor tree is empty"
+            exit 1
+          fi
       - run: uv run pytest -q packages/provide-terminal-cloudflare/tests
       - run: uv run python scripts/verify_package_artifacts.py
 
@@ -118,6 +133,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm run build:frontend
       - run: uv sync --group dev
       - run: uv build --package provide-terminal
       - run: uvx --from twine twine check dist/*

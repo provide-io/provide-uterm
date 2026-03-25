@@ -19,14 +19,14 @@ from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt,
 from provide_terminal_cloudflare.config import JwtConfig
 from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
 
 
 def _decode_control_frames(messages: list[str]) -> list[dict]:
-    """Decode a list of control-stream-encoded messages into plain dicts."""
+    """Decode a list of control-channel-encoded messages into plain dicts."""
     result = []
     for raw in messages:
-        decoder = ControlStreamDecoder()
+        decoder = ControlChannelDecoder()
         events = decoder.feed(raw)
         events.extend(decoder.finish())
         result.extend(e.control for e in events if isinstance(e, ControlChunk))

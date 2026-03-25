@@ -10,6 +10,12 @@ import asyncio
 import importlib.resources
 import importlib.util
 import json
+
+# Ensure this repo's src/provide package wins over sibling workspaces on sys.path.
+# Skip in mutant context — mutmut's root conftest already prepends mutants/src/
+# with trampolined modules; overriding it here would load non-trampolined copies
+# and cause all connectors mutants to report no_tests.
+import os as _os
 import socket
 import socketserver
 import sys
@@ -23,19 +29,19 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-# Ensure this repo's src/provide package wins over sibling workspaces on sys.path.
-_PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
-_PROJECT_SRC_STR = str(_PROJECT_SRC)
-if _PROJECT_SRC_STR in sys.path:
-    sys.path.remove(_PROJECT_SRC_STR)
-sys.path.insert(0, _PROJECT_SRC_STR)
-_loaded_provide = sys.modules.get("provide")
-if _loaded_provide is not None:
-    loaded_path = str(getattr(_loaded_provide, "__file__", ""))
-    if "/provide-terminal/src/provide/" not in loaded_path:
-        for name in list(sys.modules):
-            if name == "provide" or name.startswith("provide."):
-                del sys.modules[name]
+if not _os.environ.get("MUTANT_UNDER_TEST"):
+    _PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
+    _PROJECT_SRC_STR = str(_PROJECT_SRC)
+    if _PROJECT_SRC_STR in sys.path:
+        sys.path.remove(_PROJECT_SRC_STR)
+    sys.path.insert(0, _PROJECT_SRC_STR)
+    _loaded_provide = sys.modules.get("provide")
+    if _loaded_provide is not None:
+        loaded_path = str(getattr(_loaded_provide, "__file__", ""))
+        if "/provide-terminal/src/provide/" not in loaded_path:
+            for name in list(sys.modules):
+                if name == "provide" or name.startswith("provide."):
+                    del sys.modules[name]
 
 from provide.terminal.hijack.hub import TermHub
 from provide.terminal.server import create_server_app, default_server_config
@@ -293,7 +299,7 @@ class WorkerController:
     async def _connect(self) -> None:
         import websockets
 
-        from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk, encode_control
+        from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control
 
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
         try:
@@ -312,7 +318,7 @@ class WorkerController:
                     "ts": time.time(),
                 }
                 await ws.send(encode_control(snapshot_msg))
-                decoder = ControlStreamDecoder()
+                decoder = ControlChannelDecoder()
                 while not self._stop.is_set():
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=0.1)

@@ -7,7 +7,7 @@
 Covers:
 - line 36: _encode_runtime_frame with type=="term"
 - branch 202->exit: _log_wire_send where type=="term" (log_control NOT called)
-- lines 257-258: ControlStreamProtocolError raised by decoder.feed()
+- lines 257-258: ControlChannelProtocolError raised by decoder.feed()
 - branch 278->260: unknown mtype in _bridge_session (no matching elif)
 """
 
@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.control_stream import (
-    ControlStreamProtocolError,
+from provide.terminal.control_channel import (
+    ControlChannelProtocolError,
     encode_control,
     encode_data,
 )
@@ -164,14 +164,14 @@ class TestLogWireSendTermBranch:
 
 
 # ---------------------------------------------------------------------------
-# _bridge_session: lines 257-258 (ControlStreamProtocolError)
+# _bridge_session: lines 257-258 (ControlChannelProtocolError)
 # ---------------------------------------------------------------------------
 
 
-class TestBridgeSessionControlStreamError:
+class TestBridgeSessionControlChannelError:
     @pytest.mark.asyncio
-    async def test_invalid_control_stream_raises_runtime_error(self) -> None:
-        """Lines 257-258: ControlStreamProtocolError from decoder.feed() → RuntimeError raised."""
+    async def test_invalid_control_channel_raises_runtime_error(self) -> None:
+        """Lines 257-258: ControlChannelProtocolError from decoder.feed() → RuntimeError raised."""
         rt = _make_runtime()
         rt._queue = asyncio.Queue()
         rt._stop = asyncio.Event()
@@ -189,12 +189,12 @@ class TestBridgeSessionControlStreamError:
         invalid_payload = "\x10\x01garbage"
 
         ws = _MockWS(rt, messages=[invalid_payload])
-        with pytest.raises(RuntimeError, match="invalid control stream"):
+        with pytest.raises(RuntimeError, match="invalid control channel"):
             await rt._bridge_session(ws)
 
     @pytest.mark.asyncio
-    async def test_invalid_control_stream_via_decoder_patch(self) -> None:
-        """Lines 257-258: RuntimeError raised from ControlStreamProtocolError (via patch)."""
+    async def test_invalid_control_channel_via_decoder_patch(self) -> None:
+        """Lines 257-258: RuntimeError raised from ControlChannelProtocolError (via patch)."""
         rt = _make_runtime()
         rt._queue = asyncio.Queue()
         rt._stop = asyncio.Event()
@@ -208,14 +208,14 @@ class TestBridgeSessionControlStreamError:
         connector.poll_messages = _slow_poll
         rt._connector = connector
 
-        # Patch ControlStreamDecoder.feed to raise ControlStreamProtocolError
-        with patch("provide.terminal.server.runtime.ControlStreamDecoder") as mock_decoder_cls:
+        # Patch ControlChannelDecoder.feed to raise ControlChannelProtocolError
+        with patch("provide.terminal.server.runtime.ControlChannelDecoder") as mock_decoder_cls:
             mock_decoder = MagicMock()
             mock_decoder_cls.return_value = mock_decoder
-            mock_decoder.feed.side_effect = ControlStreamProtocolError("bad frame")
+            mock_decoder.feed.side_effect = ControlChannelProtocolError("bad frame")
 
             ws = _MockWS(rt, messages=["any input"])
-            with pytest.raises(RuntimeError, match="invalid control stream"):
+            with pytest.raises(RuntimeError, match="invalid control channel"):
                 await rt._bridge_session(ws)
 
 

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import encode_control
+from provide.terminal.control_channel import encode_control
 from provide.terminal.hijack.frames import (
     BrowserInputFrame,
     make_error_frame,
@@ -39,6 +39,47 @@ else:
 logger = get_logger(__name__)
 
 
+async def _handle_snapshot_req(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
+    """Handle snapshot_req message type."""
+    is_owner = await hub.touch_if_owner(worker_id, ws) is not None
+    if is_owner:
+        await hub.request_snapshot(worker_id)
+    else:
+        # Non-owner viewers may request snapshots only when no hijack is
+        # active — forwarding during an active hijack disrupts the owner's
+        # wait_for_guard prompt detection.
+        if not await hub.check_still_hijacked(worker_id):
+            await hub.request_snapshot(worker_id)
+
+
+async def _handle_analyze_req(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
+    """Handle analyze_req message type."""
+    if await hub.touch_if_owner(worker_id, ws) is not None:
+        await hub.request_analysis(worker_id)
+
+
+async def _handle_heartbeat(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
+    """Handle heartbeat message type."""
+    lease_expires_at = await hub.touch_if_owner(worker_id, ws)
+    if lease_expires_at is not None:
+        await ws.send_text(encode_control(make_heartbeat_ack_frame(lease_expires_at, ts=time.time())))
+        await hub.broadcast_hijack_state(worker_id)
+
+
+async def _handle_hijack_step(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
+    """Handle hijack_step message type."""
+    if await hub.touch_if_owner(worker_id, ws) is not None:
+        ok = await hub.send_worker(
+            worker_id,
+            {"type": "control", "action": "step", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
+        )
+        if not ok:
+            await ws.send_text(encode_control(make_error_frame("No worker connected for this session.")))
+        else:
+            hub.metric("hijack_steps_total")
+            await hub.append_event(worker_id, "hijack_step", {"owner": "dashboard_ws"})
+
+
 async def handle_browser_message(
     hub: TermHub,
     ws: WebSocket,
@@ -55,51 +96,22 @@ async def handle_browser_message(
     mtype = msg_b.get("type")
 
     if mtype == "snapshot_req":
-        is_owner = await hub.touch_if_owner(worker_id, ws) is not None
-        if is_owner:
-            await hub.request_snapshot(worker_id)
-        else:
-            # Non-owner viewers may request snapshots only when no hijack is
-            # active — forwarding during an active hijack disrupts the owner's
-            # wait_for_guard prompt detection.
-            if not await hub.check_still_hijacked(worker_id):
-                await hub.request_snapshot(worker_id)
-
+        await _handle_snapshot_req(hub, ws, worker_id)
     elif mtype == "analyze_req":
-        if await hub.touch_if_owner(worker_id, ws) is not None:
-            await hub.request_analysis(worker_id)
-
+        await _handle_analyze_req(hub, ws, worker_id)
     elif mtype == "heartbeat":
-        lease_expires_at = await hub.touch_if_owner(worker_id, ws)
-        if lease_expires_at is not None:
-            await ws.send_text(encode_control(make_heartbeat_ack_frame(lease_expires_at, ts=time.time())))
-            await hub.broadcast_hijack_state(worker_id)
-
+        await _handle_heartbeat(hub, ws, worker_id)
     elif mtype == "hijack_request":
         return await _handle_hijack_request(hub, ws, worker_id, role, owned_hijack)
-
     elif mtype == "hijack_step":
-        if await hub.touch_if_owner(worker_id, ws) is not None:
-            ok = await hub.send_worker(
-                worker_id,
-                {"type": "control", "action": "step", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
-            )
-            if not ok:
-                await ws.send_text(encode_control(make_error_frame("No worker connected for this session.")))
-            else:
-                hub.metric("hijack_steps_total")
-                await hub.append_event(worker_id, "hijack_step", {"owner": "dashboard_ws"})
-
+        await _handle_hijack_step(hub, ws, worker_id)
     elif mtype == "hijack_release":
         return await _handle_hijack_release(hub, ws, worker_id, owned_hijack)
-
     elif mtype == "ping":
         with suppress(Exception):
             await ws.send_text(encode_control(make_pong_frame(ts=time.time())))
-
     elif mtype == "input":
         await _handle_input(hub, ws, worker_id, msg_b)
-
     return owned_hijack
 
 
@@ -208,6 +220,69 @@ async def _handle_input(
             await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]})
 
 
+async def _resolve_resumed_role(
+    hub: TermHub, ws: WebSocket, worker_id: str, role: str, session_role: str
+) -> tuple[str, bool]:
+    """Resolve the role for a resumed browser session. Returns (new_role, can_hijack).
+
+    Never escalates above the role the current auth layer grants.
+    """
+    new_role = role
+    if session_role in VALID_ROLES and _ROLE_PRIORITY.get(session_role, 0) <= _ROLE_PRIORITY.get(role, 0):
+        new_role = session_role
+    if new_role != role:
+        async with hub._lock:
+            st = hub._workers.get(worker_id)
+            if st is not None:  # pragma: no branch
+                st.browsers[ws] = new_role
+    return new_role, new_role == "admin"
+
+
+async def _attempt_reclaim_under_lock(hub: TermHub, ws: WebSocket, worker_id: str) -> bool:
+    """Attempt to acquire hijack ownership inside the hub lock.
+
+    Returns True if ownership was successfully set.
+    """
+    async with hub._lock:
+        st = hub._workers.get(worker_id)
+        if (  # pragma: no branch
+            st is not None
+            and st.worker_ws is not None
+            and st.input_mode != "open"
+            and st.hijack_owner is None
+            and not hub.is_hijacked(st)
+        ):
+            st.hijack_owner = ws
+            st.hijack_owner_expires_at = time.time() + hub._dashboard_hijack_lease_s
+            return True
+    return False
+
+
+async def _try_reclaim_hijack(
+    hub: TermHub, ws: WebSocket, worker_id: str, session: Any, can_hijack: bool
+) -> tuple[bool, bool]:
+    """Attempt to reclaim the hijack lease for a resuming session.
+
+    Returns (owned_hijack, reclaimed_hijack).
+    """
+    if not (session.was_hijack_owner and can_hijack):
+        return False, False
+    pause_sent = await hub.send_worker(
+        worker_id,
+        {"type": "control", "action": "pause", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
+    )
+    if pause_sent:
+        reclaimed_hijack = await _attempt_reclaim_under_lock(hub, ws, worker_id)
+        owned_hijack = reclaimed_hijack
+        if not reclaimed_hijack and not await hub.check_still_hijacked(worker_id):
+            await hub.send_worker(
+                worker_id,
+                {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
+            )
+        return owned_hijack, reclaimed_hijack
+    return False, False
+
+
 async def _handle_resume(
     hub: TermHub,
     ws: WebSocket,
@@ -233,54 +308,14 @@ async def _handle_resume(
     if hub._on_resume is not None and not await hub._on_resume(old_token, session):
         return owned_hijack
 
-    # Valid resume — revoke old token
     store.revoke(old_token)
 
-    # Restore role if stored role is not higher than currently-resolved role
-    # (never escalate above the role the auth layer grants right now).
-    new_role = role
-    if session.role in VALID_ROLES and _ROLE_PRIORITY.get(session.role, 0) <= _ROLE_PRIORITY.get(role, 0):
-        new_role = session.role
-    if new_role != role:
-        async with hub._lock:
-            st = hub._workers.get(worker_id)
-            if st is not None:  # pragma: no branch
-                st.browsers[ws] = new_role
-    can_hijack = new_role == "admin"
+    new_role, can_hijack = await _resolve_resumed_role(hub, ws, worker_id, role, session.role)
+    owned_hijack, reclaimed_hijack = await _try_reclaim_hijack(hub, ws, worker_id, session, can_hijack)
 
-    # Reclaim hijack if was owner and no current hijack. Resumption must restore
-    # both the browser-side ownership bit and the worker-side paused state.
-    reclaimed_hijack = False
-    if session.was_hijack_owner and can_hijack:
-        pause_sent = await hub.send_worker(
-            worker_id,
-            {"type": "control", "action": "pause", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
-        )
-        if pause_sent:
-            async with hub._lock:
-                st = hub._workers.get(worker_id)
-                if (  # pragma: no branch
-                    st is not None
-                    and st.worker_ws is not None
-                    and st.input_mode != "open"
-                    and st.hijack_owner is None
-                    and not hub.is_hijacked(st)
-                ):
-                    st.hijack_owner = ws
-                    st.hijack_owner_expires_at = time.time() + hub._dashboard_hijack_lease_s
-                    owned_hijack = True
-                    reclaimed_hijack = True
-            if not reclaimed_hijack and not await hub.check_still_hijacked(worker_id):
-                await hub.send_worker(
-                    worker_id,
-                    {"type": "control", "action": "resume", "owner": "dashboard", "lease_s": 0, "ts": time.time()},
-                )
-
-    # Issue new token for this connection
     new_token = store.create(worker_id, new_role, hub._resume_ttl_s)
     hub._ws_to_resume_token[ws] = new_token
 
-    # Re-read state and send updated hello
     _resumed_state = await hub.register_browser_state_snapshot(worker_id, ws)
     await ws.send_text(
         encode_control(

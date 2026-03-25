@@ -2,7 +2,7 @@
 
 Shared terminal I/O primitives and WebSocket proxy infrastructure for the provide ecosystem.
 
-**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · WS session resumption (role + hijack survive reconnect) · quick-connect ephemeral sessions (`GET /app/connect`, `POST /api/connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 2000+ tests at 100% branch coverage
+**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · WS session resumption (role + hijack survive reconnect) · quick-connect ephemeral sessions (`GET /app/connect`, `POST /api/connect`) · `ShellSessionConnector` for in-process shell sessions · built-in Python REPL (`ushell`) · JWT auth · 4000+ tests at 100% branch coverage
 
 For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
 
@@ -181,7 +181,7 @@ This is the canonical hosted-app example for the library. It demonstrates:
 - browser session pages and operator pages
 - server-side role resolution and policy
 - WS session resumption with in-memory token storage
-- hosted connectors (`shell`, `telnet`, `ssh`)
+- hosted connectors (`shell`, `telnet`, `ssh`, `websocket`, `ushell`)
 - session APIs, mode switching, and optional file-backed recording
 
 Key endpoints:
@@ -266,6 +266,12 @@ For `connector_type = "ssh"`, the session entry can use these auth fields:
 The SSH connector intentionally skips user SSH config discovery so startup stays
 predictable and fast in the hosted server. If you need key-based auth in config
 without a file path, prefer `client_key_data`.
+
+For `connector_type = "ushell"`, no external process is required. The session runs
+a built-in Python REPL powered by [`provide-shell`](packages/provide-shell/README.md).
+Commands include `py <expr>`, `sessions`, `kv list/get/set/delete`, `fetch [-X METHOD] <url>`,
+`env`, `clear`, and `exit`. The REPL sandbox pre-imports `json`, `datetime`, `re`,
+`hashlib`, and `base64`.
 
 ### Frontend — ProvideTerminal
 

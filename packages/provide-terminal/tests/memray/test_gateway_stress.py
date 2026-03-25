@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Memray stress test for ControlStream gateway processing."""
+"""Memray stress test for ControlChannel gateway processing."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from tests.memray.conftest import assert_allocation_within_threshold
 @pytest.mark.memray
 @pytest.mark.slow
 def test_gateway_stress(memray_output_dir: Path, memray_baseline: dict[str, int]) -> None:
-    """Stress test ControlStream encode/decode with memray profiling."""
+    """Stress test ControlChannel encode/decode with memray profiling."""
     script_path = Path(__file__).parent.parent.parent / "scripts" / "memray_gateway_stress.py"
     output_bin = memray_output_dir / "gateway_stress.bin"
 
@@ -48,7 +48,7 @@ def test_gateway_stress(memray_output_dir: Path, memray_baseline: dict[str, int]
 
     # Compare to baseline
     baseline = memray_baseline.get("controlstream_total_allocations")
-    assert_allocation_within_threshold(baseline, total_allocations, "ControlStream")
+    assert_allocation_within_threshold(baseline, total_allocations, "ControlChannel")
 
     # Update baseline if needed
     if baseline is None:

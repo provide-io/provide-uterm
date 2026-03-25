@@ -56,6 +56,23 @@ class _PollingMixin:
             await asyncio.sleep(0.08)
         return None
 
+    @staticmethod
+    def _compile_guard_regex(
+        expect_regex: str | None,
+    ) -> tuple[re.Pattern[str] | None, str | None]:
+        """Compile *expect_regex* and return ``(pattern, error_msg)``.
+
+        Returns ``(None, None)`` when *expect_regex* is absent/empty.
+        Returns ``(None, error_message)`` if compilation fails.
+        Returns ``(compiled_pattern, None)`` on success.
+        """
+        if not expect_regex:
+            return None, None
+        try:
+            return compile_expect_regex(expect_regex, flags=re.IGNORECASE | re.MULTILINE), None
+        except PromptRegexError as exc:
+            return None, str(exc)
+
     async def wait_for_guard(
         self,
         worker_id: str,
@@ -70,12 +87,9 @@ class _PollingMixin:
         Returns ``(matched, snapshot, reason)`` where *reason* is None on success
         or a short error string on failure.
         """
-        regex_obj: re.Pattern[str] | None = None
-        if expect_regex:
-            try:
-                regex_obj = compile_expect_regex(expect_regex, flags=re.IGNORECASE | re.MULTILINE)
-            except PromptRegexError as exc:
-                return False, None, str(exc)
+        regex_obj, regex_err = self._compile_guard_regex(expect_regex)
+        if regex_err is not None:
+            return False, None, regex_err
 
         if not expect_prompt_id and regex_obj is None:
             async with self._lock:  # type: ignore[attr-defined]

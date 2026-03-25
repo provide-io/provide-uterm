@@ -14,7 +14,7 @@ from typing import Any, ParamSpec, TypeVar, cast
 
 from provide.telemetry.backpressure import release, try_acquire
 from provide.telemetry.sampling import should_sample
-from provide.telemetry.tracing.context import get_trace_context, set_trace_context
+from provide.telemetry.tracing.context import get_span_id, get_trace_id, set_trace_context
 from provide.telemetry.tracing.provider import _sync_otel_trace_context, get_tracer
 
 P = ParamSpec("P")
@@ -34,13 +34,14 @@ def trace(name: str | None = None) -> Callable[[Callable[P, R]], Callable[P, R]]
                 ticket = try_acquire("traces")
                 if ticket is None:
                     return await fn(*args, **kwargs)
-                prev = get_trace_context()
+                prev_trace = get_trace_id()
+                prev_span = get_span_id()
                 with get_tracer(fn.__module__).start_as_current_span(span_name):
                     _sync_otel_trace_context()
                     try:
                         return await fn(*args, **kwargs)
                     finally:
-                        set_trace_context(prev["trace_id"], prev["span_id"])
+                        set_trace_context(prev_trace, prev_span)
                         release(ticket)
 
             return cast(Callable[P, R], async_wrapper)  # pragma: no mutate
@@ -52,13 +53,14 @@ def trace(name: str | None = None) -> Callable[[Callable[P, R]], Callable[P, R]]
             ticket = try_acquire("traces")
             if ticket is None:
                 return fn(*args, **kwargs)
-            prev = get_trace_context()
+            prev_trace = get_trace_id()
+            prev_span = get_span_id()
             with get_tracer(fn.__module__).start_as_current_span(span_name):
                 _sync_otel_trace_context()
                 try:
                     return fn(*args, **kwargs)
                 finally:
-                    set_trace_context(prev["trace_id"], prev["span_id"])
+                    set_trace_context(prev_trace, prev_span)
                     release(ticket)
 
         return cast(Callable[P, R], sync_wrapper)  # pragma: no mutate

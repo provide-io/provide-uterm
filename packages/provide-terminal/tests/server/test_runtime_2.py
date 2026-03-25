@@ -450,26 +450,24 @@ class TestRun:
         assert call_count[0] >= 2  # retried at least once
 
     async def test_backoff_reset_after_clean_session(self) -> None:
-        """Attempt counter (backoff index) resets to 0 after a session completes normally."""
+        """Attempt counter (backoff index) resets to 0 after a session completes normally.
+
+        Mocks _bridge_session directly so that line 324 (attempt = 0) is definitely hit.
+        """
         rt = _make_runtime()
         connector = _make_connector()
+        bridge_calls = [0]
+
+        async def _fake_bridge(ws: Any) -> None:
+            bridge_calls[0] += 1
+            rt._stop.set()  # signal clean exit after first session
 
         class _CleanCtx:
-            async def __aenter__(self) -> _WS:
-                return _WS()
+            async def __aenter__(self) -> MagicMock:
+                return MagicMock()
 
             async def __aexit__(self, *_: object) -> None:
                 return None
-
-        class _WS:
-            async def send(self, data: str) -> None:
-                pass  # allow sends without stopping
-
-            async def recv(self) -> str:
-                # Set stop on first recv call — bridge_session will exit cleanly
-                rt._stop.set()
-                await asyncio.sleep(100)
-                return ""
 
         fake_ws_mod = MagicMock()
         fake_ws_mod.connect = MagicMock(return_value=_CleanCtx())
@@ -477,9 +475,12 @@ class TestRun:
         real_ws = sys.modules.pop("websockets", None)
         sys.modules["websockets"] = fake_ws_mod
         try:
-            with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+            with (
+                patch("provide.terminal.server.runtime.build_connector", return_value=connector),
+                patch.object(rt, "_bridge_session", _fake_bridge),
+            ):
                 await rt.start()
-                for _ in range(200):
+                for _ in range(100):
                     await asyncio.sleep(0.02)
                     if rt._task is not None and rt._task.done():
                         break
@@ -489,5 +490,5 @@ class TestRun:
             else:
                 sys.modules.pop("websockets", None)
 
-        # Test passes if it finishes — verifies attempt=0 line is executed
         assert rt._task is not None and rt._task.done()
+        assert bridge_calls[0] == 1

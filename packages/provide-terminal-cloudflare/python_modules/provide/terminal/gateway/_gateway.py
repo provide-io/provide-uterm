@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import (
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     ControlChunk,
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
     DataChunk,
     encode_control,
     encode_data,
@@ -80,10 +80,10 @@ async def _handle_ws_control(
 ) -> bool:
     """Return True if *message* is a gateway control frame (intercept it)."""
     try:
-        decoder = ControlStreamDecoder()
+        decoder = ControlChannelDecoder()
         events = decoder.feed(message)
         events.extend(decoder.finish())
-    except ControlStreamProtocolError:
+    except ControlChannelProtocolError:
         try:
             data = json.loads(message)
         except (json.JSONDecodeError, ValueError):
@@ -139,6 +139,22 @@ def _normalize_crlf(raw: bytes) -> bytes:
 # ---------------------------------------------------------------------------
 
 
+def _skip_subneg_sequence(data: bytes, i: int, n: int) -> int:
+    """Scan forward from *i* to find the end of an IAC SB … IAC SE sequence.
+
+    *i* should point to the first byte **after** the IAC SB opener (i.e. the
+    start of the subnegotiation payload).
+
+    Returns the position immediately after the closing IAC SE pair, or *n* if
+    the sequence is truncated.
+    """
+    while i < n:
+        if data[i] == _IAC and i + 1 < n and data[i + 1] == _SE:
+            return i + 2
+        i += 1
+    return n
+
+
 def _strip_iac(data: bytes) -> bytes:
     """Remove IAC telnet negotiation sequences from inbound client data."""
     out = bytearray()
@@ -158,12 +174,7 @@ def _strip_iac(data: bytes) -> bytes:
             i += 2
             continue
         if cmd == _SB:
-            i += 2
-            while i < n:
-                if data[i] == _IAC and i + 1 < n and data[i + 1] == _SE:
-                    i += 2
-                    break
-                i += 1
+            i = _skip_subneg_sequence(data, i + 2, n)
             continue
         if cmd in (_IP, _BREAK):
             out.append(0x03)  # Ctrl-C
@@ -171,9 +182,6 @@ def _strip_iac(data: bytes) -> bytes:
             continue
         if cmd == _EOF:
             out.append(0x04)  # Ctrl-D
-            i += 2
-            continue
-        if cmd == _AO:
             i += 2
             continue
         if cmd in (_WILL, _WONT, _DO, _DONT):
@@ -223,7 +231,7 @@ async def _ws_to_tcp(
     color_mode: str = "passthrough",
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
 
     async def _write_fn(data: bytes) -> None:
         writer.write(data)
@@ -233,7 +241,7 @@ async def _ws_to_tcp(
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
-            except ControlStreamProtocolError:
+            except ControlChannelProtocolError:
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
@@ -306,7 +314,7 @@ async def _ws_to_ssh(
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
     stdout = process.stdout  # type: ignore[attr-defined]
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
 
     async def _write_fn(data: bytes) -> None:
         stdout.write(data.decode("utf-8", errors="replace"))
@@ -315,7 +323,7 @@ async def _ws_to_ssh(
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
-            except ControlStreamProtocolError:
+            except ControlChannelProtocolError:
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):

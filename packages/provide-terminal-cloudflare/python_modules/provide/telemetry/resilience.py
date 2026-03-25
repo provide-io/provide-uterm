@@ -34,7 +34,7 @@ T = TypeVar("T")
 Signal = str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ExporterPolicy:
     retries: int = 0
     backoff_seconds: float = 0.0

@@ -13,7 +13,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from provide.terminal.control_stream import encode_control, encode_data
+from provide.terminal.control_channel import encode_control, encode_data
 from provide.terminal.hijack.bridge import TermBridge
 
 _DLE_STX = "\x10\x02"
@@ -21,7 +21,7 @@ _HEADER_LEN = 11  # DLE STX + 8 hex + ':'
 
 
 def _decode_msg(raw: str) -> dict:
-    """Decode a control-stream-framed message to a dict."""
+    """Decode a control-channel-framed message to a dict."""
     if raw.startswith(_DLE_STX):
         return json.loads(raw[_HEADER_LEN:])
     return json.loads(raw)

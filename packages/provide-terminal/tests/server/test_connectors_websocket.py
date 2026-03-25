@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES, build_connector
 from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
 
 
@@ -303,12 +304,72 @@ class TestWebSocketSessionConnector:
     # -- build_connector integration -----------------------------------------
 
     def test_build_connector_websocket(self) -> None:
-        from provide.terminal.server.connectors import build_connector
-
         c = build_connector("sid", "dn", "websocket", {"url": "ws://test"})
         assert isinstance(c, WebSocketSessionConnector)
 
-    def test_known_connector_types_includes_websocket(self) -> None:
-        from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
+    def test_build_connector_websocket_passes_session_id(self) -> None:
+        c = build_connector("my-sid", "my-dn", "websocket", {"url": "ws://test"})
+        assert c._session_id == "my-sid"
 
+    def test_build_connector_websocket_passes_display_name(self) -> None:
+        c = build_connector("my-sid", "my-dn", "websocket", {"url": "ws://test"})
+        assert c._display_name == "my-dn"
+
+    def test_known_connector_types_includes_websocket(self) -> None:
         assert "websocket" in KNOWN_CONNECTOR_TYPES
+
+    def test_build_connector_ushell(self) -> None:
+        from provide.shell.terminal._connector import UshellConnector
+
+        c = build_connector("sid", "dn", "ushell", {})
+        assert isinstance(c, UshellConnector)
+
+    def test_build_connector_ushell_passes_session_id(self) -> None:
+        c = build_connector("my-sid", "my-dn", "ushell", {})
+        assert c._session_id == "my-sid"
+
+    def test_build_connector_ushell_passes_display_name(self) -> None:
+        c = build_connector("my-sid", "my-dn", "ushell", {})
+        assert c._display_name == "my-dn"
+
+    def test_known_connector_types_includes_ushell(self) -> None:
+        assert "ushell" in KNOWN_CONNECTOR_TYPES
+
+    def test_build_connector_shell(self) -> None:
+        from provide.terminal.server.connectors.shell import ShellSessionConnector
+
+        c = build_connector("my-sid", "my-dn", "shell", {})
+        assert isinstance(c, ShellSessionConnector)
+        assert c._session_id == "my-sid"
+        assert c._display_name == "my-dn"
+
+    def test_build_connector_telnet(self) -> None:
+        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+
+        c = build_connector("my-sid", "my-dn", "telnet", {})
+        assert isinstance(c, TelnetSessionConnector)
+        assert c._session_id == "my-sid"
+        assert c._display_name == "my-dn"
+
+    def test_build_connector_ssh(self) -> None:
+        from provide.terminal.server.connectors.ssh import SshSessionConnector
+
+        c = build_connector("my-sid", "my-dn", "ssh", {"insecure_no_host_check": True})
+        assert isinstance(c, SshSessionConnector)
+        assert c._session_id == "my-sid"
+        assert c._display_name == "my-dn"
+
+    def test_known_connector_types_includes_shell(self) -> None:
+        assert "shell" in KNOWN_CONNECTOR_TYPES
+
+    def test_known_connector_types_includes_telnet(self) -> None:
+        assert "telnet" in KNOWN_CONNECTOR_TYPES
+
+    def test_known_connector_types_includes_ssh(self) -> None:
+        assert "ssh" in KNOWN_CONNECTOR_TYPES
+
+    def test_build_connector_unknown_raises_value_error(self) -> None:
+        import pytest
+
+        with pytest.raises(ValueError, match="bogus-type"):
+            build_connector("sid", "dn", "bogus-type", {})

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Memray stress test for ControlStream encoding/decoding."""
+"""Memray stress test for ControlChannel encoding/decoding."""
 
-from provide.terminal.control_stream import ControlStreamDecoder, encode_control, encode_data
+from provide.terminal.control_channel import ControlChannelDecoder, encode_control, encode_data
 
 # Payload size variants
 SMALL = "x" * 10
@@ -11,7 +11,7 @@ LARGE = "z" * 2000
 
 def main() -> None:
     """Stress encode/decode cycles with varying payload sizes."""
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
 
     # Terminal data path: 500K encode_data + decoder.feed cycles
     payloads = [SMALL, MEDIUM, LARGE]

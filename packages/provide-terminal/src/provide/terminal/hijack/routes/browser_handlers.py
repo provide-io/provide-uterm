@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
 
-from provide.terminal.control_stream import encode_control
+from provide.terminal.control_channel import encode_control
 from provide.terminal.hijack.frames import (
     BrowserInputFrame,
     make_error_frame,

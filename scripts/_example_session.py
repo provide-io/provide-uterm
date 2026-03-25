@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal
 
-from provide.terminal.control_stream import (
-    ControlStreamDecoder,
-    ControlStreamProtocolError,
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChannelProtocolError,
     DataChunk,
     encode_control,
     encode_data,
@@ -400,7 +400,7 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
                 attempt = 0
                 session.connected = True
                 session.outbound_queue = asyncio.Queue()
-                decoder = ControlStreamDecoder()
+                decoder = ControlChannelDecoder()
                 logger.info("demo_session_connected worker_id=%s", worker_id)
 
                 await ws.send(_encode_frame(_worker_hello(session)))
@@ -430,7 +430,7 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
 
                     try:
                         events = decoder.feed(raw)
-                    except ControlStreamProtocolError:
+                    except ControlChannelProtocolError:
                         continue
 
                     for event in events:

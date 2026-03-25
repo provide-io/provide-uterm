@@ -16,7 +16,7 @@ import pytest
 from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
 from provide_terminal_cloudflare.state.store import LeaseRecord
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -58,7 +58,7 @@ def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionR
 
 
 def _decode_sent(raw: str, *, data_frame_type: str | None = None) -> dict:
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1

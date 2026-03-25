@@ -24,7 +24,7 @@ _HEADER_LEN = 11  # DLE STX + 8 hex + ':'
 
 
 def _decode_msg(raw: str) -> dict:
-    """Decode a control-stream-framed message to a dict."""
+    """Decode a control-channel-framed message to a dict."""
     if raw.startswith(_DLE_STX):
         return json.loads(raw[_HEADER_LEN:])
     return json.loads(raw)

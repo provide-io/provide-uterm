@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
 try:
-    from provide.terminal.control_stream import (
+    from provide.terminal.control_channel import (
+        ControlChannelDecoder,
+        ControlChannelProtocolError,
         ControlChunk,
-        ControlStreamDecoder,
-        ControlStreamProtocolError,
         DataChunk,
         encode_control,
         encode_data,
@@ -16,8 +16,8 @@ try:
 except (ImportError, ModuleNotFoundError):
     # Fallback for Cloudflare Durable Objects validation phase
     ControlChunk = Any  # type: ignore[assignment]
-    ControlStreamDecoder = Any  # type: ignore[assignment]
-    ControlStreamProtocolError = Exception  # type: ignore[assignment]
+    ControlChannelDecoder = Any  # type: ignore[assignment]
+    ControlChannelProtocolError = Exception  # type: ignore[assignment]
     DataChunk = Any  # type: ignore[assignment]
 
     def encode_control(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
@@ -292,11 +292,11 @@ def parse_stream(
     active_limits = limits or MessageLimits()
     if len(raw.encode("utf-8")) > active_limits.max_ws_message_bytes:
         raise ProtocolError("message too large")
-    decoder = ControlStreamDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
+    decoder = ControlChannelDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
     try:
         events = decoder.feed(raw)
         events.extend(decoder.finish())
-    except ControlStreamProtocolError as exc:
+    except ControlChannelProtocolError as exc:
         raise ProtocolError(str(exc)) from exc
     if not events:
         raise ProtocolError("empty frame")

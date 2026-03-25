@@ -19,7 +19,7 @@ import pytest
 import uvicorn
 import websockets
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 from provide.terminal.server import create_server_app, default_server_config
 from provide.terminal.transports.ssh import start_ssh_server
 
@@ -32,7 +32,7 @@ def _ws_url(base_url: str, path: str) -> str:
     return base_url.replace("http://", "ws://") + path
 
 
-_WS_DECODERS: WeakKeyDictionary[Any, ControlStreamDecoder] = WeakKeyDictionary()
+_WS_DECODERS: WeakKeyDictionary[Any, ControlChannelDecoder] = WeakKeyDictionary()
 _WS_PENDING: WeakKeyDictionary[Any, list[dict[str, Any]]] = WeakKeyDictionary()
 
 
@@ -47,7 +47,7 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, A
                     return msg
                 continue
             raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-            decoder = _WS_DECODERS.setdefault(ws, ControlStreamDecoder())
+            decoder = _WS_DECODERS.setdefault(ws, ControlChannelDecoder())
             events = decoder.feed(raw)
             for event in events:
                 if isinstance(event, ControlChunk):

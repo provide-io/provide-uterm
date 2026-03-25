@@ -29,7 +29,7 @@ _restore_stack: contextvars.ContextVar[tuple[dict[str, object], ...]] = contextv
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PropagationContext:
     traceparent: str | None
     tracestate: str | None

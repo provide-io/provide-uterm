@@ -26,7 +26,7 @@ _logger = logging.getLogger(__name__)
 Signal = str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SamplingPolicy:
     default_rate: float = 1.0
     overrides: dict[str, float] = field(default_factory=dict)
@@ -72,7 +72,9 @@ def get_sampling_policy(signal: Signal) -> SamplingPolicy:
 
 
 def should_sample(signal: Signal, key: str | None = None) -> bool:
-    policy = get_sampling_policy(signal)
+    sig = _validate_signal(signal)
+    with _lock:
+        policy = _policies[sig]
     rate = policy.default_rate
     if key is not None and key in policy.overrides:
         rate = policy.overrides[key]

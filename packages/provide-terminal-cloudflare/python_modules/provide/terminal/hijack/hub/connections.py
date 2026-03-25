@@ -208,6 +208,44 @@ class _ConnectionMixin:
                 "resume_token": resume_token,
             }
 
+    @staticmethod
+    def _scan_events_for_resume(st: Any) -> bool:
+        """Scan event history to determine if a resume is still needed on browser disconnect.
+
+        Returns ``True`` if a resume control frame should be sent (no prior expiry
+        or release event was found in the history that would have already sent one).
+        Scans backwards; stops at the first hijack lifecycle event encountered.
+        """
+        for evt in reversed(st.events):
+            t = str(evt.get("type", ""))
+            if t in {"hijack_owner_expired", "hijack_lease_expired"}:
+                return False
+            if t in {"hijack_acquired", "hijack_released"}:
+                break
+        return True
+
+    def _update_lock_state(self, st: Any, ws: Any, owned_hijack: bool) -> tuple[bool, bool, bool]:
+        """Apply disconnect state mutations to *st* and return outcome flags.
+
+        Returns ``(was_owner, rest_still_active, resume_without_owner)``.
+        Must be called while holding ``self._lock``.
+        """
+        was_owner = self.is_dashboard_hijack_active(st) and st.hijack_owner is ws
+        rest_still_active = False
+        resume_without_owner = False
+        st.browsers.pop(ws, None)
+        if was_owner:
+            st.hijack_owner = None
+            st.hijack_owner_expires_at = None
+            rest_still_active = self.has_valid_rest_lease(st)
+        elif owned_hijack and st.worker_ws is not None and not self.is_hijacked(st):  # pragma: no branch
+            # Scan backwards for the most recent hijack-related event to determine
+            # whether cleanup already sent a resume (lease/owner expired) or whether
+            # a resume is still needed.  Checking only the last event is fragile
+            # because a subsequent snapshot event can overwrite the expiry marker.
+            resume_without_owner = self._scan_events_for_resume(st)
+        return was_owner, rest_still_active, resume_without_owner
+
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
         """Handle a browser WS disconnect atomically.
 
@@ -217,29 +255,12 @@ class _ConnectionMixin:
         browser_count = -1
         async with self._lock:
             st = self._workers.get(worker_id)
-            was_owner = st is not None and self.is_dashboard_hijack_active(st) and st.hijack_owner is ws
+            was_owner = False
             rest_still_active = False
             resume_without_owner = False
             if st is not None:  # pragma: no branch
-                st.browsers.pop(ws, None)
+                was_owner, rest_still_active, resume_without_owner = self._update_lock_state(st, ws, owned_hijack)
                 browser_count = len(st.browsers)
-                if was_owner:
-                    st.hijack_owner = None
-                    st.hijack_owner_expires_at = None
-                    rest_still_active = self.has_valid_rest_lease(st)
-                elif owned_hijack and st.worker_ws is not None and not self.is_hijacked(st):  # pragma: no branch
-                    # Scan backwards for the most recent hijack-related event to determine
-                    # whether cleanup already sent a resume (lease/owner expired) or whether
-                    # a resume is still needed.  Checking only the last event is fragile
-                    # because a subsequent snapshot event can overwrite the expiry marker.
-                    resume_without_owner = True
-                    for evt in reversed(st.events):
-                        t = str(evt.get("type", ""))
-                        if t in {"hijack_owner_expired", "hijack_lease_expired"}:
-                            resume_without_owner = False
-                            break
-                        if t in {"hijack_acquired", "hijack_released"}:
-                            break
         # Mark resume token with hijack ownership (if any) so a reconnecting
         # browser can reclaim the lease.  Do NOT revoke — the token must survive
         # until the browser reconnects or TTL expires.

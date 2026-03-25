@@ -60,6 +60,8 @@ class MockTerminal {
   opened = false;
   disposed = false;
   focused = false;
+  cols = 0;
+  rows = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // biome-ignore lint/suspicious/noExplicitAny: test mock
   addon: any = null;
@@ -813,5 +815,130 @@ describe("local echo and activity indicator", () => {
     // After dispose, timers should be null
     expect(w._activityFlashTimer).toBeNull();
     expect(w._statusDotElement).toBeNull();
+  });
+});
+
+// ── onResize callback ──────────────────────────────────────────────────────────
+
+describe("onResize callback", () => {
+  let capturedRoCallback: (() => void) | null = null;
+
+  beforeEach(() => {
+    capturedRoCallback = null;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          capturedRoCallback = cb;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    // Suppress rAF by default — ResizeObserver tests don't need it to fire
+    vi.stubGlobal("requestAnimationFrame", (_cb: () => void) => 0);
+  });
+
+  /** Create widget and init terminal via a snapshot message. */
+  function makeWidgetWithTerm(opts: Record<string, unknown> = {}): {
+    widget: ProvideHijack;
+    term: MockTerminal;
+  } {
+    const { widget } = makeWidget(opts);
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" });
+    // biome-ignore lint/suspicious/noExplicitAny: accessing private for test
+    const term = (widget as any)._term as MockTerminal;
+    return { widget, term };
+  }
+
+  // ── ResizeObserver path ────────────────────────────────────────────────────
+
+  it("fires onResize via ResizeObserver when dims are positive", () => {
+    const onResize = vi.fn();
+    const { term } = makeWidgetWithTerm({ onResize });
+    term.cols = 80;
+    term.rows = 24;
+    capturedRoCallback?.();
+    expect(onResize).toHaveBeenCalledOnce();
+    expect(onResize).toHaveBeenCalledWith(80, 24);
+  });
+
+  it("does not fire onResize via ResizeObserver when cols is zero", () => {
+    const onResize = vi.fn();
+    makeWidgetWithTerm({ onResize }); // term.cols/rows default to 0
+    capturedRoCallback?.();
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onResize via ResizeObserver when _term is null (disposed)", () => {
+    const onResize = vi.fn();
+    const { widget, term } = makeWidgetWithTerm({ onResize });
+    term.cols = 80;
+    term.rows = 24;
+    widget.dispose(); // sets _term = null
+    capturedRoCallback?.();
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("does not throw via ResizeObserver when onResize is not provided", () => {
+    const { term } = makeWidgetWithTerm();
+    term.cols = 80;
+    term.rows = 24;
+    expect(() => capturedRoCallback?.()).not.toThrow();
+  });
+
+  // ── rAF (initial fit) path ─────────────────────────────────────────────────
+
+  it("fires onResize via rAF when dims are positive at fit time", () => {
+    const onResize = vi.fn();
+    // Subclass with positive dims so they're set when the rAF callback fires
+    class TermWithDims extends MockTerminal {
+      cols = 80;
+      rows = 24;
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).Terminal = TermWithDims;
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
+      cb();
+      return 0;
+    });
+    const { widget } = makeWidget({ onResize });
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" });
+    expect(onResize).toHaveBeenCalledWith(80, 24);
+  });
+
+  it("does not fire onResize via rAF when dims are zero at fit time", () => {
+    const onResize = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
+      cb();
+      return 0;
+    });
+    const { widget } = makeWidget({ onResize });
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" }); // MockTerminal: cols=0, rows=0
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onResize via rAF when _term is null (disposed before rAF fires)", () => {
+    const onResize = vi.fn();
+    class TermWithDims extends MockTerminal {
+      cols = 80;
+      rows = 24;
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).Terminal = TermWithDims;
+    let latestWidget: ProvideHijack | null = null;
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
+      latestWidget?.dispose(); // dispose before the callback fires → _term = null
+      cb();
+      return 0;
+    });
+    const { widget } = makeWidget({ onResize });
+    latestWidget = widget;
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" });
+    expect(onResize).not.toHaveBeenCalled();
   });
 });

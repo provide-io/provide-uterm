@@ -374,11 +374,16 @@ class AgentProcessManager:
 
     async def kill_agent(self, agent_id: str) -> None:
         async with self.manager._state_lock:
-            if agent_id not in self.manager.processes:
-                return
-            process = self.manager.processes[agent_id]
+            process = self.manager.processes.get(agent_id)
+            agent = self.manager.agents.get(agent_id)
+            fallback_pid = int(getattr(agent, "pid", 0) or 0) if process is None else 0
 
-        await self._stop_process_tree(agent_id=agent_id, process=process, timeout_s=_STOP_TIMEOUT_S)
+        await self._stop_process_tree(
+            agent_id=agent_id,
+            process=process,
+            pid=fallback_pid or None,
+            timeout_s=_STOP_TIMEOUT_S,
+        )
 
         async with self.manager._state_lock:
             if agent_id in self.manager.agents:

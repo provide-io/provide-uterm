@@ -26,7 +26,7 @@ from dataclasses import dataclass
 Signal = str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class HealthSnapshot:
     queue_depth_logs: int
     queue_depth_traces: int

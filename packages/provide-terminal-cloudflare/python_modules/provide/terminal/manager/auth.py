@@ -45,6 +45,28 @@ class TokenAuthMiddleware:
         self._public_paths = public_paths or frozenset()
         self._public_prefixes = public_prefixes or ()
 
+    def _is_public_path(self, path: str) -> bool:
+        """Return True if *path* is exempt from token authentication."""
+        return path in self._public_paths or any(path.startswith(p) for p in self._public_prefixes)
+
+    def _extract_request_token(self, scope: Any) -> tuple[str, bool]:
+        """Extract bearer token from scope. Returns (token, pass_through).
+
+        pass_through=True means the request should bypass auth (e.g. OPTIONS).
+        """
+        scope_type = scope.get("type")
+        if scope_type == "websocket":
+            qs = scope.get("query_string", b"").decode("utf-8", errors="replace")
+            return (parse_qs(qs).get("token") or [""])[0].strip(), False
+        method: str = scope.get("method", "")
+        if method == "OPTIONS":
+            return "", True
+        headers: dict[bytes, bytes] = dict(scope.get("headers", []))
+        auth = headers.get(b"authorization", b"").decode("utf-8", errors="replace")
+        if auth.startswith("Bearer "):
+            return auth[len("Bearer ") :].strip(), False
+        return headers.get(b"x-api-token", b"").decode("utf-8", errors="replace").strip(), False
+
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         scope_type = scope.get("type")
         if scope_type not in ("http", "websocket"):
@@ -52,25 +74,14 @@ class TokenAuthMiddleware:
             return
 
         path: str = scope.get("path", "")
-
-        if path in self._public_paths or any(path.startswith(p) for p in self._public_prefixes):
+        if self._is_public_path(path):
             await self._app(scope, receive, send)
             return
 
-        if scope_type == "websocket":
-            qs = scope.get("query_string", b"").decode("utf-8", errors="replace")
-            provided = (parse_qs(qs).get("token") or [""])[0].strip()
-        else:
-            method: str = scope.get("method", "")
-            if method == "OPTIONS":
-                await self._app(scope, receive, send)
-                return
-            headers: dict[bytes, bytes] = dict(scope.get("headers", []))
-            auth = headers.get(b"authorization", b"").decode("utf-8", errors="replace")
-            if auth.startswith("Bearer "):
-                provided = auth[len("Bearer ") :].strip()
-            else:
-                provided = headers.get(b"x-api-token", b"").decode("utf-8", errors="replace").strip()
+        provided, pass_through = self._extract_request_token(scope)
+        if pass_through:
+            await self._app(scope, receive, send)
+            return
 
         if not hmac.compare_digest(provided, self._token):
             if scope_type == "websocket":

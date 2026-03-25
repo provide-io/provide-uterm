@@ -27,6 +27,7 @@ worker-protocol frames.  Callers broadcast these to connected browsers.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -64,6 +65,7 @@ class UshellConnector(_SessionConnector):
         self._session_id = session_id
         self._display_name = display_name or session_id
         self._connected = False
+        self._welcomed = False
         self._buf = LineBuffer()
         self._sandbox = Sandbox(extra=extra_ctx)
         ctx: dict[str, Any] = dict(extra_ctx or {})
@@ -87,17 +89,23 @@ class UshellConnector(_SessionConnector):
     # ------------------------------------------------------------------
 
     async def poll_messages(self) -> list[dict[str, Any]]:
-        """Return the initial welcome frames emitted on first connect.
+        """Return the initial welcome frames on first call after connect.
 
         Returns a ``worker_hello`` frame (sets ``input_mode=open`` so all
         operators can type) followed by the banner + first prompt.
+        Subsequent calls sleep briefly so the HostedSessionRuntime's
+        recv_task can win the poll/recv race and deliver browser input.
         """
         if not self._connected:
             return []
-        return [
-            worker_hello("open"),
-            term(BANNER + PROMPT),
-        ]
+        if not self._welcomed:
+            self._welcomed = True
+            return [
+                worker_hello("open"),
+                term(BANNER + PROMPT),
+            ]
+        await asyncio.sleep(0.05)
+        return []
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         """Process raw keystroke *data* and return terminal frames.

@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from tests.hijack.control_stream_helpers import decode_control_payload
-from provide.terminal.control_stream import encode_control
+from tests.hijack.control_channel_helpers import decode_control_payload
+from provide.terminal.control_channel import encode_control
 from provide.terminal.hijack.bridge import TermBridge, _safe_int
 from provide.terminal.hijack.models import _safe_float
 

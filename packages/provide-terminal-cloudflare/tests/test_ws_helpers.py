@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
 
 
 def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:
@@ -259,7 +259,7 @@ async def test_send_ws_encodes_control_frame() -> None:
     await host.send_ws(ws, {"type": "hello", "v": 1})
     ws.send.assert_called_once()
     payload = ws.send.call_args[0][0]
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
     events = decoder.feed(payload)
     assert len(events) == 1
     assert isinstance(events[0], ControlChunk)

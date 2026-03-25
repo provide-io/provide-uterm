@@ -5,6 +5,6 @@
 
 """Shared test helpers."""
 
-from .control_stream import IncrementalFrameDecoder, decode_chunk, encode_frame
+from .control_channel import IncrementalFrameDecoder, decode_chunk, encode_frame
 
 __all__ = ["IncrementalFrameDecoder", "decode_chunk", "encode_frame"]

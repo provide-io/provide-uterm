@@ -18,7 +18,7 @@ from provide.terminal.client.control_ws import (
     _SyncTestWsConnection,
     connect_test_ws,
 )
-from provide.terminal.control_stream import encode_control, encode_data
+from provide.terminal.control_channel import encode_control, encode_data
 
 
 class TestLogicalFrameDecoderFinish:

@@ -11,7 +11,7 @@ from typing import Any
 
 import websockets
 
-from provide.terminal.control_stream import encode_control
+from provide.terminal.control_channel import encode_control
 from provide.terminal.gateway import (
     TelnetWsGateway,
     _apply_color_mode,

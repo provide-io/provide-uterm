@@ -20,3 +20,13 @@ def set_trace_context(trace_id: str | None, span_id: str | None) -> None:
 
 def get_trace_context() -> dict[str, str | None]:
     return {"trace_id": _trace_id.get(), "span_id": _span_id.get()}
+
+
+def get_trace_id() -> str | None:
+    """Return the current trace ID without creating a dict."""
+    return _trace_id.get()
+
+
+def get_span_id() -> str | None:
+    """Return the current span ID without creating a dict."""
+    return _span_id.get()

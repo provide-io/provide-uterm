@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 
-from provide.terminal.control_stream import encode_control
+from provide.terminal.control_channel import encode_control
 from provide.terminal.gateway._gateway import (
     _handle_ws_control,
     _read_token,

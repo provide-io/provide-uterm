@@ -63,6 +63,56 @@ class PromptWaiter:
         self.session = session
         self.on_screen_update = on_screen_update
 
+    async def _assert_session_connected(self) -> None:
+        """Raise ConnectionError if session is absent or disconnected."""
+        if self.session is None:
+            raise ConnectionError("Session is None")
+        if not await _session_is_connected(self.session):
+            raise ConnectionError("Session disconnected")
+
+    async def _wait_if_not_idle(
+        self,
+        detected_full: dict[str, Any],
+        is_idle: bool,
+        elapsed: float,
+        timeout_sec: float,
+        idle_grace_ratio: float,
+        read_interval_sec: float,
+        require_idle: bool,
+        on_prompt_rejected: Callable[[dict[str, Any], str], None] | None,
+    ) -> bool:
+        """Return True if we should skip this candidate due to non-idle state."""
+        if not (require_idle and not is_idle and elapsed < timeout_sec * idle_grace_ratio):
+            return False
+        if on_prompt_rejected:
+            on_prompt_rejected(detected_full, "not_idle")
+        remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
+        wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
+        await self.session.wait_for_update(timeout_ms=wait_ms)  # type: ignore[union-attr]
+        return True
+
+    async def _check_prompt_filters(
+        self,
+        detected_full: dict[str, Any],
+        prompt_id: str,
+        expected_prompt_id: str | None,
+        on_prompt_detected: Callable[[dict[str, Any]], bool] | None,
+        on_prompt_rejected: Callable[[dict[str, Any], str], None] | None,
+        read_interval_sec: float,
+    ) -> bool:
+        """Return True if prompt was rejected by filters (should continue to next poll)."""
+        if expected_prompt_id and expected_prompt_id not in prompt_id:
+            if on_prompt_rejected:
+                on_prompt_rejected(detected_full, "expected_mismatch")
+            await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))  # type: ignore[union-attr]
+            return True
+        if on_prompt_detected and not on_prompt_detected(detected_full):
+            if on_prompt_rejected:
+                on_prompt_rejected(detected_full, "callback_reject")
+            await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))  # type: ignore[union-attr]
+            return True
+        return False
+
     async def wait_for_prompt(
         self,
         expected_prompt_id: str | None = None,
@@ -98,12 +148,8 @@ class PromptWaiter:
         read_interval_sec = read_interval_ms / 1000.0
 
         while time.monotonic() - start_mono < timeout_sec:
-            if self.session is None:
-                raise ConnectionError("Session is None")
-            if not await _session_is_connected(self.session):
-                raise ConnectionError("Session disconnected")
-
-            snapshot = self.session.snapshot()
+            await self._assert_session_connected()
+            snapshot = self.session.snapshot()  # type: ignore[union-attr]
             screen = snapshot.get("screen", "")
 
             if self.on_screen_update:
@@ -122,24 +168,26 @@ class PromptWaiter:
                     on_prompt_seen(detected_full)
 
                 elapsed = time.monotonic() - start_mono
-                if require_idle and not is_idle and elapsed < timeout_sec * idle_grace_ratio:
-                    if on_prompt_rejected:
-                        on_prompt_rejected(detected_full, "not_idle")
-                    remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
-                    wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
-                    await self.session.wait_for_update(timeout_ms=wait_ms)
+                if await self._wait_if_not_idle(
+                    detected_full,
+                    is_idle,
+                    elapsed,
+                    timeout_sec,
+                    idle_grace_ratio,
+                    read_interval_sec,
+                    require_idle,
+                    on_prompt_rejected,
+                ):
                     continue
 
-                if expected_prompt_id and expected_prompt_id not in prompt_id:
-                    if on_prompt_rejected:
-                        on_prompt_rejected(detected_full, "expected_mismatch")
-                    await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
-                    continue
-
-                if on_prompt_detected and not on_prompt_detected(detected_full):
-                    if on_prompt_rejected:
-                        on_prompt_rejected(detected_full, "callback_reject")
-                    await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))
+                if await self._check_prompt_filters(
+                    detected_full,
+                    prompt_id,
+                    expected_prompt_id,
+                    on_prompt_detected,
+                    on_prompt_rejected,
+                    read_interval_sec,
+                ):
                     continue
 
                 return {
@@ -151,7 +199,7 @@ class PromptWaiter:
                 }
 
             remaining = max(0, timeout_sec - (time.monotonic() - start_mono))
-            await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))
+            await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))  # type: ignore[union-attr]
 
         raise TimeoutError(f"No prompt detected within {timeout_ms}ms")
 

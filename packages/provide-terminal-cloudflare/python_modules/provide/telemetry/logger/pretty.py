@@ -53,6 +53,7 @@ class PrettyRenderer:
         self._key_color = key_color  # pragma: no mutate
         self._value_color = value_color  # pragma: no mutate
         self._fields = fields  # pragma: no mutate
+        self._fields_set = frozenset(fields)  # pragma: no mutate
 
     def __call__(self, logger: object, name: str, event_dict: dict[str, Any]) -> str:  # noqa: ARG002  # pragma: no mutate
         parts: list[str] = []
@@ -81,8 +82,8 @@ class PrettyRenderer:
         parts.append(str(event))
 
         # 4. Remaining keys — sorted, optionally filtered key=repr(value) pairs
-        fields_set = set(self._fields)
-        filtered_items = [(k, event_dict[k]) for k in sorted(event_dict) if not self._fields or k in fields_set]
+        fields_set = self._fields_set
+        filtered_items = [(k, event_dict[k]) for k in sorted(event_dict) if not fields_set or k in fields_set]
         for key, val in filtered_items:
             val_repr = repr(val)
             key_part = self._key_color + key + RESET if self._colors and self._key_color else key  # pragma: no mutate

@@ -158,7 +158,9 @@ async def list_agents(
         row = agent.model_dump()
         row["interactive"] = interactive
         rows.append(row)
-    rows.sort(key=lambda item: (float(item.get("last_update_time") or 0), str(item.get("agent_id") or "")), reverse=True)
+    rows.sort(
+        key=lambda item: (float(item.get("last_update_time") or 0), str(item.get("agent_id") or "")), reverse=True
+    )
     return {"total": len(rows), "agents": rows}
 
 

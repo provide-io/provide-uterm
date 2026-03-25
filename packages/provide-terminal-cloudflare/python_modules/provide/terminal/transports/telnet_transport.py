@@ -73,6 +73,19 @@ class TelnetTransport:
         self._tasks: set[asyncio.Task[None]] = set()
 
     @staticmethod
+    def _find_subneg_end(buf: bytes, start: int) -> int | None:
+        """Find the end of a SB...SE subnegotiation block.
+
+        Returns the index just after SE, or None if the block is incomplete.
+        """
+        j = start
+        while j < len(buf) - 1:
+            if buf[j] == IAC and buf[j + 1] == SE:
+                return j + 2
+            j += 1
+        return None
+
+    @staticmethod
     def _parse_telnet_buffer(data: bytes | bytearray) -> tuple[bytes, list[tuple[str, int, int | bytes]], int]:
         """Parse complete telnet sequences from a buffer.
 
@@ -105,17 +118,13 @@ class TelnetTransport:
                 continue
 
             if cmd == SB:
-                j = i + 2
-                while j < len(buf) - 1:
-                    if buf[j] == IAC and buf[j + 1] == SE:
-                        payload = buf[i + 2 : j]
-                        events.append(("subnegotiation", 0, payload))
-                        i = j + 2
-                        consumed = i
-                        break
-                    j += 1
-                else:
+                end = TelnetTransport._find_subneg_end(buf, i + 2)
+                if end is None:
                     break
+                payload = buf[i + 2 : end - 2]
+                events.append(("subnegotiation", 0, payload))
+                i = end
+                consumed = i
                 continue
 
             if cmd == IAC:
@@ -270,9 +279,8 @@ class TelnetTransport:
         self._rows = rows
         await self._send_naws(cols, rows)
 
-    async def _negotiate(self, cmd: int, opt: int) -> None:
-        if not self._writer:
-            return
+    def _track_negotiation_state(self, cmd: int, opt: int) -> None:
+        """Record the negotiation command in the appropriate tracking set."""
         if cmd == DO:
             self._negotiated["do"].add(opt)
         elif cmd == DONT:
@@ -282,25 +290,37 @@ class TelnetTransport:
         elif cmd == WONT:  # pragma: no branch
             self._negotiated["wont"].add(opt)
 
+    async def _negotiate_do_response(self, opt: int) -> None:
+        """Send the appropriate response to a DO command."""
+        if opt in (OPT_BINARY, OPT_SGA_OPT):
+            await self._send_will(opt)
+        elif opt == OPT_NAWS:
+            await self._send_will(opt)
+            await self._send_naws(self._cols, self._rows)
+        elif opt == OPT_TTYPE:
+            await self._send_will(opt)
+            await self._send_ttype(self._term)
+        else:
+            await self._send_wont(opt)
+
+    async def _negotiate_will_response(self, opt: int) -> None:
+        """Send the appropriate response to a WILL command."""
+        if opt in (OPT_ECHO, OPT_SGA_OPT, OPT_BINARY):
+            await self._send_do(opt)
+        else:
+            await self._send_dont(opt)
+
+    async def _negotiate(self, cmd: int, opt: int) -> None:
+        if not self._writer:
+            return
+        self._track_negotiation_state(cmd, opt)
         try:
             if cmd == DO:
-                if opt in (OPT_BINARY, OPT_SGA_OPT):
-                    await self._send_will(opt)
-                elif opt == OPT_NAWS:
-                    await self._send_will(opt)
-                    await self._send_naws(self._cols, self._rows)
-                elif opt == OPT_TTYPE:
-                    await self._send_will(opt)
-                    await self._send_ttype(self._term)
-                else:
-                    await self._send_wont(opt)
+                await self._negotiate_do_response(opt)
             elif cmd == DONT:
                 await self._send_wont(opt)
             elif cmd == WILL:
-                if opt in (OPT_ECHO, OPT_SGA_OPT, OPT_BINARY):
-                    await self._send_do(opt)
-                else:
-                    await self._send_dont(opt)
+                await self._negotiate_will_response(opt)
             elif cmd == WONT:  # pragma: no branch
                 await self._send_dont(opt)
         except (ConnectionResetError, BrokenPipeError):  # pragma: no cover
