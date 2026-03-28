@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from provide_terminal_cloudflare.contracts import MessageLimits, ProtocolError, frame_json, parse_frame
+from provide.terminal.cloudflare.contracts import MessageLimits, ProtocolError, frame_json, parse_frame, parse_stream
 
 
 def test_parse_input_frame_ok() -> None:
@@ -142,3 +142,23 @@ def test_frame_json_with_kwargs() -> None:
     data = parse_frame(raw)
     assert data["action"] == "pause"
     assert data["owner"] == "alice"
+
+
+def test_parse_stream_empty_raises() -> None:
+    """parse_stream on empty input raises ProtocolError('empty frame')."""
+    with pytest.raises(ProtocolError, match="empty frame"):
+        parse_stream("", data_frame_type="input")
+
+
+def test_parse_frame_no_type_term_data_raises() -> None:
+    """parse_frame without data_frame_type raises when stream yields a 'term' data frame."""
+    raw = frame_json("term", data="output")
+    with pytest.raises(ProtocolError, match="data frame type required"):
+        parse_frame(raw)
+
+
+def test_parse_frame_multiple_frames_raises() -> None:
+    """parse_frame raises when the raw string contains multiple frames."""
+    raw = frame_json("heartbeat") + frame_json("heartbeat")
+    with pytest.raises(ProtocolError, match="expected a single frame"):
+        parse_frame(raw, data_frame_type="input")

@@ -12,10 +12,10 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from provide_terminal_cloudflare.api.ws_routes import handle_socket_message
-from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
-from provide_terminal_cloudflare.contracts import frame_json
-from provide_terminal_cloudflare.state.store import SqliteStateStore
+from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
+from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+from provide.terminal.cloudflare.contracts import frame_json
+from provide.terminal.cloudflare.state.store import SqliteStateStore
 
 
 @pytest.fixture()
@@ -287,3 +287,122 @@ class TestWsRoutesResume:
         assert hellos[0]["role"] == "operator"
         assert hellos[0]["can_hijack"] is False
         assert ws._attachment == "browser:operator:w1"
+
+    async def test_resume_reclaims_hijack_when_was_owner(self, runtime: _MockRuntime, store: SqliteStateStore) -> None:
+        """Lines 128-137: hijack ownership is reclaimed when stored token marks was_hijack_owner=True."""
+        store.create_resume_token("tok-hijack", "w1", "admin", 300)
+        store.mark_resume_hijack_owner("tok-hijack", True)
+        runtime.current_role = "admin"
+        runtime.input_mode = "hijack"
+
+        # Patch runtime with persist_lease and broadcast_hijack_state
+        persisted: list = []
+        broadcast_calls: list = []
+
+        async def _broadcast_hijack_state() -> None:
+            broadcast_calls.append(True)
+
+        runtime.persist_lease = lambda session: persisted.append(session)
+        runtime.broadcast_hijack_state = _broadcast_hijack_state
+        runtime.push_worker_control = SimpleNamespace()  # replaced below
+
+        control_calls: list = []
+
+        async def _push_worker_control(action: str, *, owner: str, lease_s: int) -> bool:
+            control_calls.append(action)
+            return True
+
+        runtime.push_worker_control = _push_worker_control  # type: ignore[assignment]
+
+        ws = _MockWs()
+        raw = frame_json("resume", token="tok-hijack")
+        await handle_socket_message(runtime, ws, raw, is_worker=False)
+
+        hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        assert len(hellos) == 1
+        assert hellos[0]["role"] == "admin"
+        # Hijack should have been acquired → persist_lease and broadcast_hijack_state called
+        assert persisted
+        assert broadcast_calls
+
+    async def test_resume_hijack_reclaim_skipped_when_acquire_fails(
+        self, runtime: _MockRuntime, store: SqliteStateStore
+    ) -> None:
+        """Line 130->140: hijack acquire returns ok=False → reclaim skipped, resume still succeeds."""
+        from provide.terminal.cloudflare.bridge.hijack import HijackSession
+
+        store.create_resume_token("tok-fail-acq", "w1", "admin", 300)
+        store.mark_resume_hijack_owner("tok-fail-acq", True)
+        runtime.current_role = "admin"
+        runtime.input_mode = "hijack"
+
+        # Pre-acquire with a different owner so acquire("dashboard_resume", ...) returns ok=False
+        other_session = HijackSession(hijack_id="other-id", owner="other_owner", lease_expires_at=time.time() + 60)
+        runtime.hijack._session = other_session
+
+        runtime.persist_lease = lambda session: None
+        broadcast_calls: list = []
+
+        async def _broadcast_hijack_state() -> None:
+            broadcast_calls.append(True)
+
+        runtime.broadcast_hijack_state = _broadcast_hijack_state
+
+        async def _push_worker_control(action: str, *, owner: str, lease_s: int) -> bool:
+            return True
+
+        runtime.push_worker_control = _push_worker_control  # type: ignore[assignment]
+
+        ws = _MockWs()
+        raw = frame_json("resume", token="tok-fail-acq")
+        await handle_socket_message(runtime, ws, raw, is_worker=False)
+
+        hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        assert len(hellos) == 1
+        # No hijack reclaim occurred
+        assert not broadcast_calls
+
+    async def test_resume_hijack_reclaim_renewal_skips_pause(
+        self, runtime: _MockRuntime, store: SqliteStateStore
+    ) -> None:
+        """Line 134->136: is_renewal=True → push_worker_control('pause') not called."""
+        import time as _time
+
+        from provide.terminal.cloudflare.bridge.hijack import HijackSession
+
+        store.create_resume_token("tok-renew", "w1", "admin", 300)
+        store.mark_resume_hijack_owner("tok-renew", True)
+        runtime.current_role = "admin"
+        runtime.input_mode = "hijack"
+
+        # Pre-acquire with the same "dashboard_resume" owner so it's a renewal
+        existing = HijackSession(hijack_id="existing-id", owner="dashboard_resume", lease_expires_at=_time.time() + 60)
+        runtime.hijack._session = existing
+
+        persisted: list = []
+        runtime.persist_lease = lambda session: persisted.append(session)
+        broadcast_calls: list = []
+
+        async def _broadcast_hijack_state() -> None:
+            broadcast_calls.append(True)
+
+        runtime.broadcast_hijack_state = _broadcast_hijack_state
+        control_calls: list = []
+
+        async def _push_worker_control(action: str, *, owner: str, lease_s: int) -> bool:
+            control_calls.append(action)
+            return True
+
+        runtime.push_worker_control = _push_worker_control  # type: ignore[assignment]
+
+        ws = _MockWs()
+        raw = frame_json("resume", token="tok-renew")
+        await handle_socket_message(runtime, ws, raw, is_worker=False)
+
+        hellos = [m for m in runtime._sent if m.get("type") == "hello"]
+        assert len(hellos) == 1
+        assert hellos[0]["role"] == "admin"
+        # Hijack reclaimed (renewal) but pause not sent
+        assert persisted
+        assert broadcast_calls
+        assert control_calls == []  # no pause because is_renewal=True

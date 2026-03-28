@@ -66,14 +66,14 @@ def _patch_files_fallthrough(file_obj):
 
 
 def test_path_traversal_single_dotdot_blocked() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     resp = serve_asset("../../etc/passwd")
     assert resp.status == 403
 
 
 def test_path_traversal_nested_blocked() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     resp = serve_asset("a/../../../secret")
     assert resp.status == 403
@@ -85,7 +85,7 @@ def test_path_traversal_nested_blocked() -> None:
 
 
 def test_serve_js_file_local() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     with _patch_files_local(_mock_file("app.js", "console.log('hi');")):
         resp = serve_asset("app.js")
@@ -96,7 +96,7 @@ def test_serve_js_file_local() -> None:
 
 
 def test_serve_css_file_local() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     with _patch_files_local(_mock_file("style.css", "body { color: red; }")):
         resp = serve_asset("style.css")
@@ -106,7 +106,7 @@ def test_serve_css_file_local() -> None:
 
 
 def test_serve_html_file_local() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     with _patch_files_local(_mock_file("index.html", "<html/>")):
         resp = serve_asset("index.html")
@@ -116,7 +116,7 @@ def test_serve_html_file_local() -> None:
 
 
 def test_serve_unknown_mime_type() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     with _patch_files_local(_mock_file("data.bin", "raw bytes")):
         resp = serve_asset("data.bin")
@@ -131,13 +131,13 @@ def test_serve_unknown_mime_type() -> None:
 
 
 def test_falls_through_to_frontend_package() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     # Patch _LOCAL_STATIC to an empty dir so the filesystem fallback (option 2)
     # doesn't intercept when ui/static/ is populated by the wrangler build.
     with (
         _patch_files_fallthrough(_mock_file("hijack.js", "// hijack")),
-        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
+        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
     ):
         resp = serve_asset("hijack.js")
 
@@ -147,11 +147,11 @@ def test_falls_through_to_frontend_package() -> None:
 
 
 def test_frontend_file_not_found_returns_404() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     with (
         _patch_files_fallthrough(_not_found_file()),
-        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
+        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
     ):
         resp = serve_asset("nonexistent.js")
 
@@ -160,7 +160,7 @@ def test_frontend_file_not_found_returns_404() -> None:
 
 
 def test_frontend_module_not_found_returns_404() -> None:
-    from provide_terminal_cloudflare.ui.assets import serve_asset
+    from provide.terminal.cloudflare.ui.assets import serve_asset
 
     call_count = [0]
 
@@ -181,13 +181,13 @@ def test_frontend_module_not_found_returns_404() -> None:
 
 
 def test_read_asset_text_path_traversal_returns_none() -> None:
-    from provide_terminal_cloudflare.ui.assets import read_asset_text
+    from provide.terminal.cloudflare.ui.assets import read_asset_text
 
     assert read_asset_text("../../etc/passwd") is None
 
 
 def test_read_asset_text_local_found() -> None:
-    from provide_terminal_cloudflare.ui.assets import read_asset_text
+    from provide.terminal.cloudflare.ui.assets import read_asset_text
 
     with _patch_files_local(_mock_file("terminal.html", "<html>terminal</html>")):
         result = read_asset_text("terminal.html")
@@ -196,7 +196,7 @@ def test_read_asset_text_local_found() -> None:
 
 
 def test_read_asset_text_file_relative_found(tmp_path) -> None:
-    from provide_terminal_cloudflare.ui.assets import read_asset_text
+    from provide.terminal.cloudflare.ui.assets import read_asset_text
 
     fake = tmp_path / "terminal.html"
     fake.write_text("<html>local</html>")
@@ -206,7 +206,7 @@ def test_read_asset_text_file_relative_found(tmp_path) -> None:
 
     with (
         patch.object(importlib.resources, "files", side_effect=_raise_first),
-        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
+        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
     ):
         result = read_asset_text("terminal.html")
 
@@ -214,11 +214,11 @@ def test_read_asset_text_file_relative_found(tmp_path) -> None:
 
 
 def test_read_asset_text_frontend_fallback_found() -> None:
-    from provide_terminal_cloudflare.ui.assets import read_asset_text
+    from provide.terminal.cloudflare.ui.assets import read_asset_text
 
     with (
         _patch_files_fallthrough(_mock_file("terminal.html", "<html>frontend</html>")),
-        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
+        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
     ):
         result = read_asset_text("terminal.html")
 
@@ -226,7 +226,7 @@ def test_read_asset_text_frontend_fallback_found() -> None:
 
 
 def test_read_asset_text_local_static_oserror_falls_through() -> None:
-    from provide_terminal_cloudflare.ui.assets import read_asset_text
+    from provide.terminal.cloudflare.ui.assets import read_asset_text
 
     class _BrokenPath:
         def __truediv__(self, other):
@@ -240,7 +240,7 @@ def test_read_asset_text_local_static_oserror_falls_through() -> None:
 
     with (
         patch.object(importlib.resources, "files", side_effect=_raise_all),
-        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", _BrokenPath()),
+        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", _BrokenPath()),
     ):
         result = read_asset_text("terminal.html")
 
@@ -248,7 +248,7 @@ def test_read_asset_text_local_static_oserror_falls_through() -> None:
 
 
 def test_read_asset_text_not_found_returns_none() -> None:
-    from provide_terminal_cloudflare.ui.assets import read_asset_text
+    from provide.terminal.cloudflare.ui.assets import read_asset_text
 
     call_count = [0]
 
@@ -258,7 +258,7 @@ def test_read_asset_text_not_found_returns_none() -> None:
 
     with (
         patch.object(importlib.resources, "files", side_effect=_always_raise),
-        patch("provide_terminal_cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
+        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-test-dir")),
     ):
         result = read_asset_text("terminal.html")
 

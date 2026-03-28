@@ -242,10 +242,25 @@ class TestKillAgent:
         with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
             await pm.kill_agent("agent_000")
         mock_stop.assert_awaited_once_with(
-            agent_id="agent_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
+            agent_id="agent_000", process=mock_proc, pid=None, timeout_s=process_module._STOP_TIMEOUT_S
         )
         assert manager.agents["agent_000"].state == "stopped"
         assert "agent_000" not in manager.processes
+
+    @pytest.mark.asyncio
+    async def test_kill_uses_pid_fallback_when_process_not_tracked(self, pm, manager):
+        agent = AgentStatusBase(agent_id="agent_000", state="running")
+        agent.pid = 9876  # type: ignore[attr-defined]
+        manager.agents["agent_000"] = agent
+        # process not in manager.processes — simulate post-restart scenario
+        manager.broadcast_status = AsyncMock()
+
+        with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
+            await pm.kill_agent("agent_000")
+        mock_stop.assert_awaited_once_with(
+            agent_id="agent_000", process=None, pid=9876, timeout_s=process_module._STOP_TIMEOUT_S
+        )
+        assert manager.agents["agent_000"].state == "stopped"
 
     @pytest.mark.asyncio
     async def test_kill_force_on_timeout(self, pm, manager):
@@ -257,7 +272,7 @@ class TestKillAgent:
         with patch.object(pm, "_stop_process_tree", new_callable=AsyncMock) as mock_stop:
             await pm.kill_agent("agent_000")
         mock_stop.assert_awaited_once_with(
-            agent_id="agent_000", process=mock_proc, timeout_s=process_module._STOP_TIMEOUT_S
+            agent_id="agent_000", process=mock_proc, pid=None, timeout_s=process_module._STOP_TIMEOUT_S
         )
 
 

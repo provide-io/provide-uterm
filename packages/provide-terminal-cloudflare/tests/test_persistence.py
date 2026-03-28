@@ -11,9 +11,9 @@ import sqlite3
 import time
 from types import SimpleNamespace
 
-from provide_terminal_cloudflare.bridge.hijack import HijackSession
-from provide_terminal_cloudflare.do.persistence import clear_lease, persist_lease
-from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
+from provide.terminal.cloudflare.bridge.hijack import HijackSession
+from provide.terminal.cloudflare.do.persistence import clear_lease, persist_lease
+from provide.terminal.cloudflare.state.store import LeaseRecord, SqliteStateStore
 
 
 def _make_store() -> SqliteStateStore:

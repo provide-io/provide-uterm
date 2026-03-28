@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
-from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
+from provide.terminal.cloudflare.state.store import LeaseRecord, SqliteStateStore
 
 
 def test_store_migrate_idempotent_and_roundtrip() -> None:

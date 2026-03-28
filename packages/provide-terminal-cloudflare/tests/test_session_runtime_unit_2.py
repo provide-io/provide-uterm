@@ -11,7 +11,7 @@ import sqlite3
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
@@ -194,7 +194,7 @@ async def test_websocket_message_worker_calls_handle_socket_message() -> None:
     rt = _make_runtime()
     ws = _MockWs(attachment="worker:admin:test-worker")
     with patch(
-        "provide_terminal_cloudflare.do.session_runtime.handle_socket_message",
+        "provide.terminal.cloudflare.do.session_runtime.handle_socket_message",
         new=AsyncMock(return_value=None),
     ) as mock_handle:
         await rt.webSocketMessage(ws, '{"type":"snapshot"}')

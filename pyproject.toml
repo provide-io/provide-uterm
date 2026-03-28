@@ -13,7 +13,7 @@ version = "0.4.0"
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["packages/provide-terminal/src"]
 
 [dependency-groups]
 dev = [
@@ -96,17 +96,6 @@ mypy_path = ["packages/provide-terminal/src", "packages/provide-shell/src"]
 module = ["provide.telemetry", "provide.telemetry.*", "structlog", "structlog.*"]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-# provide.terminal.shell shims re-export from provide.shell.*; ty needs type: ignore
-# here but mypy resolves the import via mypy_path — suppress the unused-ignore warning.
-module = [
-    "provide.terminal.shell._commands",
-    "provide.terminal.shell._connector",
-    "provide.terminal.shell._output",
-    "provide.terminal.shell._repl",
-    "provide.terminal.shell._sandbox",
-]
-warn_unused_ignores = false
 
 [tool.ty.environment]
 python-version = "3.11"
@@ -117,7 +106,7 @@ invalid-argument-type = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,mutants"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/structlog/*,mutants"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans"
 
 [tool.bandit]
@@ -141,7 +130,7 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = ["src/provide/shell/terminal/_connector.py", "src/provide/terminal/server/connectors/__init__.py"]
+paths_to_mutate = ["packages/provide-shell/src/provide/shell/terminal/_connector.py", "packages/provide-terminal/src/provide/terminal/server/connectors/__init__.py", "packages/provide-terminal/src/provide/terminal/server/connectors/registry.py"]
 tests_dir = [
     "packages/provide-terminal/tests/shell/test_shell_connector.py",
     "packages/provide-terminal/tests/server/test_app_ushell.py",
@@ -153,7 +142,6 @@ also_copy = [
     "packages/provide-terminal-cloudflare/src",
     "packages/provide-terminal/tests",
     "packages/provide-shell/tests",
-    "src/provide",
     "conftest.py",
 ]
 pytest_add_cli_args = ["--timeout=30", "-p", "no:randomly", "-p", "no:hypothesis"]

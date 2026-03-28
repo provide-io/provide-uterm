@@ -24,9 +24,9 @@ import json
 from types import SimpleNamespace
 from typing import get_type_hints
 
-from provide_terminal_cloudflare.api.http_routes import route_http
-from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
-from provide_terminal_cloudflare.contracts import (
+from provide.terminal.cloudflare.api.http_routes import route_http
+from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+from provide.terminal.cloudflare.contracts import (
     HijackAcquireResponse,
     HijackEventsResponse,
     HijackHeartbeatResponse,

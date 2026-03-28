@@ -10,7 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from provide_terminal_cloudflare.do.ws_helpers import _WsHelperMixin
+from provide.terminal.cloudflare.do.ws_helpers import _WsHelperMixin
 
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
 

@@ -141,6 +141,54 @@ class TestSwarmStatus:
         result = await _call(mcp_app, "swarm_status")
         assert result["total_agents"] == 1
 
+    @pytest.mark.asyncio
+    async def test_telemetry_fields_stripped_by_default(self, manager, pm):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        app = create_manager_mcp_tools(manager, agent_telemetry_fields=frozenset({"custom_telemetry", "extra_data"}))
+        # Inject extra fields into the dumped agent data via model
+        import unittest.mock as _mock
+
+        with _mock.patch.object(manager, "get_swarm_status") as mock_status:
+            mock_status.return_value = _mock.MagicMock()
+            mock_status.return_value.model_dump.return_value = {
+                "total_agents": 1,
+                "agents": [
+                    {"agent_id": "agent_000", "state": "running", "custom_telemetry": {"x": 1}, "extra_data": [1, 2]}
+                ],
+            }
+            result = await _call(app, "swarm_status")
+        assert "custom_telemetry" not in result["agents"][0]
+        assert "extra_data" not in result["agents"][0]
+        assert result["agents"][0]["state"] == "running"
+
+    @pytest.mark.asyncio
+    async def test_telemetry_fields_preserved_when_include_true(self, manager, pm):
+        app = create_manager_mcp_tools(manager, agent_telemetry_fields=frozenset({"custom_telemetry"}))
+        import unittest.mock as _mock
+
+        with _mock.patch.object(manager, "get_swarm_status") as mock_status:
+            mock_status.return_value = _mock.MagicMock()
+            mock_status.return_value.model_dump.return_value = {
+                "total_agents": 1,
+                "agents": [{"agent_id": "agent_000", "state": "running", "custom_telemetry": {"x": 1}}],
+            }
+            result = await _call(app, "swarm_status", {"include_telemetry": True})
+        assert result["agents"][0]["custom_telemetry"] == {"x": 1}
+
+    @pytest.mark.asyncio
+    async def test_no_stripping_when_telemetry_fields_none(self, manager, pm):
+        app = create_manager_mcp_tools(manager)  # agent_telemetry_fields=None (default)
+        import unittest.mock as _mock
+
+        with _mock.patch.object(manager, "get_swarm_status") as mock_status:
+            mock_status.return_value = _mock.MagicMock()
+            mock_status.return_value.model_dump.return_value = {
+                "total_agents": 1,
+                "agents": [{"agent_id": "agent_000", "state": "running", "app_field": "kept"}],
+            }
+            result = await _call(app, "swarm_status")
+        assert result["agents"][0]["app_field"] == "kept"
+
 
 class TestSwarmPause:
     @pytest.mark.asyncio

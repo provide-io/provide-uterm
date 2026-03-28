@@ -11,8 +11,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from provide_terminal_cloudflare.cf_types import Response
-from provide_terminal_cloudflare.entry import Default, _extract_worker_id
+from provide.terminal.cloudflare.cf_types import Response
+from provide.terminal.cloudflare.entry import Default, _extract_worker_id
 
 # ---------------------------------------------------------------------------
 # _extract_worker_id
@@ -86,7 +86,7 @@ async def test_default_fetch_health() -> None:
 async def test_default_fetch_sessions_no_kv() -> None:
     """Lines 52-58: no SESSION_REGISTRY → scope='local'."""
     d = _make_default()
-    with patch("provide_terminal_cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
+    with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
         resp = await d.fetch(_req("/api/sessions"))
     assert resp.status == 200
     assert resp.headers.get("X-Sessions-Scope") == "local"  # type: ignore[union-attr]
@@ -95,7 +95,7 @@ async def test_default_fetch_sessions_no_kv() -> None:
 async def test_default_fetch_sessions_with_kv() -> None:
     """Lines 55-58: SESSION_REGISTRY present → scope='fleet'."""
     d = _make_default({"SESSION_REGISTRY": object()})
-    with patch("provide_terminal_cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
+    with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
         resp = await d.fetch(_req("/api/sessions"))
     assert resp.headers.get("X-Sessions-Scope") == "fleet"  # type: ignore[union-attr]
 
@@ -109,7 +109,7 @@ async def test_default_fetch_assets_prefix_path() -> None:
     """Lines 60-61: /assets/... → serve_asset."""
     d = _make_default()
     mock_resp = Response(body="<html>", status=200)
-    with patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp):
+    with patch("provide.terminal.cloudflare.entry.serve_asset", return_value=mock_resp):
         resp = await d.fetch(_req("/assets/terminal.html"))
     assert resp.status == 200
 
@@ -118,7 +118,7 @@ async def test_default_fetch_static_js_path() -> None:
     """Lines 62-63: /hijack.js → serve_asset."""
     d = _make_default()
     mock_resp = Response(body="js", status=200)
-    with patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp) as mock_sa:
+    with patch("provide.terminal.cloudflare.entry.serve_asset", return_value=mock_resp) as mock_sa:
         await d.fetch(_req("/hijack.js"))
     mock_sa.assert_called_once_with("hijack.js")
 
@@ -127,7 +127,7 @@ async def test_default_fetch_static_html_path() -> None:
     """Lines 62-63: /terminal.html → serve_asset."""
     d = _make_default()
     mock_resp = Response(body="html", status=200)
-    with patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp):
+    with patch("provide.terminal.cloudflare.entry.serve_asset", return_value=mock_resp):
         resp = await d.fetch(_req("/terminal.html"))
     assert resp.status == 200
 
@@ -305,7 +305,7 @@ async def test_sessions_jwt_mode_valid_token_returns_200() -> None:
         url="https://x/api/sessions",
         headers=SimpleNamespace(get=lambda k, default=None: f"Bearer {token}"),
     )
-    with patch("provide_terminal_cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
+    with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
         resp = await d.fetch(r)
     assert resp.status == 200
 
@@ -334,6 +334,6 @@ async def test_sessions_jwt_mode_cookie_token_returns_200() -> None:
         return None
 
     r = SimpleNamespace(url="https://x/api/sessions", headers=SimpleNamespace(get=_get_header))
-    with patch("provide_terminal_cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
+    with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
         resp = await d.fetch(r)
     assert resp.status == 200

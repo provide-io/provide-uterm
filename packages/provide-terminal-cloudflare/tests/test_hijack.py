@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
+from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
 
 
 def test_acquire_conflict_and_release() -> None:

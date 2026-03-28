@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide_terminal_cloudflare.do.ushell — CF ushell adapter."""
+"""Tests for provide.terminal.cloudflare.do.ushell — CF ushell adapter."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def _make_runtime(
 
 def test_load_connector_import_error():
     """When UshellConnector cannot be imported, returns None."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     # Block both shell modules so the ImportError branch is exercised.
     orig_connector = sys.modules.get("provide.shell.terminal._connector")
@@ -67,7 +67,7 @@ def test_load_connector_import_error():
 
 def test_load_connector_success_with_list_kv_sessions():
     """Happy path: UshellConnector created with list_kv_sessions in ctx."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     env = SimpleNamespace(SESSION_REGISTRY=MagicMock())
     connector = ushell_mod._load_connector("ushell-123", env, storage=None)
@@ -77,7 +77,7 @@ def test_load_connector_success_with_list_kv_sessions():
 
 def test_load_connector_with_storage():
     """Storage is wired into ctx when provided."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     storage = MagicMock()
     env = SimpleNamespace()
@@ -88,7 +88,7 @@ def test_load_connector_with_storage():
 
 def test_load_connector_without_storage():
     """Storage key absent from ctx when storage=None."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     env = SimpleNamespace()
     connector = ushell_mod._load_connector("ushell-s", env, storage=None)
@@ -98,12 +98,12 @@ def test_load_connector_without_storage():
 
 async def test_load_connector_primary_list_kv_sessions_callable():
     """The _list_sessions closure actually calls list_kv_sessions(env)."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     fake_lks = AsyncMock(return_value=[{"id": "s1"}])
     env = SimpleNamespace(SESSION_REGISTRY=MagicMock())
 
-    with patch("provide_terminal_cloudflare.state.registry.list_kv_sessions", fake_lks):
+    with patch("provide.terminal.cloudflare.state.registry.list_kv_sessions", fake_lks):
         connector = ushell_mod._load_connector("ushell-call", env, storage=None)
         assert connector is not None
         fn = connector._dispatcher._ctx["list_kv_sessions"]
@@ -114,15 +114,15 @@ async def test_load_connector_primary_list_kv_sessions_callable():
 
 def test_load_connector_fallback_import_path():
     """Falls back to state.registry when primary import fails."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     # Block the primary import path.
     fake_lks = AsyncMock(return_value=[])
     fake_state_registry = MagicMock()
     fake_state_registry.list_kv_sessions = fake_lks
 
-    orig = sys.modules.get("provide_terminal_cloudflare.state.registry")
-    sys.modules["provide_terminal_cloudflare.state.registry"] = None  # type: ignore[assignment]
+    orig = sys.modules.get("provide.terminal.cloudflare.state.registry")
+    sys.modules["provide.terminal.cloudflare.state.registry"] = None  # type: ignore[assignment]
     sys.modules["state.registry"] = fake_state_registry
     try:
         env = SimpleNamespace()
@@ -131,22 +131,22 @@ def test_load_connector_fallback_import_path():
         assert "list_kv_sessions" in connector._dispatcher._ctx
     finally:
         if orig is None:
-            sys.modules.pop("provide_terminal_cloudflare.state.registry", None)
+            sys.modules.pop("provide.terminal.cloudflare.state.registry", None)
         else:
-            sys.modules["provide_terminal_cloudflare.state.registry"] = orig
+            sys.modules["provide.terminal.cloudflare.state.registry"] = orig
         sys.modules.pop("state.registry", None)
 
 
 async def test_load_connector_fallback_list_kv_sessions_callable():
     """The fallback _list_sessions2 closure actually calls _lks(env)."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     fake_lks = AsyncMock(return_value=[{"id": "s2"}])
     fake_state_registry = MagicMock()
     fake_state_registry.list_kv_sessions = fake_lks
 
-    orig = sys.modules.get("provide_terminal_cloudflare.state.registry")
-    sys.modules["provide_terminal_cloudflare.state.registry"] = None  # type: ignore[assignment]
+    orig = sys.modules.get("provide.terminal.cloudflare.state.registry")
+    sys.modules["provide.terminal.cloudflare.state.registry"] = None  # type: ignore[assignment]
     sys.modules["state.registry"] = fake_state_registry
     try:
         env = SimpleNamespace()
@@ -156,9 +156,9 @@ async def test_load_connector_fallback_list_kv_sessions_callable():
         result = await fn()
     finally:
         if orig is None:
-            sys.modules.pop("provide_terminal_cloudflare.state.registry", None)
+            sys.modules.pop("provide.terminal.cloudflare.state.registry", None)
         else:
-            sys.modules["provide_terminal_cloudflare.state.registry"] = orig
+            sys.modules["provide.terminal.cloudflare.state.registry"] = orig
         sys.modules.pop("state.registry", None)
 
     assert result == [{"id": "s2"}]
@@ -167,11 +167,11 @@ async def test_load_connector_fallback_list_kv_sessions_callable():
 
 def test_load_connector_both_imports_fail():
     """No list_kv_sessions in ctx when both import paths fail."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
-    orig_primary = sys.modules.get("provide_terminal_cloudflare.state.registry")
+    orig_primary = sys.modules.get("provide.terminal.cloudflare.state.registry")
     orig_fallback = sys.modules.get("state.registry")
-    sys.modules["provide_terminal_cloudflare.state.registry"] = None  # type: ignore[assignment]
+    sys.modules["provide.terminal.cloudflare.state.registry"] = None  # type: ignore[assignment]
     sys.modules["state.registry"] = None  # type: ignore[assignment]
     try:
         env = SimpleNamespace()
@@ -180,9 +180,9 @@ def test_load_connector_both_imports_fail():
         assert "list_kv_sessions" not in connector._dispatcher._ctx
     finally:
         if orig_primary is None:
-            sys.modules.pop("provide_terminal_cloudflare.state.registry", None)
+            sys.modules.pop("provide.terminal.cloudflare.state.registry", None)
         else:
-            sys.modules["provide_terminal_cloudflare.state.registry"] = orig_primary
+            sys.modules["provide.terminal.cloudflare.state.registry"] = orig_primary
         if orig_fallback is None:
             sys.modules.pop("state.registry", None)
         else:
@@ -196,7 +196,7 @@ def test_load_connector_both_imports_fail():
 
 def test_init_ushell_non_ushell_session():
     """Non-ushell session IDs are ignored."""
-    from provide_terminal_cloudflare.do.ushell import init_ushell
+    from provide.terminal.cloudflare.do.ushell import init_ushell
 
     rt = _make_runtime(worker_id="shell-xyz")
     init_ushell(rt)
@@ -205,7 +205,7 @@ def test_init_ushell_non_ushell_session():
 
 def test_init_ushell_already_initialized():
     """No-op if _ushell is already set."""
-    from provide_terminal_cloudflare.do.ushell import init_ushell
+    from provide.terminal.cloudflare.do.ushell import init_ushell
 
     existing = MagicMock()
     rt = _make_runtime(ushell=existing)
@@ -215,7 +215,7 @@ def test_init_ushell_already_initialized():
 
 def test_init_ushell_connector_none():
     """Logs error when _load_connector returns None."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     rt = _make_runtime()
     with patch.object(ushell_mod, "_load_connector", return_value=None):
@@ -225,7 +225,7 @@ def test_init_ushell_connector_none():
 
 def test_init_ushell_happy_path():
     """Sets input_mode=open and attaches connector."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     rt = _make_runtime()
     fake_connector = MagicMock()
@@ -237,7 +237,7 @@ def test_init_ushell_happy_path():
 
 def test_init_ushell_passes_storage():
     """_load_connector is called with storage from ctx."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     storage = MagicMock()
     rt = _make_runtime(storage=storage)
@@ -249,7 +249,7 @@ def test_init_ushell_passes_storage():
 
 def test_init_ushell_no_ctx_attribute():
     """Works even when runtime has no ctx attribute (storage=None fallback)."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     # Use SimpleNamespace so missing attributes don't auto-create (unlike MagicMock)
     rt = SimpleNamespace(
@@ -268,7 +268,7 @@ def test_init_ushell_no_ctx_attribute():
 
 def test_init_ushell_ctx_no_storage_attr():
     """Works when ctx exists but has no storage attribute (storage=None fallback)."""
-    from provide_terminal_cloudflare.do import ushell as ushell_mod
+    from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     rt = _make_runtime()
     rt.ctx = SimpleNamespace()  # ctx without storage attr
@@ -285,7 +285,7 @@ def test_init_ushell_ctx_no_storage_attr():
 
 async def test_on_browser_connected_no_ushell():
     """No-op when _ushell is None."""
-    from provide_terminal_cloudflare.do.ushell import on_browser_connected
+    from provide.terminal.cloudflare.do.ushell import on_browser_connected
 
     rt = _make_runtime(ushell=None)
     await on_browser_connected(rt)
@@ -294,7 +294,7 @@ async def test_on_browser_connected_no_ushell():
 
 async def test_on_browser_connected_already_started():
     """No-op when _ushell_started is True."""
-    from provide_terminal_cloudflare.do.ushell import on_browser_connected
+    from provide.terminal.cloudflare.do.ushell import on_browser_connected
 
     ushell = MagicMock()
     ushell.start = AsyncMock()
@@ -305,7 +305,7 @@ async def test_on_browser_connected_already_started():
 
 async def test_on_browser_connected_happy_path_sends_frames():
     """Broadcasts worker_connected and term frames, skips worker_hello."""
-    from provide_terminal_cloudflare.do.ushell import on_browser_connected
+    from provide.terminal.cloudflare.do.ushell import on_browser_connected
 
     ushell = MagicMock()
     ushell.start = AsyncMock()
@@ -327,7 +327,7 @@ async def test_on_browser_connected_happy_path_sends_frames():
 
 async def test_on_browser_connected_all_frames_worker_hello():
     """No broadcast_to_browsers calls when all frames are worker_hello."""
-    from provide_terminal_cloudflare.do.ushell import on_browser_connected
+    from provide.terminal.cloudflare.do.ushell import on_browser_connected
 
     ushell = MagicMock()
     ushell.start = AsyncMock()

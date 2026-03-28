@@ -41,7 +41,7 @@ def _make_env(mode: str = "dev") -> SimpleNamespace:
 
 
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev"):
-    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+    from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
     return SessionRuntime(_make_ctx(worker_id), _make_env(mode))
 
@@ -53,7 +53,7 @@ def _make_runtime(worker_id: str = "test-worker", mode: str = "dev"):
 
 async def test_wait_for_prompt_snapshot_none_during_poll() -> None:
     """Cover the `if snapshot:` false branch — snapshot stays None inside the loop."""
-    from provide_terminal_cloudflare.api.http_routes._shared import _wait_for_prompt
+    from provide.terminal.cloudflare.api.http_routes._shared import _wait_for_prompt
 
     class _NoSnapshotRuntime:
         last_snapshot = None  # always None
@@ -76,8 +76,8 @@ async def test_wait_for_prompt_snapshot_none_during_poll() -> None:
 
 async def test_acquire_renewal_skips_pause() -> None:
     """Cover the `if not result.is_renewal:` false branch (renewal → no pause sent)."""
-    from provide_terminal_cloudflare.api.http_routes import route_http
-    from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
+    from provide.terminal.cloudflare.api.http_routes import route_http
+    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
 
     class _Req:
         def __init__(self, url: str, *, method: str = "GET", body: dict | None = None):
@@ -161,8 +161,8 @@ async def test_acquire_renewal_skips_pause() -> None:
 
 async def test_fetch_jwks_stale_cache_triggers_refetch() -> None:
     """Line 45->48: cache entry exists but is past TTL → network call is made again."""
-    from provide_terminal_cloudflare.auth import jwt as jwt_module
-    from provide_terminal_cloudflare.auth.jwt import _JWKS_CACHE_TTL_S, _fetch_jwks
+    from provide.terminal.cloudflare.auth import jwt as jwt_module
+    from provide.terminal.cloudflare.auth.jwt import _JWKS_CACHE_TTL_S, _fetch_jwks
 
     url = "https://example.com/.well-known/jwks-stale.json"
     stale_data: dict = {"keys": [{"kty": "old"}]}
@@ -194,8 +194,8 @@ async def test_fetch_jwks_stale_cache_triggers_refetch() -> None:
 async def test_resolve_signing_key_no_kid_alg_mismatch_skips_key() -> None:
     """Line 89->82: no-kid path where key_alg != alg → loop continues, no match → raises."""
     import jwt as pyjwt
-    from provide_terminal_cloudflare.auth.jwt import JwtValidationError, _resolve_signing_key
-    from provide_terminal_cloudflare.config import JwtConfig
+    from provide.terminal.cloudflare.auth.jwt import JwtValidationError, _resolve_signing_key
+    from provide.terminal.cloudflare.config import JwtConfig
 
     config = JwtConfig(
         mode="jwt",
@@ -218,7 +218,7 @@ async def test_resolve_signing_key_no_kid_alg_mismatch_skips_key() -> None:
     mismatch_key.key = object()
 
     with (
-        patch("provide_terminal_cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
+        patch("provide.terminal.cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
         patch("jwt.PyJWKSet.from_dict", return_value=MagicMock(keys=[mismatch_key])),
         patch("jwt.get_unverified_header", return_value={"alg": "HS256"}),
         pytest.raises(JwtValidationError, match="no matching key"),
@@ -233,7 +233,7 @@ async def test_resolve_signing_key_no_kid_alg_mismatch_skips_key() -> None:
 
 def test_require_pywrangler_found_does_not_raise() -> None:
     """Line 21->exit: shutil.which returns a path → _require_pywrangler returns without raising."""
-    from provide_terminal_cloudflare.cli import _require_pywrangler
+    from provide.terminal.cloudflare.cli import _require_pywrangler
 
     with patch("shutil.which", return_value="/usr/local/bin/pywrangler"):
         # Should complete without raising RuntimeError
@@ -247,7 +247,7 @@ def test_require_pywrangler_found_does_not_raise() -> None:
 
 def test_config_from_env_role_map_non_dict_json_ignored() -> None:
     """Line 100->104: JWT_ROLE_MAP contains valid JSON but not a dict → ignored."""
-    from provide_terminal_cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.config import CloudflareConfig
 
     env = SimpleNamespace(AUTH_MODE="dev", JWT_ROLE_MAP='["admin", "operator"]')
     cfg = CloudflareConfig.from_env(env)
@@ -365,7 +365,7 @@ async def test_websocket_error_browser_no_kv_update() -> None:
     rt.browser_sockets[rt.ws_key(ws)] = ws
 
     mock_kv = AsyncMock()
-    with patch("provide_terminal_cloudflare.do.session_runtime.update_kv_session", mock_kv):
+    with patch("provide.terminal.cloudflare.do.session_runtime.update_kv_session", mock_kv):
         await rt.webSocketError(ws, RuntimeError("test error"))
 
     # KV update should NOT be called for browser sockets
@@ -381,8 +381,8 @@ def test_persist_lease_no_set_alarm_does_not_raise() -> None:
     """Line 377->exit: persist_lease with storage that has no setAlarm → skips alarm."""
     import sqlite3
 
-    from provide_terminal_cloudflare.bridge.hijack import HijackSession
-    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+    from provide.terminal.cloudflare.bridge.hijack import HijackSession
+    from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
     conn = sqlite3.connect(":memory:")
     ctx = SimpleNamespace(
@@ -413,7 +413,7 @@ async def test_alarm_worker_connected_no_set_alarm() -> None:
     """Line 491->exit: alarm() with worker_ws set but ctx.storage has no setAlarm."""
     import sqlite3
 
-    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+    from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
     conn = sqlite3.connect(":memory:")
     ctx = SimpleNamespace(
@@ -432,7 +432,7 @@ async def test_alarm_worker_connected_no_set_alarm() -> None:
     rt.worker_ws = ws_stub
 
     mock_kv = AsyncMock()
-    with patch("provide_terminal_cloudflare.do._session_runtime_io.update_kv_session", mock_kv):
+    with patch("provide.terminal.cloudflare.do._session_runtime_io.update_kv_session", mock_kv):
         await rt.alarm()
 
     mock_kv.assert_awaited_once()
@@ -447,8 +447,8 @@ async def test_alarm_no_worker_active_hijack_no_set_alarm() -> None:
     """Line 494->exit: alarm() with worker_ws=None, hijack.session present, no setAlarm."""
     import sqlite3
 
-    from provide_terminal_cloudflare.bridge.hijack import HijackSession
-    from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+    from provide.terminal.cloudflare.bridge.hijack import HijackSession
+    from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
     conn = sqlite3.connect(":memory:")
     ctx = SimpleNamespace(

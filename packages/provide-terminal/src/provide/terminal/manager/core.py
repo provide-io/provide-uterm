@@ -330,7 +330,7 @@ class AgentManager:
         """Restore one agent from saved state if not already present."""
         if agent_id not in self.agents:
             saved_state = agent_data.get("state", "stopped")
-            if saved_state in ("running", "disconnected", "queued"):
+            if saved_state in ("running", "recovering", "disconnected", "queued"):
                 agent_data["state"] = "stopped"
             if "agent_id" not in agent_data:
                 agent_data["agent_id"] = agent_id
