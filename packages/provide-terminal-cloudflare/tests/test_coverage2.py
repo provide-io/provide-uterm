@@ -14,11 +14,11 @@ from types import SimpleNamespace
 
 import jwt
 import pytest
-from provide_terminal_cloudflare.auth.jwt import JwtValidationError, decode_jwt
-from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
-from provide_terminal_cloudflare.config import JwtConfig
-from provide_terminal_cloudflare.state.registry import list_kv_sessions, update_kv_session
-from provide_terminal_cloudflare.state.store import LeaseRecord, SqliteStateStore
+from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt
+from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+from provide.terminal.cloudflare.config import JwtConfig
+from provide.terminal.cloudflare.state.registry import list_kv_sessions, update_kv_session
+from provide.terminal.cloudflare.state.store import LeaseRecord, SqliteStateStore
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -141,7 +141,7 @@ class TestDecodeJwtBranches:
         }
         config = JwtConfig(mode="jwt", jwks_url="https://example.com/.well-known/jwks.json", algorithms=("HS256",))
         with (
-            patch("provide_terminal_cloudflare.auth.jwt._fetch_jwks", return_value=jwks_data),
+            patch("provide.terminal.cloudflare.auth.jwt._fetch_jwks", return_value=jwks_data),
             pytest.raises(JwtValidationError),
         ):
             await decode_jwt(token, config)

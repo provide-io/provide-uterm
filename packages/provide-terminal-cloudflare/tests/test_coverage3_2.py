@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
-from provide_terminal_cloudflare.auth.jwt import JwtValidationError
-from provide_terminal_cloudflare.config import JwtConfig
-from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+from provide.terminal.cloudflare.auth.jwt import JwtValidationError
+from provide.terminal.cloudflare.config import JwtConfig
+from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -127,8 +127,8 @@ async def test_broadcast_worker_frame_removes_failed_raw_socket() -> None:
 
 async def test_fetch_jwks_cache_hit() -> None:
     """_fetch_jwks returns cached value without a network call on second call."""
-    from provide_terminal_cloudflare.auth import jwt as jwt_module
-    from provide_terminal_cloudflare.auth.jwt import _fetch_jwks
+    from provide.terminal.cloudflare.auth import jwt as jwt_module
+    from provide.terminal.cloudflare.auth.jwt import _fetch_jwks
 
     fake_keys: dict = {"keys": [{"kty": "EC"}]}
     encoded = json.dumps(fake_keys).encode()
@@ -166,7 +166,7 @@ async def test_fetch_jwks_cache_hit() -> None:
 
 async def test_resolve_signing_key_no_config_raises() -> None:
     """Line 92: no jwks_url and no public_key_pem → JwtValidationError."""
-    from provide_terminal_cloudflare.auth.jwt import _resolve_signing_key
+    from provide.terminal.cloudflare.auth.jwt import _resolve_signing_key
 
     config = JwtConfig(mode="jwt", public_key_pem=None, jwks_url=None)
     token = jwt.encode({"sub": "u", "exp": int(time.time()) + 600}, "k", algorithm="HS256")
@@ -181,7 +181,7 @@ async def test_resolve_signing_key_no_config_raises() -> None:
 
 async def test_resolve_signing_key_kid_matches() -> None:
     """Line 83: JWT kid matches a key in JWKS → return that key."""
-    from provide_terminal_cloudflare.auth.jwt import _resolve_signing_key
+    from provide.terminal.cloudflare.auth.jwt import _resolve_signing_key
 
     sentinel_key = object()
     mock_jwks_key = MagicMock()
@@ -201,7 +201,7 @@ async def test_resolve_signing_key_kid_matches() -> None:
     )
 
     with (
-        patch("provide_terminal_cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
+        patch("provide.terminal.cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
         patch("jwt.PyJWKSet.from_dict", return_value=MagicMock(keys=[mock_jwks_key])),
     ):
         key = await _resolve_signing_key(token, config)
@@ -216,7 +216,7 @@ async def test_resolve_signing_key_kid_matches() -> None:
 
 def test_config_invalid_mode_defaults_to_jwt() -> None:
     """Line 79: AUTH_MODE with unrecognised value → silently defaults to 'jwt'."""
-    from provide_terminal_cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.config import CloudflareConfig
 
     env = SimpleNamespace(AUTH_MODE="invalid_mode", WORKER_BEARER_TOKEN="t")
     config = CloudflareConfig.from_env(env)

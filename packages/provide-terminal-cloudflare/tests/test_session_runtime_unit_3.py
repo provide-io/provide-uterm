@@ -12,9 +12,9 @@ import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from provide_terminal_cloudflare.bridge.hijack import HijackSession
-from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
-from provide_terminal_cloudflare.state.store import LeaseRecord
+from provide.terminal.cloudflare.bridge.hijack import HijackSession
+from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+from provide.terminal.cloudflare.state.store import LeaseRecord
 
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
@@ -209,6 +209,41 @@ async def test_push_worker_input_sends_frame() -> None:
     rt.worker_ws = ws
     assert await rt.push_worker_input("ls\r") is True
     assert _decode_sent(ws.sent[0], data_frame_type="input")["type"] == "input"
+
+
+async def test_push_worker_control_via_ushell() -> None:
+    """push_worker_control delegates to _ushell.handle_control when ushell active."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    rt = _make_runtime()
+    mock_ushell = SimpleNamespace(handle_control=AsyncMock())
+    rt._ushell = mock_ushell
+    result = await rt.push_worker_control("pause", owner="a", lease_s=60)
+    assert result is True
+    mock_ushell.handle_control.assert_awaited_once_with("pause")
+
+
+async def test_push_worker_input_via_ushell_broadcasts_frames() -> None:
+    """push_worker_input routes through ushell and broadcasts returned frames."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    rt = _make_runtime()
+    frame = {"type": "term", "data": "hello", "ts": 0.0}
+    mock_ushell = SimpleNamespace(handle_input=AsyncMock(return_value=[frame]))
+    rt._ushell = mock_ushell
+
+    broadcast_calls: list[dict] = []
+
+    async def _fake_broadcast(f):
+        broadcast_calls.append(f)
+
+    with patch.object(rt, "broadcast_to_browsers", side_effect=_fake_broadcast):
+        result = await rt.push_worker_input("hi")
+
+    assert result is True
+    assert broadcast_calls == [frame]
 
 
 # ---------------------------------------------------------------------------

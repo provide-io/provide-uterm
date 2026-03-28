@@ -18,7 +18,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
+from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
 
@@ -126,7 +126,7 @@ def test_lazy_init_worker_id_url_raises_returns_early() -> None:
 
 async def test_request_json_oversized_body_returns_empty() -> None:
     """request_json returns {} when body exceeds _MAX_REQUEST_BODY (no crash, no OOM)."""
-    from provide_terminal_cloudflare.do._session_runtime_io import _MAX_REQUEST_BODY
+    from provide.terminal.cloudflare.do._session_runtime_io import _MAX_REQUEST_BODY
 
     rt = _make_runtime()
 
@@ -173,7 +173,7 @@ async def test_fetch_websocket_worker_upgrade() -> None:
 
     with (
         patch.dict(sys.modules, {"js": js_mock}),
-        patch("provide_terminal_cloudflare.do.session_runtime.update_kv_session", mock_kv),
+        patch("provide.terminal.cloudflare.do.session_runtime.update_kv_session", mock_kv),
     ):
         resp = await rt.fetch(
             _MockRequest(
@@ -233,7 +233,7 @@ async def test_fetch_websocket_worker_kv_raises_still_returns_101() -> None:
 
     with (
         patch.dict(sys.modules, {"js": js_mock}),
-        patch("provide_terminal_cloudflare.do.session_runtime.update_kv_session", mock_kv),
+        patch("provide.terminal.cloudflare.do.session_runtime.update_kv_session", mock_kv),
     ):
         resp = await rt.fetch(
             _MockRequest(

@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 import jwt
 import pytest
-from provide_terminal_cloudflare.do.session_runtime import SessionRuntime
-from provide_terminal_cloudflare.state.store import LeaseRecord
+from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+from provide.terminal.cloudflare.state.store import LeaseRecord
 
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 

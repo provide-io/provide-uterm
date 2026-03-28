@@ -51,6 +51,7 @@ def create_manager_mcp_tools(
     *,
     base_url: str | None = None,
     on_first_http: Callable[[], Awaitable[None]] | None = None,
+    agent_telemetry_fields: frozenset[str] | None = None,
 ) -> FastMCP:
     """Create a FastMCP app with generic swarm management tools.
 
@@ -60,6 +61,10 @@ def create_manager_mcp_tools(
             out-of-process calls.  Ignored when *manager* is provided.
         on_first_http: Async callback invoked once before the first HTTP
             request.  Useful for auto-starting the manager process.
+        agent_telemetry_fields: Set of per-agent field names to strip from
+            ``swarm_status`` responses when ``include_telemetry=False``.
+            Pass application-specific field names here; defaults to no
+            stripping when ``None``.
 
     Raises:
         ValueError: If neither *manager* nor *base_url* is provided.
@@ -87,12 +92,24 @@ def create_manager_mcp_tools(
     # ------------------------------------------------------------------
 
     @mcp.tool()
-    async def swarm_status() -> dict[str, Any]:
-        """Get current swarm status: agent counts by state, desired agents, pause state, uptime."""
+    async def swarm_status(include_telemetry: bool = False) -> dict[str, Any]:
+        """Get current swarm status: agent counts by state, desired agents, pause state, uptime.
+
+        Args:
+            include_telemetry: Include per-agent application-specific telemetry fields.
+                               Defaults to False to keep responses small for large swarms.
+        """
         if manager is not None:
-            return manager.get_swarm_status().model_dump()
-        ok, data = await _http("GET", "/swarm/status")
-        return data if ok else {"error": data.get("error", "Failed to get swarm status")}
+            data = manager.get_swarm_status().model_dump()
+        else:
+            ok, data = await _http("GET", "/swarm/status")
+            if not ok:
+                return {"error": data.get("error", "Failed to get swarm status")}
+        if not include_telemetry and agent_telemetry_fields:
+            for agent in data.get("agents", []):
+                for field in agent_telemetry_fields:
+                    agent.pop(field, None)
+        return data
 
     @mcp.tool()
     async def swarm_spawn_batch(

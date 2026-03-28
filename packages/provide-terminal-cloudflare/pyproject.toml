@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "pyjwt>=2.9",
-  "provide-terminal>=0.3.0",
+  "provide-terminal>=0.4.0",
 ]
 
 [project.optional-dependencies]
@@ -45,13 +45,14 @@ Homepage = "https://github.com/provide-io/provide-terminal"
 Repository = "https://github.com/provide-io/provide-terminal"
 
 [project.scripts]
-uterm-cf = "provide_terminal_cloudflare.cli:main"
+uterm-cf = "provide.terminal.cloudflare.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -62,14 +63,14 @@ markers = [
     "playwright: Playwright browser UI tests",
 ]
 addopts = [
-    "--cov=provide_terminal_cloudflare",
+    "--cov=provide.terminal.cloudflare",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
 
 [tool.coverage.run]
-source = ["provide_terminal_cloudflare"]
+source = ["provide.terminal.cloudflare"]
 branch = true
 
 [tool.coverage.report]

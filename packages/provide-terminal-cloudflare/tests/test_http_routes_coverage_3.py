@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from provide_terminal_cloudflare.api.http_routes import route_http
-from provide_terminal_cloudflare.bridge.hijack import HijackCoordinator
+from provide.terminal.cloudflare.api.http_routes import route_http
+from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
 
 
 class _Req:

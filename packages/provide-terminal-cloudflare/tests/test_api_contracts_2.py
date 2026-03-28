@@ -10,8 +10,8 @@ from __future__ import annotations
 import time
 
 import jwt
-from provide_terminal_cloudflare.auth.jwt import decode_jwt
-from provide_terminal_cloudflare.config import CloudflareConfig, JwtConfig
+from provide.terminal.cloudflare.auth.jwt import decode_jwt
+from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
 
 # ---------------------------------------------------------------------------
 # Contract: JWT roles_claim parity with FastAPI AuthConfig
@@ -132,7 +132,7 @@ def test_no_local_static_overrides() -> None:
     import importlib.resources
     from pathlib import Path
 
-    static_dir = Path(__file__).parent.parent / "src" / "provide_terminal_cloudflare" / "ui" / "static"
+    static_dir = Path(__file__).parent.parent / "src" / "provide" / "terminal" / "cloudflare" / "ui" / "static"
     gitignore = static_dir / ".gitignore"
     # If the .gitignore sentinel exists, all other files are gitignored build
     # artifacts — not committed overrides.  Skip the check in that case.
@@ -140,7 +140,7 @@ def test_no_local_static_overrides() -> None:
         return
 
     try:
-        static_root = importlib.resources.files("provide_terminal_cloudflare.ui") / "static"
+        static_root = importlib.resources.files("provide.terminal.cloudflare.ui") / "static"
         static_files = [p for p in static_root.iterdir() if p.is_file()]  # type: ignore[union-attr]
     except (ModuleNotFoundError, TypeError, NotImplementedError, FileNotFoundError):
         static_files = []

@@ -1,6 +1,6 @@
 name = "provide-terminal-cloudflare"
 account_id = "0cd7f4f58f13e02c5bf57aa9dc347d1d"
-main = "src/provide_terminal_cloudflare/entry.py"
+main = "src/provide/terminal/cloudflare/entry.py"
 compatibility_date = "2026-03-04"
 compatibility_flags = ["python_workers"]
 
@@ -13,7 +13,7 @@ globs = ["**/*.js", "**/*.css"]
 fallthrough = true
 
 [build]
-command = "cp -r ../../packages/provide-terminal/src/provide/terminal/frontend/. src/provide_terminal_cloudflare/ui/static/"
+command = "cp -r ../../packages/provide-terminal/src/provide/terminal/frontend/. src/provide/terminal/cloudflare/ui/static/"
 # Watch the frontend source — NOT the CF package dir.  The build command
 # copies *into* ui/static/ which lives inside the CF source tree; watching
 # that tree would trigger an infinite rebuild loop.

@@ -107,7 +107,7 @@ async def _handle_heartbeat_timeouts(pm: AgentProcessManager) -> None:
     heartbeat_stop_requests: list[tuple[str, subprocess.Popen[bytes]]] = []
     async with pm.manager._state_lock:
         for agent in list(pm.manager.agents.values()):
-            if agent.state in ("running",) and now - agent.last_update_time > heartbeat_timeout:
+            if agent.state in ("running", "recovering", "blocked") and now - agent.last_update_time > heartbeat_timeout:
                 logger.warning("agent_heartbeat_timeout", agent_id=agent.agent_id, timeout_s=heartbeat_timeout)
                 agent.state = "error"
                 agent.error_message = (
