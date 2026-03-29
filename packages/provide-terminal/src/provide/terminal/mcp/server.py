@@ -30,7 +30,7 @@ from provide.terminal.client.hijack import HijackClient
 from provide.terminal.client.mcp_tools import _ok
 from provide.terminal.screen import strip_ansi
 
-TOOL_COUNT = 16
+TOOL_COUNT = 17
 
 # C-style escape sequences that LLMs commonly emit in ``keys`` strings.
 _ESCAPE_MAP: dict[str, str] = {
@@ -355,6 +355,44 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     async def worker_disconnect(worker_id: str) -> dict[str, Any]:
         """Disconnect a worker WebSocket."""
         ok, data = await client.disconnect_worker(worker_id)
+        return _ok(ok, data)
+
+    # -- Real-time event subscription -----------------------------------------
+
+    @mcp.tool()
+    async def session_watch(
+        session_id: str,
+        event_types: str | None = None,
+        pattern: str | None = None,
+        timeout_s: float = 10.0,
+        max_events: int = 50,
+    ) -> dict[str, Any]:
+        """Watch a session for events in real time.
+
+        Subscribes to the session event stream and returns events as they arrive.
+        When the server's EventBus is not configured, returns recent events from
+        the ring buffer instead (graceful fallback).
+
+        Parameters
+        ----------
+        event_types:
+            Comma-separated list of event types to filter on
+            (e.g. ``"snapshot,input_send"``).  Omit to receive all types.
+        pattern:
+            Regex applied to ``snapshot`` event ``data.screen`` text.
+            Only matching snapshots are returned.
+        timeout_s:
+            How long to wait for events before returning (clamped to 30 s).
+        max_events:
+            Maximum events to collect before returning early.
+        """
+        ok, data = await client.watch_session_events(  # type: ignore[attr-defined]
+            session_id,
+            event_types=event_types,
+            pattern=pattern,
+            timeout_ms=int(min(max(timeout_s, 0.1), 30) * 1000),
+            max_events=max_events,
+        )
         return _ok(ok, data)
 
     return mcp

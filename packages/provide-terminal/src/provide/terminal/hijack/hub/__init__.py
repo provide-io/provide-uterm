@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from provide.terminal.hijack.hub.event_bus import EventBus
+
 from provide.terminal.hijack.hub.core import (
     BrowserRoleResolutionError,
     BrowserRoleResolver,
@@ -34,6 +36,7 @@ class TermHubProtocol(Protocol):
     max_ws_message_bytes: int
     max_input_chars: int
     browser_rate_limit_per_sec: float
+    _event_bus: EventBus | None
 
     def metric(self, name: str, value: int = ...) -> None: ...
     def notify_hijack_changed(self, worker_id: str, *, enabled: bool, owner: str | None = ...) -> None: ...
@@ -86,6 +89,7 @@ class TermHubProtocol(Protocol):
 __all__ = [
     "BrowserRoleResolutionError",
     "BrowserRoleResolver",
+    "EventBus",
     "HijackStateCallback",
     "InMemoryResumeStore",
     "ResumeCallback",

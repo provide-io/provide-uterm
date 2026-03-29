@@ -17,10 +17,19 @@ from pathlib import Path
 
 if os.environ.get("MUTANT_UNDER_TEST"):
     _here = Path(__file__).resolve().parent  # mutants/ when run by mutmut
-    _mutated_src = _here / "src"
-    if _mutated_src.exists():
-        # Prepend mutants/src so mutated copies take priority over the editable install.
-        sys.path.insert(0, str(_mutated_src))
+    # Prepend mutated source copies so they take priority over the editable install.
+    _inserted = False
+    _src = _here / "src"
+    if _src.exists() and str(_src) not in sys.path:
+        sys.path.insert(0, str(_src))
+        _inserted = True
+    # Flush already-imported provide modules so Python re-imports them from the
+    # mutants copies above rather than the editable-install paths cached in
+    # sys.modules before this conftest ran.
+    if _inserted:
+        for _mod in list(sys.modules):
+            if _mod == "provide" or _mod.startswith("provide."):
+                del sys.modules[_mod]
 
     # mutmut calls set_start_method('fork') in the parent process; the forked
     # pytest worker inherits the already-set context, so the trampoline's second
@@ -38,3 +47,19 @@ if os.environ.get("MUTANT_UNDER_TEST"):
             _orig_set_start(method, force=force)
 
     _mp.set_start_method = _safe_set_start  # type: ignore[attr-defined]
+
+    # On macOS, calling setproctitle() in a forked child causes SIGSEGV.
+    # Register an at-fork handler (runs in the child before any user code)
+    # to replace the setproctitle binding in mutmut's module namespace with
+    # a no-op, so the child survives long enough to run the mutated tests.
+    if os.environ.get("MUTANT_UNDER_TEST") == "stats":
+
+        def _noop_setproctitle_in_child() -> None:
+            try:
+                import mutmut.__main__ as _mm
+
+                _mm.setproctitle = lambda _t: None  # type: ignore[attr-defined]
+            except Exception:  # noqa: S110 # pragma: no cover
+                pass
+
+        os.register_at_fork(after_in_child=_noop_setproctitle_in_child)

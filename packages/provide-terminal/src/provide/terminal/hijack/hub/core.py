@@ -15,7 +15,10 @@ import asyncio
 import inspect
 import time
 from collections.abc import Awaitable, Callable, Coroutine
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from provide.terminal.hijack.hub.event_bus import EventBus
 
 from provide.telemetry import get_logger
 
@@ -91,6 +94,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         resume_store: ResumeTokenStore | None = None,
         resume_ttl_s: float = 300,
         on_resume: ResumeCallback | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -115,6 +119,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
         self._on_resume = on_resume
         self._ws_to_resume_token: dict[WebSocket, str] = {}
+        self._event_bus: EventBus | None = event_bus
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
@@ -213,7 +218,10 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             # Set min_event_seq after append so it always reflects events[0].seq,
             # which is correct whether or not the deque was full before the append.
             st.min_event_seq = int(st.events[0]["seq"])
-            return evt
+        # EventBus fanout is outside the lock — put_nowait never blocks.
+        if self._event_bus is not None:
+            self._event_bus._enqueue(worker_id, evt)
+        return evt
 
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
         """Send *msg* to all browser WebSockets registered for *worker_id*."""
@@ -353,6 +361,13 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                     st2.worker_ws = None
             return False
 
+    async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
+        """Deregister the worker WS and notify the EventBus on disconnect."""
+        should_broadcast, was_hijacked = await super().deregister_worker(worker_id, ws)
+        if should_broadcast and self._event_bus is not None:
+            self._event_bus.close_worker(worker_id)
+        return should_broadcast, was_hijacked
+
     async def prune_if_idle(self, worker_id: str) -> None:
         """Remove worker state when no connections or leases remain."""
         async with self._lock:
@@ -444,6 +459,8 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         if was_hijacked:
             self.notify_hijack_changed(worker_id, enabled=False, owner=None)
             await self.broadcast_hijack_state(worker_id)
+        if self._event_bus is not None:
+            self._event_bus.close_worker(worker_id)
         await self.prune_if_idle(worker_id)
         return True
 

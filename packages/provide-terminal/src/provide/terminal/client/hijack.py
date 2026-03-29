@@ -111,11 +111,15 @@ class HijackClient:
         *,
         json: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> tuple[bool, Any]:
         """Issue an HTTP request and return ``(ok, body_or_error)``."""
         client = self._get_client()
+        kw: dict[str, Any] = {"json": json, "params": params}
+        if timeout is not None:
+            kw["timeout"] = httpx.Timeout(timeout)
         try:
-            r = await client.request(method, path, json=json, params=params)
+            r = await client.request(method, path, **kw)
         except httpx.HTTPError as exc:
             log.warning("HijackClient %s %s failed: %s", method, path, exc)
             return False, {"error": str(exc)}
@@ -296,6 +300,32 @@ class HijackClient:
             "GET",
             f"/api/sessions/{session_id}/events",
             params={"limit": limit},
+        )
+
+    async def watch_session_events(
+        self,
+        session_id: str,
+        *,
+        event_types: str | None = None,
+        pattern: str | None = None,
+        timeout_ms: int = 5000,
+        max_events: int = 50,
+    ) -> tuple[bool, Any]:
+        """Long-poll the session event stream via the watch endpoint.
+
+        The HTTP request timeout is set to ``timeout_ms + 5 s`` to accommodate
+        the server-side wait plus network overhead.
+        """
+        params: dict[str, Any] = {"timeout_ms": timeout_ms, "max_events": max_events}
+        if event_types is not None:
+            params["event_types"] = event_types
+        if pattern is not None:
+            params["pattern"] = pattern
+        return await self._request(
+            "GET",
+            f"/api/sessions/{session_id}/events/watch",
+            params=params,
+            timeout=timeout_ms / 1000 + 5.0,
         )
 
     async def set_session_mode(

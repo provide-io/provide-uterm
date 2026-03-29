@@ -33,7 +33,7 @@ from typing import Any
 
 try:
     from provide.terminal.server.connectors.base import SessionConnector as _SessionConnector
-except ImportError:
+except ImportError:  # pragma: no cover
     _SessionConnector = object  # type: ignore[assignment,misc]
 
 from provide.shell._commands import CommandDispatcher
@@ -57,8 +57,8 @@ class UshellConnector(_SessionConnector):
 
     def __init__(
         self,
-        session_id: str = "",
-        display_name: str = "",
+        session_id: str = "",  # pragma: no mutate
+        display_name: str = "",  # pragma: no mutate
         _config: dict[str, Any] | None = None,
         extra_ctx: dict[str, Any] | None = None,
     ) -> None:
