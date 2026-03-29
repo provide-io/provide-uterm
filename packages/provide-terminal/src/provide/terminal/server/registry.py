@@ -274,6 +274,51 @@ class SessionRegistry:
     async def events(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
         return await self._hub.get_recent_events(session_id, limit)
 
+    async def watch_session_events(
+        self,
+        session_id: str,
+        *,
+        timeout_ms: int = 5000,
+        event_types: list[str] | None = None,
+        pattern: str | None = None,
+        max_events: int = 50,
+    ) -> dict[str, Any]:
+        """Long-poll: subscribe to EventBus and return events as they arrive.
+
+        Falls back to the ring buffer when EventBus is not configured on the hub.
+        """
+        import asyncio
+        import time as _time
+
+        event_bus = getattr(self._hub, "_event_bus", None)
+        if event_bus is None:
+            recent = await self._hub.get_recent_events(session_id, limit=max_events)
+            return {"events": recent, "dropped_count": 0, "timed_out": False}
+
+        collected: list[dict[str, Any]] = []
+        timed_out = False
+        timeout_s = timeout_ms / 1000
+        deadline = _time.monotonic() + timeout_s
+        dropped = 0
+
+        async with event_bus.watch(session_id, event_types=event_types, pattern=pattern) as sub:
+            while len(collected) < max_events:
+                remaining = deadline - _time.monotonic()
+                if remaining <= 0:  # pragma: no cover — race: clock advanced between iterations
+                    timed_out = True
+                    break
+                try:
+                    item = await asyncio.wait_for(sub.queue.get(), timeout=remaining)
+                except TimeoutError:
+                    timed_out = True
+                    break
+                if item is None:  # worker-disconnected sentinel
+                    break
+                collected.append(item)
+            dropped = sub.dropped
+
+        return {"events": collected, "dropped_count": dropped, "timed_out": timed_out}
+
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
         async with self._lock:
             session = self._require_session(session_id)

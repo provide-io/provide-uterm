@@ -58,22 +58,22 @@ describe("HijackHost", () => {
     mockHijackCtor();
     render(<HijackHost sessionId="my-worker" />);
     expect(calls).toHaveLength(1);
-    expect(calls[0].config.workerId).toBe("my-worker");
-    expect(typeof calls[0].config.onResize).toBe("function");
+    expect(calls[0]?.config.workerId).toBe("my-worker");
+    expect(typeof calls[0]?.config.onResize).toBe("function");
   });
 
   it("sets showAnalysis and mobileKeys false for non-operator surface", () => {
     mockHijackCtor();
     render(<HijackHost sessionId="s1" surface="user" />);
-    expect(calls[0].config.showAnalysis).toBe(false);
-    expect(calls[0].config.mobileKeys).toBe(false);
+    expect(calls[0]?.config.showAnalysis).toBe(false);
+    expect(calls[0]?.config.mobileKeys).toBe(false);
   });
 
   it("sets showAnalysis and mobileKeys true for operator surface", () => {
     mockHijackCtor();
     render(<HijackHost sessionId="s1" surface="operator" />);
-    expect(calls[0].config.showAnalysis).toBe(true);
-    expect(calls[0].config.mobileKeys).toBe(true);
+    expect(calls[0]?.config.showAnalysis).toBe(true);
+    expect(calls[0]?.config.mobileKeys).toBe(true);
   });
 
   it("calls setMounted(true) when widget is constructed", () => {
@@ -93,7 +93,7 @@ describe("HijackHost", () => {
   it("calling onResize updates store dimensions", () => {
     mockHijackCtor();
     render(<HijackHost sessionId="s1" />);
-    const { onResize } = calls[0].config;
+    const onResize = calls[0]?.config.onResize;
     onResize?.(120, 40);
     const { cols, rows } = useTerminalStore.getState();
     expect(cols).toBe(120);

@@ -261,6 +261,28 @@ def create_api_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="insufficient privileges")
         return await _registry(request).events(session_id, limit=limit)
 
+    @router.get("/sessions/{session_id}/events/watch")
+    async def watch_events(
+        request: Request,
+        session_id: _SessionId,
+        timeout_ms: Annotated[int, Query(ge=100, le=30000)] = 5000,
+        event_types: Annotated[str | None, Query(max_length=500)] = None,
+        pattern: Annotated[str | None, Query(max_length=200)] = None,
+        max_events: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        principal = _principal(request)
+        authz = _authz(request)
+        definition = await _session_definition(request, session_id)
+        if not authz.can_read_session(principal, definition):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+        return await _registry(request).watch_session_events(  # type: ignore[attr-defined]
+            session_id,
+            timeout_ms=timeout_ms,
+            event_types=event_types.split(",") if event_types else None,
+            pattern=pattern,
+            max_events=max_events,
+        )
+
     @router.get("/sessions/{session_id}/recording")
     async def recording(request: Request, session_id: _SessionId) -> dict[str, Any]:
         principal = _principal(request)

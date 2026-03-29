@@ -97,6 +97,16 @@ module = ["provide.telemetry", "provide.telemetry.*", "structlog", "structlog.*"
 ignore_missing_imports = true
 
 
+[[tool.mypy.overrides]]
+# ty 0.0.19 has a cross-file resolution bug: it can't see methods added to HijackClient
+# and SessionRegistry from call sites in other modules. Ignores are unused from mypy's
+# perspective — suppress the warn_unused_ignores noise.
+module = [
+    "provide.terminal.mcp.server",
+    "provide.terminal.server.routes.api",
+]
+warn_unused_ignores = false
+
 [tool.ty.environment]
 python-version = "3.11"
 extra-paths = ["packages/provide-shell/src"]
@@ -123,6 +133,7 @@ paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests", "pa
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
 
 [tool.xenon]
 max_absolute = "C"
@@ -130,16 +141,19 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = ["packages/provide-shell/src/provide/shell/terminal/_connector.py", "packages/provide-terminal/src/provide/terminal/server/connectors/__init__.py", "packages/provide-terminal/src/provide/terminal/server/connectors/registry.py"]
+paths_to_mutate = ["src/provide/shell/terminal/_connector.py", "src/provide/terminal/server/connectors/__init__.py", "src/provide/terminal/server/connectors/registry.py", "src/provide/terminal/hijack/hub/event_bus.py"]
 tests_dir = [
     "packages/provide-terminal/tests/shell/test_shell_connector.py",
     "packages/provide-terminal/tests/server/test_app_ushell.py",
     "packages/provide-terminal/tests/server/test_connectors_websocket.py",
+    "packages/provide-terminal/tests/server/test_connectors.py",
+    "packages/provide-terminal/tests/hijack/test_event_bus.py",
+    "packages/provide-terminal/tests/hijack/test_event_bus_integration.py",
 ]
 also_copy = [
+    "src",
     "packages/provide-shell/src",
     "packages/provide-terminal/src",
-    "packages/provide-terminal-cloudflare/src",
     "packages/provide-terminal/tests",
     "packages/provide-shell/tests",
     "conftest.py",

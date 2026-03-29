@@ -903,7 +903,7 @@ describe("onResize callback", () => {
       cb();
       return 0;
     });
-    const { widget } = makeWidget({ onResize });
+    makeWidget({ onResize });
     getWs().open();
     sendMessage({ type: "snapshot", screen: "" });
     expect(onResize).toHaveBeenCalledWith(80, 24);
@@ -915,7 +915,7 @@ describe("onResize callback", () => {
       cb();
       return 0;
     });
-    const { widget } = makeWidget({ onResize });
+    makeWidget({ onResize });
     getWs().open();
     sendMessage({ type: "snapshot", screen: "" }); // MockTerminal: cols=0, rows=0
     expect(onResize).not.toHaveBeenCalled();
