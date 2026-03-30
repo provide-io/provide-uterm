@@ -20,12 +20,9 @@ from typing import Any
 
 import httpx
 import pytest
-import uvicorn
 
+from tests.e2e._live_server import live_server_with_bus
 from provide.terminal.client import connect_async_ws
-from provide.terminal.hijack.hub import EventBus
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.config import config_from_mapping
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -37,45 +34,9 @@ ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
 @pytest.fixture()
 async def live_server() -> Any:
-    cfg = config_from_mapping(
-        {
-            "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "dev"},
-            "sessions": [
-                {
-                    "session_id": "h1",
-                    "display_name": "Hijack Session",
-                    "connector_type": "shell",
-                    "auto_start": False,
-                }
-            ],
-        }
-    )
-    app = create_server_app(cfg)
-    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical")
-    server = uvicorn.Server(config)
-    task = asyncio.create_task(server.serve())
-
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + 5.0
-    while not server.started:
-        if loop.time() > deadline:
-            server.should_exit = True
-            await asyncio.wait_for(task, timeout=2.0)
-            raise RuntimeError("live_server (hijack): uvicorn startup timeout")
-        await asyncio.sleep(0.05)
-
-    port: int = server.servers[0].sockets[0].getsockname()[1]
-    base_url = f"http://127.0.0.1:{port}"
-
-    hub = app.state.uterm_registry._hub
-    hub._event_bus = EventBus()
-
-    try:
-        yield hub, base_url
-    finally:
-        server.should_exit = True
-        await asyncio.wait_for(task, timeout=5.0)
+    sessions = [{"session_id": "h1", "display_name": "Hijack Session", "connector_type": "shell", "auto_start": False}]
+    async with live_server_with_bus(sessions, label="live_server (hijack)") as result:
+        yield result
 
 
 def ws_url(base_url: str, path: str) -> str:

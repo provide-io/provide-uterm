@@ -96,6 +96,7 @@ async def test_acquire_renewal_skips_pause() -> None:
         hijack = HijackCoordinator()
         last_snapshot = None
         last_analysis = None
+        lifecycle_state = "stopped"
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
 

@@ -37,11 +37,20 @@ class _Runtime:
         worker_ws: object | None = None,
     ) -> None:
         self.worker_id = "w"
+        self.meta: dict = {
+            "display_name": self.worker_id,
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
         self.worker_ws = worker_ws
         self.hijack = HijackCoordinator()
         self._role = role
         self.last_snapshot: dict | None = None
         self.last_analysis: str | None = None
+        self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
         self.browser_hijack_owner: dict[str, str] = {}
         self._sent: list[dict] = []

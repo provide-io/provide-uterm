@@ -57,6 +57,14 @@ class _Req:
 class _Runtime:
     def __init__(self, worker_ws: object | None = None) -> None:
         self.worker_id = "test-worker"
+        self.meta: dict = {
+            "display_name": self.worker_id,
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
         self.worker_ws = worker_ws
         self.hijack = HijackCoordinator()
         self._role = "admin"
@@ -64,6 +72,7 @@ class _Runtime:
         self._actions: list[tuple[str, str, int]] = []
         self.last_snapshot: dict | None = None
         self.browser_hijack_owner: dict[str, str] = {}
+        self.lifecycle_state = "running" if worker_ws is not None else "stopped"
         self.input_mode: str = "hijack"
 
     async def request_json(self, request: object) -> dict:
@@ -144,7 +153,7 @@ async def test_sessions_lifecycle_state_reflects_connection() -> None:
 
     assert connected_resp[0]["lifecycle_state"] == "running"
     assert connected_resp[0]["connected"] is True
-    assert disconnected_resp[0]["lifecycle_state"] == "idle"
+    assert disconnected_resp[0]["lifecycle_state"] == "stopped"
     assert disconnected_resp[0]["connected"] is False
 
 

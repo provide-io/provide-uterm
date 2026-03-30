@@ -56,6 +56,7 @@ namespaces = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["src"]
 markers = [
     "e2e: end-to-end tests against a live pywrangler dev server (skipped by default; use -m e2e or E2E=1)",
     "real_cf: requires real Cloudflare deployment with live KV + full WS support (skipped unless REAL_CF=1)",

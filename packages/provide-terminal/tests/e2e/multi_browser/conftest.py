@@ -14,12 +14,9 @@ from typing import Any
 
 import httpx
 import pytest
-import uvicorn
 
+from tests.e2e._live_server import live_server_with_bus
 from provide.terminal.client import connect_async_ws
-from provide.terminal.hijack.hub import EventBus
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.config import config_from_mapping
 
 # ---------------------------------------------------------------------------
 # Header constants
@@ -38,45 +35,9 @@ VIEWER_H = {"X-Uterm-Principal": "view-user", "X-Uterm-Role": "viewer"}
 @pytest.fixture()
 async def live_server() -> Any:
     """Single-session live server with EventBus injected. Yields (hub, base_url)."""
-    cfg = config_from_mapping(
-        {
-            "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "dev"},
-            "sessions": [
-                {
-                    "session_id": "s1",
-                    "display_name": "Test Session",
-                    "connector_type": "shell",
-                    "auto_start": False,
-                }
-            ],
-        }
-    )
-    app = create_server_app(cfg)
-    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical")
-    server = uvicorn.Server(config)
-    task = asyncio.create_task(server.serve())
-
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + 5.0
-    while not server.started:
-        if loop.time() > deadline:
-            server.should_exit = True
-            await asyncio.wait_for(task, timeout=2.0)
-            raise RuntimeError("live_server: uvicorn startup timeout")
-        await asyncio.sleep(0.05)
-
-    port: int = server.servers[0].sockets[0].getsockname()[1]
-    base_url = f"http://127.0.0.1:{port}"
-
-    hub = app.state.uterm_registry._hub
-    hub._event_bus = EventBus()
-
-    try:
-        yield hub, base_url
-    finally:
-        server.should_exit = True
-        await asyncio.wait_for(task, timeout=5.0)
+    sessions = [{"session_id": "s1", "display_name": "Test Session", "connector_type": "shell", "auto_start": False}]
+    async with live_server_with_bus(sessions, label="live_server (multi_browser)") as result:
+        yield result
 
 
 # ---------------------------------------------------------------------------
@@ -117,14 +78,20 @@ async def drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, An
 
 
 async def drain_all(ws: Any, timeout: float = 0.4) -> list[dict[str, Any]]:
+    """Collect all messages that arrive within *timeout* seconds.
+
+    Stops collecting as soon as a recv() times out — no more messages are
+    immediately available.  The *timeout* parameter acts as an upper bound.
+    """
     msgs: list[dict[str, Any]] = []
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
+        remaining = deadline - asyncio.get_running_loop().time()
         try:
-            raw = await asyncio.wait_for(ws.recv(), timeout=0.1)
+            raw = await asyncio.wait_for(ws.recv(), timeout=min(0.1, remaining))
             msgs.append(json.loads(raw))
         except TimeoutError:
-            continue
+            break
     return msgs
 
 

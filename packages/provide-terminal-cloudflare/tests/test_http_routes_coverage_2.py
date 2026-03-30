@@ -37,12 +37,21 @@ class _Runtime:
         worker_id: str = "w",
     ) -> None:
         self.worker_id = worker_id
+        self.meta: dict = {
+            "display_name": self.worker_id,
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
         self.worker_ws = worker_ws
         self.hijack = HijackCoordinator()
         self._role = role
         self._browser_role = browser_role
         self.last_snapshot: dict | None = None
         self.last_analysis: str | None = None
+        self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
         self.browser_hijack_owner: dict[str, str] = {}
 
@@ -365,10 +374,19 @@ async def test_cf_hijack_events_has_more_true_when_exactly_limit() -> None:
     class _RuntimeWith5:
         # Reuse _Runtime but override store and hijack
         worker_id = "w"
+        meta: dict = {
+            "display_name": "w",
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
         worker_ws = object()
         hijack = coord
         last_snapshot = None
         last_analysis = None
+        lifecycle_state = "stopped"
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
         _role = "admin"
@@ -441,10 +459,19 @@ async def test_cf_hijack_events_has_more_false_when_fewer() -> None:
 
     class _Runtime2:  # type: ignore[misc]
         worker_id = "w"
+        meta: dict = {
+            "display_name": "w",
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
         worker_ws = object()
         hijack = coord
         last_snapshot = None
         last_analysis = None
+        lifecycle_state = "stopped"
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
 

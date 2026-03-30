@@ -21,12 +21,9 @@ from typing import Any
 
 import httpx
 import pytest
-import uvicorn
 
+from tests.e2e._live_server import live_server_with_bus
 from provide.terminal.client import connect_async_ws
-from provide.terminal.hijack.hub import EventBus
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.config import config_from_mapping
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -38,45 +35,11 @@ ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
 @pytest.fixture()
 async def live_server() -> Any:
-    cfg = config_from_mapping(
-        {
-            "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "dev"},
-            "sessions": [
-                {
-                    "session_id": "flt1",
-                    "display_name": "Filter Session",
-                    "connector_type": "shell",
-                    "auto_start": False,
-                }
-            ],
-        }
-    )
-    app = create_server_app(cfg)
-    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical")
-    server = uvicorn.Server(config)
-    task = asyncio.create_task(server.serve())
-
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + 5.0
-    while not server.started:
-        if loop.time() > deadline:
-            server.should_exit = True
-            await asyncio.wait_for(task, timeout=2.0)
-            raise RuntimeError("live_server (filters): uvicorn startup timeout")
-        await asyncio.sleep(0.05)
-
-    port: int = server.servers[0].sockets[0].getsockname()[1]
-    base_url = f"http://127.0.0.1:{port}"
-
-    hub = app.state.uterm_registry._hub
-    hub._event_bus = EventBus()
-
-    try:
-        yield hub, base_url
-    finally:
-        server.should_exit = True
-        await asyncio.wait_for(task, timeout=5.0)
+    sessions = [
+        {"session_id": "flt1", "display_name": "Filter Session", "connector_type": "shell", "auto_start": False}
+    ]
+    async with live_server_with_bus(sessions, label="live_server (filters)") as result:
+        yield result
 
 
 def ws_url(base_url: str, path: str) -> str:
@@ -148,7 +111,8 @@ async def test_three_subscribers_different_event_filters(live_server: Any) -> No
             await browser_ws.send(json.dumps({"type": "hijack_request"}))
             resp2 = await asyncio.wait_for(sub2_task, timeout=8.0)
 
-    resp3 = await asyncio.wait_for(sub3_task, timeout=3.0)
+        # Await sub3 while http client is still alive — sub3 uses the same client
+        resp3 = await asyncio.wait_for(sub3_task, timeout=8.0)
 
     # sub1: snapshot only
     body1 = resp1.json()
@@ -175,11 +139,12 @@ async def test_pattern_filter_passes_matching_screen(live_server: Any) -> None:
     """EventBus watch with pattern=\\$ only delivers snapshots whose screen matches."""
     hub, base_url = live_server
 
-    assert hub._event_bus is not None
+    event_bus = hub.event_bus
+    assert event_bus is not None
 
     async with (
         connect_async_ws(ws_url(base_url, "/ws/worker/flt1/term")) as worker,
-        hub._event_bus.watch("flt1", event_types=["snapshot"], pattern=r"\$ ") as sub,
+        event_bus.watch("flt1", event_types=["snapshot"], pattern=r"\$ ") as sub,
     ):
         await worker.recv()  # snapshot_req
 
@@ -190,8 +155,8 @@ async def test_pattern_filter_passes_matching_screen(live_server: Any) -> None:
         # Queue must still be empty — non-matching event was dropped by pattern filter
         assert sub.queue.empty(), "pattern filter let a non-matching event through"
 
-        # Now publish a matching event directly so the screen field is present
-        hub._event_bus._enqueue(  # type: ignore[attr-defined]
+        # Inject a matching event directly via the private _enqueue to verify delivery
+        event_bus._enqueue(  # type: ignore[attr-defined]
             "flt1",
             {"type": "snapshot", "worker_id": "flt1", "data": {"screen": "root@host:~$ ", "screen_hash": "p1"}},
         )

@@ -30,9 +30,12 @@ from provide.terminal.server.auth import (
 )
 from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
+from provide.terminal.server.profiles import FileProfileStore
 from provide.terminal.server.registry import SessionRegistry
 from provide.terminal.server.routes.api import create_api_router
 from provide.terminal.server.routes.pages import create_page_router
+from provide.terminal.server.routes.profiles import create_profiles_router
+from provide.terminal.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -189,6 +192,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         resume_store=InMemoryResumeStore(),
         on_resume=_on_resume,
     )
+    webhook_manager = WebhookManager()
     registry = SessionRegistry(
         config.sessions,
         hub=hub,
@@ -197,6 +201,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         worker_bearer_token=config.auth.worker_bearer_token,
         max_sessions=config.server.max_sessions,
     )
+    profile_store = FileProfileStore(config.profiles.directory)
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -220,6 +225,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             boot_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await boot_task
+            await webhook_manager.shutdown()
             await registry.shutdown()
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
@@ -229,6 +235,8 @@ def create_server_app(config: ServerConfig) -> FastAPI:
     app.state.uterm_hub = hub
     app.state.uterm_registry = registry
     app.state.uterm_metrics = metrics
+    app.state.uterm_webhooks = webhook_manager
+    app.state.uterm_profile_store = profile_store
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -265,6 +273,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
 
     app.include_router(hub.create_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
+    app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_page_router(), prefix=config.ui.app_path, dependencies=[Depends(_require_authenticated)])
 
     if config.server.allowed_origins:

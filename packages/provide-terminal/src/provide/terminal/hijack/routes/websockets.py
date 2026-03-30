@@ -166,6 +166,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             {
                                 "prompt_id": extract_prompt_id(cast("dict[str, Any]", snapshot)),
                                 "screen_hash": snapshot.get("screen_hash"),
+                                "screen": snapshot.get("screen", ""),
                             },
                         )
                     elif mtype == "analysis":

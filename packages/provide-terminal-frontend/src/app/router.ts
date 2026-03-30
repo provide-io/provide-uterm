@@ -13,7 +13,7 @@ import { renderSession } from "./views/session-view.js";
 export async function routeApp(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   switch (bootstrap.page_kind) {
     case "connect":
-      renderConnect(root, bootstrap);
+      void renderConnect(root, bootstrap);
       return;
     case "dashboard":
       await renderDashboard(root, bootstrap);

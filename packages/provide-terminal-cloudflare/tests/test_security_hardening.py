@@ -74,6 +74,14 @@ async def test_decode_jwt_rejects_future_nbf_outside_skew() -> None:
 class _Runtime:
     def __init__(self) -> None:
         self.worker_id = "w1"
+        self.meta: dict = {
+            "display_name": self.worker_id,
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
         self.worker_ws = object()
         self.hijack = HijackCoordinator()
         self.persisted: list[float] = []
@@ -81,6 +89,7 @@ class _Runtime:
         self._role = "admin"
         self.last_snapshot: dict | None = None
         self.browser_hijack_owner: dict[str, str] = {}
+        self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
 
     async def request_json(self, request: object) -> dict[str, object]:

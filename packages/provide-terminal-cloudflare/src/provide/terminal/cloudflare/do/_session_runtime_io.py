@@ -21,6 +21,7 @@ from typing import Any
 try:
     from provide.terminal.cloudflare.bridge.hijack import HijackSession
     from provide.terminal.cloudflare.cf_types import CFWebSocket
+    from provide.terminal.cloudflare.do._webhooks import fire_webhooks
     from provide.terminal.cloudflare.do.persistence import clear_lease as _clear_lease
     from provide.terminal.cloudflare.do.persistence import persist_lease as _persist_lease
     from provide.terminal.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
@@ -28,6 +29,7 @@ try:
 except Exception:  # pragma: no cover
     from bridge.hijack import HijackSession  # type: ignore[import-not-found]  # noqa: TC002
     from cf_types import CFWebSocket  # type: ignore[import-not-found]  # noqa: TC002
+    from do._webhooks import fire_webhooks  # type: ignore[import-not-found]
     from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found]
     from do.persistence import persist_lease as _persist_lease  # type: ignore[import-not-found]
     from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found]
@@ -143,8 +145,9 @@ class _SessionRuntimeIoMixin:
                 self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
 
     async def broadcast_worker_frame(self, payload: dict[str, Any]) -> None:
-        self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)  # type: ignore[attr-defined]
+        event = self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)  # type: ignore[attr-defined]
         await self.broadcast_to_browsers(payload)
+        await fire_webhooks(self, event)  # type: ignore[arg-type]
 
         text_payload: str | None = None
         frame_type = str(payload.get("type") or "")

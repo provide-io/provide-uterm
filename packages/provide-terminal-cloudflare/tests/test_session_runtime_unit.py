@@ -203,6 +203,105 @@ def test_restore_state_with_input_mode() -> None:
     assert rt.input_mode == "open"
 
 
+def test_restore_state_loads_meta_from_sqlite() -> None:
+    """_restore_state loads session metadata from SQLite when present."""
+    rt = _make_runtime("w1")
+    rt.store.save_session_meta(
+        "w1",
+        {
+            "display_name": "Saved Name",
+            "connector_type": "ssh",
+            "created_at": 1000.0,
+            "tags": ["a"],
+            "visibility": "private",
+            "owner": "alice",
+        },
+    )
+    rt.meta = {"display_name": "w1"}  # reset
+    rt._meta_loaded = False
+    rt._restore_state()
+    assert rt.meta["display_name"] == "Saved Name"
+    assert rt.meta["connector_type"] == "ssh"
+    assert rt._meta_loaded is True
+
+
+@pytest.mark.asyncio
+async def test_ensure_meta_loads_from_kv() -> None:
+    """_ensure_meta reads KV on first contact when SQLite has no meta."""
+    import json as _json
+
+    rt = _make_runtime("w1")
+    kv_data = _json.dumps(
+        {
+            "display_name": "KV Session",
+            "connector_type": "telnet",
+            "created_at": 2000.0,
+            "tags": ["prod"],
+            "visibility": "public",
+            "owner": "bob",
+        }
+    )
+
+    class _FakeKV:
+        async def get(self, key):
+            return kv_data if key == "session:w1" else None
+
+    rt.env.SESSION_REGISTRY = _FakeKV()
+    rt._meta_loaded = False
+    await rt._ensure_meta()
+    assert rt.meta["display_name"] == "KV Session"
+    assert rt.meta["connector_type"] == "telnet"
+    assert rt._meta_loaded is True
+    # Should be persisted to SQLite
+    saved = rt.store.load_session_meta("w1")
+    assert saved is not None
+    assert saved["display_name"] == "KV Session"
+
+
+@pytest.mark.asyncio
+async def test_ensure_meta_no_kv_binding() -> None:
+    """_ensure_meta with no SESSION_REGISTRY is a no-op."""
+    rt = _make_runtime("w1")
+    rt._meta_loaded = False
+    await rt._ensure_meta()
+    assert rt._meta_loaded is True
+    assert rt.meta["display_name"] == "w1"  # default
+
+
+@pytest.mark.asyncio
+async def test_ensure_meta_kv_error_is_swallowed() -> None:
+    """_ensure_meta swallows KV read errors gracefully."""
+
+    class _BrokenKV:
+        async def get(self, _key):
+            raise RuntimeError("KV down")
+
+    rt = _make_runtime("w1")
+    rt.env.SESSION_REGISTRY = _BrokenKV()
+    rt._meta_loaded = False
+    await rt._ensure_meta()  # should not raise
+    assert rt._meta_loaded is True
+
+
+@pytest.mark.asyncio
+async def test_ensure_meta_idempotent() -> None:
+    """_ensure_meta only runs once (second call is a no-op)."""
+    rt = _make_runtime("w1")
+    rt._meta_loaded = False
+
+    class _FakeKV:
+        call_count = 0
+
+        async def get(self, _key):
+            _FakeKV.call_count += 1
+            return
+
+    rt.env.SESSION_REGISTRY = _FakeKV()
+    await rt._ensure_meta()
+    await rt._ensure_meta()  # second call should skip
+    assert _FakeKV.call_count == 1
+
+
 # ---------------------------------------------------------------------------
 # _extract_token
 # ---------------------------------------------------------------------------

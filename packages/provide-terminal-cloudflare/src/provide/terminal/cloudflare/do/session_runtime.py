@@ -60,6 +60,16 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
+        self.lifecycle_state: str = "stopped"
+        self.meta: dict[str, Any] = {
+            "display_name": self.worker_id,
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
+        self._meta_loaded: bool = False
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
         self._ushell: Any = None  # UshellConnector | None
@@ -77,7 +87,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         return "default"  # fallback: hex-ID addressed DO, not name-addressed
 
     def _restore_state(self) -> None:
-        # Alarm registrations persist across cold starts — no need to re-arm here.
+        saved_meta = self.store.load_session_meta(self.worker_id)
+        if saved_meta is not None:
+            self.meta = saved_meta
+            self._meta_loaded = True
         row = self.store.load_session(self.worker_id)
         if row is None:
             return
@@ -101,6 +114,30 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         stored_mode = row.get("input_mode")
         if stored_mode in {"hijack", "open"}:
             self.input_mode = stored_mode
+
+    async def _ensure_meta(self) -> None:
+        """Lazy-load session metadata from KV on first contact, persist to SQLite."""
+        if self._meta_loaded:
+            return
+        self._meta_loaded = True
+        kv = getattr(self.env, "SESSION_REGISTRY", None)
+        if kv is None:
+            return
+        try:
+            raw = await kv.get(f"session:{self.worker_id}")
+            if raw is not None:
+                data = json.loads(str(raw))
+                self.meta = {
+                    "display_name": data.get("display_name") or self.worker_id,
+                    "connector_type": data.get("connector_type") or "unknown",
+                    "created_at": float(data.get("created_at") or time.time()),
+                    "tags": data.get("tags") or [],
+                    "visibility": data.get("visibility") or "public",
+                    "owner": data.get("owner"),
+                }
+        except Exception:
+            logger.debug("_ensure_meta kv read failed for %s", self.worker_id)
+        self.store.save_session_meta(self.worker_id, self.meta)
 
     # ------------------------------------------------------------------
     # Auth helpers
@@ -202,6 +239,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
     async def fetch(self, request: object) -> Response:
         # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
         self._lazy_init_worker_id(request)
+        await self._ensure_meta()
 
         # Parse URL once — reused for worker WS check and socket role routing.
         upgrade_header = str(request.headers.get("Upgrade") or "").lower()  # type: ignore[attr-defined]
@@ -273,6 +311,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                         connected=True,
                         hijacked=self.hijack.session is not None,
                         input_mode=self.input_mode,
+                        meta=self.meta,
                     )
                 except Exception as exc:
                     logger.warning("kv register worker in fetch() failed: %s", exc)
@@ -315,6 +354,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self._register_socket(ws, role)
         if role == "worker":
             self.worker_ws = ws
+            self.lifecycle_state = "running"
             await self.broadcast_worker_frame(
                 {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}
             )
@@ -324,6 +364,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 connected=True,
                 hijacked=self.hijack.session is not None,
                 input_mode=self.input_mode,
+                meta=self.meta,
             )
         elif role == "raw":
             self.raw_sockets[ws_id] = ws
@@ -380,6 +421,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         wid = self._socket_worker_id(ws)
         self._remove_ws(ws)
         if role == "worker":
+            self.lifecycle_state = "stopped"
             await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)
 
@@ -389,5 +431,6 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
         self._remove_ws(ws)
         if role == "worker":
+            self.lifecycle_state = "error"
             await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)

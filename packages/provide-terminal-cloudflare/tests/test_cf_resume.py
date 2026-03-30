@@ -119,6 +119,7 @@ class _MockRuntime:
 
     def __init__(self, store: SqliteStateStore) -> None:
         self.worker_id = "w1"
+        self.lifecycle_state = "stopped"
         self.input_mode = "hijack"
         self.hijack = HijackCoordinator()
         self.last_snapshot: dict | None = None

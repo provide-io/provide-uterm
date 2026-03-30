@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { quickConnect } from "../api.js";
+import { createProfile, fetchProfile, quickConnect } from "../api.js";
 import type { AppBootstrap } from "../types.js";
 import { renderAppHeader } from "./app-header.js";
 
@@ -65,7 +65,26 @@ async function handleSubmit(form: HTMLFormElement, errorEl: HTMLElement, submitB
     if (pass) payload.password = pass;
   }
   try {
+    // Connect first
     const result = await quickConnect(payload as unknown as Parameters<typeof quickConnect>[0]);
+
+    // Save profile only after successful connect
+    const saveCheckbox = form.querySelector<HTMLInputElement>("#connect-save-profile");
+    if (saveCheckbox?.checked) {
+      // Save profile without password — profiles never store credentials.
+      const profilePayload: Record<string, unknown> = {
+        name: name || type,
+        connector_type: type,
+      };
+      if (host) profilePayload.host = host;
+      if (payload.port) profilePayload.port = payload.port;
+      if (payload.username) profilePayload.username = payload.username;
+      if (payload.input_mode) profilePayload.input_mode = payload.input_mode;
+      if (payload.tags) profilePayload.tags = payload.tags;
+      await createProfile(profilePayload as Parameters<typeof createProfile>[0]).catch(() => {
+        // Non-fatal — navigate proceeds even if save fails.
+      });
+    }
     window.location.href = result.url;
   } catch (err) {
     errorEl.textContent = err instanceof Error ? err.message : "Connection failed.";
@@ -74,7 +93,7 @@ async function handleSubmit(form: HTMLFormElement, errorEl: HTMLElement, submitB
   }
 }
 
-export function renderConnect(root: HTMLElement, bootstrap: AppBootstrap): void {
+export async function renderConnect(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   const safeAppPath = escapeHtml(bootstrap.app_path);
   root.innerHTML = `
     <div class="page">
@@ -125,6 +144,10 @@ export function renderConnect(root: HTMLElement, bootstrap: AppBootstrap): void 
             <label for="connect-tags">Tags (optional, comma-separated)</label>
             <input id="connect-tags" type="text" placeholder="game, prod, demo">
           </div>
+          <div class="field" style="flex-direction:row;align-items:center;gap:.5rem">
+            <input id="connect-save-profile" type="checkbox">
+            <label for="connect-save-profile" style="margin:0">Save as profile</label>
+          </div>
           <div id="connect-error" class="field-error"></div>
           <button id="connect-submit" class="btn primary" type="submit" style="width:100%">Connect</button>
         </form>
@@ -146,4 +169,33 @@ export function renderConnect(root: HTMLElement, bootstrap: AppBootstrap): void 
     e.preventDefault();
     void handleSubmit(form, errorEl, submitBtn);
   });
+
+  // Pre-fill from ?profile=<id>
+  const params = new URLSearchParams(window.location.search);
+  const profileId = params.get("profile");
+  if (profileId) {
+    const profile = await fetchProfile(profileId);
+    if (profile && form) {
+      const nameEl = form.querySelector<HTMLInputElement>("#connect-name");
+      const typeEl = form.querySelector<HTMLSelectElement>("#connect-type");
+      const hostEl = form.querySelector<HTMLInputElement>("#connect-host");
+      const portFieldEl = form.querySelector<HTMLInputElement>("#connect-port");
+      const userEl = form.querySelector<HTMLInputElement>("#connect-user");
+      const modeEl = form.querySelector<HTMLSelectElement>("#connect-mode");
+      const tagsEl = form.querySelector<HTMLInputElement>("#connect-tags");
+      if (nameEl) nameEl.value = profile.name;
+      if (typeEl) {
+        typeEl.value = profile.connector_type;
+        updateFieldVisibility(form);
+      }
+      if (hostEl && profile.host) hostEl.value = profile.host;
+      if (portFieldEl && profile.port) {
+        portFieldEl.value = String(profile.port);
+        portFieldEl.dataset.userEdited = "1";
+      }
+      if (userEl && profile.username) userEl.value = profile.username;
+      if (modeEl && profile.input_mode) modeEl.value = profile.input_mode;
+      if (tagsEl && profile.tags.length > 0) tagsEl.value = profile.tags.join(", ");
+    }
+  }
 }

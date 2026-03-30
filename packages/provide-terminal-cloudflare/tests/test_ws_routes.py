@@ -21,6 +21,15 @@ from provide.terminal.cloudflare.contracts import frame_json
 class _Runtime:
     def __init__(self, *, input_mode: str = "hijack", browser_role: str = "admin") -> None:
         self.worker_id = "w1"
+        self.meta: dict = {
+            "display_name": self.worker_id,
+            "connector_type": "unknown",
+            "created_at": 0.0,
+            "tags": [],
+            "visibility": "public",
+            "owner": None,
+        }
+        self.lifecycle_state = "stopped"
         self.input_mode = input_mode
         self.hijack = HijackCoordinator()
         self.last_snapshot: dict | None = None
