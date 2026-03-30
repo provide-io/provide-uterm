@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title id="title">SSE Viewer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'SF Mono', monospace; font-size: 13px; }
+  #header {
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 10px 16px; display: flex; align-items: center; gap: 12px;
+  }
+  #session-label { font-size: 15px; font-weight: 600; color: #58a6ff; }
+  #status { font-size: 12px; padding: 3px 8px; border-radius: 12px; background: #21262d; color: #8b949e; }
+  #status.connected { background: #0d4429; color: #3fb950; }
+  #status.error { background: #490202; color: #f85149; }
+  #event-count { font-size: 11px; color: #8b949e; margin-left: auto; }
+  #log {
+    height: calc(100vh - 48px); overflow-y: auto;
+    padding: 8px 0;
+  }
+  .event {
+    display: flex; gap: 12px; padding: 4px 16px;
+    border-bottom: 1px solid #161b22;
+    animation: flash 0.3s ease-out;
+  }
+  .event:hover { background: #161b22; }
+  @keyframes flash { from { background: #1c2d3b; } to { background: transparent; } }
+  .ts { color: #484f58; min-width: 90px; }
+  .seq { color: #6e7681; min-width: 40px; text-align: right; }
+  .type { min-width: 110px; font-weight: 600; }
+  .type.snapshot { color: #79c0ff; }
+  .type.term     { color: #d2a8ff; }
+  .type.worker_connected { color: #3fb950; }
+  .type.worker_disconnected { color: #f85149; }
+  .type.heartbeat { color: #484f58; }
+  .body { color: #c9d1d9; white-space: pre; overflow: hidden; text-overflow: ellipsis; max-width: 600px; }
+  #empty { padding: 32px; color: #484f58; text-align: center; }
+</style>
+</head>
+<body>
+<div id="header">
+  <span id="session-label">loading…</span>
+  <span id="status">connecting</span>
+  <span id="event-count">0 events</span>
+</div>
+<div id="log"><div id="empty">waiting for events…</div></div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const sessionId = params.get('session') || 'unknown';
+const base      = params.get('base')    || location.origin;
+const label     = params.get('label')   || sessionId;
+
+document.getElementById('title').textContent = `SSE · ${label}`;
+document.getElementById('session-label').textContent = `session: ${label}`;
+
+const statusEl = document.getElementById('status');
+const logEl    = document.getElementById('log');
+const cntEl    = document.getElementById('event-count');
+let count = 0;
+
+function fmt(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v.slice(0, 120);
+  return JSON.stringify(v).slice(0, 120);
+}
+
+function addRow(seq, type, body) {
+  const empty = document.getElementById('empty');
+  if (empty) empty.remove();
+
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-US', { hour12: false }) + '.' +
+             String(now.getMilliseconds()).padStart(3,'0');
+
+  const row = document.createElement('div');
+  row.className = 'event';
+  row.innerHTML =
+    `<span class="ts">${ts}</span>` +
+    `<span class="seq">#${seq}</span>` +
+    `<span class="type ${type}">${type}</span>` +
+    `<span class="body">${fmt(body)}</span>`;
+  logEl.appendChild(row);
+  logEl.scrollTop = logEl.scrollHeight;
+  cntEl.textContent = `${++count} events`;
+}
+
+const url = `${base}/api/sessions/${sessionId}/events/stream`;
+const es  = new EventSource(url);
+
+es.onopen = () => {
+  statusEl.textContent = 'connected';
+  statusEl.className = 'connected';
+};
+es.onerror = () => {
+  statusEl.textContent = 'reconnecting…';
+  statusEl.className = 'error';
+};
+es.onmessage = (e) => {
+  let ev;
+  try { ev = JSON.parse(e.data); } catch { return; }
+  const body = ev.data?.screen || ev.data?.text || ev.screen || '';
+  addRow(ev.seq ?? '?', ev.type ?? 'event', body);
+};
+</script>
+</body>
+</html>

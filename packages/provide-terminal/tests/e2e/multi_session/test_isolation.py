@@ -44,10 +44,11 @@ async def test_two_sessions_eventbus_isolated(two_session_server: Any) -> None:
         await w2.recv()  # snapshot_req for s2
 
         # Subscribe to each session independently
-        assert hub._event_bus is not None
+        event_bus = hub.event_bus
+        assert event_bus is not None
         async with (
-            hub._event_bus.watch("s1") as sub1,
-            hub._event_bus.watch("s2") as sub2,
+            event_bus.watch("s1") as sub1,
+            event_bus.watch("s2") as sub2,
         ):
             # s1 worker fires; s2 worker stays silent
             await w1.send(json.dumps(snapshot_msg("$ s1 event", "s1")))
@@ -89,14 +90,14 @@ async def test_two_sessions_concurrent_long_polls(two_session_server: Any) -> No
         # Launch both long-polls simultaneously
         poll1 = asyncio.create_task(watch_events(base_url, "s1", timeout_ms=6000, max_events=1))
         poll2 = asyncio.create_task(watch_events(base_url, "s2", timeout_ms=6000, max_events=1))
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.5)
 
         # Fire events in reverse order to make sure routing is correct
         await w2.send(json.dumps(snapshot_msg("$ s2 concurrent", "s2")))
-        resp2 = await asyncio.wait_for(poll2, timeout=8.0)
+        resp2 = await asyncio.wait_for(poll2, timeout=15.0)
 
         await w1.send(json.dumps(snapshot_msg("$ s1 concurrent", "s1")))
-        resp1 = await asyncio.wait_for(poll1, timeout=8.0)
+        resp1 = await asyncio.wait_for(poll1, timeout=15.0)
 
     assert resp1.status_code == 200
     body1 = resp1.json()

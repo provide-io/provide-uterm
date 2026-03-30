@@ -121,6 +121,11 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._ws_to_resume_token: dict[WebSocket, str] = {}
         self._event_bus: EventBus | None = event_bus
 
+    @property
+    def event_bus(self) -> EventBus | None:
+        """Public accessor for the EventBus instance (None if not configured)."""
+        return self._event_bus
+
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
         callback = self._on_metric
@@ -206,7 +211,12 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         return role
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Append a timestamped event to the worker's event ring buffer and return it."""
+        """Append a timestamped event to the worker's event ring buffer and return it.
+
+        For ``event_type="snapshot"`` the *data* dict contains ``prompt_id``,
+        ``screen_hash``, and ``screen`` (the full screen text).  Pattern filters
+        on the EventBus rely on ``data["screen"]`` being populated.
+        """
         payload = data or {}
         async with self._lock:
             st = self._workers.get(worker_id)

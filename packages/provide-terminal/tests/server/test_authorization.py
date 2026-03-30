@@ -6,11 +6,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from provide.terminal.server.auth import Principal
 from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.models import SessionDefinition
+
+if TYPE_CHECKING:
+    from provide.terminal.server.profiles import ConnectionProfile
 
 
 @pytest.fixture()
@@ -156,3 +161,73 @@ class TestResolveBrowserRole:
         p = _principal(roles=["unknown"])
         s = _session(visibility="public")
         assert authz.resolve_browser_role(p, s) == "viewer"
+
+
+# ── Profile authorization ─────────────────────────────────────────────────
+
+
+def _make_test_profile(owner: str, visibility: str = "private") -> ConnectionProfile:
+    """Return a minimal ConnectionProfile for auth tests."""
+    import time
+
+    from provide.terminal.server.profiles import ConnectionProfile
+
+    now = time.time()
+    return ConnectionProfile(
+        profile_id="profile-test",
+        owner=owner,
+        name="Test",
+        connector_type="ssh",
+        visibility=visibility,  # type: ignore[arg-type]
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def test_can_read_own_private_profile() -> None:
+    authz = AuthorizationService()
+    principal = _principal("alice", roles=["operator"])
+    profile = _make_test_profile(owner="alice", visibility="private")
+    assert authz.can_read_profile(principal, profile) is True
+
+
+def test_cannot_read_other_private_profile() -> None:
+    authz = AuthorizationService()
+    principal = _principal("alice", roles=["operator"])
+    profile = _make_test_profile(owner="bob", visibility="private")
+    assert authz.can_read_profile(principal, profile) is False
+
+
+def test_can_read_shared_profile_as_non_owner() -> None:
+    authz = AuthorizationService()
+    principal = _principal("alice", roles=["operator"])
+    profile = _make_test_profile(owner="bob", visibility="shared")
+    assert authz.can_read_profile(principal, profile) is True
+
+
+def test_admin_can_read_any_profile() -> None:
+    authz = AuthorizationService()
+    principal = _principal("admin", roles=["admin"])
+    profile = _make_test_profile(owner="bob", visibility="private")
+    assert authz.can_read_profile(principal, profile) is True
+
+
+def test_can_mutate_own_profile() -> None:
+    authz = AuthorizationService()
+    principal = _principal("alice", roles=["operator"])
+    profile = _make_test_profile(owner="alice")
+    assert authz.can_mutate_profile(principal, profile) is True
+
+
+def test_cannot_mutate_other_profile() -> None:
+    authz = AuthorizationService()
+    principal = _principal("alice", roles=["operator"])
+    profile = _make_test_profile(owner="bob")
+    assert authz.can_mutate_profile(principal, profile) is False
+
+
+def test_admin_can_mutate_any_profile() -> None:
+    authz = AuthorizationService()
+    principal = _principal("admin", roles=["admin"])
+    profile = _make_test_profile(owner="bob")
+    assert authz.can_mutate_profile(principal, profile) is True

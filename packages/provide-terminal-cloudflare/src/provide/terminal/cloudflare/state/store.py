@@ -42,46 +42,74 @@ class SqliteStateStore:
                 raise first_exc from None
 
     def migrate(self) -> None:
-        self._run(
-            """
-            CREATE TABLE IF NOT EXISTS session_state (
-                worker_id TEXT PRIMARY KEY,
-                hijack_id TEXT,
-                owner TEXT,
-                lease_expires_at REAL,
-                last_snapshot_json TEXT,
-                event_seq INTEGER NOT NULL DEFAULT 0,
-                updated_at REAL NOT NULL
-            )
-            """
-        )
-        self._run(
-            """
-            CREATE TABLE IF NOT EXISTS session_events (
-                worker_id TEXT NOT NULL,
-                seq INTEGER NOT NULL,
-                ts REAL NOT NULL,
-                event_type TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                PRIMARY KEY (worker_id, seq)
-            )
-            """
-        )
-        # Add input_mode column if it does not exist yet (idempotent migration).
+        for ddl in (
+            """CREATE TABLE IF NOT EXISTS session_state (
+                worker_id TEXT PRIMARY KEY, hijack_id TEXT, owner TEXT,
+                lease_expires_at REAL, last_snapshot_json TEXT,
+                event_seq INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS session_events (
+                worker_id TEXT NOT NULL, seq INTEGER NOT NULL, ts REAL NOT NULL,
+                event_type TEXT NOT NULL, payload_json TEXT NOT NULL,
+                PRIMARY KEY (worker_id, seq))""",
+            """CREATE TABLE IF NOT EXISTS resume_tokens (
+                token TEXT PRIMARY KEY, worker_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'viewer', was_hijack_owner INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL, expires_at REAL NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS webhooks (
+                webhook_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, url TEXT NOT NULL,
+                event_types_json TEXT, pattern TEXT, secret TEXT)""",
+            """CREATE TABLE IF NOT EXISTS session_meta (
+                worker_id TEXT PRIMARY KEY, display_name TEXT NOT NULL DEFAULT '',
+                connector_type TEXT NOT NULL DEFAULT 'unknown', created_at REAL NOT NULL DEFAULT 0,
+                tags_json TEXT NOT NULL DEFAULT '[]', visibility TEXT NOT NULL DEFAULT 'public',
+                owner TEXT)""",
+        ):
+            self._run(ddl)
         with contextlib.suppress(Exception):
             self._run("ALTER TABLE session_state ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'hijack'")
+
+    # ------------------------------------------------------------------
+    # Session metadata (display_name, connector_type, created_at, etc.)
+    # ------------------------------------------------------------------
+
+    def save_session_meta(self, worker_id: str, meta: dict[str, Any]) -> None:
+        """Persist session metadata to SQLite (UPSERT)."""
         self._run(
-            """
-            CREATE TABLE IF NOT EXISTS resume_tokens (
-                token TEXT PRIMARY KEY,
-                worker_id TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'viewer',
-                was_hijack_owner INTEGER NOT NULL DEFAULT 0,
-                created_at REAL NOT NULL,
-                expires_at REAL NOT NULL
-            )
-            """
+            "INSERT INTO session_meta(worker_id,display_name,connector_type,created_at,tags_json,visibility,owner) "
+            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(worker_id) DO UPDATE SET display_name=excluded.display_name,"
+            "connector_type=excluded.connector_type,created_at=excluded.created_at,"
+            "tags_json=excluded.tags_json,visibility=excluded.visibility,owner=excluded.owner",
+            worker_id,
+            str(meta.get("display_name") or worker_id),
+            str(meta.get("connector_type") or "unknown"),
+            float(meta.get("created_at") or time.time()),
+            json.dumps(meta.get("tags") or [], ensure_ascii=True),
+            str(meta.get("visibility") or "public"),
+            meta.get("owner"),
         )
+
+    def load_session_meta(self, worker_id: str) -> dict[str, Any] | None:
+        """Load persisted session metadata, or ``None`` if never saved."""
+        rows = self._rows(
+            self._run(
+                "SELECT display_name,connector_type,created_at,tags_json,visibility,owner "
+                "FROM session_meta WHERE worker_id=?",
+                worker_id,
+            )
+        )
+        if not rows:
+            return None
+        r, rv = rows[0], self._row_value
+        return {
+            "display_name": str(rv(r, "display_name", 0) or worker_id),
+            "connector_type": str(rv(r, "connector_type", 1) or "unknown"),
+            "created_at": float(rv(r, "created_at", 2) or 0),
+            "tags": json.loads(str(rv(r, "tags_json", 3) or "[]")),
+            "visibility": str(rv(r, "visibility", 4) or "public"),
+            "owner": rv(r, "owner", 5),
+        }
+
+    # ---- Session state (hijack lease, snapshot, events) ----
 
     def load_session(self, worker_id: str) -> dict[str, Any] | None:
         rows = self._rows(
@@ -155,14 +183,7 @@ class SqliteStateStore:
 
     def min_event_seq(self, worker_id: str) -> int:
         rows = self._rows(
-            self._run(
-                """
-                SELECT COALESCE(MIN(seq), 0) AS seq
-                FROM session_events
-                WHERE worker_id = ?
-                """,
-                worker_id,
-            )
+            self._run("SELECT COALESCE(MIN(seq), 0) AS seq FROM session_events WHERE worker_id = ?", worker_id)
         )
         if not rows:
             return 0
@@ -190,8 +211,7 @@ class SqliteStateStore:
         )
 
     def append_event(self, worker_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-        # CF DO SQLite does not support SAVEPOINT/BEGIN/ROLLBACK — the storage
-        # API auto-coalesces writes atomically.  Run statements directly.
+        # CF DO SQLite auto-coalesces writes atomically (no SAVEPOINT/ROLLBACK).
         current_seq = self.current_event_seq(worker_id)
         seq = current_seq + 1
         ts = time.time()
@@ -233,14 +253,7 @@ class SqliteStateStore:
 
     def current_event_seq(self, worker_id: str) -> int:
         rows = self._rows(
-            self._run(
-                """
-                SELECT COALESCE(MAX(seq), 0) AS seq
-                FROM session_events
-                WHERE worker_id = ?
-                """,
-                worker_id,
-            )
+            self._run("SELECT COALESCE(MAX(seq), 0) AS seq FROM session_events WHERE worker_id = ?", worker_id)
         )
         if not rows:
             return 0
@@ -275,6 +288,118 @@ class SqliteStateStore:
             }
             for row in rows
         ]
+
+    # ------------------------------------------------------------------
+    # Recording
+    # ------------------------------------------------------------------
+
+    def count_events(self, worker_id: str) -> int:
+        """Return the total number of events stored for *worker_id*."""
+        rows = self._rows(self._run("SELECT COUNT(*) AS cnt FROM session_events WHERE worker_id = ?", worker_id))
+        # COUNT(*) always returns exactly one row.
+        return int(self._row_value(rows[0], "cnt", 0) or 0)
+
+    def list_recording_entries(
+        self,
+        worker_id: str,
+        *,
+        limit: int = 200,
+        offset: int | None = None,
+        event: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Query session events as ``{ts, event, data}``.  *offset=None* → tail."""
+        limit = max(1, min(limit, 500))
+        tail = offset is None
+
+        where = "WHERE worker_id = ?"
+        params: list[object] = [worker_id]
+        if event is not None:
+            where += " AND event_type = ?"
+            params.append(event)
+
+        order = "ORDER BY seq DESC" if tail else "ORDER BY seq ASC"
+        params.append(limit)
+        suffix = f"{order} LIMIT ?"
+        if not tail:
+            suffix += " OFFSET ?"
+            params.append(max(0, offset))  # type: ignore[arg-type]
+
+        sql = f"SELECT ts, event_type, payload_json FROM session_events {where} {suffix}"  # noqa: S608
+        rows = self._rows(self._run(sql, *params))
+        if tail:
+            rows = list(reversed(rows))
+
+        return [
+            {
+                "ts": float(self._row_value(row, "ts", 0) or 0.0),
+                "event": str(self._row_value(row, "event_type", 1) or ""),
+                "data": json.loads(str(self._row_value(row, "payload_json", 2) or "{}")),
+            }
+            for row in rows
+        ]
+
+    # ------------------------------------------------------------------
+    # Webhooks
+    # ------------------------------------------------------------------
+
+    def save_webhook(
+        self,
+        webhook_id: str,
+        session_id: str,
+        url: str,
+        *,
+        event_types: list[str] | None = None,
+        pattern: str | None = None,
+        secret: str | None = None,
+    ) -> None:
+        event_types_json = json.dumps(event_types) if event_types is not None else None
+        self._run(
+            """
+            INSERT INTO webhooks(webhook_id, session_id, url, event_types_json, pattern, secret)
+            VALUES(?, ?, ?, ?, ?, ?)
+            ON CONFLICT(webhook_id) DO UPDATE SET
+                url = excluded.url,
+                event_types_json = excluded.event_types_json,
+                pattern = excluded.pattern,
+                secret = excluded.secret
+            """,
+            webhook_id,
+            session_id,
+            url,
+            event_types_json,
+            pattern,
+            secret,
+        )
+
+    def load_webhooks(self, session_id: str) -> list[dict[str, Any]]:
+        rows = self._rows(
+            self._run(
+                """
+                SELECT webhook_id, session_id, url, event_types_json, pattern, secret
+                FROM webhooks
+                WHERE session_id = ?
+                """,
+                session_id,
+            )
+        )
+        return [
+            {
+                "webhook_id": str(self._row_value(row, "webhook_id", 0) or ""),
+                "session_id": str(self._row_value(row, "session_id", 1) or ""),
+                "url": str(self._row_value(row, "url", 2) or ""),
+                "event_types": json.loads(str(self._row_value(row, "event_types_json", 3) or "null")),
+                "pattern": self._row_value(row, "pattern", 4),
+                "secret": self._row_value(row, "secret", 5),
+            }
+            for row in rows
+        ]
+
+    def delete_webhook(self, webhook_id: str) -> bool:
+        rows_before = self._rows(self._run("SELECT webhook_id FROM webhooks WHERE webhook_id = ?", webhook_id))
+        if not rows_before:
+            return False
+        self._run("DELETE FROM webhooks WHERE webhook_id = ?", webhook_id)
+        return True
 
     # ------------------------------------------------------------------
     # Resume tokens

@@ -101,6 +101,12 @@ class RecordingConfig(ServerBaseModel):
         return value
 
 
+class ProfileStoreConfig(ServerBaseModel):
+    """File-backed profile store settings."""
+
+    directory: Path = Path(".uterm-profiles")
+
+
 class ServerBindConfig(ServerBaseModel):
     """Bind and public URL settings."""
 
@@ -234,11 +240,19 @@ class ServerConfig(ServerBaseModel):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     recording: RecordingConfig = Field(default_factory=RecordingConfig)
+    profiles: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
     sessions: list[SessionDefinition] = Field(default_factory=list)
 
 
 ServerModel: TypeAlias = (
-    AuthConfig | UiConfig | RecordingConfig | ServerBindConfig | SessionDefinition | SessionRuntimeStatus | ServerConfig
+    AuthConfig
+    | UiConfig
+    | RecordingConfig
+    | ProfileStoreConfig
+    | ServerBindConfig
+    | SessionDefinition
+    | SessionRuntimeStatus
+    | ServerConfig
 )
 
 

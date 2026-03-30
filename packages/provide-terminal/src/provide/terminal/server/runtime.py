@@ -313,6 +313,7 @@ class HostedSessionRuntime:
         backoff_s = [0.25, 0.5, 1.0, 2.0, 5.0]
         attempt = 0
         while not self._stop.is_set():
+            self._state = "starting"
             try:
                 self._connector = await self._start_connector()
                 worker_url = self._ws_url() + f"/ws/worker/{self.definition.session_id}/term"

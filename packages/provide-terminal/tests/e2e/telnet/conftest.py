@@ -42,7 +42,8 @@ import pytest
 import uvicorn
 import websockets
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk
+from provide.terminal.control_channel import ControlChannelDecoder as ControlStreamDecoder
+from provide.terminal.control_channel import ControlChunk, DataChunk
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.config import config_from_mapping
 from provide.terminal.transports.telnet_server import start_telnet_server
@@ -85,7 +86,13 @@ async def _xff_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
 
 
 def _alloc_port() -> int:
-    """Return a free ephemeral TCP port by briefly binding to it."""
+    """Return a free ephemeral TCP port by briefly binding to it.
+
+    There is a small TOCTOU window between releasing the port here and uvicorn
+    binding to it.  This is acceptable for tests — the probability of collision
+    is negligible in a local test run, and retrying on bind failure would
+    complicate the fixture considerably.
+    """
     with socket.socket() as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("127.0.0.1", 0))

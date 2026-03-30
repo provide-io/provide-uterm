@@ -30,7 +30,7 @@ from provide.terminal.client.hijack import HijackClient
 from provide.terminal.client.mcp_tools import _ok
 from provide.terminal.screen import strip_ansi
 
-TOOL_COUNT = 17
+TOOL_COUNT = 18
 
 # C-style escape sequences that LLMs commonly emit in ``keys`` strings.
 _ESCAPE_MAP: dict[str, str] = {
@@ -394,5 +394,53 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
             max_events=max_events,
         )
         return _ok(ok, data)
+
+    @mcp.tool()
+    async def session_subscribe(
+        session_id: str,
+        event_types: str | None = None,
+        pattern: str | None = None,
+        duration_s: float = 30.0,
+        max_events: int = 200,
+    ) -> dict[str, Any]:
+        """Long-running session subscription for agent loops.
+
+        Unlike ``session_watch`` (≤ 30 s, ≤ 50 events), this tool is designed
+        for AI agents that need to monitor a session for an extended period —
+        for example, waiting for a shell prompt regex to appear before sending
+        the next command.
+
+        Returns when *max_events* events have been collected, the *pattern*
+        fires at least once, or *duration_s* elapses — whichever comes first.
+
+        Parameters
+        ----------
+        event_types:
+            Comma-separated list of event types to filter on
+            (e.g. ``"snapshot"``).  Omit to receive all types.
+        pattern:
+            Regex applied to ``snapshot`` event ``data.screen`` text.
+            Only matching snapshots are returned.  When this fires,
+            ``matched_pattern`` will be ``True`` in the response.
+        duration_s:
+            How long to subscribe before returning (clamped to 1-120 s).
+        max_events:
+            Maximum events to collect before returning early (clamped to
+            1-500).
+        """
+        clamped_duration_s = min(max(duration_s, 1.0), 120.0)
+        clamped_max_events = min(max(max_events, 1), 500)
+        ok, data = await client.watch_session_events(  # type: ignore[attr-defined]
+            session_id,
+            event_types=event_types,
+            pattern=pattern,
+            timeout_ms=int(clamped_duration_s * 1000),
+            max_events=clamped_max_events,
+        )
+        # Enrich with matched_pattern so callers know whether the pattern fired.
+        matched = bool(pattern and ok and data.get("events"))
+        result = _ok(ok, data)
+        result["matched_pattern"] = matched
+        return result
 
     return mcp

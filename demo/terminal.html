@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  Interactive terminal viewer — connects via WebSocket browser endpoint.
+  URL params: ?session=<id>&base=<api_url>&label=<display_name>
+
+  Handles two connector modes:
+    - telnet/ssh: sends raw `term` frames → xterm.js renders VT100 directly
+    - shell: sends `snapshot` frames only → screen is cleared and redrawn on each snap
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title id="title">Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  #header {
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+    font-family: 'SF Mono', monospace; font-size: 13px; color: #e6edf3;
+    flex-shrink: 0;
+  }
+  #session-label { font-weight: 600; color: #58a6ff; }
+  #status {
+    padding: 2px 8px; border-radius: 12px; font-size: 11px;
+    background: #21262d; color: #8b949e;
+    transition: background 0.2s, color 0.2s;
+  }
+  #status.connected   { background: #0d4429; color: #3fb950; }
+  #status.error       { background: #490202; color: #f85149; }
+  #status.worker-off  { background: #3d2f00; color: #d29922; }
+  #terminal-wrap { flex: 1; padding: 4px 8px; overflow: hidden; }
+  .xterm-viewport { overflow-y: auto !important; }
+</style>
+</head>
+<body>
+<div id="header">
+  <span id="session-label">loading…</span>
+  <span id="status">connecting</span>
+</div>
+<div id="terminal-wrap"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script>
+// ── Control channel codec ─────────────────────────────────────────────────────
+// Verbatim logic from packages/provide-terminal/src/provide/terminal/frontend/hijack-codec.js
+// (ES module `export` keywords removed for inline use)
+
+const _DLE = "\x10";
+const _STX = "\x02";
+const _CONTROL_LEN_RE = /^[0-9a-fA-F]{8}$/;
+
+function encodeDataFrame(data) {
+  return String(data ?? "").split(_DLE).join(_DLE + _DLE);
+}
+
+function encodeControlFrame(payload) {
+  const json = JSON.stringify(payload);
+  return `${_DLE}${_STX}${json.length.toString(16).padStart(8, "0")}:${json}`;
+}
+
+class ControlChannelDecoder {
+  constructor() { this._buffer = ""; }
+  reset() { this._buffer = ""; }
+  feed(chunk) {
+    this._buffer += String(chunk ?? "");
+    const frames = [];
+    let cursor = 0;
+    let text = "";
+    while (cursor < this._buffer.length) {
+      const ch = this._buffer[cursor];
+      if (ch !== _DLE) { text += ch; cursor++; continue; }
+      if (cursor + 1 >= this._buffer.length) break;
+      const marker = this._buffer[cursor + 1];
+      if (marker === _DLE) { text += _DLE; cursor += 2; continue; }
+      if (marker !== _STX) throw new Error("invalid control channel prefix");
+      if (text) { frames.push({ type: "data", data: text }); text = ""; }
+      if (cursor + 11 > this._buffer.length) break;
+      const header = this._buffer.slice(cursor + 2, cursor + 10);
+      if (!_CONTROL_LEN_RE.test(header)) throw new Error("invalid control length");
+      if (this._buffer[cursor + 10] !== ":") throw new Error("invalid control separator");
+      const payloadLen = parseInt(header, 16);
+      const payloadStart = cursor + 11;
+      const payloadEnd = payloadStart + payloadLen;
+      if (payloadEnd > this._buffer.length) break;
+      frames.push({
+        type: "control",
+        control: JSON.parse(this._buffer.slice(payloadStart, payloadEnd)),
+      });
+      cursor = payloadEnd;
+    }
+    if (cursor === this._buffer.length) {
+      if (text) frames.push({ type: "data", data: text });
+      this._buffer = "";
+    } else {
+      this._buffer = text + this._buffer.slice(cursor);
+    }
+    return frames;
+  }
+}
+
+// ── xterm.js ──────────────────────────────────────────────────────────────────
+
+const params    = new URLSearchParams(location.search);
+const sessionId = params.get("session") || "unknown";
+const base      = params.get("base")    || location.origin;
+const label     = params.get("label")   || sessionId;
+
+document.getElementById("title").textContent         = `Terminal · ${label}`;
+document.getElementById("session-label").textContent = `session: ${label}`;
+
+const statusEl = document.getElementById("status");
+
+const term = new Terminal({
+  theme: {
+    background: "#0d1117", foreground: "#e6edf3",
+    cursor: "#58a6ff", selectionBackground: "#264f78",
+    black:        "#484f58", red:        "#f85149", green:  "#3fb950", yellow:  "#d29922",
+    blue:         "#58a6ff", magenta:    "#bc8cff", cyan:   "#39c5cf", white:   "#b1bac4",
+    brightBlack:  "#6e7681", brightRed:  "#ff7b72", brightGreen: "#56d364", brightYellow: "#e3b341",
+    brightBlue:   "#79c0ff", brightMagenta: "#d2a8ff", brightCyan: "#56d4dd", brightWhite: "#f0f6fc",
+  },
+  fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', monospace",
+  fontSize: 13, lineHeight: 1.2, cursorBlink: true,
+  scrollback: 2000, allowTransparency: false, convertEol: false,
+});
+
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(document.getElementById("terminal-wrap"));
+fitAddon.fit();
+window.addEventListener("resize", () => fitAddon.fit());
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+
+const decoder = new ControlChannelDecoder();
+const wsBase  = base.replace(/^http/, "ws");
+const ws      = new WebSocket(`${wsBase}/ws/browser/${sessionId}/term`);
+
+ws.onopen = () => {
+  statusEl.textContent = "connected";
+  statusEl.className   = "connected";
+  term.focus();
+};
+
+ws.onclose = () => {
+  statusEl.textContent = "disconnected";
+  statusEl.className   = "error";
+  term.write("\r\n\x1b[31m[connection closed]\x1b[0m\r\n");
+};
+
+ws.onerror = () => {
+  statusEl.textContent = "error";
+  statusEl.className   = "error";
+};
+
+// Track whether raw term frames have arrived (telnet/ssh mode vs snapshot-only mode).
+// telnet/ssh: sends both `term` and `snapshot` frames — use xterm.js VT100 rendering.
+// shell: sends only `snapshot` frames — clear + redraw screen on each snap.
+let hadTermFrame = false;
+
+function renderSnapshot(ev) {
+  // Clear screen (VT100 erase-display + cursor-home) then write each row.
+  term.write("\x1b[2J\x1b[H");
+  const rows = (ev.screen ?? "").split("\n");
+  for (let i = 0; i < rows.length; i++) {
+    term.write(rows[i].replace(/\s+$/, ""));
+    if (i < rows.length - 1) term.write("\r\n");
+  }
+  // Reposition cursor to where the screen shows it.
+  if (ev.cursor) {
+    const row = (ev.cursor.y ?? 0) + 1;
+    const col = (ev.cursor.x ?? 0) + 1;
+    term.write(`\x1b[${row};${col}H`);
+  }
+}
+
+ws.onmessage = (e) => {
+  let frames;
+  try { frames = decoder.feed(e.data); } catch { return; }
+  for (const frame of frames) {
+    if (frame.type === "data") {
+      // Unframed terminal data (raw bytes from the backend)
+      term.write(frame.data);
+      continue;
+    }
+    const ev = frame.control;
+    switch (ev.type) {
+      case "term":
+        hadTermFrame = true;
+        term.write(ev.data ?? "");
+        break;
+      case "snapshot":
+        if (!hadTermFrame) {
+          // Shell connector (snapshot-only): clear and redraw on every snap
+          renderSnapshot(ev);
+        }
+        break;
+      case "hello":
+        if (!ev.worker_online) {
+          term.write("\x1b[33m[waiting for worker…]\x1b[0m\r\n");
+          statusEl.textContent = "worker offline";
+          statusEl.className   = "worker-off";
+        }
+        break;
+      case "worker_connected":
+        term.write("\r\n\x1b[32m[worker connected]\x1b[0m\r\n");
+        statusEl.textContent = "connected";
+        statusEl.className   = "connected";
+        break;
+      case "worker_disconnected":
+        term.write("\r\n\x1b[31m[worker disconnected]\x1b[0m\r\n");
+        statusEl.textContent = "worker offline";
+        statusEl.className   = "worker-off";
+        break;
+    }
+  }
+};
+
+// ── Keyboard input ────────────────────────────────────────────────────────────
+
+function _send(data) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(encodeDataFrame(data));
+  }
+}
+
+term.onData(_send);
+
+// Exposed for demo/test automation — call from Playwright via page.evaluate()
+window._demo_send = _send;
+</script>
+</body>
+</html>

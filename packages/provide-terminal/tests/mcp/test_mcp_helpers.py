@@ -52,6 +52,7 @@ class TestToolMetadata:
             "worker_input_mode",
             "worker_disconnect",
             "session_watch",
+            "session_subscribe",
         }
         assert names == expected
 

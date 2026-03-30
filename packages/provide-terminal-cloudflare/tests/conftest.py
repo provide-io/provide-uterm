@@ -81,66 +81,116 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.skip(reason="E2E tests skipped; use -m e2e or set E2E=1"))
 
 
+def _wait_for_health(base: str, timeout_s: float) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"{base}/api/health", timeout=2) as resp:  # noqa: S310
+                if resp.status == 200:
+                    return True
+        except (urllib.error.URLError, OSError):
+            time.sleep(1)
+    return False
+
+
+class _PywranglerManager:
+    """Manages a pywrangler dev process with auto-restart on crash."""
+
+    def __init__(self) -> None:
+        import shutil
+
+        self._pywrangler = shutil.which("pywrangler") or "pywrangler"
+        self._proc: subprocess.Popen[bytes] | None = None
+        self._dev_vars_path = _PACKAGE_ROOT / ".dev.vars"
+        self._dev_vars_original: str | None = (
+            self._dev_vars_path.read_text(encoding="utf-8") if self._dev_vars_path.exists() else None
+        )
+        self._dev_vars_path.write_text("AUTH_MODE=dev\n", encoding="utf-8")
+
+    def start(self) -> bool:
+        self._stop_proc()
+        self._proc = subprocess.Popen(
+            [
+                self._pywrangler,
+                "dev",
+                "--port",
+                str(_E2E_PORT),
+                "--ip",
+                "127.0.0.1",
+                "--var",
+                "ENVIRONMENT:development",
+            ],
+            cwd=_PACKAGE_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        return _wait_for_health(_E2E_BASE, _STARTUP_TIMEOUT_S)
+
+    def ensure_healthy(self) -> bool:
+        """Check if pywrangler is alive; restart if crashed."""
+        if self._proc is not None and self._proc.poll() is None:
+            # Process still running — quick health check
+            try:
+                with urllib.request.urlopen(f"{_E2E_BASE}/api/health", timeout=3) as resp:  # noqa: S310
+                    if resp.status == 200:
+                        return True
+            except (urllib.error.URLError, OSError):
+                pass
+        # Dead or unhealthy — restart
+        return self.start()
+
+    def _stop_proc(self) -> None:
+        if self._proc is None:
+            return
+        self._proc.terminate()
+        try:
+            self._proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
+        self._proc = None
+
+    def teardown(self) -> None:
+        self._stop_proc()
+        if self._dev_vars_original is None:
+            self._dev_vars_path.unlink(missing_ok=True)
+        else:
+            self._dev_vars_path.write_text(self._dev_vars_original, encoding="utf-8")
+
+
+# Module-level manager so we can share it between fixtures.
+_manager: _PywranglerManager | None = None
+
+
 @pytest.fixture(scope="session")
 def wrangler_server():
     """Yield the base URL of a running worker for E2E tests.
 
-    If ``REAL_CF_URL`` is set (e.g. ``https://provide-terminal-cloudflare.neurotic.workers.dev``),
-    that URL is yielded directly — no local pywrangler dev process is started.
-
-    Otherwise, starts ``pywrangler dev`` locally, writes ``.dev.vars`` with
-    ``AUTH_MODE=dev`` (restored on teardown), waits for the health endpoint.
+    If ``REAL_CF_URL`` is set, that URL is yielded directly.
+    Otherwise, starts ``pywrangler dev`` locally with auto-restart on crash.
     """
     real_cf_url = os.environ.get("REAL_CF_URL", "").rstrip("/")
-    if real_cf_url:
+    # Only use real CF URL when REAL_CF is explicitly set — avoids accidentally
+    # routing local e2e tests to the real deployment when REAL_CF_URL lingers in env.
+    if real_cf_url and os.environ.get("REAL_CF"):
         yield real_cf_url
         return
 
-    import shutil
-
-    dev_vars_path = _PACKAGE_ROOT / ".dev.vars"
-    _dev_vars_original: str | None = dev_vars_path.read_text(encoding="utf-8") if dev_vars_path.exists() else None
-    dev_vars_path.write_text("AUTH_MODE=dev\n", encoding="utf-8")
-
-    pywrangler = shutil.which("pywrangler") or "pywrangler"
-    proc = subprocess.Popen(
-        # Pass ENVIRONMENT=development via --var so it overrides wrangler.toml's
-        # ENVIRONMENT="production", which would otherwise block AUTH_MODE=dev.
-        [pywrangler, "dev", "--port", str(_E2E_PORT), "--ip", "127.0.0.1", "--var", "ENVIRONMENT:development"],
-        cwd=_PACKAGE_ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    deadline = time.monotonic() + _STARTUP_TIMEOUT_S
-    ready = False
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(f"{_E2E_BASE}/api/health", timeout=2) as resp:  # noqa: S310
-                if resp.status == 200:
-                    ready = True
-                    break
-        except (urllib.error.URLError, OSError):
-            time.sleep(1)
-
-    if not ready:
-        proc.terminate()
-        out, _ = proc.communicate(timeout=5)
-        msg = (out or b"").decode(errors="replace")
-        if _dev_vars_original is None:
-            dev_vars_path.unlink(missing_ok=True)
-        else:
-            dev_vars_path.write_text(_dev_vars_original, encoding="utf-8")
-        pytest.skip(f"pywrangler dev did not start within {_STARTUP_TIMEOUT_S}s: {msg[:500]}")
+    global _manager
+    _manager = _PywranglerManager()
+    if not _manager.start():
+        _manager.teardown()
+        pytest.skip(f"pywrangler dev did not start within {_STARTUP_TIMEOUT_S}s")
 
     yield _E2E_BASE
 
-    proc.terminate()
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    _manager.teardown()
+    _manager = None
 
-    if _dev_vars_original is None:
-        dev_vars_path.unlink(missing_ok=True)
-    else:
-        dev_vars_path.write_text(_dev_vars_original, encoding="utf-8")
+
+@pytest.fixture(autouse=True)
+def _ensure_pywrangler_healthy(request: pytest.FixtureRequest) -> None:
+    """Auto-use fixture: before each E2E test, verify pywrangler is alive."""
+    if not request.node.get_closest_marker("e2e"):
+        return
+    if _manager is not None and not _manager.ensure_healthy():
+        pytest.skip("pywrangler crashed and could not be restarted")

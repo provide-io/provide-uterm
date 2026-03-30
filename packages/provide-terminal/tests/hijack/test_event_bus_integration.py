@@ -24,8 +24,9 @@ def _make_hub() -> TermHub:
 async def test_append_event_delivers_to_subscriber() -> None:
     hub = _make_hub()
     await hub._get("w1")
-    assert hub._event_bus is not None
-    async with hub._event_bus.watch("w1") as sub:
+    event_bus = hub.event_bus
+    assert event_bus is not None
+    async with event_bus.watch("w1") as sub:
         evt = await hub.append_event("w1", "snapshot", {"screen": "hello"})
         item = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
     assert item["seq"] == evt["seq"]
@@ -50,8 +51,9 @@ async def test_append_event_unknown_worker_no_bus_error() -> None:
 async def test_append_event_delivers_to_filtered_subscriber() -> None:
     hub = _make_hub()
     await hub._get("w1")
-    assert hub._event_bus is not None
-    async with hub._event_bus.watch("w1", event_types=["hijack_acquired"]) as sub:
+    event_bus = hub.event_bus
+    assert event_bus is not None
+    async with event_bus.watch("w1", event_types=["hijack_acquired"]) as sub:
         await hub.append_event("w1", "snapshot", {"screen": "x"})
         await hub.append_event("w1", "hijack_acquired", {"hijack_id": "abc"})
         item = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
@@ -73,8 +75,9 @@ async def test_deregister_worker_closes_subscriptions() -> None:
     ws.close = AsyncMock()
 
     await hub.register_worker("w1", ws)
-    assert hub._event_bus is not None
-    async with hub._event_bus.watch("w1") as sub:
+    event_bus = hub.event_bus
+    assert event_bus is not None
+    async with event_bus.watch("w1") as sub:
         await hub.deregister_worker("w1", ws)
         sentinel = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
     assert sentinel is None
@@ -88,8 +91,9 @@ async def test_deregister_wrong_ws_does_not_close() -> None:
     ws_other = AsyncMock()
 
     await hub.register_worker("w1", ws_real)
-    assert hub._event_bus is not None
-    async with hub._event_bus.watch("w1") as sub:
+    event_bus = hub.event_bus
+    assert event_bus is not None
+    async with event_bus.watch("w1") as sub:
         # Deregister with the wrong ws — should not close subscriptions
         should_broadcast, _ = await hub.deregister_worker("w1", ws_other)
         assert not should_broadcast
@@ -111,8 +115,9 @@ async def test_disconnect_worker_closes_subscriptions() -> None:
     ws.close = AsyncMock()
 
     await hub.register_worker("w1", ws)
-    assert hub._event_bus is not None
-    async with hub._event_bus.watch("w1") as sub:
+    event_bus = hub.event_bus
+    assert event_bus is not None
+    async with event_bus.watch("w1") as sub:
         await hub.disconnect_worker("w1")
         sentinel = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
     assert sentinel is None
@@ -133,13 +138,14 @@ async def test_broadcast_latency_with_subscribers() -> None:
     """1000 append_event calls with 5 active subscribers should complete quickly."""
     hub = _make_hub()
     await hub._get("w1")
-    assert hub._event_bus is not None
+    event_bus = hub.event_bus
+    assert event_bus is not None
 
     n = 1000
     subs = []
     ctxs = []
     for _ in range(5):
-        ctx = hub._event_bus.watch("w1")
+        ctx = event_bus.watch("w1")
         sub = await ctx.__aenter__()
         subs.append(sub)
         ctxs.append(ctx)
@@ -161,9 +167,10 @@ async def test_slow_subscriber_does_not_block_append() -> None:
     """A full subscriber queue must not block append_event."""
     hub = TermHub(event_bus=EventBus(max_queue_depth=2))
     await hub._get("w1")
-    assert hub._event_bus is not None
+    event_bus = hub.event_bus
+    assert event_bus is not None
 
-    async with hub._event_bus.watch("w1") as sub:
+    async with event_bus.watch("w1") as sub:
         # Fill the queue first
         for i in range(10):
             await hub.append_event("w1", "snapshot", {"screen": f"{i}"})

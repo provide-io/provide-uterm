@@ -5,7 +5,7 @@
 
 import type { AnalysisResponse, RecordingEntry, SessionStatus, SnapshotPayload } from "../server-common.js";
 import { apiJson } from "../server-common.js";
-import type { RecordingEntryView, SessionDetails, SessionSummary, SessionSurface } from "./types.js";
+import type { ConnectionProfile, RecordingEntryView, SessionDetails, SessionSummary, SessionSurface } from "./types.js";
 
 function normalizeMode(value: string): "open" | "hijack" {
   return value === "hijack" ? "hijack" : "open";
@@ -130,4 +130,34 @@ export function widgetSurface(surface: SessionSurface | undefined): { showAnalys
     showAnalysis: isOperator,
     mobileKeys: isOperator,
   };
+}
+
+export async function fetchProfiles(): Promise<ConnectionProfile[]> {
+  return apiJson<ConnectionProfile[]>("/api/profiles");
+}
+
+export async function fetchProfile(profileId: string): Promise<ConnectionProfile | null> {
+  try {
+    return await apiJson<ConnectionProfile>(`/api/profiles/${encodeURIComponent(profileId)}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function createProfile(
+  payload: Partial<ConnectionProfile> & { name: string; connector_type: string },
+): Promise<ConnectionProfile> {
+  return apiJson<ConnectionProfile>("/api/profiles", "POST", payload);
+}
+
+export async function deleteProfile(profileId: string): Promise<void> {
+  await apiJson<{ ok: boolean }>(`/api/profiles/${encodeURIComponent(profileId)}`, "DELETE");
+}
+
+export async function connectFromProfile(profileId: string, password?: string): Promise<QuickConnectResult> {
+  return apiJson<QuickConnectResult>(
+    `/api/profiles/${encodeURIComponent(profileId)}/connect`,
+    "POST",
+    password ? { password } : {},
+  );
 }

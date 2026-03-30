@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -116,8 +117,10 @@ _WORKER_ROUTE_PATTERNS = (
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/hijack(?:/.*)?$"),
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/(?:input_mode|disconnect_worker)$"),
     re.compile(
-        r"^/api/sessions/(?P<worker_id>[a-zA-Z0-9_-]{1,64})(?:/(?:snapshot|events|mode|clear|analyze|restart))?$"
+        r"^/api/sessions/(?P<worker_id>[a-zA-Z0-9_-]{1,64})(?:/(?:snapshot|events|mode|clear|analyze|restart|recording(?:/(?:entries|download))?))?$"
     ),
+    re.compile(r"^/api/sessions/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/events/stream$"),
+    re.compile(r"^/api/sessions/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/webhooks(?:/[a-zA-Z0-9_-]{1,64})?$"),
 )
 _STATIC_ASSET_PATH = re.compile(r"^/[a-zA-Z0-9._/-]+\.(?:html|css|js)$")
 _SESSION_ID_RE = re.compile(r"^/api/sessions/(?P<session_id>[a-zA-Z0-9_-]{1,64})$")
@@ -264,16 +267,19 @@ async def _handle_connect(request: object, env: object) -> Response:
     session_id = f"{prefix}-{uuid.uuid4().hex[:12]}"
     display_name = str(body.get("display_name") or session_id)
     input_mode = str(body.get("input_mode", "open"))
+    tags = list(body.get("tags") or [])
+    created_at = time.time()
     entry = {
         "session_id": session_id,
         "display_name": display_name,
+        "created_at": created_at,
         "connector_type": connector_type,
         "lifecycle_state": "waiting",
         "input_mode": input_mode,
         "connected": False,
         "auto_start": False,
-        "tags": [],
-        "recording_enabled": False,
+        "tags": tags,
+        "recording_enabled": True,
         "recording_available": False,
         "owner": None,
         "visibility": "public",
@@ -335,6 +341,8 @@ def _match_api_route(path: str, request: object) -> object | None:
         return _api_sessions
     if path == "/api/connect":
         return _api_connect
+    if path.startswith("/api/profiles"):
+        return _api_profiles
     session_delete_match = _SESSION_ID_RE.match(path)
     if session_delete_match and str(getattr(request, "method", "GET")).upper() == "DELETE":
         # Stash the match for the handler.
@@ -351,6 +359,37 @@ async def _api_sessions(request: object, env: object, config: CloudflareConfig) 
 
 async def _api_connect(request: object, env: object, _config: CloudflareConfig) -> Response:
     return await _handle_connect(request, env)
+
+
+async def _api_profiles(request: object, env: object, config: CloudflareConfig) -> Response:
+    from provide.terminal.cloudflare.api._profiles import route_profiles
+
+    path = urlparse(str(getattr(request, "url", ""))).path
+    method = str(getattr(request, "method", "GET")).upper()
+    # In dev mode, use a fixed principal. In JWT mode, resolve from token.
+    principal_id = "dev-user" if config.jwt.mode == "dev" else _resolve_principal_id(request, config)
+    return await route_profiles(request, env, path, method, principal_id)
+
+
+def _resolve_principal_id(request: object, config: CloudflareConfig) -> str:
+    """Extract principal subject_id from JWT token on a pre-authenticated request.
+
+    Uses synchronous PyJWT decode (not the async Web Crypto path) since this runs
+    in the entry worker, not inside a DO.
+    """
+    from provide.terminal.cloudflare.auth.jwt import extract_bearer_or_cookie
+
+    token = extract_bearer_or_cookie(request)
+    if not token:
+        return "anonymous"
+    try:
+        import jwt as pyjwt
+
+        key = config.jwt.public_key_pem or ""
+        claims = pyjwt.decode(token, key, algorithms=list(config.jwt.algorithms), options={"verify_exp": True})
+        return str(claims.get("sub") or claims.get("common_name") or "anonymous")
+    except Exception:
+        return "anonymous"
 
 
 async def _as_future(value: Response) -> Response:

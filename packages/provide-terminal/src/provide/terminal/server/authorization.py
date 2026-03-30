@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from provide.terminal.server.auth import Principal
     from provide.terminal.server.models import SessionDefinition
+    from provide.terminal.server.profiles import ConnectionProfile
 
 Role = str
 Capability = str
@@ -95,6 +96,12 @@ class AuthorizationService:
         if session.owner is None:
             return False
         return self.is_owner(principal, session)
+
+    def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return profile.owner == principal.subject_id or profile.visibility == "shared" or self.is_admin(principal)
+
+    def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return profile.owner == principal.subject_id or self.is_admin(principal)
 
     def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
         if not self.can_read_session(principal, session):

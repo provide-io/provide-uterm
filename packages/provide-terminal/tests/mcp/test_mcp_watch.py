@@ -70,8 +70,8 @@ async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_tool_count_is_17() -> None:
-    assert TOOL_COUNT == 17
+def test_tool_count_is_18() -> None:
+    assert TOOL_COUNT == 18
 
 
 # ---------------------------------------------------------------------------
@@ -523,3 +523,139 @@ class TestWatchEndpoint:
         body = r.json()
         assert len(body["events"]) == 1
         assert body["events"][0]["type"] == "snapshot"
+
+
+# ---------------------------------------------------------------------------
+# session_subscribe MCP tool
+# ---------------------------------------------------------------------------
+
+
+class TestSessionSubscribeMcpTool:
+    def _make_app(self) -> FastAPI:
+        from provide.terminal.server.app import create_server_app
+
+        cfg = config_from_mapping(
+            {
+                "server": {"host": "127.0.0.1", "port": 0},
+                "auth": {"mode": "dev"},
+                "sessions": [
+                    {
+                        "session_id": "s1",
+                        "display_name": "Test",
+                        "connector_type": "shell",
+                        "auto_start": False,
+                    }
+                ],
+            }
+        )
+        return create_server_app(cfg)
+
+    async def test_subscribe_returns_events_and_matched_pattern_false_when_no_pattern(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        with patch(
+            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(
+                return_value=(
+                    True,
+                    {
+                        "events": [{"worker_id": "s1", "seq": 1, "ts": 1.0, "type": "snapshot", "data": {}}],
+                        "dropped_count": 0,
+                        "timed_out": False,
+                    },
+                )
+            ),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1"})
+
+        assert data["success"] is True
+        assert len(data["events"]) == 1
+        assert data["matched_pattern"] is False  # no pattern given
+
+    async def test_subscribe_matched_pattern_true_when_pattern_and_events(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        with patch(
+            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(
+                return_value=(
+                    True,
+                    {
+                        "events": [{"type": "snapshot", "data": {"screen": "$ "}}],
+                        "dropped_count": 0,
+                        "timed_out": False,
+                    },
+                )
+            ),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": r"\$ "})
+
+        assert data["matched_pattern"] is True
+
+    async def test_subscribe_matched_pattern_false_when_no_events(self) -> None:
+        """Pattern given but no events returned → matched_pattern=False."""
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        with patch(
+            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True})),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": r"\$ "})
+
+        assert data["matched_pattern"] is False
+
+    async def test_subscribe_clamps_duration_min(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_subscribe", {"session_id": "s1", "duration_s": 0.001})
+
+        call_kwargs = mock_watch.call_args
+        assert call_kwargs.kwargs["timeout_ms"] == 1000  # min 1 s
+
+    async def test_subscribe_clamps_duration_max(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_subscribe", {"session_id": "s1", "duration_s": 9999.0})
+
+        call_kwargs = mock_watch.call_args
+        assert call_kwargs.kwargs["timeout_ms"] == 120000  # max 120 s
+
+    async def test_subscribe_clamps_max_events_min(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_subscribe", {"session_id": "s1", "max_events": 0})
+
+        call_kwargs = mock_watch.call_args
+        assert call_kwargs.kwargs["max_events"] == 1  # min 1
+
+    async def test_subscribe_clamps_max_events_max(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_subscribe", {"session_id": "s1", "max_events": 10000})
+
+        call_kwargs = mock_watch.call_args
+        assert call_kwargs.kwargs["max_events"] == 500  # max 500
+
+    async def test_subscribe_client_error_returns_failure(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        with patch(
+            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(return_value=(False, {"error": "timeout"})),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1"})
+
+        assert data["success"] is False
+        assert data["matched_pattern"] is False

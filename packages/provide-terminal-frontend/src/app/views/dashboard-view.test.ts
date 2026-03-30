@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppBootstrap, SessionSummary } from "../types.js";
 
 vi.mock("../api.js", () => ({
+  deleteProfile: vi.fn(),
   deleteSession: vi.fn(),
+  fetchProfiles: vi.fn(),
   restartSession: vi.fn(),
 }));
 vi.mock("../state.js", () => ({
@@ -51,6 +53,7 @@ let root: HTMLElement;
 beforeEach(() => {
   root = document.createElement("div");
   document.body.appendChild(root);
+  vi.mocked(apiModule.fetchProfiles).mockResolvedValue([]);
   vi.mocked(stateModule.summarizeSessions).mockImplementation((sessions) => ({
     running: sessions.filter((s) => s.connected && s.lifecycleState === "running"),
     stopped: sessions.filter((s) => !s.connected && s.lifecycleState !== "error"),
@@ -77,7 +80,7 @@ describe("renderDashboard", () => {
     vi.mocked(stateModule.loadDashboardState).mockResolvedValue([session]);
     await renderDashboard(root, makeBootstrap());
     const status = root.querySelector<HTMLElement>("#dashboard-status")!;
-    expect(status.textContent).toContain("1 session(s) loaded");
+    expect(status.textContent).toContain("1 session(s)");
   });
 
   it("shows error status when load fails", async () => {
@@ -91,6 +94,7 @@ describe("renderDashboard", () => {
     vi.mocked(stateModule.loadDashboardState).mockResolvedValue([]);
     await renderDashboard(root, makeBootstrap());
     vi.clearAllMocks();
+    vi.mocked(apiModule.fetchProfiles).mockResolvedValue([]);
     vi.mocked(stateModule.loadDashboardState).mockResolvedValue([makeSummary()]);
     vi.mocked(stateModule.summarizeSessions).mockReturnValue({
       running: [makeSummary()],

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from collections import deque
 from typing import TYPE_CHECKING, Any, cast
 
@@ -33,7 +34,7 @@ _MUTABLE_SESSION_FIELDS = frozenset(
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import AsyncGenerator, Iterable
     from pathlib import Path
 
     from provide.terminal.hijack.hub import TermHub
@@ -287,10 +288,7 @@ class SessionRegistry:
 
         Falls back to the ring buffer when EventBus is not configured on the hub.
         """
-        import asyncio
-        import time as _time
-
-        event_bus = getattr(self._hub, "_event_bus", None)
+        event_bus = getattr(self._hub, "event_bus", None)
         if event_bus is None:
             recent = await self._hub.get_recent_events(session_id, limit=max_events)
             return {"events": recent, "dropped_count": 0, "timed_out": False}
@@ -298,12 +296,12 @@ class SessionRegistry:
         collected: list[dict[str, Any]] = []
         timed_out = False
         timeout_s = timeout_ms / 1000
-        deadline = _time.monotonic() + timeout_s
+        deadline = time.monotonic() + timeout_s
         dropped = 0
 
         async with event_bus.watch(session_id, event_types=event_types, pattern=pattern) as sub:
             while len(collected) < max_events:
-                remaining = deadline - _time.monotonic()
+                remaining = deadline - time.monotonic()
                 if remaining <= 0:  # pragma: no cover — race: clock advanced between iterations
                     timed_out = True
                     break
@@ -318,6 +316,41 @@ class SessionRegistry:
             dropped = sub.dropped
 
         return {"events": collected, "dropped_count": dropped, "timed_out": timed_out}
+
+    async def stream_session_events(
+        self,
+        session_id: str,
+        *,
+        event_types: list[str] | None = None,
+        pattern: str | None = None,
+        heartbeat_s: float = 15.0,
+    ) -> AsyncGenerator[str, None]:
+        """Async generator of SSE-formatted strings for *session_id*.
+
+        Yields ``data: {json}\\n\\n`` per event, a heartbeat line every
+        *heartbeat_s* seconds of idle time, and a final
+        ``data: {"type":"worker_disconnected"}\\n\\n`` then stops on worker
+        disconnect.  Returns immediately (empty generator) when EventBus is
+        not configured on the hub.
+
+        For ``snapshot`` events the *data* dict contains ``screen`` so that
+        pattern filters in the EventBus work correctly.
+        """
+        event_bus = getattr(self._hub, "event_bus", None)
+        if event_bus is None:
+            return
+
+        async with event_bus.watch(session_id, event_types=event_types, pattern=pattern) as sub:
+            while True:
+                try:
+                    item = await asyncio.wait_for(sub.queue.get(), timeout=heartbeat_s)
+                except TimeoutError:
+                    yield 'data: {"type":"heartbeat"}\n\n'
+                    continue
+                if item is None:  # worker-disconnected sentinel
+                    yield 'data: {"type":"worker_disconnected"}\n\n'
+                    return
+                yield f"data: {json.dumps(item)}\n\n"
 
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
         async with self._lock:

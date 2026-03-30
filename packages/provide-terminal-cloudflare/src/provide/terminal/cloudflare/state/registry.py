@@ -28,8 +28,9 @@ async def update_kv_session(
     connected: bool,
     hijacked: bool = False,
     input_mode: str = "hijack",
-    recording_enabled: bool = False,
+    recording_enabled: bool = True,
     recording_available: bool = False,
+    meta: dict[str, Any] | None = None,
 ) -> None:
     """Write (or delete) this DO's session entry in the KV registry.
 
@@ -46,19 +47,21 @@ async def update_kv_session(
         except Exception as exc:
             logger.debug("kv delete %s failed: %s", key, exc)
         return
+    m = meta or {}
     status: dict[str, Any] = {
         "session_id": worker_id,
-        "display_name": worker_id,
-        "connector_type": "unknown",
+        "display_name": m.get("display_name") or worker_id,
+        "created_at": m.get("created_at") or 0.0,
+        "connector_type": m.get("connector_type") or "unknown",
         "lifecycle_state": "running",
         "input_mode": input_mode,
         "connected": True,
         "auto_start": False,
-        "tags": [],
+        "tags": m.get("tags") or [],
         "recording_enabled": recording_enabled,
         "recording_available": recording_available,
-        "owner": None,
-        "visibility": "public",
+        "owner": m.get("owner"),
+        "visibility": m.get("visibility") or "public",
         "last_error": None,
         "hijacked": hijacked,
     }

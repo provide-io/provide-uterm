@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { deleteSession, restartSession } from "../api.js";
+import { deleteProfile, deleteSession, fetchProfiles, restartSession } from "../api.js";
 import { loadDashboardState, summarizeSessions } from "../state.js";
-import type { AppBootstrap, SessionSummary } from "../types.js";
+import type { AppBootstrap, ConnectionProfile, SessionSummary } from "../types.js";
 import { renderAppHeader } from "./app-header.js";
 
 function escapeHtml(value: string): string {
@@ -15,6 +15,49 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function profilesSectionMarkup(profiles: ConnectionProfile[], appPath: string): string {
+  const safeAppPath = escapeHtml(appPath);
+  if (profiles.length === 0) {
+    return `
+      <section class="card stack">
+        <div class="section-heading">
+          <h2>Profiles</h2>
+          <div class="small">No saved profiles. <a href="${safeAppPath}/connect">Connect</a> and save one.</div>
+        </div>
+      </section>
+    `;
+  }
+  return `
+    <section class="card stack">
+      <div class="section-heading"><h2>Profiles</h2><div class="small">${profiles.length} saved</div></div>
+      <div class="session-list">
+        ${profiles
+          .map(
+            (p) => `
+          <article class="session-card" data-profile-id="${escapeHtml(p.profile_id)}">
+            <div class="session-header">
+              <div>
+                <span class="session-title">${escapeHtml(p.name)}</span>
+                <div class="small">${escapeHtml(p.connector_type)}${p.host ? ` · ${escapeHtml(p.host)}${p.port ? `:${p.port}` : ""}` : ""}</div>
+              </div>
+              <div class="session-badges">
+                ${p.visibility === "shared" ? `<span class="badge badge-visibility">shared</span>` : ""}
+              </div>
+            </div>
+            ${p.tags.length > 0 ? `<div class="tag-list">${p.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+            <div class="toolbar">
+              <a class="btn" href="${safeAppPath}/connect?profile=${encodeURIComponent(p.profile_id)}">Connect</a>
+              <button class="btn btn-delete-profile" data-profile-id="${escapeHtml(p.profile_id)}">Delete</button>
+            </div>
+          </article>
+        `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
 }
 
 function sectionMarkup(title: string, sessions: SessionSummary[], appPath: string): string {
@@ -80,7 +123,7 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
         <div class="toolbar">
           <button id="dashboard-refresh" class="btn">Refresh</button>
         </div>
-        <div id="dashboard-status" class="status-chip info">Loading sessions…</div>
+        <div id="dashboard-status" class="status-chip info">Loading…</div>
       </section>
       <div id="dashboard-content" class="page"></div>
     </div>
@@ -88,13 +131,15 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
   const status = root.querySelector<HTMLElement>("#dashboard-status");
   const content = root.querySelector<HTMLElement>("#dashboard-content");
   if (!status || !content) throw new Error("dashboard shell is incomplete");
-  async function loadSessions(statusEl: HTMLElement, contentEl: HTMLElement): Promise<void> {
+
+  async function loadAll(statusEl: HTMLElement, contentEl: HTMLElement): Promise<void> {
     try {
-      const sessions = await loadDashboardState();
+      const [sessions, profiles] = await Promise.all([loadDashboardState(), fetchProfiles()]);
       const groups = summarizeSessions(sessions);
       statusEl.className = "status-chip ok";
-      statusEl.textContent = `${sessions.length} session(s) loaded`;
+      statusEl.textContent = `${sessions.length} session(s) · ${profiles.length} profile(s)`;
       contentEl.innerHTML = [
+        profilesSectionMarkup(profiles, bootstrap.app_path),
         sectionMarkup("Active", groups.running, bootstrap.app_path),
         sectionMarkup("Idle", groups.stopped, bootstrap.app_path),
         sectionMarkup("Error", groups.degraded, bootstrap.app_path),
@@ -102,14 +147,35 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
     } catch (error) {
       statusEl.className = "status-chip error";
       statusEl.textContent = `Dashboard failed to load: ${String(error)}`;
-      contentEl.innerHTML = `<section class="card"><div class="small">Unable to load session state.</div></section>`;
+      contentEl.innerHTML = `<section class="card"><div class="small">Unable to load dashboard state.</div></section>`;
     }
   }
+
   root.querySelector<HTMLButtonElement>("#dashboard-refresh")?.addEventListener("click", () => {
-    void loadSessions(status, content);
+    void loadAll(status, content);
   });
+
   content.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
+
+    const deleteProfileBtn = target.closest<HTMLButtonElement>(".btn-delete-profile");
+    if (deleteProfileBtn) {
+      const pid = deleteProfileBtn.dataset.profileId;
+      if (!pid) return;
+      if (!window.confirm(`Delete profile? This cannot be undone.`)) return;
+      deleteProfileBtn.disabled = true;
+      deleteProfileBtn.textContent = "…";
+      void deleteProfile(pid)
+        .then(() => loadAll(status, content))
+        .catch((err: unknown) => {
+          deleteProfileBtn.disabled = false;
+          deleteProfileBtn.textContent = "Delete";
+          status.className = "status-chip error";
+          status.textContent = `Delete failed: ${String(err)}`;
+        });
+      return;
+    }
+
     const restartBtn = target.closest<HTMLButtonElement>(".btn-restart");
     if (restartBtn) {
       const sid = restartBtn.dataset.sessionId;
@@ -117,7 +183,7 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
       restartBtn.disabled = true;
       restartBtn.textContent = "…";
       void restartSession(sid)
-        .then(() => loadSessions(status, content))
+        .then(() => loadAll(status, content))
         .catch((err: unknown) => {
           restartBtn.disabled = false;
           restartBtn.textContent = "Restart";
@@ -126,6 +192,7 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
         });
       return;
     }
+
     const deleteBtn = target.closest<HTMLButtonElement>(".btn-delete");
     if (deleteBtn) {
       const sid = deleteBtn.dataset.sessionId;
@@ -134,7 +201,7 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
       deleteBtn.disabled = true;
       deleteBtn.textContent = "…";
       void deleteSession(sid)
-        .then(() => loadSessions(status, content))
+        .then(() => loadAll(status, content))
         .catch((err: unknown) => {
           deleteBtn.disabled = false;
           deleteBtn.textContent = "Delete";
@@ -143,5 +210,6 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
         });
     }
   });
-  await loadSessions(status, content);
+
+  await loadAll(status, content);
 }

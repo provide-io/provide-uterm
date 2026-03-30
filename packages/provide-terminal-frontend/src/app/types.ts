@@ -88,3 +88,19 @@ export interface AppBootstrap {
   session_id?: string;
   surface?: SessionSurface;
 }
+
+export interface ConnectionProfile {
+  profile_id: string;
+  owner: string;
+  name: string;
+  connector_type: string;
+  host: string | null;
+  port: number | null;
+  username: string | null;
+  tags: string[];
+  input_mode: string;
+  recording_enabled: boolean;
+  visibility: string;
+  created_at: number;
+  updated_at: number;
+}
