@@ -31,6 +31,7 @@ function renderTags(tags: string[]): string {
 }
 
 function sidebarHtml(s: SessionSummary | null, appPath: string, sessionId: string): string {
+  const shareQuery = window.location.search || "";
   const name = s?.displayName ?? sessionId;
   const isOpen = s?.inputMode === "open";
   const liveBadge = s?.connected
@@ -61,7 +62,7 @@ function sidebarHtml(s: SessionSummary | null, appPath: string, sessionId: strin
     <div class="sidebar-section">
       <div class="small" style="text-transform:uppercase;letter-spacing:0.06em">Actions</div>
       <div class="toolbar" style="margin:0">
-        <a class="btn" href="${esc(appPath)}/replay/${encodeURIComponent(sessionId)}">View replay</a>
+        <a class="btn" href="${esc(appPath)}/replay/${encodeURIComponent(sessionId)}${esc(shareQuery)}">View replay</a>
         <button class="btn" id="btn-clear">Clear runtime</button>
         <button class="btn" id="btn-restart">Restart session</button>
         <button class="btn" id="btn-delete">Delete session</button>

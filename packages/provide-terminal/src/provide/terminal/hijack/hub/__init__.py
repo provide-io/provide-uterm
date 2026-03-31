@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from provide.terminal.hijack.hub.event_bus import EventBus
-
 from provide.terminal.hijack.hub.core import (
     BrowserRoleResolutionError,
     BrowserRoleResolver,
@@ -11,6 +9,7 @@ from provide.terminal.hijack.hub.core import (
     ResumeCallback,
     TermHub,
 )
+from provide.terminal.hijack.hub.event_bus import EventBus
 from provide.terminal.hijack.hub.resume import (
     InMemoryResumeStore,
     ResumeSession,

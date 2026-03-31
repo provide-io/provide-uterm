@@ -412,6 +412,48 @@ In `jwt` mode, `from_env()` raises `ValueError` if this secret is not set.
 
 ---
 
+## Tunnel Protocol (Terminal Sharing)
+
+The tunnel system enables tmate-style terminal sharing: a local CLI agent (`uterm share`)
+connects outbound to the CF edge, sharing a PTY session with remote viewers.
+
+### Tunnel Wire Format
+
+Binary WebSocket frames with a 2-byte header:
+
+```
+[1 byte: channel_id] [1 byte: flags] [N bytes: payload]
+
+Channel 0x00: control (JSON)
+Channel 0x01: primary data (raw PTY bytes)
+Channel 0x02+: additional streams (future)
+
+Flags: 0x00=data, 0x01=EOF
+```
+
+### Tunnel Key Files
+
+| File | Role |
+|------|------|
+| `tunnel/protocol.py` (provide-terminal) | Binary frame encode/decode |
+| `tunnel/client.py` (provide-terminal) | Async WebSocket tunnel client |
+| `tunnel/pty_capture.py` (provide-terminal) | PTY spawn and attach |
+| `tunnel/fastapi_routes.py` (provide-terminal) | FastAPI `/tunnel/{id}` route |
+| `cli/share.py` (provide-terminal) | `uterm share` CLI entry point |
+| `api/tunnel_routes.py` (CF) | Binary frame handler in DO |
+| `api/_tunnel_api.py` (CF) | `POST /api/tunnels`, `GET /s/{id}` handlers |
+| `entry.py` (CF) | Route registration for `/tunnel/`, `/s/`, `/api/tunnels` |
+
+### Share URL Authentication
+
+| Layer | Token | Role | Requires Account |
+|-------|-------|------|-----------------|
+| Share URL | `share_token` in query param | viewer | No |
+| Control URL | `control_token` in query param | operator | No |
+| CF Access JWT | JWT from CF Access | admin/operator/viewer | Yes |
+
+---
+
 ## Known Platform Quirks
 
 | Quirk | Symptom | Fix |

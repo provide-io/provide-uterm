@@ -70,6 +70,9 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             "owner": None,
         }
         self._meta_loaded: bool = False
+        self._tunnel_worker_token: str | None = None
+        self._share_token: str | None = None
+        self._control_token: str | None = None
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
         self._ushell: Any = None  # UshellConnector | None
@@ -135,9 +138,27 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                     "visibility": data.get("visibility") or "public",
                     "owner": data.get("owner"),
                 }
+                self._tunnel_worker_token = str(data.get("worker_token") or "") or None
+                self._share_token = str(data.get("share_token") or "") or None
+                self._control_token = str(data.get("control_token") or "") or None
         except Exception:
             logger.debug("_ensure_meta kv read failed for %s", self.worker_id)
         self.store.save_session_meta(self.worker_id, self.meta)
+
+    def _share_role_for_request(self, request: object) -> str | None:
+        try:
+            qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
+            token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
+        except Exception as exc:
+            logger.debug("failed to parse share token: %s", exc)
+            token = None
+        if not token:
+            return None
+        if self._control_token and secrets.compare_digest(token, self._control_token):
+            return "admin"
+        if self._share_token and secrets.compare_digest(token, self._share_token):
+            return "viewer"
+        return None
 
     # ------------------------------------------------------------------
     # Auth helpers
@@ -166,6 +187,9 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         (``none``/``dev`` mode), or ``(None, error_response)`` on failure.
         """
         if self.config.jwt.mode in {"none", "dev"}:
+            return None, None
+        share_role = self._share_role_for_request(request)
+        if share_role is not None:
             return None, None
         # CF Access Service Auth: if the request carries a service token
         # header, CF Access already validated it — trust the request.
@@ -202,6 +226,9 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         """
         if self.config.jwt.mode in {"none", "dev"}:
             return "admin"
+        share_role = self._share_role_for_request(request)
+        if share_role is not None:
+            return share_role
         token = self._extract_token(request)
         if not token:
             return "viewer"
@@ -229,7 +256,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
         except Exception:
             return
-        for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/worker/", "/api/sessions/"):
+        for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/tunnel/", "/worker/", "/api/sessions/"):
             if path.startswith(prefix):
                 segment = path[len(prefix) :].split("/")[0]
                 if segment:
@@ -250,36 +277,46 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # skipped entirely and the request falls through to _resolve_principal()
         # which permits all callers in those modes.  In JWT mode, from_env()
         # guarantees worker_bearer_token is set (ValueError otherwise).
-        _is_worker_ws = upgrade_header == "websocket" and path.startswith("/ws/worker/")
+        _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/"))
         if _is_worker_ws and self.config.worker_bearer_token:
             # CF Access service tokens bypass worker bearer token check.
             _cf_client = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[union-attr]
             if _cf_client.endswith(".access"):
-                principal, auth_error = None, None
+                _principal, auth_error = None, None
             else:
                 token = extract_bearer_or_cookie(request)
-                if not token or not secrets.compare_digest(token, self.config.worker_bearer_token):
+                valid_worker_token = False
+                auth_type = "none"
+                if token and secrets.compare_digest(token, self.config.worker_bearer_token):
+                    valid_worker_token = True
+                    auth_type = "global_bearer"
+                if token and self._tunnel_worker_token and secrets.compare_digest(token, self._tunnel_worker_token):
+                    valid_worker_token = True
+                    auth_type = "tunnel_session"
+                if not valid_worker_token:
+                    logger.info("tunnel_token_validated worker_id=%s valid=false", self.worker_id)
                     return Response(
                         json.dumps({"error": "worker authentication required"}),
                         status=403,
                         headers={"content-type": "application/json"},
                     )
-                principal, auth_error = None, None
+                logger.info("tunnel_token_validated worker_id=%s auth_type=%s", self.worker_id, auth_type)
+                _principal, auth_error = None, None
         else:
-            principal, auth_error = await self._resolve_principal(request)
+            _principal, auth_error = await self._resolve_principal(request)
             if auth_error is not None:
                 return auth_error
         if upgrade_header == "websocket":
             from js import WebSocketPair  # type: ignore[import-not-found]
 
             socket_role = "browser"
-            if path.startswith("/ws/worker/"):
+            if path.startswith(("/ws/worker/", "/tunnel/")):
                 socket_role = "worker"
             elif path.startswith("/ws/raw/"):
                 socket_role = "raw"
 
             # Resolve browser role from JWT (defaults to "admin" in dev/none mode).
-            browser_role = "admin" if principal is None else _resolve_jwt_role(principal)
+            browser_role = await self.browser_role_for_request(request)
 
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)
@@ -408,6 +445,23 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 message.decode("latin-1", errors="replace") if isinstance(message, (bytes, bytearray)) else str(message)
             )
             await self.push_worker_input(payload)
+            return
+
+        # Tunnel protocol: binary frames from the tunnel agent (worker role).
+        # In Pyodide, JS ArrayBuffer/Uint8Array arrives as a JsProxy, not Python bytes.
+        # Convert via to_py() or to_bytes() before checking isinstance.
+        _bin = message
+        if hasattr(_bin, "to_py"):
+            _bin = _bin.to_py()
+        elif hasattr(_bin, "to_bytes"):
+            _bin = _bin.to_bytes()
+        if isinstance(_bin, (bytes, bytearray, memoryview)) and role == "worker":
+            try:
+                from provide.terminal.cloudflare.api.tunnel_routes import handle_tunnel_message
+            except ImportError:
+                from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found]
+
+            await handle_tunnel_message(self, ws, bytes(_bin))
             return
 
         raw = message if isinstance(message, str) else str(message)

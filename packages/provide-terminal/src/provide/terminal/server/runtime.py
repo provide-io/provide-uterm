@@ -43,6 +43,11 @@ async def _cancel_and_wait(tasks: set[asyncio.Task[object]]) -> None:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
+async def _await_task_completion(task: asyncio.Task[None]) -> None:
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
 class HostedSessionRuntime:
     """Long-lived worker runtime for one named hosted session."""
 
@@ -109,9 +114,21 @@ class HostedSessionRuntime:
         self._stop.set()
         task = self._task
         if task is not None:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            if task.done():
+                with contextlib.suppress(asyncio.CancelledError):
+                    task.result()
+            else:
+                running_loop = asyncio.get_running_loop()
+                task_loop = task.get_loop()
+                if task_loop is running_loop:
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+                else:
+                    task_loop.call_soon_threadsafe(task.cancel)
+                    future = asyncio.run_coroutine_threadsafe(_await_task_completion(task), task_loop)
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await asyncio.wrap_future(future)
         self._task = None
         await self._stop_connector()
         self._state = "stopped"

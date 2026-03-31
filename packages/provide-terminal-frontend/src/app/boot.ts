@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+import { setShareToken } from "../server-common.js";
 import { routeApp } from "./router.js";
 import type { AppBootstrap } from "./types.js";
 
@@ -37,5 +38,6 @@ export async function bootApp(): Promise<void> {
     throw new Error("Missing #app-root");
   }
   const bootstrap = readBootstrap();
+  setShareToken(bootstrap.share_token ?? null);
   await routeApp(root, bootstrap);
 }

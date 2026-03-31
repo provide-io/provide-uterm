@@ -9,11 +9,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import importlib.resources
+import re
 import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,6 +52,12 @@ logger = get_logger(__name__)
 # Delay between FastAPI startup completing and the auto-start session loop
 # beginning.  Gives the event loop time to finish route/middleware init.
 _AUTO_START_DELAY_S = 0.15
+_SHARE_SESSION_PATTERNS = (
+    re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)(?:/.*)?$"),
+    re.compile(r"^/app/(?:session|operator|replay)/(?P<session_id>[\w\-]+)$"),
+    re.compile(r"^/ws/browser/(?P<session_id>[\w\-]+)/term$"),
+    re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack(?:/.*)?$"),
+)
 
 
 def _validate_frontend_assets() -> None:
@@ -121,11 +129,87 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         "hijack_releases_total": 0,
         "hijack_steps_total": 0,
     }
+    tunnel_tokens: dict[str, dict[str, str]] = {}
 
     def _inc_metric(name: str, value: int = 1) -> None:
         metrics[name] = metrics.get(name, 0) + value
 
+    def _share_session_id_for(path: str) -> str | None:
+        for pattern in _SHARE_SESSION_PATTERNS:
+            match = pattern.match(path)
+            if match is not None:
+                return str(match.group("session_id"))
+        return None
+
+    def _resolve_tunnel_share_principal(connection: HTTPConnection) -> Principal | None:
+        path = str(connection.scope.get("path", ""))
+        session_id = _share_session_id_for(path)
+        if session_id is None:
+            return None
+        # Check query param first, then cookie.
+        raw_qs = connection.scope.get("query_string", b"")
+        query = raw_qs.decode("utf-8", errors="ignore") if isinstance(raw_qs, bytes) else str(raw_qs)
+        provided = (parse_qs(query).get("token", [None]) or [None])[0]
+        if not provided:
+            # Try cookie: uterm_tunnel_{session_id}
+            from http.cookies import SimpleCookie
+
+            cookie_header = (
+                dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
+            )
+            cookies = SimpleCookie(cookie_header)
+            cookie_key = f"uterm_tunnel_{session_id}"
+            if cookie_key in cookies:
+                provided = cookies[cookie_key].value
+        if not provided:
+            return None
+        app = connection.scope.get("app")
+        token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
+        token_state = token_map.get(session_id) if isinstance(token_map, dict) else None
+        if token_state is None:
+            return None
+        # Check expiry.
+        expires_at = token_state.get("expires_at")
+        if isinstance(expires_at, (int, float)) and time.time() > float(expires_at):
+            logger.info("tunnel_token_expired session_id=%s", session_id)
+            return None
+        # Check IP binding.
+        if config.tunnel.ip_binding:
+            issued_ip = token_state.get("issued_ip")
+            client_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
+            if issued_ip and issued_ip != client_ip:
+                logger.info(
+                    "tunnel_token_ip_mismatch session_id=%s issued=%s actual=%s", session_id, issued_ip, client_ip
+                )
+                return None
+        # Match token type.
+        source_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
+        if secrets.compare_digest(str(provided), str(token_state.get("control_token", ""))):
+            connection.state.uterm_share_token = str(provided)
+            connection.state.uterm_share_role = "operator"
+            logger.info("tunnel_token_validated session_id=%s token_type=control source_ip=%s", session_id, source_ip)
+            return Principal(
+                subject_id=f"share:{session_id}:operator",
+                roles=frozenset({"admin"}),
+                scopes=frozenset({"*"}),
+            )
+        if secrets.compare_digest(str(provided), str(token_state.get("share_token", ""))):
+            connection.state.uterm_share_token = str(provided)
+            connection.state.uterm_share_role = "viewer"
+            logger.info("tunnel_token_validated session_id=%s token_type=share source_ip=%s", session_id, source_ip)
+            return Principal(
+                subject_id=f"share:{session_id}:viewer",
+                roles=frozenset({"viewer"}),
+                scopes=frozenset({"session.read"}),
+            )
+        logger.info("tunnel_token_validated session_id=%s valid=false source_ip=%s", session_id, source_ip)
+        return None
+
     async def _require_authenticated(connection: HTTPConnection) -> None:
+        share_principal = _resolve_tunnel_share_principal(connection)
+        if share_principal is not None:
+            connection.state.uterm_principal = share_principal
+            return
         # Workers authenticate with a raw bearer token, not a JWT.  Check it
         # before JWT resolution so a valid worker token is never mis-rejected as
         # anonymous when auth.mode='jwt'.
@@ -203,6 +287,20 @@ def create_server_app(config: ServerConfig) -> FastAPI:
     )
     profile_store = FileProfileStore(config.profiles.directory)
 
+    async def _sweep_expired_tunnel_tokens() -> None:
+        """Periodically remove expired tunnel tokens from the in-memory map."""
+        while True:
+            await asyncio.sleep(60)
+            now = time.time()
+            expired = [
+                sid
+                for sid, state in tunnel_tokens.items()
+                if isinstance(state.get("expires_at"), (int, float)) and now > float(state["expires_at"])
+            ]
+            for sid in expired:
+                tunnel_tokens.pop(sid, None)
+                logger.info("tunnel_token_expired session_id=%s swept=true", sid)
+
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         async def _delayed_boot() -> None:
@@ -219,12 +317,16 @@ def create_server_app(config: ServerConfig) -> FastAPI:
                 else None
             )
         )
+        sweep_task = asyncio.create_task(_sweep_expired_tunnel_tokens())
         try:
             yield
         finally:
+            sweep_task.cancel()
             boot_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await boot_task
+            with contextlib.suppress(asyncio.CancelledError):
+                await sweep_task
             await webhook_manager.shutdown()
             await registry.shutdown()
 
@@ -237,6 +339,7 @@ def create_server_app(config: ServerConfig) -> FastAPI:
     app.state.uterm_metrics = metrics
     app.state.uterm_webhooks = webhook_manager
     app.state.uterm_profile_store = profile_store
+    app.state.uterm_tunnel_tokens = tunnel_tokens
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:

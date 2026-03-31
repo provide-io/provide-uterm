@@ -15,6 +15,19 @@ import os
 import sys
 from pathlib import Path
 
+if not os.environ.get("MUTANT_UNDER_TEST"):
+    _ROOT = Path(__file__).resolve().parent
+    _PACKAGE_SRCS = [
+        _ROOT / "packages" / "provide-terminal" / "src",
+        _ROOT / "packages" / "provide-terminal-cloudflare" / "src",
+        _ROOT / "packages" / "provide-shell" / "src",
+    ]
+    for _src in reversed(_PACKAGE_SRCS):
+        _src_str = str(_src)
+        if _src_str in sys.path:
+            sys.path.remove(_src_str)
+        sys.path.insert(0, _src_str)
+
 if os.environ.get("MUTANT_UNDER_TEST"):
     _here = Path(__file__).resolve().parent  # mutants/ when run by mutmut
     # Prepend mutated source copies so they take priority over the editable install.

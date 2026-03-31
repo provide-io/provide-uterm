@@ -7,12 +7,35 @@
 from __future__ import annotations
 
 import tempfile
+import time
 from pathlib import Path
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
 from provide.terminal.server import create_server_app, default_server_config
+from provide.terminal.server.models import AuthConfig, SessionDefinition
+
+_TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
+
+
+def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
+    now = int(time.time())
+    return jwt.encode(
+        {
+            "sub": sub,
+            "roles": roles or ["viewer"],
+            "iss": "provide-terminal",
+            "aud": "provide-terminal-server",
+            "iat": now,
+            "nbf": now,
+            "exp": now + 600,
+        },
+        key=_TEST_KEY,
+        algorithm="HS256",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -158,6 +181,73 @@ def test_delete_session(app_client: TestClient) -> None:
     assert r.status_code == 200
     assert r.json()["ok"] is True
     assert app_client.get("/api/sessions/del-me").status_code == 404
+
+
+def test_tunnel_share_token_allows_read_only_session_api() -> None:
+    cfg = default_server_config()
+    cfg.auth = AuthConfig(
+        mode="jwt",
+        jwt_public_key_pem=_TEST_KEY,
+        jwt_algorithms=["HS256"],
+        jwt_issuer="provide-terminal",
+        jwt_audience="provide-terminal-server",
+        worker_bearer_token=_make_token(sub="worker", roles=["admin"]),
+    )
+    cfg.sessions = [
+        SessionDefinition(
+            session_id="tunnel-api-view",
+            display_name="Tunnel View",
+            connector_type="shell",
+            visibility="public",
+        )
+    ]
+    app = create_server_app(cfg)
+    app.state.uterm_tunnel_tokens = {
+        "tunnel-api-view": {
+            "share_token": "share-token-123",
+            "control_token": "control-token-123",
+            "worker_token": "worker-token-123",
+        }
+    }
+    with TestClient(app) as client:
+        response = client.get("/api/sessions/tunnel-api-view?token=share-token-123")
+        denied = client.post("/api/sessions/tunnel-api-view/mode?token=share-token-123", json={"input_mode": "open"})
+    assert response.status_code == 200
+    assert denied.status_code == 403
+
+
+def test_tunnel_control_token_allows_session_mutation_api() -> None:
+    cfg = default_server_config()
+    cfg.auth = AuthConfig(
+        mode="jwt",
+        jwt_public_key_pem=_TEST_KEY,
+        jwt_algorithms=["HS256"],
+        jwt_issuer="provide-terminal",
+        jwt_audience="provide-terminal-server",
+        worker_bearer_token=_make_token(sub="worker", roles=["admin"]),
+    )
+    cfg.sessions = [
+        SessionDefinition(
+            session_id="tunnel-api-control",
+            display_name="Tunnel Control",
+            connector_type="shell",
+            visibility="public",
+        )
+    ]
+    app = create_server_app(cfg)
+    app.state.uterm_tunnel_tokens = {
+        "tunnel-api-control": {
+            "share_token": "share-token-123",
+            "control_token": "control-token-123",
+            "worker_token": "worker-token-123",
+        }
+    }
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/sessions/tunnel-api-control/mode?token=control-token-123", json={"input_mode": "hijack"}
+        )
+    assert response.status_code == 200
+    assert response.json()["input_mode"] == "hijack"
 
 
 # ---------------------------------------------------------------------------

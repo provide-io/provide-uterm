@@ -139,6 +139,40 @@ def test_operator_session_200_sets_cookies_and_fitaddon(client: TestClient) -> N
     assert "uterm_surface=operator" in cookies
 
 
+def test_tunnel_share_token_allows_session_page_without_jwt() -> None:
+    token = "share-token-123"
+    app = _jwt_app_public_session("tok-sess-share")
+    app.state.uterm_tunnel_tokens = {
+        "tok-sess-share": {
+            "share_token": token,
+            "control_token": "control-token-123",
+            "worker_token": "worker-token-123",
+        }
+    }
+    with TestClient(app) as c:
+        r = c.get(f"/app/session/tok-sess-share?token={token}")
+    assert r.status_code == 200
+    assert '"share_role": "viewer"' in r.text
+    assert '"share_token": "share-token-123"' in r.text
+
+
+def test_tunnel_control_token_allows_operator_page_without_jwt() -> None:
+    token = "control-token-123"
+    app = _jwt_app_public_session("tok-sess-control")
+    app.state.uterm_tunnel_tokens = {
+        "tok-sess-control": {
+            "share_token": "share-token-123",
+            "control_token": token,
+            "worker_token": "worker-token-123",
+        }
+    }
+    with TestClient(app) as c:
+        r = c.get(f"/app/operator/tok-sess-control?token={token}")
+    assert r.status_code == 200
+    assert '"share_role": "operator"' in r.text
+    assert '"share_token": "control-token-123"' in r.text
+
+
 # ── replay_view ──────────────────────────────────────────────────────────────
 
 

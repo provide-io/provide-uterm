@@ -16,6 +16,11 @@ export async function renderSession(root: HTMLElement, bootstrap: AppBootstrap):
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+  const shareQuery = bootstrap.share_token ? `?token=${encodeURIComponent(bootstrap.share_token)}` : "";
+  const controlLink =
+    bootstrap.share_role === "viewer"
+      ? ""
+      : `<a class="btn" style="margin-left:auto" href="${safeAppPath}/operator/${encodeURIComponent(bootstrap.session_id)}${shareQuery}">→ Control</a>`;
   root.innerHTML = `
     <div class="page">
       ${renderAppHeader(bootstrap, "session")}
@@ -23,7 +28,7 @@ export async function renderSession(root: HTMLElement, bootstrap: AppBootstrap):
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span class="session-title">${bootstrap.title}</span>
           <div id="session-status" class="status-chip info">Loading…</div>
-          <a class="btn" style="margin-left:auto" href="${safeAppPath}/operator/${encodeURIComponent(bootstrap.session_id)}">→ Control</a>
+          ${controlLink}
         </div>
       </section>
       <section class="card">

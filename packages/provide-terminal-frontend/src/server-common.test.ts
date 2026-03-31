@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiJson, readBooleanDataset, readDataset, requireElement } from "./server-common.js";
+import { apiJson, readBooleanDataset, readDataset, requireElement, setShareToken } from "./server-common.js";
 
 describe("apiJson", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    setShareToken(null);
   });
 
   it("calls fetch with correct method and headers for GET", async () => {
@@ -20,6 +21,22 @@ describe("apiJson", () => {
     const result = await apiJson<{ result: string }>("/api/test");
     expect(result).toEqual({ result: "ok" });
     expect(mockFetch).toHaveBeenCalledWith("/api/test", {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  it("appends the share token to API paths when configured", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ result: "ok" }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    setShareToken("share-abc");
+
+    await apiJson<{ result: string }>("/api/test");
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/test?token=share-abc", {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });

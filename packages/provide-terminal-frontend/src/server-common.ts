@@ -44,6 +44,7 @@ export interface ProvideHijackConfig {
   workerId: string;
   showAnalysis?: boolean;
   mobileKeys?: boolean;
+  authToken?: string;
 }
 
 export interface ProvideHijackConstructor {
@@ -56,6 +57,30 @@ declare global {
   }
 }
 
+/**
+ * Module-level share token for tunnel session authentication.
+ * Set from bootstrap JSON on page load; null when using cookie-based auth.
+ * SECURITY: ephemeral credential — do not log or persist to storage.
+ */
+let _shareToken: string | null = null;
+
+/** Store the share token for subsequent API/WS calls. Pass null for cookie mode. */
+export function setShareToken(token: string | null | undefined): void {
+  _shareToken = typeof token === "string" && token.length > 0 ? token : null;
+}
+
+/** Return the current share token, or null if in cookie mode. */
+export function getShareToken(): string | null {
+  return _shareToken;
+}
+
+/** Append the share token as a query parameter if set (query transport mode). No-op in cookie mode. */
+export function withShareToken(path: string): string {
+  if (_shareToken === null) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}token=${encodeURIComponent(_shareToken)}`;
+}
+
 export async function apiJson<T>(path: string, method: HttpMethod = "GET", body: unknown = null): Promise<T> {
   const init: RequestInit = {
     method,
@@ -66,7 +91,7 @@ export async function apiJson<T>(path: string, method: HttpMethod = "GET", body:
   if (body !== null) {
     init.body = JSON.stringify(body);
   }
-  const response = await fetch(path, init);
+  const response = await fetch(withShareToken(path), init);
   if (!response.ok) {
     throw new Error(String(response.status));
   }

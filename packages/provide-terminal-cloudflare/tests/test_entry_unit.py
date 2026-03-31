@@ -194,6 +194,16 @@ async def test_default_fetch_spa_routes() -> None:
         assert expected_kind in str(resp.body), f"{path} missing {expected_kind}"
 
 
+async def test_default_fetch_share_route() -> None:
+    """Shared tunnel links under /s/{id} resolve to the SPA shell."""
+    kv = SimpleNamespace(get=AsyncMock(return_value=json.dumps({"share_token": "abc", "control_token": "def"})))
+    d = _make_default({"SESSION_REGISTRY": kv})
+    req = SimpleNamespace(url="https://x/s/test-123?token=abc", headers=SimpleNamespace(get=lambda *_a, **_k: None))
+    resp = await d.fetch(req)
+    assert resp.status == 200
+    assert "session" in str(resp.body)
+
+
 async def test_default_fetch_root_path() -> None:
     """/ → SPA dashboard."""
     d = _make_default()

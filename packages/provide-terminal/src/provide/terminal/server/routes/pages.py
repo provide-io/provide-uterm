@@ -59,6 +59,13 @@ def _set_page_cookies(
             _set_auth_cookie(response, cfg.auth.token_cookie, token, secure=secure)
 
 
+def _share_context(request: Request) -> tuple[str | None, str | None]:
+    return (
+        getattr(request.state, "uterm_share_role", None),
+        getattr(request.state, "uterm_share_token", None),
+    )
+
+
 def create_page_router() -> APIRouter:
     router = APIRouter()
 
@@ -97,6 +104,8 @@ def create_page_router() -> APIRouter:
             session_id,
             operator=False,
             app_path=cfg.ui.app_path,
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -122,6 +131,8 @@ def create_page_router() -> APIRouter:
             session_id,
             operator=True,
             app_path=cfg.ui.app_path,
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -146,6 +157,8 @@ def create_page_router() -> APIRouter:
             cfg.ui.assets_path,
             session_id,
             app_path=cfg.ui.app_path,
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,

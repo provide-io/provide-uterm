@@ -408,6 +408,29 @@ async def test_browser_role_jwt_bad_token() -> None:
     assert await rt.browser_role_for_request(req) == "viewer"
 
 
+async def test_browser_role_share_token_viewer() -> None:
+    rt = _make_runtime(mode="jwt")
+    rt._share_token = "share-token-123"
+    req = _MockRequest(url="https://x/app/session/test-worker?token=share-token-123")
+    assert await rt.browser_role_for_request(req) == "viewer"
+
+
+async def test_browser_role_share_token_control_maps_to_admin() -> None:
+    rt = _make_runtime(mode="jwt")
+    rt._control_token = "control-token-123"
+    req = _MockRequest(url="https://x/app/operator/test-worker?token=control-token-123")
+    assert await rt.browser_role_for_request(req) == "admin"
+
+
+async def test_resolve_principal_share_token_bypasses_jwt() -> None:
+    rt = _make_runtime(mode="jwt")
+    rt._share_token = "share-token-123"
+    req = _MockRequest(url="https://x/app/session/test-worker?token=share-token-123")
+    principal, error = await rt._resolve_principal(req)
+    assert principal is None
+    assert error is None
+
+
 # ---------------------------------------------------------------------------
 # _socket_role
 # ---------------------------------------------------------------------------

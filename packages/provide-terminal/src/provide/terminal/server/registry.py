@@ -263,6 +263,20 @@ class SessionRegistry:
         await runtime.clear()
         return runtime.status()
 
+    async def set_tunnel_connected(self, session_id: str, connected: bool) -> SessionRuntimeStatus | None:
+        """Update tunnel-backed session liveness from the raw /tunnel websocket path."""
+        async with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return None
+            runtime = self._runtime_for(session)
+            runtime_any = cast("Any", runtime)
+            runtime_any._connected = connected
+            runtime_any._state = "running" if connected else "stopped"
+            if connected:
+                runtime_any._last_error = None
+        return runtime.status()
+
     async def analyze_session(self, session_id: str) -> str:
         async with self._lock:
             session = self._require_session(session_id)

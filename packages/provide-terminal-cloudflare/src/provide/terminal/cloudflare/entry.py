@@ -4,7 +4,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 # Import handler base classes directly from workers — these MUST resolve to the
 # real CF runtime classes (not stubs) so Cloudflare's Pyodide validation phase
@@ -114,6 +114,7 @@ _WORKER_ROUTE_PATTERNS = (
     re.compile(r"^/ws/browser/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$"),
     re.compile(r"^/ws/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$"),
     re.compile(r"^/ws/raw/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$"),
+    re.compile(r"^/tunnel/(?P<worker_id>[a-zA-Z0-9_-]{1,64})$"),
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/hijack(?:/.*)?$"),
     re.compile(r"^/worker/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/(?:input_mode|disconnect_worker)$"),
     re.compile(
@@ -124,6 +125,7 @@ _WORKER_ROUTE_PATTERNS = (
 )
 _STATIC_ASSET_PATH = re.compile(r"^/[a-zA-Z0-9._/-]+\.(?:html|css|js)$")
 _SESSION_ID_RE = re.compile(r"^/api/sessions/(?P<session_id>[a-zA-Z0-9_-]{1,64})$")
+_SHARE_ROUTE_RE = re.compile(r"^/s/(?P<sid>[a-zA-Z0-9_-]{1,64})$")
 
 _XTERM_CDN = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
 _FITADDON_CDN = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
@@ -139,6 +141,9 @@ def _resolve_spa_route(path: str) -> tuple[str, dict[str, object]] | None:
         return ("dashboard", {})
     if path in {"/app/connect", "/app/connect/"}:
         return ("connect", {})
+    share_match = _SHARE_ROUTE_RE.match(path)
+    if share_match:
+        return ("share", {"session_id": share_match.group("sid"), "surface": "user"})
     m = _SPA_SESSION_RE.match(path)
     if m:
         kind = m.group("kind")
@@ -316,6 +321,27 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
     if _STATIC_ASSET_PATH.match(path):
         return serve_asset(path.removeprefix("/"))
 
+    try:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_share_route, resolve_share_context
+    except ImportError:
+        from api._tunnel_api import handle_share_route, resolve_share_context  # type: ignore[import-not-found]
+
+    spa = _resolve_spa_route(path)
+    if spa is not None and spa[0] == "share" and "session_id" in spa[1]:
+        return await handle_share_route(request, env, str(spa[1]["session_id"]), _spa_response)
+
+    if spa is not None and "session_id" in spa[1]:
+        share_context = await resolve_share_context(request, env, str(spa[1]["session_id"]))
+        if share_context is not None:
+            page_kind, share_role = share_context
+            return _spa_response(
+                page_kind,
+                session_id=str(spa[1]["session_id"]),
+                surface="operator" if share_role == "operator" else "user",
+                share_role=share_role,
+                share_token=(parse_qs(urlparse(str(request.url)).query).get("token", [None]) or [None])[0],
+            )
+
     # Authenticated API routes.
     handler = _match_api_route(path, request)
     if handler is not None:
@@ -324,7 +350,7 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
             return auth_error
         return await handler(request, env, config)
 
-    # DO-proxied routes.
+    # DO-proxied routes (includes /tunnel/{id} for WSS upgrade).
     worker_id = _extract_worker_id(path)
     if worker_id is not None:
         namespace = getattr(env, "SESSION_RUNTIME", None)
@@ -341,6 +367,8 @@ def _match_api_route(path: str, request: object) -> object | None:
         return _api_sessions
     if path == "/api/connect":
         return _api_connect
+    if path == "/api/tunnels":
+        return _api_tunnels
     if path.startswith("/api/profiles"):
         return _api_profiles
     session_delete_match = _SESSION_ID_RE.match(path)
@@ -359,6 +387,15 @@ async def _api_sessions(request: object, env: object, config: CloudflareConfig) 
 
 async def _api_connect(request: object, env: object, _config: CloudflareConfig) -> Response:
     return await _handle_connect(request, env)
+
+
+async def _api_tunnels(request: object, env: object, _config: CloudflareConfig) -> Response:
+    try:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
+    except ImportError:
+        from api._tunnel_api import handle_tunnels  # type: ignore[import-not-found]
+
+    return await handle_tunnels(request, env)
 
 
 async def _api_profiles(request: object, env: object, config: CloudflareConfig) -> Response:

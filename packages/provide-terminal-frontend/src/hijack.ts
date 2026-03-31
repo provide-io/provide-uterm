@@ -87,6 +87,7 @@ export class ProvideHijack {
       wsUrl: config.wsUrl,
       workerId: config.workerId,
       wsPathPrefix: config.wsPathPrefix ?? "/ws/browser",
+      authToken: config.authToken,
       title: config.title,
       showInput: config.showInput ?? true,
       showAnalysis: config.showAnalysis ?? true,
@@ -181,18 +182,33 @@ export class ProvideHijack {
   private _resolveWsUrl(): string {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const url = this._config.wsUrl;
+    const authToken = this._config.authToken;
+    const appendToken = (value: string): string => {
+      if (!authToken) return value;
+      const parsed = new URL(value, `${proto}//${location.host}`);
+      parsed.searchParams.set("token", authToken);
+      return parsed.toString();
+    };
     if (url) {
-      if (url.startsWith("/")) return `${proto}//${location.host}${url}`;
-      return url; // already absolute ws:// or wss://
+      if (url.startsWith("/")) return appendToken(`${proto}//${location.host}${url}`);
+      return appendToken(url); // already absolute ws:// or wss://
     }
     const workerId = encodeURIComponent(this._config.workerId ?? "default");
     const prefix = this._config.wsPathPrefix;
-    return `${proto}//${location.host}${prefix}/${workerId}/term`;
+    return appendToken(`${proto}//${location.host}${prefix}/${workerId}/term`);
   }
 
   private _resolveHijackApiBase(): string {
     const workerId = encodeURIComponent(this._config.workerId ?? "default");
     return `/worker/${workerId}/hijack`;
+  }
+
+  private _withAuthToken(path: string): string {
+    if (!this._config.authToken) {
+      return path;
+    }
+    const separator = path.includes("?") ? "&" : "?";
+    return `${path}${separator}token=${encodeURIComponent(this._config.authToken)}`;
   }
 
   private async _restHijack(
@@ -208,7 +224,7 @@ export class ProvideHijack {
       if (!this._restHijackId) return null;
       path = `${base}/${encodeURIComponent(this._restHijackId)}/${action}`;
     }
-    const resp = await fetch(path, {
+    const resp = await fetch(this._withAuthToken(path), {
       method: "POST",
       credentials: "include",
       headers,
@@ -672,7 +688,7 @@ export class ProvideHijack {
           clearTimeout(this._wakingTimer);
           this._wakingTimer = null;
         }
-        this._wakingTimedOut = false;
+        this._wakingTimedOut = true;
         this._workerOnline = false;
         this._hijacked = false;
         this._hijackedByMe = false;

@@ -131,9 +131,11 @@ class TestKVExtractorValidateInternals:
         mock_match = MagicMock()
         mock_match.lastindex = 1  # truthy — triggers group(1) path
         mock_match.group.side_effect = lambda n: (_ for _ in ()).throw(IndexError("no group")) if n == 1 else "fallback"
+        mock_pattern = MagicMock()
+        mock_pattern.finditer.return_value = [mock_match]
 
         config = {"field": "val", "type": "string", "regex": r"val: (\w+)"}
-        with patch("provide.terminal.detection.extractor.re.search", return_value=mock_match):
+        with patch("provide.terminal.detection.extractor.re.compile", return_value=mock_pattern):
             result = KVExtractor.extract("val: something", config, run_validation=False)
         assert result is not None
         assert result["val"] == "fallback"

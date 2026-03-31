@@ -133,7 +133,29 @@ paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests", "pa
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
 addopts = "--import-mode=importlib"
+testpaths = [
+    "packages/provide-terminal/tests",
+    "packages/provide-terminal-cloudflare/tests",
+    "packages/provide-shell/tests",
+]
+norecursedirs = [
+    ".git",
+    ".venv",
+    "node_modules",
+    "mutants",
+    "packages/provide-terminal-cloudflare/python_modules",
+]
+markers = [
+    "playwright: browser-based UI tests",
+    "mutant: mutation-testing focused tests",
+    "memray: memory profiling tests",
+    "slow: slow tests (>10s)",
+    "e2e: end-to-end tests against a live pywrangler dev server",
+    "real_cf: tests requiring a real Cloudflare deployment",
+]
 
 [tool.xenon]
 max_absolute = "C"
