@@ -24,3 +24,15 @@ EPOCH_TURN_DROP_MIN: int = 50
 
 # Default health-check polling interval (seconds).
 HEALTH_CHECK_INTERVAL_S: int = 10
+
+# Worker log rotation: rotate on spawn when file exceeds this size.
+WORKER_LOG_MAX_BYTES: int = 50 * 1024 * 1024  # 50 MB
+
+# Worker log retention: delete stale .prev files after this age.
+WORKER_LOG_RETENTION_S: float = 3.0 * 86400  # 3 days
+
+# Timeseries rotation: rotate when file exceeds this size.
+TIMESERIES_MAX_BYTES: int = 50 * 1024 * 1024  # 50 MB
+
+# Timeseries retention: delete old timeseries files after this age.
+TIMESERIES_RETENTION_S: float = 7.0 * 86400  # 7 days

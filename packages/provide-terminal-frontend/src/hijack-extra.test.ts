@@ -469,7 +469,7 @@ describe("hijack.ts branch coverage - WS handlers", () => {
     sendMessage({ type: "hello", worker_online: true });
     sendMessage({ type: "worker_disconnected" });
     const text = q(container, "statustext")?.textContent ?? "";
-    expect(text).toContain("Waking");
+    expect(text).toContain("Offline");
   });
 
   it("hello with resume_token saves it", () => {

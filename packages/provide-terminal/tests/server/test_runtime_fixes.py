@@ -10,6 +10,9 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
+import threading
+
 import pytest
 
 from provide.terminal.server.models import RecordingConfig, SessionDefinition
@@ -117,3 +120,47 @@ class TestLastErrorResetOnStart:
         )
 
         await rt.stop()
+
+
+class TestCrossLoopStop:
+    async def test_stop_cancels_task_from_different_loop(self) -> None:
+        """stop() must not crash when the runtime task belongs to another loop."""
+        rt = _make_runtime()
+        ready = threading.Event()
+        holder: dict[str, object] = {}
+
+        def _loop_thread() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def _dummy_run() -> None:
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    pass
+
+            task = loop.create_task(_dummy_run())
+            holder["loop"] = loop
+            holder["task"] = task
+            ready.set()
+            loop.run_forever()
+            pending = [pending_task for pending_task in asyncio.all_tasks(loop) if not pending_task.done()]
+            for pending_task in pending:
+                pending_task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.close()
+
+        thread = threading.Thread(target=_loop_thread, daemon=True)
+        thread.start()
+        assert ready.wait(timeout=2.0)
+
+        rt._task = holder["task"]  # type: ignore[assignment]
+        await rt.stop()
+        assert rt._task is None
+        assert not holder["task"].cancelled() or holder["task"].done()  # type: ignore[union-attr]
+
+        loop = holder["loop"]
+        assert isinstance(loop, asyncio.AbstractEventLoop)
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=2.0)

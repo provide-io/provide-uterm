@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
@@ -78,6 +79,33 @@ def _collect_spawn_configs(
     if not configs and last_config:
         configs = [last_config]
     return configs
+
+
+def _cleanup_old_worker_logs(pm: AgentProcessManager) -> int:
+    """Delete stale .prev and orphan worker log files. Returns count deleted."""
+    from provide.terminal.manager.constants import WORKER_LOG_RETENTION_S
+
+    log_dir = Path(pm._log_dir) if pm._log_dir else Path("logs/workers")
+    if not log_dir.is_dir():
+        return 0
+    cutoff = time.time() - WORKER_LOG_RETENTION_S
+    deleted = 0
+    active_ids = set(pm.manager.agents.keys())
+    for f in log_dir.iterdir():
+        if not f.is_file():
+            continue
+        try:
+            mtime = f.stat().st_mtime
+        except OSError:
+            continue
+        if mtime >= cutoff:
+            continue
+        if f.suffix == ".prev" or (f.name.endswith(".log") and f.stem not in active_ids):
+            f.unlink(missing_ok=True)
+            deleted += 1
+    if deleted:
+        logger.info("worker_log_cleanup", deleted=deleted)
+    return deleted
 
 
 async def _handle_exited_processes(pm: AgentProcessManager) -> None:

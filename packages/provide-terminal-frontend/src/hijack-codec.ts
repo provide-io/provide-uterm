@@ -11,6 +11,7 @@ export interface HijackConfig {
   wsUrl?: string;
   workerId?: string;
   wsPathPrefix?: string;
+  authToken?: string;
   title?: string | null;
   showInput?: boolean;
   showAnalysis?: boolean;
@@ -25,6 +26,7 @@ export interface ResolvedConfig {
   wsUrl: string | undefined;
   workerId: string | undefined;
   wsPathPrefix: string;
+  authToken: string | undefined;
   title: string | null | undefined;
   showInput: boolean;
   showAnalysis: boolean;

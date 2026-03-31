@@ -38,6 +38,8 @@ class TimeseriesManager:
         interval_s: int = 20,
         plugin: TimeseriesPlugin | None = None,
     ):
+        from provide.terminal.manager.constants import TIMESERIES_MAX_BYTES, TIMESERIES_RETENTION_S
+
         self._get_status = get_status
         self.interval_s = max(1, int(interval_s))
         self.timeseries_dir = Path(timeseries_dir)
@@ -46,6 +48,9 @@ class TimeseriesManager:
         self.path = self.timeseries_dir / f"swarm_timeseries_{stamp}.jsonl"
         self.samples_count = 0
         self._plugin = plugin
+        self._max_bytes = TIMESERIES_MAX_BYTES
+        # Cleanup old timeseries files from previous runs.
+        self._cleanup_old(TIMESERIES_RETENTION_S)
 
     def get_info(self) -> dict[str, Any]:
         """Return timeseries metadata."""
@@ -155,12 +160,37 @@ class TimeseriesManager:
             "uptime_seconds": status.uptime_seconds,
         }
 
+    def _cleanup_old(self, retention_s: float) -> None:
+        """Delete timeseries files older than *retention_s*."""
+        cutoff = time.time() - retention_s
+        for f in self.timeseries_dir.glob("swarm_timeseries_*.jsonl"):
+            if f == self.path:
+                continue
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    logger.info("timeseries_cleanup", path=str(f))
+            except OSError:
+                continue
+
+    def _rotate_if_needed(self) -> None:
+        """Rotate the current file if it exceeds the size limit."""
+        try:
+            if self.path.stat().st_size <= self._max_bytes:
+                return
+        except OSError:
+            return
+        archived = self.timeseries_dir / f"{self.path.stem}_{self.samples_count}.jsonl"
+        self.path.rename(archived)
+        logger.info("timeseries_rotated", archived=str(archived))
+
     def write_sample(self, status: Any, *, reason: str) -> None:
         """Append one timeseries sample row (safe to call from a thread)."""
         try:
             row = self._build_row(status, reason=reason)
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=True) + "\n")
+            self._rotate_if_needed()
         except Exception as e:
             logger.exception("failed_to_write_timeseries_sample", error=str(e))
 

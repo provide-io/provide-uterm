@@ -498,8 +498,10 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Create and return a FastAPI ``APIRouter`` with all terminal routes registered."""
         from provide.terminal.hijack.routes.rest import register_rest_routes
         from provide.terminal.hijack.routes.websockets import register_ws_routes
+        from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
 
         router = APIRouter()
         register_rest_routes(self, router)
         register_ws_routes(self, router)
+        register_tunnel_routes(self, router)
         return router

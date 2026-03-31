@@ -88,7 +88,7 @@ class TestWidgetInitialState:
         expect(_release_btn(page)).to_be_visible()
         expect(_resync_btn(page)).to_be_visible()
         expect(page.get_by_role("button", name="Analyze")).to_be_visible()
-        expect(page.locator("button[title='Mobile key toolbar']")).to_be_visible()
+        expect(page.locator("button[title='Toggle mobile key toolbar']")).to_be_visible()
 
     def test_hijack_button_disabled_when_no_worker(self, page: Page, hijack_server: tuple[str, object]) -> None:
         """Hijack button must be disabled until a worker comes online."""
@@ -104,13 +104,13 @@ class TestWidgetInitialState:
         expect(_release_btn(page)).to_be_disabled()
 
     def test_status_shows_worker_offline_when_no_worker(self, page: Page, hijack_server: tuple[str, object]) -> None:
-        """Status text shows 'Worker offline' after hello with no worker connected."""
+        """Status text shows 'Offline' after hello with no worker connected."""
         base_url, _ = hijack_server
         worker_id = f"offline-{_uid()}"
         _navigate(page, base_url, worker_id)
 
-        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Worker offline'")
-        assert _status_text(page) == "Worker offline"
+        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Offline'")
+        assert _status_text(page) == "Offline"
 
     def test_mobile_keys_row_hidden_before_hijack(self, page: Page, hijack_server: tuple[str, object]) -> None:
         """The .mobile-keys row must not be visible before a hijack is acquired."""
@@ -118,7 +118,7 @@ class TestWidgetInitialState:
         worker_id = f"mkeys-{_uid()}"
         _navigate(page, base_url, worker_id)
 
-        page.locator("button[title='Mobile key toolbar']").click()
+        page.locator("button[title='Toggle mobile key toolbar']").click()
         assert not page.locator(".mobile-keys").is_visible()
 
 
@@ -167,7 +167,7 @@ class TestWorkerOnlineState:
         expect(_hijack_btn(page)).to_be_disabled(timeout=5000)
 
     def test_status_worker_offline_after_disconnect(self, page: Page, hijack_server: tuple[str, object]) -> None:
-        """Status shows 'Worker offline' after the worker disconnects."""
+        """Status shows 'Offline' after the worker disconnects."""
         base_url, _ = hijack_server
         worker_id = f"woffline-{_uid()}"
         ctrl = WorkerController(base_url, worker_id).start()
@@ -178,8 +178,8 @@ class TestWorkerOnlineState:
 
         ctrl.stop()
 
-        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Worker offline'")
-        assert _status_text(page) == "Worker offline"
+        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Offline'")
+        assert _status_text(page) == "Offline"
 
 
 # ---------------------------------------------------------------------------

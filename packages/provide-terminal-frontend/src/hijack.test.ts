@@ -443,7 +443,7 @@ describe("message dispatch", () => {
     getWs().open();
     sendMessage({ type: "hello", worker_online: true });
     sendMessage({ type: "worker_disconnected" });
-    expect(q(container, "statustext")?.textContent).toBe("Waking…");
+    expect(q(container, "statustext")?.textContent).toBe("Offline");
   });
 
   it("input_mode_changed updates status", () => {

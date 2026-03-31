@@ -106,7 +106,7 @@ class TestFrontendV8Coverage:
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
         expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
-        page.locator("button[title='Mobile key toolbar']").click()
+        page.locator("button[title='Toggle mobile key toolbar']").click()
         expect(page.locator(".mobile-keys")).to_be_visible(timeout=5000)
         page.locator("[id$='-inputfield']").fill("/status")
         page.get_by_role("button", name="Send").click()

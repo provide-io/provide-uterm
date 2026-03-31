@@ -47,6 +47,21 @@ Opt-in feature. Enabled on FastAPI by passing `resume_store` to `TermHub`; alway
   prior browser role from the token; consumers that need identity-aware resume
   checks must provide `on_resume` validation when constructing `TermHub`.
 
+## Tunnel protocol
+
+Binary WebSocket framing for `uterm share` terminal sharing and future TCP/HTTP tunneling.
+
+| Capability | FastAPI backend | Cloudflare backend |
+|---|---|---|
+| Wire format | `[1B channel][1B flags][N bytes payload]` | same |
+| Channel 0x00 (control) | JSON: open, resize, close, snapshot | same |
+| Channel 0x01 (data) | Raw PTY bytes | same |
+| Flag 0x01 (EOF) | Half-close signal | same |
+| Endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
+| Auth (agent) | `worker_bearer_token` (Bearer header) | Per-session `worker_token` in KV |
+| `POST /api/tunnels` | not yet | supported (creates session + tokens) |
+| `GET /s/{id}?token=…` | not yet | supported (share/control token → role) |
+
 ## Accuracy note
 
 This document describes the intended public contract. It does not mean every

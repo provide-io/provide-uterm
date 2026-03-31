@@ -153,6 +153,18 @@ describe("renderSession", () => {
     expect(widgetModule.mountHijackWidget).toHaveBeenCalledWith(expect.any(HTMLElement), "my-sess", "user");
   });
 
+  it("hides the control link for viewer share pages", async () => {
+    const summary = makeSummary();
+    vi.mocked(stateModule.loadUserWorkspaceState).mockResolvedValue({
+      session: { summary, snapshotPromptId: null, analysis: null },
+      status: { tone: "ok", text: "OK" },
+      widget: { mounted: false, error: null },
+    });
+    vi.mocked(widgetModule.mountHijackWidget).mockReturnValue({ mounted: true, error: null });
+    await renderSession(root, makeBootstrap({ share_role: "viewer", share_token: "share-token-123" }));
+    expect(root.querySelector('a[href*="/operator/"]')).toBeNull();
+  });
+
   it("throws when session shell DOM elements are missing (line 36)", async () => {
     // Make querySelector return null for #session-status so the guard fires
     const origQuerySelector = root.querySelector.bind(root);

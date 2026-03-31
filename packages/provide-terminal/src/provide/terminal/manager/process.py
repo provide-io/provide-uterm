@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 from provide.terminal.manager._monitor import (
     _STOP_TIMEOUT_S,
+    _cleanup_old_worker_logs,
     _handle_bust_respawn,
     _handle_desired_state,
     _handle_exited_processes,
@@ -243,10 +244,19 @@ class AgentProcessManager:
             raise RuntimeError(f"Failed to spawn agent: {e}") from e
 
     def _spawn_process(self, agent_id: str, cmd: list[str], env: dict[str, str]) -> subprocess.Popen[bytes]:
+        from provide.terminal.manager.constants import WORKER_LOG_MAX_BYTES
+
         log_dir = Path(self._log_dir) if self._log_dir else Path("logs/workers")
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"{agent_id}.log"
-        log_handle = log_file.open("a")
+        # Rotate oversized log from previous lifecycle.
+        if log_file.is_file():
+            with contextlib.suppress(OSError):
+                if log_file.stat().st_size > WORKER_LOG_MAX_BYTES:
+                    prev = log_dir / f"{agent_id}.log.prev"
+                    prev.unlink(missing_ok=True)
+                    log_file.rename(prev)
+        log_handle = log_file.open("w")
         try:
             proc = subprocess.Popen(  # noqa: S603
                 cmd,
@@ -434,6 +444,7 @@ class AgentProcessManager:
 
     async def monitor_processes(self) -> None:
         """Monitor agent processes for crashes or completion."""
+        _monitor_iter = 0
         while True:
             await _handle_exited_processes(self)
             self._spawn_tasks = [t for t in self._spawn_tasks if not t.done()]
@@ -441,4 +452,8 @@ class AgentProcessManager:
             _handle_stale_queued(self)
             await _handle_bust_respawn(self)
             await _handle_desired_state(self)
+            _monitor_iter += 1
+            if _monitor_iter % 360 == 0:  # ~1 hour at 10s interval
+                with contextlib.suppress(Exception):
+                    _cleanup_old_worker_logs(self)
             await asyncio.sleep(self.manager.health_check_interval)

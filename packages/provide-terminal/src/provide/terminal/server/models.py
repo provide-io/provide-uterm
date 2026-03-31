@@ -101,6 +101,23 @@ class RecordingConfig(ServerBaseModel):
         return value
 
 
+class TunnelConfig(ServerBaseModel):
+    """Tunnel sharing security settings."""
+
+    token_ttl_s: int = 3600
+    token_transport: Literal["query", "cookie", "both"] = "both"  # noqa: S105
+    cookie_secure: bool = True
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    ip_binding: bool = False
+
+    @field_validator("token_ttl_s")
+    @classmethod
+    def _validate_ttl(cls, value: int) -> int:
+        if value < 60:
+            raise ValueError(f"tunnel.token_ttl_s must be >= 60, got: {value}")
+        return value
+
+
 class ProfileStoreConfig(ServerBaseModel):
     """File-backed profile store settings."""
 
@@ -241,6 +258,7 @@ class ServerConfig(ServerBaseModel):
     ui: UiConfig = Field(default_factory=UiConfig)
     recording: RecordingConfig = Field(default_factory=RecordingConfig)
     profiles: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
+    tunnel: TunnelConfig = Field(default_factory=TunnelConfig)
     sessions: list[SessionDefinition] = Field(default_factory=list)
 
 
@@ -249,6 +267,7 @@ ServerModel: TypeAlias = (
     | UiConfig
     | RecordingConfig
     | ProfileStoreConfig
+    | TunnelConfig
     | ServerBindConfig
     | SessionDefinition
     | SessionRuntimeStatus
