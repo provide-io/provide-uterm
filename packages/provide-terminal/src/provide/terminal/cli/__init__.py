@@ -329,6 +329,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
     add_tunnel_subcommand(sub)
 
+    # ---- inspect subcommand ----
+    from provide.terminal.cli.inspect import add_inspect_subcommand
+
+    add_inspect_subcommand(sub)
+
+    # ---- watch subcommand ----
+    from provide.terminal.cli.watch import add_watch_subcommand
+
+    add_watch_subcommand(sub)
+
     return parser
 
 

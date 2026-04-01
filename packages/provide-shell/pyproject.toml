@@ -21,6 +21,7 @@ dependencies = []
 
 [project.optional-dependencies]
 terminal = ["provide-terminal>=0.3.0"]
+images = ["Pillow>=10.0"]
 
 [project.scripts]
 ushell = "provide.shell.__main__:main"

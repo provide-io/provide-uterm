@@ -146,12 +146,24 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self.store.save_session_meta(self.worker_id, self.meta)
 
     def _share_role_for_request(self, request: object) -> str | None:
+        token = None
         try:
             qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
             token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
         except Exception as exc:
             logger.debug("failed to parse share token: %s", exc)
-            token = None
+        # Cookie fallback: uterm_tunnel_{worker_id}
+        if not token:
+            try:
+                from http.cookies import SimpleCookie
+
+                cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[union-attr]
+                cookies = SimpleCookie(cookie_header)
+                cookie_key = f"uterm_tunnel_{self.worker_id}"
+                if cookie_key in cookies:
+                    token = cookies[cookie_key].value
+            except Exception:  # noqa: S110
+                pass
         if not token:
             return None
         if self._control_token and secrets.compare_digest(token, self._control_token):
@@ -316,7 +328,11 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 socket_role = "raw"
 
             # Resolve browser role from JWT (defaults to "admin" in dev/none mode).
-            browser_role = await self.browser_role_for_request(request)
+            # Workers authenticate via bearer token, not JWT — default to "admin".
+            if socket_role == "worker":
+                browser_role = "admin"
+            else:
+                browser_role = await self.browser_role_for_request(request)
 
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)

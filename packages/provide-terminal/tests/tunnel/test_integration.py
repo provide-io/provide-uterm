@@ -441,3 +441,46 @@ class TestTunnelCreationDetails:
         resp = client.delete("/api/tunnels/nonexistent-id/tokens")
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
+
+
+class TestTokenTransportEnforcement:
+    """Verify token_transport config is actually enforced."""
+
+    def test_query_only_rejects_cookie(self) -> None:
+        """When token_transport='query', cookie is not accepted."""
+        cfg, app = _make_app()
+        cfg.tunnel.token_transport = "query"
+        client = TestClient(app)
+        tunnel = _create_tunnel(client)
+        tid = tunnel["tunnel_id"]
+        share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        resp = TestClient(app).get(
+            f"/app/session/{tid}",
+            cookies={f"uterm_tunnel_{tid}": share_tok},
+        )
+        cookies = {c.name: c.value for c in resp.cookies.jar}
+        assert "share:" not in cookies.get("uterm_principal", "")
+
+    def test_query_only_accepts_query(self) -> None:
+        """When token_transport='query', query param still works."""
+        cfg, app = _make_app()
+        cfg.tunnel.token_transport = "query"
+        client = TestClient(app)
+        tunnel = _create_tunnel(client)
+        tid = tunnel["tunnel_id"]
+        share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        resp = TestClient(app).get(f"/app/session/{tid}?token={share_tok}")
+        cookies = {c.name: c.value for c in resp.cookies.jar}
+        assert "share:" in cookies.get("uterm_principal", "")
+
+    def test_cookie_only_rejects_query(self) -> None:
+        """When token_transport='cookie', query param is not accepted."""
+        cfg, app = _make_app()
+        cfg.tunnel.token_transport = "cookie"
+        client = TestClient(app)
+        tunnel = _create_tunnel(client)
+        tid = tunnel["tunnel_id"]
+        share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        resp = TestClient(app).get(f"/app/session/{tid}?token={share_tok}")
+        cookies = {c.name: c.value for c in resp.cookies.jar}
+        assert "share:" not in cookies.get("uterm_principal", "")

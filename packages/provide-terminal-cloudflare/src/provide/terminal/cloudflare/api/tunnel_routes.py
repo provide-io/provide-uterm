@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _CHANNEL_CONTROL = 0x00
 _CHANNEL_DATA = 0x01
+_CHANNEL_HTTP = 0x03
 _FLAG_EOF = 0x01
 _MIN_FRAME = 2
 
@@ -63,6 +64,15 @@ async def handle_tunnel_message(
 
     if flags & _FLAG_EOF:
         logger.info("tunnel EOF on channel %d for worker_id=%s", channel, runtime.worker_id)
+        return
+
+    if channel == _CHANNEL_HTTP and payload:
+        try:
+            http_msg = json.loads(payload)
+            http_msg["_channel"] = "http"
+            await runtime.broadcast_worker_frame(http_msg)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            logger.warning("tunnel_bad_http_frame worker_id=%s", runtime.worker_id)
         return
 
     if channel >= _CHANNEL_DATA and payload:

@@ -101,11 +101,26 @@ async def resolve_share_context(request: object, env: object, tunnel_id: str) ->
     share_tok = session.get("share_token")
     control_tok = session.get("control_token")
 
+    provided = None
     try:
         qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
         provided = (qs.get("token", [None]) or [None])[0]
-    except Exception:
-        provided = None
+    except Exception:  # noqa: S110
+        pass
+    # Cookie fallback: uterm_tunnel_{tunnel_id}
+    if not provided:
+        try:
+            from http.cookies import SimpleCookie
+
+            cookie_header = str(
+                getattr(request, "headers", {}).get("cookie") or getattr(request, "headers", {}).get("Cookie") or ""
+            )
+            cookies = SimpleCookie(cookie_header)
+            cookie_key = f"uterm_tunnel_{tunnel_id}"
+            if cookie_key in cookies:
+                provided = cookies[cookie_key].value
+        except Exception:  # noqa: S110
+            pass
 
     # Check expiry.
     expires_at = session.get("expires_at")

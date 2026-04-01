@@ -385,3 +385,60 @@ class TestExpiredWorkerToken:
         req = _mock_request("https://example.com/s/tunnel-abc123?token=ctrl-tok")
         result = await resolve_share_context(req, env, "tunnel-abc123")
         assert result is None
+
+
+class TestCookieAuth:
+    """Cookie-based share token auth on CF."""
+
+    @pytest.mark.asyncio
+    async def test_cookie_share_token_accepted(self) -> None:
+        """resolve_share_context accepts share token from cookie."""
+        entry = _kv_entry()
+        env = _mock_env({"session:tunnel-abc123": entry})
+        req = _mock_request("https://example.com/app/session/tunnel-abc123")
+        req.headers = MagicMock()
+        req.headers.get = MagicMock(
+            side_effect=lambda k: "uterm_tunnel_tunnel-abc123=share-tok" if k.lower() == "cookie" else None
+        )
+        result = await resolve_share_context(req, env, "tunnel-abc123")
+        assert result is not None
+        assert result[1] == "viewer"
+
+    @pytest.mark.asyncio
+    async def test_cookie_control_token_accepted(self) -> None:
+        entry = _kv_entry()
+        env = _mock_env({"session:tunnel-abc123": entry})
+        req = _mock_request("https://example.com/app/operator/tunnel-abc123")
+        req.headers = MagicMock()
+        req.headers.get = MagicMock(
+            side_effect=lambda k: "uterm_tunnel_tunnel-abc123=ctrl-tok" if k.lower() == "cookie" else None
+        )
+        result = await resolve_share_context(req, env, "tunnel-abc123")
+        assert result is not None
+        assert result[1] == "operator"
+
+    @pytest.mark.asyncio
+    async def test_cookie_wrong_token_rejected(self) -> None:
+        entry = _kv_entry()
+        env = _mock_env({"session:tunnel-abc123": entry})
+        req = _mock_request("https://example.com/app/session/tunnel-abc123")
+        req.headers = MagicMock()
+        req.headers.get = MagicMock(
+            side_effect=lambda k: "uterm_tunnel_tunnel-abc123=wrong" if k.lower() == "cookie" else None
+        )
+        result = await resolve_share_context(req, env, "tunnel-abc123")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_query_takes_precedence_over_cookie(self) -> None:
+        """When both query param and cookie present, query param wins."""
+        entry = _kv_entry()
+        env = _mock_env({"session:tunnel-abc123": entry})
+        req = _mock_request("https://example.com/app/session/tunnel-abc123?token=share-tok")
+        req.headers = MagicMock()
+        req.headers.get = MagicMock(
+            side_effect=lambda k: "uterm_tunnel_tunnel-abc123=ctrl-tok" if k.lower() == "cookie" else None
+        )
+        result = await resolve_share_context(req, env, "tunnel-abc123")
+        assert result is not None
+        assert result[1] == "viewer"  # share-tok from query, not ctrl-tok from cookie

@@ -40,3 +40,34 @@ class TunnelCreateResponse(TypedDict):
     share_url: str
     control_url: str
     expires_at: float
+
+
+class HttpRequestMessage(TypedDict, total=False):
+    """Structured HTTP request sent on channel 0x03."""
+
+    type: str  # "http_req"
+    id: str
+    ts: float
+    method: str
+    url: str
+    headers: dict[str, str]
+    body_size: int
+    body_b64: str
+    body_truncated: bool
+    body_binary: bool
+
+
+class HttpResponseMessage(TypedDict, total=False):
+    """Structured HTTP response sent on channel 0x03."""
+
+    type: str  # "http_res"
+    id: str
+    ts: float
+    status: int
+    status_text: str
+    headers: dict[str, str]
+    body_size: int
+    body_b64: str
+    body_truncated: bool
+    body_binary: bool
+    duration_ms: float

@@ -7,6 +7,8 @@
 from provide.terminal.tunnel.protocol import (
     CHANNEL_CONTROL,
     CHANNEL_DATA,
+    CHANNEL_HTTP,
+    CHANNEL_TCP,
     FLAG_DATA,
     FLAG_EOF,
     TunnelFrame,
@@ -20,6 +22,8 @@ from provide.terminal.tunnel.protocol import (
 __all__ = [
     "CHANNEL_CONTROL",
     "CHANNEL_DATA",
+    "CHANNEL_HTTP",
+    "CHANNEL_TCP",
     "FLAG_DATA",
     "FLAG_EOF",
     "TunnelFrame",

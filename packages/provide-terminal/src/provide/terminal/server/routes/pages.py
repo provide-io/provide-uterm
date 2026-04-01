@@ -12,7 +12,13 @@ from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse
 
 from provide.terminal.server.auth import extract_bearer_token, resolve_http_principal
-from provide.terminal.server.ui import connect_page_html, operator_dashboard_html, replay_page_html, session_page_html
+from provide.terminal.server.ui import (
+    connect_page_html,
+    inspect_page_html,
+    operator_dashboard_html,
+    replay_page_html,
+    session_page_html,
+)
 
 if TYPE_CHECKING:
     from provide.terminal.server.models import ServerConfig
@@ -153,6 +159,32 @@ def create_page_router() -> APIRouter:
         if not authz.can_read_session(principal, session):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         html = replay_page_html(
+            session.display_name,
+            cfg.ui.assets_path,
+            session_id,
+            app_path=cfg.ui.app_path,
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
+            xterm_cdn=cfg.ui.xterm_cdn,
+            fitaddon_cdn=cfg.ui.fitaddon_cdn,
+            fonts_cdn=cfg.ui.fonts_cdn,
+        )
+        response = HTMLResponse(html)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
+        return response
+
+    @router.get("/inspect/{session_id}", response_class=HTMLResponse)
+    async def inspect_view(request: Request, session_id: _SessionId) -> HTMLResponse:
+        session = await request.app.state.uterm_registry.get_definition(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
+        cfg = request.app.state.uterm_config
+        secure = _is_secure_request(request)
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        authz = request.app.state.uterm_authz
+        if not authz.can_read_session(principal, session):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+        html = inspect_page_html(
             session.display_name,
             cfg.ui.assets_path,
             session_id,

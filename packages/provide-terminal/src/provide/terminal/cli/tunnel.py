@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 from provide.terminal.defaults import TerminalDefaults
 from provide.terminal.tunnel.protocol import (
+    CHANNEL_TCP,
     FLAG_EOF,
     decode_frame,
     encode_control,
@@ -37,8 +38,6 @@ from provide.terminal.tunnel.protocol import (
 )
 
 log = logging.getLogger(__name__)
-
-_CHANNEL_TCP = 0x02  # TCP data uses channel 2 (channel 1 reserved for terminal)
 
 
 # ---------------------------------------------------------------------------
@@ -95,9 +94,9 @@ async def _relay_tcp_to_ws(reader: asyncio.StreamReader, ws_send: Any) -> None:
         while True:
             data = await reader.read(4096)
             if not data:
-                await ws_send(encode_frame(_CHANNEL_TCP, b"", flags=FLAG_EOF))
+                await ws_send(encode_frame(CHANNEL_TCP, b"", flags=FLAG_EOF))
                 break
-            await ws_send(encode_frame(_CHANNEL_TCP, data))
+            await ws_send(encode_frame(CHANNEL_TCP, data))
     except (ConnectionError, OSError):
         pass
 
@@ -107,7 +106,7 @@ async def _relay_ws_to_tcp(ws_recv: Any, writer: asyncio.StreamWriter) -> None:
     try:
         while True:
             frame = await ws_recv()
-            if frame.channel != _CHANNEL_TCP:
+            if frame.channel != CHANNEL_TCP:
                 continue
             if frame.is_eof:
                 break
@@ -195,7 +194,7 @@ async def _run_tunnel(
             encode_control(
                 {
                     "type": "open",
-                    "channel": _CHANNEL_TCP,
+                    "channel": CHANNEL_TCP,
                     "tunnel_type": "tcp",
                     "local_port": local_port,
                 }
