@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
+from fastapi import Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
@@ -146,12 +147,14 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         session_id = _share_session_id_for(path)
         if session_id is None:
             return None
-        # Check query param first, then cookie.
-        raw_qs = connection.scope.get("query_string", b"")
-        query = raw_qs.decode("utf-8", errors="ignore") if isinstance(raw_qs, bytes) else str(raw_qs)
-        provided = (parse_qs(query).get("token", [None]) or [None])[0]
-        if not provided:
-            # Try cookie: uterm_tunnel_{session_id}
+        # Check query param and/or cookie based on token_transport config.
+        transport = config.tunnel.token_transport
+        provided = None
+        if transport in ("query", "both"):
+            raw_qs = connection.scope.get("query_string", b"")
+            query = raw_qs.decode("utf-8", errors="ignore") if isinstance(raw_qs, bytes) else str(raw_qs)
+            provided = (parse_qs(query).get("token", [None]) or [None])[0]
+        if not provided and transport in ("cookie", "both"):
             from http.cookies import SimpleCookie
 
             cookie_header = (
@@ -378,6 +381,17 @@ def create_server_app(config: ServerConfig) -> FastAPI:
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_page_router(), prefix=config.ui.app_path, dependencies=[Depends(_require_authenticated)])
+
+    @app.get("/s/{session_id}")
+    async def short_share_url(request: FastAPIRequest, session_id: str) -> object:
+        """Short share URL: /s/{id}?token=... → redirect to /app/session/{id}?token=..."""
+        from starlette.responses import RedirectResponse
+
+        qs = str(request.url.query)
+        target = f"{config.ui.app_path}/session/{session_id}"
+        if qs:
+            target += f"?{qs}"
+        return RedirectResponse(url=target, status_code=302)
 
     if config.server.allowed_origins:
         app.add_middleware(

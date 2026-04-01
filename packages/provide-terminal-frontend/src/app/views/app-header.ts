@@ -14,7 +14,7 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export type AppHeaderTab = "dashboard" | "connect" | "session" | "operator" | "replay";
+export type AppHeaderTab = "dashboard" | "connect" | "session" | "operator" | "replay" | "inspect";
 
 export function renderAppHeader(bootstrap: AppBootstrap, active: AppHeaderTab): string {
   const safeAppPath = escapeHtml(bootstrap.app_path);

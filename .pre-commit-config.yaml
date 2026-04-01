@@ -64,6 +64,7 @@ repos:
           - fastmcp>=2.0
           - provide-telemetry>=0.3
           - structlog>=24.0
+          - textual>=0.50
         pass_filenames: false
         always_run: true
         types: [python]
@@ -85,6 +86,7 @@ repos:
           - pyjwt>=2.9
           - fastmcp>=2.0
           - provide-telemetry>=0.3
+          - textual>=0.50
           - structlog>=24.0
         pass_filenames: false
         always_run: true

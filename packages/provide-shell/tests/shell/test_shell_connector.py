@@ -4,11 +4,32 @@
 #
 """Tests for provide.shell.terminal._connector — UshellConnector."""
 
+import asyncio
+import contextlib
 import importlib
+import io
 import sys
+from unittest.mock import patch
 
+from PIL import Image
+
+from provide.shell._commands import AnimatedResult
 from provide.shell._output import BANNER, PROMPT
 from provide.shell.terminal._connector import UshellConnector
+
+# ---------------------------------------------------------------------------
+# Helper: create a small animated GIF on disk
+# ---------------------------------------------------------------------------
+
+
+def _make_gif_file(tmp_path, n_frames: int = 2) -> str:
+    frames = [Image.new("RGB", (4, 4), (i * 100, 255, 0)) for i in range(n_frames)]
+    buf = io.BytesIO()
+    frames[0].save(buf, format="GIF", save_all=True, append_images=frames[1:], duration=100, loop=0)
+    p = tmp_path / "anim.gif"
+    p.write_bytes(buf.getvalue())
+    return str(p)
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -236,6 +257,72 @@ async def test_config_param_accepted():
 # ---------------------------------------------------------------------------
 # ImportError fallback for SessionConnector base class
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# AnimatedResult handling (lines 109-111, 127, 135-145)
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_input_animated_result_starts_stream(tmp_path):
+    """handle_input with a render command returning AnimatedResult spawns _stream_animation."""
+    gif_path = _make_gif_file(tmp_path, n_frames=2)
+    conn = UshellConnector("s1")
+    await conn.start()
+    # Drain welcome frames
+    await conn.poll_messages()
+
+    # Send a render command that returns AnimatedResult (file:// URL, animated GIF)
+    frames = await conn.handle_input(f"render file://{gif_path}\r")
+    # May have an echo frame — just check it doesn't raise
+    assert isinstance(frames, list)
+
+    # Let the background _stream_animation task run at least one iteration
+    await asyncio.sleep(0.3)
+
+    # poll_messages should drain _pending_frames (lines 109-111)
+    polled = await conn.poll_messages()
+    assert isinstance(polled, list)
+    # Should have at least some frames from the animation
+    assert len(polled) > 0
+
+
+async def test_handle_input_animated_result_via_mock():
+    """Cover handle_input AnimatedResult branch (line 127) and _stream_animation (135-145)."""
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()
+
+    animated = AnimatedResult(frames=["frame1\n", "frame2\n"], fps=100.0, loop=False)
+    with patch.object(conn._dispatcher, "dispatch", return_value=animated):
+        frames = await conn.handle_input("render whatever\r")
+    # May have echo frame; AnimatedResult does NOT add to frames directly
+    assert isinstance(frames, list)
+
+    # Give _stream_animation time to run both frames + PROMPT
+    await asyncio.sleep(0.05)
+
+    # Drain pending frames (lines 109-111)
+    polled = await conn.poll_messages()
+    data_all = "".join(f["data"] for f in polled)
+    assert "frame1" in data_all or "frame2" in data_all or PROMPT in data_all
+
+
+async def test_stream_animation_loop_then_cancel():
+    """Cover _stream_animation with loop=True and CancelledError (line 143)."""
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()
+
+    animated = AnimatedResult(frames=["looped\n"], fps=200.0, loop=True)
+    task = asyncio.ensure_future(conn._stream_animation(animated))
+    # Let it loop a few times
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    # After cancellation the task should be done
+    assert task.done()
 
 
 def test_session_connector_import_error_falls_back_to_object():

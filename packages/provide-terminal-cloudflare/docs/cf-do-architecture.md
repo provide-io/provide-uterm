@@ -412,45 +412,152 @@ In `jwt` mode, `from_env()` raises `ValueError` if this secret is not set.
 
 ---
 
-## Tunnel Protocol (Terminal Sharing)
+## Tunnel System
 
-The tunnel system enables tmate-style terminal sharing: a local CLI agent (`uterm share`)
-connects outbound to the CF edge, sharing a PTY session with remote viewers.
+The tunnel system enables tmate-style terminal sharing, TCP port forwarding, and HTTP
+traffic inspection through a multiplexed binary WebSocket protocol.
 
-### Tunnel Wire Format
+### Architecture Overview
 
-Binary WebSocket frames with a 2-byte header:
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Local Machine                                 │
+│                                                                         │
+│  uterm share [cmd]    uterm tunnel <port>    uterm inspect <port>      │
+│       │                     │                       │                   │
+│  ┌────┴────┐          ┌────┴────┐           ┌──────┴──────┐           │
+│  │ PTY I/O │          │ TCP     │           │ HTTP Proxy  │           │
+│  │ ch 0x01 │          │ ch 0x02 │           │ ch 0x01+03  │           │
+│  └────┬────┘          └────┬────┘           └──────┬──────┘           │
+│       └──────────┬─────────┴───────────────────────┘                   │
+│            ┌─────┴──────┐                                              │
+│            │ Tunnel     │  Binary frames: [channel][flags][payload]    │
+│            │ Client     │  Multiplexed over single WebSocket          │
+│            └─────┬──────┘                                              │
+└──────────────────┼──────────────────────────────────────────────────────┘
+                   │ WSS /tunnel/{id}  (Bearer: worker_token)
+                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     CF Worker / FastAPI Server                           │
+│                                                                         │
+│  SessionRuntime DO / TermHub                                            │
+│  ├─ ch 0x00 (control) → open/resize/close lifecycle                    │
+│  ├─ ch 0x01 (terminal) → broadcast_worker_frame() → browsers          │
+│  ├─ ch 0x02 (tcp)      → raw relay (not broadcast)                     │
+│  └─ ch 0x03 (http)     → broadcast as {_channel:"http"} → browsers    │
+│                                                                         │
+│  Browser WS: /ws/browser/{id}/term                                      │
+│  ├─ Receives ch 0x01 as DLE/STX encoded term frames                   │
+│  ├─ Receives ch 0x03 as DLE/STX encoded control frames                │
+│  └─ Session/Operator view: xterm.js terminal                           │
+│  └─ Inspect view: request list + detail pane                           │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Channel Multiplexing
+
+All tunnel traffic flows over a single WebSocket connection using binary frames:
 
 ```
 [1 byte: channel_id] [1 byte: flags] [N bytes: payload]
-
-Channel 0x00: control (JSON)
-Channel 0x01: primary data (raw PTY bytes)
-Channel 0x02+: additional streams (future)
-
-Flags: 0x00=data, 0x01=EOF
 ```
 
-### Tunnel Key Files
+| Channel | Name | Payload | Used By |
+|---------|------|---------|---------|
+| `0x00` | Control | JSON (`open`, `resize`, `close`, `error`) | All modes |
+| `0x01` | Terminal | Raw PTY bytes or log lines | `share`, `inspect` |
+| `0x02` | TCP | Raw TCP bytes | `tunnel` |
+| `0x03` | HTTP | Structured JSON (`http_req`, `http_res`) | `inspect` |
+
+Flags: `0x00` = data, `0x01` = EOF (half-close).
+
+Channels are independent — `uterm inspect` uses channels 0x01 (terminal log) and 0x03
+(HTTP structured data) simultaneously on the same WebSocket.
+
+### HTTP Inspection Protocol (Channel 0x03)
+
+The `uterm inspect` command runs a local HTTP reverse proxy. For each proxied request:
+
+```json
+{"type":"http_req","id":"r1","ts":1711000000.0,
+ "method":"POST","url":"/api/login",
+ "headers":{"content-type":"application/json"},
+ "body_size":42,"body_b64":"eyJ1c2VyIjoiYWRtaW4ifQ=="}
+
+{"type":"http_res","id":"r1","ts":1711000000.089,
+ "status":200,"status_text":"OK",
+ "headers":{"content-type":"application/json"},
+ "body_size":18,"body_b64":"eyJ0b2tlbiI6ImFiYyJ9",
+ "duration_ms":89}
+```
+
+**Body rules:** < 256KB → base64 inline; > 256KB → `body_truncated: true`; binary content
+types (image/*, audio/*, etc.) → `body_binary: true`. The actual proxy transparently
+forwards the full body regardless of size.
+
+### Token Security
+
+Three tokens generated per tunnel session (`POST /api/tunnels`):
+
+| Token | Purpose | Transport | Grants |
+|-------|---------|-----------|--------|
+| `worker_token` | Agent WSS auth | Bearer header | Tunnel connection |
+| `share_token` | View URL | Query param or cookie | viewer role |
+| `control_token` | Operator URL | Query param or cookie | operator role |
+
+**Hardening:**
+- **TTL**: Default 1 hour, configurable via `TunnelConfig.token_ttl_s`
+- **Revocation**: `DELETE /api/tunnels/{id}/tokens`
+- **Rotation**: `POST /api/tunnels/{id}/tokens/rotate` → new tokens, old invalidated
+- **Timing-safe**: All comparisons use `secrets.compare_digest()`
+- **Enumeration**: Share routes return 404 for both "not found" and "invalid token"
+- **Cookie transport**: `token_transport: "both"` sets HttpOnly cookie + query param
+- **IP binding**: Optional (`TunnelConfig.ip_binding`), validates source IP on access
+- **Audit logging**: Structured logs on create/validate/expire/revoke/rotate
+
+### CLI Commands
+
+```
+uterm share [cmd]              # Share terminal (channel 0x01)
+uterm tunnel <port>            # Forward TCP port (channel 0x02)
+uterm inspect <port>           # HTTP proxy + inspection (channels 0x01 + 0x03)
+uterm watch <id-or-url>        # TUI viewer for existing tunnel (read-only, Textual)
+```
+
+### Browser Views
+
+| Route | View | Data Source |
+|-------|------|-------------|
+| `/app/session/{id}` | Terminal viewer | Channel 0x01 via hijack widget |
+| `/app/operator/{id}` | Terminal + controls | Channel 0x01 via hijack widget |
+| `/app/inspect/{id}` | HTTP request list + detail | Channel 0x03 via direct WS |
+| `/s/{id}?token=...` | Share viewer (CF) | Channel 0x01, token-authenticated |
+
+### Key Files
 
 | File | Role |
 |------|------|
-| `tunnel/protocol.py` (provide-terminal) | Binary frame encode/decode |
-| `tunnel/client.py` (provide-terminal) | Async WebSocket tunnel client |
-| `tunnel/pty_capture.py` (provide-terminal) | PTY spawn and attach |
-| `tunnel/fastapi_routes.py` (provide-terminal) | FastAPI `/tunnel/{id}` route |
-| `cli/share.py` (provide-terminal) | `uterm share` CLI entry point |
-| `api/tunnel_routes.py` (CF) | Binary frame handler in DO |
-| `api/_tunnel_api.py` (CF) | `POST /api/tunnels`, `GET /s/{id}` handlers |
-| `entry.py` (CF) | Route registration for `/tunnel/`, `/s/`, `/api/tunnels` |
+| `tunnel/protocol.py` | Binary frame encode/decode, channel constants |
+| `tunnel/types.py` | `TunnelTokenState`, `HttpRequestMessage`, `HttpResponseMessage` |
+| `tunnel/client.py` | Async WebSocket tunnel client with reconnect |
+| `tunnel/pty_capture.py` | PTY spawn and TTY attach |
+| `tunnel/http_proxy.py` | Body encoding rules, log formatting |
+| `tunnel/fastapi_routes.py` | FastAPI `/tunnel/{id}` WS route (channels 0x01-0x03) |
+| `cli/share.py` | `uterm share` CLI |
+| `cli/tunnel.py` | `uterm tunnel` CLI |
+| `cli/inspect.py` | `uterm inspect` CLI |
+| CF `api/tunnel_routes.py` | DO binary frame handler |
+| CF `api/_tunnel_api.py` | `POST /api/tunnels`, share URL auth |
+| CF `entry.py` | Route registration: `/tunnel/`, `/s/`, `/api/tunnels`, `/app/inspect/` |
+| Frontend `inspect-view.ts` | Live HTTP request list + detail pane |
 
-### Share URL Authentication
+### Pyodide Runtime Fixes
 
-| Layer | Token | Role | Requires Account |
-|-------|-------|------|-----------------|
-| Share URL | `share_token` in query param | viewer | No |
-| Control URL | `control_token` in query param | operator | No |
-| CF Access JWT | JWT from CF Access | admin/operator/viewer | Yes |
+| Issue | Fix |
+|-------|-----|
+| JS ArrayBuffer not `isinstance(bytes)` | `to_py()`/`to_bytes()` before check |
+| `provide.terminal.cloudflare.api.*` import fails | `try/except` with flat path fallback |
+| Worker WS triggers JWT decode | Skip `browser_role_for_request()` for `socket_role == "worker"` |
 
 ---
 

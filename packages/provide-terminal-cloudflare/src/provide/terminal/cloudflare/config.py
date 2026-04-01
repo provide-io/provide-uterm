@@ -52,6 +52,9 @@ class CloudflareConfig:
     limits: LimitsConfig = field(default_factory=LimitsConfig)
     upstream: UpstreamConfig = field(default_factory=UpstreamConfig)
     worker_bearer_token: str | None = None
+    tunnel_token_ttl_s: int = 3600
+    tunnel_token_transport: str = "both"  # noqa: S105 — "query", "cookie", or "both"
+    tunnel_ip_binding: bool = False
 
     @classmethod
     def from_env(cls, env: Any) -> CloudflareConfig:
@@ -131,4 +134,7 @@ class CloudflareConfig:
             limits=limits,
             upstream=upstream,
             worker_bearer_token=worker_bearer_token,
+            tunnel_token_ttl_s=max(60, int(_get("TUNNEL_TOKEN_TTL_S", "3600"))),
+            tunnel_token_transport=_get("TUNNEL_TOKEN_TRANSPORT", "both") or "both",
+            tunnel_ip_binding=_get_bool("TUNNEL_IP_BINDING", default=False),
         )

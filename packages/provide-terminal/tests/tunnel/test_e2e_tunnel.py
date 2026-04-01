@@ -158,3 +158,34 @@ class TestE2ETunnelTokenAPIs:
         # expires_at should be ~120s from now (not default 3600)
         assert body["expires_at"] < time.time() + 200
         assert body["expires_at"] > time.time() + 60
+
+
+class TestShortShareUrl:
+    """Test /s/{id} short share URL redirect."""
+
+    def test_short_url_redirects(self, e2e_client: TestClient) -> None:
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
+        tid = resp.json()["tunnel_id"]
+        share_token = e2e_client.app.state.uterm_tunnel_tokens[tid]["share_token"]  # type: ignore[union-attr]
+
+        redirect = e2e_client.get(f"/s/{tid}?token={share_token}", follow_redirects=False)
+        assert redirect.status_code == 302
+        location = redirect.headers["location"]
+        assert f"/app/session/{tid}" in location
+        assert f"token={share_token}" in location
+
+    def test_short_url_without_token(self, e2e_client: TestClient) -> None:
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
+        tid = resp.json()["tunnel_id"]
+
+        redirect = e2e_client.get(f"/s/{tid}", follow_redirects=False)
+        assert redirect.status_code == 302
+        assert f"/app/session/{tid}" in redirect.headers["location"]
+
+    def test_short_url_follows_redirect(self, e2e_client: TestClient) -> None:
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
+        tid = resp.json()["tunnel_id"]
+        share_token = e2e_client.app.state.uterm_tunnel_tokens[tid]["share_token"]  # type: ignore[union-attr]
+
+        final = e2e_client.get(f"/s/{tid}?token={share_token}", follow_redirects=True)
+        assert final.status_code == 200

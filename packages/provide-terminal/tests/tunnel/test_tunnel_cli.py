@@ -13,7 +13,6 @@ import pytest
 
 from provide.terminal.cli import _build_parser
 from provide.terminal.cli.tunnel import (
-    _CHANNEL_TCP,
     _cmd_tunnel,
     _create_tunnel,
     _handle_tcp_client,
@@ -21,7 +20,7 @@ from provide.terminal.cli.tunnel import (
     _relay_tcp_to_ws,
     _relay_ws_to_tcp,
 )
-from provide.terminal.tunnel.protocol import FLAG_EOF, TunnelFrame, decode_frame
+from provide.terminal.tunnel.protocol import CHANNEL_TCP, FLAG_EOF, TunnelFrame, decode_frame
 from provide.terminal.tunnel.types import TunnelCreateResponse, TunnelTokenState
 
 
@@ -141,11 +140,11 @@ class TestRelayTcpToWs:
 
         assert len(sent) == 3  # 2 data + 1 EOF
         # First two are data frames on channel 2
-        assert sent[0][0] == _CHANNEL_TCP
-        assert sent[1][0] == _CHANNEL_TCP
+        assert sent[0][0] == CHANNEL_TCP
+        assert sent[1][0] == CHANNEL_TCP
         # Last is EOF
         frame = decode_frame(sent[2])
-        assert frame.is_eof and frame.channel == _CHANNEL_TCP
+        assert frame.is_eof and frame.channel == CHANNEL_TCP
 
     @pytest.mark.asyncio
     async def test_handles_connection_error(self) -> None:
@@ -161,8 +160,8 @@ class TestRelayWsToTcp:
         writer = AsyncMock()
         writer.close = MagicMock()
         frames = [
-            TunnelFrame(channel=_CHANNEL_TCP, flags=0, payload=b"hello"),
-            TunnelFrame(channel=_CHANNEL_TCP, flags=FLAG_EOF, payload=b""),
+            TunnelFrame(channel=CHANNEL_TCP, flags=0, payload=b"hello"),
+            TunnelFrame(channel=CHANNEL_TCP, flags=FLAG_EOF, payload=b""),
         ]
         ws_recv = AsyncMock(side_effect=frames)
 
@@ -177,7 +176,7 @@ class TestRelayWsToTcp:
         writer.close = MagicMock()
         frames = [
             TunnelFrame(channel=0x01, flags=0, payload=b"terminal data"),
-            TunnelFrame(channel=_CHANNEL_TCP, flags=FLAG_EOF, payload=b""),
+            TunnelFrame(channel=CHANNEL_TCP, flags=FLAG_EOF, payload=b""),
         ]
         ws_recv = AsyncMock(side_effect=frames)
 
@@ -202,7 +201,7 @@ class TestHandleTcpClient:
         writer.close = MagicMock()
         sent: list[bytes] = []
         ws_send = AsyncMock(side_effect=lambda d: sent.append(d))
-        frames = [TunnelFrame(channel=_CHANNEL_TCP, flags=FLAG_EOF, payload=b"")]
+        frames = [TunnelFrame(channel=CHANNEL_TCP, flags=FLAG_EOF, payload=b"")]
         ws_recv = AsyncMock(side_effect=frames)
 
         await _handle_tcp_client(reader, writer, ws_send, ws_recv)

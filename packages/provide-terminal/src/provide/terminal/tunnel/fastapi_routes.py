@@ -11,6 +11,7 @@ and bridges it to TermHub (the same hub used by the legacy text protocol).
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 import time
 from contextlib import suppress
@@ -30,6 +31,7 @@ from provide.terminal.hijack.frames import (
 )
 from provide.terminal.tunnel.protocol import (
     CHANNEL_DATA,
+    CHANNEL_HTTP,
     decode_control,
     decode_frame,
 )
@@ -103,6 +105,18 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
                     await _handle_control(hub, websocket, worker_id, frame.payload)
                 elif frame.is_eof:
                     logger.info("tunnel_eof worker_id=%s channel=%d", worker_id, frame.channel)
+                elif frame.channel == CHANNEL_HTTP:
+                    # HTTP inspection: broadcast structured JSON as control frame
+                    try:
+                        http_msg = json.loads(frame.payload)
+                        http_msg["_channel"] = "http"
+                        await hub.broadcast(
+                            worker_id,
+                            cast("dict[str, Any]", http_msg),
+                        )
+                        await hub.append_event(worker_id, http_msg.get("type", "http"), http_msg)
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        logger.warning("tunnel_bad_http_frame worker_id=%s", worker_id)
                 elif frame.channel >= CHANNEL_DATA and frame.payload:
                     text = frame.payload.decode("utf-8", errors="replace")
                     await hub.broadcast(

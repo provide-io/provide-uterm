@@ -49,18 +49,58 @@ Opt-in feature. Enabled on FastAPI by passing `resume_store` to `TermHub`; alway
 
 ## Tunnel protocol
 
-Binary WebSocket framing for `uterm share` terminal sharing and future TCP/HTTP tunneling.
+Binary multiplexed WebSocket framing for terminal sharing, TCP forwarding, and HTTP inspection.
+
+### Wire format
+
+`[1 byte channel][1 byte flags][N bytes payload]` per binary WebSocket message.
+
+| Channel | Name | Payload | CLI command |
+|---------|------|---------|-------------|
+| `0x00` | Control | JSON: `open`, `resize`, `close`, `error` | all |
+| `0x01` | Terminal | Raw PTY bytes or log lines | `uterm share`, `uterm inspect` |
+| `0x02` | TCP | Raw TCP bytes | `uterm tunnel` |
+| `0x03` | HTTP | Structured JSON: `http_req`, `http_res` | `uterm inspect` |
+
+Flags: `0x00` = data, `0x01` = EOF (half-close).
+
+### Tunnel endpoints
 
 | Capability | FastAPI backend | Cloudflare backend |
 |---|---|---|
-| Wire format | `[1B channel][1B flags][N bytes payload]` | same |
-| Channel 0x00 (control) | JSON: open, resize, close, snapshot | same |
-| Channel 0x01 (data) | Raw PTY bytes | same |
-| Flag 0x01 (EOF) | Half-close signal | same |
-| Endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
-| Auth (agent) | `worker_bearer_token` (Bearer header) | Per-session `worker_token` in KV |
-| `POST /api/tunnels` | not yet | supported (creates session + tokens) |
-| `GET /s/{id}?token=…` | not yet | supported (share/control token → role) |
+| Agent endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
+| Browser endpoint | `WSS /ws/browser/{id}/term` | same |
+| `POST /api/tunnels` | supported | supported |
+| `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | not yet |
+| `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | not yet |
+| Share URL (`?token=...`) | `/s/{id}` → 302 redirect | `/s/{id}` → 302 redirect |
+| Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
+
+### Tunnel auth
+
+| Capability | FastAPI backend | Cloudflare backend |
+|---|---|---|
+| Agent auth | Global `worker_bearer_token` OR per-session `worker_token` | same |
+| Share token | Query param or `uterm_tunnel_{id}` cookie | Query param or `uterm_tunnel_{id}` cookie |
+| Control token | Query param or cookie | Query param or cookie |
+| Token TTL | Default 1h, configurable via `TunnelConfig.token_ttl_s` | Default 1h, configurable via `TUNNEL_TOKEN_TTL_S` env var |
+| Token revocation | `DELETE /api/tunnels/{id}/tokens` | not yet implemented |
+| Token rotation | `POST /api/tunnels/{id}/tokens/rotate` | not yet implemented |
+| IP binding | Optional (`TunnelConfig.ip_binding`) | Optional (`TUNNEL_IP_BINDING` env var) |
+| Timing-safe compare | `secrets.compare_digest()` | same |
+| Enumeration prevention | 404 for both "not found" and "invalid token" | same |
+
+### HTTP inspection (channel 0x03)
+
+| Capability | FastAPI backend | Cloudflare backend |
+|---|---|---|
+| Channel 0x03 broadcast | `hub.broadcast()` + `hub.append_event()` | `runtime.broadcast_worker_frame()` |
+| HTTP req/res JSON | Parsed, tagged `_channel: "http"`, broadcast to browsers | same |
+| Invalid JSON handling | Logged as warning, dropped | same |
+| Body < 256KB | Included as `body_b64` (base64) | same (agent-side encoding) |
+| Body > 256KB | `body_truncated: true`, no `body_b64` | same |
+| Binary content | `body_binary: true`, no `body_b64` | same |
+| Inspect view | `/app/inspect/{id}` — live request list + detail | same |
 
 ## Accuracy note
 

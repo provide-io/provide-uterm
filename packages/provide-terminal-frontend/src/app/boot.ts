@@ -18,7 +18,8 @@ function readBootstrap(): AppBootstrap {
     parsed.page_kind !== "session" &&
     parsed.page_kind !== "operator" &&
     parsed.page_kind !== "replay" &&
-    parsed.page_kind !== "connect"
+    parsed.page_kind !== "connect" &&
+    parsed.page_kind !== "inspect"
   ) {
     throw new Error("Invalid page bootstrap");
   }

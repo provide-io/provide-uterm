@@ -16,6 +16,7 @@ kv get <key>        — read a KV value by key
 kv set <key> <val>  — write a KV entry
 kv delete <key>     — delete a KV entry
 fetch [-X METHOD] <url> [body] — HTTP request (GET by default)
+render [flags] <url>    — render image as ANSI art (requires provide-shell[images])
 storage list        — list DO storage keys
 storage get <key>   — read a DO storage value
 env                 — show available context keys
@@ -24,6 +25,8 @@ exit / quit         — end the shell session
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from provide.shell._output import (
@@ -43,6 +46,16 @@ from provide.shell._output import (
 )
 from provide.shell._sandbox import Sandbox
 
+
+@dataclass
+class AnimatedResult:
+    """Return type for animated render output — caller handles frame timing."""
+
+    frames: list[str]
+    fps: float
+    loop: bool
+
+
 # ---------------------------------------------------------------------------
 # Help text
 # ---------------------------------------------------------------------------
@@ -59,6 +72,7 @@ _HELP = (
     f"{fmt_kv('kv set <key> <value>', 'write a KV entry')}"
     f"{fmt_kv('kv delete <key>', 'delete a KV entry')}"
     f"{fmt_kv('fetch [-X METHOD] <url> [body]', 'HTTP request (GET by default)')}"
+    f"{fmt_kv('render [flags] <url>', 'render image as ANSI art')}"
     f"{fmt_kv('storage list', 'list DO storage keys')}"
     f"{fmt_kv('storage get <key>', 'read a DO storage value')}"
     f"{fmt_kv('env', 'show available context keys')}"
@@ -92,6 +106,13 @@ _COMMAND_HELP: dict[str, str] = {
         "storage list         — list all DO storage keys.\r\nstorage get <key>    — read a DO storage value by key.\r\n"
     ),
     "env": "env — show available context keys and their types.\r\n",
+    "render": (
+        "render [--mode truecolor|256|16] [--cols N] [--rows N] [--fps N] [--loop] <url>\r\n"
+        "  Render an image as ANSI art in the terminal.\r\n"
+        "  Supports PNG, JPEG, GIF, APNG, WebP, BMP, TIFF, and more.\r\n"
+        "  Animated images stream frames; use --loop to repeat.\r\n"
+        "  Requires: pip install 'provide-shell[images]'\r\n"
+    ),
     "exit": "exit / quit — end this shell session.\r\n",
     "quit": "exit / quit — end this shell session.\r\n",
 }
@@ -120,7 +141,7 @@ class CommandDispatcher:
         self._ctx = ctx
         self._sandbox = sandbox or Sandbox({"ctx": ctx})
 
-    async def dispatch(self, line: str) -> list[str]:
+    async def dispatch(self, line: str) -> list[str] | AnimatedResult:
         """Process a completed *line* and return a list of raw output strings."""
         line = line.strip()
         # Ctrl+C — already echoed; just re-show prompt.
@@ -164,6 +185,9 @@ class CommandDispatcher:
 
         if cmd == "env":
             return self._cmd_env()
+
+        if cmd == "render":
+            return await self._cmd_render(arg)
 
         return [error_msg(f"unknown command: {cmd!r} — type {BOLD}help{RESET}") + PROMPT]
 
@@ -375,3 +399,85 @@ class CommandDispatcher:
             lines = [fmt_kv(k, "") for k in ctx_keys]
         output = heading("context") + "".join(lines) if lines else info_msg("(empty context)")
         return [output + PROMPT]
+
+    async def _cmd_render(self, arg: str) -> list[str] | AnimatedResult:
+        if not arg:
+            return [
+                error_msg("usage: render [--mode truecolor|256|16] [--cols N] [--rows N] [--fps N] [--loop] <url>")
+                + PROMPT
+            ]
+
+        # Parse flags
+        mode = "truecolor"
+        cols = 80
+        rows = 24
+        fps_override: float | None = None
+        loop = False
+        tokens = arg.split()
+        url = ""
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok == "--mode" and i + 1 < len(tokens):
+                mode = tokens[i + 1]
+                if mode not in {"truecolor", "256", "16"}:
+                    return [error_msg(f"unknown mode {mode!r} (use truecolor, 256, or 16)") + PROMPT]
+                i += 2
+            elif tok == "--cols" and i + 1 < len(tokens):
+                cols = int(tokens[i + 1])
+                i += 2
+            elif tok == "--rows" and i + 1 < len(tokens):
+                rows = int(tokens[i + 1])
+                i += 2
+            elif tok == "--fps" and i + 1 < len(tokens):
+                fps_override = float(tokens[i + 1])
+                i += 2
+            elif tok == "--loop":
+                loop = True
+                i += 1
+            elif not tok.startswith("--"):
+                url = tok
+                i += 1
+            else:
+                return [error_msg(f"unknown flag: {tok}") + PROMPT]
+
+        if not url:
+            return [
+                error_msg("usage: render [--mode truecolor|256|16] [--cols N] [--rows N] [--fps N] [--loop] <url>")
+                + PROMPT
+            ]
+
+        # Fetch image bytes
+        try:
+            if url.startswith("file://"):
+                file_path = Path(url[7:])
+                if not file_path.is_file():
+                    return [error_msg(f"file not found: {file_path}") + PROMPT]
+                data = file_path.read_bytes()
+            elif url.startswith(("http://", "https://")):
+                import urllib.request
+
+                req = urllib.request.Request(url, headers={"User-Agent": "provide-shell/1.0"})  # noqa: S310
+                with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310  # nosec B310
+                    data = resp.read()
+            else:
+                return [error_msg("unsupported URL scheme (use http://, https://, or file://)") + PROMPT]
+        except Exception as exc:
+            return [error_msg(f"cannot fetch: {exc}") + PROMPT]
+
+        # Convert to ANSI frames
+        try:
+            from provide.shell._render import image_to_ansi_frames
+
+            frames, source_fps = image_to_ansi_frames(data, cols=cols, rows=rows, mode=mode)  # type: ignore[arg-type]
+        except ImportError as exc:
+            return [error_msg(str(exc)) + PROMPT]
+        except Exception as exc:
+            return [error_msg(f"cannot decode image: {exc}") + PROMPT]
+
+        fps_final = fps_override if fps_override is not None else source_fps
+
+        if len(frames) <= 1 or fps_final <= 0:
+            return [frames[0] + PROMPT] if frames else [error_msg("empty image") + PROMPT]
+
+        return AnimatedResult(frames=frames, fps=fps_final, loop=loop)

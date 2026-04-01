@@ -80,7 +80,8 @@ show_missing = true
 skip_covered = false
 
 [tool.uv.sources]
-provide-shell = { path = "../../packages/provide-shell", editable = true }
+provide-shell = { workspace = true }
+provide-terminal = { workspace = true }
 
 [tool.mutmut]
 paths_to_mutate = ["src/"]

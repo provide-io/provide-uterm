@@ -230,6 +230,47 @@ def connect_page_html(
     )
 
 
+def inspect_page_html(
+    title: str,
+    assets_path: str,
+    session_id: str,
+    *,
+    app_path: str,
+    share_role: str | None = None,
+    share_token: str | None = None,
+    xterm_cdn: str = "",
+    fitaddon_cdn: str = "",
+    fonts_cdn: str = "",
+) -> str:
+    bootstrap = {
+        "page_kind": "inspect",
+        "title": title,
+        "app_path": app_path,
+        "assets_path": assets_path,
+        "session_id": session_id,
+        "surface": "operator",
+        "share_role": share_role,
+        "share_token": share_token,
+    }
+    body = (
+        "<body>"
+        "<div id='app-root'></div>"
+        "<noscript><div class='page'><div class='card'>This application requires JavaScript.</div></div></noscript>"
+        f"{_bootstrap_tag(bootstrap)}"
+        "</body>"
+    )
+    return _shell(
+        title,
+        assets_path,
+        body,
+        pre_vite_modules=("hijack.js",),
+        scripts=("server-session-page.js",),
+        xterm_cdn=xterm_cdn,
+        fitaddon_cdn=fitaddon_cdn,
+        fonts_cdn=fonts_cdn,
+    )
+
+
 def replay_page_html(
     title: str,
     assets_path: str,

@@ -36,7 +36,7 @@ try:
 except ImportError:  # pragma: no cover
     _SessionConnector = object  # type: ignore[assignment,misc]
 
-from provide.shell._commands import CommandDispatcher
+from provide.shell._commands import AnimatedResult, CommandDispatcher
 from provide.shell._output import BANNER, CLEAR_SCREEN, PROMPT
 from provide.shell._repl import LineBuffer
 from provide.shell._sandbox import Sandbox
@@ -70,6 +70,7 @@ class UshellConnector(_SessionConnector):
         self._sandbox = Sandbox(extra=extra_ctx)
         ctx: dict[str, Any] = dict(extra_ctx or {})
         self._dispatcher = CommandDispatcher(ctx, self._sandbox)
+        self._pending_frames: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # SessionConnector lifecycle
@@ -104,15 +105,15 @@ class UshellConnector(_SessionConnector):
                 worker_hello("open"),
                 term(BANNER + PROMPT),
             ]
+        if self._pending_frames:
+            frames = list(self._pending_frames)
+            self._pending_frames.clear()
+            return frames
         await asyncio.sleep(0.05)
         return []
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
-        """Process raw keystroke *data* and return terminal frames.
-
-        Echo frames are emitted for every printable character.  Command
-        output frames are emitted only when Enter is pressed.
-        """
+        """Process raw keystroke *data* and return terminal frames."""
         self._buf.feed(data)
         frames: list[dict[str, Any]] = []
 
@@ -121,10 +122,27 @@ class UshellConnector(_SessionConnector):
             frames.append(term(echo))
 
         for line in self._buf.take_completed():
-            output_strings = await self._dispatcher.dispatch(line)
-            frames.extend(term(s) for s in output_strings)
+            result = await self._dispatcher.dispatch(line)
+            if isinstance(result, AnimatedResult):
+                asyncio.ensure_future(self._stream_animation(result))  # noqa: RUF006
+            else:
+                frames.extend(term(s) for s in result)
 
         return frames
+
+    async def _stream_animation(self, result: AnimatedResult) -> None:
+        """Stream animation frames as terminal output."""
+        delay = 1.0 / result.fps if result.fps > 0 else 0.1
+        try:
+            while True:
+                for frame in result.frames:
+                    await asyncio.sleep(delay)
+                    self._pending_frames.append(term(frame))
+                if not result.loop:
+                    break
+        except asyncio.CancelledError:
+            pass
+        self._pending_frames.append(term(PROMPT))
 
     async def handle_control(self, action: str) -> list[dict[str, Any]]:  # noqa: ARG002
         """Handle hijack control actions.
