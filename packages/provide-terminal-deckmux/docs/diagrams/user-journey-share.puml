@@ -1,0 +1,72 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml user-journey-share
+title provide-terminal — Terminal Sharing Journey
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam sequenceArrowColor #2563eb
+skinparam sequenceLifeLineBorderColor #d1d5db
+skinparam sequenceParticipantBorderColor #d1d5db
+skinparam sequenceParticipantBackgroundColor #f3f4f6
+skinparam actorBorderColor #6b7280
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+actor "Tim\n(admin)" as Tim
+participant "uterm share\n(CLI)" as CLI
+participant "Server\n(TermHub)" as S
+participant "Jane's Browser\n(operator)" as Jane
+participant "Red Hawk's Browser\n(viewer)" as RH
+
+== Tim starts sharing ==
+
+Tim -> CLI : uterm share
+CLI -> S : WebSocket connect\n(worker role + bearer token)
+S -> CLI : hello {input_mode: "hijack",\n  presence_enabled: true}
+note over CLI : PTY process spawns\nTerminal is live
+
+== Jane joins via link ==
+
+Jane -> S : WebSocket connect\n(operator role + JWT)
+S -> Jane : hello {worker_online: true,\n  presence_enabled: true}
+S -> Jane : presence_sync {users: [Tim]}
+Jane -> S : presence_update {scroll_line: 0,\n  name: "Jane"}
+S -> CLI : presence_update — Jane joined
+note over Jane : Sees Tim's terminal\nTim's avatar glows\n(pulsing border = controller)
+
+== Red Hawk joins ==
+
+RH -> S : WebSocket connect\n(viewer role + JWT)
+S -> RH : hello {worker_online: true}
+S -> RH : presence_sync {users: [Tim, Jane]}
+RH -> S : presence_update {name: "Red Hawk"}
+S -> Jane : presence_update — Red Hawk joined
+S -> CLI : presence_update — Red Hawk joined
+note over Jane : Red Hawk's avatar appears\nEdge bar shows their viewport
+
+== Live collaboration ==
+
+CLI -> S : PTY bytes (terminal output)
+S -> Jane : terminal data
+S -> RH : terminal data
+
+Jane -> S : scroll to line 42
+S -> RH : presence_update {scroll_line: 42, user: Jane}
+note over RH : Jane's edge bar moves to line 42
+
+note over Jane,RH : DeckMux overlay shows:\n• Tim's avatar — pulsing border (controller)\n• Jane's avatar — at line 42\n• Red Hawk's avatar — position shown in edge bar
+
+== Jane requests control ==
+
+Jane -> S : control_request {target: tim}
+S -> CLI : control_request_notification {from: "Jane"}
+note over Tim : Toast in terminal:\n"Jane requesting control"\n[Hand over] [Deny]
+Tim -> CLI : accepts handover
+CLI -> S : control_handover {to: jane}
+S -> Jane : control_transfer {reason: "handover"}
+S -> RH : control_transfer {to: jane}
+note over Jane : Jane's border now pulses\nJane can type
+
+@enduml

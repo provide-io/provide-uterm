@@ -12,7 +12,10 @@
     "isolatedModules": true,
     "outDir": "dist",
     "rootDir": "src",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"]
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@provide-terminal-frontend/*": ["../provide-terminal-frontend/src/*"]
+    }
   },
   "include": ["src"]
 }

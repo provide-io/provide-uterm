@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.shell._repl — LineBuffer keystroke handling."""
+"""Tests for provide.terminal.shell._repl — LineBuffer keystroke handling."""
 
-from provide.shell._repl import LineBuffer
+from provide.terminal.shell._repl import LineBuffer
 
 
 def test_printable_chars_echoed():

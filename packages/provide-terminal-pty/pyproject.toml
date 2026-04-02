@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provide-terminal-pty"
+dynamic = ["version"]
+description = "Local PTY connector with PAM authentication and LD_PRELOAD capture for provide-terminal"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+dependencies = ["pamela>=1.2"]
+
+[project.optional-dependencies]
+terminal = ["provide-terminal>=0.4.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0",
+    "mypy>=1.19",
+    "bandit>=1.9",
+    "ruff>=0.15",
+]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"provide.terminal.pty" = ["py.typed", "_native/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-ra",
+    "--cov=provide.terminal.pty",
+    "--cov-branch",
+    "--cov-report=term-missing",
+]
+markers = [
+    "requires_pam: requires /etc/pam.d/provide-terminal service config (skip in CI)",
+    "requires_root: requires root or CAP_SETUID to switch users",
+]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "S", "B", "C4", "PTH"]
+ignore = [
+    "S603",  # subprocess without shell — we use os.execve, not subprocess
+    "S604",  # shell= keyword — used in ResolvedUser dataclass field, not subprocess
+    "S108",  # temp file — addressed via mkdtemp() in connector
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]  # assert statements are expected in pytest test files
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.bandit]
+# These operations are intentional in a PTY/PAM package:
+#   B404: import subprocess — we do not use subprocess; os.execve is deliberate
+#   B603: subprocess without shell=True — not applicable (os.execve)
+# Suppressions are applied inline with # nosec BXXX comments.
+skips = []

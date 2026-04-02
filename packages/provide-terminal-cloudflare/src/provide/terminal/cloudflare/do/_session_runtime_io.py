@@ -27,7 +27,7 @@ try:
     from provide.terminal.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide.terminal.cloudflare.state.store import LeaseRecord
 except Exception:  # pragma: no cover
-    from bridge.hijack import HijackSession  # type: ignore[import-not-found]  # noqa: TC002
+    from bridge.hijack import HijackSession  # type: ignore[import-not-found]
     from cf_types import CFWebSocket  # type: ignore[import-not-found]  # noqa: TC002
     from do._webhooks import fire_webhooks  # type: ignore[import-not-found]
     from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found]
@@ -43,6 +43,39 @@ _MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sa
 
 class _SessionRuntimeIoMixin:
     """Mixin providing request helpers, broadcast, worker I/O, and alarm for SessionRuntime."""
+
+    # ------------------------------------------------------------------
+    # State restore (called from SessionRuntime.__init__)
+    # ------------------------------------------------------------------
+
+    def _restore_state(self) -> None:
+        saved_meta = self.store.load_session_meta(self.worker_id)  # type: ignore[attr-defined]
+        if saved_meta is not None:
+            self.meta = saved_meta  # type: ignore[attr-defined]
+            self._meta_loaded = True  # type: ignore[attr-defined]
+        row = self.store.load_session(self.worker_id)  # type: ignore[attr-defined]
+        if row is None:
+            return
+        hijack_id = row.get("hijack_id")
+        owner = row.get("owner")
+        lease_expires_at = row.get("lease_expires_at")
+        if (
+            isinstance(hijack_id, str)
+            and isinstance(owner, str)
+            and isinstance(lease_expires_at, (float, int))
+            and float(lease_expires_at) > time.time()
+        ):
+            self.hijack._session = HijackSession(  # type: ignore[attr-defined]
+                hijack_id=hijack_id,
+                owner=owner,
+                lease_expires_at=float(lease_expires_at),
+            )
+        snapshot = row.get("last_snapshot")
+        if isinstance(snapshot, dict):
+            self.last_snapshot = snapshot  # type: ignore[attr-defined]
+        stored_mode = row.get("input_mode")
+        if stored_mode in {"hijack", "open"}:
+            self.input_mode = stored_mode  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Request helpers

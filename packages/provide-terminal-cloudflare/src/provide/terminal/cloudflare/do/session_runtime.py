@@ -12,7 +12,7 @@ try:
     from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
     from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
     from provide.terminal.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
-    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator, HijackSession
+    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
     from provide.terminal.cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.do._session_runtime_io import _SessionRuntimeIoMixin
@@ -25,7 +25,7 @@ except Exception:
     from api.ws_routes import handle_socket_message  # type: ignore[import-not-found]
     from auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie  # type: ignore[import-not-found]
     from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[import-not-found]
-    from bridge.hijack import HijackCoordinator, HijackSession  # type: ignore[import-not-found]
+    from bridge.hijack import HijackCoordinator  # type: ignore[import-not-found]
     from cf_types import CFWebSocket, DurableObject, Response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
     from do._session_runtime_io import _SessionRuntimeIoMixin  # type: ignore[import-not-found]
@@ -88,35 +88,6 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             except Exception as exc:
                 logger.debug("failed to derive worker_id from durable object name: %s", exc)
         return "default"  # fallback: hex-ID addressed DO, not name-addressed
-
-    def _restore_state(self) -> None:
-        saved_meta = self.store.load_session_meta(self.worker_id)
-        if saved_meta is not None:
-            self.meta = saved_meta
-            self._meta_loaded = True
-        row = self.store.load_session(self.worker_id)
-        if row is None:
-            return
-        hijack_id = row.get("hijack_id")
-        owner = row.get("owner")
-        lease_expires_at = row.get("lease_expires_at")
-        if (
-            isinstance(hijack_id, str)
-            and isinstance(owner, str)
-            and isinstance(lease_expires_at, (float, int))
-            and float(lease_expires_at) > time.time()
-        ):
-            self.hijack._session = HijackSession(
-                hijack_id=hijack_id,
-                owner=owner,
-                lease_expires_at=float(lease_expires_at),
-            )
-        snapshot = row.get("last_snapshot")
-        if isinstance(snapshot, dict):
-            self.last_snapshot = snapshot
-        stored_mode = row.get("input_mode")
-        if stored_mode in {"hijack", "open"}:
-            self.input_mode = stored_mode
 
     async def _ensure_meta(self) -> None:
         """Lazy-load session metadata from KV on first contact, persist to SQLite."""
@@ -391,12 +362,17 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                                 "hijack_step_supported": True,
                                 "resume_supported": True,
                                 "resume_token": resume_token,
+                                "presence_enabled": bool(self.meta.get("presence")),
                                 "ts": time.time(),
                             }
                         )
                     )
                 except Exception as exc:
                     logger.warning("failed to send hello from fetch(): %s", exc)
+                try:
+                    await self._maybe_send_presence_sync(server, exclude_self=False)
+                except Exception as exc:
+                    logger.warning("failed to send presence_sync from fetch(): %s", exc)
 
             return Response(None, status=101, web_socket=client)
         return await route_http(self, request)
@@ -444,9 +420,11 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                     "hijack_step_supported": True,
                     "resume_supported": True,
                     "resume_token": _open_resume_token,
+                    "presence_enabled": bool(self.meta.get("presence")),
                     "ts": time.time(),
                 },
             )
+            await self._maybe_send_presence_sync(ws, exclude_self=True)
             await self.send_hijack_state(ws)
             if self.last_snapshot is not None:
                 await self.send_ws(ws, self.last_snapshot)
@@ -489,6 +467,9 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # self.worker_ws is None so the identity check would always be False.
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
+        if role == "browser" and self.meta.get("presence"):
+            user_id = self.ws_key(ws)
+            await self.broadcast_to_browsers({"type": "presence_leave", "user_id": user_id, "ts": time.time()})
         self._remove_ws(ws)
         if role == "worker":
             self.lifecycle_state = "stopped"
@@ -499,6 +480,9 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
+        if role == "browser" and self.meta.get("presence"):
+            user_id = self.ws_key(ws)
+            await self.broadcast_to_browsers({"type": "presence_leave", "user_id": user_id, "ts": time.time()})
         self._remove_ws(ws)
         if role == "worker":
             self.lifecycle_state = "error"

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.shell._commands — CommandDispatcher."""
+"""Tests for provide.terminal.shell._commands — CommandDispatcher."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.shell._commands import CommandDispatcher
+from provide.terminal.shell._commands import CommandDispatcher
 
 
 def make_dispatcher(ctx: dict[str, Any] | None = None) -> CommandDispatcher:

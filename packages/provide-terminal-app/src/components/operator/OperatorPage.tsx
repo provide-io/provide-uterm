@@ -11,8 +11,8 @@ import { StatusBadge } from "../common/StatusBadge";
 import { AppHeader } from "../layout/AppHeader";
 import { PageShell } from "../layout/PageShell";
 import { HijackHost } from "../widgets/HijackHost";
-import { OperatorSidebar } from "./OperatorSidebar";
 import styles from "./OperatorPage.module.css";
+import { OperatorSidebar } from "./OperatorSidebar";
 
 interface OperatorPageProps {
   bootstrap: AppBootstrap;
@@ -42,9 +42,7 @@ export function OperatorPage({ bootstrap }: OperatorPageProps) {
               </StatusBadge>
             )}
             {summary?.recordingEnabled && <StatusBadge tone="warning">recording</StatusBadge>}
-            {summary?.connected && (
-              <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>connected</span>
-            )}
+            {summary?.connected && <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>connected</span>}
           </>
         }
       />
@@ -75,15 +73,20 @@ function TerminalStatusDot() {
   const rows = useTerminalStore((s) => s.rows);
   return (
     <>
-      <div className="status-dot" style={{
-        background: mounted ? "var(--success)" : "var(--text-tertiary)",
-        boxShadow: mounted ? "0 0 4px var(--success)" : undefined,
-      }} />
+      <div
+        className="status-dot"
+        style={{
+          background: mounted ? "var(--success)" : "var(--text-tertiary)",
+          boxShadow: mounted ? "0 0 4px var(--success)" : undefined,
+        }}
+      />
       <span>{mounted ? "Connected" : "Disconnected"}</span>
       {cols > 0 && rows > 0 && (
         <>
           <span>·</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{cols}×{rows}</span>
+          <span style={{ fontFamily: "var(--font-mono)" }}>
+            {rows}×{cols}
+          </span>
         </>
       )}
     </>

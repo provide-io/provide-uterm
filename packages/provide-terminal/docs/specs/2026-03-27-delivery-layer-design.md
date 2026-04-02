@@ -141,8 +141,8 @@ packages/provide-terminal-cloudflare/tests/
 
 ```bash
 # FastAPI package — 100% coverage
-uv run pytest packages/provide-terminal/tests/ packages/provide-shell/tests/ \
-  -q --cov=provide.terminal --cov=provide.shell --cov-fail-under=100 \
+uv run pytest packages/provide-terminal/tests/ packages/provide-terminal-shell/tests/ \
+  -q --cov=provide.terminal --cov=provide.terminal.shell --cov-fail-under=100 \
   --ignore=packages/provide-terminal/tests/memray \
   --ignore=packages/provide-terminal/tests/playwright
 

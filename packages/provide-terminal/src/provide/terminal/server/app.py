@@ -22,14 +22,16 @@ from fastapi import Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
-from provide.telemetry import get_logger
+from provide.telemetry import TelemetryMiddleware, get_logger
 
 from provide.terminal.hijack.hub import InMemoryResumeStore, ResumeSession, TermHub
+from provide.terminal.server.api_keys import ApiKeyStore
 from provide.terminal.server.auth import (
     Principal,
     extract_bearer_token,
     resolve_http_principal,
     resolve_ws_principal,
+    set_api_key_store_hook,
 )
 from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
@@ -38,6 +40,7 @@ from provide.terminal.server.registry import SessionRegistry
 from provide.terminal.server.routes.api import create_api_router
 from provide.terminal.server.routes.pages import create_page_router
 from provide.terminal.server.routes.profiles import create_profiles_router
+from provide.terminal.server.security import SecurityHeadersMiddleware
 from provide.terminal.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
@@ -107,8 +110,14 @@ def _validate_auth_config(config: ServerConfig) -> None:
         raise ValueError("configure auth.jwt_public_key_pem or auth.jwt_jwks_url when auth.mode='jwt'")
 
 
-def create_server_app(config: ServerConfig) -> FastAPI:
-    """Create the standalone reference server application."""
+def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = None) -> FastAPI:
+    """Create the standalone reference server application.
+
+    Args:
+        config: Server configuration.
+        hub_class: Optional TermHub subclass to use instead of the default TermHub.
+                   Useful for injecting mixins such as DeckMuxMixin.
+    """
     _validate_auth_config(config)
     _validate_frontend_assets()
     authz = AuthorizationService()
@@ -272,7 +281,8 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return policy.role_for(principal, session)
 
-    hub = TermHub(
+    _hub_class = hub_class if hub_class is not None else TermHub
+    hub = _hub_class(
         resolve_browser_role=_resolve_browser_role,
         on_metric=_inc_metric,
         worker_token=config.auth.worker_bearer_token,
@@ -289,6 +299,56 @@ def create_server_app(config: ServerConfig) -> FastAPI:
         max_sessions=config.server.max_sessions,
     )
     profile_store = FileProfileStore(config.profiles.directory)
+
+    async def _sweep_idle_sessions() -> None:
+        """Periodically disconnect sessions with no activity beyond the configured timeout."""
+        timeout_s = config.session_idle_timeout_s
+        while True:
+            await asyncio.sleep(60)
+            if timeout_s <= 0:
+                continue
+            now = time.time()
+            async with hub._lock:
+                candidates = [
+                    (wid, st.last_activity_at)
+                    for wid, st in hub._workers.items()
+                    if not st.browsers and (now - st.last_activity_at) > timeout_s
+                ]
+            for worker_id, last_at in candidates:
+                try:
+                    logger.info(
+                        "session_idle_timeout worker_id=%s idle_s=%d",
+                        worker_id,
+                        int(now - last_at),
+                    )
+                    await hub.disconnect_worker(worker_id)
+                except Exception:
+                    logger.exception("session_idle_timeout_error worker_id=%s", worker_id)
+
+    async def _sweep_expired_sessions() -> None:
+        """Remove stopped sessions older than session_retention_s."""
+        retention_s = config.session_retention_s
+        while True:
+            await asyncio.sleep(300)
+            if retention_s <= 0:
+                continue
+            now = time.time()
+            pairs = await registry.list_sessions_with_definitions()
+            for sess_status, _definition in pairs:
+                if sess_status.lifecycle_state != "stopped":
+                    continue
+                if sess_status.stopped_at is None:
+                    continue
+                if (now - sess_status.stopped_at) >= retention_s:
+                    try:
+                        await registry.delete_session(sess_status.session_id)
+                        logger.info(
+                            "session_retention_sweep session_id=%s age_s=%d",
+                            sess_status.session_id,
+                            int(now - sess_status.stopped_at),
+                        )
+                    except Exception:
+                        logger.exception("session_retention_sweep_error session_id=%s", sess_status.session_id)
 
     async def _sweep_expired_tunnel_tokens() -> None:
         """Periodically remove expired tunnel tokens from the in-memory map."""
@@ -321,15 +381,23 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             )
         )
         sweep_task = asyncio.create_task(_sweep_expired_tunnel_tokens())
+        idle_sweep_task = asyncio.create_task(_sweep_idle_sessions())
+        retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
         try:
             yield
         finally:
+            retention_sweep_task.cancel()
+            idle_sweep_task.cancel()
             sweep_task.cancel()
             boot_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await boot_task
             with contextlib.suppress(asyncio.CancelledError):
                 await sweep_task
+            with contextlib.suppress(asyncio.CancelledError):
+                await idle_sweep_task
+            with contextlib.suppress(asyncio.CancelledError):
+                await retention_sweep_task
             await webhook_manager.shutdown()
             await registry.shutdown()
 
@@ -343,6 +411,9 @@ def create_server_app(config: ServerConfig) -> FastAPI:
     app.state.uterm_webhooks = webhook_manager
     app.state.uterm_profile_store = profile_store
     app.state.uterm_tunnel_tokens = tunnel_tokens
+    api_key_store = ApiKeyStore()
+    app.state.uterm_api_key_store = api_key_store
+    set_api_key_store_hook(lambda: api_key_store)
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -401,6 +472,9 @@ def create_server_app(config: ServerConfig) -> FastAPI:
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         )
+
+    app.add_middleware(SecurityHeadersMiddleware, config=config.security)
+    app.add_middleware(TelemetryMiddleware)
 
     frontend_path = importlib.resources.files("provide.terminal") / "frontend"
     app.mount(config.ui.assets_path, StaticFiles(directory=str(frontend_path), html=False), name="uterm-assets")

@@ -367,6 +367,34 @@ def test_match_api_route_unknown() -> None:
     assert _match_api_route("/api/unknown", _req("/api/unknown")) is None
 
 
+def test_match_api_route_tunnel_revoke() -> None:
+    from provide.terminal.cloudflare.entry import _match_api_route
+
+    assert (
+        _match_api_route("/api/tunnels/tunnel-abc/tokens", _req("/api/tunnels/tunnel-abc/tokens", method="DELETE"))
+        is not None
+    )
+
+
+def test_match_api_route_tunnel_revoke_wrong_method() -> None:
+    from provide.terminal.cloudflare.entry import _match_api_route
+
+    assert (
+        _match_api_route("/api/tunnels/tunnel-abc/tokens", _req("/api/tunnels/tunnel-abc/tokens", method="GET")) is None
+    )
+
+
+def test_match_api_route_tunnel_rotate() -> None:
+    from provide.terminal.cloudflare.entry import _match_api_route
+
+    assert (
+        _match_api_route(
+            "/api/tunnels/tunnel-abc/tokens/rotate", _req("/api/tunnels/tunnel-abc/tokens/rotate", method="POST")
+        )
+        is not None
+    )
+
+
 # ---------------------------------------------------------------------------
 # Default.fetch() integration — exercises _api_connect/_api_sessions wrappers
 # ---------------------------------------------------------------------------

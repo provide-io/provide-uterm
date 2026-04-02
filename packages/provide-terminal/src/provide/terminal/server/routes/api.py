@@ -11,9 +11,12 @@ from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Path, Query, Request, Response
 from fastapi.responses import FileResponse, PlainTextResponse
+from provide.telemetry import get_tracer
 
+from provide.terminal.server.audit import audit_event
 from provide.terminal.server.models import model_dump
 from provide.terminal.server.registry import SessionValidationError
+from provide.terminal.server.routes.api_keys import create_api_keys_router
 from provide.terminal.server.routes.sse import create_sse_router
 from provide.terminal.server.routes.webhooks import create_webhook_router
 
@@ -25,6 +28,25 @@ if TYPE_CHECKING:
     from provide.terminal.server.authorization import AuthorizationService
     from provide.terminal.server.models import SessionDefinition
     from provide.terminal.server.registry import SessionRegistry
+
+
+def _set_span_attrs(span: Any, **attrs: str | None) -> None:
+    """Set uterm.* attributes on a span if it exposes set_attribute."""
+    set_attr = getattr(span, "set_attribute", None)
+    if not callable(set_attr):
+        return
+    mapping = {
+        "session_id": "uterm.session_id",
+        "worker_id": "uterm.worker_id",
+        "operation": "uterm.operation",
+        "principal": "uterm.principal",
+        "http_method": "http.method",
+        "http_path": "http.target",
+    }
+    for key, otel_key in mapping.items():
+        val = attrs.get(key)
+        if val is not None:
+            set_attr(otel_key, val)
 
 
 def _registry(request: Request) -> SessionRegistry:
@@ -42,6 +64,10 @@ def _principal(request: Request) -> Principal:
     return cast("Principal", principal)
 
 
+def _source_ip(request: Request) -> str:
+    return str(getattr(request.client, "host", "unknown")) if request.client else "unknown"
+
+
 async def _session_definition(request: Request, session_id: str) -> SessionDefinition:
     session = await _registry(request).get_definition(session_id)
     if session is None:
@@ -53,6 +79,7 @@ def create_api_router() -> APIRouter:
     router = APIRouter(prefix="/api")
     router.include_router(create_sse_router())
     router.include_router(create_webhook_router())
+    router.include_router(create_api_keys_router())
 
     @router.get("/health")
     async def health(request: Request, response: Response) -> dict[str, object]:
@@ -82,11 +109,84 @@ def create_api_router() -> APIRouter:
         return PlainTextResponse(body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
     @router.get("/sessions")
-    async def list_sessions(request: Request) -> list[dict[str, Any]]:
+    async def list_sessions(
+        request: Request,
+        tag: Annotated[list[str] | None, Query()] = None,
+        connector_type: Annotated[str | None, Query()] = None,
+        visibility: Annotated[str | None, Query()] = None,
+        state: Annotated[str | None, Query()] = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        sort: Annotated[str, Query()] = "created_at",
+        order: Annotated[str, Query()] = "desc",
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> list[dict[str, Any]]:
         principal = _principal(request)
         authz = _authz(request)
         pairs = await _registry(request).list_sessions_with_definitions()
-        return [model_dump(status) for status, definition in pairs if authz.can_read_session(principal, definition)]
+        results = [model_dump(status) for status, definition in pairs if authz.can_read_session(principal, definition)]
+        if tag:
+            results = [s for s in results if set(tag) & set(s.get("tags", []))]
+        if connector_type:
+            results = [s for s in results if s.get("connector_type") == connector_type]
+        if visibility:
+            results = [s for s in results if s.get("visibility") == visibility]
+        if state:
+            results = [s for s in results if s.get("lifecycle_state") == state]
+        if q:
+            q_lower = q.lower()
+            results = [
+                s
+                for s in results
+                if q_lower in str(s.get("session_id", "")).lower()
+                or q_lower in str(s.get("display_name", "")).lower()
+                or any(q_lower in t.lower() for t in s.get("tags", []))
+            ]
+        sort_key = sort if sort in {"created_at", "display_name", "session_id"} else "created_at"
+        reverse = order != "asc"
+        results.sort(key=lambda s: s.get(sort_key, ""), reverse=reverse)
+        return results[offset : offset + limit]
+
+    @router.delete("/sessions")
+    async def bulk_delete_sessions(
+        request: Request,
+        payload: Annotated[dict[str, Any], Body(...)],
+    ) -> dict[str, int]:
+        principal = _principal(request)
+        authz = _authz(request)
+        if not authz.is_admin(principal):
+            raise HTTPException(status_code=403, detail="admin privileges required for bulk delete")
+        filt = payload.get("filter", {})
+        filter_state = str(filt.get("state", "")).strip() or None
+        older_than_s = filt.get("older_than_s")
+        registry = _registry(request)
+        pairs = await registry.list_sessions_with_definitions()
+        import time as _time
+
+        now = _time.time()
+        to_delete: list[str] = []
+        for status, definition in pairs:
+            if not authz.can_mutate_session(principal, definition, "session.control.delete"):
+                continue
+            dumped = model_dump(status)
+            if filter_state and dumped.get("lifecycle_state") != filter_state:
+                continue
+            if older_than_s is not None:
+                stopped_at = dumped.get("stopped_at")
+                if stopped_at is None or (now - float(stopped_at)) < float(older_than_s):
+                    continue
+            to_delete.append(definition.session_id)
+        for sid in to_delete:
+            await registry.delete_session(sid)
+        if to_delete:
+            audit_event(
+                "session.bulk_delete",
+                principal=principal.subject_id,
+                session_id=",".join(to_delete),
+                source_ip=_source_ip(request),
+                detail={"count": len(to_delete), "filter": filt},
+            )
+        return {"deleted": len(to_delete)}
 
     @router.post("/sessions")
     async def create_session(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
@@ -100,12 +200,27 @@ def create_api_router() -> APIRouter:
             if requested_owner not in {None, principal.subject_id}:
                 raise HTTPException(status_code=403, detail="owner must match authenticated subject")
             mutable_payload["owner"] = principal.subject_id
-        try:
-            session = await _registry(request).create_session(mutable_payload)
-        except SessionValidationError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        with get_tracer(__name__).start_as_current_span("uterm.session.create") as span:
+            _set_span_attrs(
+                span,
+                session_id=str(mutable_payload.get("session_id", "")),
+                operation="session.create",
+                principal=principal.subject_id,
+                http_method="POST",
+                http_path="/api/sessions",
+            )
+            try:
+                session = await _registry(request).create_session(mutable_payload)
+            except SessionValidationError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        audit_event(
+            "session.create",
+            principal=principal.subject_id,
+            session_id=str(mutable_payload.get("session_id", "")),
+            source_ip=_source_ip(request),
+        )
         return model_dump(session)
 
     def _sid_not_found(session_id: str) -> HTTPException:
@@ -152,7 +267,22 @@ def create_api_router() -> APIRouter:
         definition = await _session_definition(request, session_id)
         if not authz.can_mutate_session(principal, definition, "session.control.delete"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        await _registry(request).delete_session(session_id)
+        with get_tracer(__name__).start_as_current_span("uterm.session.delete") as span:
+            _set_span_attrs(
+                span,
+                session_id=session_id,
+                operation="session.delete",
+                principal=principal.subject_id,
+                http_method="DELETE",
+                http_path=f"/api/sessions/{session_id}",
+            )
+            await _registry(request).delete_session(session_id)
+        audit_event(
+            "session.delete",
+            principal=principal.subject_id,
+            session_id=session_id,
+            source_ip=_source_ip(request),
+        )
         return {"ok": True}
 
     @router.post("/sessions/{session_id}/connect")
@@ -375,12 +505,28 @@ def create_api_router() -> APIRouter:
         }
         if payload.get("recording_enabled"):
             session_payload["recording_enabled"] = True
-        try:
-            session = await _registry(request).create_session(session_payload)
-        except SessionValidationError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        with get_tracer(__name__).start_as_current_span("uterm.session.quick_connect") as span:
+            _set_span_attrs(
+                span,
+                session_id=session_id,
+                operation="session.quick_connect",
+                principal=principal.subject_id,
+                http_method="POST",
+                http_path="/api/connect",
+            )
+            try:
+                session = await _registry(request).create_session(session_payload)
+            except SessionValidationError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        audit_event(
+            "session.create",
+            principal=principal.subject_id,
+            session_id=session_id,
+            source_ip=_source_ip(request),
+            detail={"connector_type": connector_type, "ephemeral": True},
+        )
         cfg = request.app.state.uterm_config
         url = f"{cfg.ui.app_path}/session/{session_id}"
         return {"session_id": session_id, "url": url, **model_dump(session)}
@@ -419,24 +565,33 @@ def create_api_router() -> APIRouter:
         ws_base = base.replace("http://", "ws://").replace("https://", "wss://")
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
 
-        try:
-            await registry.create_session(
-                {
-                    "session_id": tunnel_id,
-                    "display_name": display_name,
-                    "connector_type": "websocket",
-                    "connector_config": {"tunnel_type": tunnel_type},
-                    "input_mode": "open",
-                    "auto_start": False,
-                    "ephemeral": True,
-                    "visibility": "public",
-                    "recording_enabled": True,
-                }
+        with get_tracer(__name__).start_as_current_span("uterm.tunnel.create") as span:
+            _set_span_attrs(
+                span,
+                session_id=tunnel_id,
+                operation="tunnel.create",
+                principal=_principal(request).subject_id,
+                http_method="POST",
+                http_path="/api/tunnels",
             )
-        except SessionValidationError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            try:
+                await registry.create_session(
+                    {
+                        "session_id": tunnel_id,
+                        "display_name": display_name,
+                        "connector_type": "websocket",
+                        "connector_config": {"tunnel_type": tunnel_type},
+                        "input_mode": "open",
+                        "auto_start": False,
+                        "ephemeral": True,
+                        "visibility": "public",
+                        "recording_enabled": True,
+                    }
+                )
+            except SessionValidationError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
 
         tunnel_tokens[tunnel_id] = {
             "worker_token": worker_token,
@@ -455,6 +610,13 @@ def create_api_router() -> APIRouter:
             tunnel_id,
             ttl_s,
             source_ip,
+        )
+        audit_event(
+            "tunnel.create",
+            principal=_principal(request).subject_id,
+            session_id=tunnel_id,
+            source_ip=source_ip,
+            detail={"tunnel_type": tunnel_type, "ttl_s": ttl_s},
         )
 
         return {
@@ -476,6 +638,12 @@ def create_api_router() -> APIRouter:
         from provide.telemetry import get_logger
 
         get_logger(__name__).info("tunnel_token_revoked session_id=%s found=%s", tunnel_id, removed is not None)
+        audit_event(
+            "tunnel.tokens.revoke",
+            principal=_principal(request).subject_id,
+            session_id=tunnel_id,
+            source_ip=_source_ip(request),
+        )
         return {"ok": True, "session_id": tunnel_id}
 
     @router.post("/tunnels/{tunnel_id}/tokens/rotate")
@@ -512,6 +680,12 @@ def create_api_router() -> APIRouter:
         from provide.telemetry import get_logger
 
         get_logger(__name__).info("tunnel_token_rotated session_id=%s source_ip=%s", tunnel_id, source_ip)
+        audit_event(
+            "tunnel.tokens.rotate",
+            principal=_principal(request).subject_id,
+            session_id=tunnel_id,
+            source_ip=source_ip,
+        )
 
         return {
             "tunnel_id": tunnel_id,

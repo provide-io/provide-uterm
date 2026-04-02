@@ -1,0 +1,55 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml architecture
+title DeckMux — Package Architecture
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam arrowColor #2563eb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+package "provide-terminal-deckmux (standalone)" {
+  [_protocol.py\nmessage types & serialization] as PROTO
+  [_presence.py\nPresenceStore + UserPresence] as PRESENCE
+  [_names.py\nname & color generation] as NAMES
+  [_transfer.py\nTransferManager + keystroke queue] as XFER
+  [_edge.py\nviewport math] as EDGE
+}
+
+package "provide-terminal (integration)" {
+  [deckmux/_hub_mixin.py\nTermHub integration] as MIX
+  [hijack/hub/core.py\nTermHub] as HUB
+  [hijack/routes/websockets.py\nmessage routing] as WS
+}
+
+package "provide-terminal-frontend" {
+  [deckmux/deckmux.ts\ncoordinator] as COORD
+  [deckmux/presence-bar.ts\navatar bar] as BAR
+  [deckmux/edge-indicators.ts\nminimap bars] as EDGE_UI
+  [deckmux/cursor-overlay.ts\npins + selections] as CURSOR
+  [deckmux/control-panel.ts\ntoasts + menus] as CTRL
+}
+
+MIX --> PROTO : uses
+MIX --> PRESENCE : uses
+MIX --> NAMES : uses
+MIX --> XFER : uses
+MIX --> EDGE : uses
+MIX --> HUB : mixin
+WS --> MIX : routes presence msgs
+
+COORD --> BAR
+COORD --> EDGE_UI
+COORD --> CURSOR
+COORD --> CTRL
+
+note right of PROTO : Zero dependencies\nStandalone package
+note right of MIX : Extends TermHub\nvia mixin pattern
+
+@enduml

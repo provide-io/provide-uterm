@@ -319,7 +319,7 @@ class TestWebSocketSessionConnector:
         assert "websocket" in KNOWN_CONNECTOR_TYPES
 
     def test_build_connector_ushell(self) -> None:
-        from provide.shell.terminal._connector import UshellConnector
+        from provide.terminal.shell.terminal._connector import UshellConnector
 
         c = build_connector("sid", "dn", "ushell", {})
         assert isinstance(c, UshellConnector)

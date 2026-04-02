@@ -1,0 +1,89 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml user-journey-deckmux
+title DeckMux — Collaborative Session Journey
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam arrowColor #2563eb
+skinparam actorBorderColor #6b7280
+skinparam actorBackgroundColor #f9fafb
+skinparam activityBorderColor #d1d5db
+skinparam activityBackgroundColor #f3f4f6
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+skinparam partitionBorderColor #d1d5db
+
+|Tim (admin / controller)|
+start
+
+:Opens session\nwith **presence: true**;
+note right
+  Avatar bar appears.
+  Tim's border pulses —
+  he holds control.
+end note
+
+|Jane (operator)|
+:Joins via share link;
+note right
+  Jane's avatar added to bar.
+  Edge bar tracks her viewport.
+end note
+
+|Red Hawk (viewer)|
+:Joins via share link;
+note right
+  Red Hawk's avatar added.
+  Three people now visible.
+end note
+
+|Tim (admin / controller)|
+:Pins line 13 (milestone);
+note right
+  Pin label "line 13" appears
+  for **all** viewers.
+end note
+
+|Jane (operator)|
+:Selects a block of text;
+note right
+  Blue highlight visible to all.
+  Jane's name shown on selection.
+end note
+
+:Clicks Tim's avatar → "Request control";
+
+|Tim (admin / controller)|
+if (Accept handover?) then (yes)
+  :Accepts;
+  note right
+    Toast dismissed.
+    Tim's border stops pulsing.
+  end note
+  |Jane (operator)|
+  :Border starts pulsing —\nJane now controls;
+  :Types commands;
+else (no / idle)
+  |Tim (admin / controller)|
+  :Ignores request\n(goes idle);
+  note right
+    Idle timer starts.
+    Countdown visible to all.
+  end note
+  |Red Hawk (viewer)|
+  :Has been typing in queue;
+  note right
+    Keystrokes buffered
+    by TransferManager.
+  end note
+  |Tim (admin / controller)|
+  :Auto-transfer fires\n(idle timeout);
+  |Red Hawk (viewer)|
+  :Receives control —\nborder pulses;\n:Buffered keystrokes\nreplayed to terminal;
+endif
+
+stop
+
+@enduml

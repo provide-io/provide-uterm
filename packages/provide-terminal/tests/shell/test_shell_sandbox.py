@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.shell._sandbox — Sandbox eval/exec."""
+"""Tests for provide.terminal.shell._sandbox — Sandbox eval/exec."""
 
-from provide.shell._sandbox import Sandbox
+from provide.terminal.shell._sandbox import Sandbox
 
 
 def test_eval_returns_result():

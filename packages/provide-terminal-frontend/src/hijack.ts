@@ -95,6 +95,7 @@ export class ProvideHijack {
       mobileKeys: config.mobileKeys ?? true,
       role: config.role,
       onResize: config.onResize,
+      onPresenceMessage: config.onPresenceMessage,
     };
     this._uid = ++_hijackInstanceCount;
     this._workerId = config.workerId ?? "default";
@@ -149,6 +150,16 @@ export class ProvideHijack {
       this._root.parentNode.removeChild(this._root);
     }
     this._root = null;
+  }
+
+  /** Send a control message over the WebSocket (e.g. presence_update, control_request). */
+  sendControlMessage(msg: Record<string, unknown>): void {
+    this._wsSend(msg);
+  }
+
+  /** The terminal wrapper element, available immediately after construction. */
+  get terminalElement(): HTMLElement | null {
+    return this._q("terminal");
   }
 
   // ── Internal helpers ────────────────────────────────────────────────────────
@@ -304,10 +315,20 @@ export class ProvideHijack {
       allowTransparency: true,
       scrollback: 10000,
       scrollOnUserInput: true,
-      overviewRulerWidth: 15,
     });
     this._term.open(termDiv);
     this._term.focus();
+
+    // Notify listeners of viewport scroll position changes (for presence tracking)
+    if (this._config.onPresenceMessage) {
+      this._term.onScroll((viewportY: number) => {
+        const rows = this._term?.rows ?? 25;
+        const totalLines = (this._term?.buffer?.active?.length as number | undefined) ?? rows;
+        this._container.dispatchEvent(
+          new CustomEvent("uterm:scroll", { bubbles: false, detail: { viewportY, rows, totalLines } }),
+        );
+      });
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     // biome-ignore lint/suspicious/noExplicitAny: window global access
@@ -613,8 +634,9 @@ export class ProvideHijack {
         this._setPromptId(promptId ?? "");
         try {
           const t = this._ensureTerm();
-          t.reset();
-          t.write("\u001b[2J\u001b[H");
+          // Use ANSI soft reset (DECSTR) + clear screen — preserves scrollback buffer.
+          // Avoids t.reset() which destroys scrollback and breaks scroll indicators.
+          t.write("\u001b[!p\u001b[2J\u001b[H");
           t.write(((msg.screen as string | undefined) ?? "").replace(/\n/g, "\r\n"));
         } catch (_) {}
         break;
@@ -710,6 +732,13 @@ export class ProvideHijack {
 
       case "error":
         this._setStatus("bad", `Error: ${(msg.message as string | undefined) ?? "unknown"}`);
+        break;
+
+      case "presence_sync":
+      case "presence_update":
+      case "presence_leave":
+      case "control_transfer":
+        this._config.onPresenceMessage?.(msg);
         break;
     }
   }

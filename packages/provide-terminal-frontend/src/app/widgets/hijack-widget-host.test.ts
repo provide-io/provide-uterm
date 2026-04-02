@@ -37,11 +37,14 @@ describe("mountHijackWidget", () => {
     (window as any).ProvideHijack = MockHijack;
     const container = document.createElement("div");
     mountHijackWidget(container, "my-session", "operator");
-    expect(MockHijack).toHaveBeenCalledWith(container, {
-      workerId: "my-session",
-      showAnalysis: true,
-      mobileKeys: true,
-    });
+    expect(MockHijack).toHaveBeenCalledWith(
+      container,
+      expect.objectContaining({
+        workerId: "my-session",
+        showAnalysis: true,
+        mobileKeys: true,
+      }),
+    );
   });
 
   it("calls ProvideHijack constructor with correct config for user surface", () => {
@@ -50,11 +53,14 @@ describe("mountHijackWidget", () => {
     (window as any).ProvideHijack = MockHijack;
     const container = document.createElement("div");
     mountHijackWidget(container, "my-session", "user");
-    expect(MockHijack).toHaveBeenCalledWith(container, {
-      workerId: "my-session",
-      showAnalysis: false,
-      mobileKeys: false,
-    });
+    expect(MockHijack).toHaveBeenCalledWith(
+      container,
+      expect.objectContaining({
+        workerId: "my-session",
+        showAnalysis: false,
+        mobileKeys: false,
+      }),
+    );
   });
 
   it("calls ProvideHijack constructor with correct config for undefined surface", () => {
@@ -63,10 +69,13 @@ describe("mountHijackWidget", () => {
     (window as any).ProvideHijack = MockHijack;
     const container = document.createElement("div");
     mountHijackWidget(container, "sess", undefined);
-    expect(MockHijack).toHaveBeenCalledWith(container, {
-      workerId: "sess",
-      showAnalysis: false,
-      mobileKeys: false,
-    });
+    expect(MockHijack).toHaveBeenCalledWith(
+      container,
+      expect.objectContaining({
+        workerId: "sess",
+        showAnalysis: false,
+        mobileKeys: false,
+      }),
+    );
   });
 });

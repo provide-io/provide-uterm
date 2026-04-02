@@ -1,0 +1,99 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml package-deps
+title provide-terminal — Package Dependency Graph
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam arrowColor #2563eb
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+
+skinparam component {
+  BorderColor #d1d5db
+  BackgroundColor #f3f4f6
+  FontColor #333333
+}
+
+' Zero-dep packages — highlighted
+skinparam rectangle {
+  BorderColor #2563eb
+  BackgroundColor #eff6ff
+  FontColor #1e40af
+}
+
+rectangle "provide-terminal-render\n(zero runtime deps)" as RENDER {
+  note as RENDER_N
+    [emulator] → pyte
+    [images] → Pillow
+    ANSI palette tables,
+    SGR emitters, image
+    conversion primitives
+  end note
+}
+
+rectangle "provide-terminal-shell\n(zero runtime deps)" as SHELL {
+  note as SHELL_N
+    [terminal] → provide-terminal
+    [images] → Pillow + render
+    Standalone Python REPL
+    python -m provide.shell
+    159 tests, 100% coverage
+  end note
+}
+
+rectangle "provide-terminal-deckmux\n(zero runtime deps)" as DECKMUX {
+  note as DECKMUX_N
+    [terminal] → provide-terminal
+    PresenceStore, TransferManager,
+    edge math, protocol types
+    Standalone — usable without server
+  end note
+}
+
+package "provide-terminal (core)" as CORE {
+  [FastAPI server\nTermHub + connectors] as CORE_C
+  note as CORE_N
+    Requires: provide-telemetry,\nprovide-terminal-shell,\nprovide-terminal-render
+    [websocket] → fastapi + websockets
+    [ssh] → asyncssh
+    [server] → fastapi + uvicorn + pyjwt
+    [cli] → fastapi + uvicorn + textual + httpx
+    ~4035 tests, 100% coverage
+  end note
+}
+
+package "provide-telemetry" as TELEM {
+  [Structured logging\n& trace context] as TELEM_C
+}
+
+package "provide-terminal-cloudflare (CF Worker)" as CF {
+  [Durable Objects\nKV registry\nAuth + SPA routing] as CF_C
+  note as CF_N
+    Cloudflare Workers adapter.
+    Parity with FastAPI server.
+    100% coverage on new code.
+    14 real CF E2E tests.
+  end note
+}
+
+' Dependency arrows
+RENDER <.. SHELL : [images] extra
+RENDER <.. CORE_C : required
+SHELL <.. CORE_C : required
+TELEM_C <.. CORE_C : required
+DECKMUX <.. CORE_C : [terminal] extra (mixin)
+CORE_C <.. CF_C : CF adapter
+
+note bottom of DECKMUX
+  DeckMux integrates via mixin:
+  deckmux/_hub_mixin.py extends TermHub
+  without modifying core.
+end note
+
+@enduml

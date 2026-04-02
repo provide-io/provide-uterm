@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.shell._output — ANSI helpers and frame builders."""
+"""Tests for provide.terminal.shell._output — ANSI helpers and frame builders."""
 
 import time
 
-from provide.shell._output import (
+from provide.terminal.shell._output import (
     BANNER,
     BLUE,
     BOLD,
@@ -26,7 +26,7 @@ from provide.shell._output import (
     info_msg,
     success_msg,
 )
-from provide.shell.terminal._output import term, worker_hello
+from provide.terminal.shell.terminal._output import term, worker_hello
 
 
 def test_term_with_ts():
@@ -136,6 +136,6 @@ def test_constants_defined():
 
 
 def test_import_init():
-    from provide.shell.terminal import UshellConnector
+    from provide.terminal.shell.terminal import UshellConnector
 
     assert UshellConnector is not None

@@ -292,6 +292,19 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
         "hello",
     }:
         pass
+    elif frame_type in {
+        # DeckMux presence messages — relayed verbatim between browsers.
+        # All fields are preserved so the relay carries the full payload.
+        "presence_update",
+        "presence_sync",
+        "presence_leave",
+        "queued_input",
+        "control_request",
+    }:
+        # Copy all non-type, non-ts fields through so the relay is lossless.
+        for k, v in value.items():
+            if k not in ("type", "ts"):
+                normalized[k] = v
     else:
         raise ProtocolError(f"unsupported frame type: {frame_type}")
 

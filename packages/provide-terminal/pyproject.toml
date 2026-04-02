@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Terminals",
     "Framework :: FastAPI",
 ]
-dependencies = ["provide-telemetry>=0.3", "provide-shell>=0.1.0"]
+dependencies = ["provide-telemetry>=0.3", "provide-terminal-shell>=0.1.0", "provide-terminal-render>=0.1"]
 
 [project.urls]
 Homepage = "https://github.com/provide-io/provide-terminal"

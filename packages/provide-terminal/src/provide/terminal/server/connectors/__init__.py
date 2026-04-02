@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import contextlib
 
-from provide.terminal.server.connectors.registry import build_connector, register_connector, registered_types
-
 from provide.terminal.server.connectors.base import SessionConnector
+from provide.terminal.server.connectors.registry import build_connector, register_connector, registered_types
 from provide.terminal.server.connectors.telnet import TelnetSessionConnector  # registers "telnet"
 
 __all__ = [
@@ -33,10 +32,13 @@ with contextlib.suppress(ImportError):
     from provide.terminal.server.connectors.websocket import WebSocketSessionConnector  # registers "websocket"
 with contextlib.suppress(ImportError):
     # register_connector is always available (from our own registry.py);
-    # only the UshellConnector import is optional — it requires provide-shell installed.
-    from provide.shell.terminal._connector import UshellConnector
+    # only the UshellConnector import is optional — it requires provide-terminal-shell installed.
+    from provide.terminal.shell.terminal._connector import UshellConnector
 
     register_connector("ushell", UshellConnector)
+
+with contextlib.suppress(ImportError):
+    import provide.terminal.pty.connector  # type: ignore[import-untyped]  # registers "pty"
 
 # Derived from the registry — reflects whatever connectors are available in this env.
 KNOWN_CONNECTOR_TYPES: frozenset[str] = registered_types()

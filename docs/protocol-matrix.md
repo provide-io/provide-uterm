@@ -71,8 +71,8 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Agent endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
 | Browser endpoint | `WSS /ws/browser/{id}/term` | same |
 | `POST /api/tunnels` | supported | supported |
-| `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | not yet |
-| `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | not yet |
+| `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | supported (revocation) |
+| `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | supported (rotation) |
 | Share URL (`?token=...`) | `/s/{id}` → 302 redirect | `/s/{id}` → 302 redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
@@ -84,8 +84,8 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Share token | Query param or `uterm_tunnel_{id}` cookie | Query param or `uterm_tunnel_{id}` cookie |
 | Control token | Query param or cookie | Query param or cookie |
 | Token TTL | Default 1h, configurable via `TunnelConfig.token_ttl_s` | Default 1h, configurable via `TUNNEL_TOKEN_TTL_S` env var |
-| Token revocation | `DELETE /api/tunnels/{id}/tokens` | not yet implemented |
-| Token rotation | `POST /api/tunnels/{id}/tokens/rotate` | not yet implemented |
+| Token revocation | `DELETE /api/tunnels/{id}/tokens` | `DELETE /api/tunnels/{id}/tokens` |
+| Token rotation | `POST /api/tunnels/{id}/tokens/rotate` | `POST /api/tunnels/{id}/tokens/rotate` |
 | IP binding | Optional (`TunnelConfig.ip_binding`) | Optional (`TUNNEL_IP_BINDING` env var) |
 | Timing-safe compare | `secrets.compare_digest()` | same |
 | Enumeration prevention | 404 for both "not found" and "invalid token" | same |
@@ -101,6 +101,59 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Body > 256KB | `body_truncated: true`, no `body_b64` | same |
 | Binary content | `body_binary: true`, no `body_b64` | same |
 | Inspect view | `/app/inspect/{id}` — live request list + detail | same |
+
+## Security headers
+
+| Capability | FastAPI backend | Cloudflare backend |
+|---|---|---|
+| `security.mode` | `"strict"` / `"dev"` (SecurityConfig) | `SECURITY_MODE` env var |
+| Content-Security-Policy | strict: full CSP; dev: not set | same |
+| Strict-Transport-Security | strict: `max-age=63072000; includeSubDomains`; dev: not set | same |
+| X-Frame-Options | strict: `DENY`; dev: not set | same |
+| X-Content-Type-Options | always `nosniff` | same |
+| Referrer-Policy | strict: `strict-origin-when-cross-origin`; dev: not set | same |
+| Permissions-Policy | strict: `camera=(), microphone=(), geolocation=()`; dev: not set | same |
+| Per-header override | config field (None=default, ""=suppress, "value"=custom) | env var (same semantics) |
+| SRI on CDN assets | `integrity` + `crossorigin` on all jsdelivr script/link tags | same |
+| WebSocket 101 bypass | headers not applied to WS upgrades | same |
+
+## DeckMux (collaborative presence)
+
+Real-time collaborative presence for terminal sessions. Enabled per session with `presence: true`.
+
+| Capability | FastAPI backend | Cloudflare backend |
+|---|---|---|
+| Session config: `presence` | `SessionDefinition.presence` | KV session entry |
+| `presence_update` relay | TermHub broadcast | DO broadcast |
+| `presence_sync` on join | sent from hub mixin | sent from DO |
+| `presence_leave` on disconnect | sent from hub mixin | sent from DO |
+| `control_request` / `control_transfer` | via hijack lease system | via DO lease state |
+| Auto-transfer (idle owner) | background check in hub | event-driven in DO |
+| Keystroke queue | in-memory buffer | in-memory buffer |
+| Hibernation recovery | N/A (always running) | ephemeral re-announce |
+| Identity (JWT users) | from principal claims | from JWT claims |
+| Identity (anonymous) | deterministic adjective+animal | same |
+| Edge indicators | frontend-only | same |
+| Name labels toggle | frontend-only | same |
+
+### DeckMux message types
+
+| Direction | Type | Payload |
+|---|---|---|
+| Browser -> Server | `presence_update` | `scroll_line`, `scroll_range`, `selection`, `pin`, `typing` |
+| Browser -> Server | `queued_input` | `keys` (buffered keystrokes from non-owner) |
+| Browser -> Server | `control_request` | `target` (user to request control from) |
+| Browser -> Server | `control_handover` | `to` (user to hand control to) |
+| Browser -> Server | `control_deny` | `requester` (user whose request is denied) |
+| Server -> Browser | `presence_update` | `user_id`, `name`, `color`, `role`, scroll/selection/pin state |
+| Server -> Browser | `presence_sync` | `users` (full state array), `config` |
+| Server -> Browser | `presence_leave` | `user_id` |
+| Server -> Browser | `control_transfer` | `from_user_id`, `to_user_id`, `reason`, `queued_keys` |
+| Server -> Browser | `control_request_notification` | `from` (requesting user) |
+| Server -> Browser | `control_denied` | (empty) |
+| Server -> Browser | `auto_transfer_warning` | `seconds_remaining` |
+
+All messages use the existing control channel (DLE+STX JSON framing). 200ms client-side debounce on presence updates. See [`packages/provide-terminal-deckmux/`](../packages/provide-terminal-deckmux/README.md) for full documentation and PlantUML diagrams.
 
 ## Accuracy note
 
