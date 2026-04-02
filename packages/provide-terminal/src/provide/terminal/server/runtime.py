@@ -69,6 +69,7 @@ class HostedSessionRuntime:
         self._stop = asyncio.Event()
         self._connected = False
         self._state: SessionLifecycle = "stopped"
+        self._stopped_at: float | None = None
         self._last_error: str | None = None
         self._logger: SessionLogger | None = None
         self._recording_path: Path | None = None
@@ -98,6 +99,7 @@ class HostedSessionRuntime:
             recording_available=(self._recording_path is not None and self._recording_path.exists()),
             owner=self.definition.owner,
             visibility=self.definition.visibility,
+            stopped_at=self._stopped_at,
             last_error=self._last_error,
         )
 
@@ -107,6 +109,7 @@ class HostedSessionRuntime:
         self._stop = asyncio.Event()
         self._queue = asyncio.Queue(maxsize=2000)
         self._state = "starting"
+        self._stopped_at = None
         self._last_error = None
         self._task = asyncio.create_task(self._run())
 
@@ -132,6 +135,7 @@ class HostedSessionRuntime:
         self._task = None
         await self._stop_connector()
         self._state = "stopped"
+        self._stopped_at = time.time()
         self._connected = False
 
     async def restart(self) -> None:
@@ -380,3 +384,4 @@ class HostedSessionRuntime:
                 self._connected = False
                 await self._stop_connector()
         self._state = "stopped"
+        self._stopped_at = time.time()

@@ -40,7 +40,7 @@ REPO = Path(__file__).resolve().parents[1]
 for _p in [
     REPO / "packages/provide-terminal/src",
     REPO / "packages/provide-terminal/tests",
-    REPO / "packages/provide-shell/src",
+    REPO / "packages/provide-terminal-shell/src",
 ]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))

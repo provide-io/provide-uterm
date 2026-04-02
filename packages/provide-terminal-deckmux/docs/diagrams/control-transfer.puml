@@ -1,0 +1,40 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml control-transfer
+title DeckMux — Control Transfer (Request / Handover)
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam sequenceArrowColor #2563eb
+skinparam sequenceLifeLineBorderColor #d1d5db
+skinparam sequenceParticipantBorderColor #d1d5db
+skinparam sequenceParticipantBackgroundColor #f3f4f6
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+participant "Jane\n(operator)" as J
+participant "Server\n(TermHub)" as S
+participant "Tim\n(DM/owner)" as T
+participant "Others" as O
+
+J -> J: clicks Tim's avatar\n-> "Request control"
+J -> S: control_request {target: tim}
+S -> T: control_request_notification\n{from: "Jane"}
+note over T: Toast appears:\n"Jane requesting control"\n[Hand over] [Deny]
+
+alt Tim accepts
+  T -> S: control_handover {to: jane}
+  S -> S: release Tim's lease\nacquire Jane's lease
+  S -> J: control_transfer {to: jane, reason: "handover"}
+  S -> T: control_transfer {to: jane, reason: "handover"}
+  S -> O: control_transfer {to: jane, reason: "handover"}
+  note over J: Pulsing border activates\nJane in status bar
+  note over T: Border deactivates\nNo longer DM
+else Tim denies
+  T -> S: control_deny {requester: jane}
+  S -> J: control_denied {}
+  note over J: Toast: "Request denied"
+end
+
+@enduml

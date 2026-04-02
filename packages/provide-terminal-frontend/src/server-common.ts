@@ -45,10 +45,16 @@ export interface ProvideHijackConfig {
   showAnalysis?: boolean;
   mobileKeys?: boolean;
   authToken?: string;
+  onPresenceMessage?: (msg: Record<string, unknown>) => void;
+}
+
+export interface ProvideHijackInstance {
+  sendControlMessage(msg: Record<string, unknown>): void;
+  readonly terminalElement: HTMLElement | null;
 }
 
 export interface ProvideHijackConstructor {
-  new (container: HTMLElement, config: ProvideHijackConfig): unknown;
+  new (container: HTMLElement, config: ProvideHijackConfig): ProvideHijackInstance;
 }
 
 declare global {

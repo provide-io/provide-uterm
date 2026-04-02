@@ -1,5 +1,8 @@
 .content {
   padding: 1.25rem;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .headerRow {

@@ -156,3 +156,53 @@ class _WsHelperMixin:
         result = ws.send(payload)
         if inspect.isawaitable(result):
             await result
+
+    async def _maybe_send_presence_sync(self, ws: CFWebSocket, *, exclude_self: bool = False) -> None:
+        """Send a ``presence_sync`` frame if the session has presence enabled.
+
+        Called after the hello message on browser connect.  ``exclude_self``
+        should be ``True`` in ``webSocketOpen`` (the socket is already
+        registered, so we exclude it from the peer list) and ``False`` in
+        ``fetch()`` (the socket is not yet in the registry).
+        """
+        if not self.meta.get("presence"):  # type: ignore[attr-defined]
+            return
+        exclude_ws: CFWebSocket | None = ws if exclude_self else None
+        connected_ids = self._get_presence_browser_ids(exclude_ws=exclude_ws)
+        await self.send_ws(  # type: ignore[attr-defined]
+            ws,
+            {
+                "type": "presence_sync",
+                "users": [{"user_id": uid} for uid in connected_ids],
+                "config": {
+                    "auto_transfer_idle_s": self.config.deckmux_auto_transfer_idle_s,  # type: ignore[attr-defined]
+                    "keystroke_queue": self.config.deckmux_keystroke_queue,  # type: ignore[attr-defined]
+                },
+                "ts": __import__("time").time(),
+            },
+        )
+
+    def _get_presence_browser_ids(self, *, exclude_ws: CFWebSocket | None) -> list[str]:
+        """Return ws_key IDs for all currently connected browser sockets.
+
+        Used to build ``presence_sync`` payloads on connect.  When
+        ``exclude_ws`` is provided (e.g. the just-connected socket in
+        ``webSocketOpen``), that socket is omitted from the list so the
+        joining browser only sees already-connected peers.
+        """
+        exclude_key = self.ws_key(exclude_ws) if exclude_ws is not None else None
+        try:
+            all_ws = list(self.ctx.getWebSockets())  # type: ignore[attr-defined]
+        except Exception:
+            all_ws = []
+        if not all_ws:
+            all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]
+        ids: list[str] = []
+        for candidate in all_ws:
+            if self._socket_role(candidate) != "browser":
+                continue
+            key = self.ws_key(candidate)
+            if key == exclude_key:
+                continue
+            ids.append(key)
+        return ids

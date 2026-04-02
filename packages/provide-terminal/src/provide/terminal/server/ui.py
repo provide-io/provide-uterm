@@ -22,6 +22,17 @@ _vite_manifest: dict[str, object] | None = None
 _vite_manifest_loaded = False
 
 
+def _hijack_js_version() -> str:
+    """Return a short cache-busting token based on hijack.js mtime."""
+    try:
+        path = importlib.resources.files("provide.terminal") / "frontend" / "hijack.js"
+        if path.is_file():
+            return format(int(path.stat().st_mtime_ns), "x")[-8:]  # type: ignore[attr-defined]
+    except Exception:  # noqa: S110
+        pass
+    return "0"
+
+
 def _read_vite_manifest() -> dict[str, object] | None:
     """Read the Vite manifest.json from the frontend package-data.
 
@@ -194,7 +205,7 @@ def session_page_html(
         # hijack.js must appear before the Vite React bundle so window.ProvideHijack
         # is set before React's useEffect runs (both are deferred modules; document
         # order determines execution order).
-        pre_vite_modules=("hijack.js",),
+        pre_vite_modules=(f"hijack.js?v={_hijack_js_version()}",),
         scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
@@ -263,7 +274,7 @@ def inspect_page_html(
         title,
         assets_path,
         body,
-        pre_vite_modules=("hijack.js",),
+        pre_vite_modules=(f"hijack.js?v={_hijack_js_version()}",),
         scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,

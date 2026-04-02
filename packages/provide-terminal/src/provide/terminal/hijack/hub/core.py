@@ -126,6 +126,13 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Public accessor for the EventBus instance (None if not configured)."""
         return self._event_bus
 
+    async def touch_activity(self, worker_id: str) -> None:
+        """Update the last-activity timestamp for *worker_id*."""
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is not None:
+                st.last_activity_at = time.time()
+
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
         callback = self._on_metric

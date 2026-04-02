@@ -4,7 +4,7 @@ Shared terminal I/O primitives and WebSocket proxy infrastructure for the provid
 
 **Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · WS session resumption (role + hijack survive reconnect) · quick-connect ephemeral sessions (`GET /app/connect`, `POST /api/connect`) · `ShellSessionConnector` for in-process shell sessions · built-in Python REPL (`ushell`) · JWT auth · 4000+ tests at 100% branch coverage
 
-For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
+For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
 
 ## Installation
 
@@ -194,10 +194,30 @@ Key endpoints:
 - `GET /app/connect` (quick-connect page)
 - `POST /api/connect` (create ephemeral session)
 
-The example TOML config in [`scripts/uterm-server.example.toml`](scripts/uterm-server.example.toml)
+The example TOML config in [`scripts/uterm-server.example.toml`](https://github.com/provide-io/provide-terminal/blob/main/scripts/uterm-server.example.toml)
 shows the intended reference-implementation structure for server config.
 For production JWT deployments, start from
-[`scripts/uterm-server.jwt.example.toml`](scripts/uterm-server.jwt.example.toml).
+[`scripts/uterm-server.jwt.example.toml`](https://github.com/provide-io/provide-terminal/blob/main/scripts/uterm-server.jwt.example.toml).
+
+### Security Headers
+
+`security.mode` controls HTTP response headers (CSP, HSTS, X-Frame-Options, etc.):
+
+- `"strict"` (default) — all security headers set with production defaults
+- `"dev"` — headers disabled for frictionless local development (only `X-Content-Type-Options: nosniff` always set)
+
+Each header is individually overridable:
+
+```toml
+[security]
+mode = "strict"
+csp = "default-src 'self' *.mycdn.com"  # override just CSP
+hsts = ""                                # suppress HSTS
+```
+
+CF Worker equivalent: `SECURITY_MODE`, `SECURITY_CSP`, etc. environment variables.
+
+CDN-loaded scripts (xterm.js) include SRI `integrity` hashes in both backends.
 
 ### Auth Runtime Posture
 
@@ -268,10 +288,33 @@ predictable and fast in the hosted server. If you need key-based auth in config
 without a file path, prefer `client_key_data`.
 
 For `connector_type = "ushell"`, no external process is required. The session runs
-a built-in Python REPL powered by [`provide-shell`](packages/provide-shell/README.md).
+a built-in Python REPL powered by [`provide-terminal-shell`](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-shell/README.md).
 Commands include `py <expr>`, `sessions`, `kv list/get/set/delete`, `fetch [-X METHOD] <url>`,
 `env`, `clear`, and `exit`. The REPL sandbox pre-imports `json`, `datetime`, `re`,
 `hashlib`, and `base64`.
+
+### DeckMux (Collaborative Presence)
+
+Enable real-time collaborative presence on any terminal session. See who's connected,
+where they're looking, and who has keyboard control.
+
+- **Avatar bar** — colored circles with initials, role badges, idle/typing indicators
+- **Edge indicators** — minimap-style viewport bars showing where each user is scrolled
+- **Pinned cursors** — click a line to pin your position, visible to all watchers
+- **Control transfer** — request/handover/auto-transfer with keystroke queue buffering
+- **Per-session** — enable with `presence: true` in session config
+
+```toml
+[sessions.debug]
+presence = true
+auto_transfer_idle_s = 30
+keystroke_queue = "replay"
+```
+
+DeckMux is a standalone package (`provide-terminal-deckmux`) with zero required dependencies,
+integrated into `provide-terminal` via a TermHub mixin. Both FastAPI and Cloudflare
+backends are supported at parity. See the [DeckMux README](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-deckmux/README.md)
+for full documentation and [PlantUML diagrams](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-deckmux/docs/diagrams/).
 
 ### Frontend — ProvideTerminal
 

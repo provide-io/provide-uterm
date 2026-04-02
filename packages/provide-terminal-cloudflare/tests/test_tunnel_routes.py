@@ -224,3 +224,144 @@ class TestTunnelApi:
 
         context = await resolve_share_context(request, env, "tunnel-abc")
         assert context is None
+
+
+class TestTunnelRevokeTokens:
+    @pytest.mark.asyncio
+    async def test_revoke_existing_tunnel(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        entry = {
+            "session_id": "tunnel-abc",
+            "worker_token": "w1",
+            "share_token": "s1",
+            "control_token": "c1",
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+
+        resp = await handle_tunnel_revoke_tokens(request, env, "tunnel-abc")
+        body = json.loads(resp.body)
+        assert resp.status == 200
+        assert body["ok"] is True
+        assert body["session_id"] == "tunnel-abc"
+        kv.put.assert_called_once()
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["worker_token"] is None
+        assert stored["share_token"] is None
+        assert stored["control_token"] is None
+
+    @pytest.mark.asyncio
+    async def test_revoke_nonexistent_tunnel(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=None)
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+
+        resp = await handle_tunnel_revoke_tokens(request, env, "tunnel-nope")
+        assert resp.status == 404
+
+    @pytest.mark.asyncio
+    async def test_revoke_no_kv(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        env = MagicMock(spec=[])
+        request = MagicMock()
+
+        resp = await handle_tunnel_revoke_tokens(request, env, "tunnel-x")
+        assert resp.status == 500
+
+    @pytest.mark.asyncio
+    async def test_revoke_corrupt_entry(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value="not-valid-json{{{")
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+
+        resp = await handle_tunnel_revoke_tokens(request, env, "tunnel-bad")
+        assert resp.status == 500
+
+
+class TestTunnelRotateTokens:
+    @pytest.mark.asyncio
+    async def test_rotate_existing_tunnel(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        entry = {
+            "session_id": "tunnel-abc",
+            "worker_token": "old_w",
+            "share_token": "old_s",
+            "control_token": "old_c",
+            "expires_at": time.time() + 100,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-abc/tokens/rotate"
+
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-abc", ttl_s=3600)
+        body = json.loads(resp.body)
+        assert resp.status == 200
+        assert body["tunnel_id"] == "tunnel-abc"
+        assert body["worker_token"] != "old_w"
+        assert "/s/tunnel-abc?token=" in body["share_url"]
+        assert "/app/operator/tunnel-abc?token=" in body["control_url"]
+        assert "expires_at" in body
+        assert body["ws_endpoint"] == "/tunnel/tunnel-abc"
+        kv.put.assert_called_once()
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["worker_token"] == body["worker_token"]
+        assert stored["share_token"] is not None
+        assert stored["control_token"] is not None
+
+    @pytest.mark.asyncio
+    async def test_rotate_nonexistent_tunnel(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=None)
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-nope/tokens/rotate"
+
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-nope")
+        assert resp.status == 404
+
+    @pytest.mark.asyncio
+    async def test_rotate_no_kv(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        env = MagicMock(spec=[])
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-x/tokens/rotate"
+
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-x")
+        assert resp.status == 500
+
+    @pytest.mark.asyncio
+    async def test_rotate_corrupt_entry(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value="bad json!!!")
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-bad/tokens/rotate"
+
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-bad")
+        assert resp.status == 500

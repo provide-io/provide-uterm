@@ -85,6 +85,62 @@ async def handle_tunnels(request: object, env: object) -> object:
     )
 
 
+async def handle_tunnel_revoke_tokens(_request: object, env: object, tunnel_id: str) -> object:
+    """Handle DELETE /api/tunnels/{id}/tokens — revoke all tokens."""
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
+    raw = await kv.get(f"session:{tunnel_id}")
+    if raw is None:
+        return json_response({"error": "not found"}, status=404)
+    try:
+        entry = json.loads(str(raw))
+    except (json.JSONDecodeError, TypeError):
+        return json_response({"error": "corrupt entry"}, status=500)
+    entry["worker_token"] = None
+    entry["share_token"] = None
+    entry["control_token"] = None
+    await kv.put(f"session:{tunnel_id}", json.dumps(entry))
+    return json_response({"ok": True, "session_id": tunnel_id})
+
+
+async def handle_tunnel_rotate_tokens(request: object, env: object, tunnel_id: str, ttl_s: int = 3600) -> object:
+    """Handle POST /api/tunnels/{id}/tokens/rotate — generate new tokens."""
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
+    raw = await kv.get(f"session:{tunnel_id}")
+    if raw is None:
+        return json_response({"error": "not found"}, status=404)
+    try:
+        entry = json.loads(str(raw))
+    except (json.JSONDecodeError, TypeError):
+        return json_response({"error": "corrupt entry"}, status=500)
+
+    new_worker = secrets.token_urlsafe(32)
+    new_share = secrets.token_urlsafe(32)
+    new_control = secrets.token_urlsafe(32)
+    expires_at = time.time() + ttl_s
+
+    entry["worker_token"] = new_worker
+    entry["share_token"] = new_share
+    entry["control_token"] = new_control
+    entry["expires_at"] = expires_at
+    await kv.put(f"session:{tunnel_id}", json.dumps(entry))
+
+    base_url = str(getattr(request, "url", "")).split("/api/")[0]
+    return json_response(
+        {
+            "tunnel_id": tunnel_id,
+            "ws_endpoint": f"/tunnel/{tunnel_id}",
+            "worker_token": new_worker,
+            "share_url": f"{base_url}/s/{tunnel_id}?token={new_share}",
+            "control_url": f"{base_url}/app/operator/{tunnel_id}?token={new_control}",
+            "expires_at": expires_at,
+        }
+    )
+
+
 async def resolve_share_context(request: object, env: object, tunnel_id: str) -> tuple[str, str] | None:
     """Return ``(page_kind, share_role)`` for a valid share token."""
     kv = getattr(env, "SESSION_REGISTRY", None)

@@ -1,0 +1,89 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml ecosystem-overview
+title provide-terminal — Ecosystem Overview
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam arrowColor #2563eb
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam actorBorderColor #6b7280
+skinparam actorBackgroundColor #f9fafb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam databaseBorderColor #d1d5db
+skinparam databaseBackgroundColor #f3f4f6
+skinparam cloudBorderColor #d1d5db
+skinparam cloudBackgroundColor #ffffff
+
+actor "Tim\n(admin / sharer)" as Tim
+actor "Jane\n(operator)" as Jane
+actor "Red Hawk\n(viewer)" as RH
+
+rectangle "Browser" as B1
+rectangle "Browser" as B2
+rectangle "Browser" as B3
+
+package "Server" {
+  package "provide-terminal (FastAPI)" as FASTAPI {
+    [TermHub\nsession registry] as HUB
+    [DeckMux Mixin\npresence + control] as DM
+    [Tunnel / Share\nbinary protocol] as TUN
+  }
+  package "provide-terminal-cloudflare (CF Worker)" as CF {
+    [Durable Object\nSessionRuntime] as DO
+  }
+}
+
+package "Python Ecosystem" {
+  package "provide-terminal-deckmux\n(zero deps)" as PKG_DM {
+    [PresenceStore] as PS
+    [TransferManager] as TM
+    [Protocol types] as PT
+  }
+  package "provide-terminal-render\n(zero deps)" as PKG_R {
+    [ANSI palette\n& SGR emitters] as ANSI
+  }
+  package "provide-terminal-shell\n(zero deps)" as PKG_SH {
+    [Python REPL\nushell] as USHELL
+  }
+}
+
+cloud "Remote Hosts" {
+  [SSH server] as SSH
+  [Telnet BBS] as TEL
+  [Local shell\n(PTY)] as SH
+}
+
+Tim --> B1
+Jane --> B2
+RH --> B3
+
+B1 --> HUB : WebSocket\n(admin role)
+B2 --> HUB : WebSocket\n(operator role)
+B3 --> HUB : WebSocket\n(viewer role)
+
+HUB --> DM : presence events
+HUB --> TUN : binary frames\n(ch0–ch3)
+HUB --> DO : CF adapter
+
+HUB --> SSH : connector
+HUB --> TEL : connector
+HUB --> SH : connector
+
+DM --> PS
+DM --> TM
+DM --> PT
+
+HUB ..> PKG_DM : uses
+HUB ..> PKG_R : uses
+HUB ..> PKG_SH : uses
+
+note right of DM : DeckMux messages ride\nthe same WebSocket\nas terminal data
+note bottom of CF : Cloudflare Workers\nKV-backed sessions\nHibernation API
+
+@enduml

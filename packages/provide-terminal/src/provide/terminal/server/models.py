@@ -61,6 +61,7 @@ class AuthConfig(ServerBaseModel):
     jwt_roles_claim: str = "roles"
     jwt_scopes_claim: str = "scope"
     worker_bearer_token: str | None = None
+    api_keys_enabled: bool = False  # Opt-in API key authentication
 
 
 class UiConfig(ServerBaseModel):
@@ -99,6 +100,18 @@ class RecordingConfig(ServerBaseModel):
         if value < 0:
             raise ValueError(f"recording.max_bytes must be >= 0 (0 = unlimited), got: {value}")
         return value
+
+
+class SecurityConfig(ServerBaseModel):
+    """Configurable security response headers."""
+
+    mode: Literal["strict", "dev"] = "strict"
+    csp: str | None = None
+    hsts: str | None = None
+    x_frame_options: str | None = None
+    x_content_type_options: str | None = None
+    referrer_policy: str | None = None
+    permissions_policy: str | None = None
 
 
 class TunnelConfig(ServerBaseModel):
@@ -156,6 +169,9 @@ class SessionDefinition(ServerBaseModel):
     owner: str | None = None
     visibility: Visibility = "public"
     ephemeral: bool = False
+    presence: bool = False
+    auto_transfer_idle_s: int = 30
+    keystroke_queue: Literal["display", "replay"] = "display"
 
     @model_validator(mode="before")
     @classmethod
@@ -247,6 +263,7 @@ class SessionRuntimeStatus(ServerBaseModel):
     recording_available: bool = False
     owner: str | None = None
     visibility: Visibility = "public"
+    stopped_at: float | None = None
     last_error: str | None = None
 
 
@@ -258,8 +275,11 @@ class ServerConfig(ServerBaseModel):
     ui: UiConfig = Field(default_factory=UiConfig)
     recording: RecordingConfig = Field(default_factory=RecordingConfig)
     profiles: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
     tunnel: TunnelConfig = Field(default_factory=TunnelConfig)
     sessions: list[SessionDefinition] = Field(default_factory=list)
+    session_idle_timeout_s: int = 0  # 0 = disabled, >0 = seconds of inactivity before auto-cleanup
+    session_retention_s: int = 0  # 0 = disabled, >0 = auto-delete stopped sessions older than N seconds
 
 
 ServerModel: TypeAlias = (
@@ -267,6 +287,7 @@ ServerModel: TypeAlias = (
     | UiConfig
     | RecordingConfig
     | ProfileStoreConfig
+    | SecurityConfig
     | TunnelConfig
     | ServerBindConfig
     | SessionDefinition

@@ -19,6 +19,8 @@ export interface HijackConfig {
   mobileKeys?: boolean;
   role?: string;
   onResize?: (cols: number, rows: number) => void;
+  /** Called for presence messages (presence_sync, presence_update, presence_leave, control_transfer). */
+  onPresenceMessage?: (msg: Record<string, unknown>) => void;
 }
 
 /** Resolved config after defaults are merged in. */
@@ -34,6 +36,7 @@ export interface ResolvedConfig {
   mobileKeys: boolean;
   role: string | undefined;
   onResize: ((cols: number, rows: number) => void) | undefined;
+  onPresenceMessage: ((msg: Record<string, unknown>) => void) | undefined;
 }
 
 export type HijackAction = "acquire" | "heartbeat" | "release" | "step";
@@ -60,7 +63,9 @@ export interface XTerminal {
   open(el: HTMLElement): void;
   focus(): void;
   onData(callback: (data: string) => void): { dispose(): void };
+  onScroll(callback: (viewportY: number) => void): { dispose(): void };
   loadAddon(addon: FitAddonInstance): void;
+  readonly buffer: { readonly active: { readonly length: number } };
 }
 
 export interface FitAddonInstance {

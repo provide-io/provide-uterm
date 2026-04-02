@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
+from provide.terminal.server.audit import audit_event
+
 if TYPE_CHECKING:
     from provide.terminal.server.models import AuthConfig
 
@@ -149,7 +151,64 @@ def _principal_from_local_mode(headers: Any, cookies: Any, auth: AuthConfig) -> 
     return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}))
 
 
+def _principal_from_api_key(headers: Any, auth: AuthConfig) -> Principal | None:
+    """Check for X-API-Key header and validate against the store.
+
+    Returns a Principal on success or None if no API key header is present
+    or the key is invalid.  The store is resolved lazily from a callback
+    to avoid a hard import-time dependency on the app layer.
+    """
+    if not auth.api_keys_enabled:
+        return None
+    raw_key = str(headers.get("x-api-key", "")).strip()
+    if not raw_key:
+        return None
+    # The store is attached by the caller via the module-level hook.
+    store = _api_key_store_hook()
+    if store is None:
+        return None
+    record = store.validate(raw_key)
+    if record is None:
+        logger.warning("api_key_auth_failed key_id=unknown")
+        audit_event("auth.failure", detail={"method": "api_key"})
+        return None
+    roles: frozenset[str]
+    if "admin" in record.scopes:
+        roles = frozenset({"admin"})
+    elif "operator" in record.scopes:
+        roles = frozenset({"operator"})
+    elif record.scopes:
+        roles = frozenset({"viewer"})
+    else:
+        # Empty scopes = full access
+        roles = frozenset({"admin"})
+    audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
+    return Principal(
+        subject_id=f"apikey:{record.key_id}",
+        roles=roles,
+        scopes=record.scopes,
+        claims={"key_id": record.key_id, "key_name": record.name},
+    )
+
+
+# Module-level hook for the API key store. Set by app.py at startup.
+
+
+def _api_key_store_hook() -> Any:
+    return None
+
+
+def set_api_key_store_hook(hook: Any) -> None:
+    """Register a callable that returns the active ApiKeyStore (or None)."""
+    global _api_key_store_hook
+    _api_key_store_hook = hook
+
+
 def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig) -> Principal:
+    # API key authentication takes precedence (when enabled).
+    api_key_principal = _principal_from_api_key(headers, auth)
+    if api_key_principal is not None:
+        return api_key_principal
     mode = str(auth.mode).strip().lower()
     if mode in {"none", "dev"}:
         return _principal_from_local_mode(headers, cookies, auth)
@@ -161,10 +220,13 @@ def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig) -> Principa
     if not token:
         return _anonymous_principal()
     try:
-        return _principal_from_jwt_token(token, auth)
+        principal = _principal_from_jwt_token(token, auth)
     except Exception as exc:
         logger.warning("jwt_auth_failed error=%s", exc)
+        audit_event("auth.failure", detail={"error": str(exc)})
         return _anonymous_principal()
+    audit_event("auth.success", principal=principal.subject_id)
+    return principal
 
 
 def resolve_http_principal(request: object, auth: AuthConfig) -> Principal:

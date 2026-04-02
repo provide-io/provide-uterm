@@ -9,7 +9,7 @@ version = "0.4.0"
 requires-python = ">=3.11"
 dependencies = [
     "provide-terminal[cli,server,ssh,emulator]",
-    "provide-shell",
+    "provide-terminal-shell",
     "provide-telemetry>=0.3",
 ]
 
@@ -51,13 +51,15 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/provide-terminal", "packages/provide-shell", "packages/provide-terminal-cloudflare"]
+members = ["packages/provide-terminal", "packages/provide-terminal-shell", "packages/provide-terminal-cloudflare", "packages/provide-terminal-deckmux", "packages/provide-terminal-render"]
 
 [tool.uv.sources]
 provide-telemetry = { path = "/REDACTED_ABS_PATH", editable = true }
 provide-terminal = { workspace = true }
-provide-shell = { workspace = true }
+provide-terminal-shell = { workspace = true }
 provide-terminal-cloudflare = { workspace = true }
+provide-terminal-deckmux = { workspace = true }
+provide-terminal-render = { workspace = true }
 
 [tool.ruff]
 line-length = 120
@@ -97,10 +99,10 @@ follow_imports = "normal"
 ignore_missing_imports = false
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["packages/provide-terminal/src", "packages/provide-shell/src"]
+mypy_path = ["packages/provide-terminal/src", "packages/provide-terminal-shell/src", "packages/provide-terminal-deckmux/src", "packages/provide-terminal-render/src"]
 
 [[tool.mypy.overrides]]
-module = ["provide.telemetry", "provide.telemetry.*", "structlog", "structlog.*"]
+module = ["provide.telemetry", "provide.telemetry.*", "provide.terminal.deckmux", "provide.terminal.deckmux.*", "structlog", "structlog.*"]
 ignore_missing_imports = true
 
 
@@ -116,7 +118,7 @@ warn_unused_ignores = false
 
 [tool.ty.environment]
 python-version = "3.11"
-extra-paths = ["packages/provide-shell/src"]
+extra-paths = ["packages/provide-terminal-shell/src", "packages/provide-terminal-deckmux/src", "packages/provide-terminal-render/src"]
 
 [tool.ty.rules]
 invalid-argument-type = "ignore"
@@ -131,12 +133,12 @@ exclude_dirs = [
     "packages/provide-terminal/tests",
     "packages/provide-terminal-cloudflare/python_modules",
     "packages/provide-terminal-cloudflare/node_modules",
-    "packages/provide-shell/tests",
+    "packages/provide-terminal-shell/tests",
 ]
 
 [tool.vulture]
 min_confidence = 80
-paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests", "packages/provide-shell/src"]
+paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests", "packages/provide-terminal-shell/src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -146,7 +148,7 @@ addopts = "--import-mode=importlib"
 testpaths = [
     "packages/provide-terminal/tests",
     "packages/provide-terminal-cloudflare/tests",
-    "packages/provide-shell/tests",
+    "packages/provide-terminal-shell/tests",
 ]
 norecursedirs = [
     ".git",
@@ -170,21 +172,32 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = ["src/provide/shell/terminal/_connector.py", "src/provide/terminal/server/connectors/__init__.py", "src/provide/terminal/server/connectors/registry.py", "src/provide/terminal/hijack/hub/event_bus.py"]
+paths_to_mutate = [
+    "src/provide/terminal/shell/_render.py",
+    "src/provide/terminal/deckmux/_presence.py",
+    "src/provide/terminal/deckmux/_hub_mixin.py",
+    "src/provide/terminal/deckmux/_transfer.py",
+    "src/provide/terminal/deckmux/_protocol.py",
+    "src/provide/terminal/deckmux/_names.py",
+    "src/provide/terminal/deckmux/_edge.py",
+]
 tests_dir = [
-    "packages/provide-terminal/tests/shell/test_shell_connector.py",
-    "packages/provide-terminal/tests/server/test_app_ushell.py",
-    "packages/provide-terminal/tests/server/test_connectors_websocket.py",
-    "packages/provide-terminal/tests/server/test_connectors.py",
-    "packages/provide-terminal/tests/hijack/test_event_bus.py",
-    "packages/provide-terminal/tests/hijack/test_event_bus_integration.py",
+    "packages/provide-terminal-shell/tests/shell/test_shell_render.py",
+    "packages/provide-terminal-deckmux/tests/deckmux/test_presence.py",
+    "packages/provide-terminal-deckmux/tests/deckmux/test_hub_mixin.py",
+    "packages/provide-terminal-deckmux/tests/deckmux/test_transfer.py",
+    "packages/provide-terminal-deckmux/tests/deckmux/test_protocol.py",
+    "packages/provide-terminal-deckmux/tests/deckmux/test_names.py",
+    "packages/provide-terminal-deckmux/tests/deckmux/test_edge.py",
 ]
 also_copy = [
     "src",
-    "packages/provide-shell/src",
+    "packages/provide-terminal-shell/src",
     "packages/provide-terminal/src",
     "packages/provide-terminal/tests",
-    "packages/provide-shell/tests",
+    "packages/provide-terminal-shell/tests",
+    "packages/provide-terminal-deckmux/src",
+    "packages/provide-terminal-deckmux/tests",
     "conftest.py",
 ]
 pytest_add_cli_args = ["--timeout=30", "-p", "no:randomly", "-p", "no:hypothesis"]

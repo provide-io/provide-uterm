@@ -42,10 +42,10 @@ def test_load_connector_import_error():
     from provide.terminal.cloudflare.do import ushell as ushell_mod
 
     # Block both shell modules so the ImportError branch is exercised.
-    orig_connector = sys.modules.get("provide.shell.terminal._connector")
-    orig_commands = sys.modules.get("provide.shell._commands")
-    sys.modules["provide.shell.terminal._connector"] = None  # type: ignore[assignment]
-    sys.modules["provide.shell._commands"] = None  # type: ignore[assignment]
+    orig_connector = sys.modules.get("provide.terminal.shell.terminal._connector")
+    orig_commands = sys.modules.get("provide.terminal.shell._commands")
+    sys.modules["provide.terminal.shell.terminal._connector"] = None  # type: ignore[assignment]
+    sys.modules["provide.terminal.shell._commands"] = None  # type: ignore[assignment]
     # Reset module-level sentinel so the branch runs fresh.
     prev_error = ushell_mod._IMPORT_ERROR
     ushell_mod._IMPORT_ERROR = None
@@ -56,13 +56,13 @@ def test_load_connector_import_error():
     finally:
         ushell_mod._IMPORT_ERROR = prev_error
         if orig_connector is None:
-            sys.modules.pop("provide.shell.terminal._connector", None)
+            sys.modules.pop("provide.terminal.shell.terminal._connector", None)
         else:
-            sys.modules["provide.shell.terminal._connector"] = orig_connector
+            sys.modules["provide.terminal.shell.terminal._connector"] = orig_connector
         if orig_commands is None:
-            sys.modules.pop("provide.shell._commands", None)
+            sys.modules.pop("provide.terminal.shell._commands", None)
         else:
-            sys.modules["provide.shell._commands"] = orig_commands
+            sys.modules["provide.terminal.shell._commands"] = orig_commands
 
 
 def test_load_connector_success_with_list_kv_sessions():

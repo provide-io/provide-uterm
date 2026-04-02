@@ -93,7 +93,57 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
         elif frame_type in {"hijack_request", "hijack_release", "hijack_step"}:
             # CF backend: hijack is REST-only. Inform the client rather than silently dropping.
             await runtime.send_ws(ws, {"type": "error", "message": "use_rest_hijack_api"})
+        elif frame_type in {"presence_update", "queued_input", "control_request"}:
+            await _handle_presence_message(runtime, ws, frame)
         # heartbeat / ping: keep-alive frames, no response required.
+
+
+async def _handle_presence_message(runtime: RuntimeProtocol, ws: object, frame: dict) -> None:  # type: ignore[type-arg]
+    """Relay a DeckMux presence message to all other connected browsers.
+
+    The DO acts as a message router only — browser-side coordinators own state.
+    Presence messages are silently dropped when the session has not been
+    configured with ``presence: true`` in its KV metadata.
+    """
+    if not runtime.meta.get("presence"):  # type: ignore[attr-defined]
+        return
+    frame_type = frame.get("type")
+    sender_key = runtime.ws_key(ws)  # type: ignore[attr-defined]
+
+    # control_request: relay only to the current hijack owner (if any).
+    if frame_type == "control_request":
+        owner_key = None
+        active = runtime.hijack.session  # type: ignore[attr-defined]
+        if active is not None:
+            for ws_id, candidate in list(runtime.browser_sockets.items()):  # type: ignore[attr-defined]
+                if runtime.browser_hijack_owner.get(ws_id) == active.hijack_id:  # type: ignore[attr-defined]
+                    owner_key = ws_id
+                    target_ws = candidate
+                    break
+        if owner_key is not None and owner_key != sender_key:
+            try:
+                await runtime.send_ws(target_ws, frame)  # type: ignore[attr-defined]
+            except Exception:
+                runtime.browser_sockets.pop(owner_key, None)  # type: ignore[attr-defined]
+        return
+
+    # presence_update / queued_input: relay to all other browsers.
+    try:
+        all_ws = list(runtime.ctx.getWebSockets())  # type: ignore[attr-defined]
+    except Exception:
+        all_ws = []
+    if not all_ws:
+        all_ws = list(runtime.browser_sockets.values())  # type: ignore[attr-defined]
+    for other_ws in all_ws:
+        if runtime._socket_role(other_ws) != "browser":  # type: ignore[attr-defined]
+            continue
+        if runtime.ws_key(other_ws) == sender_key:  # type: ignore[attr-defined]
+            continue
+        ws_id = runtime.ws_key(other_ws)  # type: ignore[attr-defined]
+        try:
+            await runtime.send_ws(other_ws, frame)  # type: ignore[attr-defined]
+        except Exception:
+            runtime.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
 
 
 async def _handle_resume(runtime: RuntimeProtocol, ws: object, frame: dict) -> None:  # type: ignore[type-arg]

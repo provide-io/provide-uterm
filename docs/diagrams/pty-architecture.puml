@@ -1,0 +1,91 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml pty-architecture
+title provide-terminal-pty — Architecture
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam arrowColor #2563eb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+skinparam databaseBorderColor #d1d5db
+skinparam databaseBackgroundColor #f3f4f6
+
+package "Browser / CF DO" {
+  [Browser\n(xterm.js)] as BROWSER
+  [Cloudflare DO\n(WebSocket proxy)] as DO
+  note right of DO
+    DO can hibernate.
+    PTY process survives —
+    it lives on the server.
+  end note
+}
+
+package "provide-terminal server (Python)" {
+  [HostedSessionRuntime\n(session lifecycle)] as RUNTIME
+
+  package "PTYConnector  (connector_type=pty)" #eff6ff {
+    [PamSession\n(ctypes → libpam)] as PAM
+    [PtyProcess\n(os.fork + pty)\nsetuid / setgid] as PTYP
+    [CaptureSocket\n(Unix socket server)] as CSOCK
+  }
+
+  package "Existing Connectors" {
+    [SshConnector\n(asyncssh)] as SSH
+    [TelnetConnector] as TEL
+    [WebSocketConnector] as WSCON
+  }
+}
+
+package "provide-terminal-pty  (native)" #fefce8 {
+  [libuterm_capture\n(.so / .dylib)\nLD_PRELOAD / DYLD_INSERT_LIBRARIES] as CAPLIB
+  [pam_uterm\n(.so)\nPAM session module] as PAMU
+}
+
+package "OS / Kernel" {
+  [libpam\n(libpam.so / libpam.dylib)] as LIBPAM
+  [Target Process\n(shell, binary, game client)] as PROC
+  [sshd / login / su\n(existing daemons)] as SSHD
+}
+
+' WebSocket path
+BROWSER --> DO : WebSocket\n(may hibernate)
+DO --> RUNTIME : WebSocket\n(persistent)
+RUNTIME --> PAM : authenticate\n(username + password)
+RUNTIME --> PTYP : spawn + supervise
+
+' PAM path
+PAM --> LIBPAM : dlopen / ctypes\nconversation callback
+LIBPAM --> PAM : env vars, limits,\nsession token
+
+' PTY + exec path
+PTYP --> PROC : fork → setuid/setgid\n→ execve\n(PTY master owned by server)
+PTYP ..> CAPLIB : sets DYLD_INSERT_LIBRARIES\nor LD_PRELOAD before exec\n(optional)
+CAPLIB --> PROC : intercepts read/write/connect
+CAPLIB --> CSOCK : tunnels intercepted I/O\nvia Unix socket
+CSOCK --> RUNTIME : additional capture stream
+
+' Daemon bridge path
+SSHD --> PAMU : calls pam_open_session\n(via pam.d config)
+PAMU --> RUNTIME : Unix socket notify\n→ register existing session
+
+note bottom of CAPLIB
+  Intercepts: read(), write(), connect()
+  Useful for binaries that bypass PTY
+  or do direct network I/O.
+  Not needed for normal shells.
+end note
+
+note bottom of PAMU
+  Daemon bridge mode:
+  drop pam_uterm.so into /etc/pam.d/sshd
+  → every sshd session appears in
+  provide-terminal automatically.
+end note
+
+@enduml

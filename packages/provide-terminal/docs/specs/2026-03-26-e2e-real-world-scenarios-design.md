@@ -160,8 +160,8 @@ uv run pytest packages/provide-terminal/tests/e2e/multi_browser/ \
                packages/provide-terminal/tests/e2e/observer/ -v
 
 # Full suite — 100% coverage must hold
-uv run pytest packages/provide-terminal/tests/ packages/provide-shell/tests/ \
-  -q --cov=provide.terminal --cov=provide.shell --cov-fail-under=100 \
+uv run pytest packages/provide-terminal/tests/ packages/provide-terminal-shell/tests/ \
+  -q --cov=provide.terminal --cov=provide.terminal.shell --cov-fail-under=100 \
   --ignore=packages/provide-terminal/tests/memray \
   --ignore=packages/provide-terminal/tests/playwright
 
