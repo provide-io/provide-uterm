@@ -288,6 +288,7 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
         worker_token=config.auth.worker_bearer_token,
         resume_store=InMemoryResumeStore(),
         on_resume=_on_resume,
+        browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
     )
     webhook_manager = WebhookManager()
     registry = SessionRegistry(
@@ -383,9 +384,18 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
         sweep_task = asyncio.create_task(_sweep_expired_tunnel_tokens())
         idle_sweep_task = asyncio.create_task(_sweep_idle_sessions())
         retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
+        pam_task: asyncio.Task[None] | None = None
+        with contextlib.suppress(ImportError):
+            from provide.terminal.server.pam_integration import run_pam_integration
+
+            pam_task = asyncio.create_task(run_pam_integration(config, registry))
         try:
             yield
         finally:
+            if pam_task is not None:
+                pam_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pam_task
             retention_sweep_task.cancel()
             idle_sweep_task.cancel()
             sweep_task.cancel()

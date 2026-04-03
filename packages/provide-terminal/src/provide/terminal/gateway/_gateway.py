@@ -446,17 +446,48 @@ class TelnetWsGateway:
         return await asyncio.start_server(self._handle, host, port)
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Handle one inbound telnet connection, reconnecting on WS-side drops.
+
+        When the upstream WebSocket closes unexpectedly (e.g. Cloudflare DO
+        hibernation) while the TCP client is still connected, this method
+        waits briefly and reconnects — using the resume token so the DO
+        restores the session.  If the TCP client closes first, no retry is
+        attempted.
+        """
+        max_reconnects = 12
+        reconnect_delay = 3.0
+
         try:
-            await _pipe_ws(
-                reader,
-                writer,
-                self._ws_url,
-                token_file=self._token_file,
-                color_mode=self._color_mode,
-                telnet=True,
-            )
-        except Exception as exc:
-            logger.debug("telnet_ws_session_ended: %s", exc)
+            for attempt in range(max_reconnects + 1):
+                if reader.at_eof():
+                    break
+                try:
+                    await _pipe_ws(
+                        reader,
+                        writer,
+                        self._ws_url,
+                        token_file=self._token_file,
+                        color_mode=self._color_mode,
+                        telnet=True,
+                    )
+                except Exception as exc:
+                    logger.debug("telnet_ws_pipe_error attempt=%d: %s", attempt, exc)
+
+                # TCP client closed — we're done
+                if reader.at_eof():
+                    break
+
+                # WS closed while TCP is still alive (hibernation or transient drop)
+                if attempt < max_reconnects:
+                    logger.debug(
+                        "ws_disconnected_tcp_alive: reconnecting in %.1fs (attempt %d/%d)",
+                        reconnect_delay,
+                        attempt + 1,
+                        max_reconnects,
+                    )
+                    await asyncio.sleep(reconnect_delay)
+                else:
+                    logger.debug("ws_reconnect_exhausted: giving up after %d attempts", max_reconnects)
         finally:
             with contextlib.suppress(Exception):
                 writer.close()

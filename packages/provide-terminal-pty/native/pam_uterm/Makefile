@@ -2,11 +2,14 @@ UNAME := $(shell uname)
 
 ifeq ($(UNAME), Darwin)
     TARGET  = pam_uterm.so
+    # macOS: link against libpam — the framework is separate from the loader
     LDFLAGS = -dynamiclib -lpam
     CFLAGS  = -fPIC -O2 -Wall -Wextra -Werror
 else
     TARGET  = pam_uterm.so
-    LDFLAGS = -shared -lpam
+    # Linux: do NOT link against libpam — symbols are provided by the PAM loader
+    # at dlopen time via RTLD_GLOBAL. Linking against -lpam causes symbol conflicts.
+    LDFLAGS = -shared
     CFLAGS  = -fPIC -O2 -Wall -Wextra -Werror
 endif
 

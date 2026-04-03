@@ -301,10 +301,18 @@ class HostedSessionRuntime:
                     outbound = await self._queue.get()
                     await self._send_outbound_frame(ws, outbound)
                     continue
-                # Reuse recv_task across iterations so a fast-returning poll_messages()
-                # (e.g. ShellSessionConnector returning [] immediately) does not cancel
-                # and discard it before it has a chance to read inbound data.
-                if recv_task is None or recv_task.done():
+                # If recv_task completed while we were processing poll output, handle it
+                # now before creating a new one — otherwise its result would be discarded.
+                if recv_task is not None and recv_task.done():
+                    try:
+                        raw = recv_task.result()
+                    except asyncio.CancelledError:
+                        break
+                    recv_task = None
+                    raw_text = raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace")
+                    await self._process_inbound(ws, connector, decoder, raw_text)
+                    continue
+                if recv_task is None:
                     recv_task = asyncio.create_task(ws.recv())
                 poll_task = asyncio.create_task(connector.poll_messages())
                 done, _ = await asyncio.wait({recv_task, poll_task}, timeout=0.5, return_when=asyncio.FIRST_COMPLETED)

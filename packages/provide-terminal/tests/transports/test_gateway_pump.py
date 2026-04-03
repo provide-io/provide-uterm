@@ -261,18 +261,73 @@ class TestPipeWs:
             ws_srv.close()
 
 
+_PIPE_WS_PATH = "provide.terminal.gateway._gateway._pipe_ws"
+
+
 class TestTelnetWsGatewayHandleException:
     async def test_handle_exception_closes_writer(self) -> None:
         """_handle closes writer even when _pipe_ws raises."""
+        gw = TelnetWsGateway("ws://localhost")
+        reader = MagicMock()
+        # at_eof: False on entry (so pipe is called), True after (TCP closed)
+        reader.at_eof.side_effect = [False, True]
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        with patch(_PIPE_WS_PATH, side_effect=RuntimeError("boom")):
+            await gw._handle(reader, writer)
+
+        writer.close.assert_called()
+
+    async def test_handle_reconnects_when_ws_closes_while_tcp_alive(self) -> None:
+        """_handle retries _pipe_ws when WS closes but TCP client is still connected."""
         gw = TelnetWsGateway("ws://localhost")
         reader = MagicMock()
         writer = MagicMock()
         writer.close = MagicMock()
         writer.wait_closed = AsyncMock()
 
-        with patch("provide.terminal.gateway._pipe_ws", side_effect=RuntimeError("boom")):
+        call_count = 0
+
+        async def _fake_pipe(*_args: object, **_kwargs: object) -> None:
+            nonlocal call_count
+            call_count += 1
+
+        # at_eof: False on first 3 checks (before/after each pipe attempt),
+        # True on 4th (TCP client finally closes after second WS drop)
+        reader.at_eof.side_effect = [False, False, False, True]
+
+        with (
+            patch(_PIPE_WS_PATH, side_effect=_fake_pipe),
+            patch("provide.terminal.gateway._gateway.asyncio.sleep", new_callable=AsyncMock),
+        ):
             await gw._handle(reader, writer)
 
+        assert call_count == 2, f"Expected 2 pipe attempts (reconnect once), got {call_count}"
+        writer.close.assert_called()
+
+    async def test_handle_no_retry_when_tcp_closes_first(self) -> None:
+        """_handle does NOT retry when TCP client closes (reader at EOF)."""
+        gw = TelnetWsGateway("ws://localhost")
+        reader = MagicMock()
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        call_count = 0
+
+        async def _fake_pipe(*_args: object, **_kwargs: object) -> None:
+            nonlocal call_count
+            call_count += 1
+
+        # at_eof: False before first call, True after (TCP closed after pipe)
+        reader.at_eof.side_effect = [False, True]
+
+        with patch(_PIPE_WS_PATH, side_effect=_fake_pipe):
+            await gw._handle(reader, writer)
+
+        assert call_count == 1, f"Expected exactly 1 pipe attempt (no retry), got {call_count}"
         writer.close.assert_called()
 
 

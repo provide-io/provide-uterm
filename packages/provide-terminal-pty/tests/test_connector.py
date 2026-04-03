@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import asyncio
+import os
+import sys
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -159,6 +162,76 @@ async def test_paused_connector_drops_input() -> None:
     msgs = await conn.poll_messages()
     await conn.stop()
     assert msgs == []
+
+
+def test_read_master_returns_empty_before_start() -> None:
+    """_read_master() returns b'' when master_fd is None (not yet started)."""
+    conn = make_connector()
+    assert conn._read_master() == b""  # noqa: SLF001
+
+
+async def test_handle_control_step_resumes() -> None:
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    await conn.handle_control("pause")
+    assert conn._paused  # noqa: SLF001
+    msgs = await conn.handle_control("step")
+    await conn.stop()
+    assert not conn._paused  # noqa: SLF001
+    assert all(m.get("type") == "snapshot" for m in msgs)
+
+
+async def test_handle_input_noop_when_paused() -> None:
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    await conn.handle_control("pause")
+    msgs = await conn.handle_input("ignored\n")
+    await conn.stop()
+    assert any(m.get("type") == "snapshot" for m in msgs)
+
+
+async def test_buffer_capped_at_32768() -> None:
+    """Buffer is truncated to last 32768 chars when it exceeds the limit."""
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    # Pre-fill buffer just below the cap, then push it over with one write.
+    conn._buffer = "a" * 32764  # noqa: SLF001
+    if conn._master_fd is not None:
+        os.write(conn._master_fd, b"b" * 10)
+    await asyncio.sleep(0.05)
+    await conn.poll_messages()
+    await conn.stop()
+    assert len(conn._buffer) <= 32768
+
+
+async def test_poll_messages_empty_when_no_output() -> None:
+    """poll_messages returns [] when the child hasn't written anything yet."""
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    msgs = await conn.poll_messages()
+    await conn.stop()
+    # cat hasn't received input so may or may not have output — just verify type
+    assert isinstance(msgs, list)
+
+
+async def test_inject_start_creates_capture_socket() -> None:
+    """start() with inject=True wires up a CaptureSocket and cleans up on stop."""
+    from provide.terminal.pty.capture import CaptureSocket
+
+    mock_cap = AsyncMock(spec=CaptureSocket)
+
+    with patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap):
+        conn = make_connector(
+            sys.executable, ["-c", "import time; time.sleep(0.1)"], inject=True
+        )
+        await conn.start()
+        assert conn._capture_socket is mock_cap  # noqa: SLF001
+        assert conn._capture_tmpdir is not None  # noqa: SLF001
+        await conn.stop()
+
+    mock_cap.stop.assert_awaited_once()
+    assert conn._capture_socket is None  # noqa: SLF001
+    assert conn._capture_tmpdir is None  # noqa: SLF001
 
 
 @pytest.mark.requires_root

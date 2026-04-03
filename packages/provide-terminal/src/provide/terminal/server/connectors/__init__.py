@@ -40,5 +40,8 @@ with contextlib.suppress(ImportError):
 with contextlib.suppress(ImportError):
     import provide.terminal.pty.connector  # type: ignore[import-untyped]  # registers "pty"
 
+with contextlib.suppress(ImportError):
+    import provide.terminal.pty.capture_connector  # type: ignore[import-untyped]  # registers "pty_capture"
+
 # Derived from the registry — reflects whatever connectors are available in this env.
 KNOWN_CONNECTOR_TYPES: frozenset[str] = registered_types()

@@ -24,7 +24,7 @@ def test_ansi_stress(memray_output_dir: Path, memray_baseline: dict[str, int], t
 
     # Run script with memray
     result = subprocess.run(
-        ["python", "-m", "memray", "run", "-o", str(output_bin), str(script_path)],
+        ["python", "-m", "memray", "run", "--force", "-o", str(output_bin), str(script_path)],
         cwd=str(Path(__file__).parent.parent.parent),
         capture_output=True,
         text=True,
