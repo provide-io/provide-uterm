@@ -1,5 +1,5 @@
 {
   "ansi_total_allocations": 4500000,
   "controlstream_total_allocations": 1000000,
-  "hub_total_allocations": 280000
+  "hub_total_allocations": 1200000
 }

@@ -387,6 +387,8 @@ def _match_api_route(path: str, request: object) -> object | None:
         if method == "DELETE":
             tid = revoke_match.group("tunnel_id")
             return lambda req, env, _cfg: _api_tunnel_revoke(req, env, tid)
+    if path == "/api/pam-events":
+        return _api_pam_events
     if path.startswith("/api/profiles"):
         return _api_profiles
     session_delete_match = _SESSION_ID_RE.match(path)
@@ -432,6 +434,15 @@ async def _api_tunnel_rotate(request: object, env: object, config: CloudflareCon
         from api._tunnel_api import handle_tunnel_rotate_tokens  # type: ignore[import-not-found]
 
     return await handle_tunnel_rotate_tokens(request, env, tunnel_id, ttl_s=config.tunnel_token_ttl_s)
+
+
+async def _api_pam_events(request: object, env: object, _config: CloudflareConfig) -> Response:
+    try:
+        from provide.terminal.cloudflare.api._pam import handle_pam_event
+    except ImportError:
+        from api._pam import handle_pam_event  # type: ignore[import-not-found]
+
+    return await handle_pam_event(request, env)
 
 
 async def _api_profiles(request: object, env: object, config: CloudflareConfig) -> Response:
