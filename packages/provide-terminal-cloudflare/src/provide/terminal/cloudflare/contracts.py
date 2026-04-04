@@ -294,12 +294,15 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
         pass
     elif frame_type in {
         # DeckMux presence messages — relayed verbatim between browsers.
-        # All fields are preserved so the relay carries the full payload.
         "presence_update",
         "presence_sync",
         "presence_leave",
         "queued_input",
         "control_request",
+        # HTTP intercept commands — relayed browser→worker.
+        "http_action",
+        "http_intercept_toggle",
+        "http_inspect_toggle",
     }:
         # Copy all non-type, non-ts fields through so the relay is lossless.
         for k, v in value.items():

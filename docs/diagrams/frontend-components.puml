@@ -1,0 +1,83 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml frontend-components
+title provide-terminal-frontend — Component Map
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam arrowColor #2563eb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+package "App Core" {
+  [boot.ts\nentry point, router init] as BOOT
+  [router.ts\nhash-based SPA router] as ROUTER
+  [state.ts\nglobal app state] as STATE
+  [api.ts\nREST + WS client] as API
+}
+
+package "Views" {
+  [app-header.ts\nnavigation bar] as HEADER
+  [dashboard-view.ts\nsession list + status] as DASH
+  [session-view.ts\nxterm.js terminal] as SESS
+  [operator-view.ts\noperator terminal] as OPER
+  [inspect-view.ts\nHTTP intercept UI] as INSPECT
+  [connect-view.ts\nnew connection form] as CONNECT
+  [replay-view.ts\nsession playback] as REPLAY
+}
+
+package "Widgets" {
+  [hijack-widget-host.ts\nhijack control panel] as HIJACK
+}
+
+package "DeckMux Overlay" {
+  [deckmux.ts\ncoordinator] as DM
+  [presence-bar.ts\navatar bar] as PBAR
+  [edge-indicators.ts\nviewport minimap] as EDGE
+  [cursor-overlay.ts\nremote cursor pins] as CURSOR
+  [control-panel.ts\nDM toasts + transfer] as DMCTRL
+  [ghost-overlay.ts\nghost cursor display] as GHOST
+}
+
+' Boot wiring
+BOOT --> ROUTER
+BOOT --> STATE
+ROUTER --> HEADER : mounts
+ROUTER --> DASH
+ROUTER --> SESS
+ROUTER --> OPER
+ROUTER --> INSPECT
+ROUTER --> CONNECT
+ROUTER --> REPLAY
+
+' Views use API + state
+DASH --> API
+SESS --> API
+OPER --> API
+INSPECT --> API
+CONNECT --> API
+
+' Widget integration
+SESS --> HIJACK : embeds
+OPER --> HIJACK : embeds
+
+' DeckMux overlay
+SESS --> DM : activates
+DM --> PBAR
+DM --> EDGE
+DM --> CURSOR
+DM --> DMCTRL
+DM --> GHOST
+
+note bottom of API
+  REST: /api/sessions, /api/keys
+  WS: terminal + control channels
+  Shared by all views.
+end note
+
+@enduml

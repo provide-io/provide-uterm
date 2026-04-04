@@ -175,7 +175,7 @@ class PTYConnector:
         termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
         pid = os.fork()  # nosec B110 — deliberate fork for PTY supervision
-        if pid == 0:
+        if pid == 0:  # pragma: no cover
             # ── child ──────────────────────────────────────────────────────
             os.close(master_fd)
             os.setsid()

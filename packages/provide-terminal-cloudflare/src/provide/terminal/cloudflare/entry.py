@@ -325,7 +325,7 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
 
     try:
         from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
-    except ImportError:
+    except ImportError:  # pragma: no cover
         from api._tunnel_api import resolve_share_context  # type: ignore[import-not-found]
 
     spa = _resolve_spa_route(path)
@@ -364,7 +364,7 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
         namespace = getattr(env, "SESSION_RUNTIME", None)
         if namespace is None:
             return json_response({"error": "SESSION_RUNTIME binding missing"}, status=500)
-        return await namespace.get(namespace.idFromName(worker_id)).fetch(request)
+        return await namespace.get(namespace.idFromName(worker_id)).fetch(request)  # pragma: no cover
 
     return json_response({"error": "not_found", "path": path}, status=404)
 
@@ -412,7 +412,7 @@ async def _api_connect(request: object, env: object, _config: CloudflareConfig) 
 async def _api_tunnels(request: object, env: object, _config: CloudflareConfig) -> Response:
     try:
         from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
-    except ImportError:
+    except ImportError:  # pragma: no cover
         from api._tunnel_api import handle_tunnels  # type: ignore[import-not-found]
 
     return await handle_tunnels(request, env)
@@ -421,7 +421,7 @@ async def _api_tunnels(request: object, env: object, _config: CloudflareConfig) 
 async def _api_tunnel_revoke(request: object, env: object, tunnel_id: str) -> Response:
     try:
         from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
-    except ImportError:
+    except ImportError:  # pragma: no cover
         from api._tunnel_api import handle_tunnel_revoke_tokens  # type: ignore[import-not-found]
 
     return await handle_tunnel_revoke_tokens(request, env, tunnel_id)
@@ -430,7 +430,7 @@ async def _api_tunnel_revoke(request: object, env: object, tunnel_id: str) -> Re
 async def _api_tunnel_rotate(request: object, env: object, config: CloudflareConfig, tunnel_id: str) -> Response:
     try:
         from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
-    except ImportError:
+    except ImportError:  # pragma: no cover
         from api._tunnel_api import handle_tunnel_rotate_tokens  # type: ignore[import-not-found]
 
     return await handle_tunnel_rotate_tokens(request, env, tunnel_id, ttl_s=config.tunnel_token_ttl_s)
@@ -439,7 +439,7 @@ async def _api_tunnel_rotate(request: object, env: object, config: CloudflareCon
 async def _api_pam_events(request: object, env: object, _config: CloudflareConfig) -> Response:
     try:
         from provide.terminal.cloudflare.api._pam import handle_pam_event
-    except ImportError:
+    except ImportError:  # pragma: no cover
         from api._pam import handle_pam_event  # type: ignore[import-not-found]
 
     return await handle_pam_event(request, env)

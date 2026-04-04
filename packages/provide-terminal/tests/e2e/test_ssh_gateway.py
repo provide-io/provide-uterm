@@ -25,7 +25,7 @@ import asyncssh
 import websockets
 import websockets.server
 
-from tests.hijack.control_channel_helpers import decode_control_payload
+from tests.bridge.control_channel_helpers import decode_control_payload
 from provide.terminal.gateway import _ssh_to_ws, _ws_to_ssh
 
 

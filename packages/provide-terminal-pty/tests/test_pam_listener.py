@@ -7,6 +7,7 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -223,6 +224,100 @@ async def test_multiple_concurrent_connections() -> None:
 
         await listener.stop()
         assert len(events) == 3
+
+
+def test_socket_path_property() -> None:
+    """socket_path property returns the configured path."""
+    listener = PamNotifyListener("/tmp/test.sock")  # noqa: S108
+    assert listener.socket_path == "/tmp/test.sock"  # noqa: S108
+
+
+async def test_handle_connection_readline_timeout_drops_connection() -> None:
+    """readline TimeoutError causes the connection to be dropped gracefully."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "notify.sock")
+        listener = PamNotifyListener(path)
+        events: list[PamEvent] = []
+        await listener.start(lambda e: _collect(events, e))
+
+        reader = AsyncMock()
+        reader.readline.side_effect = TimeoutError("mock timeout")
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        await listener._handle_connection(reader, writer)  # noqa: SLF001
+        writer.close.assert_called_once()
+        await listener.stop()
+
+
+async def test_handle_connection_exception_in_readline_drops_connection() -> None:
+    """Non-timeout exception during readline breaks the loop."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "notify.sock")
+        listener = PamNotifyListener(path)
+        events: list[PamEvent] = []
+        await listener.start(lambda e: _collect(events, e))
+
+        reader = AsyncMock()
+        reader.readline.side_effect = ConnectionResetError("reset")
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        await listener._handle_connection(reader, writer)  # noqa: SLF001
+        writer.close.assert_called_once()
+        await listener.stop()
+
+
+async def test_handle_connection_oversized_line_skipped() -> None:
+    """Lines longer than _MAX_LINE are skipped with a warning."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "notify.sock")
+        listener = PamNotifyListener(path)
+        events: list[PamEvent] = []
+        await listener.start(lambda e: _collect(events, e))
+
+        big_line = b"x" * 5000 + b"\n"
+        good_line = b'{"event":"open","username":"alice","tty":"","pid":1}\n'
+
+        _reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(big_line + good_line)
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(0.05)
+
+        await listener.stop()
+        assert len(events) == 1  # big line skipped, good line received
+
+
+async def test_handle_connection_null_handler_skips_dispatch() -> None:
+    """Events are not dispatched when handler is None."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "notify.sock")
+        listener = PamNotifyListener(path)
+        events: list[PamEvent] = []
+        await listener.start(lambda e: _collect(events, e))
+        listener._handler = None  # noqa: SLF001
+
+        _reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(0.05)
+
+        await listener.stop()
+        assert events == []
+
+
+def test_parse_event_non_numeric_pid_defaults_to_zero() -> None:
+    """_parse_event() handles non-numeric pid gracefully."""
+    line = b'{"event":"open","username":"alice","tty":"/dev/pts/0","pid":"bad"}\n'
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.pid == 0
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

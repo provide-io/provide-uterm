@@ -123,3 +123,19 @@ def test_resolve_validates_username() -> None:
     """resolve() must reject usernames with null bytes before touching pwd."""
     with pytest.raises(ValueError, match="null byte"):
         UidMap().resolve("ali\x00ce")
+
+
+def test_resolve_empty_username_with_run_as_uid() -> None:
+    """resolve() with empty username skips username validation and uses run_as_uid."""
+    pw = _current()
+    result = UidMap().resolve("", run_as_uid=pw.pw_uid)
+    assert result.uid == pw.pw_uid
+
+
+def test_from_uid_unknown_uid_returns_synthetic_user() -> None:
+    """_from_uid() returns a synthetic ResolvedUser for an unknown UID."""
+    result = UidMap().resolve("", run_as_uid=999999999)
+    assert result.uid == 999999999
+    assert result.home == "/"
+    assert result.shell == "/bin/sh"
+    assert result.name == "999999999"

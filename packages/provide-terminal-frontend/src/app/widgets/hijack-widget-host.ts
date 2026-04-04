@@ -95,14 +95,18 @@ export function mountHijackWidget(
 
   const widget = new HijackWidget(container, config);
 
-  // Forward xterm scroll → presence_update to server
+  // Forward xterm scroll → presence_update to server (debounced to reduce WS traffic)
+  let scrollTimer: ReturnType<typeof setTimeout> | null = null;
   container.addEventListener("uterm:scroll", (e) => {
     const { viewportY, rows } = (e as CustomEvent<{ viewportY: number; rows: number }>).detail;
-    widget.sendControlMessage({
-      type: "presence_update",
-      scroll_line: viewportY,
-      scroll_range: [viewportY, viewportY + rows],
-    });
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      widget.sendControlMessage({
+        type: "presence_update",
+        scroll_line: viewportY,
+        scroll_range: [viewportY, viewportY + rows],
+      });
+    }, 200);
   });
 
   // Forward DeckMux outbound control events → WS

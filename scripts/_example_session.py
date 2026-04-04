@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal
 
+from provide.terminal.bridge.hub import TermHub
 from provide.terminal.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
@@ -18,7 +19,6 @@ from provide.terminal.control_channel import (
     encode_control,
     encode_data,
 )
-from provide.terminal.hijack.hub import TermHub
 
 logger = logging.getLogger(__name__)
 

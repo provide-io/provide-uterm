@@ -4,8 +4,9 @@
 import asyncio
 import os
 import sys
+from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -232,6 +233,230 @@ async def test_inject_start_creates_capture_socket() -> None:
     mock_cap.stop.assert_awaited_once()
     assert conn._capture_socket is None  # noqa: SLF001
     assert conn._capture_tmpdir is None  # noqa: SLF001
+
+
+def test_register_import_error_silently_returns() -> None:
+    """_register() returns silently when server package absent."""
+    from provide.terminal.pty.connector import _register
+
+    with patch.dict(sys.modules, {"provide.terminal.server.connectors.registry": None}):
+        _register()  # must not raise
+
+
+def test_register_no_refresh_when_connectors_module_absent() -> None:
+    """_register() succeeds without refreshing when connectors module absent."""
+    from types import ModuleType
+
+    from provide.terminal.pty.connector import _register
+
+    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+
+    def _fake_register(name: str, cls: object) -> None:
+        pass
+
+    def _fake_registered_types() -> frozenset:
+        return frozenset({"pty"})
+
+    fake_registry.register_connector = _fake_register  # type: ignore[attr-defined]
+    fake_registry.registered_types = _fake_registered_types  # type: ignore[attr-defined]
+
+    with patch.dict(
+        sys.modules,
+        {
+            "provide.terminal.server.connectors.registry": fake_registry,
+            "provide.terminal.server.connectors": None,  # module absent from sys.modules
+        },
+    ):
+        _register()  # must not raise
+
+
+def test_register_refreshes_known_connector_types() -> None:
+    """_register() updates KNOWN_CONNECTOR_TYPES on connectors module when present."""
+    from types import ModuleType
+
+    from provide.terminal.pty.connector import _register
+
+    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+
+    def _fake_register(name: str, cls: object) -> None:
+        pass
+
+    def _fake_registered_types() -> frozenset:
+        return frozenset({"pty"})
+
+    fake_registry.register_connector = _fake_register  # type: ignore[attr-defined]
+    fake_registry.registered_types = _fake_registered_types  # type: ignore[attr-defined]
+
+    fake_connectors = ModuleType("provide.terminal.server.connectors")
+    fake_connectors.KNOWN_CONNECTOR_TYPES = frozenset()  # type: ignore[attr-defined]
+
+    with patch.dict(
+        sys.modules,
+        {
+            "provide.terminal.server.connectors.registry": fake_registry,
+            "provide.terminal.server.connectors": fake_connectors,
+        },
+    ):
+        _register()
+
+    assert "pty" in fake_connectors.KNOWN_CONNECTOR_TYPES
+
+
+async def test_start_pam_requires_root() -> None:
+    """start() with username+password raises PermissionError when not root."""
+    if os.geteuid() == 0:
+        pytest.skip("test only applies when not root")
+    conn = make_connector("/bin/echo", username="nobody", password="pass")  # noqa: S106
+    with pytest.raises(PermissionError, match="root"):
+        await conn.start()
+    await conn.stop()
+
+
+async def test_start_with_run_as_uid_sets_env() -> None:
+    """start() with run_as_uid resolves user and sets HOME/SHELL/USER env."""
+    conn = make_connector("/bin/echo", ["x"], run_as_uid=os.geteuid())
+    await conn.start()
+    assert conn.is_connected()
+    await conn.stop()
+
+
+async def test_start_inject_no_lib_path_skips_env_var() -> None:
+    """start() with inject=True but no lib path skips LD_PRELOAD/DYLD env vars."""
+    mock_cap = AsyncMock()
+    with (
+        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
+        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+    ):
+        conn = make_connector("/bin/echo", ["x"], inject=True)
+        await conn.start()
+        await conn.stop()
+
+
+async def test_start_inject_sets_lib_env_when_lib_present() -> None:
+    """start() with inject=True and present lib sets DYLD_INSERT_LIBRARIES (macOS)."""
+    fake_lib = Path("/fake/libuterm_capture.dylib")
+    mock_cap = AsyncMock()
+    _cap_lib_path = "provide.terminal.pty.connector.get_capture_lib_path"
+    with (
+        patch(_cap_lib_path, return_value=fake_lib),
+        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.terminal.pty.connector.sys") as mock_sys,
+    ):
+        mock_sys.platform = "darwin"
+        conn = make_connector("/bin/echo", ["x"], inject=True)
+        await conn.start()
+        await conn.stop()
+
+
+async def test_start_inject_sets_ld_preload_on_linux() -> None:
+    """start() with inject=True on non-darwin platform sets LD_PRELOAD."""
+    fake_lib = Path("/fake/libuterm_capture.so")
+    mock_cap = AsyncMock()
+    _cap_lib_path = "provide.terminal.pty.connector.get_capture_lib_path"
+    with (
+        patch(_cap_lib_path, return_value=fake_lib),
+        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.terminal.pty.connector.sys") as mock_sys,
+    ):
+        mock_sys.platform = "linux"
+        conn = make_connector("/bin/echo", ["x"], inject=True)
+        await conn.start()
+        await conn.stop()
+
+
+async def test_start_pam_path_mocked_as_root() -> None:
+    """start() with username+password and mocked-root calls all PAM methods."""
+    mock_pam = MagicMock()
+    mock_pam.get_env.return_value = {}
+    with (
+        patch("provide.terminal.pty.connector.os.geteuid", return_value=0),
+        patch("provide.terminal.pty.connector.PamSession", return_value=mock_pam),
+    ):
+        conn = make_connector("/bin/echo", ["x"], username="nobody", password="secret")  # noqa: S106
+        await conn.start()
+        await conn.stop()
+
+    mock_pam.authenticate.assert_called_once_with("nobody", "secret")
+    mock_pam.acct_mgmt.assert_called_once()
+    mock_pam.open_session.assert_called_once()
+    mock_pam.get_env.assert_called_once()
+
+
+async def test_stop_handles_dead_child_pid() -> None:
+    """stop() handles ProcessLookupError + ChildProcessError from dead child."""
+    conn = make_connector("/bin/echo", ["done"])
+    # Set state directly to avoid forking — TIOCSCTTY fails in Docker without a tty
+    conn._connected = True  # noqa: SLF001
+    conn._child_pid = 999999999  # dead/invalid PID  # noqa: SLF001
+    r_fd, w_fd = os.pipe()
+    conn._master_fd = r_fd  # noqa: SLF001
+    os.close(w_fd)
+    await conn.stop()  # must not raise
+    assert conn._child_pid is None  # noqa: SLF001
+    assert conn._master_fd is None  # noqa: SLF001
+
+
+async def test_stop_handles_oserror_on_master_close() -> None:
+    """stop() gracefully handles OSError when master_fd already closed."""
+    conn = make_connector("/bin/echo", ["done"])
+    await conn.start()
+    if conn._master_fd is not None:  # noqa: SLF001
+        os.close(conn._master_fd)  # noqa: SLF001
+    await conn.stop()  # must not raise
+
+
+async def test_stop_calls_pam_close_session() -> None:
+    """stop() calls pam.close_session() when a PamSession is attached."""
+    conn = make_connector("/bin/echo")
+    await conn.start()
+    mock_pam = MagicMock()
+    conn._pam = mock_pam  # noqa: SLF001
+    await conn.stop()
+    mock_pam.close_session.assert_called_once()
+
+
+async def test_poll_messages_buffer_truncated() -> None:
+    """poll_messages() truncates buffer to 32768 when it exceeds the limit."""
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    conn._buffer = "a" * 32764  # noqa: SLF001
+    conn._read_master = lambda: b"b" * 10  # type: ignore[method-assign]  # noqa: SLF001
+    msgs = await conn.poll_messages()
+    await conn.stop()
+    assert len(conn._buffer) == 32768  # noqa: SLF001
+    assert any(m.get("type") == "snapshot" for m in msgs)
+
+
+async def test_handle_control_unknown_action_returns_snapshot() -> None:
+    """handle_control() with an unrecognized action returns a snapshot (no-op)."""
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    msgs = await conn.handle_control("unknown_action")
+    await conn.stop()
+    assert all(m.get("type") == "snapshot" for m in msgs)
+
+
+async def test_read_master_oserror_marks_disconnected() -> None:
+    """_read_master() catches OSError (closed fd) and marks connector disconnected."""
+    conn = make_connector("/bin/echo", ["done"])
+    await conn.start()
+    assert conn.is_connected()
+    if conn._master_fd is not None:  # noqa: SLF001
+        os.close(conn._master_fd)  # noqa: SLF001
+    result = conn._read_master()  # noqa: SLF001
+    assert result == b""
+    assert not conn._connected  # noqa: SLF001
+    conn._master_fd = None  # noqa: SLF001  # prevent double-close in stop()
+    await conn.stop()
+
+
+async def test_start_pam_requires_root_mocked() -> None:
+    """start() raises PermissionError when geteuid returns non-zero (mocked)."""
+    with patch("provide.terminal.pty.connector.os.geteuid", return_value=1000):
+        conn = make_connector("/bin/echo", username="nobody", password="pass")  # noqa: S106
+        with pytest.raises(PermissionError, match="root"):
+            await conn.start()
+    await conn.stop()
 
 
 @pytest.mark.requires_root

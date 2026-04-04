@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from provide.terminal.hijack.hub import TermHub
-from provide.terminal.hijack.models import WorkerTermState
+from provide.terminal.bridge.hub import TermHub
+from provide.terminal.bridge.models import WorkerTermState
 
 
 @pytest.fixture

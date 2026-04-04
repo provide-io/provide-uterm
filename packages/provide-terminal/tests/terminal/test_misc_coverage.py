@@ -199,25 +199,25 @@ class TestSessionLoggerBranches:
 
 class TestExtractPromptId:
     def test_empty_string_prompt_id_returns_none(self) -> None:
-        from provide.terminal.hijack.rest_helpers import extract_prompt_id
+        from provide.terminal.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": ""}}
         assert extract_prompt_id(snapshot) is None
 
     def test_non_string_prompt_id_returns_none(self) -> None:
-        from provide.terminal.hijack.rest_helpers import extract_prompt_id
+        from provide.terminal.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": 42}}
         assert extract_prompt_id(snapshot) is None
 
     def test_none_prompt_id_returns_none(self) -> None:
-        from provide.terminal.hijack.rest_helpers import extract_prompt_id
+        from provide.terminal.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": None}}
         assert extract_prompt_id(snapshot) is None
 
     def test_valid_prompt_id_returned(self) -> None:
-        from provide.terminal.hijack.rest_helpers import extract_prompt_id
+        from provide.terminal.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": "menu_main"}}
         assert extract_prompt_id(snapshot) == "menu_main"
@@ -231,8 +231,8 @@ class TestExtractPromptId:
 class TestWaitForGuardNoNewSnapshot:
     async def test_snap_ts_not_advanced_triggers_request_snapshot(self) -> None:
         """Line 106->109: snap_ts <= last_snap_ts → request_snapshot called again."""
-        from provide.terminal.hijack.hub import TermHub
-        from provide.terminal.hijack.models import WorkerTermState
+        from provide.terminal.bridge.hub import TermHub
+        from provide.terminal.bridge.models import WorkerTermState
 
         hub = TermHub()
 
@@ -277,7 +277,7 @@ class TestWaitForGuardNoNewSnapshot:
 class TestHijackableMixinBranches:
     async def test_watchdog_fires_with_on_stuck_none(self) -> None:
         """Lines 146->152: on_stuck is None, watchdog fires but does not call it."""
-        from provide.terminal.hijack.base import HijackableMixin
+        from provide.terminal.bridge.base import HijackableMixin
 
         class MyWorker(HijackableMixin):
             pass
@@ -292,7 +292,7 @@ class TestHijackableMixinBranches:
 
     async def test_stop_watchdog_before_start_is_noop(self) -> None:
         """Line 163->exit: stop_watchdog() when _watchdog_task is None."""
-        from provide.terminal.hijack.base import HijackableMixin
+        from provide.terminal.bridge.base import HijackableMixin
 
         class MyWorker(HijackableMixin):
             pass
