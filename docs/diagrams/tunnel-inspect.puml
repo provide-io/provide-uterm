@@ -1,0 +1,61 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml tunnel-inspect
+title provide-terminal-tunnel — HTTP Inspect / Intercept Flow
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam sequenceArrowColor #2563eb
+skinparam sequenceParticipantBorderColor #d1d5db
+skinparam sequenceParticipantBackgroundColor #f3f4f6
+skinparam sequenceLifeLineBorderColor #d1d5db
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+participant "CLI Proxy\n(http_proxy.py)" as CLI
+participant "Tunnel WS\n(client.py)" as TWS
+participant "Server\n(fastapi_routes.py)" as SRV
+participant "InterceptGate\n(intercept.py)" as GATE
+participant "Browser\n(inspect-view.ts)" as UI
+
+note over TWS
+  Binary protocol per frame:
+  [1B channel][1B flags][N payload]
+  0x00=control  0x01=terminal
+  0x02=TCP      0x03=HTTP
+end note
+
+== HTTP Request Captured ==
+
+CLI -> TWS : CHANNEL_HTTP frame\n(request JSON)
+TWS -> SRV : WS binary message
+SRV -> GATE : enqueue request
+GATE -> UI : push to inspect queue
+
+alt Intercept Mode (gate open)
+  UI -> GATE : action: forward / drop / modify
+  GATE -> SRV : resolved action
+  SRV -> TWS : CHANNEL_HTTP response frame
+  TWS -> CLI : forward / drop result
+else Passthrough Mode (gate closed)
+  GATE -> SRV : auto-forward
+  SRV -> TWS : CHANNEL_HTTP response frame
+  TWS -> CLI : response bytes
+end
+
+== Terminal I/O (concurrent) ==
+
+CLI -> TWS : CHANNEL_TERMINAL frame\n(PTY bytes)
+TWS -> SRV : terminal data
+SRV -> UI : xterm.js render
+
+note over GATE
+  InterceptGate actions:
+  - forward: pass request unchanged
+  - drop: discard silently
+  - modify: rewrite headers/body
+  Each pending request has a TTL.
+end note
+
+@enduml

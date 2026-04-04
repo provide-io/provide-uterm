@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import asyncio
+import contextlib
+import socket
 import struct
+import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -228,4 +232,230 @@ async def test_no_snapshot_when_no_stdout_frames() -> None:
         await asyncio.sleep(0.05)
         msgs = await conn.poll_messages()
         assert msgs == []
+        await conn.stop()
+
+
+def test_capture_register_import_error_silently_returns() -> None:
+    """_register() returns silently when server package absent."""
+    from provide.terminal.pty.capture_connector import _register
+
+    with patch.dict(sys.modules, {"provide.terminal.server.connectors.registry": None}):
+        _register()  # must not raise
+
+
+def test_capture_register_success() -> None:
+    """_register() calls register_connector when server package is available."""
+    from types import ModuleType
+
+    from provide.terminal.pty.capture_connector import CaptureConnector, _register
+
+    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+    registered: dict[str, object] = {}
+
+    def _fake_register(name: str, cls: object) -> None:
+        registered[name] = cls
+
+    fake_registry.register_connector = _fake_register  # type: ignore[attr-defined]
+
+    with patch.dict(
+        sys.modules,
+        {"provide.terminal.server.connectors.registry": fake_registry},
+    ):
+        _register()
+
+    assert registered.get("pty_capture") is CaptureConnector
+
+
+async def test_stop_closes_stdin_sock() -> None:
+    """stop() closes _stdin_sock when it is set."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        mock_sock = MagicMock()
+        conn._stdin_sock = mock_sock  # noqa: SLF001
+        await conn.stop()
+        mock_sock.close.assert_called_once()
+        assert conn._stdin_sock is None  # noqa: SLF001
+
+
+async def test_stop_stdin_sock_close_oserror_ignored() -> None:
+    """stop() ignores OSError when closing _stdin_sock."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        mock_sock = MagicMock()
+        mock_sock.close.side_effect = OSError("boom")
+        conn._stdin_sock = mock_sock  # noqa: SLF001
+        await conn.stop()  # must not raise
+
+
+async def test_connect_frame_followed_by_more_frames_loops() -> None:
+    """CONNECT frame followed by more frames covers the loop-continue branch."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _send_frames(
+            conn._socket_path,  # noqa: SLF001
+            [
+                _make_frame(CHANNEL_CONNECT, b"10.0.0.1:80"),
+                _make_frame(CHANNEL_STDOUT, b"hello"),
+            ],
+        )
+        await asyncio.sleep(0.05)
+        msgs = await conn.poll_messages()
+        assert any(m.get("type") == "term" for m in msgs)
+        analysis = await conn.get_analysis()
+        assert "10.0.0.1:80" in analysis
+        await conn.stop()
+
+
+async def test_connect_log_truncated_at_100() -> None:
+    """connect_log is truncated to last 100 entries when it exceeds 100."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        # Send 102 CONNECT frames via separate connections to avoid overwhelming it
+        for i in range(102):
+            await _send_frames(
+                conn._socket_path,  # noqa: SLF001
+                [_make_frame(CHANNEL_CONNECT, f"1.2.3.4:{i}".encode())],
+            )
+        await asyncio.sleep(0.15)
+        await conn.poll_messages()
+        assert len(conn._connect_log) <= 100  # noqa: SLF001
+        await conn.stop()
+
+
+async def test_handle_input_forwards_to_stdin_socket() -> None:
+    """handle_input() forwards data to stdin socket when configured."""
+    with tempfile.TemporaryDirectory() as td:
+        stdin_sock_path = str(Path(td) / "stdin.sock")
+        received: list[bytes] = []
+
+        # Create a simple Unix socket server to receive stdin data
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(stdin_sock_path)
+        srv.listen(1)
+        srv.settimeout(2.0)
+
+        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
+        await conn.start()
+        await conn.handle_input("hello\n")
+
+        # Accept connection and read data
+        with contextlib.suppress(Exception):
+            client, _ = srv.accept()
+            data = client.recv(1024)
+            received.append(data)
+            client.close()
+        srv.close()
+
+        await conn.stop()
+        assert received and b"hello\n" in received[0]
+
+
+async def test_forward_stdin_reconnects_on_send_error() -> None:
+    """_forward_stdin() clears broken socket when sendall raises OSError."""
+    with tempfile.TemporaryDirectory() as td:
+        stdin_sock_path = str(Path(td) / "stdin.sock")
+
+        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
+        await conn.start()
+
+        # Pre-set a broken sock that will fail on sendall
+        broken_sock = MagicMock()
+        broken_sock.sendall.side_effect = OSError("broken pipe")
+        broken_sock.close = MagicMock()
+        conn._stdin_sock = broken_sock  # noqa: SLF001
+
+        # _forward_stdin should clear the broken sock; since no real server is listening
+        # the reconnect attempt will also fail (OSError on connect) — that's OK
+        conn._forward_stdin(b"test")  # noqa: SLF001
+
+        assert conn._stdin_sock is None  # noqa: SLF001  # cleared after failure
+        await conn.stop()
+
+
+async def test_forward_stdin_close_oserror_on_broken_sock() -> None:
+    """_forward_stdin() handles OSError from close() on a broken socket."""
+    with tempfile.TemporaryDirectory() as td:
+        stdin_sock_path = str(Path(td) / "stdin.sock")
+
+        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
+        await conn.start()
+
+        # Pre-set a sock that fails on both sendall AND close
+        broken_sock = MagicMock()
+        broken_sock.sendall.side_effect = OSError("broken pipe")
+        broken_sock.close.side_effect = OSError("close failed")
+        conn._stdin_sock = broken_sock  # noqa: SLF001
+
+        # Must not raise — OSError from close() is swallowed
+        conn._forward_stdin(b"test")  # noqa: SLF001
+
+        assert conn._stdin_sock is None  # noqa: SLF001
+        await conn.stop()
+
+
+async def test_forward_stdin_both_attempts_fail_exhausts_loop() -> None:
+    """_forward_stdin() exits loop when reconnect succeeds but sendall fails twice."""
+    with tempfile.TemporaryDirectory() as td:
+        stdin_sock_path = str(Path(td) / "stdin.sock")
+
+        # Create a server that accepts connections but immediately drops them
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(stdin_sock_path)
+        srv.listen(5)
+        srv.setblocking(False)
+
+        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
+        await conn.start()
+
+        # Attempt 0: broken sock → sendall fails → close → sock = None
+        # Attempt 1: None → real connect succeeds → sendall fails → sock = None → done
+        call_count = [0]
+
+        def _patched_socket(*args: object, **kwargs: object) -> MagicMock:
+            call_count[0] += 1
+            s = MagicMock()
+            s.connect = MagicMock()  # succeed
+            s.sendall.side_effect = OSError("send failed attempt 2")
+            s.close = MagicMock()
+            return s
+
+        broken_sock = MagicMock()
+        broken_sock.sendall.side_effect = OSError("send failed attempt 1")
+        broken_sock.close = MagicMock()
+        conn._stdin_sock = broken_sock  # noqa: SLF001
+
+        with patch(
+            "provide.terminal.pty.capture_connector.socket.socket",
+            side_effect=_patched_socket,
+        ):
+            conn._forward_stdin(b"test")  # noqa: SLF001
+
+        # The loop should have exhausted both attempts
+        assert conn._stdin_sock is None  # noqa: SLF001
+        assert call_count[0] == 1  # one new socket was created for attempt 1
+
+        srv.close()
+        await conn.stop()
+
+
+async def test_poll_messages_unknown_channel_loops() -> None:
+    """Unknown channel frames are silently ignored and the loop continues."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+
+        # Send an unknown channel (0xFF) followed by a STDOUT frame
+        unknown_frame = _make_frame(0xFF, b"ignored")
+        stdout_frame = _make_frame(CHANNEL_STDOUT, b"visible")
+        await _send_frames(
+            conn._socket_path,  # noqa: SLF001
+            [unknown_frame, stdout_frame],
+        )
+        await asyncio.sleep(0.05)
+        msgs = await conn.poll_messages()
+        assert any(m.get("type") == "term" for m in msgs)
         await conn.stop()

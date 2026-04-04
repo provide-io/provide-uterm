@@ -47,11 +47,21 @@ addopts = [
     "--cov=provide.terminal.pty",
     "--cov-branch",
     "--cov-report=term-missing",
+    "--cov-fail-under=100",
 ]
 markers = [
     "requires_pam: requires /etc/pam.d/provide-terminal service config (skip in CI)",
     "requires_pam_auth: requires /etc/pam.d/provide-terminal with working unix_chkpwd (skipped in Docker)",
     "requires_root: requires root or CAP_SETUID to switch users",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+# Module-level libpam availability check: False branch only reachable when
+# libpam is absent — not testable in Docker where libpam is always present.
+partial_branches = [
+    "if _libpam is not None:",
 ]
 
 [tool.ruff]

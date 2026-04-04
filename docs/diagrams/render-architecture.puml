@@ -1,0 +1,63 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml render-architecture
+title provide-terminal-render — Module Architecture
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam arrowColor #2563eb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+package "provide-terminal-render (zero runtime deps)" {
+  [palette.py\nANSI16, XTERM256 tables\ncolor quantizers] as PAL
+  [sgr.py\nSGR escape emitters\nfg/bg/reset sequences] as SGR
+  [image.py\nPillow -> ANSI conversion\nhalf-block rendering] as IMG
+  [buffer.py\nAnsiBuffer (pyte wrapper)\nscreen state tracking] as BUF
+}
+
+package "Optional Extras" #fefce8 {
+  [pyte\n(terminal emulator)] as PYTE
+  [Pillow\n(image processing)] as PIL
+}
+
+package "Consumers" {
+  [provide-terminal\nansi_render.py shim] as SHIM
+  [provide-terminal-shell\nrender command] as SHREND
+}
+
+' Internal relationships
+SGR --> PAL : color lookups
+IMG --> PAL : quantize to palette
+IMG --> SGR : emit colored blocks
+BUF --> SGR : emit screen diff
+
+' Optional deps
+BUF ..> PYTE : [emulator] extra
+IMG ..> PIL : [images] extra
+
+' Consumers
+SHIM --> PAL : re-exports
+SHIM --> SGR : re-exports
+SHIM --> IMG : re-exports
+SHIM --> BUF : re-exports
+SHREND --> IMG : render frames
+
+note right of PAL
+  ANSI_16: standard terminal colors
+  XTERM_256: extended palette (6x6x6 + grays)
+  Quantizers: RGB -> nearest palette index
+end note
+
+note right of BUF
+  AnsiBuffer wraps pyte.Screen
+  Tracks dirty lines for
+  incremental rendering.
+end note
+
+@enduml

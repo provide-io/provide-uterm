@@ -38,7 +38,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
 
-from provide.terminal.hijack.hub import TermHub
+from provide.terminal.bridge.hub import TermHub
 
 if TYPE_CHECKING:
     from collections.abc import Generator

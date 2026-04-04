@@ -40,7 +40,7 @@ async def handle_pam_event(request: object, env: object) -> object:
     """Handle POST /api/pam-events."""
     try:
         from provide.terminal.cloudflare.cf_types import json_response
-    except ImportError:
+    except ImportError:  # pragma: no cover
         from cf_types import json_response  # type: ignore[import-not-found]
 
     method = str(getattr(request, "method", "GET")).upper()

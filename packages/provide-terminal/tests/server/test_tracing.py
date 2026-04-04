@@ -58,7 +58,7 @@ class _CapturingTracer:
 @contextmanager
 def _capturing_tracer():  # type: ignore[no-untyped-def]
     """Context manager that installs a _CapturingTracer for the duration."""
-    import provide.terminal.hijack.routes.websockets as _ws_mod
+    import provide.terminal.bridge.routes.websockets as _ws_mod
     import provide.terminal.server.routes.api as _api_mod
 
     ct = _CapturingTracer()

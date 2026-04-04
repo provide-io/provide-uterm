@@ -43,7 +43,7 @@ if not _os.environ.get("MUTANT_UNDER_TEST"):
                 if name == "provide" or name.startswith("provide."):
                     del sys.modules[name]
 
-from provide.terminal.hijack.hub import TermHub
+from provide.terminal.bridge.hub import TermHub
 from provide.terminal.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:

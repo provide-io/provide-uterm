@@ -40,6 +40,7 @@
 #include <security/pam_appl.h>
 #include <security/pam_modules.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,7 +50,6 @@
 
 #define DEFAULT_SOCKET  "/run/uterm-notify.sock"
 #define DEFAULT_CAP_DIR "/run"
-#define MAX_JSON        768
 #define MAX_PATH        256
 #define MAX_ENV         512  /* "KEY=value" — must hold prefix + MAX_PATH */
 
@@ -68,6 +68,24 @@ static const char *_get_arg(int argc, const char **argv, const char *key, const 
 static int _is_capture_mode(int argc, const char **argv) {
     const char *mode = _get_arg(argc, argv, "mode", "notify");
     return strcmp(mode, "capture") == 0;
+}
+
+/* ── JSON builder (dynamic allocation — no truncation risk) ──────────────── */
+
+static char *_build_json(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int len = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    if (len < 0) return NULL;
+    char *buf = malloc((size_t)len + 2);  /* +1 NUL, +1 newline */
+    if (!buf) return NULL;
+    va_start(ap, fmt);
+    vsnprintf(buf, (size_t)len + 1, fmt, ap);
+    va_end(ap);
+    buf[len] = '\n';
+    buf[len + 1] = '\0';
+    return buf;
 }
 
 /* ── unix socket notifier ────────────────────────────────────────────────── */
@@ -108,14 +126,14 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
     const char *tty = NULL;
     pam_get_item(pamh, PAM_TTY, (const void **)&tty);
 
-    char json[MAX_JSON];
+    char *json;
     if (capture) {
         char cap_sock[MAX_PATH];
         snprintf(cap_sock, sizeof(cap_sock), "%s/uterm-cap-%d.sock", cap_dir, pid);
 
-        snprintf(json, sizeof(json),
+        json = _build_json(
                  "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
-                 "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\"}\n",
+                 "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\"}",
                  username ? username : "",
                  tty      ? tty      : "",
                  pid, cap_sock);
@@ -132,15 +150,18 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
             pam_putenv(pamh, cap_env);
         }
     } else {
-        snprintf(json, sizeof(json),
+        json = _build_json(
                  "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
-                 "\"pid\":%d,\"mode\":\"notify\"}\n",
+                 "\"pid\":%d,\"mode\":\"notify\"}",
                  username ? username : "",
                  tty      ? tty      : "",
                  pid);
     }
 
-    _notify(socket_path, json);
+    if (json) {
+        _notify(socket_path, json);
+        free(json);
+    }
     return PAM_SUCCESS;
 }
 
@@ -157,15 +178,17 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh, int flags __attribute__(
     const char *tty = NULL;
     pam_get_item(pamh, PAM_TTY, (const void **)&tty);
 
-    char json[MAX_JSON];
-    snprintf(json, sizeof(json),
+    char *json = _build_json(
              "{\"event\":\"close\",\"username\":\"%s\",\"tty\":\"%s\","
-             "\"pid\":%d,\"mode\":\"%s\"}\n",
+             "\"pid\":%d,\"mode\":\"%s\"}",
              username ? username : "",
              tty      ? tty      : "",
              pid,
              capture ? "capture" : "notify");
 
-    _notify(socket_path, json);
+    if (json) {
+        _notify(socket_path, json);
+        free(json);
+    }
     return PAM_SUCCESS;
 }

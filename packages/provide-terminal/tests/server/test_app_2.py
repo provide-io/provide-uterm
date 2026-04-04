@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from fastapi.testclient import TestClient
 
+from provide.terminal.bridge.hub import ResumeSession
 from provide.terminal.client import connect_test_ws
-from provide.terminal.hijack.hub import ResumeSession
 from provide.terminal.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:

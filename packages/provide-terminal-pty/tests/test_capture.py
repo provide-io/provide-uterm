@@ -5,6 +5,7 @@ import asyncio
 import struct
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -128,3 +129,32 @@ def test_socket_path_with_null_byte_rejected() -> None:
 def test_socket_path_must_be_absolute() -> None:
     with pytest.raises(ValueError, match="absolute"):
         CaptureSocket("relative/path.sock")
+
+
+async def test_stop_socket_already_removed() -> None:
+    """stop() handles FileNotFoundError when socket file was externally removed."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+        await cap.start()
+        Path(path).unlink()  # remove before stop()
+        await cap.stop()  # must not raise
+
+
+async def test_handle_connection_wait_closed_exception_ignored() -> None:
+    """_handle_connection() suppresses exceptions from writer.wait_closed()."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+        await cap.start()
+
+        reader = AsyncMock()
+        reader.readexactly.side_effect = asyncio.IncompleteReadError(b"", 5)
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock(side_effect=RuntimeError("boom"))
+
+        await cap._handle_connection(reader, writer)  # noqa: SLF001
+        writer.close.assert_called_once()
+
+        await cap.stop()

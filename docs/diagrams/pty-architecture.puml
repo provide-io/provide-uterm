@@ -30,9 +30,11 @@ package "provide-terminal server (Python)" {
   [HostedSessionRuntime\n(session lifecycle)] as RUNTIME
 
   package "PTYConnector  (connector_type=pty)" #eff6ff {
-    [PamSession\n(ctypes → libpam)] as PAM
-    [PtyProcess\n(os.fork + pty)\nsetuid / setgid] as PTYP
-    [CaptureSocket\n(Unix socket server)] as CSOCK
+    [PamSession\n(pam.py — ctypes → libpam)\nauthenticate / open / close] as PAM
+    [PtyProcess\n(connector.py — os.fork + pty)\nsetuid / setgid] as PTYP
+    [CaptureSocket\n(capture.py — Unix socket server)] as CSOCK
+    [CaptureConnector\n(capture_connector.py)\nsession fed by libuterm_capture] as CAPCON
+    [PamListener\n(pam_listener.py)\nUnix socket for pam_uterm.so] as PAML
   }
 
   package "Existing Connectors" {
@@ -42,9 +44,9 @@ package "provide-terminal server (Python)" {
   }
 }
 
-package "provide-terminal-pty  (native)" #fefce8 {
-  [libuterm_capture\n(.so / .dylib)\nLD_PRELOAD / DYLD_INSERT_LIBRARIES] as CAPLIB
-  [pam_uterm\n(.so)\nPAM session module] as PAMU
+package "provide-terminal-pty  (native C — _native/)" #fefce8 {
+  [libuterm_capture.so\n(.so / .dylib)\nLD_PRELOAD / DYLD_INSERT_LIBRARIES\nintercepts read/write/connect] as CAPLIB
+  [pam_uterm.so\n(.so)\nPAM session module\nnotifies server via Unix socket] as PAMU
 }
 
 package "OS / Kernel" {
@@ -68,11 +70,13 @@ PTYP --> PROC : fork → setuid/setgid\n→ execve\n(PTY master owned by server)
 PTYP ..> CAPLIB : sets DYLD_INSERT_LIBRARIES\nor LD_PRELOAD before exec\n(optional)
 CAPLIB --> PROC : intercepts read/write/connect
 CAPLIB --> CSOCK : tunnels intercepted I/O\nvia Unix socket
-CSOCK --> RUNTIME : additional capture stream
+CSOCK --> CAPCON : capture stream
+CAPCON --> RUNTIME : session connector\n(capture-fed session)
 
 ' Daemon bridge path
 SSHD --> PAMU : calls pam_open_session\n(via pam.d config)
-PAMU --> RUNTIME : Unix socket notify\n→ register existing session
+PAMU --> PAML : Unix socket JSON notify
+PAML --> RUNTIME : register existing session
 
 note bottom of CAPLIB
   Intercepts: read(), write(), connect()

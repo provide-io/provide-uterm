@@ -1,0 +1,77 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml shell-architecture
+title provide-terminal-shell — Architecture
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam arrowColor #2563eb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+package "provide-terminal-shell" {
+  [_repl.py\nREPL loop + input dispatch] as REPL
+  [_commands.py\ncommand registry + handlers] as CMDS
+  [_output.py\nOutputResult, AnimatedResult] as OUTPUT
+  [_sandbox.py\nrestricted exec for `py`] as SANDBOX
+  [_render.py\nrender command + frame streaming] as REND
+  [__main__.py\npython -m provide.terminal.shell] as MAIN
+
+  package "Commands" #eff6ff {
+    [help] as CMD_HELP
+    [clear] as CMD_CLEAR
+    [py] as CMD_PY
+    [sessions / kill] as CMD_SESS
+    [kv] as CMD_KV
+    [fetch] as CMD_FETCH
+    [storage] as CMD_STORAGE
+    [render] as CMD_RENDER
+    [env] as CMD_ENV
+    [exit / quit] as CMD_EXIT
+  }
+}
+
+package "provide-terminal (integration)" {
+  [UshellConnector\nconnector_type=ushell\nprefix: ushell-*] as CONN
+  [HostedSessionRuntime] as RUNTIME
+}
+
+' Internal wiring
+MAIN --> REPL : starts
+REPL --> CMDS : dispatches input
+CMDS --> CMD_HELP
+CMDS --> CMD_CLEAR
+CMDS --> CMD_PY
+CMDS --> CMD_SESS
+CMDS --> CMD_KV
+CMDS --> CMD_FETCH
+CMDS --> CMD_STORAGE
+CMDS --> CMD_RENDER
+CMDS --> CMD_ENV
+CMDS --> CMD_EXIT
+CMD_PY --> SANDBOX : restricted exec
+CMD_RENDER --> REND : frame streaming
+REND --> OUTPUT : AnimatedResult
+CMDS --> OUTPUT : OutputResult
+
+' Integration
+RUNTIME --> CONN : spawns
+CONN --> REPL : drives I/O
+
+note right of SANDBOX
+  AST-validated code execution.
+  No imports, no file I/O,
+  no subprocess by default.
+end note
+
+note bottom of CONN
+  Session IDs: ushell-<uuid>
+  connector_type = "ushell"
+end note
+
+@enduml

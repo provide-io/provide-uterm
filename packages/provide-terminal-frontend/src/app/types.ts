@@ -119,6 +119,7 @@ export interface HttpRequestEntry {
   body_b64?: string;
   body_truncated?: boolean;
   body_binary?: boolean;
+  intercepted?: boolean;
 }
 
 export interface HttpResponseEntry {
@@ -139,4 +140,33 @@ export interface HttpExchangeEntry {
   id: string;
   request: HttpRequestEntry;
   response: HttpResponseEntry | null;
+  intercepted: boolean;
+  interceptResolved: boolean;
+  interceptAction: string | null;
+}
+
+export interface HttpActionMessage {
+  type: "http_action";
+  id: string;
+  action: "forward" | "drop" | "modify";
+  headers?: Record<string, string>;
+  body_b64?: string;
+}
+
+export interface HttpInterceptToggle {
+  type: "http_intercept_toggle";
+  enabled: boolean;
+}
+
+export interface HttpInspectToggle {
+  type: "http_inspect_toggle";
+  enabled: boolean;
+}
+
+export interface HttpInterceptState {
+  type: "http_intercept_state";
+  enabled: boolean;
+  inspect_enabled: boolean;
+  timeout_s: number;
+  timeout_action: string;
 }

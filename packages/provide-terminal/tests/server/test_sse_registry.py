@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from provide.terminal.hijack.hub import EventBus, TermHub
+from provide.terminal.bridge.hub import EventBus, TermHub
 from provide.terminal.server.config import config_from_mapping
 from provide.terminal.server.models import RecordingConfig
 from provide.terminal.server.registry import SessionRegistry

@@ -371,7 +371,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                     logger.warning("failed to send hello from fetch(): %s", exc)
                 try:
                     await self._maybe_send_presence_sync(server, exclude_self=False)
-                except Exception as exc:
+                except Exception as exc:  # pragma: no cover — requires real WS upgrade + presence
                     logger.warning("failed to send presence_sync from fetch(): %s", exc)
 
             return Response(None, status=101, web_socket=client)
@@ -445,14 +445,14 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # In Pyodide, JS ArrayBuffer/Uint8Array arrives as a JsProxy, not Python bytes.
         # Convert via to_py() or to_bytes() before checking isinstance.
         _bin = message
-        if hasattr(_bin, "to_py"):
+        if hasattr(_bin, "to_py"):  # pragma: no cover — Pyodide JsProxy only
             _bin = _bin.to_py()
-        elif hasattr(_bin, "to_bytes"):
+        elif hasattr(_bin, "to_bytes"):  # pragma: no cover — Pyodide JsProxy only
             _bin = _bin.to_bytes()
         if isinstance(_bin, (bytes, bytearray, memoryview)) and role == "worker":
             try:
                 from provide.terminal.cloudflare.api.tunnel_routes import handle_tunnel_message
-            except ImportError:
+            except ImportError:  # pragma: no cover
                 from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found]
 
             await handle_tunnel_message(self, ws, bytes(_bin))

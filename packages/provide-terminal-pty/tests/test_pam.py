@@ -282,3 +282,132 @@ def test_open_session_raises_on_failure() -> None:
         session._handle = ctypes.c_void_p(1)  # type: ignore[attr-defined]
         with pytest.raises(PamError, match="pam_open_session failed"):
             session.open_session()
+
+
+def test_open_session_null_pam_envlist() -> None:
+    """open_session() is a no-op on env when pam_getenvlist returns NULL."""
+    _requires_libpam()
+    import ctypes
+
+    import provide.terminal.pty.pam as pam_mod
+
+    session = PamSession()
+    session._username = "alice"  # type: ignore[assignment]
+    session._handle = ctypes.c_void_p(1)  # type: ignore[attr-defined]
+
+    with (
+        patch.object(pam_mod, "_pam_open_session", return_value=0),
+        patch.object(pam_mod, "_pam_getenvlist", return_value=None),
+    ):
+        session.open_session()
+    assert session.get_env() == {}
+
+
+def test_open_session_populates_env_from_pam_envlist() -> None:
+    """open_session() parses key=value entries from pam_getenvlist."""
+    _requires_libpam()
+    import ctypes
+
+    import provide.terminal.pty.pam as pam_mod
+
+    session = PamSession()
+    session._username = "alice"  # type: ignore[assignment]
+    session._handle = ctypes.c_void_p(1)  # type: ignore[attr-defined]
+
+    # Null-terminated c_char_p array: ["MYVAR=hello", None]
+    env_arr = (ctypes.c_char_p * 2)(b"MYVAR=hello", None)
+
+    with (
+        patch.object(pam_mod, "_pam_open_session", return_value=0),
+        patch.object(pam_mod, "_pam_getenvlist", return_value=env_arr),
+    ):
+        session.open_session()
+    assert session.get_env() == {"MYVAR": "hello"}
+
+
+def test_close_session_skips_pam_calls_with_null_handle() -> None:
+    """close_session() skips pam_close_session/pam_end when _handle is null."""
+    _requires_libpam()
+    session = PamSession()
+    session._username = "alice"  # type: ignore[assignment]  # bypass early return
+    session._session_open = True  # type: ignore[attr-defined]  # bypass early return
+    # _handle is already ctypes.c_void_p(None) which is falsy — PAM calls are skipped
+    session.close_session()
+    assert not session._session_open  # type: ignore[attr-defined]
+
+
+def test_conv_callback_echo_on_and_text_info_branches() -> None:
+    """_conv handles PAM_PROMPT_ECHO_ON (username) and PAM_TEXT_INFO (no response)."""
+    _requires_libpam()
+    import ctypes
+
+    from provide.terminal.pty.pam import (
+        _PAM_SUCCESS,
+        _make_conv_callback,
+        _PamMessage,
+        _PamResponse,
+    )
+
+    _PAM_PROMPT_ECHO_ON = 2
+    _PAM_TEXT_INFO = 4
+
+    _, cb = _make_conv_callback("alice", "secret")
+
+    # Two messages: style=2 (returns username) and style=4 (no response)
+    msgs = (_PamMessage * 2)()
+    msgs[0].msg_style = _PAM_PROMPT_ECHO_ON
+    msgs[0].msg = b"Username:"
+    msgs[1].msg_style = _PAM_TEXT_INFO
+    msgs[1].msg = b"Info"
+
+    msg_ptrs = (ctypes.POINTER(_PamMessage) * 2)(
+        ctypes.pointer(msgs[0]),
+        ctypes.pointer(msgs[1]),
+    )
+    resp_ptr = ctypes.pointer(_PamResponse())
+    resp_ptr_p = ctypes.pointer(resp_ptr)
+
+    result = cb(
+        2,
+        ctypes.cast(msg_ptrs, ctypes.POINTER(ctypes.POINTER(_PamMessage))),
+        ctypes.cast(resp_ptr_p, ctypes.POINTER(ctypes.POINTER(_PamResponse))),
+        None,
+    )
+    assert result == _PAM_SUCCESS
+
+
+def test_conv_callback_calloc_failure_returns_conv_err() -> None:
+    """_conv returns _PAM_CONV_ERR when libc calloc returns 0 (allocation failure)."""
+    _requires_libpam()
+    import ctypes
+    from unittest.mock import MagicMock
+
+    import provide.terminal.pty.pam as pam_mod
+    from provide.terminal.pty.pam import (
+        _PAM_CONV_ERR,
+        _make_conv_callback,
+        _PamMessage,
+        _PamResponse,
+    )
+
+    _, cb = _make_conv_callback("alice", "secret")
+
+    msgs = (_PamMessage * 1)()
+    msgs[0].msg_style = 1  # PAM_PROMPT_ECHO_OFF
+    msgs[0].msg = b"Password:"
+
+    msg_ptrs = (ctypes.POINTER(_PamMessage) * 1)(ctypes.pointer(msgs[0]))
+    resp_ptr = ctypes.pointer(_PamResponse())
+    resp_ptr_p = ctypes.pointer(resp_ptr)
+
+    fake_libc = MagicMock()
+    fake_libc.calloc.return_value = 0
+
+    with patch.object(pam_mod, "_libc", fake_libc):
+        result = cb(
+            1,
+            ctypes.cast(msg_ptrs, ctypes.POINTER(ctypes.POINTER(_PamMessage))),
+            ctypes.cast(resp_ptr_p, ctypes.POINTER(ctypes.POINTER(_PamResponse))),
+            None,
+        )
+    assert result == _PAM_CONV_ERR

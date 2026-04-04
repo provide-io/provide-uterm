@@ -277,7 +277,7 @@ class TestQuickConnectConflict:
 class TestMaxSessions:
     def test_max_sessions_blocks_create(self) -> None:
         """SessionRegistry enforces max_sessions limit."""
-        from provide.terminal.hijack.hub.core import TermHub
+        from provide.terminal.bridge.hub.core import TermHub
         from provide.terminal.server.models import RecordingConfig
         from provide.terminal.server.registry import SessionRegistry
 
@@ -296,7 +296,7 @@ class TestMaxSessions:
 
     def test_max_sessions_none_is_unbounded(self) -> None:
         """max_sessions=None (default) does not limit session creation."""
-        from provide.terminal.hijack.hub.core import TermHub
+        from provide.terminal.bridge.hub.core import TermHub
         from provide.terminal.server.models import RecordingConfig
         from provide.terminal.server.registry import SessionRegistry
 

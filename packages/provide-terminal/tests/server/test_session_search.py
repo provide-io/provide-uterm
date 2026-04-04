@@ -237,7 +237,7 @@ def test_combined_filters(client: TestClient) -> None:
 
 async def test_retention_sweep() -> None:
     """Stopped sessions older than retention_s are removed by the sweep."""
-    from provide.terminal.hijack.hub import TermHub
+    from provide.terminal.bridge.hub import TermHub
     from provide.terminal.server.models import RecordingConfig
 
     hub = TermHub()
@@ -278,7 +278,7 @@ async def test_retention_sweep() -> None:
 
 async def test_retention_disabled() -> None:
     """When retention_s=0, no sessions are removed."""
-    from provide.terminal.hijack.hub import TermHub
+    from provide.terminal.bridge.hub import TermHub
     from provide.terminal.server.models import RecordingConfig
 
     hub = TermHub()

@@ -1,0 +1,82 @@
+' SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+' SPDX-License-Identifier: AGPL-3.0-or-later
+
+@startuml system-overview
+title provide-terminal — 12-Package System Overview
+
+skinparam backgroundColor #ffffff
+skinparam defaultFontColor #333333
+skinparam componentBorderColor #d1d5db
+skinparam componentBackgroundColor #f3f4f6
+skinparam packageBorderColor #d1d5db
+skinparam packageBackgroundColor #ffffff
+skinparam arrowColor #2563eb
+skinparam noteBorderColor #d1d5db
+skinparam noteBackgroundColor #f9fafb
+
+skinparam rectangle {
+  BorderColor #2563eb
+  BackgroundColor #eff6ff
+  FontColor #1e40af
+}
+
+' --- Zero-dep leaf packages ---
+rectangle "provide-terminal-render\n(ANSI palette, SGR, image)" as RENDER
+rectangle "provide-terminal-shell\n(Python REPL, ushell)" as SHELL
+rectangle "provide-terminal-deckmux\n(collaborative presence)" as DECKMUX
+rectangle "provide-terminal-detection\n(prompt detection)" as DETECT
+rectangle "provide-terminal-transports\n(Telnet / SSH / WS)" as XPORT
+rectangle "provide-terminal-gateway\n(protocol conversion)" as GW
+rectangle "provide-terminal-pty\n(PTY, PAM, capture)" as PTY
+rectangle "provide-terminal-tunnel\n(tunnel protocol, HTTP inspect)" as TUNNEL
+rectangle "provide-terminal-manager\n(agent swarm)" as MGR
+
+' --- Core ---
+package "provide-terminal (core)" as CORE {
+  [bridge hub\nserver / CLI\nclient / MCP] as CORE_C
+}
+
+' --- Edge packages ---
+package "provide-terminal-cloudflare" as CF {
+  [CF Worker adapter\nDurable Objects / KV] as CF_C
+}
+
+package "provide-terminal-frontend" as FE {
+  [Browser UI\n(vanilla TypeScript)] as FE_C
+}
+
+package "provide-telemetry" as TELEM {
+  [structured logging\n& trace context] as TELEM_C
+}
+
+' --- Core required deps ---
+RENDER <-- CORE_C : required
+SHELL <-- CORE_C : required
+TELEM_C <-- CORE_C : required
+
+' --- Core optional integration (mixin / extras) ---
+DECKMUX <.. CORE_C : [terminal] mixin
+DETECT <.. CORE_C : symlink
+XPORT <.. CORE_C : [ssh/ws] extras
+GW <.. CORE_C : symlink
+PTY <.. CORE_C : [terminal] extra
+TUNNEL <.. CORE_C : symlink
+MGR <.. CORE_C : symlink
+
+' --- Leaf optional deps ---
+SHELL ..> RENDER : [images] extra
+GW ..> XPORT : uses transports
+
+' --- CF adapter ---
+CORE_C <-- CF_C : adapter
+
+' --- Frontend connects via WS ---
+FE_C --> CORE_C : WebSocket / REST
+FE_C --> CF_C : WebSocket / REST
+
+note bottom of RENDER : zero deps
+note bottom of SHELL : zero deps
+note bottom of DECKMUX : zero deps
+note bottom of DETECT : zero deps
+
+@enduml

@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
-from provide.terminal.hijack.hub import EventBus, TermHub
+from provide.terminal.bridge.hub import EventBus, TermHub
 from provide.terminal.server.webhooks import WebhookConfig, WebhookManager
 
 # ---------------------------------------------------------------------------

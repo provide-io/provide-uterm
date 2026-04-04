@@ -24,6 +24,7 @@ dev = [
     "hypothesis>=6.151.9",
     "memray>=1.0; sys_platform != 'win32'",
     "mutmut>=3.3.1",
+    "Pillow>=10.0",
     "mypy>=1.19",
     "pip-audit>=2.7.0",
     "pip-licenses>=5.5.0",
@@ -51,7 +52,7 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/provide-terminal", "packages/provide-terminal-shell", "packages/provide-terminal-cloudflare", "packages/provide-terminal-deckmux", "packages/provide-terminal-render"]
+members = ["packages/provide-terminal", "packages/provide-terminal-shell", "packages/provide-terminal-cloudflare", "packages/provide-terminal-deckmux", "packages/provide-terminal-render", "packages/provide-terminal-pty", "packages/provide-terminal-detection", "packages/provide-terminal-manager", "packages/provide-terminal-transports", "packages/provide-terminal-tunnel", "packages/provide-terminal-gateway", "packages/provide-terminal-ai", "packages/provide-terminal-client"]
 
 [tool.uv.sources]
 provide-telemetry = { path = "/REDACTED_ABS_PATH", editable = true }
@@ -60,6 +61,14 @@ provide-terminal-shell = { workspace = true }
 provide-terminal-cloudflare = { workspace = true }
 provide-terminal-deckmux = { workspace = true }
 provide-terminal-render = { workspace = true }
+provide-terminal-pty = { workspace = true }
+provide-terminal-detection = { workspace = true }
+provide-terminal-manager = { workspace = true }
+provide-terminal-transports = { workspace = true }
+provide-terminal-tunnel = { workspace = true }
+provide-terminal-gateway = { workspace = true }
+provide-terminal-ai = { workspace = true }
+provide-terminal-client = { workspace = true }
 
 [tool.ruff]
 line-length = 120
@@ -180,6 +189,13 @@ paths_to_mutate = [
     "src/provide/terminal/deckmux/_protocol.py",
     "src/provide/terminal/deckmux/_names.py",
     "src/provide/terminal/deckmux/_edge.py",
+    "src/provide/terminal/pty/_validate.py",
+    "src/provide/terminal/pty/uid_map.py",
+    "src/provide/terminal/pty/capture.py",
+    "src/provide/terminal/pty/capture_connector.py",
+    "src/provide/terminal/pty/pam_listener.py",
+    "src/provide/terminal/pty/pam.py",
+    "src/provide/terminal/pty/connector.py",
 ]
 tests_dir = [
     "packages/provide-terminal-shell/tests/shell/test_shell_render.py",
@@ -189,6 +205,13 @@ tests_dir = [
     "packages/provide-terminal-deckmux/tests/deckmux/test_protocol.py",
     "packages/provide-terminal-deckmux/tests/deckmux/test_names.py",
     "packages/provide-terminal-deckmux/tests/deckmux/test_edge.py",
+    "packages/provide-terminal-pty/tests/test_validate.py",
+    "packages/provide-terminal-pty/tests/test_uid_map.py",
+    "packages/provide-terminal-pty/tests/test_capture.py",
+    "packages/provide-terminal-pty/tests/test_capture_connector.py",
+    "packages/provide-terminal-pty/tests/test_pam_listener.py",
+    "packages/provide-terminal-pty/tests/test_pam.py",
+    "packages/provide-terminal-pty/tests/test_connector.py",
 ]
 also_copy = [
     "src",
@@ -198,7 +221,15 @@ also_copy = [
     "packages/provide-terminal-shell/tests",
     "packages/provide-terminal-deckmux/src",
     "packages/provide-terminal-deckmux/tests",
+    "packages/provide-terminal-pty/src",
+    "packages/provide-terminal-pty/tests",
     "conftest.py",
 ]
-pytest_add_cli_args = ["--timeout=30", "-p", "no:randomly", "-p", "no:hypothesis"]
+pytest_add_cli_args = [
+    "--timeout=30",
+    "-p", "no:randomly",
+    "-p", "no:hypothesis",
+    "--ignore=packages/provide-terminal-pty/tests/test_ld_preload_capture.py",
+    "--ignore=packages/provide-terminal-pty/tests/e2e/",
+]
 debug = true

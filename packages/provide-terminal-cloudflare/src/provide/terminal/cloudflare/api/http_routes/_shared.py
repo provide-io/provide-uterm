@@ -10,7 +10,7 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 
 try:
-    from provide.terminal.hijack.rest_helpers import (
+    from provide.terminal.bridge.rest_helpers import (
         MAX_EXPECT_REGEX_LEN,
         PromptRegexError,
         build_hijack_events_response,

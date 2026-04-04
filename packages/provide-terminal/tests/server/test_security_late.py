@@ -127,7 +127,7 @@ async def test_bridge_stops_on_permanent_http_error() -> None:
     """TermBridge._run must stop reconnecting on 401/403/404, not back off and retry."""
     from unittest.mock import MagicMock
 
-    from provide.terminal.hijack.bridge import TermBridge
+    from provide.terminal.bridge.worker_link import TermBridge
 
     class FakeStatusError(Exception):
         status_code = 403
@@ -167,8 +167,8 @@ def test_hijack_acquire_error_message_says_session_not_worker() -> None:
     """hijack_acquire must return 'for this session', not the previous 'for this worker', in error text."""
     from fastapi import APIRouter
 
-    from provide.terminal.hijack.hub import TermHub
-    from provide.terminal.hijack.routes import register_rest_routes
+    from provide.terminal.bridge.hub import TermHub
+    from provide.terminal.bridge.routes import register_rest_routes
 
     hub = TermHub()
     router = APIRouter()
@@ -189,7 +189,7 @@ def test_hijack_acquire_error_message_says_session_not_worker() -> None:
 
 def test_browser_handlers_error_message_says_session_not_worker() -> None:
     """Browser WS hijack error messages must say 'for this session', not 'for this worker'."""
-    import provide.terminal.hijack.routes.browser_handlers as bh_module
+    import provide.terminal.bridge.routes.browser_handlers as bh_module
 
     source = bh_module.__file__
     assert source is not None

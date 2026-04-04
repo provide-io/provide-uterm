@@ -87,6 +87,7 @@ __all__ = [
 _FASTAPI_EXPORTS: frozenset[str] = frozenset({"mount_terminal_ui", "create_ws_terminal_router", "WsTerminalProxy"})
 _GATEWAY_EXPORTS: frozenset[str] = frozenset({"TelnetWsGateway", "SshWsGateway"})
 _SERVER_EXPORTS: frozenset[str] = frozenset({"create_server_app", "load_server_config", "default_server_config"})
+_SESSION_EXPORTS: frozenset[str] = frozenset({"TelnetSession", "connect_telnet"})
 
 
 def __getattr__(name: str) -> object:
@@ -102,4 +103,8 @@ def __getattr__(name: str) -> object:
         import provide.terminal.server as _server_mod
 
         return getattr(_server_mod, name)
+    if name in _SESSION_EXPORTS:
+        import provide.terminal.telnet_session as _session_mod
+
+        return getattr(_session_mod, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

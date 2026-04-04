@@ -24,7 +24,7 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
 from provide.telemetry import TelemetryMiddleware, get_logger
 
-from provide.terminal.hijack.hub import InMemoryResumeStore, ResumeSession, TermHub
+from provide.terminal.bridge.hub import InMemoryResumeStore, ResumeSession, TermHub
 from provide.terminal.server.api_keys import ApiKeyStore
 from provide.terminal.server.auth import (
     Principal,
@@ -458,7 +458,14 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
         )
         return response
 
-    app.include_router(hub.create_router(), dependencies=[Depends(_require_authenticated)])
+    # Tunnel routes are passed as extra registrars to avoid a hard import
+    # dependency from bridge → tunnel (enables future package extraction).
+    from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
+
+    app.include_router(
+        hub.create_router(extra_route_registrars=[register_tunnel_routes]),
+        dependencies=[Depends(_require_authenticated)],
+    )
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_page_router(), prefix=config.ui.app_path, dependencies=[Depends(_require_authenticated)])

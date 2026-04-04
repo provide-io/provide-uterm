@@ -95,6 +95,10 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
             await runtime.send_ws(ws, {"type": "error", "message": "use_rest_hijack_api"})
         elif frame_type in {"presence_update", "queued_input", "control_request"}:
             await _handle_presence_message(runtime, ws, frame)
+        elif frame_type in {"http_action", "http_intercept_toggle", "http_inspect_toggle"}:
+            # Relay intercept/inspect commands from browser back to the worker
+            if runtime.worker_ws is not None:
+                await runtime.send_ws(runtime.worker_ws, frame)
         # heartbeat / ping: keep-alive frames, no response required.
 
 
