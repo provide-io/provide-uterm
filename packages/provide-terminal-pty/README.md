@@ -35,4 +35,4 @@ This package is Linux/macOS only (requires PTY support).
 
 ## License
 
-AGPL-3.0-or-later. Copyright (c) 2025-2026 MindTenet LLC.
+AGPL-3.0-or-later. Copyright (c) 2025-2026 provide.io llc.

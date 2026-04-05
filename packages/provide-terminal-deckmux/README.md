@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved. -->
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved. -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 # provide-terminal-deckmux
@@ -145,4 +145,4 @@ Full design specification: [`docs/superpowers/specs/2026-03-30-deckmux-design.md
 
 ## License
 
-AGPL-3.0-or-later. Copyright (c) 2025-2026 MindTenet LLC.
+AGPL-3.0-or-later. Copyright (c) 2025-2026 provide.io llc.

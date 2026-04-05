@@ -41,7 +41,7 @@ Create `packages/provide-terminal/tests/server/test_profile_store.py`:
 
 ```python
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Unit tests for ConnectionProfile model and FileProfileStore."""
@@ -229,7 +229,7 @@ Create `packages/provide-terminal/src/provide/terminal/server/profiles.py`:
 
 ```python
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """ConnectionProfile model and FileProfileStore for persisted connection profiles."""
@@ -568,7 +568,7 @@ Create `packages/provide-terminal/tests/server/test_api_profiles.py`:
 
 ```python
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Integration tests for /api/profiles endpoints."""
@@ -774,7 +774,7 @@ Create `packages/provide-terminal/src/provide/terminal/server/routes/profiles.py
 
 ```python
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """REST API routes for connection profiles."""
@@ -1094,7 +1094,7 @@ Replace the entire file `packages/provide-terminal-frontend/src/app/views/dashbo
 
 ```typescript
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
@@ -1316,7 +1316,7 @@ Replace the entire file `packages/provide-terminal-frontend/src/app/views/connec
 
 ```typescript
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
