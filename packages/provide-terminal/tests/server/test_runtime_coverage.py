@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Coverage gap tests for server/runtime.py."""
@@ -181,3 +181,62 @@ class TestBridgeSessionUnknownMtype:
         # The for loop at line 237 iterates over empty responses list
         unknown_msgs = [m for m in sent_msgs if "unknown_weird_type" in m]
         assert len(unknown_msgs) == 0
+
+
+# ---------------------------------------------------------------------------
+# Regression: empty poll_messages() must not hot-spin (backoff sleep)
+# ---------------------------------------------------------------------------
+
+
+class TestPollEmptyBackoff:
+    async def test_empty_poll_triggers_backoff_sleep(self) -> None:
+        """When poll_messages() returns [] instantly, the loop must sleep to
+        avoid hot-spinning.  Before the fix, connectors like shell/pty that
+        return [] with no internal wait caused 99% CPU usage."""
+        runtime = _make_runtime()
+        connector = _make_connector()
+        runtime._connector = connector
+
+        runtime._log_snapshot = AsyncMock()  # type: ignore[method-assign]
+        runtime._log_event = AsyncMock()  # type: ignore[method-assign]
+        runtime._log_send = AsyncMock()  # type: ignore[method-assign]
+        runtime._queue = asyncio.Queue()
+
+        poll_count = 0
+
+        async def _poll() -> list[dict]:
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count >= 3:
+                runtime._stop.set()
+            return []  # empty — should trigger backoff
+
+        connector.poll_messages = _poll
+
+        mock_ws = AsyncMock()
+        mock_ws.send = AsyncMock()
+        # recv blocks forever (simulates no client data)
+        async def _recv_forever() -> str:
+            await asyncio.sleep(999)
+            return ""  # never reached
+
+        mock_ws.recv = _recv_forever
+
+        connector.set_mode = AsyncMock(return_value=[])
+        connector.get_snapshot = AsyncMock(return_value={"type": "snapshot", "screen": "", "ts": 1.0})
+
+        sleep_calls: list[float] = []
+        original_sleep = asyncio.sleep
+
+        async def _track_sleep(delay: float, *a: object, **kw: object) -> None:
+            sleep_calls.append(delay)
+            await original_sleep(delay)
+
+        with patch("asyncio.sleep", side_effect=_track_sleep):
+            await runtime._bridge_session(mock_ws)
+
+        # The backoff sleep of 0.05s should have been called at least once
+        backoff_sleeps = [d for d in sleep_calls if 0.04 <= d <= 0.06]
+        assert len(backoff_sleeps) >= 1, (
+            f"Expected backoff sleeps of ~0.05s but got: {sleep_calls}"
+        )

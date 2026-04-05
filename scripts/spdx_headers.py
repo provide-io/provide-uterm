@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 SPDX_OPEN = "#\n"
-SPDX_COPYRIGHT = "# SPDX-FileCopyrightText" + ": Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.\n"
+SPDX_COPYRIGHT = "# SPDX-FileCopyrightText" + ": Copyright (c) 2025-2026 provide.io llc. All rights reserved.\n"
 SPDX_LICENSE = "# SPDX-License-Identifier" + ": AGPL-3.0-or-later\n"
 SPDX_CLOSE = "#\n"
 CANONICAL_BLOCK = (SPDX_OPEN, SPDX_COPYRIGHT, SPDX_LICENSE, SPDX_CLOSE)

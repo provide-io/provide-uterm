@@ -309,4 +309,4 @@ All packages at 100% branch+line coverage. 6100+ tests total.
 
 ## License
 
-AGPL-3.0-or-later. Copyright (c) 2025-2026 MindTenet LLC.
+AGPL-3.0-or-later. Copyright (c) 2025-2026 provide.io llc.

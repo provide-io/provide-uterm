@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Playwright E2E tests for the HTTP inspect/intercept UI.
@@ -64,11 +64,12 @@ def inspect_server():
 
     from starlette.staticfiles import StaticFiles
 
-    app.mount("/app/assets", StaticFiles(directory=frontend_str, html=True), name="assets")
-
     @app.get("/app/inspect/{session_id}")
     async def inspect_page(session_id: str) -> HTMLResponse:
-        return HTMLResponse(_inspect_page_html(session_id, "/app/assets"))
+        return HTMLResponse(_inspect_page_html(session_id, "/_static"))
+
+    # Mount AFTER routes so it doesn't shadow /app/inspect
+    app.mount("/_static", StaticFiles(directory=frontend_str, html=True), name="assets")
 
     uvi_config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="critical")
     server = uvicorn.Server(uvi_config)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Live DYLD_INSERT_LIBRARIES injection demo.
@@ -109,6 +109,7 @@ def _find_injectable_binary() -> tuple[str, list[str], str]:
 def _start_server() -> uvicorn.Server:
     config = default_server_config()
     config.auth.mode = "dev"  # type: ignore[assignment]
+    config.session_idle_timeout_s = 1800  # auto-sweep idle sessions after 30 min
     config.server = ServerBindConfig(
         host="127.0.0.1",
         port=_SERVER_PORT,
@@ -317,9 +318,13 @@ def main() -> None:
     print("=" * 60)
     sys.stdout.flush()
 
+    _IDLE_TIMEOUT_S = 3600  # self-exit after 1 hour idle
+    last_activity = time.monotonic()
+
     try:
         while True:
             if proc.poll() is not None:
+                last_activity = time.monotonic()
                 print("\n  Process exited — restarting...")
                 sys.stdout.flush()
                 _api_post(f"/api/sessions/{_SESSION_ID}/clear", {})
@@ -346,6 +351,10 @@ def main() -> None:
                 master_fd_holder[0] = master_fd  # update stdin listener in-place
                 t_drain = threading.Thread(target=_pty_drain, args=(master_fd, stop), daemon=True)
                 t_drain.start()
+            if time.monotonic() - last_activity > _IDLE_TIMEOUT_S:
+                print("\n  Idle timeout (1h) — shutting down.")
+                sys.stdout.flush()
+                break
             time.sleep(1)
     except KeyboardInterrupt:
         pass

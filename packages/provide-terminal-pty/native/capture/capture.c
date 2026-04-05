@@ -1,5 +1,5 @@
-/* packages/undef-terminal-pty/native/capture/capture.c
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+/* packages/provide-terminal-pty/native/capture/capture.c
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
  * libuterm_capture: LD_PRELOAD / DYLD_INSERT_LIBRARIES capture library.
@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <signal.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -80,6 +81,13 @@ static fn_write   g_real_write;
 static fn_read    g_real_read;
 static fn_connect g_real_connect;
 
+static void capture_disable(void) {
+    if (g_capture_fd >= 0) {
+        close(g_capture_fd);
+        g_capture_fd = -1;
+    }
+}
+
 static void send_frame(uint8_t channel, const void *data, size_t len) {
     if (g_capture_fd < 0 || !g_real_write) return;
     uint8_t header[5];
@@ -90,9 +98,18 @@ static void send_frame(uint8_t channel, const void *data, size_t len) {
     header[3] = (n >>  8) & 0xff;
     header[4] = (n      ) & 0xff;
     /* Call real write directly (g_capture_fd > 2 so no recursion even if
-     * g_real_write ended up as our hook — but it won't, per the above). */
-    g_real_write(g_capture_fd, header, 5);
-    g_real_write(g_capture_fd, data, len);
+     * g_real_write ended up as our hook — but it won't, per the above).
+     * If the capture socket is dead, disable capture permanently so we
+     * don't spin-loop on failing syscalls. */
+    ssize_t rc = g_real_write(g_capture_fd, header, 5);
+    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
+        capture_disable();
+        return;
+    }
+    rc = g_real_write(g_capture_fd, data, len);
+    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
+        capture_disable();
+    }
 }
 
 __attribute__((constructor))
@@ -174,8 +191,15 @@ static void send_frame(uint8_t channel, const void *data, size_t len) {
     header[2] = (n >> 16) & 0xff;
     header[3] = (n >>  8) & 0xff;
     header[4] = (n      ) & 0xff;
-    orig_write(g_capture_fd, header, 5);
-    orig_write(g_capture_fd, data, len);
+    ssize_t rc = orig_write(g_capture_fd, header, 5);
+    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
+        capture_disable();
+        return;
+    }
+    rc = orig_write(g_capture_fd, data, len);
+    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
+        capture_disable();
+    }
 }
 
 __attribute__((constructor))
@@ -183,6 +207,9 @@ static void uterm_capture_init(void) {
     orig_write   = (fn_write)  dlsym(RTLD_NEXT, "write");
     orig_read    = (fn_read)   dlsym(RTLD_NEXT, "read");
     orig_connect = (fn_connect)dlsym(RTLD_NEXT, "connect");
+
+    /* Prevent SIGPIPE from killing the host process when the capture socket dies. */
+    signal(SIGPIPE, SIG_IGN);
 
     const char *path = getenv("UTERM_CAPTURE_SOCKET");
     if (!path || !*path) return;

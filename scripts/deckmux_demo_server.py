@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Live DeckMux demo server — shared Ubuntu bash shell via SSH.
@@ -71,6 +71,7 @@ def build_app(port: int, ssh_port: int) -> object:
         server=ServerBindConfig(host="127.0.0.1", port=port),
         sessions=[definition],
         recording=RecordingConfig(enabled_by_default=False),
+        session_idle_timeout_s=1800,  # auto-sweep idle sessions after 30 min
     )
     return create_server_app(config, hub_class=DeckMuxTermHub)
 

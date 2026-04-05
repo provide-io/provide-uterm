@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Hosted session runtime that bridges a connector into TermHub."""
@@ -320,8 +320,14 @@ class HostedSessionRuntime:
                 if not done:
                     continue
                 if poll_task in done:
-                    for outbound in poll_task.result():
+                    poll_result = poll_task.result()
+                    for outbound in poll_result:
                         await self._send_outbound_frame(ws, outbound)
+                    if not poll_result and recv_task not in done:
+                        # poll_messages() returned empty instantly — backoff
+                        # to avoid hot-spinning when the connector has no
+                        # internal wait (e.g. shell, pty, capture connectors).
+                        await asyncio.sleep(0.05)
                 if recv_task in done:
                     try:
                         raw = recv_task.result()

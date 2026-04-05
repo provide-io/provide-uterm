@@ -38,4 +38,4 @@ esc = sgr_truecolor(fg=(200, 50, 50), bg=(0, 0, 0))
 
 ## License
 
-AGPL-3.0-or-later. Copyright (c) 2025-2026 MindTenet LLC.
+AGPL-3.0-or-later. Copyright (c) 2025-2026 provide.io llc.
