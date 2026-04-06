@@ -153,7 +153,7 @@ Real-time collaborative presence for terminal sessions. Enabled per session with
 | Server -> Browser | `control_denied` | (empty) |
 | Server -> Browser | `auto_transfer_warning` | `seconds_remaining` |
 
-All messages use the existing control channel (DLE+STX JSON framing). 200ms client-side debounce on presence updates. See [`packages/provide-terminal-deckmux/`](../packages/provide-terminal-deckmux/README.md) for full documentation and PlantUML diagrams.
+All messages use the existing control channel (DLE+STX JSON framing). 200ms client-side debounce on presence updates. The deckmux module is part of the `provide-terminal` core package.
 
 ## Accuracy note
 

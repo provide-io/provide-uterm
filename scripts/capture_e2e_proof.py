@@ -19,13 +19,13 @@ Usage (from repo root):
     uv run python scripts/capture_e2e_proof.py
 
 Requires:
-    - provide-terminal-pty installed (pip install -e packages/provide-terminal-pty)
+    - provide-terminal-platform installed (pip install -e packages/provide-terminal-platform)
     - pywrangler available (pip install pywrangler)
     - websockets (pip install websockets)
     - httpx (pip install httpx)
 
 On Linux only: libuterm_capture.so must be built:
-    make -C packages/provide-terminal-pty/native/capture/
+    make -C packages/provide-terminal-platform/native/capture/
 """
 
 from __future__ import annotations
@@ -46,8 +46,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-pty/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-deckmux/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
 
 import uvicorn  # noqa: E402
 
@@ -214,14 +213,14 @@ def main() -> None:
     print(f"platform: {sys.platform}")
     print()
 
-    # ── 0. Check for provide-terminal-pty ──────────────────────────────────────
+    # ── 0. Check for provide-terminal-platform ────────────────────────────────
     try:
         from provide.terminal.pty._build import get_capture_lib_path
         from provide.terminal.pty.pam_listener import PamNotifyListener  # noqa: F401
 
-        _ok("provide-terminal-pty importable")
+        _ok("provide-terminal-platform importable")
     except ImportError as exc:
-        _fail(f"provide-terminal-pty not installed: {exc}")
+        _fail(f"provide-terminal-platform not installed: {exc}")
         return
 
     lib_path = get_capture_lib_path()

@@ -53,7 +53,7 @@ try:
     from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
     from provide.terminal.cloudflare.state.registry import delete_kv_session, list_kv_sessions
     from provide.terminal.cloudflare.ui.assets import read_asset_text, serve_asset
-except Exception:
+except ImportError:
     try:
         from auth.jwt import (  # type: ignore[import-not-found]
             JwtValidationError,

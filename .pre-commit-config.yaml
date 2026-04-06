@@ -71,7 +71,7 @@ repos:
 
       - id: ty
         name: ty check
-        entry: ty check packages/provide-terminal/src/ packages/provide-terminal-pty/src/ --extra-search-path packages/provide-terminal-pty/src/
+        entry: ty check packages/provide-terminal/src/ packages/provide-terminal-platform/src/ --extra-search-path packages/provide-terminal-platform/src/
         language: python
         language_version: python3.11
         additional_dependencies:
@@ -93,9 +93,9 @@ repos:
         always_run: true
         types: [python]
 
-      - id: mypy-pty
-        name: mypy strict (provide-terminal-pty)
-        entry: bash -c 'MYPYPATH=packages/provide-terminal/src:packages/provide-terminal-pty/src mypy packages/provide-terminal-pty/src/provide/'
+      - id: mypy-platform
+        name: mypy strict (provide-terminal-platform)
+        entry: bash -c 'MYPYPATH=packages/provide-terminal/src:packages/provide-terminal-platform/src mypy packages/provide-terminal-platform/src/provide/'
         language: system
         pass_filenames: false
         always_run: false
@@ -103,7 +103,7 @@ repos:
 
       - id: bandit
         name: bandit
-        entry: bandit -r packages/provide-terminal/src/ packages/provide-terminal-pty/src/ -ll
+        entry: bandit -r packages/provide-terminal/src/ packages/provide-terminal-platform/src/ -ll
         language: python
         language_version: python3.11
         additional_dependencies:

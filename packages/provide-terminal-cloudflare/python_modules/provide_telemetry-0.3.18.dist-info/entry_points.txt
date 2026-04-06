@@ -1,2 +1,0 @@
-[pytest11]
-provide_telemetry = provide.telemetry.testing

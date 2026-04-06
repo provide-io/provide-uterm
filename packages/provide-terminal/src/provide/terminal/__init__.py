@@ -92,7 +92,7 @@ _SESSION_EXPORTS: frozenset[str] = frozenset({"TelnetSession", "connect_telnet"}
 
 def __getattr__(name: str) -> object:
     if name in _FASTAPI_EXPORTS:
-        import provide.terminal.fastapi as _fastapi_mod
+        import provide.terminal.fastapi_utils as _fastapi_mod
 
         return getattr(_fastapi_mod, name)
     if name in _GATEWAY_EXPORTS:

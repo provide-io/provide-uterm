@@ -37,8 +37,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-pty/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-deckmux/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
 
 import uvicorn  # noqa: E402
 
@@ -193,10 +192,10 @@ def main() -> None:
     import fcntl
     import termios
 
-    dylib = _REPO_ROOT / "packages/provide-terminal-pty/native/capture/libuterm_capture.dylib"
+    dylib = _REPO_ROOT / "packages/provide-terminal-platform/native/capture/libuterm_capture.dylib"
     if not dylib.exists():
         print(f"\n  ✗ dylib not found: {dylib}")
-        print("  Build it first: make -C packages/provide-terminal-pty/native/capture/")
+        print("  Build it first: make -C packages/provide-terminal-platform/native/capture/")
         sys.exit(1)
 
     binary, argv, display_name = _find_injectable_binary()

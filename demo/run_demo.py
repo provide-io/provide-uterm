@@ -40,14 +40,23 @@ REPO = Path(__file__).resolve().parents[1]
 for _p in [
     REPO / "packages/provide-terminal/src",
     REPO / "packages/provide-terminal/tests",
-    REPO / "packages/provide-terminal-shell/src",
+    REPO / "packages/provide-terminal/src",
 ]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 from provide.terminal.server.app import create_server_app  # noqa: E402
 from provide.terminal.server.config import config_from_mapping  # noqa: E402
-from provide.terminal.transports.telnet_server import _build_telnet_handshake  # noqa: E402  # type: ignore[attr-defined]
+from provide.terminal.transports.telnet_server import (  # noqa: E402
+    _build_telnet_handshake,  # type: ignore[attr-defined]
+)
+
+# ---------------------------------------------------------------------------
+# Port constants — change here rather than inline
+# ---------------------------------------------------------------------------
+DEMO_SERVER_PORT = 8766
+STATIC_SERVER_PORT = 9987
+WEBHOOK_RECEIVER_PORT = 9988
 
 # ---------------------------------------------------------------------------
 # Telnet echo server
@@ -147,7 +156,7 @@ async def drive_demo(
         wh = (
             await http.post(
                 "/api/sessions/telnet-alpha/webhooks",
-                json={"url": "http://127.0.0.1:9988/hook", "event_types": ["snapshot"]},
+                json={"url": f"http://127.0.0.1:{WEBHOOK_RECEIVER_PORT}/hook", "event_types": ["snapshot"]},
             )
         ).json()
         print(f"[demo]   webhook registered: {wh['webhook_id'][:8]}…")
@@ -199,7 +208,7 @@ def _start_webhook_receiver(hits: list[dict[str, Any]]) -> None:
             self.send_response(200)
             self.end_headers()
 
-    srv = HTTPServer(("127.0.0.1", 9988), _Handler)
+    srv = HTTPServer(("127.0.0.1", WEBHOOK_RECEIVER_PORT), _Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 
@@ -223,18 +232,18 @@ async def main() -> None:
     print(f"[demo] Telnet echo servers: alpha={port_a} gamma={port_b}")
 
     # Start static HTML server
-    static_srv = HTTPServer(("127.0.0.1", 9987), _StaticHandler)
+    static_srv = HTTPServer(("127.0.0.1", STATIC_SERVER_PORT), _StaticHandler)
     threading.Thread(target=static_srv.serve_forever, daemon=True).start()
-    print("[demo] Static HTML server: http://127.0.0.1:9987/ (terminal.html)")
+    print(f"[demo] Static HTML server: http://127.0.0.1:{STATIC_SERVER_PORT}/ (terminal.html)")
 
     # Build FastAPI server config — auto_start=True so connectors come up automatically
     cfg = config_from_mapping(
         {
             "server": {
                 "host": "127.0.0.1",
-                "port": 8766,
-                "public_base_url": "http://127.0.0.1:8766",
-                "allowed_origins": ["http://127.0.0.1:9987"],
+                "port": DEMO_SERVER_PORT,
+                "public_base_url": f"http://127.0.0.1:{DEMO_SERVER_PORT}",
+                "allowed_origins": [f"http://127.0.0.1:{STATIC_SERVER_PORT}"],
             },
             "auth": {"mode": "dev"},
             "sessions": [
@@ -262,7 +271,7 @@ async def main() -> None:
         }
     )
     app = create_server_app(cfg)
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8766, log_level="warning"))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=DEMO_SERVER_PORT, log_level="warning"))
     srv_task = asyncio.create_task(server.serve())
 
     # Wait for server ready
@@ -271,16 +280,16 @@ async def main() -> None:
         if asyncio.get_running_loop().time() > deadline:
             raise RuntimeError("uvicorn startup timeout")
         await asyncio.sleep(0.05)
-    print("[demo] FastAPI server ready: http://127.0.0.1:8766/")
+    print(f"[demo] FastAPI server ready: http://127.0.0.1:{DEMO_SERVER_PORT}/")
 
     # Attach EventBus so SSE streams and webhooks work
-    from provide.terminal.hijack.hub import EventBus
+    from provide.terminal.bridge.hub import EventBus
 
     app.state.uterm_registry._hub._event_bus = EventBus()
 
     # ── Open Playwright browsers ──────────────────────────────────────────────
-    api = "http://127.0.0.1:8766"
-    viewer = "http://127.0.0.1:9987"
+    api = f"http://127.0.0.1:{DEMO_SERVER_PORT}"
+    viewer = f"http://127.0.0.1:{STATIC_SERVER_PORT}"
 
     screenshots_dir = DEMO_DIR / "screenshots"
     screenshots_dir.mkdir(exist_ok=True)

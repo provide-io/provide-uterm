@@ -28,30 +28,17 @@ classifiers = [
     "Topic :: Terminals",
     "Framework :: FastAPI",
 ]
-dependencies = ["provide-telemetry>=0.3", "provide-terminal-shell>=0.1.0", "provide-terminal-render>=0.1"]
+dependencies = ["provide-telemetry>=0.3"]
 
 [project.urls]
 Homepage = "https://github.com/provide-io/provide-terminal"
 Repository = "https://github.com/provide-io/provide-terminal"
 
 [project.optional-dependencies]
-websocket = ["fastapi>=0.110", "websockets>=12.0"]
-ssh       = ["asyncssh>=2.14"]
 emulator  = ["pyte>=0.8"]
-server    = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9"]
-cli       = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0", "textual>=0.50", "httpx>=0.27"]
+ssh       = ["asyncssh>=2.14"]
 client    = ["httpx>=0.27"]
-manager   = ["fastapi>=0.110", "uvicorn>=0.24", "pyyaml>=6.0"]
-all       = ["fastapi>=0.110", "asyncssh>=2.14", "pyte>=0.8", "uvicorn>=0.24", "websockets>=12.0", "pyjwt>=2.9", "httpx>=0.27", "fastmcp>=2.0", "pyyaml>=6.0"]
-mcp = [
-    "fastmcp>=2.0",
-]
-
-[project.scripts]
-uterm = "provide.terminal.cli:main"
-uterm-server = "provide.terminal.server.cli:main"
-uterm-mcp = "provide.terminal.mcp.cli:main"
-uterm-manager = "provide.terminal.manager.cli:main"
+all       = ["pyte>=0.8", "asyncssh>=2.14", "httpx>=0.27"]
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -62,12 +49,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 "provide.terminal" = [
     "py.typed",
-    "frontend/*",
-    "frontend/app/*.js",
-    "frontend/app/views/*.js",
-    "frontend/app/widgets/*.js",
-    "frontend/.vite/*",
-    "frontend/assets/*",
 ]
 
 [dependency-groups]

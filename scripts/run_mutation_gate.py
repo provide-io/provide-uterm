@@ -30,7 +30,7 @@ CONFIG_FILES: Final[tuple[str, ...]] = (
 MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = ("--randomly-dont-reorganize",)
 DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
     "packages/provide-terminal/src/provide/terminal/",
-    "packages/provide-terminal-pty/src/provide/terminal/pty/",
+    "packages/provide-terminal-platform/src/provide/terminal/pty/",
 )
 
 

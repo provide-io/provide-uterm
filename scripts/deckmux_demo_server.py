@@ -28,7 +28,6 @@ import sys
 import uvicorn
 
 sys.path.insert(0, "packages/provide-terminal/src")
-sys.path.insert(0, "packages/provide-terminal-deckmux/src")
 
 import provide.terminal.server.connectors.ssh  # noqa: F401  — registers "ssh" connector
 from provide.terminal.bridge.hub import TermHub

@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: undef-terminal
-Source: https://github.com/undef-games/undef-terminal
+Upstream-Name: provide-terminal
+Source: https://github.com/provide-io/provide-terminal
 
 Files: *
 Copyright: Copyright (c) 2025-2026 provide.io llc. All rights reserved.

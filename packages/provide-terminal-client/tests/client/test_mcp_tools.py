@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from httpx import ASGITransport
-
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
+
 from provide.terminal.client.mcp_tools import hijack_tools
 
 WID = "mcp-worker"

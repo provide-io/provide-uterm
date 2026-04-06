@@ -66,7 +66,7 @@ _run "readelf -h $CAP_LIB | grep 'Type:' && readelf -h $PAM_MODULE | grep 'Type:
 
 UTERM_PKG="/REDACTED_ABS_PATH"
 
-echo "==> Installing provide-terminal-pty Python package into Colima system Python..."
+echo "==> Installing provide-terminal-platform Python package into Colima system Python..."
 _run "python3 -m pip install -q --break-system-packages -e $PTY_PKG"
 
 echo "==> Installing provide-terminal (server + pam_integration) into Colima system Python..."

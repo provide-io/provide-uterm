@@ -120,7 +120,7 @@ Pluggable connectors behind a unified session model:
 | `telnet` | Remote telnet (RFC 854) |
 | `ssh` | Remote SSH (asyncssh) |
 | `websocket` | WebSocket upstream |
-| `ushell` | Built-in Python REPL ([provide-terminal-shell](packages/provide-terminal-shell/)) |
+| `ushell` | Built-in Python REPL (shell module in `provide-terminal`) |
 | `pty` | Local PTY with PAM auth and LD_PRELOAD capture |
 
 The **gateway** converts between protocols: browser WebSocket ↔ telnet/SSH backends with ANSI color mode negotiation.
@@ -169,7 +169,7 @@ Enable per-session with `presence: true`. Works on both FastAPI and CF backends 
 uterm-mcp  # starts MCP server for Claude, GPT, or any MCP-compatible agent
 ```
 
-Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-terminal-ai](packages/provide-terminal-ai/).
+Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-terminal-client](packages/provide-terminal-client/).
 
 ### Agent Management
 
@@ -179,7 +179,7 @@ Orchestrate fleets of terminal workers:
 uterm-manager --config swarm.yaml
 ```
 
-Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-manager](packages/provide-terminal-manager/).
+Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-platform](packages/provide-terminal-platform/).
 
 ---
 
@@ -261,24 +261,17 @@ docker compose -f docker/docker-compose.yml up
 
 ## Package Ecosystem
 
-| Package | Description | Tests |
-|---------|-------------|-------|
-| `provide-terminal` | Core: bridge hub, server, CLI | 3,000+ |
-| `provide-terminal-ai` | AI/MCP integration (16 session control tools) | 189 |
-| `provide-terminal-client` | HTTP/WS client library | 88 |
-| `provide-terminal-detection` | Prompt detection and screen parsing | 199 |
-| `provide-terminal-manager` | Agent swarm management | 579 |
-| `provide-terminal-transports` | Telnet, SSH, WebSocket protocols | 408 |
-| `provide-terminal-tunnel` | Tunnel protocol, HTTP inspect/intercept | 470 |
-| `provide-terminal-gateway` | Protocol conversion (Telnet↔WS, SSH↔WS) | 122 |
-| `provide-terminal-pty` | PTY connector, PAM, LD_PRELOAD capture | 192 |
-| `provide-terminal-shell` | Python REPL shell (ushell) | 261 |
-| `provide-terminal-render` | ANSI color rendering primitives | 97 |
-| `provide-terminal-deckmux` | Collaborative presence (Deck Mux) | 177 |
-| `provide-terminal-cloudflare` | CF Worker + Durable Object adapter | 886 |
-| `provide-terminal-frontend` | Browser UI (vanilla TypeScript) | 472 |
+| Package | Role | Tests |
+|---------|------|-------|
+| `provide-terminal` | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
+| `provide-terminal-server` | Server: bridge hub, FastAPI, CLI, tunnel, gateway | ~2800 |
+| `provide-terminal-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
+| `provide-terminal-platform` | Platform: PTY, PAM, capture, fleet manager | ~780 |
+| `provide-terminal-cloudflare` | CF Worker + Durable Object | ~890 |
+| `provide-terminal-frontend` | Browser UI (TypeScript, xterm.js) | — |
+| `provide-terminal-app` | App shell | — |
 
-All packages at 100% branch+line coverage. 6100+ tests total.
+All packages at 100% branch+line coverage. 8760+ tests total.
 
 ---
 
@@ -302,7 +295,6 @@ All packages at 100% branch+line coverage. 6100+ tests total.
 - [Production Readiness Gates](docs/production-readiness-pass2.md)
 - [Release Governance](docs/release-governance.md)
 - [Architecture Diagrams](docs/diagrams/) (PlantUML)
-- [DeckMux Documentation](packages/provide-terminal-deckmux/README.md)
 - [Cloudflare Workers](packages/provide-terminal-cloudflare/README.md)
 
 ---

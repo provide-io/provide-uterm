@@ -4,7 +4,7 @@
 # Publish all workspace packages to TestPyPI (staging) then PyPI (production),
 # with Sigstore signing and GitHub Release asset upload.
 #
-# Dependency order: provide-terminal-shell → provide-terminal → provide-terminal-cloudflare
+# Dependency order: provide-terminal → provide-terminal-{server,client,platform} → provide-terminal-cloudflare
 
 name: Release
 
@@ -29,91 +29,31 @@ jobs:
       fail-fast: true
       matrix:
         package:
-          - provide-terminal-shell
           - provide-terminal
+          - provide-terminal-server
+          - provide-terminal-client
+          - provide-terminal-platform
           - provide-terminal-cloudflare
     steps:
       - uses: actions/checkout@v4
 
       - uses: astral-sh/setup-uv@v5
 
+      # Build sdist + wheel for each package
       - name: Build sdist + wheel
         run: uv build --package ${{ matrix.package }}
 
+      # Upload build artifacts for later publish stages
       - name: Upload dists
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.package }}
           path: dist/*
 
-  # ── Stage 1: provide-terminal-shell (no PyPI deps on other workspace packages) ──
-  testpypi-shell:
-    name: TestPyPI · provide-terminal-shell
-    needs: build
-    runs-on: ubuntu-latest
-    environment: testpypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist-provide-terminal-shell
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
-
-  verify-shell:
-    name: Verify TestPyPI · provide-terminal-shell
-    needs: testpypi-shell
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Read expected version
-        id: ver
-        run: echo "version=$(cat packages/provide-terminal-shell/VERSION)" >> "$GITHUB_OUTPUT"
-      - name: Install from TestPyPI (with retries)
-        run: |
-          for i in 1 2 3 4 5; do
-            if pip install \
-                 --index-url https://test.pypi.org/simple/ \
-                 --extra-index-url https://pypi.org/simple/ \
-                 "provide-terminal-shell==${{ steps.ver.outputs.version }}"; then
-              break
-            fi
-            echo "Attempt $i failed — waiting 30s for index propagation…"
-            sleep 30
-          done
-      - name: Verify installed version
-        run: |
-          installed=$(pip show provide-terminal-shell | grep '^Version:' | awk '{print $2}')
-          expected="${{ steps.ver.outputs.version }}"
-          echo "Installed: $installed  Expected: $expected"
-          [ "$installed" = "$expected" ]
-
-  pypi-shell:
-    name: PyPI · provide-terminal-shell
-    needs: verify-shell
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist-provide-terminal-shell
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
-
-  # ── Stage 2: provide-terminal (depends on provide-terminal-shell) ─────────────────
+  # ── Stage 1: provide-terminal (core, no workspace deps) ─────────────────
   testpypi-terminal:
     name: TestPyPI · provide-terminal
-    needs: [build, pypi-shell]
+    needs: build
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
@@ -137,9 +77,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # Read expected version from VERSION file
       - name: Read expected version
         id: ver
         run: echo "version=$(cat packages/provide-terminal/VERSION)" >> "$GITHUB_OUTPUT"
+      # Install from TestPyPI with fallback to PyPI for transitive deps
       - name: Install from TestPyPI (with retries)
         run: |
           for i in 1 2 3 4 5; do
@@ -152,6 +94,7 @@ jobs:
             echo "Attempt $i failed — waiting 30s for index propagation…"
             sleep 30
           done
+      # Confirm the installed version matches
       - name: Verify installed version
         run: |
           installed=$(pip show provide-terminal | grep '^Version:' | awk '{print $2}')
@@ -174,7 +117,54 @@ jobs:
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
 
-  # ── Stage 3: provide-terminal-cloudflare (depends on both) ─────────────
+  # ── Stage 2: server, client, platform (depend on provide-terminal) ─────
+  testpypi-dependents:
+    name: TestPyPI · ${{ matrix.package }}
+    needs: [build, pypi-terminal]
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        package:
+          - provide-terminal-server
+          - provide-terminal-client
+          - provide-terminal-platform
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ matrix.package }}
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  pypi-dependents:
+    name: PyPI · ${{ matrix.package }}
+    needs: testpypi-dependents
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        package:
+          - provide-terminal-server
+          - provide-terminal-client
+          - provide-terminal-platform
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ matrix.package }}
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ── Stage 3: provide-terminal-cloudflare (depends on core) ─────────────
   testpypi-cloudflare:
     name: TestPyPI · provide-terminal-cloudflare
     needs: [build, pypi-terminal]
@@ -201,9 +191,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # Read expected version
       - name: Read expected version
         id: ver
         run: echo "version=$(cat packages/provide-terminal-cloudflare/VERSION)" >> "$GITHUB_OUTPUT"
+      # Install from TestPyPI with fallback
       - name: Install from TestPyPI (with retries)
         run: |
           for i in 1 2 3 4 5; do
@@ -216,6 +208,7 @@ jobs:
             echo "Attempt $i failed — waiting 30s for index propagation…"
             sleep 30
           done
+      # Confirm the installed version matches
       - name: Verify installed version
         run: |
           installed=$(pip show provide-terminal-cloudflare | grep '^Version:' | awk '{print $2}')
@@ -241,13 +234,14 @@ jobs:
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
     name: Sign & upload to GitHub Release
-    needs: [pypi-shell, pypi-terminal, pypi-cloudflare]
+    needs: [pypi-terminal, pypi-dependents, pypi-cloudflare]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: write
     steps:
+      # Download all build artifacts
       - name: Download all dists
         uses: actions/download-artifact@v4
         with:
@@ -255,6 +249,7 @@ jobs:
           path: dist/
           merge-multiple: true
 
+      # Sign each artifact with Sigstore
       - name: Sign with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
@@ -262,6 +257,7 @@ jobs:
             dist/*.tar.gz
             dist/*.whl
 
+      # Attach signed artifacts to the GitHub Release
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -266,7 +266,7 @@ class TestTelnetColorPath:
 
     def test_colors_through_telnet_proxy(self, page: Page) -> None:
         """Send 16/256/truecolor palette via telnet, verify in browser."""
-        from provide.terminal.fastapi import WsTerminalProxy, mount_terminal_ui
+        from provide.terminal.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 
         # Start color telnet server
         telnet_server = _ColorTelnetServer(("127.0.0.1", 0), _ColorTelnetHandler)
