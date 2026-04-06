@@ -87,13 +87,14 @@ def test_validate_frontend_assets_raises_when_missing() -> None:
 
 
 def test_validate_auth_config_header_mode_passes() -> None:
-    """Mode 'header' with worker_bearer_token should not raise (line 77 return)."""
+    """Mode 'header' with acknowledged flag and worker_bearer_token should not raise."""
     from provide.terminal.server.app import _validate_auth_config
 
     cfg = default_server_config()
     cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
     cfg.auth.worker_bearer_token = "test-token"
-    # Should not raise — exits at line 77 before JWT checks
+    # Should not raise — header mode acknowledged and worker token set
     _validate_auth_config(cfg)
 
 

@@ -201,7 +201,7 @@ class TestCmdProxy:
         mock_uvicorn = MagicMock()
         with (
             patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
-            patch("provide.terminal.fastapi.WsTerminalProxy", _CapturingProxy),
+            patch("provide.terminal.fastapi_utils.WsTerminalProxy", _CapturingProxy),
         ):
             main(["proxy", "bbs.example.com", "23"])
 

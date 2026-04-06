@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.fastapi — create_ws_terminal_router + WsTerminalProxy."""
+"""Tests for provide.terminal.fastapi_utils — create_ws_terminal_router + WsTerminalProxy."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pytest
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 
-from provide.terminal.fastapi import WsTerminalProxy, create_ws_terminal_router
+from provide.terminal.fastapi_utils import WsTerminalProxy, create_ws_terminal_router
 from provide.terminal.transports.websocket import WebSocketStreamReader, WebSocketStreamWriter
 
 # ---------------------------------------------------------------------------
@@ -357,9 +357,9 @@ class TestPackageGetattr:
 
         from fastapi import FastAPI
 
-        from provide.terminal.fastapi import mount_terminal_ui
+        from provide.terminal.fastapi_utils import mount_terminal_ui
 
         app = FastAPI()
-        with patch("provide.terminal.fastapi.Path.is_dir", return_value=False):  # noqa: SIM117
+        with patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=False):  # noqa: SIM117
             with pytest.raises(RuntimeError, match="terminal UI assets not found"):
                 mount_terminal_ui(app)

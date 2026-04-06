@@ -30,12 +30,15 @@ RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# Copy package source and metadata
-COPY pyproject.toml README.md ./
-COPY src/ src/
+# Copy workspace root metadata
+COPY pyproject.toml uv.lock README.md ./
 
-# Install the server extras (FastAPI, uvicorn, pyjwt)
-RUN uv pip install --system ".[server,websocket]"
+# Copy core and server packages
+COPY packages/provide-terminal/ packages/provide-terminal/
+COPY packages/provide-terminal-server/ packages/provide-terminal-server/
+
+# Install the server with all extras
+RUN uv pip install --system "./packages/provide-terminal[emulator]" "./packages/provide-terminal-server[all]"
 
 # Default dev config: no sessions, no JWT, open access.
 # Override via: -v /path/to/config.toml:/config/server.toml:ro

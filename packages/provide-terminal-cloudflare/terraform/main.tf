@@ -45,7 +45,7 @@ resource "cloudflare_workers_kv_namespace" "session_registry_preview" {
 
 # ---------------------------------------------------------------------------
 # Custom domain: uterm.neurotic.org
-# Maps the undef-terminal-cloudflare worker to a subdomain for easier access.
+# Maps the provide-terminal-cloudflare worker to a subdomain for easier access.
 # ---------------------------------------------------------------------------
 
 resource "cloudflare_workers_custom_domain" "uterm" {

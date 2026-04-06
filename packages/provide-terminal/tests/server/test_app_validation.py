@@ -49,21 +49,31 @@ class TestValidateAuthConfigDevMode:
 class TestValidateAuthConfigHeaderMode:
     """Test header mode validation."""
 
+    def test_header_mode_requires_acknowledged(self) -> None:
+        """Header mode without header_mode_acknowledged must raise."""
+        config = ServerConfig(auth=AuthConfig(mode="header", worker_bearer_token="token"))
+        with pytest.raises(ValueError, match="header_mode_acknowledged"):
+            _validate_auth_config(config)
+
     def test_header_mode_requires_worker_bearer_token(self) -> None:
         """Header mode must have worker_bearer_token."""
-        config = ServerConfig(auth=AuthConfig(mode="header", worker_bearer_token=None))
+        config = ServerConfig(auth=AuthConfig(mode="header", header_mode_acknowledged=True, worker_bearer_token=None))
         with pytest.raises(ValueError, match="worker_bearer_token"):
             _validate_auth_config(config)
 
     def test_header_mode_with_token_succeeds(self) -> None:
         """Header mode with token should not raise."""
-        config = ServerConfig(auth=AuthConfig(mode="header", worker_bearer_token="secret123"))
+        config = ServerConfig(
+            auth=AuthConfig(mode="header", header_mode_acknowledged=True, worker_bearer_token="secret123")
+        )
         # Should not raise
         _validate_auth_config(config)
 
     def test_header_mode_logs_warning(self) -> None:
         """Header mode should warn about trusting headers."""
-        config = ServerConfig(auth=AuthConfig(mode="header", worker_bearer_token="token"))
+        config = ServerConfig(
+            auth=AuthConfig(mode="header", header_mode_acknowledged=True, worker_bearer_token="token")
+        )
         # Should not raise (warning is logged internally)
         _validate_auth_config(config)
 
@@ -266,6 +276,7 @@ class TestValidateAuthConfigMutationKilling:
         config = ServerConfig(
             auth=AuthConfig(
                 mode="header",
+                header_mode_acknowledged=True,
                 jwt_algorithms=[],  # OK for non-JWT
                 worker_bearer_token="token",
             )

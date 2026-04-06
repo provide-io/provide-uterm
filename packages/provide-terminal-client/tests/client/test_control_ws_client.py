@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from provide.terminal.control_channel import encode_control, encode_data
 
 from provide.terminal.client.control_ws import (
     AsyncInlineWebSocketClient,
@@ -16,7 +17,6 @@ from provide.terminal.client.control_ws import (
     SyncInlineWebSocketClient,
     encode_logical_frame,
 )
-from provide.terminal.control_channel import encode_control, encode_data
 
 
 def test_encode_logical_frame_uses_data_channel_for_term_and_input() -> None:

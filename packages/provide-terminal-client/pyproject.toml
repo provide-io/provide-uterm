@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "provide-terminal-client"
 dynamic = ["version"]
-description = "HTTP/WS client library for provide-terminal session control"
+description = "Client libraries, transports, and AI/MCP integration for provide-terminal"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = []
@@ -16,6 +16,9 @@ dependencies = []
 [project.optional-dependencies]
 http = ["httpx>=0.27"]
 websocket = ["websockets>=16.0"]
+ssh = ["asyncssh>=2.22.0"]
+mcp = ["fastmcp>=2.0"]
+all = ["httpx>=0.27", "websockets>=16.0", "asyncssh>=2.22.0", "fastmcp>=2.0"]
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=1.3",
@@ -25,7 +28,12 @@ dev = [
     "ruff>=0.15",
     "httpx>=0.27",
     "websockets>=16.0",
+    "asyncssh>=2.22.0",
+    "fastmcp>=2.0",
 ]
+
+[project.scripts]
+uterm-mcp = "provide.terminal.ai.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -43,6 +51,8 @@ addopts = [
     "--tb=short",
     "-ra",
     "--cov=provide.terminal.client",
+    "--cov=provide.terminal.transports",
+    "--cov=provide.terminal.ai",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
@@ -50,12 +60,18 @@ addopts = [
 
 [tool.ruff]
 target-version = "py311"
+line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "S", "B", "C4", "PTH"]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
+    "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
+]
+ignore = ["E501", "S104", "S112", "S311"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101"]
+"__init__.py" = ["F401", "RUF022"]
+"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
 python_version = "3.11"

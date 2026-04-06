@@ -12,7 +12,7 @@ variable "cloudflare_account_id" {
 variable "worker_name" {
   description = "Name of the Cloudflare Worker (must match wrangler.toml `name`)."
   type        = string
-  default     = "undef-terminal-cloudflare"
+  default     = "provide-terminal-cloudflare"
 }
 
 variable "environment" {

@@ -368,16 +368,18 @@ class TestWorkerBearerTokenScope:
 
     def test_header_mode_logs_startup_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """Header auth mode must log a warning about trusting proxy headers."""
+        from provide.terminal.server.app import _validate_auth_config
         from provide.terminal.server.models import AuthConfig
 
         auth = AuthConfig(
             mode="header",
+            header_mode_acknowledged=True,
             worker_bearer_token="header-mode-token",
         )
         cfg = default_server_config()
         cfg.auth = auth
         with caplog.at_level(logging.WARNING, logger="provide.terminal.server.app"):
-            create_server_app(cfg)
+            _validate_auth_config(cfg)
         assert any("auth_mode=header" in r.message and "reverse proxy" in r.message for r in caplog.records)
 
     def test_worker_bearer_token_rejected_on_browser_ws(self) -> None:

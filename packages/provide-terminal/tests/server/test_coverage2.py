@@ -330,11 +330,19 @@ class TestValidateAuthConfig:
         with pytest.raises(ValueError, match="worker_bearer_token is required"):
             create_server_app(cfg)
 
-    def test_header_mode_without_worker_token_raises(self) -> None:
+    def test_header_mode_without_acknowledged_raises(self) -> None:
         from provide.terminal.server.models import AuthConfig
 
         cfg = default_server_config()
         cfg.auth = AuthConfig(mode="header")
+        with pytest.raises(ValueError, match="header_mode_acknowledged"):
+            create_server_app(cfg)
+
+    def test_header_mode_without_worker_token_raises(self) -> None:
+        from provide.terminal.server.models import AuthConfig
+
+        cfg = default_server_config()
+        cfg.auth = AuthConfig(mode="header", header_mode_acknowledged=True)
         with pytest.raises(ValueError, match="worker_bearer_token is required"):
             create_server_app(cfg)
 

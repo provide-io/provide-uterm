@@ -44,11 +44,6 @@ def test_tty_slug_special_chars() -> None:
 # ── run_pam_integration ───────────────────────────────────────────────────────
 
 
-async def test_run_pam_integration_non_server_config_exits_early() -> None:
-    """Should exit immediately if config is not a ServerConfig."""
-    await run_pam_integration(object(), MagicMock())  # must not raise
-
-
 async def test_run_pam_integration_no_notify_socket_exits_early() -> None:
     """Should exit immediately if pam.notify_socket is not set."""
     from provide.terminal.server.models import ServerConfig
@@ -59,7 +54,7 @@ async def test_run_pam_integration_no_notify_socket_exits_early() -> None:
 
 
 async def test_run_pam_integration_missing_pty_package_exits_gracefully() -> None:
-    """If provide-terminal-pty not installed, should warn and return cleanly."""
+    """If provide-terminal-platform not installed, should warn and return cleanly."""
     from provide.terminal.server.models import PamConfig, ServerConfig
 
     ServerConfig(pam=PamConfig(notify_socket="/run/uterm-notify.sock"))
@@ -74,7 +69,7 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from provide.terminal.server.models import PamConfig
 
@@ -105,7 +100,7 @@ async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from provide.terminal.server.models import PamConfig
 
@@ -129,7 +124,7 @@ async def test_on_open_notify_mode_no_auto_session_skips_creation() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from provide.terminal.server.models import PamConfig
 
@@ -148,7 +143,7 @@ async def test_on_open_capture_mode_without_socket_falls_through_to_auto_session
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from provide.terminal.server.models import PamConfig
 
@@ -176,7 +171,7 @@ async def test_on_open_custom_auto_session_command() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from provide.terminal.server.models import PamConfig
 
@@ -203,14 +198,14 @@ async def test_on_close_stops_existing_session() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
     runtime = MagicMock()
     runtime.stop = AsyncMock()
 
     registry = MagicMock()
-    registry._runtimes = {"pam-alice-3": runtime}
+    registry.get_runtime = MagicMock(return_value=runtime)
 
     from provide.terminal.server.models import PamConfig
 
@@ -224,11 +219,11 @@ async def test_on_close_no_session_does_not_raise() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     ev = PamEvent(event="close", username="ghost", tty="/dev/pts/99", pid=0)
     registry = MagicMock()
-    registry._runtimes = {}
+    registry.get_runtime = MagicMock(return_value=None)
 
     from provide.terminal.server.models import PamConfig
 
@@ -240,14 +235,14 @@ async def test_on_close_runtime_stop_exception_is_swallowed() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
     runtime = MagicMock()
     runtime.stop = AsyncMock(side_effect=RuntimeError("already stopped"))
 
     registry = MagicMock()
-    registry._runtimes = {"pam-alice-3": runtime}
+    registry.get_runtime = MagicMock(return_value=runtime)
 
     from provide.terminal.server.models import PamConfig
 
@@ -397,7 +392,7 @@ async def test_on_open_forwards_to_cf_when_configured() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -433,7 +428,7 @@ async def test_on_close_forwards_to_cf_when_configured() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -446,7 +441,7 @@ async def test_on_close_forwards_to_cf_when_configured() -> None:
         relay_token="tok",
     )
     registry = MagicMock()
-    registry._runtimes = {}
+    registry.get_runtime = MagicMock(return_value=None)
 
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -469,7 +464,7 @@ def test_session_id_with_tty_uses_slug_only() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     ev = PamEvent(event="open", username="alice", tty="/dev/pts/3", pid=1234)
     assert _session_id(ev) == "pam-alice-3"
@@ -480,7 +475,7 @@ def test_session_id_empty_tty_includes_pid() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     ev1 = PamEvent(event="open", username="alice", tty="", pid=100)
     ev2 = PamEvent(event="open", username="alice", tty="", pid=200)
@@ -494,7 +489,7 @@ def test_session_id_open_and_close_match_with_same_pid() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     ev_open = PamEvent(event="open", username="bob", tty="", pid=999)
     ev_close = PamEvent(event="close", username="bob", tty="", pid=999)
@@ -514,7 +509,7 @@ async def test_run_pam_integration_dispatches_event_via_real_socket() -> None:
     try:
         import provide.terminal.pty.pam_listener  # noqa: F401
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from provide.terminal.server.models import PamConfig, ServerConfig
 
@@ -595,7 +590,7 @@ async def test_on_open_bridge_start_failure_cleans_up() -> None:
     try:
         from provide.terminal.pty.pam_listener import PamEvent
     except ImportError:
-        pytest.skip("provide-terminal-pty not installed")
+        pytest.skip("provide-terminal-platform not installed")
 
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -612,7 +607,7 @@ async def test_on_open_bridge_start_failure_cleans_up() -> None:
     runtime = MagicMock()
     connector = MagicMock()
     runtime.connector = connector
-    registry._runtimes = {"pam-alice-0": runtime}
+    registry.get_runtime = MagicMock(return_value=runtime)
 
     bridge_mock = MagicMock()
     bridge_mock.start = AsyncMock(side_effect=RuntimeError("connect failed"))

@@ -19,6 +19,6 @@ output "wrangler_kv_block" {
 }
 
 output "uterm_custom_domain" {
-  description = "Custom domain for undef-terminal-cloudflare worker."
+  description = "Custom domain for provide-terminal-cloudflare worker."
   value       = cloudflare_workers_custom_domain.uterm.hostname
 }

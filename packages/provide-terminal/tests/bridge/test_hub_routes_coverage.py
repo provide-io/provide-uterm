@@ -230,7 +230,7 @@ class TestWebSocketStreamReaderBufferedDisconnect:
 class TestMountTerminalUi:
     async def test_mount_registers_route(self) -> None:
         """mount_terminal_ui registers a static file mount on the app."""
-        from provide.terminal.fastapi import mount_terminal_ui
+        from provide.terminal.fastapi_utils import mount_terminal_ui
 
         app = FastAPI()
         mount_terminal_ui(app)

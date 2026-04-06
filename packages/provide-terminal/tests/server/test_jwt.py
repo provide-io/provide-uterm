@@ -114,6 +114,12 @@ def live_reference_server_jwt() -> Generator[str, None, None]:
 
     base_url = f"http://127.0.0.1:{port}"
     config = default_server_config()
+    # Start the shell session in hijack mode so worker_hello echoes "hijack"
+    # rather than "open", avoiding a race where the worker re-sends open mode
+    # after a test-initiated mode switch.
+    for session in config.sessions:
+        if session.session_id == "provide-shell":
+            session.input_mode = "hijack"
     config.auth.mode = "jwt"
     config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
     config.auth.jwt_algorithms = ["HS256"]
@@ -186,13 +192,6 @@ class TestReferenceServerJwtE2E:
         viewer_headers = _auth_headers("viewer-1", ["viewer"])
 
         await self._wait_for_connected(live_reference_server_jwt, "provide-shell", admin_headers)
-        async with httpx.AsyncClient(base_url=live_reference_server_jwt) as http:
-            mode = await http.post(
-                "/api/sessions/provide-shell/mode",
-                headers=admin_headers,
-                json={"input_mode": "hijack"},
-            )
-            assert mode.status_code == 200
 
         async with websockets.connect(
             _ws_url(live_reference_server_jwt, "/ws/browser/provide-shell/term"), additional_headers=viewer_headers

@@ -19,9 +19,10 @@ if not os.environ.get("MUTANT_UNDER_TEST"):
     _ROOT = Path(__file__).resolve().parent
     _PACKAGE_SRCS = [
         _ROOT / "packages" / "provide-terminal" / "src",
+        _ROOT / "packages" / "provide-terminal-server" / "src",
         _ROOT / "packages" / "provide-terminal-cloudflare" / "src",
-        _ROOT / "packages" / "provide-terminal-shell" / "src",
-        _ROOT / "packages" / "provide-terminal-pty" / "src",
+        _ROOT / "packages" / "provide-terminal-platform" / "src",
+        _ROOT / "packages" / "provide-terminal-client" / "src",
     ]
     for _src in reversed(_PACKAGE_SRCS):
         _src_str = str(_src)

@@ -41,7 +41,7 @@ WORKDIR /app
 
 # Copy full workspace so uv can resolve the lockfile
 COPY pyproject.toml uv.lock README.md ./
-COPY src/ src/
+COPY packages/provide-terminal/ packages/provide-terminal/
 COPY packages/provide-terminal-cloudflare/ packages/provide-terminal-cloudflare/
 
 WORKDIR /app/packages/provide-terminal-cloudflare
@@ -51,8 +51,7 @@ RUN uv sync --extra dev
 
 # Populate the CF package's static dir with compiled frontend assets so the
 # worker can serve the UI without needing the provide-terminal package at runtime.
-# (ui/static/ is empty in the source tree; this is a container-only build step.)
-RUN cp -r /app/src/provide/terminal/frontend/. \
+RUN cp -r /app/packages/provide-terminal/src/provide/terminal/frontend/. \
         src/provide_terminal_cloudflare/ui/static/
 
 EXPOSE 27788

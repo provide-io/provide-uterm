@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml pty-architecture
-title provide-terminal-pty — Architecture
+title provide-terminal-platform (pty module) — Architecture
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333
@@ -44,7 +44,7 @@ package "provide-terminal server (Python)" {
   }
 }
 
-package "provide-terminal-pty  (native C — _native/)" #fefce8 {
+package "provide-terminal-platform / pty  (native C — _native/)" #fefce8 {
   [libuterm_capture.so\n(.so / .dylib)\nLD_PRELOAD / DYLD_INSERT_LIBRARIES\nintercepts read/write/connect] as CAPLIB
   [pam_uterm.so\n(.so)\nPAM session module\nnotifies server via Unix socket] as PAMU
 }

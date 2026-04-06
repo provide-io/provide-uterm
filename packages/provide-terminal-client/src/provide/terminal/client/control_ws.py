@@ -11,7 +11,13 @@ from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
+from provide.terminal.control_channel import (
+    ControlChannelDecoder,
+    ControlChunk,
+    DataChunk,
+    encode_control,
+    encode_data,
+)
 
 WsRole = Literal["browser", "worker"]
 

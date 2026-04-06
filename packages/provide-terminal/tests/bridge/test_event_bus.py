@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 
 import pytest
 
@@ -222,7 +221,7 @@ def test_compile_pattern_returns_compiled() -> None:
 
 
 def test_compile_pattern_invalid_raises() -> None:
-    with pytest.raises(re.error):
+    with pytest.raises(ValueError, match="invalid watch pattern regex"):
         _compile_pattern(r"[invalid")
 
 

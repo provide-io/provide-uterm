@@ -378,7 +378,7 @@ class _EchoTelnetHandler(socketserver.BaseRequestHandler):
 @pytest.fixture(scope="session")
 def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
     """Session-scoped fixture: terminal UI + WS/telnet echo proxy for browser tests."""
-    from provide.terminal.fastapi import WsTerminalProxy, mount_terminal_ui
+    from provide.terminal.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 
     received_chunks: list[bytes] = []
     telnet_server = _ThreadedEchoServer(("127.0.0.1", 0), received_chunks)
