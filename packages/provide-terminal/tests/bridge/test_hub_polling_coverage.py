@@ -34,7 +34,7 @@ async def test_broadcast_hijack_state_owner_gets_me_others_get_other() -> None:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.browsers = {ws_owner: "admin", ws_other: "operator"}
         st.hijack_owner = ws_owner
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
 
     await hub.broadcast_hijack_state("bot1")
 
@@ -156,7 +156,7 @@ async def test_wait_for_guard_timeout_ms_minimum() -> None:
     hub._workers["bot1"].last_snapshot = {"screen": "test"}
 
     # timeout_ms=1 should be clamped to 50ms
-    start = time.time()
+    start = time.monotonic()
     ok, snap, reason = await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
@@ -164,7 +164,7 @@ async def test_wait_for_guard_timeout_ms_minimum() -> None:
         timeout_ms=1,  # Will be clamped to 50
         poll_interval_ms=10,
     )
-    elapsed = time.time() - start
+    elapsed = time.monotonic() - start
 
     assert not ok
     assert reason == "prompt_guard_not_satisfied"
@@ -178,7 +178,7 @@ async def test_wait_for_guard_poll_interval_minimum() -> None:
     hub._workers["bot1"].last_snapshot = {"screen": "test", "ts": time.time()}
 
     # poll_interval_ms=1 should be clamped to 20ms
-    start = time.time()
+    start = time.monotonic()
     ok, snap, reason = await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
@@ -186,7 +186,7 @@ async def test_wait_for_guard_poll_interval_minimum() -> None:
         timeout_ms=100,
         poll_interval_ms=1,  # Will be clamped to 20
     )
-    elapsed = time.time() - start
+    elapsed = time.monotonic() - start
 
     # Should have at least 1 poll cycle (20ms)
     assert elapsed >= 0.015
@@ -272,9 +272,9 @@ async def test_wait_for_snapshot_with_fresh_snapshot() -> None:
     }
 
     # Should return immediately without waiting for timeout
-    start = time.time()
+    start = time.monotonic()
     result = await hub.wait_for_snapshot("bot1", timeout_ms=500)
-    elapsed = time.time() - start
+    elapsed = time.monotonic() - start
 
     assert result is not None
     assert result["screen"] == "fresh content"
@@ -364,9 +364,9 @@ async def test_wait_for_snapshot_timestamp_exceeds_req() -> None:
     # Snapshot with ts slightly in future (> req_ts)
     hub._workers["bot1"].last_snapshot = {"screen": "fresh", "ts": req_ts + 0.01}
 
-    start = time.time()
+    start = time.monotonic()
     result = await hub.wait_for_snapshot("bot1", timeout_ms=500)
-    elapsed = time.time() - start
+    elapsed = time.monotonic() - start
 
     assert result is not None
     assert result["screen"] == "fresh"
@@ -380,7 +380,7 @@ async def test_wait_for_guard_min_timeout_50ms() -> None:
     hub._workers["bot1"].last_snapshot = {"screen": "test"}
 
     # Request very small timeout that should be clamped to 50ms
-    start = time.time()
+    start = time.monotonic()
     ok, snap, reason = await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
@@ -388,7 +388,7 @@ async def test_wait_for_guard_min_timeout_50ms() -> None:
         timeout_ms=1,  # Way too small
         poll_interval_ms=10,
     )
-    elapsed = time.time() - start
+    elapsed = time.monotonic() - start
 
     # Should have waited at least 50ms (clamped minimum)
     assert elapsed >= 0.04
@@ -401,7 +401,7 @@ async def test_wait_for_guard_min_interval_20ms() -> None:
     hub._workers["bot1"].last_snapshot = {"screen": "test", "ts": time.time()}
 
     # Request very small interval
-    start = time.time()
+    start = time.monotonic()
     ok, snap, reason = await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
@@ -409,7 +409,7 @@ async def test_wait_for_guard_min_interval_20ms() -> None:
         timeout_ms=100,
         poll_interval_ms=1,  # Way too small, should clamp to 20ms
     )
-    elapsed = time.time() - start
+    elapsed = time.monotonic() - start
 
     # Should have polled multiple times with minimum 20ms intervals
     # At least one poll cycle should occur

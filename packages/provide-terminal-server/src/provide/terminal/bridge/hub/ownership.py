@@ -86,7 +86,7 @@ class _HijackOwnershipMixin:
 
     async def cleanup_expired_hijack(self, worker_id: str) -> bool:
         """Expire any stale REST or dashboard leases for *worker_id*; send resume if fully released."""
-        now = time.time()
+        now = time.monotonic()
         result = await self._expire_leases_under_lock(worker_id, now)
         if result is None:
             return False
@@ -112,7 +112,7 @@ class _HijackOwnershipMixin:
             if st is None:
                 return None
             hs = st.hijack_session
-            if hs is None or hs.lease_expires_at <= time.time() or hs.hijack_id != hijack_id:
+            if hs is None or hs.lease_expires_at <= time.monotonic() or hs.hijack_id != hijack_id:
                 return None
             return hs
 
@@ -136,6 +136,8 @@ class _HijackOwnershipMixin:
             st = self._workers.get(worker_id)
             if st is None or st.worker_ws is None:
                 return False, "no_worker"
+            if st.input_mode == "open":
+                return False, "open_mode"
             if self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st):  # type: ignore[attr-defined]
                 return False, "already_hijacked"
             st.hijack_session = HijackSession(
@@ -163,7 +165,7 @@ class _HijackOwnershipMixin:
                 return False, "already_hijacked"
             ttl = self._dashboard_hijack_lease_s
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + ttl
+            st.hijack_owner_expires_at = time.monotonic() + ttl
         return True, None
 
     async def touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
@@ -173,7 +175,7 @@ class _HijackOwnershipMixin:
             if st is None or st.hijack_owner is None:
                 return None
             ttl = self._dashboard_hijack_lease_s if lease_s is None else max(1, min(int(lease_s), 600))
-            st.hijack_owner_expires_at = time.time() + ttl
+            st.hijack_owner_expires_at = time.monotonic() + ttl
             return st.hijack_owner_expires_at
 
     async def touch_if_owner(self, worker_id: str, ws: WebSocket) -> float | None:
@@ -182,7 +184,7 @@ class _HijackOwnershipMixin:
             st = self._workers.get(worker_id)
             if st is None or not self.is_dashboard_hijack_active(st) or st.hijack_owner is not ws:  # type: ignore[attr-defined]
                 return None
-            st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
+            st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
             return st.hijack_owner_expires_at
 
     async def try_release_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
@@ -295,7 +297,7 @@ class _HijackOwnershipMixin:
                 st is not None
                 and st.hijack_session is not None
                 and st.hijack_session.hijack_id == hijack_id
-                and st.hijack_session.lease_expires_at > time.time()
+                and st.hijack_session.lease_expires_at > time.monotonic()
             )
 
     async def release_rest_hijack(self, worker_id: str, hijack_id: str) -> tuple[bool, bool]:
@@ -337,5 +339,5 @@ class _HijackOwnershipMixin:
                 return False
             allowed: bool = bool(self.can_send_input(st, ws))  # type: ignore[attr-defined]
             if self.is_dashboard_hijack_active(st) and st.hijack_owner is ws:  # type: ignore[attr-defined]
-                st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
+                st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
             return allowed

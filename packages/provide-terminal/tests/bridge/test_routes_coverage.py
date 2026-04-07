@@ -83,7 +83,7 @@ class TestRestSendEmptyKeys:
         import asyncio
 
         hub, app, client = _make_app()
-        now = time.time()
+        now = time.monotonic()
         hid = "abcdef12-0000-0000-0000-000000000000"
 
         # Register a valid REST session
@@ -136,7 +136,7 @@ class TestRestHijackRelease:
         import asyncio
 
         hub, app, client = _make_app()
-        now = time.time()
+        now = time.monotonic()
         hid = "abcdef12-0000-0000-0000-000000000000"
 
         notify_calls: list[dict] = []
@@ -175,7 +175,7 @@ class TestRestHijackRelease:
         import asyncio
 
         hub, app, client = _make_app()
-        now = time.time()
+        now = time.monotonic()
         hid = "abcdef12-0000-0000-0000-000000000000"
 
         async def _setup() -> None:

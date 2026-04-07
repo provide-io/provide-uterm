@@ -294,7 +294,7 @@ class TestForceReleaseHijackDashboard:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 300
+            st.hijack_owner_expires_at = time.monotonic() + 300
 
         result = await hub.force_release_hijack("w1")
         assert result is True

@@ -267,7 +267,7 @@ class TestDisconnectWorkerStateCleanup:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
-            st.hijack_owner_expires_at = time.time() + 3600
+            st.hijack_owner_expires_at = time.monotonic() + 3600
 
         await hub.disconnect_worker("w1")
 
@@ -293,7 +293,7 @@ class TestDisconnectWorkerStateCleanup:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
-            st.hijack_owner_expires_at = time.time() + 3600
+            st.hijack_owner_expires_at = time.monotonic() + 3600
 
         await hub.disconnect_worker("w1")
 

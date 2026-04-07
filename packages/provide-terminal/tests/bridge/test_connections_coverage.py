@@ -58,7 +58,7 @@ async def test_set_worker_hello_mode_blocked_when_hijack_active() -> None:
 
     from provide.terminal.bridge.models import HijackSession
 
-    now = time.time()
+    now = time.monotonic()
     async with hub._lock:
         hub._workers[worker_id].hijack_session = HijackSession(
             hijack_id="test-hid",
@@ -109,7 +109,7 @@ async def test_force_release_hijack_clears_rest_session() -> None:
 
         from provide.terminal.bridge.models import HijackSession, WorkerTermState
 
-        now = time.time()
+        now = time.monotonic()
         st = WorkerTermState()
         st.hijack_session = HijackSession(
             hijack_id="force-hid",
@@ -182,7 +182,7 @@ async def test_register_worker_clears_all_hijack_fields() -> None:
 
     # Pre-populate with hijack state
     async with hub._lock:
-        now = time.time()
+        now = time.monotonic()
         st = WorkerTermState()
         st.hijack_session = HijackSession(
             hijack_id="test",
@@ -362,7 +362,7 @@ async def test_cleanup_browser_disconnect_was_owner_with_rest_active() -> None:
         st.worker_ws = MagicMock()
         st.browsers[ws_owner] = "admin"
         st.browsers[ws_other] = "viewer"
-        now = time.time()
+        now = time.monotonic()
         st.hijack_session = HijackSession(
             hijack_id="test",
             owner="alice",

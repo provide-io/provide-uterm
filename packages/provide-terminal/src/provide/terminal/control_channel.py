@@ -63,8 +63,14 @@ def encode_control(payload: Mapping[str, Any]) -> str:
 class ControlChannelDecoder:
     """Incrementally decode the inline control channel."""
 
-    def __init__(self, *, max_control_payload_bytes: int = 1_048_576) -> None:
+    def __init__(
+        self,
+        *,
+        max_control_payload_bytes: int = 1_048_576,
+        max_buffer_bytes: int = 10_485_760,
+    ) -> None:
         self._max_control_payload_bytes = max(1, int(max_control_payload_bytes))
+        self._max_buffer_bytes = max(1, int(max_buffer_bytes))
         self._buffer = ""
         self._buffer_parts: list[str] = []
 
@@ -73,6 +79,13 @@ class ControlChannelDecoder:
         if not isinstance(chunk, str):
             raise TypeError(f"control channel chunks must be str, got {type(chunk).__name__!r}")
         self._buffer_parts.append(chunk)
+        total = sum(len(p) for p in self._buffer_parts)
+        if total > self._max_buffer_bytes:
+            self._buffer_parts.clear()
+            self._buffer = ""
+            raise ControlChannelProtocolError(
+                f"control channel buffer overflow: {total} > {self._max_buffer_bytes}"
+            )
         self._buffer = "".join(self._buffer_parts)
         events = self._drain(final=False)
         # After _drain, self._buffer contains only unconsumed data.

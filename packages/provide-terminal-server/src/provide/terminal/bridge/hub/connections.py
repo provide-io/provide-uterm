@@ -31,6 +31,20 @@ logger = get_logger(__name__)
 # on completion via the done callback.
 _background_tasks: set[asyncio.Task[Any]] = set()
 
+
+async def shutdown_background_tasks(timeout: float = 5.0) -> int:
+    """Cancel and await all pending background tasks. Returns count cancelled."""
+    tasks = list(_background_tasks)
+    if not tasks:
+        return 0
+    for task in tasks:
+        task.cancel()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    _background_tasks.clear()
+    cancelled = sum(1 for r in results if isinstance(r, (asyncio.CancelledError, Exception)))
+    return cancelled
+
+
 # Maximum number of per-client rate-limit buckets held in memory at once.
 # On overflow the oldest half of entries are evicted (LRU-lite), preserving
 # rate-limit state for recently-active clients while bounding memory growth.
@@ -91,7 +105,7 @@ class _ConnectionMixin:
             for k in list(self._rest_acquire_per_client)[:_REST_CLIENT_EVICT_COUNT]:
                 del self._rest_acquire_per_client[k]
         bucket = self._rest_acquire_per_client.setdefault(client_id, TokenBucket(self._rest_acquire_rate))
-        return self._rest_acquire_bucket.allow() and bucket.allow()
+        return bucket.allow() and self._rest_acquire_bucket.allow()
 
     def allow_rest_send_for(self, client_id: str) -> bool:
         """Per-client REST send/step rate limit (also checks the global bucket).
@@ -103,7 +117,7 @@ class _ConnectionMixin:
             for k in list(self._rest_send_per_client)[:_REST_CLIENT_EVICT_COUNT]:
                 del self._rest_send_per_client[k]
         bucket = self._rest_send_per_client.setdefault(client_id, TokenBucket(self._rest_send_rate))
-        return self._rest_send_bucket.allow() and bucket.allow()
+        return bucket.allow() and self._rest_send_bucket.allow()
 
     # -- Token access ----------------------------------------------------------
 

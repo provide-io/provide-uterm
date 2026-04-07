@@ -33,9 +33,9 @@ def _active_session(hijack_id: str, owner: str = "test") -> HijackSession:
     return HijackSession(
         hijack_id=hijack_id,
         owner=owner,
-        acquired_at=time.time(),
-        lease_expires_at=time.time() + 3600,
-        last_heartbeat=time.time(),
+        acquired_at=time.monotonic(),
+        lease_expires_at=time.monotonic() + 3600,
+        last_heartbeat=time.monotonic(),
     )
 
 

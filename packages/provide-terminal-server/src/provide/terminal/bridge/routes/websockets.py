@@ -112,7 +112,11 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
         try:
             while True:
-                raw = await websocket.receive_text()
+                try:
+                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=hub.ws_idle_timeout_s)
+                except TimeoutError:
+                    logger.info("ws_worker_idle_timeout worker_id=%s", worker_id)
+                    break
                 if len(raw.encode("utf-8")) > hub.max_ws_message_bytes:
                     logger.warning("ws_worker_oversized worker_id=%s size=%d", worker_id, len(raw))
                     continue
@@ -318,7 +322,11 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         try:
             _browser_bucket = TokenBucket(hub.browser_rate_limit_per_sec)
             while True:
-                raw = await websocket.receive_text()
+                try:
+                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=hub.ws_idle_timeout_s)
+                except TimeoutError:
+                    logger.info("ws_browser_idle_timeout worker_id=%s", worker_id)
+                    break
                 if len(raw.encode("utf-8")) > hub.max_ws_message_bytes:
                     logger.warning("ws_browser_oversized worker_id=%s size=%d", worker_id, len(raw))
                     continue

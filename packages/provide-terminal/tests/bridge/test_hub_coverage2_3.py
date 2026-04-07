@@ -51,7 +51,7 @@ class TestRestSendKeysTooLong:
     def test_send_keys_too_long_returns_400(self) -> None:
         """Line 318: len(request.keys) > hub.max_input_chars → 400."""
         hub, app, client = _make_app(max_input_chars=100)
-        now = time.time()
+        now = time.monotonic()
         hid = "abcdef12-0000-0000-0000-000000000000"
 
         async def _setup() -> None:

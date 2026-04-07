@@ -57,6 +57,13 @@ def _encode_worker_frame(msg: dict[str, Any]) -> str:
     return encode_control(msg)
 
 
+def _mono_to_wall(mono_ts: float | None) -> float | None:
+    """Convert a monotonic timestamp to wall-clock for external consumers."""
+    if mono_ts is None:
+        return None
+    return time.time() + (mono_ts - time.monotonic())
+
+
 class BrowserRoleResolutionError(RuntimeError):
     """Raised when a browser-role resolver fails and the WS should be rejected."""
 
@@ -95,6 +102,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         resume_ttl_s: float = 300,
         on_resume: ResumeCallback | None = None,
         event_bus: EventBus | None = None,
+        ws_idle_timeout_s: float = 300.0,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -120,18 +128,27 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._on_resume = on_resume
         self._ws_to_resume_token: dict[WebSocket, str] = {}
         self._event_bus: EventBus | None = event_bus
+        self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))
 
     @property
     def event_bus(self) -> EventBus | None:
         """Public accessor for the EventBus instance (None if not configured)."""
         return self._event_bus
 
+    async def shutdown(self) -> None:
+        """Cancel all background tasks for graceful shutdown."""
+        from provide.terminal.bridge.hub.connections import shutdown_background_tasks
+
+        count = await shutdown_background_tasks()
+        if count:
+            logger.info("hub_shutdown cancelled %d background tasks", count)
+
     async def touch_activity(self, worker_id: str) -> None:
         """Update the last-activity timestamp for *worker_id*."""
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is not None:
-                st.last_activity_at = time.time()
+                st.last_activity_at = time.monotonic()
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
@@ -152,7 +169,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
     def has_valid_rest_lease(st: WorkerTermState) -> bool:
         """Return True if *st* has an unexpired REST hijack session."""
         hs = st.hijack_session
-        return hs is not None and hs.lease_expires_at > time.time()
+        return hs is not None and hs.lease_expires_at > time.monotonic()
 
     @staticmethod
     def is_dashboard_hijack_active(st: WorkerTermState) -> bool:
@@ -161,7 +178,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             return False
         if st.hijack_owner_expires_at is None:
             return True
-        return st.hijack_owner_expires_at > time.time()
+        return st.hijack_owner_expires_at > time.monotonic()
 
     def is_hijacked(self, st: WorkerTermState) -> bool:
         """Return True if *st* is under any active hijack (dashboard WS or REST)."""
@@ -327,7 +344,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             is_rest=is_rest,
             hijack_owner=hijack_owner,
             input_mode=input_mode,
-            lease_expires_at=lease_expires_at,
+            lease_expires_at=_mono_to_wall(lease_expires_at),
         )
         if dead:
             await self.remove_dead_browsers(worker_id, dead)
@@ -356,7 +373,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 is_rest=is_rest2,
                 hijack_owner=hijack_owner2,
                 input_mode=input_mode2,
-                lease_expires_at=lease2,
+                lease_expires_at=_mono_to_wall(lease2),
                 suppress_errors=True,
             )
 
@@ -424,7 +441,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         return make_hijack_state_frame(
             hijacked=is_h,
             owner=owner,
-            lease_expires_at=lease_expires_at,
+            lease_expires_at=_mono_to_wall(lease_expires_at),
             input_mode=input_mode,
         )
 
@@ -483,7 +500,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
 
     async def get_idle_candidates(self, timeout_s: float) -> list[tuple[str, float]]:
         """Return ``(worker_id, last_activity_at)`` for workers with no browsers idle beyond *timeout_s*."""
-        now = time.time()
+        now = time.monotonic()
         async with self._lock:
             return [
                 (wid, st.last_activity_at)
@@ -518,7 +535,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 and not self.is_hijacked(st)
             ):
                 st.hijack_owner = ws
-                st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
+                st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
                 return True
         return False
 

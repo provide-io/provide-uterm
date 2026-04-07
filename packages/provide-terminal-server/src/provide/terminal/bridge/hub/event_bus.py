@@ -69,8 +69,9 @@ class EventBus:
             slow consumers at the cost of more memory.
     """
 
-    def __init__(self, max_queue_depth: int = 500) -> None:
+    def __init__(self, max_queue_depth: int = 500, max_subscribers_per_worker: int = 100) -> None:
         self._max_queue_depth = max(1, int(max_queue_depth))
+        self._max_subscribers_per_worker = max(1, int(max_subscribers_per_worker))
         # worker_id -> list of active subscriptions
         self._subs: dict[str, list[_Subscription]] = {}
 
@@ -129,14 +130,26 @@ class EventBus:
             self._put_sentinel(sub)
 
     def _put_sentinel(self, sub: _Subscription) -> None:
-        """Put None into *sub*'s queue, dropping oldest if full."""
+        """Put None into *sub*'s queue, dropping oldest if full.
+
+        The sentinel MUST be delivered — a missing sentinel leaves subscribers
+        hanging forever.  If normal drop-oldest fails, the queue is cleared.
+        """
         try:
             sub.queue.put_nowait(None)
         except asyncio.QueueFull:
             with contextlib.suppress(asyncio.QueueEmpty):  # pragma: no cover — race guard
                 sub.queue.get_nowait()
-            with contextlib.suppress(asyncio.QueueFull):
+            sub.dropped += 1
+            try:
                 sub.queue.put_nowait(None)
+            except asyncio.QueueFull:
+                # Clear queue entirely to guarantee sentinel delivery
+                while not sub.queue.empty():
+                    with contextlib.suppress(asyncio.QueueEmpty):
+                        sub.queue.get_nowait()
+                sub.queue.put_nowait(None)
+                logger.warning("event_bus_sentinel_forced worker_id=%s sub_id=%s", sub.worker_id, sub.sub_id)
 
     # ------------------------------------------------------------------
     # Subscription management
@@ -168,6 +181,12 @@ class EventBus:
             ``await asyncio.wait_for(sub.queue.get(), timeout=...)``.
             A ``None`` item signals worker disconnect.
         """
+        current = len(self._subs.get(worker_id, []))
+        if current >= self._max_subscribers_per_worker:
+            raise RuntimeError(
+                f"EventBus: max subscribers ({self._max_subscribers_per_worker}) "
+                f"reached for worker {worker_id!r}"
+            )
         compiled = _compile_pattern(pattern)
         sub = _Subscription(
             sub_id=uuid.uuid4().hex,

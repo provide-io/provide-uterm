@@ -37,7 +37,7 @@ class TestCleanupExpiredHijackRecheck:
         worker_ws = _make_ws()
         worker_ws.send_text = AsyncMock()
 
-        now = time.time()
+        now = time.monotonic()
         # Set an expired REST session
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
@@ -65,9 +65,9 @@ class TestCleanupExpiredHijackRecheck:
                         st2.hijack_session = HijackSession(
                             hijack_id="hid2",
                             owner="other",
-                            acquired_at=time.time(),
-                            lease_expires_at=time.time() + 60,
-                            last_heartbeat=time.time(),
+                            acquired_at=time.monotonic(),
+                            lease_expires_at=time.monotonic() + 60,
+                            last_heartbeat=time.monotonic(),
                         )
             return await original_send_worker(wid, msg)
 
@@ -85,7 +85,7 @@ class TestCleanupExpiredHijackRecheck:
         worker_ws = _make_ws()
         worker_ws.send_text = AsyncMock()
 
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
@@ -124,7 +124,7 @@ class TestRemoveDeadBrowsersOwner:
             st.worker_ws = worker_ws
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 300
+            st.hijack_owner_expires_at = time.monotonic() + 300
 
         changed = await hub.remove_dead_browsers("w1", {owner_ws})
         assert changed is True
@@ -143,13 +143,13 @@ class TestExtendHijackLeaseNotFound:
     async def test_extend_lease_unknown_worker_returns_none(self) -> None:
         """Line 240: worker not found → return None."""
         hub = _make_hub()
-        result = await hub.extend_hijack_lease("nonexistent", "hid1", 60, time.time())
+        result = await hub.extend_hijack_lease("nonexistent", "hid1", 60, time.monotonic())
         assert result is None
 
     async def test_extend_lease_wrong_hijack_id_returns_none(self) -> None:
         """Line 240: hijack_id mismatch → return None."""
         hub = _make_hub()
-        now = time.time()
+        now = time.monotonic()
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
@@ -174,7 +174,7 @@ class TestReleaseRestHijackShouldResume:
     async def test_release_rest_hijack_no_dashboard_returns_should_resume_true(self) -> None:
         """Line 306: release_rest_hijack when no dashboard hijack → should_resume=True."""
         hub = _make_hub()
-        now = time.time()
+        now = time.monotonic()
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
