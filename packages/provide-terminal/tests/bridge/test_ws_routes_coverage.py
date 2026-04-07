@@ -59,7 +59,7 @@ class TestStaleHijackOnWorkerReconnect:
             # that left hijack state behind)
             import asyncio
 
-            now = time.time()
+            now = time.monotonic()
 
             async def _setup_stale():
                 async with hub._lock:

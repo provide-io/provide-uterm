@@ -42,7 +42,7 @@ async def _register_worker(hub: TermHub, worker_id: str, worker_ws: Any | None =
 
 
 def _make_hijack_session(worker_id: str, lease_s: float = 60.0) -> HijackSession:
-    now = time.time()
+    now = time.monotonic()
     return HijackSession(
         hijack_id=f"hj-{worker_id}",
         owner="test-owner",
@@ -59,7 +59,7 @@ def _make_hijack_session(worker_id: str, lease_s: float = 60.0) -> HijackSession
 
 class TestGetHijackEventsData:
     def _make_session(self, hijack_id: str = "hj-1") -> HijackSession:
-        now = time.time()
+        now = time.monotonic()
         return HijackSession(
             hijack_id=hijack_id,
             owner="test",
@@ -169,7 +169,7 @@ class TestGetHijackEventsData:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -195,7 +195,7 @@ class TestCheckHijackValid:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -214,7 +214,7 @@ class TestCheckHijackValid:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -244,11 +244,11 @@ class TestPrepareBrowserInput:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.input_mode = "hijack"
             st.browsers[owner_ws] = "admin"
 
-        initial_expiry = time.time() + 60
+        initial_expiry = time.monotonic() + 60
         async with hub._lock:
             st.hijack_owner_expires_at = initial_expiry
 
@@ -265,7 +265,7 @@ class TestPrepareBrowserInput:
         wws = _make_ws()
         owner_ws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        before = time.time()
+        before = time.monotonic()
         async with hub._lock:
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = before + 10  # short lease
@@ -288,7 +288,7 @@ class TestPrepareBrowserInput:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.input_mode = "hijack"
             st.browsers[owner_ws] = "admin"
 
@@ -304,7 +304,7 @@ class TestPrepareBrowserInput:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.input_mode = "hijack"
             st.browsers[owner_ws] = "admin"
 
@@ -313,4 +313,4 @@ class TestPrepareBrowserInput:
             new_expiry = hub._workers["w1"].hijack_owner_expires_at
         # Must be in the future (not in the past due to subtraction)
         assert new_expiry is not None
-        assert new_expiry > time.time()
+        assert new_expiry > time.monotonic()

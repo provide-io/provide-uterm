@@ -42,10 +42,10 @@ class _PollingMixin:
 
     async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
         """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""
-        req_ts = time.time()
-        end = req_ts + timeout_ms / 1000.0
+        req_ts = time.time()  # wall-clock — compared against worker snapshot ts
+        end = time.monotonic() + timeout_ms / 1000.0
         await self.request_snapshot(worker_id)  # type: ignore[attr-defined]
-        while time.time() < end:
+        while time.monotonic() < end:
             async with self._lock:  # type: ignore[attr-defined]
                 st: WorkerTermState | None = self._workers.get(worker_id)  # type: ignore[attr-defined]
                 if st is None:
@@ -98,7 +98,7 @@ class _PollingMixin:
             await self.request_snapshot(worker_id)  # type: ignore[attr-defined]
             return True, snap, None
 
-        end = time.time() + max(50, timeout_ms) / 1000.0
+        end = time.monotonic() + max(50, timeout_ms) / 1000.0
         interval = max(20, poll_interval_ms) / 1000.0
         last_snapshot: dict[str, Any] | None = None
         # Request an initial snapshot before entering the loop; subsequent
@@ -107,7 +107,7 @@ class _PollingMixin:
         # the worker is already streaming snapshots proactively.
         await self.request_snapshot(worker_id)  # type: ignore[attr-defined]
         last_snap_ts = 0.0
-        while time.time() < end:
+        while time.monotonic() < end:
             async with self._lock:  # type: ignore[attr-defined]
                 st = self._workers.get(worker_id)  # type: ignore[attr-defined]
                 last_snapshot = st.last_snapshot if st is not None else None

@@ -84,7 +84,7 @@ class TestSnapshotReq:
             st = hub._workers["w1"]
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         worker_ws.send_text.reset_mock()
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "snapshot_req"}, False)
         # Snapshot request should NOT be forwarded to the worker because hijack is active
@@ -101,7 +101,7 @@ class TestHeartbeat:
         async with hub._lock:
             st = hub._workers["w1"]
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "heartbeat"}, True)
         # First call is heartbeat_ack; subsequent calls are hijack_state broadcasts.
         first_sent = ws.send_text.call_args_list[0][0][0]
@@ -168,7 +168,7 @@ class TestHijackRelease:
         async with hub._lock:
             st = hub._workers["w1"]
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         assert result is False
         async with hub._lock:

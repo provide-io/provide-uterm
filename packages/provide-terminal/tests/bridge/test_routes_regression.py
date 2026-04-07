@@ -35,9 +35,9 @@ def _active_session(hijack_id: str, owner: str = "test") -> HijackSession:
     return HijackSession(
         hijack_id=hijack_id,
         owner=owner,
-        acquired_at=time.time(),
-        lease_expires_at=time.time() + 3600,
-        last_heartbeat=time.time(),
+        acquired_at=time.monotonic(),
+        lease_expires_at=time.monotonic() + 3600,
+        last_heartbeat=time.monotonic(),
     )
 
 
@@ -254,8 +254,10 @@ def test_snapshot_returns_fresh_lease_after_concurrent_heartbeat() -> None:
 
     assert r.status_code == 200
     data = r.json()
-    assert data["lease_expires_at"] == extended_expires, (
-        f"expected fresh expiry {extended_expires}, got {data['lease_expires_at']}"
+    # REST response converts monotonic→wall-clock; check within tolerance
+    expected_wall = time.time() + (extended_expires - time.monotonic())
+    assert abs(data["lease_expires_at"] - expected_wall) < 2.0, (
+        f"expected ~{expected_wall}, got {data['lease_expires_at']}"
     )
 
 
@@ -286,8 +288,9 @@ def test_snapshot_falls_back_to_original_lease_if_session_gone() -> None:
 
     assert r.status_code == 200
     data = r.json()
-    # Falls back to the originally-captured expiry
-    assert data["lease_expires_at"] == original_expires
+    # Falls back to the originally-captured expiry (converted from monotonic to wall-clock)
+    # Allow ±2s tolerance for the monotonic→wall conversion
+    assert abs(data["lease_expires_at"] - (time.time() + (original_expires - time.monotonic()))) < 2.0
 
 
 # ---------------------------------------------------------------------------

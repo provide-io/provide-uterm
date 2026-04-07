@@ -25,10 +25,11 @@ class WebSocketStreamReader:
     buffered and served byte-by-byte as ``read(1)`` requests arrive.
     """
 
-    def __init__(self, ws: WebSocket) -> None:
+    def __init__(self, ws: WebSocket, *, encoding: str = "utf-8") -> None:
         self._ws = ws
         self._buffer = bytearray()
         self._closed = False
+        self._encoding = encoding
 
     async def read(self, n: int) -> bytes:
         """Return up to *n* bytes, fetching new WS messages as needed.
@@ -41,7 +42,7 @@ class WebSocketStreamReader:
         while len(self._buffer) < n:
             try:
                 text = await self._ws.receive_text()
-                self._buffer.extend(text.encode("utf-8"))
+                self._buffer.extend(text.encode(self._encoding, errors="replace"))
             except (WebSocketDisconnect, RuntimeError):
                 self._closed = True
                 if self._buffer:

@@ -49,12 +49,11 @@ class TestRateLimitEvaluationOrder:
     def test_acquire_per_client_rejected_does_not_drain_global(self) -> None:
         """When per-client bucket is exhausted, global token must NOT be consumed.
 
-        Kills the mutation that swaps operands back:
-          return self._rest_acquire_bucket.allow() and bucket.allow()
-        With that mutation the global bucket gets drained even when per-client would block.
+        Uses a high global rate (100/s) so the global bucket has plenty of
+        tokens — only the per-client bucket is drained.  This catches the
+        evaluation-order bug where global.allow() is called before per-client.
         """
-        hub = _make_hub(rest_acquire_rate_limit_per_sec=0.001)  # tiny per-client rate
-        # Drain the per-client bucket completely.
+        hub = _make_hub(rest_acquire_rate_limit_per_sec=100)  # high global rate
         client = "victim"
         # Create and exhaust per-client bucket manually.
         hub._rest_acquire_per_client[client] = TokenBucket(0.001)
@@ -73,10 +72,9 @@ class TestRateLimitEvaluationOrder:
     def test_send_per_client_rejected_does_not_drain_global(self) -> None:
         """Same as above for the send rate limiter.
 
-        Kills the mutation:
-          return self._rest_send_bucket.allow() and bucket.allow()
+        Uses a high global rate so only per-client exhaustion is tested.
         """
-        hub = _make_hub(rest_send_rate_limit_per_sec=0.001)
+        hub = _make_hub(rest_send_rate_limit_per_sec=100)  # high global rate
         client = "flooder"
         hub._rest_send_per_client[client] = TokenBucket(0.001)
         hub._rest_send_per_client[client]._tokens = 0.0
@@ -327,7 +325,7 @@ class TestWasOwnerClearsExpiresAt:
             st.browsers[browser_ws] = "admin"
             # Make browser_ws the dashboard hijack owner with an active lease.
             st.hijack_owner = browser_ws
-            st.hijack_owner_expires_at = time.time() + 3600  # far future
+            st.hijack_owner_expires_at = time.monotonic() + 3600  # far future
 
         await hub.cleanup_browser_disconnect("w1", browser_ws, owned_hijack=True)
 

@@ -72,7 +72,7 @@ class TestDisconnectWorkerWasHijacked:
         mock_ws.close = AsyncMock()
         mock_ws.send_text = AsyncMock()
 
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = mock_ws
@@ -106,7 +106,7 @@ class TestRestSendToctouRecheck:
 
         hub, app = _make_app()
         hid = "aabb0011-2233-4455-6677-000000000001"
-        now = time.time()
+        now = time.monotonic()
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
@@ -149,7 +149,7 @@ class TestRestStepToctouRecheck:
 
         hub, app = _make_app()
         hid = "aabb0011-2233-4455-6677-000000000002"
-        now = time.time()
+        now = time.monotonic()
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())

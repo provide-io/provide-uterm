@@ -156,7 +156,7 @@ class TestRestSessionValidation:
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
             # Create a session that expires immediately
-            now = time.time()
+            now = time.monotonic()
             st.hijack_session = HijackSession(
                 hijack_id="aabb0011-2233-4455-6677-889900aabbcc",
                 owner="tester",
@@ -270,7 +270,7 @@ class TestBroadcastDeadSocketHijackOwner:
             st.worker_ws = worker_ws
             st.browsers[dead_browser] = "operator"
             st.hijack_owner = dead_browser
-            st.hijack_owner_expires_at = time.time() + 600
+            st.hijack_owner_expires_at = time.monotonic() + 600
 
         await hub.broadcast("w1", {"type": "test_msg"})
 
@@ -316,7 +316,7 @@ class TestBroadcastHijackStateDeadSocketOwner:
             st.worker_ws = worker_ws
             st.browsers[dead_browser] = "operator"
             st.hijack_owner = dead_browser
-            st.hijack_owner_expires_at = time.time() + 600
+            st.hijack_owner_expires_at = time.monotonic() + 600
 
         await hub.broadcast_hijack_state("w1")
 
@@ -335,7 +335,7 @@ class TestTryAcquireRestHijackNoWorker:
     async def test_returns_no_worker_when_disconnected(self) -> None:
         hub, _ = _make_app()
         ok, err = await hub.try_acquire_rest_hijack(
-            "no-such-worker", owner="owner", lease_s=300, hijack_id="aabb", now=time.time()
+            "no-such-worker", owner="owner", lease_s=300, hijack_id="aabb", now=time.monotonic()
         )
         assert ok is False
         assert err == "no_worker"
@@ -346,7 +346,7 @@ class TestTryAcquireRestHijackNoWorker:
         hub, _ = _make_app()
         async with hub._lock:
             hub._workers["w1"] = WorkerTermState()  # worker_ws defaults to None
-        ok, err = await hub.try_acquire_rest_hijack("w1", owner="owner", lease_s=300, hijack_id="aabb", now=time.time())
+        ok, err = await hub.try_acquire_rest_hijack("w1", owner="owner", lease_s=300, hijack_id="aabb", now=time.monotonic())
         assert ok is False
         assert err == "no_worker"
 
@@ -365,12 +365,12 @@ class TestTouchHijackOwnerWithLease:
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.hijack_owner = mock_ws
-            st.hijack_owner_expires_at = time.time() + 10
+            st.hijack_owner_expires_at = time.monotonic() + 10
 
         result = await hub.touch_hijack_owner("w1", lease_s=120)
         assert result is not None
         # Should be approximately now + 120
-        assert result > time.time() + 100
+        assert result > time.monotonic() + 100
 
 
 # ---------------------------------------------------------------------------

@@ -195,7 +195,7 @@ class TestHijackRequestWorkerMessage:
             st = hub._workers["w1"]
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
 
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         assert result is False
@@ -263,7 +263,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         # First call = resume control frame
         msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
@@ -277,7 +277,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["action"] == "resume"
@@ -290,7 +290,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["owner"] == "dashboard"
@@ -303,7 +303,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert msg["lease_s"] == 0
@@ -316,7 +316,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
         assert "ts" in msg
@@ -329,7 +329,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         result = await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         assert result is False
 
@@ -341,7 +341,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         # No rest lease → rest_active=False → _do_resume=True → resume sent
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
         wws.send_text.assert_called()
@@ -356,7 +356,7 @@ class TestHijackReleaseWorkerMessage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         with patch.object(hub, "notify_hijack_changed") as mock_notify:
             await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_release"}, True)
             mock_notify.assert_called_once()

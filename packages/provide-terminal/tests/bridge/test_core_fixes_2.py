@@ -99,7 +99,7 @@ class TestDisconnectWorkerWasHijackedLogic:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
-            st.hijack_owner_expires_at = time.time() + 3600
+            st.hijack_owner_expires_at = time.monotonic() + 3600
 
         await hub.disconnect_worker("w1")
 
@@ -217,7 +217,7 @@ class TestDisconnectWorkerCallArgs:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
-            st.hijack_owner_expires_at = time.time() + 3600
+            st.hijack_owner_expires_at = time.monotonic() + 3600
 
         recorded: list[tuple[str, bool, Any]] = []
 
@@ -251,7 +251,7 @@ class TestDisconnectWorkerCallArgs:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
-            st.hijack_owner_expires_at = time.time() + 3600
+            st.hijack_owner_expires_at = time.monotonic() + 3600
 
         recorded_ids: list[str | None] = []
 
@@ -359,7 +359,7 @@ class TestSetInputModeActiveHijackError:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = hijack_ws
-            st.hijack_owner_expires_at = time.time() + 3600
+            st.hijack_owner_expires_at = time.monotonic() + 3600
 
         ok, err = await hub.set_input_mode("w1", "open")
 
@@ -410,7 +410,7 @@ class TestSetInputModeBroadcastPayload:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.browsers[browser_ws] = "operator"
 
-        before = time.time()
+        before = time.time()  # wall-clock — comparing against broadcast ts
         await hub.set_input_mode("w1", "open")
         after = time.time()
 

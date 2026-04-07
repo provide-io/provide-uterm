@@ -57,6 +57,7 @@ control.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import time
 import uuid
@@ -76,6 +77,11 @@ from provide.terminal.bridge.models import (
     HijackSendRequest,
     InputModeRequest,
 )
+
+
+def _mono_to_wall(mono_ts: float) -> float:
+    """Convert a monotonic timestamp to wall-clock for external API responses."""
+    return time.time() + (mono_ts - time.monotonic())
 from provide.terminal.bridge.rest_helpers import (
     build_hijack_events_response,
     build_hijack_snapshot_response,
@@ -124,7 +130,8 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         # returns False, which is caught at the ok check below.
         lease_s = hub.clamp_lease(request.lease_s)
         hijack_id = str(uuid.uuid4())
-        now = time.time()
+        wall_now = time.time()
+        mono_now = time.monotonic()
         ok = await hub.send_worker(
             worker_id,
             {
@@ -133,7 +140,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 "owner": request.owner,
                 "lease_s": lease_s,
                 "hijack_id": hijack_id,
-                "ts": now,
+                "ts": wall_now,
             },
         )
         if not ok:
@@ -151,7 +158,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 owner=request.owner,
                 lease_s=lease_s,
                 hijack_id=hijack_id,
-                now=now,
+                now=mono_now,
             )
             if not acquired:
                 if err == "already_hijacked":
@@ -187,11 +194,15 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                             "owner": request.owner,
                             "lease_s": 0,
                             "hijack_id": hijack_id,
-                            "ts": now,
+                            "ts": wall_now,
                         },
                     )
-                error_msg = "No worker connected." if err == "no_worker" else "Worker is already hijacked."
-                return JSONResponse({"error": error_msg}, status_code=409)
+                error_msgs = {
+                    "no_worker": "No worker connected.",
+                    "already_hijacked": "Worker is already hijacked.",
+                    "open_mode": "Hijack not available in open input mode.",
+                }
+                return JSONResponse({"error": error_msgs.get(err, str(err))}, status_code=409)
             session_committed = True
             hub.metric("hijack_acquires_total")
             logger.info(
@@ -211,7 +222,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 "ok": True,
                 "worker_id": worker_id,
                 "hijack_id": hijack_id,
-                "lease_expires_at": now + lease_s,
+                "lease_expires_at": wall_now + lease_s,
                 "owner": request.owner,
             }
         finally:
@@ -219,7 +230,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 # Pause was sent but the session was never committed (e.g. client
                 # disconnected and the request was cancelled).  Send a resume so
                 # the worker exits the paused state.
-                with contextlib.suppress(Exception):
+                try:
                     await hub.send_worker(
                         worker_id,
                         {
@@ -228,9 +239,11 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                             "owner": request.owner,
                             "lease_s": 0,
                             "hijack_id": hijack_id,
-                            "ts": now,
+                            "ts": wall_now,
                         },
                     )
+                except (asyncio.CancelledError, OSError, RuntimeError) as exc:
+                    logger.warning("hijack_acquire_compensating_resume_failed worker_id=%s: %s", worker_id, exc)
 
     @router.post("/worker/{worker_id}/hijack/{hijack_id}/heartbeat")
     async def hijack_heartbeat(
@@ -244,13 +257,13 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         if hs is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         lease_s = hub.clamp_lease(request.lease_s)
-        now = time.time()
+        now = time.monotonic()
         new_expires = await hub.extend_hijack_lease(worker_id, hijack_id, lease_s, now)
         if new_expires is None:  # pragma: no cover
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         await hub.append_event(worker_id, "hijack_heartbeat", {"hijack_id": hijack_id, "lease_s": lease_s})
         await hub.broadcast_hijack_state(worker_id)
-        return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id, "lease_expires_at": new_expires}
+        return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id, "lease_expires_at": _mono_to_wall(new_expires)}
 
     @router.get("/worker/{worker_id}/hijack/{hijack_id}/snapshot")
     async def hijack_snapshot(
@@ -269,7 +282,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             worker_id=worker_id,
             hijack_id=hijack_id,
             snapshot=snapshot,
-            lease_expires_at=fresh_expires,
+            lease_expires_at=_mono_to_wall(fresh_expires),
         )
 
     @router.get("/worker/{worker_id}/hijack/{hijack_id}/events")
@@ -295,7 +308,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             min_event_seq=min_event_seq,
             events=rows,
             limit=limit,
-            lease_expires_at=fresh_expires,
+            lease_expires_at=_mono_to_wall(fresh_expires),
         )
 
     @router.post("/worker/{worker_id}/hijack/{hijack_id}/send")
@@ -374,7 +387,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             "hijack_id": hijack_id,
             "sent": request.keys,
             "matched_prompt_id": extract_prompt_id(snapshot),
-            "lease_expires_at": fresh_expires,
+            "lease_expires_at": _mono_to_wall(fresh_expires),
         }
 
     @router.post("/worker/{worker_id}/hijack/{hijack_id}/step")
@@ -407,7 +420,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         await hub.append_event(worker_id, "hijack_step", {"hijack_id": hijack_id})
         hub.metric("hijack_steps_total")
         fresh_expires = await hub.get_fresh_hijack_expiry(worker_id, hijack_id, hs.lease_expires_at)
-        return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id, "lease_expires_at": fresh_expires}
+        return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id, "lease_expires_at": _mono_to_wall(fresh_expires)}
 
     @router.post("/worker/{worker_id}/hijack/{hijack_id}/release")
     async def hijack_release(

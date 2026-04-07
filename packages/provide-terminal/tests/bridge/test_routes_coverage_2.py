@@ -365,7 +365,7 @@ class TestBrowserHandlerHijackRelease:
         owner_ws = MagicMock()
         owner_ws.send_text = AsyncMock()
 
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
@@ -408,7 +408,7 @@ class TestBrowserHandlerHijackRelease:
         owner_ws = MagicMock()
         owner_ws.send_text = AsyncMock()
 
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws

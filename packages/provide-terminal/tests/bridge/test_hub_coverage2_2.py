@@ -29,7 +29,7 @@ class TestCleanupExpiredHijackShouldResumeFalse:
     async def test_should_resume_false_when_rest_still_active(self) -> None:
         """Line 81->88: should_resume=False (dashboard expired but REST still active)."""
         hub = TermHub()
-        now = time.time()
+        now = time.monotonic()
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())
@@ -67,7 +67,7 @@ class TestCleanupExpiredHijackShouldResumeFalseAfterRecheck:
         """Lines 81->88: should_resume=True but recheck shows new hijack → skip resume."""
         hub = TermHub()
         worker_ws = _make_ws()
-        now = time.time()
+        now = time.monotonic()
 
         # Set up an expired dashboard hijack (so cleanup will fire)
         async with hub._lock:
@@ -113,7 +113,7 @@ class TestCleanupExpiredHijackRecheckTrue:
     async def test_should_resume_false_when_recheck_finds_hijack(self) -> None:
         """Line 86->88: recheck finds is_hijacked → should_resume becomes False."""
         hub = TermHub()
-        now = time.time()
+        now = time.monotonic()
 
         # Expired REST session — should_resume will be True after first lock
         async with hub._lock:
@@ -185,7 +185,7 @@ class TestRemoveDeadBrowsersClearsOwner:
     async def test_remove_dead_browsers_clears_dashboard_owner(self) -> None:
         """Line 213->220: dead socket is dashboard owner → clear owner, set notify_hijack_off."""
         hub = TermHub()
-        now = time.time()
+        now = time.monotonic()
 
         owner_ws = _make_ws()
         worker_ws = _make_ws()
@@ -216,7 +216,7 @@ class TestRemoveDeadBrowsersRecheckFindsHijack:
     async def test_remove_dead_browsers_recheck_blocks_resume(self) -> None:
         """Lines 225->227: notify_hijack_off=True but recheck finds is_hijacked → False."""
         hub = TermHub()
-        now = time.time()
+        now = time.monotonic()
 
         owner_ws = _make_ws()
         worker_ws = _make_ws()
@@ -283,7 +283,7 @@ class TestReleaseRestHijackNotFound:
     async def test_release_rest_hijack_wrong_hijack_id(self) -> None:
         """Line 306: hijack_session.hijack_id != hijack_id → return False, False."""
         hub = TermHub()
-        now = time.time()
+        now = time.monotonic()
 
         async with hub._lock:
             st = hub._workers.setdefault("w1", WorkerTermState())

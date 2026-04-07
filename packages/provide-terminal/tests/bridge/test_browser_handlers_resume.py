@@ -283,7 +283,7 @@ class TestHandleResumeTokenLogic:
         asyncio.run(_run())
 
     def test_resume_hijack_expiry_not_subtracted(self) -> None:
-        """mutmut_52: hijack_owner_expires_at = time.time() + lease (not minus)."""
+        """mutmut_52: hijack_owner_expires_at = time.monotonic() + lease (not minus)."""
         store = InMemoryResumeStore()
         client, hub = self._make_app_client("admin", store)
 
@@ -345,7 +345,7 @@ class TestHandleBrowserMessageDispatch:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_step"}, True)
         wws.send_text.assert_called()
         msg = _decode_msg(wws.send_text.call_args_list[0][0][0])
@@ -379,7 +379,7 @@ class TestHandleResumeBranchCoverage:
         st = await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
             st.hijack_owner = other_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
         token = store.create("w1", "admin", 300)
         store.mark_hijack_owner(token, True)
 

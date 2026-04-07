@@ -57,7 +57,7 @@ class HijackCoordinator:
 
     @property
     def session(self) -> HijackSession | None:
-        return self._active_session(time.time())
+        return self._active_session(time.monotonic())
 
     def acquire(self, owner: str, lease_s: int, *, now: float | None = None) -> AcquireResult:
         """Acquire a hijack lease, always generating a new hijack_id.
@@ -67,7 +67,7 @@ class HijackCoordinator:
         the new lease period.  A different owner while a lease is active returns
         ``ok=False``.
         """
-        now_ts = time.time() if now is None else now
+        now_ts = time.monotonic() if now is None else now
         active = self._active_session(now_ts)
         if active is not None and active.owner != owner:
             return AcquireResult(ok=False, session=active, error="already_hijacked")
@@ -84,7 +84,7 @@ class HijackCoordinator:
         return AcquireResult(ok=True, session=active, is_renewal=is_renewal)
 
     def heartbeat(self, hijack_id: str, lease_s: int, *, now: float | None = None) -> AcquireResult:
-        now_ts = time.time() if now is None else now
+        now_ts = time.monotonic() if now is None else now
         active = self._active_session(now_ts)
         if active is None:
             return AcquireResult(ok=False, session=None, error="not_hijacked")

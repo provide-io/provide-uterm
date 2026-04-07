@@ -78,7 +78,7 @@ class TestCoordinatorThroughput:
     def test_expired_lease_allows_new_acquire(self) -> None:
         """Expired leases are cleaned up, allowing new owners."""
         coord = HijackCoordinator()
-        now = time.time()
+        now = time.monotonic()
 
         # Acquire with 1s lease in the past
         result = coord.acquire("alice", 1, now=now - 10)

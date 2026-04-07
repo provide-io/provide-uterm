@@ -126,7 +126,7 @@ class TermHubStateMachine(RuleBasedStateMachine):
 
         self._run(
             self.hub.try_acquire_rest_hijack(
-                wid, owner=owner, lease_s=lease, hijack_id=str(uuid.uuid4()), now=time.time()
+                wid, owner=owner, lease_s=lease, hijack_id=str(uuid.uuid4()), now=time.monotonic()
             )
         )
 

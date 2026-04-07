@@ -61,7 +61,8 @@ async def _handle_heartbeat(hub: TermHub, ws: WebSocket, worker_id: str) -> None
     """Handle heartbeat message type."""
     lease_expires_at = await hub.touch_if_owner(worker_id, ws)
     if lease_expires_at is not None:
-        await ws.send_text(encode_control(make_heartbeat_ack_frame(lease_expires_at, ts=time.time())))
+        wall_expires = time.time() + (lease_expires_at - time.monotonic())
+        await ws.send_text(encode_control(make_heartbeat_ack_frame(wall_expires, ts=time.time())))
         await hub.broadcast_hijack_state(worker_id)
 
 
