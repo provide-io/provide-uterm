@@ -145,10 +145,9 @@ class HostedSessionRuntime:
         if mode not in {"hijack", "open"}:
             raise ValueError(f"invalid mode: {mode}")
         typed_mode = cast("Literal['hijack', 'open']", mode)
+        if self._connector is not None:
+            await self._enqueue_messages(await self._connector.set_mode(typed_mode))
         self.definition.input_mode = typed_mode
-        if self._connector is None:
-            return
-        await self._enqueue_messages(await self._connector.set_mode(typed_mode))
 
     async def clear(self) -> None:
         if self._connector is None:

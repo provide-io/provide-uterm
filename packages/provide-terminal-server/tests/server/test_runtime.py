@@ -101,6 +101,20 @@ class TestSetMode:
         await rt.set_mode("open")
         assert not rt._queue.empty()
 
+    async def test_connector_failure_does_not_commit_mode(self) -> None:
+        """If connector.set_mode() raises, definition.input_mode must not change."""
+        rt = _make_runtime()
+        rt.definition.input_mode = "hijack"
+        connector = _make_connector()
+        connector.set_mode = AsyncMock(side_effect=RuntimeError("connector down"))
+        rt._connector = connector
+        rt._queue = asyncio.Queue()
+        with pytest.raises(RuntimeError, match="connector down"):
+            await rt.set_mode("open")
+        assert rt.definition.input_mode == "hijack", (
+            "definition.input_mode must not change when connector.set_mode() fails"
+        )
+
 
 # ---------------------------------------------------------------------------
 # clear / analyze

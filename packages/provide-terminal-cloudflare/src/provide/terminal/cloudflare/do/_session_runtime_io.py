@@ -41,6 +41,13 @@ logger = logging.getLogger(__name__)
 _MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sandbox
 
 
+def _mono_to_wall(mono: float | None) -> float | None:
+    """Convert a monotonic timestamp to wall-clock for API/WS responses."""
+    if mono is None:
+        return None
+    return mono + (time.time() - time.monotonic())
+
+
 class _SessionRuntimeIoMixin:
     """Mixin providing request helpers, broadcast, worker I/O, and alarm for SessionRuntime."""
 
@@ -63,7 +70,7 @@ class _SessionRuntimeIoMixin:
             isinstance(hijack_id, str)
             and isinstance(owner, str)
             and isinstance(lease_expires_at, (float, int))
-            and float(lease_expires_at) > time.time()
+            and float(lease_expires_at) > time.monotonic()
         ):
             self.hijack._session = HijackSession(  # type: ignore[attr-defined]
                 hijack_id=hijack_id,
@@ -115,7 +122,7 @@ class _SessionRuntimeIoMixin:
                 "type": "hijack_state",
                 "hijacked": session is not None,
                 "owner": owner,
-                "lease_expires_at": (session.lease_expires_at if session is not None else None),
+                "lease_expires_at": (_mono_to_wall(session.lease_expires_at) if session is not None else None),
                 "ts": time.time(),
             },
         )
@@ -205,9 +212,10 @@ class _SessionRuntimeIoMixin:
                 self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
 
     async def alarm(self) -> None:
-        now = time.time()
+        mono_now = time.monotonic()
+        wall_now = time.time()
         session = self.hijack.session  # type: ignore[attr-defined]
-        if session is not None and session.lease_expires_at <= now:
+        if session is not None and session.lease_expires_at <= mono_now:
             logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
             self.hijack.release(session.hijack_id)  # type: ignore[attr-defined]
             self.clear_lease()
@@ -223,7 +231,7 @@ class _SessionRuntimeIoMixin:
                 input_mode=self.input_mode,  # type: ignore[attr-defined]
             )
             if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
-                _s.setAlarm(int((now + KV_REFRESH_S) * 1000))
+                _s.setAlarm(int((wall_now + KV_REFRESH_S) * 1000))
         elif self.hijack.session is not None:  # type: ignore[attr-defined]
             if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
-                _s.setAlarm(int(self.hijack.session.lease_expires_at * 1000))  # type: ignore[attr-defined]
+                _s.setAlarm(int(_mono_to_wall(self.hijack.session.lease_expires_at) * 1000))  # type: ignore[attr-defined]

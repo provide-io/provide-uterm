@@ -15,6 +15,7 @@ from ._shared import (
     PromptRegexError,
     _extract_hijack_id,
     _extract_prompt_id,
+    _mono_to_wall,
     _parse_lease_s,
     _safe_int,
     _wait_for_prompt,
@@ -67,7 +68,7 @@ async def route_hijack(
                 "ok": True,
                 "worker_id": runtime.worker_id,
                 "hijack_id": result.session.hijack_id,
-                "lease_expires_at": result.session.lease_expires_at,
+                "lease_expires_at": _mono_to_wall(result.session.lease_expires_at),
                 "owner": owner,
             }
         )
@@ -92,7 +93,7 @@ async def route_hijack(
                 "ok": True,
                 "worker_id": runtime.worker_id,
                 "hijack_id": hijack_id,
-                "lease_expires_at": result.session.lease_expires_at,
+                "lease_expires_at": _mono_to_wall(result.session.lease_expires_at),
             }
         )
 
@@ -128,7 +129,7 @@ async def route_hijack(
                 "ok": True,
                 "worker_id": runtime.worker_id,
                 "hijack_id": hijack_id,
-                "lease_expires_at": lease_expires_at,
+                "lease_expires_at": _mono_to_wall(lease_expires_at),
             }
         )
 
@@ -153,7 +154,7 @@ async def route_hijack(
                 worker_id=runtime.worker_id,
                 hijack_id=hijack_id,
                 snapshot=snapshot,
-                lease_expires_at=session.lease_expires_at if session is not None else None,
+                lease_expires_at=_mono_to_wall(session.lease_expires_at) if session is not None else None,
             )
         )
 
@@ -181,7 +182,7 @@ async def route_hijack(
                 min_event_seq=min_event_seq,
                 events=rows,
                 limit=limit,
-                lease_expires_at=session.lease_expires_at,
+                lease_expires_at=_mono_to_wall(session.lease_expires_at),
             )
         )
 
@@ -266,6 +267,6 @@ async def _handle_hijack_send(
             "hijack_id": hijack_id,
             "sent": data,
             "matched_prompt_id": _extract_prompt_id(matched_snapshot),
-            "lease_expires_at": session.lease_expires_at if session is not None else None,
+            "lease_expires_at": _mono_to_wall(session.lease_expires_at) if session is not None else None,
         }
     )

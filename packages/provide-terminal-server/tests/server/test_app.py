@@ -205,6 +205,9 @@ class TestReferenceServerApp:
     async def test_hijack_conflict_counter_increments_on_second_acquire(self, live_reference_server: str) -> None:
         await self._wait_for_connected(live_reference_server, "provide-shell")
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            # Default session is open mode; switch to hijack so REST acquire works.
+            mode_resp = await http.post("/api/sessions/provide-shell/mode", json={"input_mode": "hijack"})
+            assert mode_resp.status_code == 200
             before = (await http.get("/api/metrics")).json()["metrics"]
             base_conflicts = int(before.get("hijack_conflicts_total", 0))
             first = await http.post("/worker/provide-shell/hijack/acquire", json={"owner": "test-a", "lease_s": 60})

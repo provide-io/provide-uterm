@@ -338,7 +338,7 @@ async def test_alarm_releases_expired_lease() -> None:
     rt = _make_runtime()
     ws = _MockWs()
     rt.worker_ws = ws
-    session = HijackSession(hijack_id="h1", owner="alice", lease_expires_at=time.time() - 1)
+    session = HijackSession(hijack_id="h1", owner="alice", lease_expires_at=time.monotonic() - 1)
     rt.hijack._session = session
     with patch.object(rt.hijack, "_active_session", return_value=session):
         await rt.alarm()

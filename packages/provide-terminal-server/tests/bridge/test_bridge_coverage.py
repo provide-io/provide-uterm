@@ -218,6 +218,7 @@ class TestAttachSessionCp437Decode:
         bridge = TermBridge.__new__(TermBridge)
         bridge._worker = bot
         bridge._worker_id = "test"
+        bridge._encoding = "cp437"
         bridge._latest_snapshot = {}
         bridge._send_q = asyncio.Queue()
         bridge._attached_session = None

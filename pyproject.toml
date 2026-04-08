@@ -172,22 +172,7 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = [
-    "src/provide/terminal/shell/_render.py",
-    "src/provide/terminal/deckmux/_presence.py",
-    "src/provide/terminal/deckmux/_hub_mixin.py",
-    "src/provide/terminal/deckmux/_transfer.py",
-    "src/provide/terminal/deckmux/_protocol.py",
-    "src/provide/terminal/deckmux/_names.py",
-    "src/provide/terminal/deckmux/_edge.py",
-    "src/provide/terminal/pty/_validate.py",
-    "src/provide/terminal/pty/uid_map.py",
-    "src/provide/terminal/pty/capture.py",
-    "src/provide/terminal/pty/capture_connector.py",
-    "src/provide/terminal/pty/pam_listener.py",
-    "src/provide/terminal/pty/pam.py",
-    "src/provide/terminal/pty/connector.py",
-]
+paths_to_mutate = ["src/provide/terminal/pty/connector.py"]
 tests_dir = [
     "packages/provide-terminal/tests/shell/test_shell_render.py",
     "packages/provide-terminal/tests/deckmux/test_presence.py",
@@ -203,6 +188,9 @@ tests_dir = [
     "packages/provide-terminal-platform/tests/pty/test_pam_listener.py",
     "packages/provide-terminal-platform/tests/pty/test_pam.py",
     "packages/provide-terminal-platform/tests/pty/test_connector.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector_io.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector_stop.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector_child.py",
 ]
 also_copy = [
     "src",

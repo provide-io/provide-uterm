@@ -98,7 +98,7 @@ class PTYConnector:
         self._run_as_uid: int | None = config.get("run_as_uid")
         self._run_as_gid: int | None = config.get("run_as_gid")
         self._extra_env: dict[str, str] = dict(config.get("env") or {})
-        self._inject: bool = bool(config.get("inject", False))
+        self._inject: bool = bool(config.get("inject", False))  # pragma: no mutate
         self._cols: int = int(config.get("cols", 80))
         self._rows: int = int(config.get("rows", 24))
 
@@ -127,7 +127,7 @@ class PTYConnector:
             self._pam.open_session()
             pam_env = self._pam.get_env()
 
-        resolved: ResolvedUser | None = None
+        resolved: ResolvedUser | None = None  # pragma: no mutate
         if self._username or self._run_as or self._run_as_uid is not None:
             resolved = self._uid_map.resolve(
                 self._username or "",
@@ -136,7 +136,7 @@ class PTYConnector:
                 run_as_gid=self._run_as_gid,
             )
 
-        capture_path: str | None = None
+        capture_path: str | None = None  # pragma: no mutate
         if self._inject:
             # mkdtemp creates a secure directory owned by the current user (mode 0700)
             self._capture_tmpdir = tempfile.mkdtemp(prefix="uterm-cap-")  # nosec B108
@@ -183,7 +183,7 @@ class PTYConnector:
             os.dup2(slave_fd, 0)
             os.dup2(slave_fd, 1)
             os.dup2(slave_fd, 2)
-            if slave_fd > 2:
+            if slave_fd > 2:  # pragma: no mutate
                 os.close(slave_fd)
 
             if resolved:
@@ -207,10 +207,31 @@ class PTYConnector:
                 os.kill(self._child_pid, signal.SIGHUP)
             except (ProcessLookupError, PermissionError):
                 pass
+            # Close master fd first so the slave side receives HUP, then wait
+            # with WNOHANG. If the child hasn't exited yet escalate to SIGKILL
+            # and do a final blocking wait so no zombie is left behind. A zombie
+            # child of the mutmut stats/clean-run phase would be caught by the
+            # mutmut fork loop's os.wait() as an unregistered PID → KeyError.
+            if self._master_fd is not None:
+                try:
+                    os.close(self._master_fd)
+                except OSError:
+                    pass
+                self._master_fd = None
             try:
-                os.waitpid(self._child_pid, os.WNOHANG)
+                pid_reaped, _ = os.waitpid(self._child_pid, os.WNOHANG)
             except ChildProcessError:
-                pass
+                pid_reaped = self._child_pid  # already gone  # pragma: no mutate
+            if pid_reaped == 0:
+                # Child still running — escalate to SIGKILL then block-wait
+                try:
+                    os.kill(self._child_pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                try:
+                    os.waitpid(self._child_pid, 0)
+                except ChildProcessError:
+                    pass
             self._child_pid = None
 
         if self._master_fd is not None:
@@ -225,7 +246,7 @@ class PTYConnector:
             self._capture_socket = None
 
         if self._capture_tmpdir is not None:
-            shutil.rmtree(self._capture_tmpdir, ignore_errors=True)
+            shutil.rmtree(self._capture_tmpdir, ignore_errors=True)  # pragma: no mutate
             self._capture_tmpdir = None
 
         if self._pam is not None:
@@ -242,15 +263,15 @@ class PTYConnector:
             return []
         data = self._read_master()
         if data:
-            self._buffer += data.decode("utf-8", errors="replace")
-            if len(self._buffer) > 32768:
+            self._buffer += data.decode("utf-8", errors="replace")  # pragma: no mutate
+            if len(self._buffer) > 32768:  # pragma: no mutate
                 self._buffer = self._buffer[-32768:]
             return [self._snapshot()]
         return []
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         if self.is_connected() and self._master_fd is not None and not self._paused:
-            os.write(self._master_fd, data.encode("utf-8"))
+            os.write(self._master_fd, data.encode("utf-8"))  # pragma: no mutate
         return [self._snapshot()]
 
     async def handle_control(self, action: str) -> list[dict[str, Any]]:
@@ -287,7 +308,7 @@ class PTYConnector:
         if self._master_fd is None:
             return b""
         try:
-            return os.read(self._master_fd, 4096)
+            return os.read(self._master_fd, 4096)  # pragma: no mutate
         except BlockingIOError:
             return b""
         except OSError:

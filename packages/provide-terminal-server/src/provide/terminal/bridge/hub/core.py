@@ -127,6 +127,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
         self._on_resume = on_resume
         self._ws_to_resume_token: dict[WebSocket, str] = {}
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus: EventBus | None = event_bus
         self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))
 
@@ -139,7 +140,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Cancel all background tasks for graceful shutdown."""
         from provide.terminal.bridge.hub.connections import shutdown_background_tasks
 
-        count = await shutdown_background_tasks()
+        count = await shutdown_background_tasks(self._background_tasks)
         if count:
             logger.info("hub_shutdown cancelled %d background tasks", count)
 

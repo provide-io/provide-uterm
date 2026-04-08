@@ -35,7 +35,6 @@ from provide.terminal.bridge.frames import (
     make_worker_connected_frame,
     make_worker_disconnected_frame,
 )
-from provide.terminal.bridge.hub.connections import _background_tasks
 from provide.terminal.bridge.models import VALID_ROLES, _safe_float, _safe_int
 from provide.terminal.bridge.ratelimit import TokenBucket
 from provide.terminal.bridge.rest_helpers import extract_prompt_id
@@ -123,6 +122,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 if not await hub.is_active_worker(worker_id, websocket):
                     with suppress(Exception):
                         await websocket.close()
+                        logger.debug("ws_worker_closed_inactive worker_id=%s", worker_id)
                     break
                 try:
                     events = decoder.feed(raw)
@@ -130,6 +130,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     logger.warning("ws_worker_bad_stream worker_id=%s: %s", worker_id, exc)
                     with suppress(Exception):
                         await websocket.close(code=1003, reason=str(exc))
+                        logger.debug("ws_worker_closed_protocol_error worker_id=%s", worker_id)
                     break
                 for event in events:
                     if isinstance(event, DataChunk):
@@ -224,8 +225,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)),
                     )
                 )
-                _background_tasks.add(_broadcast_task)
-                _broadcast_task.add_done_callback(_background_tasks.discard)
+                hub._background_tasks.add(_broadcast_task)
+                _broadcast_task.add_done_callback(hub._background_tasks.discard)
                 _broadcast_task.add_done_callback(
                     lambda t: (
                         logger.warning(
@@ -238,8 +239,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 if was_hijacked:
                     hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
                     _hijack_state_task = asyncio.create_task(hub.broadcast_hijack_state(worker_id))
-                    _background_tasks.add(_hijack_state_task)
-                    _hijack_state_task.add_done_callback(_background_tasks.discard)
+                    hub._background_tasks.add(_hijack_state_task)
+                    _hijack_state_task.add_done_callback(hub._background_tasks.discard)
                     _hijack_state_task.add_done_callback(
                         lambda t: (
                             logger.warning(
@@ -336,6 +337,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     logger.warning("ws_browser_bad_stream worker_id=%s: %s", worker_id, exc)
                     with suppress(Exception):
                         await websocket.close(code=1003, reason=str(exc))
+                        logger.debug("ws_browser_closed_protocol_error worker_id=%s", worker_id)
                     break
                 for event in events:
                     msg_b = {"type": "input", "data": event.data} if isinstance(event, DataChunk) else event.control
@@ -344,6 +346,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         logger.warning("ws_browser_rate_limited worker_id=%s", worker_id)
                         with suppress(Exception):
                             await websocket.send_text(encode_control(make_error_frame("rate_limited")))
+                            logger.debug("ws_browser_rate_limited_sent worker_id=%s", worker_id)
                         continue
 
                     # Resume handled here (not in browser_handlers) because it can
@@ -410,8 +413,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             },
                         )
                     )
-                    _background_tasks.add(_resume_task)
-                    _resume_task.add_done_callback(_background_tasks.discard)
+                    hub._background_tasks.add(_resume_task)
+                    _resume_task.add_done_callback(hub._background_tasks.discard)
                     _resume_task.add_done_callback(
                         lambda t: (
                             logger.warning(
@@ -441,8 +444,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             },
                         )
                     )
-                    _background_tasks.add(_resume_task)
-                    _resume_task.add_done_callback(_background_tasks.discard)
+                    hub._background_tasks.add(_resume_task)
+                    _resume_task.add_done_callback(hub._background_tasks.discard)
                     _resume_task.add_done_callback(
                         lambda t: (
                             logger.warning(

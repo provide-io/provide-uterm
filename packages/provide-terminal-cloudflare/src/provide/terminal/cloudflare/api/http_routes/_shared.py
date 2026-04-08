@@ -45,6 +45,14 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
 if TYPE_CHECKING:
     from provide.terminal.cloudflare.contracts import RuntimeProtocol
 
+
+def _mono_to_wall(mono: float | None) -> float | None:
+    """Convert a monotonic timestamp to wall-clock for API responses."""
+    if mono is None:
+        return None
+    return mono + (time.time() - time.monotonic())
+
+
 # Matches /hijack/{hijack_id}/ in any path segment position.
 _HIJACK_ID_RE = re.compile(r"/hijack/([0-9a-fA-F\-]{1,64})/")
 _MIN_LEASE_S = 1

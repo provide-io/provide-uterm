@@ -32,7 +32,7 @@ async def test_touch_activity_updates_timestamp(hub: TermHub) -> None:
     st.last_activity_at = 1000.0
     hub._workers["w1"] = st
 
-    with patch("time.time", return_value=2000.0):
+    with patch("time.monotonic", return_value=2000.0):
         await hub.touch_activity("w1")
 
     assert st.last_activity_at == 2000.0
@@ -162,10 +162,10 @@ async def test_sweep_resilient_to_per_worker_errors(hub: TermHub) -> None:
 
 
 async def test_activity_updated_on_worker_data() -> None:
-    """WorkerTermState.last_activity_at should have a default from time.time."""
-    before = time.time()
+    """WorkerTermState.last_activity_at should have a default from time.monotonic."""
+    before = time.monotonic()
     st = WorkerTermState()
-    after = time.time()
+    after = time.monotonic()
     assert before <= st.last_activity_at <= after
 
 

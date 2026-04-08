@@ -112,11 +112,20 @@ class TermBridge:
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
     """
 
-    def __init__(self, worker: Any, worker_id: str, manager_url: str, *, max_ws_message_bytes: int = 1_048_576) -> None:
+    def __init__(
+        self,
+        worker: Any,
+        worker_id: str,
+        manager_url: str,
+        *,
+        max_ws_message_bytes: int = 1_048_576,
+        encoding: str = "cp437",
+    ) -> None:
         self._worker = worker
         self._worker_id = worker_id
         self._manager_url = manager_url
         self._max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
+        self._encoding = encoding
         self._send_q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=2000)
         self._latest_snapshot: dict[str, Any] | None = None
         self._running = False
@@ -137,7 +146,7 @@ class TermBridge:
             self._latest_snapshot = snapshot
             if not raw:
                 return
-            text = raw.decode("cp437", errors="replace")
+            text = raw.decode(self._encoding, errors="replace")
             try:
                 self._send_q.put_nowait({"type": "term", "data": text, "ts": time.time()})
             except asyncio.QueueFull:

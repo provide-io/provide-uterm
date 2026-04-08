@@ -211,11 +211,16 @@ class SessionRegistry:
                     validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
                 except ValidationError as exc:
                     raise SessionValidationError(validation_error_message(exc)) from exc
+                # Apply non-mode fields immediately; input_mode is deferred
+                # to runtime.set_mode() so it only commits after the
+                # connector-side change succeeds.
                 for field in updates:
-                    setattr(session, field, getattr(validated, field))
+                    if field != "input_mode":
+                        setattr(session, field, getattr(validated, field))
             runtime = self._runtime_for(session)
         if "input_mode" in updates:
-            await runtime.set_mode(session.input_mode)
+            await runtime.set_mode(validated.input_mode)
+            await self._hub.set_input_mode(session_id, validated.input_mode)
         return runtime.status()
 
     async def delete_session(self, session_id: str) -> None:
@@ -250,14 +255,18 @@ class SessionRegistry:
         async with self._lock:
             session = self._require_session(session_id)
             try:
-                validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), "input_mode": mode})
+                SessionDefinition.model_validate({**session.model_dump(mode="python"), "input_mode": mode})
             except ValidationError as exc:
                 raise SessionValidationError(validation_error_message(exc)) from exc
-            session.input_mode = validated.input_mode
             runtime = self._runtime_for(session)
         if mode == "open":
             await self._force_release_hijack(session_id)
+        # runtime.set_mode() commits session.input_mode only after the
+        # connector-side change succeeds, avoiding state drift on failure.
         await runtime.set_mode(mode)
+        # Synchronously update the hub's input_mode so REST acquire checks
+        # see the new mode immediately (connector WS pipeline is async).
+        await self._hub.set_input_mode(session_id, mode)
         return runtime.status()
 
     async def clear_session(self, session_id: str) -> SessionRuntimeStatus:
@@ -276,9 +285,13 @@ class SessionRegistry:
             runtime = self._runtime_for(session)
             runtime_any = cast("Any", runtime)
             runtime_any._connected = connected
-            runtime_any._state = "running" if connected else "stopped"
             if connected:
+                runtime_any._state = "running"
                 runtime_any._last_error = None
+                runtime_any._stopped_at = None
+            else:
+                runtime_any._state = "stopped"
+                runtime_any._stopped_at = time.time()
         return runtime.status()
 
     async def analyze_session(self, session_id: str) -> str:
