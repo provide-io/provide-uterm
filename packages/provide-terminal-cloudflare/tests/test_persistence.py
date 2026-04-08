@@ -68,8 +68,10 @@ class TestPersistLease:
         persist_lease(store, ctx, "w1", session, LeaseRecord)
 
         assert len(alarm_calls) == 1, f"Expected 1 alarm call, got {len(alarm_calls)}"
-        expected_ms = int(session.lease_expires_at * 1000)
-        assert alarm_calls[0] == expected_ms, f"Alarm should be set to {expected_ms}, got {alarm_calls[0]}"
+        # Alarm uses wall-clock conversion of monotonic lease_expires_at
+        wall_expires = session.lease_expires_at + (time.time() - time.monotonic())
+        expected_ms = int(wall_expires * 1000)
+        assert abs(alarm_calls[0] - expected_ms) < 2000, f"Alarm should be ~{expected_ms}, got {alarm_calls[0]}"
 
     def test_persist_lease_noop_when_session_is_none(self) -> None:
         """persist_lease does nothing when session is None."""

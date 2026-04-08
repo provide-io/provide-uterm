@@ -23,7 +23,6 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
 from typing import Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------

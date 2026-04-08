@@ -20,9 +20,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tests.bridge.control_channel_helpers import decode_control_payloads
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
+from tests.bridge.control_channel_helpers import decode_control_payloads
 
 
 def _make_hub(**kwargs: Any) -> TermHub:
@@ -446,3 +446,70 @@ class TestSetInputModeBroadcastPayload:
         mode_msgs = [p for p in payloads if p.get("type") == "input_mode_changed"]
         assert mode_msgs
         assert mode_msgs[0].get("input_mode") == "open"
+
+
+# ---------------------------------------------------------------------------
+# hub.shutdown() and shutdown_background_tasks
+# ---------------------------------------------------------------------------
+
+
+async def test_hub_shutdown_cancels_background_tasks() -> None:
+    """shutdown() cancels background tasks and logs the count."""
+    import asyncio
+
+    from provide.terminal.bridge.hub import TermHub
+
+    hub = TermHub()
+
+    async def _long_running() -> None:
+        await asyncio.sleep(60)
+
+    task = asyncio.create_task(_long_running())
+    hub._background_tasks.add(task)
+    task.add_done_callback(hub._background_tasks.discard)
+
+    await hub.shutdown()
+    assert len(hub._background_tasks) == 0
+    assert task.cancelled()
+
+
+async def test_hub_shutdown_empty_tasks_is_noop() -> None:
+    """shutdown() with no background tasks returns without error."""
+    from provide.terminal.bridge.hub import TermHub
+
+    hub = TermHub()
+    assert len(hub._background_tasks) == 0
+    await hub.shutdown()  # must not raise
+
+
+async def test_shutdown_background_tasks_returns_count() -> None:
+    """shutdown_background_tasks() returns the number of tasks cancelled."""
+    import asyncio
+
+    from provide.terminal.bridge.hub.connections import shutdown_background_tasks
+
+    async def _long() -> None:
+        await asyncio.sleep(60)
+
+    task_set: set[asyncio.Task[None]] = set()
+    t1 = asyncio.create_task(_long())
+    t2 = asyncio.create_task(_long())
+    task_set.add(t1)
+    task_set.add(t2)
+
+    count = await shutdown_background_tasks(task_set)
+    assert count == 2
+    assert len(task_set) == 0
+    assert t1.cancelled()
+    assert t2.cancelled()
+
+
+async def test_shutdown_background_tasks_empty_returns_zero() -> None:
+    """shutdown_background_tasks() with empty set returns 0."""
+    import asyncio
+
+    from provide.terminal.bridge.hub.connections import shutdown_background_tasks
+
+    task_set: set[asyncio.Task[None]] = set()
+    count = await shutdown_background_tasks(task_set)
+    assert count == 0

@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,6 +21,7 @@ from provide.terminal.server.registry import SessionRegistry, SessionValidationE
 def _make_hub() -> MagicMock:
     hub = MagicMock()
     hub.force_release_hijack = AsyncMock(return_value=True)
+    hub.set_input_mode = AsyncMock(return_value=(True, None))
     hub.get_last_snapshot = AsyncMock(return_value=None)
     hub.get_recent_events = AsyncMock(return_value=[])
     hub.browser_count = AsyncMock(return_value=0)
@@ -270,6 +273,84 @@ class TestSetMode:
         reg = _make_registry([_session("mode-test")])
         with pytest.raises(SessionValidationError, match="invalid input_mode"):
             await reg.set_mode("mode-test", "superuser")
+
+
+# ---------------------------------------------------------------------------
+# Transactional mode changes — definition must not commit before runtime
+# ---------------------------------------------------------------------------
+
+
+class TestTransactionalModeChanges:
+    async def _get_runtime(self, reg: SessionRegistry, sid: str) -> Any:
+        """Force lazy runtime creation and return it."""
+        async with reg._lock:
+            session = reg._require_session(sid)
+            return reg._runtime_for(session)
+
+    async def test_update_session_mode_rollback_on_connector_failure(self) -> None:
+        """update_session must not persist input_mode when runtime.set_mode raises."""
+        reg = _make_registry([_session("s1")])
+        runtime = await self._get_runtime(reg, "s1")
+        # Default mode is "open"; set to "hijack" so we can test the switch fails
+        runtime.definition.input_mode = "hijack"
+        runtime._connector = MagicMock()
+        runtime._connector.set_mode = AsyncMock(side_effect=RuntimeError("boom"))
+        runtime._queue = asyncio.Queue()
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await reg.update_session("s1", {"input_mode": "open"})
+
+        async with reg._lock:
+            defn = reg._require_session("s1")
+        assert defn.input_mode == "hijack", "input_mode must not change on connector failure"
+
+    async def test_set_mode_rollback_on_connector_failure(self) -> None:
+        """set_mode must not persist input_mode when runtime.set_mode raises."""
+        reg = _make_registry([_session("s1")])
+        runtime = await self._get_runtime(reg, "s1")
+        runtime.definition.input_mode = "hijack"
+        runtime._connector = MagicMock()
+        runtime._connector.set_mode = AsyncMock(side_effect=RuntimeError("boom"))
+        runtime._queue = asyncio.Queue()
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await reg.set_mode("s1", "open")
+
+        async with reg._lock:
+            defn = reg._require_session("s1")
+        assert defn.input_mode == "hijack", "input_mode must not change on connector failure"
+
+
+# ---------------------------------------------------------------------------
+# Tunnel disconnect sets stopped_at for retention sweep
+# ---------------------------------------------------------------------------
+
+
+class TestTunnelDisconnectStoppedAt:
+    async def test_disconnect_sets_stopped_at(self) -> None:
+        """set_tunnel_connected(False) must set stopped_at so retention sweep can reap."""
+        reg = _make_registry([_session("t1")])
+        # Connect first
+        status = await reg.set_tunnel_connected("t1", True)
+        assert status is not None
+        assert status.lifecycle_state == "running"
+        assert status.stopped_at is None
+
+        # Disconnect
+        status = await reg.set_tunnel_connected("t1", False)
+        assert status is not None
+        assert status.lifecycle_state == "stopped"
+        assert status.stopped_at is not None, "stopped_at must be set for retention sweep"
+
+    async def test_reconnect_clears_stopped_at(self) -> None:
+        """set_tunnel_connected(True) after disconnect must clear stopped_at."""
+        reg = _make_registry([_session("t1")])
+        await reg.set_tunnel_connected("t1", True)
+        await reg.set_tunnel_connected("t1", False)
+        status = await reg.set_tunnel_connected("t1", True)
+        assert status is not None
+        assert status.stopped_at is None
+        assert status.lifecycle_state == "running"
 
 
 # ---------------------------------------------------------------------------

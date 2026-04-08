@@ -41,7 +41,7 @@ async def _register_worker(hub: TermHub, worker_id: str, worker_ws: Any | None =
 
 
 def _make_hijack_session(worker_id: str, lease_s: float = 60.0) -> HijackSession:
-    now = time.time()
+    now = time.monotonic()
     return HijackSession(
         hijack_id=f"hj-{worker_id}",
         owner="test-owner",
@@ -66,7 +66,7 @@ class TestExpireLeasesUnderLock:
         async with hub._lock:
             st.hijack_session = hs
         # Session not expired — should return (False, False, False)
-        result = await hub._expire_leases_under_lock("w1", time.time() - 10)
+        result = await hub._expire_leases_under_lock("w1", time.monotonic() - 10)
         assert result is not None
         rest_expired, dashboard_expired, should_resume = result
         assert rest_expired is False
@@ -79,8 +79,8 @@ class TestExpireLeasesUnderLock:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
-        result = await hub._expire_leases_under_lock("w1", time.time() - 10)
+            st.hijack_owner_expires_at = time.monotonic() + 60
+        result = await hub._expire_leases_under_lock("w1", time.monotonic() - 10)
         assert result is not None
         rest_expired, dashboard_expired, should_resume = result
         assert dashboard_expired is False
@@ -90,7 +90,7 @@ class TestExpireLeasesUnderLock:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -112,7 +112,7 @@ class TestExpireLeasesUnderLock:
         wws = _make_ws()
         owner_ws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = now  # exactly at boundary
@@ -128,7 +128,7 @@ class TestExpireLeasesUnderLock:
         wws = _make_ws()
         owner_ws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = now - 1  # already expired
@@ -143,7 +143,7 @@ class TestExpireLeasesUnderLock:
         wws = _make_ws()
         _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         # Both rest and dashboard expired, but also a new owner appears (concurrent acquire)
         hs = HijackSession(
             hijack_id="hj-1",
@@ -177,7 +177,7 @@ class TestRecheckAndResume:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         await hub._recheck_and_resume("w1", now)
         wws.send_text.assert_called()
         msg = decode_control_payload(wws.send_text.call_args[0][0])
@@ -190,7 +190,7 @@ class TestRecheckAndResume:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         await hub._recheck_and_resume("w1", now)
         msg = decode_control_payload(wws.send_text.call_args[0][0])
         assert "lease_s" in msg
@@ -201,7 +201,7 @@ class TestRecheckAndResume:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         await hub._recheck_and_resume("w1", now)
         msg = decode_control_payload(wws.send_text.call_args[0][0])
         assert "ts" in msg
@@ -211,7 +211,7 @@ class TestRecheckAndResume:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         with patch.object(hub, "notify_hijack_changed") as mock_notify:
             await hub._recheck_and_resume("w1", now)
             mock_notify.assert_called_once()
@@ -222,7 +222,7 @@ class TestRecheckAndResume:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         with patch.object(hub, "notify_hijack_changed") as mock_notify:
             await hub._recheck_and_resume("w1", now)
             mock_notify.assert_called_once()
@@ -233,7 +233,7 @@ class TestRecheckAndResume:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         with patch.object(hub, "notify_hijack_changed") as mock_notify:
             await hub._recheck_and_resume("w1", now)
             mock_notify.assert_called_once()
@@ -251,7 +251,7 @@ class TestCleanupExpiredHijack:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -278,7 +278,7 @@ class TestCleanupExpiredHijack:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -307,7 +307,7 @@ class TestCleanupExpiredHijack:
         wws = _make_ws()
         owner_ws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         async with hub._lock:
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = now - 1  # expired

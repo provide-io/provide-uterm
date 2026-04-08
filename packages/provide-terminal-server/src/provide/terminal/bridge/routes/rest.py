@@ -58,7 +58,6 @@ control.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -77,16 +76,16 @@ from provide.terminal.bridge.models import (
     HijackSendRequest,
     InputModeRequest,
 )
-
-
-def _mono_to_wall(mono_ts: float) -> float:
-    """Convert a monotonic timestamp to wall-clock for external API responses."""
-    return time.time() + (mono_ts - time.monotonic())
 from provide.terminal.bridge.rest_helpers import (
     build_hijack_events_response,
     build_hijack_snapshot_response,
     extract_prompt_id,
 )
+
+
+def _mono_to_wall(mono_ts: float) -> float:
+    """Convert a monotonic timestamp to wall-clock for external API responses."""
+    return time.time() + (mono_ts - time.monotonic())
 
 if TYPE_CHECKING:
     from provide.terminal.bridge.hub import TermHub

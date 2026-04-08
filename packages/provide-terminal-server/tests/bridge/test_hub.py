@@ -54,9 +54,9 @@ async def test_cleanup_expired_rest_session() -> None:
     hub._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
-        acquired_at=time.time() - 200,
-        lease_expires_at=time.time() - 1,
-        last_heartbeat=time.time() - 200,
+        acquired_at=time.monotonic() - 200,
+        lease_expires_at=time.monotonic() - 1,
+        last_heartbeat=time.monotonic() - 200,
     )
     expired = await hub.cleanup_expired_hijack("bot1")
     assert expired
@@ -70,9 +70,9 @@ async def test_cleanup_not_expired_rest_session() -> None:
     hub._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
-        acquired_at=time.time(),
-        lease_expires_at=time.time() + 3600,
-        last_heartbeat=time.time(),
+        acquired_at=time.monotonic(),
+        lease_expires_at=time.monotonic() + 3600,
+        last_heartbeat=time.monotonic(),
     )
     expired = await hub.cleanup_expired_hijack("bot1")
     assert not expired
@@ -89,7 +89,7 @@ async def test_cleanup_expired_dashboard_owner() -> None:
     await hub._get("bot1")
     mock_ws = AsyncMock()
     hub._workers["bot1"].hijack_owner = mock_ws
-    hub._workers["bot1"].hijack_owner_expires_at = time.time() - 1
+    hub._workers["bot1"].hijack_owner_expires_at = time.monotonic() - 1
     expired = await hub.cleanup_expired_hijack("bot1")
     assert expired
     # Bot is fully idle after owner expiry → pruned from _bots.
@@ -115,9 +115,9 @@ async def test_cleanup_sends_resume_to_worker() -> None:
     hub._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
-        acquired_at=time.time() - 200,
-        lease_expires_at=time.time() - 1,
-        last_heartbeat=time.time() - 200,
+        acquired_at=time.monotonic() - 200,
+        lease_expires_at=time.monotonic() - 1,
+        last_heartbeat=time.monotonic() - 200,
     )
     await hub.cleanup_expired_hijack("bot1")
     mock_ws.send_text.assert_awaited_once()
@@ -215,7 +215,7 @@ async def test_clamp_lease_maximum() -> None:
 async def test_is_dashboard_hijack_active_expired() -> None:
     st = WorkerTermState()
     st.hijack_owner = AsyncMock()
-    st.hijack_owner_expires_at = time.time() - 1
+    st.hijack_owner_expires_at = time.monotonic() - 1
     assert not TermHub.is_dashboard_hijack_active(st)
 
 
@@ -229,7 +229,7 @@ async def test_is_dashboard_hijack_active_no_expiry() -> None:
 async def test_is_dashboard_hijack_active_future() -> None:
     st = WorkerTermState()
     st.hijack_owner = AsyncMock()
-    st.hijack_owner_expires_at = time.time() + 3600
+    st.hijack_owner_expires_at = time.monotonic() + 3600
     assert TermHub.is_dashboard_hijack_active(st)
 
 
@@ -320,9 +320,9 @@ async def test_broadcast_hijack_state_rest_session_active() -> None:
     hub._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
-        acquired_at=time.time(),
-        lease_expires_at=time.time() + 3600,
-        last_heartbeat=time.time(),
+        acquired_at=time.monotonic(),
+        lease_expires_at=time.monotonic() + 3600,
+        last_heartbeat=time.monotonic(),
     )
     await hub.broadcast_hijack_state("bot1")
     mock_ws.send_text.assert_awaited_once()
@@ -377,7 +377,7 @@ async def test_hijack_state_msg_owner_is_me() -> None:
     await hub._get("bot1")
     mock_ws = AsyncMock()
     hub._workers["bot1"].hijack_owner = mock_ws
-    hub._workers["bot1"].hijack_owner_expires_at = time.time() + 3600
+    hub._workers["bot1"].hijack_owner_expires_at = time.monotonic() + 3600
     msg = await hub.hijack_state_msg_for("bot1", mock_ws)
     assert msg["owner"] == "me"
 
@@ -389,13 +389,13 @@ async def test_cleanup_expired_both_expired_sends_resume() -> None:
     mock_ws = AsyncMock()
     hub._workers["bot1"].worker_ws = mock_ws
     hub._workers["bot1"].hijack_owner = AsyncMock()
-    hub._workers["bot1"].hijack_owner_expires_at = time.time() - 1
+    hub._workers["bot1"].hijack_owner_expires_at = time.monotonic() - 1
     hub._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
-        acquired_at=time.time() - 200,
-        lease_expires_at=time.time() - 1,
-        last_heartbeat=time.time() - 200,
+        acquired_at=time.monotonic() - 200,
+        lease_expires_at=time.monotonic() - 1,
+        last_heartbeat=time.monotonic() - 200,
     )
     expired = await hub.cleanup_expired_hijack("bot1")
     assert expired

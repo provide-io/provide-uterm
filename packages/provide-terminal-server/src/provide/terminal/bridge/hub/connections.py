@@ -26,23 +26,16 @@ from provide.terminal.bridge.ratelimit import TokenBucket
 
 logger = get_logger(__name__)
 
-# Keeps strong references to fire-and-forget tasks so CPython's GC cannot
-# collect them before the event loop runs them.  Each task removes itself
-# on completion via the done callback.
-_background_tasks: set[asyncio.Task[Any]] = set()
-
-
-async def shutdown_background_tasks(timeout: float = 5.0) -> int:
+async def shutdown_background_tasks(task_set: set[asyncio.Task[Any]]) -> int:
     """Cancel and await all pending background tasks. Returns count cancelled."""
-    tasks = list(_background_tasks)
+    tasks = list(task_set)
     if not tasks:
         return 0
     for task in tasks:
         task.cancel()
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    _background_tasks.clear()
-    cancelled = sum(1 for r in results if isinstance(r, (asyncio.CancelledError, Exception)))
-    return cancelled
+    task_set.clear()
+    return sum(1 for r in results if isinstance(r, (asyncio.CancelledError, Exception)))
 
 
 # Maximum number of per-client rate-limit buckets held in memory at once.
@@ -77,6 +70,7 @@ class _ConnectionMixin:
     _rest_send_bucket: TokenBucket
     _rest_acquire_per_client: dict[str, TokenBucket]
     _rest_send_per_client: dict[str, TokenBucket]
+    _background_tasks: set[asyncio.Task[Any]]
     _resume_store: ResumeTokenStore | None
     _resume_ttl_s: float
     _ws_to_resume_token: dict[Any, str]
@@ -286,8 +280,8 @@ class _ConnectionMixin:
         on_empty = getattr(self, "on_worker_empty", None)
         if browser_count == 0 and on_empty is not None:
             task = asyncio.create_task(on_empty(worker_id))
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
         return {
             "was_owner": was_owner,
             "rest_still_active": rest_still_active,

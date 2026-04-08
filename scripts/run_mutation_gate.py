@@ -59,7 +59,12 @@ def _seed_mutants_config(paths_to_mutate: list[str] | None = None) -> None:
     _sanitize_mutants_pyproject(mutants / "pyproject.toml", paths_to_mutate=paths_to_mutate)
 
 
-def _sanitize_mutants_pyproject(path: Path, *, paths_to_mutate: list[str] | None) -> None:
+def _sanitize_mutants_pyproject(
+    path: Path,
+    *,
+    paths_to_mutate: list[str] | None,
+    strip_workspace: bool = True,
+) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
@@ -67,19 +72,22 @@ def _sanitize_mutants_pyproject(path: Path, *, paths_to_mutate: list[str] | None
     for arg in MUTMUT_INCOMPATIBLE_PYTEST_ARGS:
         updated = updated.replace(f'"{arg}",\n', "")
         updated = updated.replace(f'"{arg}"', "")
-    # Strip uv workspace config — mutants/ doesn't contain workspace members
-    updated = re.sub(
-        r"^\[tool\.uv\.workspace\]\n(?:.*\n)*?\n",
-        "\n",
-        updated,
-        flags=re.MULTILINE,
-    )
-    updated = re.sub(
-        r"^\[tool\.uv\.sources\]\n(?:.*\n)*?\n",
-        "\n",
-        updated,
-        flags=re.MULTILINE,
-    )
+    if strip_workspace:
+        # Strip uv workspace config — mutants/ doesn't contain workspace members.
+        # Do NOT strip from the root pyproject.toml: uv needs workspace/sources
+        # to resolve packages like provide-terminal that aren't on PyPI.
+        updated = re.sub(
+            r"^\[tool\.uv\.workspace\]\n(?:.*\n)*?\n",
+            "\n",
+            updated,
+            flags=re.MULTILINE,
+        )
+        updated = re.sub(
+            r"^\[tool\.uv\.sources\]\n(?:.*\n)*?\n",
+            "\n",
+            updated,
+            flags=re.MULTILINE,
+        )
     if paths_to_mutate:
         encoded = ", ".join(f'"{item}"' for item in paths_to_mutate)
         updated, count = re.subn(
@@ -100,6 +108,56 @@ def _half_cpu_count() -> int:
     return max(1, count // 2)
 
 
+def _resolve_to_mutmut_path(path: str) -> str | None:
+    """Translate a git-diff path to the path mutmut uses (usually src/-prefixed).
+
+    mutmut reads paths_to_mutate as given in pyproject.toml.  In this repo,
+    `src/` at the root is a symlink tree that mirrors every package's source,
+    so mutmut uses paths like `src/provide/terminal/pty/connector.py`.  Git
+    diff returns the real file path, e.g.
+    `packages/provide-terminal-platform/src/provide/terminal/pty/connector.py`.
+
+    Strategy: walk paths_to_mutate from the root pyproject.toml and return the
+    first entry whose resolved inode matches the changed file's inode, so we
+    never hard-code package prefixes.
+    """
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        import tomli as tomllib  # type: ignore[no-reuse-def]
+    try:
+        cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+        configured = cfg.get("tool", {}).get("mutmut", {}).get("paths_to_mutate", [])
+    except Exception:  # noqa: BLE001
+        return path
+
+    try:
+        target_inode = Path(path).stat().st_ino
+    except OSError:
+        return path
+
+    for entry in configured:
+        ep = Path(entry)
+        try:
+            # Direct match (file entry)
+            if ep.is_file() and ep.stat().st_ino == target_inode:
+                return entry
+            # Directory entry — walk for a matching file
+            if ep.is_dir():
+                for child in ep.rglob("*.py"):
+                    try:
+                        if child.stat().st_ino == target_inode:
+                            return str(child)
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+
+    # Fallback: return original path (the original always works if mutmut is run
+    # from the package root where the path_to_mutate resides)
+    return path
+
+
 def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ...]) -> list[str]:
     diff_cmd = ["git", "diff", "--name-only"]
     if staged_only:
@@ -118,8 +176,12 @@ def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ..
             continue
         if not any(path.startswith(root) for root in roots):
             continue
-        if Path(path).exists():
-            changed.append(path)
+        if not Path(path).exists():
+            continue
+        # Translate to the path mutmut actually uses (may differ via symlinks)
+        resolved = _resolve_to_mutmut_path(path)
+        if resolved:
+            changed.append(resolved)
     return sorted(set(changed))
 
 
@@ -167,7 +229,7 @@ def run_mutation_gate(
 
         # Also rewrite the root pyproject.toml so mutmut sees the narrowed targets
         if paths_to_mutate and root_original is not None:
-            _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate)
+            _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate, strip_workspace=False)
 
         children = max_children if attempt == 1 else 1
         print(f"Running mutation attempt {attempt}/{attempts} with max-children={children}")
@@ -178,13 +240,18 @@ def run_mutation_gate(
         print("+", " ".join(cmd))
         try:
             mutmut_result = subprocess.run(cmd, check=False, env=mutation_env)  # noqa: S603
+            # export-cicd-stats must run BEFORE restoring the root pyproject.toml:
+            # mutmut stores meta files under the paths_to_mutate prefix used during
+            # the run; export-cicd-stats re-reads paths_to_mutate to locate them.
+            # Restoring early causes a path mismatch → "No previous mutation data".
+            if mutmut_result.returncode <= 1:
+                _run(_uv_mutmut_cmd(python_version, "export-cicd-stats"), env=mutation_env)
         finally:
-            # Restore root pyproject.toml immediately
+            # Restore root pyproject.toml (even on error so we never leave it modified)
             if root_original is not None:
                 root_pyproject.write_text(root_original, encoding="utf-8")
         if mutmut_result.returncode > 1:
             raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
-        _run(_uv_mutmut_cmd(python_version, "export-cicd-stats"), env=mutation_env)
         last_stats = _read_stats(stats_path)
         score = _mutation_score(last_stats)
         print(f"mutation_score={score:.2f}")

@@ -17,7 +17,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.hub.connections import _background_tasks
 from provide.terminal.bridge.models import WorkerTermState
 
 
@@ -165,11 +164,11 @@ class TestOnWorkerEmptyCallback:
             st.browsers[browser_ws] = "operator"
 
         # Take a snapshot of the set before to detect any lingering None.
-        _background_tasks.discard(None)  # ensure clean state
+        hub._background_tasks.discard(None)  # ensure clean state
         await hub.cleanup_browser_disconnect("w2", browser_ws, owned_hijack=False)
         await asyncio.sleep(0)  # let task complete and run done-callback
 
-        assert None not in _background_tasks, (
+        assert None not in hub._background_tasks, (
             "_background_tasks must not contain None — "
             "mutmut_71 adds None instead of the task, leaving it in the set permanently"
         )

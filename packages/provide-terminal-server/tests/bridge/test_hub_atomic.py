@@ -30,7 +30,7 @@ async def test_try_release_ws_hijack_clears_owner() -> None:
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
 
     released, rest_active = await hub.try_release_ws_hijack("bot1", ws)
     assert released is True
@@ -47,7 +47,7 @@ async def test_try_release_ws_hijack_rejects_non_owner() -> None:
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws_owner
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
 
     released, rest_active = await hub.try_release_ws_hijack("bot1", ws_other)
     assert released is False
@@ -71,7 +71,7 @@ async def test_try_release_ws_hijack_noop_when_expired() -> None:
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() - 1  # already expired
+        st.hijack_owner_expires_at = time.monotonic() - 1  # already expired
 
     released, _rest = await hub.try_release_ws_hijack("bot1", ws)
     assert released is False
@@ -89,11 +89,11 @@ async def test_touch_if_owner_returns_expiry_for_active_owner() -> None:
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
 
     result = await hub.touch_if_owner("bot1", ws)
     assert result is not None
-    assert result > time.time()
+    assert result > time.monotonic()
 
 
 async def test_touch_if_owner_returns_none_for_non_owner() -> None:
@@ -104,7 +104,7 @@ async def test_touch_if_owner_returns_none_for_non_owner() -> None:
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws_owner
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
 
     result = await hub.touch_if_owner("bot1", ws_other)
     assert result is None
@@ -125,7 +125,7 @@ async def test_touch_if_owner_returns_none_after_owner_cleared() -> None:
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
 
     assert await hub.touch_if_owner("bot1", ws) is not None
 
@@ -148,9 +148,9 @@ async def test_get_rest_session_returns_session_when_valid() -> None:
         st.hijack_session = HijackSession(
             hijack_id="abc123",
             owner="test",
-            acquired_at=time.time(),
-            lease_expires_at=time.time() + 3600,
-            last_heartbeat=time.time(),
+            acquired_at=time.monotonic(),
+            lease_expires_at=time.monotonic() + 3600,
+            last_heartbeat=time.monotonic(),
         )
 
     result = await hub.get_rest_session("bot1", "abc123")
@@ -166,9 +166,9 @@ async def test_get_rest_session_returns_none_for_wrong_hijack_id() -> None:
         st.hijack_session = HijackSession(
             hijack_id="abc123",
             owner="test",
-            acquired_at=time.time(),
-            lease_expires_at=time.time() + 3600,
-            last_heartbeat=time.time(),
+            acquired_at=time.monotonic(),
+            lease_expires_at=time.monotonic() + 3600,
+            last_heartbeat=time.monotonic(),
         )
 
     result = await hub.get_rest_session("bot1", "wrong-id")
@@ -205,9 +205,9 @@ async def test_hijack_state_msg_for_rest_session_returns_other() -> None:
         st.hijack_session = HijackSession(
             hijack_id="s1",
             owner="tester",
-            acquired_at=time.time(),
-            lease_expires_at=time.time() + 3600,
-            last_heartbeat=time.time(),
+            acquired_at=time.monotonic(),
+            lease_expires_at=time.monotonic() + 3600,
+            last_heartbeat=time.monotonic(),
         )
 
     msg = await hub.hijack_state_msg_for("bot1", ws)
@@ -222,13 +222,13 @@ async def test_try_release_ws_hijack_returns_rest_active_when_rest_session_prese
     async with hub._lock:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() + 60
+        st.hijack_owner_expires_at = time.monotonic() + 60
         st.hijack_session = HijackSession(
             hijack_id="r1",
             owner="rest-client",
-            acquired_at=time.time(),
-            lease_expires_at=time.time() + 3600,
-            last_heartbeat=time.time(),
+            acquired_at=time.monotonic(),
+            lease_expires_at=time.monotonic() + 3600,
+            last_heartbeat=time.monotonic(),
         )
 
     released, rest_active = await hub.try_release_ws_hijack("bot1", ws)
@@ -249,13 +249,13 @@ async def test_cleanup_expired_hijack_increments_metric_counter() -> None:
         st = hub._workers.setdefault("bot1", WorkerTermState())
         st.worker_ws = ws
         st.hijack_owner = ws
-        st.hijack_owner_expires_at = time.time() - 1
+        st.hijack_owner_expires_at = time.monotonic() - 1
         st.hijack_session = HijackSession(
             hijack_id="expired-1",
             owner="owner-a",
-            acquired_at=time.time() - 100,
-            lease_expires_at=time.time() - 1,
-            last_heartbeat=time.time() - 50,
+            acquired_at=time.monotonic() - 100,
+            lease_expires_at=time.monotonic() - 1,
+            last_heartbeat=time.monotonic() - 50,
         )
 
     changed = await hub.cleanup_expired_hijack("bot1")
@@ -341,9 +341,9 @@ async def test_prune_if_idle_keeps_bot_with_active_rest_session() -> None:
         st.hijack_session = HijackSession(
             hijack_id="x",
             owner="test",
-            acquired_at=time.time(),
-            lease_expires_at=time.time() + 90,
-            last_heartbeat=time.time(),
+            acquired_at=time.monotonic(),
+            lease_expires_at=time.monotonic() + 90,
+            last_heartbeat=time.monotonic(),
         )
 
     await hub.prune_if_idle("bot1")

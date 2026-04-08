@@ -73,7 +73,7 @@ class TestForceReleaseHijackControlMsg:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()
-            st.hijack_owner_expires_at = time.time() + 300
+            st.hijack_owner_expires_at = time.monotonic() + 300
 
         result = await hub.force_release_hijack("w1")
         assert result is True, f"Expected True when hijack cleared, got {result!r}"
@@ -100,7 +100,7 @@ class TestForceReleaseHijackControlMsg:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()
-            st.hijack_owner_expires_at = time.time() + 300
+            st.hijack_owner_expires_at = time.monotonic() + 300
 
         await hub.force_release_hijack("w1")
 
@@ -126,7 +126,7 @@ class TestForceReleaseHijackControlMsg:
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()
-            st.hijack_owner_expires_at = time.time() + 300
+            st.hijack_owner_expires_at = time.monotonic() + 300
             st.browsers[browser_ws] = "admin"
 
         await hub.force_release_hijack("w1")
@@ -156,7 +156,7 @@ class TestCanSendInputHijackMode:
         st.input_mode = "hijack"
         st.hijack_owner = ws
         # Set expires_at in the past to make hijack expired
-        st.hijack_owner_expires_at = time.time() - 10.0  # expired 10 seconds ago
+        st.hijack_owner_expires_at = time.monotonic() - 10.0  # expired 10 seconds ago
 
         result = hub.can_send_input(st, ws)
         assert result is False, f"Expired hijack owner must NOT be able to send input, got {result!r}"

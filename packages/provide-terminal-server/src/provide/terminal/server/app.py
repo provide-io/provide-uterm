@@ -408,6 +408,7 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
                 await idle_sweep_task
             with contextlib.suppress(asyncio.CancelledError):
                 await retention_sweep_task
+            await hub.shutdown()
             await webhook_manager.shutdown()
             await registry.shutdown()
 

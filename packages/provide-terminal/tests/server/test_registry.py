@@ -19,6 +19,7 @@ from provide.terminal.server.registry import SessionRegistry, SessionValidationE
 def _make_hub() -> MagicMock:
     hub = MagicMock()
     hub.force_release_hijack = AsyncMock(return_value=True)
+    hub.set_input_mode = AsyncMock(return_value=(True, None))
     hub.get_last_snapshot = AsyncMock(return_value=None)
     hub.get_recent_events = AsyncMock(return_value=[])
     hub.browser_count = AsyncMock(return_value=0)

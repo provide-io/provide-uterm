@@ -12,6 +12,7 @@ so they can be tested independently of the full Durable Object runtime.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,8 @@ def persist_lease(
     )
     _s = getattr(ctx, "storage", None)
     if _s is not None and callable(getattr(_s, "setAlarm", None)):
-        _s.setAlarm(int(session.lease_expires_at * 1000))
+        wall_expires = session.lease_expires_at + (time.time() - time.monotonic())
+        _s.setAlarm(int(wall_expires * 1000))
 
 
 def clear_lease(store: Any, worker_id: str) -> None:

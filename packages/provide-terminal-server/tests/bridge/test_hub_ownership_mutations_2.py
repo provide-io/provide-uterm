@@ -43,7 +43,7 @@ async def _register_worker(hub: TermHub, worker_id: str, worker_ws: Any | None =
 
 
 def _make_hijack_session(worker_id: str, lease_s: float = 60.0) -> HijackSession:
-    now = time.time()
+    now = time.monotonic()
     return HijackSession(
         hijack_id=f"hj-{worker_id}",
         owner="test-owner",
@@ -80,11 +80,11 @@ class TestGetRestSession:
         assert "w1" in cleaned_ids
 
     async def test_expires_session_at_boundary(self) -> None:
-        """mutmut_9: lease_expires_at <= time.time() must expire (not just <)."""
+        """mutmut_9: lease_expires_at <= time.monotonic() must expire (not just <)."""
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -110,7 +110,7 @@ class TestTryAcquireRestHijack:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         acquired, err = await hub.try_acquire_rest_hijack("w1", owner="test", lease_s=60, hijack_id="hj-1", now=now)
         assert acquired is True
         async with hub._lock:
@@ -124,7 +124,7 @@ class TestTryAcquireRestHijack:
         hub = _make_hub()
         wws = _make_ws()
         await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         acquired, err = await hub.try_acquire_rest_hijack("w1", owner="test", lease_s=60, hijack_id="hj-1", now=now)
         assert acquired is True
         async with hub._lock:
@@ -148,13 +148,13 @@ class TestTouchHijackOwner:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
 
         # lease_s=0 should be clamped to max(1, ...) = 1
         result = await hub.touch_hijack_owner("w1", lease_s=0)
         assert result is not None
         # The expiry should be ~1 second from now (not 2)
-        assert result < time.time() + 2
+        assert result < time.monotonic() + 2
 
     async def test_max_ttl_clamped_to_600(self) -> None:
         """mutmut_18: min(..., 600) must clamp to 600, not 601."""
@@ -164,14 +164,14 @@ class TestTouchHijackOwner:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
 
         # lease_s=9999 should be clamped to 600
         result = await hub.touch_hijack_owner("w1", lease_s=9999)
         assert result is not None
         # Should be ~600s from now, not ~601s
-        assert result <= time.time() + 601
-        assert result >= time.time() + 599
+        assert result <= time.monotonic() + 601
+        assert result >= time.monotonic() + 599
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ class TestRemoveDeadBrowsers:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.browsers[non_owner_dead] = "operator"
 
         # Dead socket is NOT the hijack owner — owner must NOT be cleared
@@ -222,7 +222,7 @@ class TestRemoveDeadBrowsers:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.browsers[owner_ws] = "admin"
 
         await hub.remove_dead_browsers("w1", {owner_ws})
@@ -237,7 +237,7 @@ class TestRemoveDeadBrowsers:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.browsers[owner_ws] = "admin"
 
         await hub.remove_dead_browsers("w1", {owner_ws})
@@ -258,7 +258,7 @@ class TestRemoveDeadBrowsers:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.browsers[owner_ws] = "admin"
 
         with patch.object(hub, "notify_hijack_changed") as mock_notify:
@@ -274,7 +274,7 @@ class TestRemoveDeadBrowsers:
         st = await _register_worker(hub, "w1", wws)
         async with hub._lock:
             st.hijack_owner = owner_ws
-            st.hijack_owner_expires_at = time.time() + 60
+            st.hijack_owner_expires_at = time.monotonic() + 60
             st.browsers[owner_ws] = "admin"
 
         with patch.object(hub, "notify_hijack_changed") as mock_notify:
@@ -294,7 +294,7 @@ class TestExtendHijackLease:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = _make_hijack_session("w1")
         async with hub._lock:
             st.hijack_session = hs
@@ -319,7 +319,7 @@ class TestGetFreshHijackExpiry:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
@@ -346,7 +346,7 @@ class TestGetFreshHijackExpiry:
         hub = _make_hub()
         wws = _make_ws()
         st = await _register_worker(hub, "w1", wws)
-        now = time.time()
+        now = time.monotonic()
         hs = HijackSession(
             hijack_id="hj-1",
             owner="test",
