@@ -364,3 +364,122 @@ def test_default_display_name_is_empty_string():
 def test_welcomed_starts_as_exactly_false():
     conn = UshellConnector("s1")
     assert conn._welcomed is False
+
+
+# ---------------------------------------------------------------------------
+# Animation: AnimatedResult dispatch → pending_frames → poll_messages
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_input_animated_result():
+    """AnimatedResult dispatch starts animation task + returns no frames."""
+    from provide.terminal.shell._commands import AnimatedResult
+
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()  # consume welcome
+
+    # Patch dispatcher to return AnimatedResult
+    anim = AnimatedResult(frames=["frame1\r\n", "frame2\r\n"], fps=100, loop=False)
+    original_dispatch = conn._dispatcher.dispatch
+
+    async def mock_dispatch(line: str) -> list[str] | AnimatedResult:
+        if line == "testanim":
+            return anim
+        return await original_dispatch(line)
+
+    conn._dispatcher.dispatch = mock_dispatch  # type: ignore[assignment]
+
+    await conn.handle_input("testanim\r")
+    # Animation runs in background
+    assert conn._animation_task is not None
+
+    # Wait for animation to finish (non-looping, 2 frames at 100fps)
+    import asyncio
+
+    await asyncio.sleep(0.2)
+    assert conn._animation_task.done()
+
+    # Pending frames should have animation output + prompt
+    poll_result = await conn.poll_messages()
+    assert len(poll_result) > 0
+    all_data = " ".join(f["data"] for f in poll_result)
+    assert "frame1" in all_data or "frame2" in all_data
+
+
+async def test_stop_cancels_animation_task():
+    """stop() cancels a running animation task."""
+    from provide.terminal.shell._commands import AnimatedResult
+
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()  # consume welcome
+
+    # Start a looping animation — fps=1000 means ~1ms per frame,
+    # so the loop=True branch (line 146→142) will execute within 50ms.
+    anim = AnimatedResult(frames=["f1\r\n", "f2\r\n"], fps=1000, loop=True)
+
+    async def mock_dispatch(line: str) -> list[str] | AnimatedResult:
+        return anim
+
+    conn._dispatcher.dispatch = mock_dispatch  # type: ignore[assignment]
+    await conn.handle_input("anim\r")
+
+    import asyncio
+
+    # Let it loop at least once (covers loop=True → continue)
+    await asyncio.sleep(0.1)
+    assert conn._animation_task is not None
+    assert not conn._animation_task.done()
+
+    await conn.stop()
+    await asyncio.sleep(0.05)
+    assert conn._animation_task.done() or conn._animation_task.cancelled()
+
+
+async def test_handle_input_replaces_running_animation():
+    """Second AnimatedResult cancels the first animation task."""
+    from provide.terminal.shell._commands import AnimatedResult
+
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()  # consume welcome
+
+    anim1 = AnimatedResult(frames=["a\r\n"], fps=10, loop=True)
+    anim2 = AnimatedResult(frames=["b\r\n"], fps=100, loop=False)
+    call_count = 0
+
+    async def mock_dispatch(line: str) -> list[str] | AnimatedResult:
+        nonlocal call_count
+        call_count += 1
+        return anim1 if call_count == 1 else anim2
+
+    conn._dispatcher.dispatch = mock_dispatch  # type: ignore[assignment]
+
+    await conn.handle_input("first\r")
+    import asyncio
+
+    await asyncio.sleep(0.05)
+    task1 = conn._animation_task
+
+    await conn.handle_input("second\r")
+    await asyncio.sleep(0.05)
+    assert task1 is not None
+    assert task1.done() or task1.cancelled()
+
+
+async def test_poll_messages_returns_pending_frames():
+    """Pending frames (e.g. from animation) are returned and cleared."""
+    conn = UshellConnector("s1")
+    await conn.start()
+    await conn.poll_messages()  # consume welcome
+
+    # Manually inject pending frames
+    conn._pending_frames.append({"type": "term", "data": "test-pending"})
+    frames = await conn.poll_messages()
+    assert len(frames) == 1
+    assert frames[0]["data"] == "test-pending"
+
+    # Pending cleared
+    frames2 = await conn.poll_messages()
+    assert frames2 == []

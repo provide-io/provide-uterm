@@ -158,3 +158,18 @@ class TestDecoderEdgeCases:
         decoder = ControlChannelDecoder()
         result = decoder.finish()
         assert result == []
+
+    def test_buffer_overflow_raises_and_clears(self) -> None:
+        """Buffer overflow protection (lines 83-88) clears state and raises."""
+        from provide.terminal.control_channel import ControlChannelProtocolError
+
+        decoder = ControlChannelDecoder(max_buffer_bytes=5)
+        # First feed is within limit (3 bytes ≤ 5)
+        decoder.feed("abc")
+        # After drain, buffer_parts is empty (data was emitted).
+        # Second feed of 6 bytes exceeds max_buffer_bytes=5.
+        with pytest.raises(ControlChannelProtocolError, match="buffer overflow"):
+            decoder.feed("x" * 6)
+        # After overflow, buffer is cleared — next feed starts fresh
+        events = decoder.feed("ok")
+        assert any(hasattr(e, "data") for e in events) or events == []

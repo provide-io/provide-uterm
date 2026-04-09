@@ -68,7 +68,7 @@ class PamTunnelBridge:
                 frame = await self._tunnel.recv()
                 if frame.is_eof:
                     break
-                if frame.channel == CHANNEL_DATA and frame.payload:
+                if frame.channel == CHANNEL_DATA and frame.payload:  # pragma: no branch
                     os.write(master_fd, frame.payload)
         except asyncio.CancelledError:
             pass

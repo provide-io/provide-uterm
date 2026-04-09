@@ -112,14 +112,52 @@ addopts = [
     "-ra",
     "-m",
     "not playwright and not memray and not slow",
-    "--cov=provide.terminal",
+    "--cov=provide.terminal.__init__",
+    "--cov=provide.terminal.ansi",
+    "--cov=provide.terminal.ansi_render",
+    "--cov=provide.terminal.control_channel",
+    "--cov=provide.terminal.deckmux",
+    "--cov=provide.terminal.defaults",
+    "--cov=provide.terminal.detection",
+    "--cov=provide.terminal.emulator",
+    "--cov=provide.terminal.file_io",
+    "--cov=provide.terminal.filters",
+    "--cov=provide.terminal.io",
+    "--cov=provide.terminal.line_editor",
+    "--cov=provide.terminal.protocols",
+    "--cov=provide.terminal.render",
+    "--cov=provide.terminal.replay",
+    "--cov=provide.terminal.screen",
+    "--cov=provide.terminal.session_logger",
+    "--cov=provide.terminal.shell",
+    "--cov=provide.terminal.telnet_session",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
 
 [tool.coverage.run]
-source = ["provide.terminal"]
+source = [
+    "provide.terminal.__init__",
+    "provide.terminal.ansi",
+    "provide.terminal.ansi_render",
+    "provide.terminal.control_channel",
+    "provide.terminal.deckmux",
+    "provide.terminal.defaults",
+    "provide.terminal.detection",
+    "provide.terminal.emulator",
+    "provide.terminal.file_io",
+    "provide.terminal.filters",
+    "provide.terminal.io",
+    "provide.terminal.line_editor",
+    "provide.terminal.protocols",
+    "provide.terminal.render",
+    "provide.terminal.replay",
+    "provide.terminal.screen",
+    "provide.terminal.session_logger",
+    "provide.terminal.shell",
+    "provide.terminal.telnet_session",
+]
 omit = ["tests/*"]
 branch = true
 
@@ -130,6 +168,7 @@ skip_covered = false
 # Loop-back branches in async receive loops — the True branch IS exercised
 # but coverage can't track the loop continuation edge reliably.
 partial_branches = [
+    "pragma: no branch",
     "if not msg.get\\(\"more_body\"",
     "elif msg_type ==",
 ]

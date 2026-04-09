@@ -148,7 +148,7 @@ graph LR
 - **`uterm inspect`** — HTTP reverse proxy with live traffic inspection
 - **`uterm inspect --intercept`** — pause requests, forward/drop/modify from the browser
 
-See [HTTP Inspection & Interception](docs/inspect.md) for the full protocol reference.
+See [HTTP Inspection & Interception](https://github.com/provide-io/provide-terminal/blob/main/docs/inspect.md) for the full protocol reference.
 
 ### Collaborative Presence (DeckMux)
 
@@ -169,7 +169,7 @@ Enable per-session with `presence: true`. Works on both FastAPI and CF backends 
 uterm-mcp  # starts MCP server for Claude, GPT, or any MCP-compatible agent
 ```
 
-Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-terminal-client](packages/provide-terminal-client/).
+Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-terminal-client](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-client).
 
 ### Agent Management
 
@@ -179,7 +179,7 @@ Orchestrate fleets of terminal workers:
 uterm-manager --config swarm.yaml
 ```
 
-Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-platform](packages/provide-terminal-platform/).
+Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-platform](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-platform).
 
 ---
 
@@ -248,7 +248,7 @@ graph LR
 
 **FastAPI** — full control, named sessions, auth, recording, policy. Deploy anywhere Python runs.
 
-**Cloudflare Workers** — edge deployment on [Durable Objects](packages/provide-terminal-cloudflare/) with CF Access JWT, KV session registry, WebSocket hibernation.
+**Cloudflare Workers** — edge deployment on [Durable Objects](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-cloudflare) with CF Access JWT, KV session registry, WebSocket hibernation.
 
 **Docker** — both backends locally:
 ```bash
@@ -287,15 +287,15 @@ All packages at 100% branch+line coverage. 8760+ tests total.
 
 ## Docs
 
-- [HTTP Inspection & Interception](docs/inspect.md)
-- [Protocol Matrix](docs/protocol-matrix.md) — backend capability contract
-- [Testing Guide](docs/TESTING.md)
-- [Operations Runbook](docs/operations/runbook.md)
-- [Service SLOs](docs/operations/slo.md)
-- [Production Readiness Gates](docs/production-readiness-pass2.md)
-- [Release Governance](docs/release-governance.md)
-- [Architecture Diagrams](docs/diagrams/) (PlantUML)
-- [Cloudflare Workers](packages/provide-terminal-cloudflare/README.md)
+- [HTTP Inspection & Interception](https://github.com/provide-io/provide-terminal/blob/main/docs/inspect.md)
+- [Protocol Matrix](https://github.com/provide-io/provide-terminal/blob/main/docs/protocol-matrix.md) — backend capability contract
+- [Testing Guide](https://github.com/provide-io/provide-terminal/blob/main/docs/TESTING.md)
+- [Operations Runbook](https://github.com/provide-io/provide-terminal/blob/main/docs/operations/runbook.md)
+- [Service SLOs](https://github.com/provide-io/provide-terminal/blob/main/docs/operations/slo.md)
+- [Production Readiness Gates](https://github.com/provide-io/provide-terminal/blob/main/docs/production-readiness-pass2.md)
+- [Release Governance](https://github.com/provide-io/provide-terminal/blob/main/docs/release-governance.md)
+- [Architecture Diagrams](https://github.com/provide-io/provide-terminal/tree/main/docs/diagrams) (PlantUML)
+- [Cloudflare Workers](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-cloudflare/README.md)
 
 ---
 

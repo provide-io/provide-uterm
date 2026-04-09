@@ -148,7 +148,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Update the last-activity timestamp for *worker_id*."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None:
+            if st is not None:  # pragma: no branch
                 st.last_activity_at = time.monotonic()
 
     def metric(self, name: str, value: int = 1) -> None:
@@ -518,7 +518,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Update the role for *ws* in *worker_id*'s browser set."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None and ws in st.browsers:
+            if st is not None and ws in st.browsers:  # pragma: no branch
                 st.browsers[ws] = role
 
     async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:

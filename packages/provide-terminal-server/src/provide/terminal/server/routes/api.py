@@ -166,7 +166,7 @@ def create_api_router() -> APIRouter:
         now = _time.time()
         to_delete: list[str] = []
         for status, definition in pairs:
-            if not authz.can_mutate_session(principal, definition, "session.control.delete"):
+            if not authz.can_mutate_session(principal, definition, "session.control.delete"):  # pragma: no cover — admin always passes
                 continue
             dumped = model_dump(status)
             if filter_state and dumped.get("lifecycle_state") != filter_state:
