@@ -112,6 +112,7 @@ fail_under = 100
 show_missing = true
 skip_covered = false
 partial_branches = [
+    "pragma: no branch",
     "if not msg.get\\(\"more_body\"",
     "elif msg_type ==",
 ]

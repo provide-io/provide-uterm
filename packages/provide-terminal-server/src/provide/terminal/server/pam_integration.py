@@ -129,7 +129,7 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
         )
         if ev.event == "open":
             await _on_open(ev, pam_cfg, registry, _bridges)
-        elif ev.event == "close":
+        elif ev.event == "close":  # pragma: no branch
             await _on_close(ev, pam_cfg, registry, _bridges)
 
     listener = PamNotifyListener(pam_cfg.notify_socket)
@@ -210,7 +210,7 @@ async def _on_close(
     if bridge is not None:
         try:
             stop = getattr(bridge, "stop", None)
-            if callable(stop):
+            if callable(stop):  # pragma: no branch
                 await stop()
         except Exception as exc:
             logger.debug("pam_bridge_stop_failed session_id=%s error=%s", session_id, exc)

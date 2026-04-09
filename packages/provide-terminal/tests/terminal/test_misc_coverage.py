@@ -356,3 +356,23 @@ class TestAnsiCoverage:
 # (TestEmulatorCachedSnapshot, TestCliSSHTransportMissing, TestReplayRawBranch,
 #  TestServerConfigRelativeDir, TestRegistryRuntimeStop, TestIoBranches
 #  moved to test_misc_coverage_2.py)
+
+
+class TestLazySessionExports:
+    """Test lazy import of TelnetSession / connect_telnet via __getattr__ (lines 107-109)."""
+
+    def test_lazy_import_telnet_session(self) -> None:
+        import provide.terminal
+
+        cls = provide.terminal.TelnetSession
+        from provide.terminal.telnet_session import TelnetSession
+
+        assert cls is TelnetSession
+
+    def test_lazy_import_connect_telnet(self) -> None:
+        import provide.terminal
+
+        fn = provide.terminal.connect_telnet
+        from provide.terminal.telnet_session import connect_telnet
+
+        assert fn is connect_telnet

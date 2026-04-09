@@ -24,13 +24,24 @@ from provide.terminal.control_channel import encode_control
 
 
 def pytest_collection_modifyitems(items: list) -> None:
-    """Mark all playwright tests and move them to the end of the collection."""
+    """Mark all PT playwright tests and move ALL playwright-marked tests to the end.
+
+    This ensures playwright tests (which start real browsers and async servers)
+    always run after all other tests, regardless of how pytest discovers them.
+    Without this, PT playwright tests can end up interleaved with tests from
+    other packages (e.g. provide-terminal-cloudflare), corrupting asyncio state.
+    """
     marker = pytest.mark.playwright
-    playwright_items = []
-    other_items = []
+    # First pass: add marker to PT playwright tests by path.
     for item in items:
         if "tests/playwright/" in str(item.fspath):
             item.add_marker(marker)
+    # Second pass: move ALL playwright-marked items (PT + CF + any other package)
+    # to the end so they never corrupt asyncio state for other tests.
+    playwright_items = []
+    other_items = []
+    for item in items:
+        if item.get_closest_marker("playwright") is not None:
             playwright_items.append(item)
         else:
             other_items.append(item)
