@@ -13,9 +13,9 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tests.bridge.control_channel_helpers import decode_control_payload
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import HijackSession, WorkerTermState
+from tests.bridge.control_channel_helpers import decode_control_payload
 
 # ---------------------------------------------------------------------------
 # Helpers

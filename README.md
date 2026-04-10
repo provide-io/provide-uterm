@@ -163,7 +163,7 @@ Enable per-session with `presence: true`. Works on both FastAPI and CF backends 
 
 ### AI/MCP Integration
 
-16 tools for AI agents to control terminal sessions via the [Model Context Protocol](https://modelcontextprotocol.io/):
+21 tools for AI agents to control terminal sessions via the [Model Context Protocol](https://modelcontextprotocol.io/):
 
 ```bash
 uterm-mcp  # starts MCP server for Claude, GPT, or any MCP-compatible agent
@@ -208,20 +208,31 @@ Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, times
 ## Installation
 
 ```bash
-pip install provide-terminal             # core only
-pip install 'provide-terminal[cli]'      # CLI tools
-pip install 'provide-terminal[server]'   # hosted server
-pip install 'provide-terminal[all]'      # everything
+pip install provide-terminal                  # core only
+pip install 'provide-terminal[emulator]'      # + pyte screen emulation
+pip install 'provide-terminal-server[cli]'    # CLI tools (uterm, uterm-server)
+pip install 'provide-terminal-server[server]' # hosted server
+pip install 'provide-terminal-client[all]'    # client + MCP tools
 ```
+
+**provide-terminal extras:**
 
 | Extra | Installs | Required for |
 |-------|----------|-------------|
-| `[websocket]` | fastapi, websockets | TermHub, WS proxy |
-| `[ssh]` | asyncssh | SSH transport |
 | `[emulator]` | pyte | Screen state tracking |
-| `[server]` | fastapi, uvicorn, pyjwt | Reference server |
+| `[ssh]` | asyncssh | SSH transport |
+| `[client]` | httpx | HTTP client |
+| `[all]` | everything above | Full core feature set |
+
+**provide-terminal-server extras:**
+
+| Extra | Installs | Required for |
+|-------|----------|-------------|
+| `[server]` | fastapi, uvicorn, pyjwt, websockets | Reference server |
 | `[cli]` | fastapi, uvicorn, websockets, textual, httpx | CLI tools |
-| `[all]` | everything above + fastmcp | Full feature set |
+| `[tunnel]` | httpx, uvicorn, websockets, fastapi | Tunnel sharing |
+| `[gateway]` | asyncssh, websockets | Telnet/SSH gateways |
+| `[all]` | everything above | Full server feature set |
 
 ---
 

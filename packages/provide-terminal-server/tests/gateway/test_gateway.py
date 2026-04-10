@@ -25,7 +25,6 @@ from provide.terminal.gateway._gateway import (
     _write_token,
 )
 
-
 # ---------------------------------------------------------------------------
 # Token file helpers
 # ---------------------------------------------------------------------------
@@ -159,7 +158,7 @@ class TestRequireWebsockets:
         with patch("builtins.__import__", side_effect=mock_import):
             try:
                 _require_websockets()
-                raise AssertionError("should have raised")  # noqa: TRY301
+                raise AssertionError("should have raised")
             except ImportError as exc:
                 assert "websockets is required" in str(exc)
 

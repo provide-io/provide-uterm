@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
     from pathlib import Path
 
+    from provide.terminal.bridge.annotation._detector import PatternDetector
     from provide.terminal.bridge.hub import TermHub
 
 
@@ -56,12 +57,14 @@ class SessionRegistry:
         recording: RecordingConfig,
         worker_bearer_token: str | None = None,
         max_sessions: int | None = None,
+        detector: PatternDetector | None = None,
     ) -> None:
         self._hub = hub
         self._recording = recording
         self._public_base_url = public_base_url
         self._worker_bearer_token = worker_bearer_token
         self._max_sessions = max_sessions
+        self._detector = detector
         self._lock = asyncio.Lock()
         self._sessions: dict[str, SessionDefinition] = {session.session_id: session for session in sessions}
         self._runtimes: dict[str, HostedSessionRuntime] = {}
@@ -112,6 +115,7 @@ class SessionRegistry:
                 public_base_url=self._public_base_url,
                 recording=self._recording,
                 worker_bearer_token=self._worker_bearer_token,
+                detector=self._detector,
             )
             self._runtimes[session.session_id] = runtime
         return runtime

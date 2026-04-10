@@ -21,7 +21,6 @@ from provide.terminal.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
-
 # ---------------------------------------------------------------------------
 # 18. 100 rapid connect/disconnect cycles
 # ---------------------------------------------------------------------------

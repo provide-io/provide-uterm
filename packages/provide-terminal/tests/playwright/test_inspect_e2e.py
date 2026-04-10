@@ -27,7 +27,6 @@ from playwright.sync_api import Page, expect
 from starlette.responses import HTMLResponse
 
 from provide.terminal.bridge.hub import TermHub
-from provide.terminal.control_channel import encode_control
 from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
 from provide.terminal.tunnel.protocol import CHANNEL_HTTP, encode_frame
 

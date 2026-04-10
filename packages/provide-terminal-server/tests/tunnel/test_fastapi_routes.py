@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.control_channel import ControlChannelDecoder
-
 from provide.terminal.tunnel.fastapi_routes import (
     register_tunnel_routes as _tunnel_registrar,
 )
@@ -79,7 +79,7 @@ class TestTunnelConnect:
 
     def test_tunnel_auth_rejected(self) -> None:
         """Tunnel rejects connection when bearer token doesn't match."""
-        hub = TermHub(worker_token="secret-token-123")  # noqa: S106
+        hub = TermHub(worker_token="secret-token-123")
         app = FastAPI()
         app.include_router(
             hub.create_router(extra_route_registrars=[_tunnel_registrar])
@@ -94,7 +94,7 @@ class TestTunnelConnect:
 
     def test_tunnel_accepts_global_worker_token(self) -> None:
         """Global worker_bearer_token accepted → line 70 covered."""
-        hub = TermHub(worker_token="global-secret")  # noqa: S106
+        hub = TermHub(worker_token="global-secret")
         app = FastAPI()
         app.include_router(
             hub.create_router(extra_route_registrars=[_tunnel_registrar])
@@ -108,7 +108,7 @@ class TestTunnelConnect:
             ws.send_bytes(encode_frame(CHANNEL_DATA, b"hello"))
 
     def test_tunnel_accepts_per_session_worker_token(self) -> None:
-        hub = TermHub(worker_token="global-token")  # noqa: S106
+        hub = TermHub(worker_token="global-token")
         app = FastAPI()
         app.include_router(
             hub.create_router(extra_route_registrars=[_tunnel_registrar])

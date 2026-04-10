@@ -9,10 +9,10 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from tests.bridge.control_channel_helpers import decode_control_payload
 from provide.terminal.bridge.models import _safe_float
 from provide.terminal.bridge.worker_link import TermBridge, _safe_int
 from provide.terminal.control_channel import encode_control
+from tests.bridge.control_channel_helpers import decode_control_payload
 
 
 class TestSafeInt:

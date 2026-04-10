@@ -22,8 +22,8 @@ class TestSshWsGatewayInit:
 
     def test_init_with_options(self, tmp_path: Path) -> None:
         tf = tmp_path / "token"
-        gw = SshWsGateway("ws://test", server_key="/tmp/key", token_file=tf, color_mode="16")
-        assert gw._server_key == "/tmp/key"
+        gw = SshWsGateway("ws://test", server_key="/tmp/key", token_file=tf, color_mode="16")  # noqa: S108
+        assert gw._server_key == "/tmp/key"  # noqa: S108
         assert gw._token_file == tf
         assert gw._color_mode == "16"
 
@@ -68,7 +68,7 @@ class TestSshWsGatewayStart:
         gw = SshWsGateway("ws://test", server_key=tmp_path / "nonexistent")
         try:
             await gw.start("127.0.0.1", 0)
-            raise AssertionError("should have raised FileNotFoundError")  # noqa: TRY301
+            raise AssertionError("should have raised FileNotFoundError")
         except FileNotFoundError as exc:
             assert "SSH host key not found" in str(exc)
 
@@ -78,7 +78,7 @@ class TestSshWsGatewayStart:
         gw = SshWsGateway("ws://test", server_key=d)
         try:
             await gw.start("127.0.0.1", 0)
-            raise AssertionError("should have raised ValueError")  # noqa: TRY301
+            raise AssertionError("should have raised ValueError")
         except ValueError as exc:
             assert "not a file" in str(exc)
 

@@ -228,8 +228,8 @@ async def test_multiple_concurrent_connections() -> None:
 
 def test_socket_path_property() -> None:
     """socket_path property returns the configured path."""
-    listener = PamNotifyListener("/tmp/test.sock")  # noqa: S108
-    assert listener.socket_path == "/tmp/test.sock"  # noqa: S108
+    listener = PamNotifyListener("/tmp/test.sock")
+    assert listener.socket_path == "/tmp/test.sock"
 
 
 async def test_handle_connection_readline_timeout_drops_connection() -> None:
@@ -246,7 +246,7 @@ async def test_handle_connection_readline_timeout_drops_connection() -> None:
         writer.close = MagicMock()
         writer.wait_closed = AsyncMock()
 
-        await listener._handle_connection(reader, writer)  # noqa: SLF001
+        await listener._handle_connection(reader, writer)
         writer.close.assert_called_once()
         await listener.stop()
 
@@ -265,7 +265,7 @@ async def test_handle_connection_exception_in_readline_drops_connection() -> Non
         writer.close = MagicMock()
         writer.wait_closed = AsyncMock()
 
-        await listener._handle_connection(reader, writer)  # noqa: SLF001
+        await listener._handle_connection(reader, writer)
         writer.close.assert_called_once()
         await listener.stop()
 
@@ -299,7 +299,7 @@ async def test_handle_connection_null_handler_skips_dispatch() -> None:
         listener = PamNotifyListener(path)
         events: list[PamEvent] = []
         await listener.start(lambda e: _collect(events, e))
-        listener._handler = None  # noqa: SLF001
+        listener._handler = None
 
         _reader, writer = await asyncio.open_unix_connection(path)
         writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')

@@ -150,9 +150,11 @@ def test_load_libpam_returns_none_on_oserror() -> None:
 
     from provide.terminal.pty.pam import _load_libpam
 
-    with patch.object(ctypes.util, "find_library", return_value="libpam.so.0"):
-        with patch.object(ctypes, "CDLL", side_effect=OSError("not found")):
-            assert _load_libpam() is None
+    with (
+        patch.object(ctypes.util, "find_library", return_value="libpam.so.0"),
+        patch.object(ctypes, "CDLL", side_effect=OSError("not found")),
+    ):
+        assert _load_libpam() is None
 
 
 def test_authenticate_raises_when_libpam_unavailable() -> None:
@@ -348,16 +350,16 @@ def test_conv_callback_echo_on_and_text_info_branches() -> None:
         _PamResponse,
     )
 
-    _PAM_PROMPT_ECHO_ON = 2
-    _PAM_TEXT_INFO = 4
+    pam_prompt_echo_on = 2
+    pam_text_info = 4
 
     _, cb = _make_conv_callback("alice", "secret")
 
     # Two messages: style=2 (returns username) and style=4 (no response)
     msgs = (_PamMessage * 2)()
-    msgs[0].msg_style = _PAM_PROMPT_ECHO_ON
+    msgs[0].msg_style = pam_prompt_echo_on
     msgs[0].msg = b"Username:"
-    msgs[1].msg_style = _PAM_TEXT_INFO
+    msgs[1].msg_style = pam_text_info
     msgs[1].msg = b"Info"
 
     msg_ptrs = (ctypes.POINTER(_PamMessage) * 2)(

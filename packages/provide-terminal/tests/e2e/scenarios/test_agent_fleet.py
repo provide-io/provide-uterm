@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -24,7 +25,6 @@ from .conftest import (
     snapshot_msg,
     ws_url,
 )
-
 
 # ---------------------------------------------------------------------------
 # 35. Human interrupts AI agent
@@ -162,10 +162,8 @@ async def test_multi_session_dashboard_disconnect_one(three_session_server: Any)
             if b1:
                 await ctx_b1.__aexit__(None, None, None)
             if b2:
-                try:
+                with contextlib.suppress(Exception):
                     await ctx_b2.__aexit__(None, None, None)
-                except Exception:
-                    pass
             if b3:
                 await ctx_b3.__aexit__(None, None, None)
 

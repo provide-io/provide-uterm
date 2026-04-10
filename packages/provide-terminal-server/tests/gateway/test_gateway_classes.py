@@ -16,7 +16,6 @@ from provide.terminal.gateway._gateway import (
     _make_process_handler,
 )
 
-
 # ---------------------------------------------------------------------------
 # Async iterator helper
 # ---------------------------------------------------------------------------
@@ -38,7 +37,7 @@ class _AsyncIter:
 
 def _mock_ws(messages: list[Any] | None = None) -> MagicMock:
     ws = MagicMock()
-    ws.__aiter__ = lambda self: _AsyncIter(messages or [])  # noqa: ARG005
+    ws.__aiter__ = lambda self: _AsyncIter(messages or [])
     ws.send = AsyncMock()
     return ws
 

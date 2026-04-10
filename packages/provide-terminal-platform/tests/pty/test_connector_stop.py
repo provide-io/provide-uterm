@@ -27,32 +27,32 @@ async def test_inject_start_creates_capture_socket() -> None:
             __import__("sys").executable, ["-c", "import time; time.sleep(0.1)"], inject=True
         )
         await conn.start()
-        assert conn._capture_socket is mock_cap  # noqa: SLF001
-        assert conn._capture_tmpdir is not None  # noqa: SLF001
+        assert conn._capture_socket is mock_cap
+        assert conn._capture_tmpdir is not None
         await conn.stop()
     mock_cap.stop.assert_awaited_once()
-    assert conn._capture_socket is None  # noqa: SLF001
-    assert conn._capture_tmpdir is None  # noqa: SLF001
+    assert conn._capture_socket is None
+    assert conn._capture_tmpdir is None
 
 
 async def test_stop_handles_dead_child_pid() -> None:
     """stop() handles ProcessLookupError + ChildProcessError from dead child."""
     conn = make_connector("/bin/echo", ["done"])
-    conn._connected = True  # noqa: SLF001
-    conn._child_pid = 999999999  # noqa: SLF001
+    conn._connected = True
+    conn._child_pid = 999999999
     r_fd, w_fd = os.pipe()
-    conn._master_fd = r_fd  # noqa: SLF001
+    conn._master_fd = r_fd
     os.close(w_fd)
     await conn.stop()
-    assert conn._child_pid is None  # noqa: SLF001
-    assert conn._master_fd is None  # noqa: SLF001
+    assert conn._child_pid is None
+    assert conn._master_fd is None
 
 
 async def test_stop_escalates_to_sigkill_when_child_survives_sighup() -> None:
     """stop() escalates to SIGKILL and blocks until child is reaped."""
     conn = make_connector("/bin/echo", ["done"])
-    conn._connected = True  # noqa: SLF001
-    conn._child_pid = 12345  # noqa: SLF001
+    conn._connected = True
+    conn._child_pid = 12345
     waitpid_calls: list[tuple[int, int]] = []
 
     def _fake_waitpid(pid: int, flags: int) -> tuple[int, int]:
@@ -69,7 +69,7 @@ async def test_stop_escalates_to_sigkill_when_child_survives_sighup() -> None:
     with patch("os.waitpid", side_effect=_fake_waitpid), patch("os.kill", side_effect=_fake_kill):
         await conn.stop()
 
-    assert conn._child_pid is None  # noqa: SLF001
+    assert conn._child_pid is None
     assert (12345, _signal.SIGHUP) in kill_calls
     assert (12345, _signal.SIGKILL) in kill_calls
     assert any(flags == 0 for _, flags in waitpid_calls), "blocking waitpid must be called"
@@ -78,8 +78,8 @@ async def test_stop_escalates_to_sigkill_when_child_survives_sighup() -> None:
 async def test_stop_sigkill_processlookuperror_and_waitpid_childprocesserror() -> None:
     """stop() survives when SIGKILL raises ProcessLookupError and waitpid raises ChildProcessError."""
     conn = make_connector("/bin/echo", ["done"])
-    conn._connected = True  # noqa: SLF001
-    conn._child_pid = 12345  # noqa: SLF001
+    conn._connected = True
+    conn._child_pid = 12345
 
     def _fake_waitpid(pid: int, flags: int) -> tuple[int, int]:
         if flags == os.WNOHANG:
@@ -92,7 +92,7 @@ async def test_stop_sigkill_processlookuperror_and_waitpid_childprocesserror() -
 
     with patch("os.waitpid", side_effect=_fake_waitpid), patch("os.kill", side_effect=_fake_kill):
         await conn.stop()
-    assert conn._child_pid is None  # noqa: SLF001
+    assert conn._child_pid is None
 
 
 async def test_stop_cleans_up_orphaned_master_fd() -> None:
@@ -100,9 +100,9 @@ async def test_stop_cleans_up_orphaned_master_fd() -> None:
     conn = make_connector("/bin/echo", ["done"])
     r_fd, w_fd = os.pipe()
     os.close(w_fd)
-    conn._master_fd = r_fd  # noqa: SLF001
+    conn._master_fd = r_fd
     await conn.stop()
-    assert conn._master_fd is None  # noqa: SLF001
+    assert conn._master_fd is None
     import pytest
     with pytest.raises(OSError):
         os.close(r_fd)
@@ -114,17 +114,17 @@ async def test_stop_orphaned_master_fd_oserror_suppressed() -> None:
     r_fd, w_fd = os.pipe()
     os.close(w_fd)
     os.close(r_fd)
-    conn._master_fd = r_fd  # noqa: SLF001  — invalid fd
+    conn._master_fd = r_fd
     await conn.stop()
-    assert conn._master_fd is None  # noqa: SLF001
+    assert conn._master_fd is None
 
 
 async def test_stop_handles_oserror_on_master_close() -> None:
     """stop() gracefully handles OSError when master_fd already closed."""
     conn = make_connector("/bin/echo", ["done"])
     await conn.start()
-    if conn._master_fd is not None:  # noqa: SLF001
-        os.close(conn._master_fd)  # noqa: SLF001
+    if conn._master_fd is not None:
+        os.close(conn._master_fd)
     await conn.stop()
 
 
@@ -133,10 +133,10 @@ async def test_stop_calls_pam_close_session() -> None:
     conn = make_connector("/bin/echo")
     await conn.start()
     mock_pam = MagicMock()
-    conn._pam = mock_pam  # noqa: SLF001
+    conn._pam = mock_pam
     await conn.stop()
     mock_pam.close_session.assert_called_once()
-    assert conn._pam is None  # noqa: SLF001  — kills _pam="" mutation
+    assert conn._pam is None
 
 
 async def test_stop_cleans_capture_tmpdir() -> None:
@@ -145,10 +145,10 @@ async def test_stop_cleans_capture_tmpdir() -> None:
     await conn.start()
     tmpdir = tempfile.mkdtemp(prefix="test-uterm-cap-")
     Path(tmpdir).joinpath("cap.sock").touch()
-    conn._capture_tmpdir = tmpdir  # noqa: SLF001
+    conn._capture_tmpdir = tmpdir
     await conn.stop()
     assert not Path(tmpdir).exists()
-    assert conn._capture_tmpdir is None  # noqa: SLF001
+    assert conn._capture_tmpdir is None
 
 
 async def test_stop_capture_tmpdir_none_after_cleanup() -> None:
@@ -156,6 +156,6 @@ async def test_stop_capture_tmpdir_none_after_cleanup() -> None:
     conn = make_connector("/bin/echo")
     await conn.start()
     tmpdir = tempfile.mkdtemp(prefix="test-uterm-cap2-")
-    conn._capture_tmpdir = tmpdir  # noqa: SLF001
+    conn._capture_tmpdir = tmpdir
     await conn.stop()
-    assert conn._capture_tmpdir is None  # noqa: SLF001
+    assert conn._capture_tmpdir is None

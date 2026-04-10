@@ -23,7 +23,6 @@ from fastapi.testclient import TestClient
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.client import connect_test_ws
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

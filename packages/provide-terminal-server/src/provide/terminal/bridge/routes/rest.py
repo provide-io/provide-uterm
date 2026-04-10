@@ -201,7 +201,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                     "already_hijacked": "Worker is already hijacked.",
                     "open_mode": "Hijack not available in open input mode.",
                 }
-                return JSONResponse({"error": error_msgs.get(err, str(err))}, status_code=409)
+                return JSONResponse({"error": error_msgs.get(err or "", str(err))}, status_code=409)
             session_committed = True
             hub.metric("hijack_acquires_total")
             logger.info(

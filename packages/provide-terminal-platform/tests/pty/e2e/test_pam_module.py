@@ -38,7 +38,7 @@ pytestmark = pytest.mark.requires_root
 _SO_SRC = Path(__file__).parent.parent.parent / "native" / "pam_uterm" / "pam_uterm.so"
 
 _TEST_USER = "testuser"
-_TEST_PASS = "testpass123"  # noqa: S105 — test credential, not a real secret
+_TEST_PASS = "testpass123"
 
 
 def _find_pam_module_dir() -> Path:

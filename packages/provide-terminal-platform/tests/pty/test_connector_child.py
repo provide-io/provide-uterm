@@ -17,7 +17,6 @@ from ._connector_helpers import (
     make_connector,
 )
 
-
 # ── Env setup helpers ─────────────────────────────────────────────────────────
 
 def _strip_user_vars() -> dict[str, str]:
@@ -241,7 +240,7 @@ async def test_start_capture_socket_path_uses_cap_sock() -> None:
 
     Kills mutations that change the filename ('XXcap.sockXX', 'CAP.SOCK', None).
     """
-    known_tmpdir = "/tmp/test-uterm-cap-known"  # noqa: S108
+    known_tmpdir = "/tmp/test-uterm-cap-known"
     captured_env: dict[str, str] = {}
     cap_socket_args: list[str] = []
 
@@ -270,7 +269,7 @@ async def test_start_capture_socket_env_key_exact() -> None:
 
     Kills mutations that change key to 'XXUTERM_CAPTURE_SOCKETXX' or 'uterm_capture_socket'.
     """
-    known_tmpdir = "/tmp/test-uterm-cap2-known"  # noqa: S108
+    known_tmpdir = "/tmp/test-uterm-cap2-known"
     captured_env: dict[str, str] = {}
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)

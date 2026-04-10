@@ -16,7 +16,6 @@ from provide.terminal.pty.connector import PTYConnector
 
 from ._connector_helpers import make_connector
 
-
 # ── Validation ────────────────────────────────────────────────────────────────
 
 def test_connector_requires_command() -> None:
@@ -83,28 +82,28 @@ def test_connector_init_default_state() -> None:
             "inject": True,
         },
     )
-    assert conn._session_id == "sid-1"  # noqa: SLF001
-    assert conn._display_name == "Display Name"  # noqa: SLF001
-    assert conn._command == "/bin/bash"  # noqa: SLF001
-    assert conn._args == ["--norc"]  # noqa: SLF001
-    assert conn._extra_env == {"FOO": "bar"}  # noqa: SLF001
-    assert conn._cols == 120  # noqa: SLF001
-    assert conn._rows == 40  # noqa: SLF001
-    assert conn._inject is True  # noqa: SLF001
-    assert conn._master_fd is None  # noqa: SLF001
-    assert conn._child_pid is None  # noqa: SLF001
-    assert conn._connected is False  # noqa: SLF001
-    assert conn._paused is False  # noqa: SLF001
-    assert conn._input_mode == "open"  # noqa: SLF001
-    assert conn._buffer == ""  # noqa: SLF001
-    assert conn._capture_socket is None  # noqa: SLF001
-    assert conn._capture_tmpdir is None  # noqa: SLF001
-    assert conn._pam is None  # noqa: SLF001
+    assert conn._session_id == "sid-1"
+    assert conn._display_name == "Display Name"
+    assert conn._command == "/bin/bash"
+    assert conn._args == ["--norc"]
+    assert conn._extra_env == {"FOO": "bar"}
+    assert conn._cols == 120
+    assert conn._rows == 40
+    assert conn._inject is True
+    assert conn._master_fd is None
+    assert conn._child_pid is None
+    assert conn._connected is False
+    assert conn._paused is False
+    assert conn._input_mode == "open"
+    assert conn._buffer == ""
+    assert conn._capture_socket is None
+    assert conn._capture_tmpdir is None
+    assert conn._pam is None
     # Default cols/rows/inject
     conn2 = make_connector("/bin/echo")
-    assert conn2._cols == 80  # noqa: SLF001
-    assert conn2._rows == 24  # noqa: SLF001
-    assert conn2._inject is False  # noqa: SLF001
+    assert conn2._cols == 80
+    assert conn2._rows == 24
+    assert conn2._inject is False
 
 
 def test_connector_init_run_as_fields() -> None:
@@ -114,9 +113,9 @@ def test_connector_init_run_as_fields() -> None:
         "n",
         config={"command": "/bin/bash", "run_as": "operator", "run_as_uid": 1001, "run_as_gid": 1002},
     )
-    assert conn._run_as == "operator"  # noqa: SLF001
-    assert conn._run_as_uid == 1001  # noqa: SLF001
-    assert conn._run_as_gid == 1002  # noqa: SLF001
+    assert conn._run_as == "operator"
+    assert conn._run_as_uid == 1001
+    assert conn._run_as_gid == 1002
 
 
 # ── is_connected ──────────────────────────────────────────────────────────────
@@ -131,7 +130,7 @@ def test_is_connected_requires_both_flag_and_fd() -> None:
     Kills the 'and' → 'or' mutation.
     """
     conn = make_connector()
-    conn._connected = True  # noqa: SLF001
+    conn._connected = True
     assert conn.is_connected() is False
 
 
@@ -150,7 +149,7 @@ async def test_start_and_stop_echo() -> None:
             break
     await conn.stop()
     assert conn.is_connected() is False
-    assert conn._connected is False  # noqa: SLF001
+    assert conn._connected is False
     assert any("hello from pty" in s for s in screens)
 
 
@@ -176,8 +175,8 @@ async def test_start_master_fd_is_nonblocking() -> None:
 
     conn = make_connector("/bin/cat")
     await conn.start()
-    assert conn._master_fd is not None  # noqa: SLF001
-    fl = _fcntl.fcntl(conn._master_fd, _fcntl.F_GETFL)  # noqa: SLF001
+    assert conn._master_fd is not None
+    fl = _fcntl.fcntl(conn._master_fd, _fcntl.F_GETFL)
     await conn.stop()
     assert fl & os.O_NONBLOCK, "master_fd must be O_NONBLOCK after start()"
 
@@ -185,7 +184,7 @@ async def test_start_master_fd_is_nonblocking() -> None:
 async def test_start_pam_requires_root() -> None:
     if os.geteuid() == 0:
         pytest.skip("test only applies when not root")
-    conn = make_connector("/bin/echo", username="nobody", password="pass")  # noqa: S106
+    conn = make_connector("/bin/echo", username="nobody", password="pass")
     with pytest.raises(PermissionError, match="root"):
         await conn.start()
     await conn.stop()
@@ -197,7 +196,7 @@ async def test_start_pam_requires_root_mocked() -> None:
     Uses anchored pattern so 'XXuser-switching...' mutations are caught.
     """
     with patch("provide.terminal.pty.connector.os.geteuid", return_value=1000):
-        conn = make_connector("/bin/echo", username="nobody", password="pass")  # noqa: S106
+        conn = make_connector("/bin/echo", username="nobody", password="pass")
         with pytest.raises(PermissionError, match=r"^user-switching via PAM"):
             await conn.start()
     await conn.stop()
@@ -213,7 +212,7 @@ async def test_start_pam_path_mocked_as_root() -> None:
         patch("provide.terminal.pty.connector.os.geteuid", return_value=0),
         patch("provide.terminal.pty.connector.PamSession", return_value=mock_pam),
     ):
-        conn = make_connector("/bin/echo", ["x"], username="nobody", password="secret")  # noqa: S106
+        conn = make_connector("/bin/echo", ["x"], username="nobody", password="secret")
         await conn.start()
         await conn.stop()
     mock_pam.authenticate.assert_called_once_with("nobody", "secret")

@@ -25,7 +25,7 @@ class TestManagerConfig:
             host="0.0.0.0",
             port=9999,
             max_agents=50,
-            state_file="/tmp/state.json",  # noqa: S108
+            state_file="/tmp/state.json",
             worker_env_prefix="MYBOT_",
         )
         assert cfg.title == "My Manager"

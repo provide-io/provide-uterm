@@ -12,6 +12,7 @@ import sys
 
 import pytest
 from PIL import Image
+
 from provide.terminal.render.image import image_to_ansi_frames, render_frame
 from provide.terminal.render.sgr import sgr_truecolor
 

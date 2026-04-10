@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **provide-terminal** is a terminal session platform that creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers. It's built around xterm.js as the screen, with provide-terminal managing the entire ecosystem.
 
-Key capabilities: session control (hijack leasing with viewer/operator/admin roles), pluggable connectors, tunnel sharing, HTTP inspection/interception, collaborative presence (DeckMux), AI/MCP integration (16 tools), and agent fleet management.
+Key capabilities: session control (hijack leasing with viewer/operator/admin roles), pluggable connectors, tunnel sharing, HTTP inspection/interception, collaborative presence (DeckMux), AI/MCP integration (21 tools), and agent fleet management.
 
 ## Build & Run Commands
 
@@ -80,7 +80,7 @@ docker compose -f docker/docker-compose.yml up
 - **Mutation testing** enforced at 100% kill rate — see `MUTATION_PATTERNS.md` for patterns
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Test markers: `playwright`, `mutant`, `memray`, `slow`, `e2e`, `real_cf`
-- Default testpaths: `provide-terminal`, `provide-terminal-cloudflare`
+- Default testpaths: `packages/provide-terminal/tests`, `packages/provide-terminal-cloudflare/tests`
 - Root `conftest.py` handles mutmut source path manipulation — don't modify unless you understand mutation testing setup
 
 ## Pre-commit Hooks

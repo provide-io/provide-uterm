@@ -15,11 +15,10 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from provide.terminal.server import create_server_app, default_server_config
-
 # Capture the original default _api_key_store_hook at import time,
 # before any test's create_server_app() replaces it.
 import provide.terminal.server.auth as _auth_mod
+from provide.terminal.server import create_server_app, default_server_config
 
 _ORIGINAL_API_KEY_STORE_HOOK = _auth_mod._api_key_store_hook
 

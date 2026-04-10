@@ -17,7 +17,6 @@ from provide.terminal.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
-
 # ---------------------------------------------------------------------------
 # TestHijackLeaseExpiryDuringConcurrentAcquireRace
 # ---------------------------------------------------------------------------
@@ -28,45 +27,47 @@ class TestHijackLeaseExpiryDuringConcurrentAcquireRace:
         """After lease expires, three concurrent REST acquires result in exactly one owner."""
         _, base_url = live_hub
 
-        async with httpx.AsyncClient(base_url=base_url) as http:
-            async with connect_async_ws(_ws_url(base_url, "/ws/worker/race1/term")) as worker:
-                await worker.recv()  # snapshot_req
+        async with (
+            httpx.AsyncClient(base_url=base_url) as http,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/race1/term")) as worker,
+        ):
+            await worker.recv()  # snapshot_req
 
-                # Acquire with a short lease
-                r = await http.post("/worker/race1/hijack/acquire", json={"owner": "initial", "lease_s": 2})
-                assert r.status_code == 200, f"Initial acquire failed: {r.status_code}: {r.text}"
-                await _drain_all(worker)  # drain initial pause
+            # Acquire with a short lease
+            r = await http.post("/worker/race1/hijack/acquire", json={"owner": "initial", "lease_s": 2})
+            assert r.status_code == 200, f"Initial acquire failed: {r.status_code}: {r.text}"
+            await _drain_all(worker)  # drain initial pause
 
-                # Wait for the lease to expire
-                await asyncio.sleep(2.2)
+            # Wait for the lease to expire
+            await asyncio.sleep(2.2)
 
-                # Three concurrent REST acquires race for the now-expired slot
-                async def rest_acquire(owner: str) -> httpx.Response:
-                    return await http.post(
-                        "/worker/race1/hijack/acquire", json={"owner": owner, "lease_s": 60}
-                    )
-
-                r1, r2, r3 = await asyncio.gather(
-                    rest_acquire("race-a"),
-                    rest_acquire("race-b"),
-                    rest_acquire("race-c"),
+            # Three concurrent REST acquires race for the now-expired slot
+            async def rest_acquire(owner: str) -> httpx.Response:
+                return await http.post(
+                    "/worker/race1/hijack/acquire", json={"owner": owner, "lease_s": 60}
                 )
 
-                results = [r1.status_code, r2.status_code, r3.status_code]
-                winners = results.count(200)
+            r1, r2, r3 = await asyncio.gather(
+                rest_acquire("race-a"),
+                rest_acquire("race-b"),
+                rest_acquire("race-c"),
+            )
 
-                assert winners == 1, (
-                    f"Exactly one REST acquire should win, got {winners}: {results}"
-                )
+            results = [r1.status_code, r2.status_code, r3.status_code]
+            winners = results.count(200)
 
-                # Worker should have received at least one pause from the winner
-                pause_msgs = await _drain_all(worker, timeout=1.0)
-                pause_controls = [
-                    m for m in pause_msgs if m.get("type") == "control" and m.get("action") == "pause"
-                ]
-                assert len(pause_controls) >= 1, (
-                    f"Worker should get at least one pause, got {len(pause_controls)}"
-                )
+            assert winners == 1, (
+                f"Exactly one REST acquire should win, got {winners}: {results}"
+            )
+
+            # Worker should have received at least one pause from the winner
+            pause_msgs = await _drain_all(worker, timeout=1.0)
+            pause_controls = [
+                m for m in pause_msgs if m.get("type") == "control" and m.get("action") == "pause"
+            ]
+            assert len(pause_controls) >= 1, (
+                f"Worker should get at least one pause, got {len(pause_controls)}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -79,36 +80,38 @@ class TestWorkerReconnectClearsStaleHijack:
         """Second worker connection replaces the first; old hijack becomes invalid."""
         hub, base_url = live_hub
 
-        async with httpx.AsyncClient(base_url=base_url) as http:
-            async with connect_async_ws(_ws_url(base_url, "/ws/worker/reconn1/term")) as w1:
-                await w1.recv()  # snapshot_req
+        async with (
+            httpx.AsyncClient(base_url=base_url) as http,
+            connect_async_ws(_ws_url(base_url, "/ws/worker/reconn1/term")) as w1,
+        ):
+            await w1.recv()  # snapshot_req
 
-                # Acquire hijack on W1
-                r = await http.post("/worker/reconn1/hijack/acquire", json={"owner": "old-owner", "lease_s": 60})
-                assert r.status_code == 200, f"W1 acquire failed: {r.status_code}: {r.text}"
-                hijack_id = r.json()["hijack_id"]
+            # Acquire hijack on W1
+            r = await http.post("/worker/reconn1/hijack/acquire", json={"owner": "old-owner", "lease_s": 60})
+            assert r.status_code == 200, f"W1 acquire failed: {r.status_code}: {r.text}"
+            hijack_id = r.json()["hijack_id"]
 
-                # W2 connects to the same worker_id (hub replaces registration)
-                async with connect_async_ws(_ws_url(base_url, "/ws/worker/reconn1/term")) as w2:
-                    await w2.recv()  # snapshot_req
+            # W2 connects to the same worker_id (hub replaces registration)
+            async with connect_async_ws(_ws_url(base_url, "/ws/worker/reconn1/term")) as w2:
+                await w2.recv()  # snapshot_req
 
-                    # Old hijack_id should fail heartbeat
-                    hb = await http.post(
-                        f"/worker/reconn1/hijack/{hijack_id}/heartbeat",
-                        json={"lease_s": 60},
-                    )
-                    # Should be 404 (session cleared when worker was replaced)
-                    assert hb.status_code == 404, (
-                        f"Old hijack heartbeat should fail after worker replacement, got {hb.status_code}: {hb.text}"
-                    )
+                # Old hijack_id should fail heartbeat
+                hb = await http.post(
+                    f"/worker/reconn1/hijack/{hijack_id}/heartbeat",
+                    json={"lease_s": 60},
+                )
+                # Should be 404 (session cleared when worker was replaced)
+                assert hb.status_code == 404, (
+                    f"Old hijack heartbeat should fail after worker replacement, got {hb.status_code}: {hb.text}"
+                )
 
-                    # New acquire against W2 succeeds
-                    r2 = await http.post(
-                        "/worker/reconn1/hijack/acquire", json={"owner": "new-owner", "lease_s": 60}
-                    )
-                    assert r2.status_code == 200, (
-                        f"New acquire after worker replacement should succeed, got {r2.status_code}: {r2.text}"
-                    )
+                # New acquire against W2 succeeds
+                r2 = await http.post(
+                    "/worker/reconn1/hijack/acquire", json={"owner": "new-owner", "lease_s": 60}
+                )
+                assert r2.status_code == 200, (
+                    f"New acquire after worker replacement should succeed, got {r2.status_code}: {r2.text}"
+                )
 
 
 # ---------------------------------------------------------------------------

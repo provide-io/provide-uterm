@@ -21,11 +21,9 @@ from provide.terminal.client import connect_async_ws
 
 from .conftest import (
     drain_all,
-    drain_until,
     snapshot_msg,
     ws_url,
 )
-
 
 # ---------------------------------------------------------------------------
 # 41. Build output event polling via REST
@@ -98,7 +96,7 @@ async def test_worker_clean_shutdown_and_restart(live_hub: Any) -> None:
 
     # Browser connects first (before any worker)
     async with connect_async_ws(ws_url(base_url, "/ws/browser/lifecycle1/term")) as browser:
-        initial = await drain_all(browser, timeout=1.0)
+        await drain_all(browser, timeout=1.0)
 
         # Worker v1 connects
         async with connect_async_ws(ws_url(base_url, "/ws/worker/lifecycle1/term")) as worker_v1:
@@ -195,7 +193,7 @@ async def test_session_survives_brief_network_blip(resume_hub: Any) -> None:
             assert len(hello_msgs) >= 1, "Reconnected browser should get hello"
 
             # Should get a snapshot (cached latest)
-            snap_msgs = [m for m in resumed_msgs if m.get("type") == "snapshot"]
+            [m for m in resumed_msgs if m.get("type") == "snapshot"]
             # May or may not get cached snapshot depending on implementation
 
             # Worker sends new snapshot

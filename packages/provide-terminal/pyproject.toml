@@ -102,6 +102,7 @@ markers = [
     "mutant: mutation-testing and mutmut-focused tests (deselected by default)",
     "memray: memory profiling and allocation stress tests (deselected by default, run with -m memray)",
     "slow: slow tests >10s (deselected by default)",
+    "docker: Docker-based E2E tests requiring a running Docker daemon (deselected by default, run with -m docker)",
 ]
 addopts = [
     "--import-mode=importlib",
@@ -111,7 +112,7 @@ addopts = [
     "--tb=short",
     "-ra",
     "-m",
-    "not playwright and not memray and not slow",
+    "not playwright and not memray and not slow and not docker",
     "--cov=provide.terminal.__init__",
     "--cov=provide.terminal.ansi",
     "--cov=provide.terminal.ansi_render",

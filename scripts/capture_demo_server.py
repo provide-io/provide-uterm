@@ -289,7 +289,7 @@ def main() -> None:
     print("=" * 56)
     sys.stdout.flush()
 
-    _IDLE_TIMEOUT_S = 3600  # self-exit after 1 hour idle
+    idle_timeout_s = 3600  # self-exit after 1 hour idle
     last_activity = time.monotonic()
 
     try:
@@ -317,7 +317,7 @@ def main() -> None:
                 master_fd = master_fd2
                 t_pty = threading.Thread(target=_pty_to_capture, args=(master_fd, capture_sock, stop), daemon=True)
                 t_pty.start()
-            if time.monotonic() - last_activity > _IDLE_TIMEOUT_S:
+            if time.monotonic() - last_activity > idle_timeout_s:
                 print("\n  Idle timeout (1h) — shutting down.")
                 sys.stdout.flush()
                 break

@@ -295,7 +295,15 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
     )
+    # Attach the fan-out controller so routes and WS dispatch can find it.
+    from provide.terminal.bridge.fanout import FanOutController, InMemoryFanOutStore
+
+    hub.fan_out_controller = FanOutController(hub=hub, store=InMemoryFanOutStore())  # type: ignore[attr-defined]
     webhook_manager = WebhookManager()
+    # Annotation detector scans snapshot/send text for security-relevant patterns.
+    from provide.terminal.bridge.annotation._detector import PatternDetector
+
+    detector = PatternDetector()
     registry = SessionRegistry(
         config.sessions,
         hub=hub,
@@ -303,6 +311,7 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
         recording=config.recording,
         worker_bearer_token=config.auth.worker_bearer_token,
         max_sessions=config.server.max_sessions,
+        detector=detector,
     )
     profile_store = FileProfileStore(config.profiles.directory)
 
@@ -461,10 +470,11 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
 
     # Tunnel routes are passed as extra registrars to avoid a hard import
     # dependency from bridge → tunnel (enables future package extraction).
+    from provide.terminal.bridge.fanout._routes import register_fanout_routes
     from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
 
     app.include_router(
-        hub.create_router(extra_route_registrars=[register_tunnel_routes]),
+        hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
         dependencies=[Depends(_require_authenticated)],
     )
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])

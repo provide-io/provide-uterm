@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tests.helpers import decode_chunk, encode_frame
 from provide.terminal.server.models import RecordingConfig, SessionDefinition
 from provide.terminal.server.runtime import HostedSessionRuntime
+from tests.helpers import decode_chunk, encode_frame
 
 
 def _make_session(session_id: str = "test-session", connector_type: str = "shell") -> SessionDefinition:

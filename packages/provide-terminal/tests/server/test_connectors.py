@@ -243,9 +243,8 @@ class TestShellSessionConnector:
 
 
 def test_registry_known_types_derived_from_registry() -> None:
-    from provide.terminal.server.connectors.registry import registered_types
-
     from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
+    from provide.terminal.server.connectors.registry import registered_types
 
     # KNOWN_CONNECTOR_TYPES is a snapshot taken at import time; the live registry
     # may have additional test-registered types, so check subset rather than equality.
@@ -261,9 +260,8 @@ def test_registry_build_connector_unknown_raises() -> None:
 
 def test_registry_register_and_build() -> None:
 
-    from provide.terminal.server.connectors.registry import build_connector, register_connector
-
     from provide.terminal.server.connectors.base import SessionConnector
+    from provide.terminal.server.connectors.registry import build_connector, register_connector
 
     class _Fake(SessionConnector):
         def __init__(self, sid: str, name: str, cfg: dict[str, Any]) -> None: ...
