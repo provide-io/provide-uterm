@@ -15,6 +15,7 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from typing import Any
@@ -25,7 +26,6 @@ from provide.terminal.client import connect_async_ws
 from provide.terminal.control_channel import DLE, STX, encode_control
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
-
 
 # ---------------------------------------------------------------------------
 # 14. Worker crash mid-snapshot-flood with active hijack + EventBus
@@ -131,7 +131,7 @@ async def test_lease_cleanup_during_reconnect_with_competing_hijack(live_hub: An
             )
 
             await asyncio.sleep(0.5)
-            b2_msgs = await _drain_all(b2, timeout=1.0)
+            await _drain_all(b2, timeout=1.0)
 
             # Check final state: at most one owner, no zombie
             st = hub._workers.get("lease-race")
@@ -177,10 +177,8 @@ async def test_malformed_control_frames_close_worker_cleanly(live_hub: Any) -> N
             await raw_worker.send(malformed)
 
             # Worker WS should be closed by hub
-            try:
+            with contextlib.suppress(websockets.exceptions.ConnectionClosed):
                 await asyncio.wait_for(raw_worker.recv(), timeout=5.0)
-            except websockets.exceptions.ConnectionClosed:
-                pass  # Expected — hub closed the connection
 
         # Hub should remain healthy — new worker can connect
         await asyncio.sleep(0.3)
@@ -237,10 +235,7 @@ async def test_binary_like_data_through_hijack_input(live_hub: Any) -> None:
             worker_msgs = await _drain_all(worker, timeout=1.0)
 
             # Collect all data from input/data messages
-            received_data: list[str] = []
-            for m in worker_msgs:
-                if "data" in m:
-                    received_data.append(str(m["data"]))
+            received_data: list[str] = [str(m["data"]) for m in worker_msgs if "data" in m]
 
             for inp in test_inputs:
                 found = any(inp in d for d in received_data)

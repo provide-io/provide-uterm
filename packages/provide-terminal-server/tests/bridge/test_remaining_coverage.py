@@ -244,3 +244,23 @@ class TestConnectionsBranches:
         assert result is False
 
 
+# ---------------------------------------------------------------------------
+# ownership.py — line 140 (open_mode guard in try_acquire_rest_hijack)
+# ---------------------------------------------------------------------------
+
+
+class TestRestHijackOpenMode:
+    """REST hijack acquire is blocked when worker is in open mode."""
+
+    async def test_acquire_rest_hijack_open_mode_returns_false(self) -> None:
+        hub = TermHub()
+        ws = MagicMock()
+        ws.send_text = AsyncMock()
+        await hub.register_worker("w1", ws)
+        # Set input_mode to "open"
+        await hub.set_worker_hello_mode("w1", "open")
+        ok, err = await hub.try_acquire_rest_hijack(
+            "w1", owner="alice", lease_s=60, hijack_id="h1", now=time.monotonic(),
+        )
+        assert ok is False
+        assert err == "open_mode"

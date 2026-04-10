@@ -56,7 +56,7 @@ async def test_start_creates_socket_file() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        assert Path(conn._socket_path).exists()  # noqa: SLF001
+        assert Path(conn._socket_path).exists()
         await conn.stop()
 
 
@@ -64,7 +64,7 @@ async def test_stop_removes_socket_file() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        path = conn._socket_path  # noqa: SLF001
+        path = conn._socket_path
         await conn.stop()
         assert not Path(path).exists()
 
@@ -102,7 +102,7 @@ async def test_stdout_frame_updates_buffer() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDOUT, b"hello")])  # noqa: SLF001
+        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDOUT, b"hello")])
         await asyncio.sleep(0.05)
         msgs = await conn.poll_messages()
         assert len(msgs) == 1
@@ -115,7 +115,7 @@ async def test_stdin_frame_increments_counter() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDIN, b"x")])  # noqa: SLF001
+        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDIN, b"x")])
         await asyncio.sleep(0.05)
         await conn.poll_messages()
         analysis = await conn.get_analysis()
@@ -128,7 +128,7 @@ async def test_connect_frame_logs_address() -> None:
         conn = _make_connector(td)
         await conn.start()
         await _send_frames(
-            conn._socket_path,  # noqa: SLF001
+            conn._socket_path,
             [_make_frame(CHANNEL_CONNECT, b"192.168.1.1:8080")],
         )
         await asyncio.sleep(0.05)
@@ -144,7 +144,7 @@ async def test_buffer_truncated_at_65536_chars() -> None:
         conn = _make_connector(td)
         await conn.start()
         await _send_frames(
-            conn._socket_path,  # noqa: SLF001
+            conn._socket_path,
             [_make_frame(CHANNEL_STDOUT, b"x" * 70000)],
         )
         await asyncio.sleep(0.05)
@@ -179,7 +179,7 @@ async def test_clear_resets_buffer() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDOUT, b"data")])  # noqa: SLF001
+        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDOUT, b"data")])
         await asyncio.sleep(0.05)
         await conn.poll_messages()
         msgs = await conn.clear()
@@ -202,15 +202,15 @@ async def test_get_analysis_contains_socket_path() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         analysis = await conn.get_analysis()
-        assert conn._socket_path in analysis  # noqa: SLF001
+        assert conn._socket_path in analysis
 
 
 async def test_custom_cols_rows() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td, cols=120, rows=40)
         await conn.start()
-        assert conn._cols == 120  # noqa: SLF001
-        assert conn._rows == 40  # noqa: SLF001
+        assert conn._cols == 120
+        assert conn._rows == 40
         await conn.stop()
 
 
@@ -228,7 +228,7 @@ async def test_no_snapshot_when_no_stdout_frames() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDIN, b"k")])  # noqa: SLF001
+        await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDIN, b"k")])
         await asyncio.sleep(0.05)
         msgs = await conn.poll_messages()
         assert msgs == []
@@ -272,10 +272,10 @@ async def test_stop_closes_stdin_sock() -> None:
         conn = _make_connector(td)
         await conn.start()
         mock_sock = MagicMock()
-        conn._stdin_sock = mock_sock  # noqa: SLF001
+        conn._stdin_sock = mock_sock
         await conn.stop()
         mock_sock.close.assert_called_once()
-        assert conn._stdin_sock is None  # noqa: SLF001
+        assert conn._stdin_sock is None
 
 
 async def test_stop_stdin_sock_close_oserror_ignored() -> None:
@@ -285,7 +285,7 @@ async def test_stop_stdin_sock_close_oserror_ignored() -> None:
         await conn.start()
         mock_sock = MagicMock()
         mock_sock.close.side_effect = OSError("boom")
-        conn._stdin_sock = mock_sock  # noqa: SLF001
+        conn._stdin_sock = mock_sock
         await conn.stop()  # must not raise
 
 
@@ -295,7 +295,7 @@ async def test_connect_frame_followed_by_more_frames_loops() -> None:
         conn = _make_connector(td)
         await conn.start()
         await _send_frames(
-            conn._socket_path,  # noqa: SLF001
+            conn._socket_path,
             [
                 _make_frame(CHANNEL_CONNECT, b"10.0.0.1:80"),
                 _make_frame(CHANNEL_STDOUT, b"hello"),
@@ -317,12 +317,12 @@ async def test_connect_log_truncated_at_100() -> None:
         # Send 102 CONNECT frames via separate connections to avoid overwhelming it
         for i in range(102):
             await _send_frames(
-                conn._socket_path,  # noqa: SLF001
+                conn._socket_path,
                 [_make_frame(CHANNEL_CONNECT, f"1.2.3.4:{i}".encode())],
             )
         await asyncio.sleep(0.15)
         await conn.poll_messages()
-        assert len(conn._connect_log) <= 100  # noqa: SLF001
+        assert len(conn._connect_log) <= 100
         await conn.stop()
 
 
@@ -366,13 +366,13 @@ async def test_forward_stdin_reconnects_on_send_error() -> None:
         broken_sock = MagicMock()
         broken_sock.sendall.side_effect = OSError("broken pipe")
         broken_sock.close = MagicMock()
-        conn._stdin_sock = broken_sock  # noqa: SLF001
+        conn._stdin_sock = broken_sock
 
         # _forward_stdin should clear the broken sock; since no real server is listening
         # the reconnect attempt will also fail (OSError on connect) — that's OK
-        conn._forward_stdin(b"test")  # noqa: SLF001
+        conn._forward_stdin(b"test")
 
-        assert conn._stdin_sock is None  # noqa: SLF001  # cleared after failure
+        assert conn._stdin_sock is None  # cleared after failure
         await conn.stop()
 
 
@@ -388,12 +388,12 @@ async def test_forward_stdin_close_oserror_on_broken_sock() -> None:
         broken_sock = MagicMock()
         broken_sock.sendall.side_effect = OSError("broken pipe")
         broken_sock.close.side_effect = OSError("close failed")
-        conn._stdin_sock = broken_sock  # noqa: SLF001
+        conn._stdin_sock = broken_sock
 
         # Must not raise — OSError from close() is swallowed
-        conn._forward_stdin(b"test")  # noqa: SLF001
+        conn._forward_stdin(b"test")
 
-        assert conn._stdin_sock is None  # noqa: SLF001
+        assert conn._stdin_sock is None
         await conn.stop()
 
 
@@ -426,16 +426,16 @@ async def test_forward_stdin_both_attempts_fail_exhausts_loop() -> None:
         broken_sock = MagicMock()
         broken_sock.sendall.side_effect = OSError("send failed attempt 1")
         broken_sock.close = MagicMock()
-        conn._stdin_sock = broken_sock  # noqa: SLF001
+        conn._stdin_sock = broken_sock
 
         with patch(
             "provide.terminal.pty.capture_connector.socket.socket",
             side_effect=_patched_socket,
         ):
-            conn._forward_stdin(b"test")  # noqa: SLF001
+            conn._forward_stdin(b"test")
 
         # The loop should have exhausted both attempts
-        assert conn._stdin_sock is None  # noqa: SLF001
+        assert conn._stdin_sock is None
         assert call_count[0] == 1  # one new socket was created for attempt 1
 
         srv.close()
@@ -452,7 +452,7 @@ async def test_poll_messages_unknown_channel_loops() -> None:
         unknown_frame = _make_frame(0xFF, b"ignored")
         stdout_frame = _make_frame(CHANNEL_STDOUT, b"visible")
         await _send_frames(
-            conn._socket_path,  # noqa: SLF001
+            conn._socket_path,
             [unknown_frame, stdout_frame],
         )
         await asyncio.sleep(0.05)

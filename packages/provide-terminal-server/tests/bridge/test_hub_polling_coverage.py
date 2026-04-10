@@ -15,9 +15,9 @@ import re
 import time
 from unittest.mock import AsyncMock
 
-from tests.bridge.control_channel_helpers import decode_control_payload
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
+from tests.bridge.control_channel_helpers import decode_control_payload
 
 # ---------------------------------------------------------------------------
 # Fix 2 regression — _broadcast_hijack_state snapshots state under lock

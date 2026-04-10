@@ -6,7 +6,7 @@
 
 Scenarios
 ---------
-21. Cross-session routing strict isolation (2 sessions × 20 snapshots × 3 browsers).
+21. Cross-session routing strict isolation (2 sessions x 20 snapshots x 3 browsers).
 22. 5 sessions concurrent worker disconnect with active browsers.
 23. Ephemeral session double-delete race.
 24. Worker ID reuse after cleanup — no stale state.
@@ -15,16 +15,15 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
 from provide.terminal.client import connect_async_ws
-
-from ..conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
-from .conftest import snapshot_msg, ws_url
-
 from tests.e2e._live_server import live_server_with_bus
+from tests.e2e.conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
+from .conftest import ws_url
 
 # ---------------------------------------------------------------------------
 # 21. Cross-session routing strict isolation
@@ -32,86 +31,83 @@ from tests.e2e._live_server import live_server_with_bus
 
 
 async def test_cross_session_routing_strict_isolation() -> None:
-    """2 sessions × 20 snapshots × 3 browsers each — zero cross-contamination."""
+    """2 sessions x 20 snapshots x 3 browsers each -- zero cross-contamination."""
     sessions = [
         {"session_id": "iso-a", "display_name": "Iso A", "connector_type": "shell", "auto_start": False},
         {"session_id": "iso-b", "display_name": "Iso B", "connector_type": "shell", "auto_start": False},
     ]
-    async with live_server_with_bus(sessions, label="strict_isolation") as (hub, base_url):
-        # Connect workers
-        async with (
-            connect_async_ws(ws_url(base_url, "/ws/worker/iso-a/term")) as wa,
-            connect_async_ws(ws_url(base_url, "/ws/worker/iso-b/term")) as wb,
-        ):
-            await wa.recv()  # snapshot_req
-            await wb.recv()
+    async with (
+        live_server_with_bus(sessions, label="strict_isolation") as (hub, base_url),
+        connect_async_ws(ws_url(base_url, "/ws/worker/iso-a/term")) as wa,
+        connect_async_ws(ws_url(base_url, "/ws/worker/iso-b/term")) as wb,
+    ):
+        await wa.recv()  # snapshot_req
+        await wb.recv()
 
-            # Connect 3 browsers per session (6 total)
-            browsers_a: list[Any] = []
-            browsers_b: list[Any] = []
-            contexts: list[Any] = []
+        # Connect 3 browsers per session (6 total)
+        browsers_a: list[Any] = []
+        browsers_b: list[Any] = []
+        contexts: list[Any] = []
 
-            for _ in range(3):
-                ctx_a = connect_async_ws(ws_url(base_url, "/ws/browser/iso-a/term"))
-                ba = await ctx_a.__aenter__()
-                contexts.append(ctx_a)
-                browsers_a.append(ba)
+        for _ in range(3):
+            ctx_a = connect_async_ws(ws_url(base_url, "/ws/browser/iso-a/term"))
+            ba = await ctx_a.__aenter__()
+            contexts.append(ctx_a)
+            browsers_a.append(ba)
 
-                ctx_b = connect_async_ws(ws_url(base_url, "/ws/browser/iso-b/term"))
-                bb = await ctx_b.__aenter__()
-                contexts.append(ctx_b)
-                browsers_b.append(bb)
+            ctx_b = connect_async_ws(ws_url(base_url, "/ws/browser/iso-b/term"))
+            bb = await ctx_b.__aenter__()
+            contexts.append(ctx_b)
+            browsers_b.append(bb)
 
-            try:
-                # Drain initial messages
-                for b in [*browsers_a, *browsers_b]:
-                    await _drain_all(b, timeout=0.5)
+        try:
+            # Drain initial messages
+            for b in [*browsers_a, *browsers_b]:
+                await _drain_all(b, timeout=0.5)
 
-                # Both workers send 20 snapshots concurrently with distinctive markers
-                async def send_batch(ws: Any, marker: str) -> None:
-                    for i in range(20):
-                        await ws.send(json.dumps(_snapshot_msg(f"{marker}-snap-{i}")))
+            # Both workers send 20 snapshots concurrently with distinctive markers
+            async def send_batch(ws: Any, marker: str) -> None:
+                for i in range(20):
+                    await ws.send(json.dumps(_snapshot_msg(f"{marker}-snap-{i}")))
 
-                await asyncio.gather(
-                    send_batch(wa, "SESSION-A"),
-                    send_batch(wb, "SESSION-B"),
+            await asyncio.gather(
+                send_batch(wa, "SESSION-A"),
+                send_batch(wb, "SESSION-B"),
+            )
+
+            await asyncio.sleep(1.0)
+
+            # Drain all browsers
+            for ba in browsers_a:
+                msgs = await _drain_all(ba, timeout=2.0)
+                snapshots = [m for m in msgs if m.get("type") == "snapshot"]
+                for s in snapshots:
+                    screen = s.get("screen", "")
+                    assert "SESSION-B" not in screen, (
+                        f"Session A browser received Session B snapshot: {screen}"
+                    )
+                a_snaps = [s for s in snapshots if "SESSION-A" in s.get("screen", "")]
+                assert len(a_snaps) >= 10, (
+                    f"Session A browser got only {len(a_snaps)} A-snapshots, expected >=10"
                 )
 
-                await asyncio.sleep(1.0)
-
-                # Drain all browsers
-                for ba in browsers_a:
-                    msgs = await _drain_all(ba, timeout=2.0)
-                    snapshots = [m for m in msgs if m.get("type") == "snapshot"]
-                    for s in snapshots:
-                        screen = s.get("screen", "")
-                        assert "SESSION-B" not in screen, (
-                            f"Session A browser received Session B snapshot: {screen}"
-                        )
-                    a_snaps = [s for s in snapshots if "SESSION-A" in s.get("screen", "")]
-                    assert len(a_snaps) >= 10, (
-                        f"Session A browser got only {len(a_snaps)} A-snapshots, expected ≥10"
+            for bb in browsers_b:
+                msgs = await _drain_all(bb, timeout=2.0)
+                snapshots = [m for m in msgs if m.get("type") == "snapshot"]
+                for s in snapshots:
+                    screen = s.get("screen", "")
+                    assert "SESSION-A" not in screen, (
+                        f"Session B browser received Session A snapshot: {screen}"
                     )
+                b_snaps = [s for s in snapshots if "SESSION-B" in s.get("screen", "")]
+                assert len(b_snaps) >= 10, (
+                    f"Session B browser got only {len(b_snaps)} B-snapshots, expected >=10"
+                )
 
-                for bb in browsers_b:
-                    msgs = await _drain_all(bb, timeout=2.0)
-                    snapshots = [m for m in msgs if m.get("type") == "snapshot"]
-                    for s in snapshots:
-                        screen = s.get("screen", "")
-                        assert "SESSION-A" not in screen, (
-                            f"Session B browser received Session A snapshot: {screen}"
-                        )
-                    b_snaps = [s for s in snapshots if "SESSION-B" in s.get("screen", "")]
-                    assert len(b_snaps) >= 10, (
-                        f"Session B browser got only {len(b_snaps)} B-snapshots, expected ≥10"
-                    )
-
-            finally:
-                for ctx in contexts:
-                    try:
-                        await ctx.__aexit__(None, None, None)
-                    except Exception:
-                        pass
+        finally:
+            for ctx in contexts:
+                with contextlib.suppress(Exception):
+                    await ctx.__aexit__(None, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -175,15 +171,11 @@ async def test_5_sessions_concurrent_worker_disconnect() -> None:
 
         finally:
             for ctx in reversed(browser_ctxs):
-                try:
+                with contextlib.suppress(Exception):
                     await ctx.__aexit__(None, None, None)
-                except Exception:
-                    pass
-            for i, ctx in enumerate(reversed(worker_ctxs)):
-                try:
+            for _i, ctx in enumerate(reversed(worker_ctxs)):
+                with contextlib.suppress(Exception):
                     await ctx.__aexit__(None, None, None)
-                except Exception:
-                    pass
 
 
 # ---------------------------------------------------------------------------

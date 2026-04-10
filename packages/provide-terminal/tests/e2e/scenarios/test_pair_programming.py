@@ -28,7 +28,6 @@ from .conftest import (
     ws_url,
 )
 
-
 # ---------------------------------------------------------------------------
 # 32. Instructor/student alternating control
 # ---------------------------------------------------------------------------
@@ -95,7 +94,7 @@ async def test_instructor_student_alternating_control(single_session_server: Any
         # Drain all worker messages and verify inputs
         await asyncio.sleep(0.5)
         worker_msgs = await drain_all(worker, timeout=1.0)
-        all_data = [str(m.get("data", "")) for m in worker_msgs if "data" in m]
+        [str(m.get("data", "")) for m in worker_msgs if "data" in m]
 
         # At minimum, "ls", "git status", and "git log" should have been received
         # "pwd" should NOT be in the mix (student was blocked in hijack mode)
@@ -158,7 +157,7 @@ async def test_viewer_escalation_denied(single_session_server: Any) -> None:
         worker_msgs = await drain_all(worker, timeout=1.0)
         all_data = [str(m.get("data", "")) for m in worker_msgs if "data" in m]
         assert not any("whoami" in d for d in all_data), f"Worker should not get viewer input: {all_data}"
-        assert not any("id\r" == d for d in all_data), f"Worker should not get viewer open-mode input: {all_data}"
+        assert not any(d == "id\r" for d in all_data), f"Worker should not get viewer open-mode input: {all_data}"
 
 
 # ---------------------------------------------------------------------------

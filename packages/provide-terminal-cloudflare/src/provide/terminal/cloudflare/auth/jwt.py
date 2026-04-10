@@ -80,7 +80,7 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
 
     try:
         from js import (
-            fetch as _js_fetch,  # type: ignore[import-not-found]  # CF Workers native async fetch  # pragma: no cover
+            fetch as _js_fetch,  # CF Workers native async fetch  # pragma: no cover
         )
 
         response = await _js_fetch(url)  # pragma: no cover
@@ -104,11 +104,11 @@ def _find_jwk(jwks_data: dict[str, Any], kid: str | None, alg: str | None) -> di
     for key in keys:
         if kid is not None:
             if key.get("kid") == kid:
-                return key
+                return dict(key)
         else:
             key_alg = key.get("alg")
             if alg is None or key_alg is None or key_alg == alg:
-                return key
+                return dict(key)
     raise JwtValidationError("no matching key found in JWKS")
 
 
@@ -134,10 +134,10 @@ async def _verify_web_crypto(
     jwks_data = await _fetch_jwks(config.jwks_url)
     jwk_dict = _find_jwk(jwks_data, header.get("kid"), alg)
 
-    algo_obj = _to_js({"name": "RSASSA-PKCS1-v1_5", "hash": "SHA-256"}, dict_converter=_js_object.fromEntries)  # type: ignore[name-defined]  # pragma: no cover
+    algo_obj = _to_js({"name": "RSASSA-PKCS1-v1_5", "hash": "SHA-256"}, dict_converter=_js_object.fromEntries)  # pragma: no cover
     crypto_key = await _js_crypto.subtle.importKey(  # pragma: no cover
         "jwk",
-        _to_js(jwk_dict, dict_converter=_js_object.fromEntries),  # type: ignore[name-defined]
+        _to_js(jwk_dict, dict_converter=_js_object.fromEntries),
         algo_obj,
         False,
         _to_js(["verify"]),
@@ -247,7 +247,7 @@ async def _verify_pyjwt(token: str, config: JwtConfig) -> dict[str, Any]:
             algorithms=list(config.algorithms),
             issuer=config.issuer,
             audience=config.audience,
-            options=options,
+            options=options,  # type: ignore[arg-type]  # PyJWT Options stub
             leeway=max(0, int(config.clock_skew_seconds)),
         )
     except InvalidTokenError as exc:

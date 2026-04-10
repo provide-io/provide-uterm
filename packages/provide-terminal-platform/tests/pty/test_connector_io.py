@@ -77,9 +77,9 @@ async def test_handle_control_pause_resume() -> None:
     conn = make_connector("/bin/cat")
     await conn.start()
     msgs_pause = await conn.handle_control("pause")
-    assert conn._paused is True  # noqa: SLF001
+    assert conn._paused is True
     msgs_resume = await conn.handle_control("resume")
-    assert conn._paused is False  # noqa: SLF001  — kills _paused=None mutation
+    assert conn._paused is False
     await conn.stop()
     assert all(m.get("type") == "snapshot" for m in msgs_pause)
     assert all(m.get("type") == "snapshot" for m in msgs_resume)
@@ -105,17 +105,17 @@ async def test_paused_connector_drops_input() -> None:
 
 def test_read_master_returns_empty_before_start() -> None:
     conn = make_connector()
-    assert conn._read_master() == b""  # noqa: SLF001
+    assert conn._read_master() == b""
 
 
 async def test_handle_control_step_resumes() -> None:
     conn = make_connector("/bin/cat")
     await conn.start()
     await conn.handle_control("pause")
-    assert conn._paused  # noqa: SLF001
+    assert conn._paused
     msgs = await conn.handle_control("step")
     await conn.stop()
-    assert not conn._paused  # noqa: SLF001
+    assert not conn._paused
     assert all(m.get("type") == "snapshot" for m in msgs)
 
 
@@ -149,12 +149,12 @@ async def test_read_master_oserror_marks_disconnected() -> None:
     conn = make_connector("/bin/echo", ["done"])
     await conn.start()
     assert conn.is_connected()
-    if conn._master_fd is not None:  # noqa: SLF001
-        os.close(conn._master_fd)  # noqa: SLF001
-    result = conn._read_master()  # noqa: SLF001
+    if conn._master_fd is not None:
+        os.close(conn._master_fd)
+    result = conn._read_master()
     assert result == b""
-    assert conn._connected is False  # noqa: SLF001  — kills _connected=None mutation
-    conn._master_fd = None  # noqa: SLF001
+    assert conn._connected is False
+    conn._master_fd = None
     await conn.stop()
 
 
@@ -167,14 +167,14 @@ def test_read_master_blocking_io_error_returns_empty_bytes() -> None:
 
     conn = make_connector("/bin/echo")
     r_fd, w_fd = os.pipe()
-    conn._master_fd = r_fd  # noqa: SLF001
-    conn._connected = True  # noqa: SLF001
+    conn._master_fd = r_fd
+    conn._connected = True
     fl = _fcntl.fcntl(r_fd, _fcntl.F_GETFL)
     _fcntl.fcntl(r_fd, _fcntl.F_SETFL, fl | os.O_NONBLOCK)
-    result = conn._read_master()  # noqa: SLF001
+    result = conn._read_master()
     os.close(r_fd)
     os.close(w_fd)
-    conn._master_fd = None  # noqa: SLF001
+    conn._master_fd = None
     assert result == b""
 
 
@@ -182,11 +182,11 @@ async def test_poll_messages_buffer_truncated() -> None:
     """poll_messages() truncates buffer to exactly 32768 chars."""
     conn = make_connector("/bin/cat")
     await conn.start()
-    conn._buffer = "a" * 32764  # noqa: SLF001
-    conn._read_master = lambda: b"b" * 10  # type: ignore[method-assign]  # noqa: SLF001
+    conn._buffer = "a" * 32764
+    conn._read_master = lambda: b"b" * 10  # type: ignore[method-assign]
     msgs = await conn.poll_messages()
     await conn.stop()
-    assert len(conn._buffer) == 32768  # noqa: SLF001
+    assert len(conn._buffer) == 32768
     assert any(m.get("type") == "snapshot" for m in msgs)
 
 
@@ -194,11 +194,11 @@ async def test_start_buffer_truncation_at_32769() -> None:
     """Buffer of 32769 chars is truncated — kills the > 32769 mutation."""
     conn = make_connector("/bin/cat")
     await conn.start()
-    conn._buffer = "a" * 32759  # noqa: SLF001
-    conn._read_master = lambda: b"b" * 10  # type: ignore[method-assign]  # noqa: SLF001
+    conn._buffer = "a" * 32759
+    conn._read_master = lambda: b"b" * 10  # type: ignore[method-assign]
     msgs = await conn.poll_messages()
     await conn.stop()
-    assert len(conn._buffer) == 32768  # noqa: SLF001
+    assert len(conn._buffer) == 32768
     assert any(m.get("type") == "snapshot" for m in msgs)
 
 
@@ -228,7 +228,7 @@ async def test_snapshot_screen_hash_matches_buffer() -> None:
     """screen_hash is md5 of current screen content."""
     conn = make_connector("/bin/cat")
     await conn.start()
-    conn._buffer = "hello world"  # noqa: SLF001
+    conn._buffer = "hello world"
     snap = await conn.get_snapshot()
     await conn.stop()
     assert snap["screen"] == "hello world"
@@ -258,7 +258,7 @@ async def test_poll_messages_returns_empty_when_paused_with_data() -> None:
     conn = make_connector("/bin/cat")
     await conn.start()
     await conn.handle_control("pause")
-    conn._read_master = lambda: b"data that should be suppressed"  # type: ignore[method-assign]  # noqa: SLF001
+    conn._read_master = lambda: b"data that should be suppressed"  # type: ignore[method-assign]
     msgs = await conn.poll_messages()
     await conn.stop()
     assert msgs == []
@@ -272,7 +272,7 @@ async def test_handle_input_writes_to_pty() -> None:
     original_write = os.write
 
     def _spy_write(fd: int, data: bytes) -> int:
-        if fd == conn._master_fd:  # noqa: SLF001
+        if fd == conn._master_fd:
             written.append(data)
         return original_write(fd, data)
 
@@ -305,18 +305,18 @@ async def test_handle_input_no_write_when_disconnected_but_fd_set() -> None:
     conn = make_connector("/bin/cat")
     await conn.start()
     # Force disconnected state but keep the fd
-    conn._connected = False  # noqa: SLF001
+    conn._connected = False
     written: list[bytes] = []
     original_write = os.write
 
     def _spy_write(fd: int, data: bytes) -> int:
-        if fd == conn._master_fd:  # noqa: SLF001
+        if fd == conn._master_fd:
             written.append(data)
         return original_write(fd, data)
 
     with patch("provide.terminal.pty.connector.os.write", side_effect=_spy_write):
         await conn.handle_input("should not be written\n")
-    conn._connected = True  # noqa: SLF001  — restore so stop() works cleanly
+    conn._connected = True
     await conn.stop()
     assert written == []
 
@@ -325,11 +325,11 @@ async def test_poll_messages_invalid_utf8_replaced() -> None:
     """poll_messages() decodes bytes with errors='replace'."""
     conn = make_connector("/bin/cat")
     await conn.start()
-    conn._read_master = lambda: b"\xff\xfe"  # type: ignore[method-assign]  # noqa: SLF001
+    conn._read_master = lambda: b"\xff\xfe"  # type: ignore[method-assign]
     msgs = await conn.poll_messages()
     await conn.stop()
     assert any(m.get("type") == "snapshot" for m in msgs)
-    assert "\ufffd" in conn._buffer  # noqa: SLF001
+    assert "\ufffd" in conn._buffer
 
 
 async def test_handle_control_step_sets_paused_false() -> None:
@@ -337,9 +337,9 @@ async def test_handle_control_step_sets_paused_false() -> None:
     conn = make_connector("/bin/cat")
     await conn.start()
     await conn.handle_control("pause")
-    assert conn._paused is True  # noqa: SLF001
+    assert conn._paused is True
     await conn.handle_control("step")
-    assert conn._paused is False  # noqa: SLF001
+    assert conn._paused is False
     await conn.stop()
 
 
@@ -347,10 +347,10 @@ async def test_buffer_capped_at_32768() -> None:
     """Buffer is truncated to last 32768 chars when it exceeds the limit."""
     conn = make_connector("/bin/cat")
     await conn.start()
-    conn._buffer = "a" * 32764  # noqa: SLF001
+    conn._buffer = "a" * 32764
     if conn._master_fd is not None:
         os.write(conn._master_fd, b"b" * 10)
     await asyncio.sleep(0.05)
     await conn.poll_messages()
     await conn.stop()
-    assert len(conn._buffer) <= 32768  # noqa: SLF001
+    assert len(conn._buffer) <= 32768

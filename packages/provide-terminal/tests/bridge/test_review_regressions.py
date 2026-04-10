@@ -191,7 +191,6 @@ class TestBroadcastLeaseExpiresAtWallClock:
         owner_ws = _make_ws()
         browser_ws = _make_ws()
 
-        import json
 
         from provide.terminal.control_channel import ControlChannelDecoder
 
@@ -276,7 +275,6 @@ class TestOpenModeRejectionSendsResume:
             st.input_mode = "open"
 
         # Simulate the REST route flow: pause is sent first, then hub rejects
-        from provide.terminal.control_channel import ControlChannelDecoder
 
         # Call try_acquire — should return open_mode
         acquired, err = await hub.try_acquire_rest_hijack(

@@ -18,14 +18,12 @@ from typing import Any
 from provide.terminal.client import connect_async_ws
 
 from .conftest import (
-    ADMIN_H,
     connect_browser,
     drain_all,
     drain_until,
     snapshot_msg,
     ws_url,
 )
-
 
 # ---------------------------------------------------------------------------
 # 29. SRE wifi drop mid-hijack
@@ -87,8 +85,7 @@ async def test_sre_wifi_drop_mid_hijack_resume(resume_hub: Any) -> None:
                     await asyncio.sleep(0.2)
 
         # Verify worker received commands in order
-        worker_msgs = await drain_all(worker, timeout=1.0)
-        all_msgs = [*worker_msgs]  # from final drain
+        await drain_all(worker, timeout=1.0)
         # Check we got inputs (they're spread across drains, so check hub state)
         # The key invariant: B's hijack was not disrupted by A's reconnect
 
@@ -120,7 +117,7 @@ async def test_shift_handoff_sequential_hijack(single_session_server: Any) -> No
             await asyncio.sleep(0.1)
 
             async with connect_browser(base_url, "s1", role="admin") as admin_b:
-                b_msgs = await drain_all(admin_b, timeout=1.0)
+                await drain_all(admin_b, timeout=1.0)
 
                 # A releases
                 await admin_a.send(json.dumps({"type": "hijack_release"}))
@@ -138,7 +135,7 @@ async def test_shift_handoff_sequential_hijack(single_session_server: Any) -> No
 
         # Verify worker received all 3 inputs
         await asyncio.sleep(0.3)
-        all_worker_msgs = await drain_all(worker, timeout=1.0)
+        await drain_all(worker, timeout=1.0)
         # Inputs were received during the test via drain_all calls
         # The key assertion is that the sequence completed without errors
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Generator
 
 import pytest
+
 from provide.terminal.render.palette import (
     ANSI16_PALETTE,
     _color_dist_sq,

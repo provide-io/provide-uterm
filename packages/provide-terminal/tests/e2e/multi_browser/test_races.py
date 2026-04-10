@@ -32,7 +32,6 @@ from .conftest import (
     ws_url,
 )
 
-
 # ---------------------------------------------------------------------------
 # 5. Thundering herd — 5 simultaneous hijack requests
 # ---------------------------------------------------------------------------
@@ -64,9 +63,8 @@ async def test_thundering_herd_5_browsers_simultaneous_hijack(live_server: Any) 
             for ws, _ in browsers:
                 msgs = await drain_all(ws, timeout=1.0)
                 for msg in msgs:
-                    if msg.get("type") == "hijack_state":
-                        if msg.get("hijacked_by_me") or msg.get("owner") == "me":
-                            me_count += 1
+                    if msg.get("type") == "hijack_state" and (msg.get("hijacked_by_me") or msg.get("owner") == "me"):
+                        me_count += 1
 
             assert me_count == 1, f"Exactly 1 browser should own hijack, got {me_count}"
 
@@ -79,7 +77,7 @@ async def test_thundering_herd_5_browsers_simultaneous_hijack(live_server: Any) 
             )
             assert pause_count >= 1, "Worker should receive at least one pause"
         finally:
-            for ws, ctx in reversed(browsers):
+            for _ws, ctx in reversed(browsers):
                 await ctx.__aexit__(None, None, None)
 
 
@@ -95,58 +93,60 @@ async def test_mode_switch_during_active_hijack() -> None:
     sessions = [
         {"session_id": "mode1", "display_name": "Mode", "connector_type": "shell", "auto_start": False},
     ]
-    async with live_server_with_bus(sessions, label="mode_switch") as (hub, base_url):
-        async with connect_async_ws(ws_url(base_url, "/ws/worker/mode1/term")) as worker:
-            await worker.recv()  # snapshot_req
+    async with (
+        live_server_with_bus(sessions, label="mode_switch") as (hub, base_url),
+        connect_async_ws(ws_url(base_url, "/ws/worker/mode1/term")) as worker,
+    ):
+        await worker.recv()  # snapshot_req
 
-            async with connect_browser(base_url, "mode1", role="admin") as b1:
-                await drain_all(b1)
+        async with connect_browser(base_url, "mode1", role="admin") as b1:
+            await drain_all(b1)
 
-                # B1 acquires hijack
-                await b1.send(json.dumps({"type": "hijack_request"}))
-                hijack_msg = await drain_until(b1, "hijack_state", timeout=3.0)
-                assert hijack_msg is not None
-                # Drain worker pause
-                await drain_until(worker, "control", timeout=3.0)
+            # B1 acquires hijack
+            await b1.send(json.dumps({"type": "hijack_request"}))
+            hijack_msg = await drain_until(b1, "hijack_state", timeout=3.0)
+            assert hijack_msg is not None
+            # Drain worker pause
+            await drain_until(worker, "control", timeout=3.0)
 
-                # REST PATCH: switch to open mode
-                async with httpx.AsyncClient(
-                    base_url=base_url, headers=ADMIN_H, timeout=10.0
-                ) as http:
-                    resp = await http.patch(
-                        "/api/sessions/mode1",
-                        json={"input_mode": "open"},
-                    )
-                    assert resp.status_code == 200, f"PATCH failed: {resp.status_code}: {resp.text}"
+            # REST PATCH: switch to open mode
+            async with httpx.AsyncClient(
+                base_url=base_url, headers=ADMIN_H, timeout=10.0
+            ) as http:
+                resp = await http.patch(
+                    "/api/sessions/mode1",
+                    json={"input_mode": "open"},
+                )
+                assert resp.status_code == 200, f"PATCH failed: {resp.status_code}: {resp.text}"
 
-                # Give the server time to process mode switch
-                await asyncio.sleep(0.5)
+            # Give the server time to process mode switch
+            await asyncio.sleep(0.5)
 
-                # Verify via REST that the mode changed
-                async with httpx.AsyncClient(
-                    base_url=base_url, headers=ADMIN_H, timeout=10.0
-                ) as http2:
-                    status_resp = await http2.get("/api/sessions/mode1")
-                    assert status_resp.status_code == 200
-                    session_data = status_resp.json()
-                    actual_mode = session_data.get("input_mode", session_data.get("definition", {}).get("input_mode"))
-                    assert actual_mode == "open", (
-                        f"Session mode should be 'open' after PATCH, got {actual_mode}"
-                    )
+            # Verify via REST that the mode changed
+            async with httpx.AsyncClient(
+                base_url=base_url, headers=ADMIN_H, timeout=10.0
+            ) as http2:
+                status_resp = await http2.get("/api/sessions/mode1")
+                assert status_resp.status_code == 200
+                session_data = status_resp.json()
+                actual_mode = session_data.get("input_mode", session_data.get("definition", {}).get("input_mode"))
+                assert actual_mode == "open", (
+                    f"Session mode should be 'open' after PATCH, got {actual_mode}"
+                )
 
-                # The mode is now "open" — verify a second acquire would fail
-                # (open mode doesn't allow hijack)
-                async with httpx.AsyncClient(
-                    base_url=base_url, headers=ADMIN_H, timeout=10.0
-                ) as http3:
-                    acq_resp = await http3.post(
-                        "/worker/mode1/hijack/acquire",
-                        json={"owner": "should-fail", "lease_s": 10},
-                    )
-                    # In open mode, acquire should be rejected (409 or similar)
-                    assert acq_resp.status_code != 200, (
-                        f"Hijack acquire should fail in open mode, got {acq_resp.status_code}"
-                    )
+            # The mode is now "open" — verify a second acquire would fail
+            # (open mode doesn't allow hijack)
+            async with httpx.AsyncClient(
+                base_url=base_url, headers=ADMIN_H, timeout=10.0
+            ) as http3:
+                acq_resp = await http3.post(
+                    "/worker/mode1/hijack/acquire",
+                    json={"owner": "should-fail", "lease_s": 10},
+                )
+                # In open mode, acquire should be rejected (409 or similar)
+                assert acq_resp.status_code != 200, (
+                    f"Hijack acquire should fail in open mode, got {acq_resp.status_code}"
+                )
 
 
 # ---------------------------------------------------------------------------

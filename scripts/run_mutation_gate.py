@@ -128,7 +128,7 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
     try:
         cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
         configured = cfg.get("tool", {}).get("mutmut", {}).get("paths_to_mutate", [])
-    except Exception:  # noqa: BLE001
+    except Exception:
         return path
 
     try:

@@ -65,7 +65,7 @@ class TestWebSocketStreamReader:
         # Request 5 bytes — gets "AB" (2 bytes), then disconnect
         data = await reader.read(5)
         assert data == b"AB"
-        assert reader._closed is True  # noqa: SLF001
+        assert reader._closed is True
 
     async def test_read_non_ascii_utf8_roundtrip(self) -> None:
         """Non-ASCII text from the browser must survive the encode step intact."""

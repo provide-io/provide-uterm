@@ -5,7 +5,7 @@
 """FastMCP server exposing the full provide-terminal control plane.
 
 Factory function ``create_mcp_app()`` returns a ready-to-run :class:`FastMCP`
-instance with ~16 tools covering session management, hijack lifecycle, and
+instance with 21 tools covering session management, hijack lifecycle, and
 worker control.
 
 Usage::
@@ -30,7 +30,7 @@ from provide.terminal.screen import strip_ansi
 from provide.terminal.client.hijack import HijackClient
 from provide.terminal.client.mcp_tools import _ok
 
-TOOL_COUNT = 18
+TOOL_COUNT = 21
 
 # C-style escape sequences that LLMs commonly emit in ``keys`` strings.
 _ESCAPE_MAP: dict[str, str] = {
@@ -386,7 +386,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         max_events:
             Maximum events to collect before returning early.
         """
-        ok, data = await client.watch_session_events(  # type: ignore[attr-defined]
+        ok, data = await client.watch_session_events(
             session_id,
             event_types=event_types,
             pattern=pattern,
@@ -430,7 +430,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         """
         clamped_duration_s = min(max(duration_s, 1.0), 120.0)
         clamped_max_events = min(max(max_events, 1), 500)
-        ok, data = await client.watch_session_events(  # type: ignore[attr-defined]
+        ok, data = await client.watch_session_events(
             session_id,
             event_types=event_types,
             pattern=pattern,
@@ -442,5 +442,50 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         result = _ok(ok, data)
         result["matched_pattern"] = matched
         return result
+
+    # -- Fan-out tools --------------------------------------------------------
+
+    @mcp.tool()
+    async def fanout_group_create(
+        session_ids: list[str],
+        name: str = "fleet",
+        mode: str = "parallel",
+    ) -> dict[str, Any]:
+        """Create a fan-out group to broadcast input to multiple sessions simultaneously."""
+        ok, data = await client.post(
+            "/api/fanout/groups",
+            json={"name": name, "worker_ids": session_ids, "mode": mode},
+        )
+        return _ok(ok, data)
+
+    @mcp.tool()
+    async def fanout_send(
+        group_id: str,
+        data: str,
+        quiesce_ms: int = 500,
+        max_response_ms: int = 10000,
+    ) -> dict[str, Any]:
+        """Broadcast input to all sessions in a fan-out group and return per-session results with divergence detection."""
+        ok, result = await client.post(
+            f"/api/fanout/groups/{group_id}/send",
+            json={"data": data, "quiesce_ms": quiesce_ms, "max_response_ms": max_response_ms},
+        )
+        return _ok(ok, result)
+
+    # -- Session annotation tool ----------------------------------------------
+
+    @mcp.tool()
+    async def session_annotate(
+        session_id: str,
+        label: str,
+        description: str = "",
+        severity: str = "info",
+    ) -> dict[str, Any]:
+        """Add an annotation to a session's recording timeline. Use this to mark important moments."""
+        ok, data = await client.post(
+            f"/api/sessions/{session_id}/annotate",
+            json={"label": label, "description": description, "severity": severity},
+        )
+        return _ok(ok, data)
 
     return mcp

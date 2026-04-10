@@ -317,7 +317,7 @@ def main() -> None:
     print("=" * 60)
     sys.stdout.flush()
 
-    _IDLE_TIMEOUT_S = 3600  # self-exit after 1 hour idle
+    idle_timeout_s = 3600  # self-exit after 1 hour idle
     last_activity = time.monotonic()
 
     try:
@@ -350,7 +350,7 @@ def main() -> None:
                 master_fd_holder[0] = master_fd  # update stdin listener in-place
                 t_drain = threading.Thread(target=_pty_drain, args=(master_fd, stop), daemon=True)
                 t_drain.start()
-            if time.monotonic() - last_activity > _IDLE_TIMEOUT_S:
+            if time.monotonic() - last_activity > idle_timeout_s:
                 print("\n  Idle timeout (1h) — shutting down.")
                 sys.stdout.flush()
                 break

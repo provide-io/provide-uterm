@@ -16,8 +16,8 @@ import httpx
 import pytest
 import uvicorn
 import websockets.server
-from provide.terminal.cli.inspect import _run_inspect
 
+from provide.terminal.cli.inspect import _run_inspect
 from provide.terminal.tunnel.protocol import (
     CHANNEL_DATA,
     CHANNEL_HTTP,
@@ -192,7 +192,7 @@ async def mock_tunnel_ws():
     await server.stop()
 
 
-_TEST_TOKEN = "test-token"  # noqa: S105
+_TEST_TOKEN = "test-token"
 
 
 @pytest.fixture

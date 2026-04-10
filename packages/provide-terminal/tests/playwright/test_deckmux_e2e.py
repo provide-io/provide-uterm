@@ -27,9 +27,9 @@ from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
 from starlette.staticfiles import StaticFiles
 
-from tests.conftest import WorkerController
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+from tests.conftest import WorkerController
 
 SCREENSHOTS_DIR = Path("packages/provide-terminal/tests/playwright/screenshots")
 

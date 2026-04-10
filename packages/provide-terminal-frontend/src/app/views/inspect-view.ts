@@ -7,7 +7,6 @@ import { _DLE, _STX } from "../../hijack-codec.js";
 import { getShareToken, requireElement } from "../../server-common.js";
 import type {
   AppBootstrap,
-  HttpActionMessage,
   HttpExchangeEntry,
   HttpInspectToggle,
   HttpInterceptToggle,
@@ -68,8 +67,7 @@ function decodeControlFrames(raw: string): Array<Record<string, unknown>> {
 function renderRow(ex: HttpExchangeEntry): string {
   const r = ex.request;
   const res = ex.response;
-  const paused =
-    ex.intercepted && !ex.interceptResolved && !res ? '<span class="badge paused">PAUSED</span>' : "";
+  const paused = ex.intercepted && !ex.interceptResolved && !res ? '<span class="badge paused">PAUSED</span>' : "";
   const resolved = ex.interceptAction ? `<span class="badge resolved">${ex.interceptAction}</span>` : "";
   const status = res
     ? `<span class="status ${statusClass(res.status)}">${res.status}</span>`
@@ -267,12 +265,7 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
     }
   }
 
-  function sendAction(
-    id: string,
-    action: string,
-    headers?: Record<string, string>,
-    bodyB64?: string,
-  ): void {
+  function sendAction(id: string, action: string, headers?: Record<string, string>, bodyB64?: string): void {
     const msg: Record<string, unknown> = { type: "http_action", id, action };
     if (headers) msg.headers = headers;
     if (bodyB64) msg.body_b64 = bodyB64;

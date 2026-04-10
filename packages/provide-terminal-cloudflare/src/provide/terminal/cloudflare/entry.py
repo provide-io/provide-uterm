@@ -108,7 +108,7 @@ except ImportError:
             return None
 
 
-__all__ = ["Default", "SessionRuntime", "ProvideTerminalCloudflareWorker"]
+__all__ = ["Default", "ProvideTerminalCloudflareWorker", "SessionRuntime"]
 
 _WORKER_ROUTE_PATTERNS = (
     re.compile(r"^/ws/browser/(?P<worker_id>[a-zA-Z0-9_-]{1,64})/term$"),

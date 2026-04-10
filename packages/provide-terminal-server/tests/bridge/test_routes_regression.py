@@ -19,9 +19,9 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.bridge.control_channel_helpers import decode_control_payloads
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import HijackSession, WorkerTermState
+from tests.bridge.control_channel_helpers import decode_control_payloads
 
 
 def make_app() -> tuple[FastAPI, TermHub]:

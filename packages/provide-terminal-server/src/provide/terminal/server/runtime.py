@@ -26,6 +26,8 @@ from provide.terminal.session_logger import SessionLogger
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from provide.terminal.bridge.annotation._detector import PatternDetector
+
 logger = get_logger(__name__)
 
 
@@ -57,6 +59,7 @@ class HostedSessionRuntime:
         public_base_url: str,
         recording: RecordingConfig,
         worker_bearer_token: str | None = None,
+        detector: PatternDetector | None = None,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
@@ -72,6 +75,8 @@ class HostedSessionRuntime:
         self._last_error: str | None = None
         self._logger: SessionLogger | None = None
         self._recording_path: Path | None = None
+        self._detector = detector
+        self._event_seq: int = 0
 
     def _ws_url(self) -> str:
         if self._public_base_url.startswith("https://"):
@@ -204,10 +209,18 @@ class HostedSessionRuntime:
             return
         screen = str(msg.get("screen", ""))
         await self._logger.log_screen(msg, screen.encode("cp437", errors="replace"))
+        self._event_seq += 1
+        if self._detector is not None:
+            for annotation in self._detector.detect("read", screen, seq=self._event_seq):
+                await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _log_send(self, data: str) -> None:
         if self._logger is not None:
             await self._logger.log_send(data)
+            self._event_seq += 1
+            if self._detector is not None:
+                for annotation in self._detector.detect("send", data, seq=self._event_seq):
+                    await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _log_event(self, event: str, payload: dict[str, Any]) -> None:
         if self._logger is not None:

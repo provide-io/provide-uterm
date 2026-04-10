@@ -101,14 +101,14 @@ def _run_with_capture(
     def collect() -> None:
         try:
             raw_holder.append(_serve_once(sock_path, timeout=timeout))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             exc_holder.append(exc)
 
     t = threading.Thread(target=collect)
     t.start()
 
     env = {**os.environ, "LD_PRELOAD": str(lib), "UTERM_CAPTURE_SOCKET": sock_path}
-    proc = subprocess.run(  # noqa: S603
+    proc = subprocess.run(
         cmd,
         env=env,
         input=stdin,
@@ -196,7 +196,7 @@ def test_no_frames_without_env_var() -> None:
         t = threading.Thread(target=collect)
         t.start()
 
-        subprocess.run(  # noqa: S603,S607
+        subprocess.run(
             ["/bin/sh", "-c", "printf 'should-not-be-captured\\n'"],
             env=env_no_socket,
             capture_output=True,

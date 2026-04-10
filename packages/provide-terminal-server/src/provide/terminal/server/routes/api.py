@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
@@ -359,6 +360,39 @@ def create_api_router() -> APIRouter:
         except KeyError:
             raise _sid_not_found(session_id) from None
         return model_dump(session)
+
+    @router.post("/sessions/{session_id}/annotate")
+    async def annotate_session(
+        request: Request,
+        session_id: _SessionId,
+        payload: Annotated[dict[str, Any], Body(...)],
+    ) -> dict[str, Any]:
+        principal = _principal(request)
+        authz = _authz(request)
+        definition = await _session_definition(request, session_id)
+        if not authz.can_mutate_session(principal, definition, "session.control.update"):  # pragma: no cover — admin always passes in dev mode
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+        registry = _registry(request)
+        runtime = registry.get_runtime(session_id)
+        if runtime is None:
+            raise HTTPException(status_code=404, detail=f"no active runtime for session: {session_id}")
+        annotation_data: dict[str, Any] = {
+            "label": str(payload.get("label", "")),
+            "description": str(payload.get("description", "")),
+            "severity": str(payload.get("severity", "info")),
+            "source": "agent",
+            "principal": principal.subject_id,
+        }
+        if runtime._logger is not None:
+            await runtime._logger.log_event("annotation", annotation_data)
+        audit_event(
+            "session.annotate",
+            principal=principal.subject_id,
+            session_id=session_id,
+            source_ip=_source_ip(request),
+            detail=annotation_data,
+        )
+        return {"ts": time.time()}
 
     @router.post("/sessions/{session_id}/analyze")
     async def analyze_session(request: Request, session_id: _SessionId) -> dict[str, Any]:

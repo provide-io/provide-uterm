@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { apiJson, requireElement, type SessionStatus, type ProvideHijackConstructor } from "./server-common.js";
+import { apiJson, type ProvideHijackConstructor, requireElement, type SessionStatus } from "./server-common.js";
 
 declare global {
   interface Window {

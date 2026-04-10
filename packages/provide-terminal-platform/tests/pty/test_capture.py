@@ -154,7 +154,7 @@ async def test_handle_connection_wait_closed_exception_ignored() -> None:
         writer.close = MagicMock()
         writer.wait_closed = AsyncMock(side_effect=RuntimeError("boom"))
 
-        await cap._handle_connection(reader, writer)  # noqa: SLF001
+        await cap._handle_connection(reader, writer)
         writer.close.assert_called_once()
 
         await cap.stop()

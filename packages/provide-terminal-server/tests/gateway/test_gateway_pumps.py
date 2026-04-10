@@ -20,7 +20,6 @@ from provide.terminal.gateway._gateway import (
     _ws_to_tcp,
 )
 
-
 # ---------------------------------------------------------------------------
 # Async iterator helper for mocking `async for message in ws`
 # ---------------------------------------------------------------------------
@@ -45,7 +44,7 @@ class _AsyncIter:
 def _mock_ws(messages: list[Any]) -> MagicMock:
     """Create a mock WS that yields *messages* via ``async for``."""
     ws = MagicMock()
-    ws.__aiter__ = lambda self: _AsyncIter(messages)  # noqa: ARG005
+    ws.__aiter__ = lambda self: _AsyncIter(messages)
     ws.send = AsyncMock()
     return ws
 

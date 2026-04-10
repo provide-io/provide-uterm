@@ -51,7 +51,7 @@ class TestCaptureConnectorThroughput:
             conn = _make_connector(td)
             await conn.start()
 
-            await _send_burst(conn._socket_path, FRAME_COUNT)  # noqa: SLF001
+            await _send_burst(conn._socket_path, FRAME_COUNT)
             await asyncio.sleep(0.2)  # let frames arrive
 
             total_msgs = 0
@@ -73,7 +73,7 @@ class TestCaptureConnectorThroughput:
             await conn.start()
 
             start = time.monotonic()
-            await _send_burst(conn._socket_path, FRAME_COUNT)  # noqa: SLF001
+            await _send_burst(conn._socket_path, FRAME_COUNT)
             await asyncio.sleep(0.1)
 
             drained = 0
@@ -97,7 +97,7 @@ class TestCaptureConnectorThroughput:
             await conn.start()
 
             _reader, writer = await asyncio.open_unix_connection(
-                conn._socket_path  # noqa: SLF001
+                conn._socket_path
             )
             for i in range(3000):
                 ch = [CHANNEL_STDOUT, CHANNEL_STDIN, CHANNEL_CONNECT][i % 3]
@@ -126,7 +126,7 @@ class TestCaptureConnectorThroughput:
             # Send large frames that would exceed buffer if uncapped
             big_frame = _make_frame(CHANNEL_STDOUT, b"A" * 4096)
             _reader, writer = await asyncio.open_unix_connection(
-                conn._socket_path  # noqa: SLF001
+                conn._socket_path
             )
             for _ in range(100):
                 writer.write(big_frame)
