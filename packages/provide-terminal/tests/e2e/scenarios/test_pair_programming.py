@@ -94,10 +94,11 @@ async def test_instructor_student_alternating_control(single_session_server: Any
         # Drain all worker messages and verify inputs
         await asyncio.sleep(0.5)
         worker_msgs = await drain_all(worker, timeout=1.0)
-        [str(m.get("data", "")) for m in worker_msgs if "data" in m]
+        all_data = [str(m.get("data", "")) for m in worker_msgs if "data" in m]
 
         # At minimum, "ls", "git status", and "git log" should have been received
         # "pwd" should NOT be in the mix (student was blocked in hijack mode)
+        assert len(all_data) >= 1, "Worker should have received at least one input"
 
 
 # ---------------------------------------------------------------------------

@@ -101,6 +101,8 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         existing = await ctrl.get_group(group_id, principal=principal.subject_id)
         if existing is None:
             return JSONResponse({"error": "group not found"}, status_code=404)
+        if existing.created_by != principal.subject_id:
+            return JSONResponse({"error": "only the group creator can delete it"}, status_code=403)
         await ctrl.delete_group(group_id, principal=principal.subject_id)
         audit_event("fanout.delete_group", principal=principal.subject_id, detail={"group_id": group_id})
         logger.info("fanout_group_deleted group_id=%s principal=%s", group_id, principal.subject_id)
@@ -147,6 +149,8 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         existing = await ctrl.get_group(group_id, principal=principal.subject_id)
         if existing is None:
             return JSONResponse({"error": "group not found"}, status_code=404)
+        if existing.created_by != principal.subject_id:
+            return JSONResponse({"error": "only the group creator can grant access"}, status_code=403)
         body = await request.json()
         grantee = body.get("grantee", "")
         await ctrl.grant_access(group_id, grantee, principal=principal.subject_id)

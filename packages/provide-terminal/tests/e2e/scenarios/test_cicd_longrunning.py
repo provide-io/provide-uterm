@@ -192,9 +192,8 @@ async def test_session_survives_brief_network_blip(resume_hub: Any) -> None:
             hello_msgs = [m for m in resumed_msgs if m.get("type") == "hello"]
             assert len(hello_msgs) >= 1, "Reconnected browser should get hello"
 
-            # Should get a snapshot (cached latest)
-            [m for m in resumed_msgs if m.get("type") == "snapshot"]
-            # May or may not get cached snapshot depending on implementation
+            # Should get a snapshot (cached latest) — may or may not appear
+            # depending on implementation, so just verify no crash on reconnect.
 
             # Worker sends new snapshot
             await worker.send(json.dumps(snapshot_msg("post-blip output")))

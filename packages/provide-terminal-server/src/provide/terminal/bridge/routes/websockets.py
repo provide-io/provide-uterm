@@ -378,6 +378,10 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                                 getattr(websocket, "state", None), "uterm_principal", None
                             )
                             _fo_subj = _fo_principal.subject_id if _fo_principal else "anonymous"
+                            # Verify caller has access to the group
+                            _fo_group = await _fo_ctrl.get_group(_fo_group_id, principal=_fo_subj)
+                            if _fo_group is None:
+                                continue  # caller doesn't own/have access
                             _fo_result = await _fo_ctrl.send(
                                 _fo_group_id, _fo_data, principal=_fo_subj,
                             )

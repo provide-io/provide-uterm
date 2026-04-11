@@ -145,7 +145,7 @@ paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not docker'"
 testpaths = [
     "packages/provide-terminal/tests",
     "packages/provide-terminal-cloudflare/tests",

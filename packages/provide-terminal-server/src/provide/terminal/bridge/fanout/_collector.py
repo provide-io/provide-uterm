@@ -82,7 +82,12 @@ class OutputCollector:
                     break
                 # Extract text from term events (data.data) or snapshot events (data.screen)
                 data = event.get("data", {})
-                text = data.get("data", "") or data.get("screen", "")
+                if isinstance(data, dict):
+                    text = data.get("data", "") or data.get("screen", "")
+                elif isinstance(data, str):
+                    text = data
+                else:
+                    text = ""
                 if text:
                     chunks.append(text)
 

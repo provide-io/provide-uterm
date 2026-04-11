@@ -372,19 +372,28 @@ def create_api_router() -> APIRouter:
         definition = await _session_definition(request, session_id)
         if not authz.can_mutate_session(principal, definition, "session.control.update"):  # pragma: no cover — admin always passes in dev mode
             raise HTTPException(status_code=403, detail="insufficient privileges")
+        label = str(payload.get("label", "")).strip()
+        if not label:
+            raise HTTPException(status_code=400, detail="label is required")
+        severity = str(payload.get("severity", "info"))
+        if severity not in ("info", "warning", "high", "critical"):
+            raise HTTPException(status_code=400, detail=f"invalid severity: {severity}")
         registry = _registry(request)
         runtime = registry.get_runtime(session_id)
         if runtime is None:
             raise HTTPException(status_code=404, detail=f"no active runtime for session: {session_id}")
         annotation_data: dict[str, Any] = {
-            "label": str(payload.get("label", "")),
+            "label": label,
             "description": str(payload.get("description", "")),
-            "severity": str(payload.get("severity", "info")),
+            "severity": severity,
             "source": "agent",
             "principal": principal.subject_id,
         }
         if runtime._logger is not None:
             await runtime._logger.log_event("annotation", annotation_data)
+        # Publish to EventBus so live browser observers see annotations in real-time
+        hub = cast("Any", request.app.state.uterm_hub)
+        evt = await hub.append_event(session_id, "annotation", annotation_data)
         audit_event(
             "session.annotate",
             principal=principal.subject_id,
@@ -392,7 +401,9 @@ def create_api_router() -> APIRouter:
             source_ip=_source_ip(request),
             detail=annotation_data,
         )
-        return {"ts": time.time()}
+        import time as _time
+
+        return {"ts": _time.time(), "seq": evt.get("seq", 0)}
 
     @router.post("/sessions/{session_id}/analyze")
     async def analyze_session(request: Request, session_id: _SessionId) -> dict[str, Any]:

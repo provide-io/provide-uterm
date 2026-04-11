@@ -87,7 +87,7 @@ def test_bearer_token_matches_jwt() -> None:
 
 
 def test_bearer_token_matches_simple() -> None:
-    assert _matches("cred.bearer_token", "Bearer abc123")
+    assert _matches("cred.bearer_token", "Bearer eyJhbGciOiJIUzI1NiJ9.test")
 
 
 def test_private_key_rsa_header_matches() -> None:
