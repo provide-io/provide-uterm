@@ -48,26 +48,37 @@ class FanOutController:
         await self._store.save(group)
         return group.group_id
 
-    async def delete_group(self, group_id: str, *, principal: str) -> None:  # noqa: ARG002
-        """Delete a fan-out group by ID."""
-        await self._store.delete(group_id)
+    async def delete_group(self, group_id: str, *, principal: str) -> None:
+        """Delete a fan-out group. Only the creator can delete."""
+        group = await self._authorized_group(group_id, principal)
+        if group is not None:
+            await self._store.delete(group_id)
 
-    async def get_group(self, group_id: str, *, principal: str) -> FanOutGroup | None:  # noqa: ARG002
-        """Retrieve a fan-out group by ID."""
-        return await self._store.get(group_id)
+    async def get_group(self, group_id: str, *, principal: str) -> FanOutGroup | None:
+        """Retrieve a group if *principal* is the creator or a grantee."""
+        return await self._authorized_group(group_id, principal)
 
     async def list_groups(self, principal: str) -> list[FanOutGroup]:
         """List all groups visible to the given principal."""
         return await self._store.list_for_principal(principal)
 
-    async def grant_access(self, group_id: str, grantee: str, *, principal: str) -> None:  # noqa: ARG002
-        """Add *grantee* to the group's grants list."""
+    async def grant_access(self, group_id: str, grantee: str, *, principal: str) -> None:
+        """Add *grantee* to the group's grants list. Only the creator can grant."""
         group = await self._store.get(group_id)
-        if group is None:
+        if group is None or group.created_by != principal:
             return
         if grantee not in group.grants:
             group.grants.append(grantee)
             await self._store.save(group)
+
+    async def _authorized_group(self, group_id: str, principal: str) -> FanOutGroup | None:
+        """Return group if *principal* is the creator or a grantee, else None."""
+        group = await self._store.get(group_id)
+        if group is None:
+            return None
+        if group.created_by == principal or principal in group.grants:
+            return group
+        return None
 
     # -- Send --------------------------------------------------------------
 
@@ -76,12 +87,12 @@ class FanOutController:
         group_id: str,
         data: str,
         *,
-        principal: str,  # noqa: ARG002
+        principal: str,
         quiesce_ms: int | None = None,
         max_response_ms: int | None = None,
     ) -> FanOutResult:
         """Broadcast *data* to all workers in the group and collect results."""
-        group = await self._store.get(group_id)
+        group = await self._authorized_group(group_id, principal)
         if group is None:
             return FanOutResult(
                 group_id=group_id,
@@ -115,7 +126,8 @@ class FanOutController:
 
         # Send to all workers in parallel
         send_results = await asyncio.gather(
-            *(self._hub.send_worker(wid, frame) for wid in group.worker_ids)
+            *(self._hub.send_worker(wid, frame) for wid in group.worker_ids),
+            return_exceptions=True,
         )
 
         # Collect output from workers that accepted the send
@@ -125,10 +137,10 @@ class FanOutController:
 
         tasks: list[asyncio.Task[tuple[str, int]]] = []
         for wid, ok in zip(group.worker_ids, send_results, strict=True):
-            if ok:
+            if ok is True:
                 tasks.append(asyncio.create_task(_collect(wid)))
 
-        collected: list[tuple[str, int]] = await asyncio.gather(*tasks) if tasks else []
+        collected: list[tuple[str, int] | BaseException] = await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
 
         # Build per-session results
         results: list[SessionFanOutResult] = []
@@ -138,14 +150,21 @@ class FanOutController:
         collect_idx = 0
 
         for wid, ok in zip(group.worker_ids, send_results, strict=True):
-            if ok:
-                delta, elapsed = collected[collect_idx]
+            if ok is True:
+                item = collected[collect_idx]
                 collect_idx += 1
-                results.append(SessionFanOutResult(
-                    worker_id=wid, ok=True, output_delta=delta, elapsed_ms=elapsed, divergent=False,
-                ))
-                successful_outputs.append(delta)
-                successful_indices.append(len(results) - 1)
+                if isinstance(item, BaseException):
+                    results.append(SessionFanOutResult(
+                        worker_id=wid, ok=False, output_delta=None, elapsed_ms=0, divergent=False,
+                    ))
+                    failed_sessions.append(wid)
+                else:
+                    delta, elapsed = item
+                    results.append(SessionFanOutResult(
+                        worker_id=wid, ok=True, output_delta=delta, elapsed_ms=elapsed, divergent=False,
+                    ))
+                    successful_outputs.append(delta)
+                    successful_indices.append(len(results) - 1)
             else:
                 results.append(SessionFanOutResult(
                     worker_id=wid, ok=False, output_delta=None, elapsed_ms=0, divergent=False,

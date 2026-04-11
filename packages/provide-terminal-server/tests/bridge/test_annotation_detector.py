@@ -96,7 +96,7 @@ def test_detects_aws_key_in_read_event() -> None:
     assert ann.source == "detector"
     assert ann.principal == "system"
     assert ann.span == AnnotationSpan(from_seq=10, to_seq=10)
-    assert AWS_KEY in ann.description
+    assert "read" in ann.description  # event_type in description, NOT the full key
 
 
 def test_detects_sudo_in_send_event() -> None:

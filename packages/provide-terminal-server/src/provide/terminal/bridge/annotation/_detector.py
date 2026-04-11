@@ -51,7 +51,10 @@ class PatternDetector:
 
             seen_categories.add(rule.category)
             match_text = m.group(0)[:_DESCRIPTION_TRUNCATE]
-            description = rule.description_template.format(match=match_text)
+            try:
+                description = rule.description_template.format(match=match_text, event_type=event_type)
+            except (KeyError, IndexError):
+                description = f"{rule.label}: {match_text}"
             results.append(
                 Annotation(
                     label=rule.label,

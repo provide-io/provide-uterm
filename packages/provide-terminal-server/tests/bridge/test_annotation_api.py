@@ -66,7 +66,7 @@ def test_annotate_no_active_runtime_returns_404() -> None:
         # Session exists but no runtime was ever created (never connected)
         r = client.post(
             "/api/sessions/no-runtime-sess/annotate",
-            json={"label": "stale", "description": "", "severity": "warn"},
+            json={"label": "stale", "description": "", "severity": "warning"},
         )
     assert r.status_code == 404
 
