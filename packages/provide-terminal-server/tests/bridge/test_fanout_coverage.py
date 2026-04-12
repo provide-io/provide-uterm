@@ -410,7 +410,9 @@ class TestFanoutSendWsDispatch:
         import asyncio
 
         group = _make_group(["w-missing"])
-        asyncio.run(ctrl.create_group(group, principal="dev"))
+        # Browser WS resolves to principal="anonymous" (no auth state in test),
+        # so the group must be owned by that same principal to pass get_group auth.
+        asyncio.run(ctrl.create_group(group, principal="anonymous"))
 
         with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
             _read_initial_browser(browser)

@@ -1,0 +1,205 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+"""Single-perspective browser recording helpers for demo recording scripts."""
+
+from __future__ import annotations
+
+import time
+from typing import TYPE_CHECKING
+
+from scripts.demos.ffmpeg import ffmpeg_to_mp4
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from playwright.sync_api import Browser, BrowserContext, Page
+
+    from scripts.demos.server import BrowserStep
+
+
+def wait_for_terminal(page: Page, uid: int = 1, timeout: float = 15.0) -> bool:
+    """Wait for xterm.js to render content into the DOM. Returns True on success."""
+    try:
+        page.locator(f"#h-{uid}-terminal .xterm-rows span").first.wait_for(state="attached", timeout=timeout * 1000)
+        return True
+    except Exception:
+        return False
+
+
+def wait_for_presence_bar(page: Page, min_users: int = 2, timeout: float = 10.0) -> bool:
+    """Wait for DeckMux presence bar with at least min_users avatars. Returns True/False."""
+    try:
+        page.wait_for_function(
+            f"document.querySelectorAll('.dm-presence-bar .dm-avatar').length >= {min_users}",
+            timeout=timeout * 1000,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def type_in_terminal(page: Page, text: str, uid: int = 1) -> None:
+    """Send input to the terminal via the hijack input row."""
+    field = page.locator(f"#h-{uid}-inputfield")
+    field.fill(text)
+    page.locator(f"#h-{uid}-inputsend").click()
+
+
+def wait_for_status(page: Page, text: str, uid: int = 1, timeout: float = 10.0) -> bool:
+    """Wait for the status text element to contain `text`. Returns True/False."""
+    try:
+        page.locator(f"#h-{uid}-statustext", has_text=text).wait_for(state="visible", timeout=timeout * 1000)
+        return True
+    except Exception:
+        return False
+
+
+def click_hijack(page: Page, uid: int = 1, timeout: float = 10.0) -> bool:
+    """Wait for the hijack button and click it. Returns True/False."""
+    btn = page.locator(f"#h-{uid}-hijack")
+    try:
+        btn.wait_for(state="visible", timeout=timeout * 1000)
+        page.wait_for_function(
+            f"!document.getElementById('h-{uid}-hijack')?.disabled",
+            timeout=timeout * 1000,
+        )
+        btn.click()
+        return True
+    except Exception:
+        return False
+
+
+def open_background_context(
+    browser: Browser,
+    base_url: str,
+    path: str,
+    wait_s: float = 2.0,
+) -> tuple[BrowserContext, Page]:
+    """Open a second browser context (no recording) and navigate to base_url+path.
+
+    Returns (context, page) — caller must close context when done.
+    """
+    ctx = browser.new_context(viewport={"width": 1280, "height": 720})
+    page = ctx.new_page()
+    full = base_url + path if path.startswith("/") else path
+    page.goto(full)
+    page.wait_for_load_state("networkidle")
+    time.sleep(wait_s)
+    return ctx, page
+
+
+def _run_steps(page: Page, steps: list[BrowserStep], shots_dir: Path) -> None:
+    """Execute a list of BrowserStep against a Playwright page."""
+    for action, wait_s, shot_name in steps:
+        if isinstance(action, str):
+            page.goto(action)
+            page.wait_for_load_state("networkidle")
+        elif callable(action):
+            action(page)
+        if wait_s > 0:
+            time.sleep(wait_s)
+        if shot_name:
+            page.screenshot(path=str(shots_dir / shot_name))
+            print(f"  📸 {shot_name}", flush=True)
+
+
+def record_perspective(
+    name: str,
+    base_url: str,
+    steps: list[BrowserStep],
+    feature_dir: Path,
+) -> Path | None:
+    """Record a single named browser perspective. Returns mp4 path or None."""
+    from playwright.sync_api import sync_playwright
+
+    shots_dir = feature_dir / "screenshots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+    resolved: list[BrowserStep] = [
+        (base_url + action if isinstance(action, str) and action.startswith("/") else action, w, s)
+        for action, w, s in steps
+    ]
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context(
+                viewport={"width": 1280, "height": 720},
+                record_video_dir=str(feature_dir),
+                record_video_size={"width": 1280, "height": 720},
+            )
+            page = ctx.new_page()
+            _run_steps(page, resolved, shots_dir)
+            ctx.close()
+            browser.close()
+        webms = list(feature_dir.glob("*.webm"))
+        if not webms:
+            return None
+        latest = max(webms, key=lambda x: x.stat().st_mtime)
+        target = feature_dir / f"{name}.webm"
+        latest.rename(target)
+        return ffmpeg_to_mp4(target)
+    except Exception as exc:
+        print(f"  [WARN] record_perspective({name}) failed: {exc}", flush=True)
+        return None
+
+
+def record_perspective_with_background(
+    name: str,
+    base_url: str,
+    steps: list[BrowserStep],
+    feature_dir: Path,
+    background_path: str,
+    background_wait_s: float = 2.0,
+) -> Path | None:
+    """Record a perspective while a background (non-recorded) context stays open."""
+    from playwright.sync_api import sync_playwright
+
+    shots_dir = feature_dir / "screenshots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+    resolved: list[BrowserStep] = [
+        (base_url + action if isinstance(action, str) and action.startswith("/") else action, w, s)
+        for action, w, s in steps
+    ]
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            bg_ctx, _bg_page = open_background_context(browser, base_url, background_path, wait_s=background_wait_s)
+            ctx = browser.new_context(
+                viewport={"width": 1280, "height": 720},
+                record_video_dir=str(feature_dir),
+                record_video_size={"width": 1280, "height": 720},
+            )
+            page = ctx.new_page()
+            _run_steps(page, resolved, shots_dir)
+            ctx.close()
+            bg_ctx.close()
+            browser.close()
+        webms = list(feature_dir.glob("*.webm"))
+        if not webms:
+            return None
+        latest = max(webms, key=lambda x: x.stat().st_mtime)
+        target = feature_dir / f"{name}.webm"
+        latest.rename(target)
+        return ffmpeg_to_mp4(target)
+    except Exception as exc:
+        print(f"  [WARN] record_perspective_with_background({name}) failed: {exc}", flush=True)
+        return None
+
+
+def browser_record(
+    base_url: str,
+    steps: list[BrowserStep],
+    feature_dir: Path,
+) -> Path | None:
+    """Record a browser session (single perspective, named 'browser')."""
+    return record_perspective("browser", base_url, steps, feature_dir)
+
+
+def browser_record_multi(
+    base_url: str,
+    perspectives: dict[str, list[BrowserStep]],
+    feature_dir: Path,
+) -> dict[str, Path | None]:
+    """Record multiple named browser perspectives sequentially."""
+    return {name: record_perspective(name, base_url, steps, feature_dir) for name, steps in perspectives.items()}

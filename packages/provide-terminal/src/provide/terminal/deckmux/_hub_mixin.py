@@ -91,6 +91,12 @@ class DeckMuxMixin:
         # Build sync payload for the joining browser
         config = {"auto_transfer_idle_s": 30, "keystroke_queue": "display"}
         result: dict[str, Any] = store.get_sync_payload(config)
+
+        # Broadcast updated sync to all existing browsers so they see the new user.
+        # addUser in the frontend is idempotent — re-joining existing users just updates them.
+        if store.count > 1:
+            await self.broadcast(worker_id, result)  # type: ignore[attr-defined]
+
         return result
 
     async def deckmux_on_browser_disconnect(

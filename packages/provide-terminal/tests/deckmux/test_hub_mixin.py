@@ -703,3 +703,31 @@ async def test_colors_avoid_collision_with_taken_colors() -> None:
     assert result is not None
     colors = [u["color"] for u in result["users"]]
     assert colors[0] != colors[1]  # taken_colors prevented the collision
+
+
+@pytest.mark.asyncio
+async def test_second_connect_broadcasts_sync_to_existing_users() -> None:
+    """When user2 joins, existing users receive presence_sync so they see user2's avatar."""
+    hub = _FakeHub()
+    ws1, ws2 = _FakeWS(), _FakeWS()
+
+    # First user connects — no broadcast needed (they're the only one)
+    await hub.deckmux_on_browser_connect("w1", ws1, "viewer")
+    hub.broadcast.assert_not_called()
+
+    # Second user connects — broadcast must fire so ws1 sees ws2
+    await hub.deckmux_on_browser_connect("w1", ws2, "operator")
+    hub.broadcast.assert_called_once()
+    worker_id_arg, msg = hub.broadcast.call_args[0]
+    assert worker_id_arg == "w1"
+    assert msg["type"] == "presence_sync"
+    assert len(msg["users"]) == 2  # both users included
+
+
+@pytest.mark.asyncio
+async def test_first_connect_does_not_broadcast() -> None:
+    """First user connecting should not trigger a broadcast (no one to notify)."""
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "viewer")
+    hub.broadcast.assert_not_called()
