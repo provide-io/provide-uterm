@@ -140,6 +140,9 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                                 worker_id,
                                 cast("dict[str, Any]", make_term_frame(event.data, ts=time.time())),
                             )
+                            # Also publish to EventBus so fanout OutputCollector can
+                            # accumulate output_delta from PTY-backed sessions.
+                            await hub.append_event(worker_id, "term", {"data": event.data})
                         continue
                     msg = event.control
                     mtype = msg.get("type")

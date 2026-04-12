@@ -24,7 +24,7 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
 
 from provide.telemetry import TelemetryMiddleware, get_logger
-from provide.terminal.bridge.hub import InMemoryResumeStore, ResumeSession, TermHub
+from provide.terminal.bridge.hub import EventBus, InMemoryResumeStore, ResumeSession, TermHub
 from provide.terminal.server.api_keys import ApiKeyStore
 from provide.terminal.server.auth import (
     Principal,
@@ -294,6 +294,7 @@ def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = No
         resume_store=InMemoryResumeStore(),
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
+        event_bus=EventBus(),
     )
     # Attach the fan-out controller so routes and WS dispatch can find it.
     from provide.terminal.bridge.fanout import FanOutController, InMemoryFanOutStore

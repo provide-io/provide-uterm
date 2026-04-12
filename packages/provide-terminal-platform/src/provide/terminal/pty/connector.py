@@ -38,6 +38,7 @@ _VALID_CONFIG_KEYS = frozenset(
         "inject",
         "cols",
         "rows",
+        "input_mode",
     }
 )
 
@@ -72,9 +73,7 @@ class PTYConnector:
     All config parameters are validated before any system call.
     """
 
-    def __init__(
-        self, session_id: str, display_name: str, config: dict[str, Any]
-    ) -> None:
+    def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
         unknown = set(config) - _VALID_CONFIG_KEYS
         if unknown:
             raise ValueError(f"unknown config keys for PTYConnector: {sorted(unknown)}")
@@ -101,13 +100,13 @@ class PTYConnector:
         self._inject: bool = bool(config.get("inject", False))  # pragma: no mutate
         self._cols: int = int(config.get("cols", 80))
         self._rows: int = int(config.get("rows", 24))
+        self._input_mode: str = str(config.get("input_mode", "open"))
 
         self._uid_map = UidMap()
         self._master_fd: int | None = None
         self._child_pid: int | None = None
         self._connected = False
         self._paused = False
-        self._input_mode = "open"
         self._buffer = ""
         self._capture_socket: CaptureSocket | None = None
         self._capture_tmpdir: str | None = None
@@ -118,9 +117,7 @@ class PTYConnector:
 
         if self._username and self._password:
             if os.geteuid() != 0:  # nosec B101 — deliberate privilege check
-                raise PermissionError(
-                    "user-switching via PAM requires the server to run as root"
-                )
+                raise PermissionError("user-switching via PAM requires the server to run as root")
             self._pam = PamSession()
             self._pam.authenticate(self._username, self._password)
             self._pam.acct_mgmt()
@@ -140,9 +137,7 @@ class PTYConnector:
         if self._inject:
             # mkdtemp creates a secure directory owned by the current user (mode 0700)
             self._capture_tmpdir = tempfile.mkdtemp(prefix="uterm-cap-")  # nosec B108
-            capture_path = str(
-                __import__("pathlib").Path(self._capture_tmpdir) / "cap.sock"
-            )
+            capture_path = str(__import__("pathlib").Path(self._capture_tmpdir) / "cap.sock")
             self._capture_socket = CaptureSocket(capture_path)
             await self._capture_socket.start()
 
@@ -294,9 +289,7 @@ class PTYConnector:
 
     async def set_mode(self, mode: str) -> list[dict[str, Any]]:
         if mode not in _VALID_MODES:
-            raise ValueError(
-                f"invalid mode {mode!r}: must be one of {sorted(_VALID_MODES)}"
-            )
+            raise ValueError(f"invalid mode {mode!r}: must be one of {sorted(_VALID_MODES)}")
         self._input_mode = mode
         return [self._hello(), self._snapshot()]
 
