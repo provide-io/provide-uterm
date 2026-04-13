@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-BASE_OUT = Path("demo/recordings")
+BASE_OUT = Path("demo")
 
 _RESET = "\033[0m"
 _BOLD = "\033[1m"

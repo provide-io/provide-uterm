@@ -253,14 +253,152 @@ describe("renderReplay", () => {
   });
 
   it("throws when replay shell DOM elements are missing (line 103)", async () => {
-    // Make querySelector return null for #replay-filter so the shell-incomplete guard fires
+    // Make querySelector return null for #btn-play so the shell-incomplete guard fires
     const origQuerySelector = root.querySelector.bind(root);
     const spy = vi.spyOn(root, "querySelector").mockImplementation((sel: string) => {
-      if (sel === "#replay-filter") return null;
+      if (sel === "#btn-play") return null;
       return origQuerySelector(sel);
     });
     await expect(renderReplay(root, makeBootstrap())).rejects.toThrow("replay shell is incomplete");
     spy.mockRestore();
+  });
+
+  it("renders Play button", async () => {
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(makeReplayState());
+    await renderReplay(root, makeBootstrap());
+    expect(root.querySelector("#btn-play")).toBeTruthy();
+  });
+
+  it("Play button does nothing when no entries", async () => {
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(makeReplayState([]));
+    await renderReplay(root, makeBootstrap());
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    // Should not throw or change anything
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+  });
+
+  it("Play button starts auto-advance and shows Pause, stops at last entry", async () => {
+    vi.useFakeTimers();
+    const entries = [makeEntry({ screen: "a" }), makeEntry({ screen: "b" }), makeEntry({ screen: "c" })];
+    const state = { ...makeReplayState(entries), index: 0 };
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(state);
+    await renderReplay(root, makeBootstrap());
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Pause");
+
+    // Advance to second entry
+    await vi.advanceTimersByTimeAsync(800);
+    expect(root.querySelector<HTMLElement>("#replay-screen")?.textContent).toBe("b");
+
+    // Advance to last entry
+    await vi.advanceTimersByTimeAsync(800);
+    expect(root.querySelector<HTMLElement>("#replay-screen")?.textContent).toBe("c");
+
+    // One more tick — at last entry, stopPlay fires
+    await vi.advanceTimersByTimeAsync(800);
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    vi.useRealTimers();
+  });
+
+  it("clicking Play while playing stops playback (Pause → Play)", async () => {
+    vi.useFakeTimers();
+    const entries = [makeEntry({ screen: "a" }), makeEntry({ screen: "b" })];
+    const state = { ...makeReplayState(entries), index: 0 };
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(state);
+    await renderReplay(root, makeBootstrap());
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Pause");
+
+    // Click again to pause
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    vi.useRealTimers();
+  });
+
+  it("prev/next/first/last stop playback before navigating", async () => {
+    vi.useFakeTimers();
+    const entries = [makeEntry({ screen: "a" }), makeEntry({ screen: "b" }), makeEntry({ screen: "c" })];
+    const state = { ...makeReplayState(entries), index: 0 };
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(state);
+    await renderReplay(root, makeBootstrap());
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Pause");
+
+    root.querySelector<HTMLButtonElement>("#btn-next")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    root.querySelector<HTMLButtonElement>("#btn-prev")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    root.querySelector<HTMLButtonElement>("#btn-first")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    root.querySelector<HTMLButtonElement>("#btn-last")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    vi.useRealTimers();
+  });
+
+  it("scrubber input stops playback before navigating", async () => {
+    vi.useFakeTimers();
+    const entries = [makeEntry({ screen: "a" }), makeEntry({ screen: "b" })];
+    const state = { ...makeReplayState(entries), index: 0 };
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(state);
+    await renderReplay(root, makeBootstrap());
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Pause");
+
+    const scrubber = root.querySelector<HTMLInputElement>("#replay-scrubber")!;
+    scrubber.value = "0";
+    scrubber.dispatchEvent(new Event("input"));
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    vi.useRealTimers();
+  });
+
+  it("clicking replay list entry stops playback before navigating", async () => {
+    vi.useFakeTimers();
+    const entries = [makeEntry({ screen: "a" }), makeEntry({ screen: "b" })];
+    const state = { ...makeReplayState(entries), index: 0 };
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(state);
+    await renderReplay(root, makeBootstrap());
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Pause");
+
+    const list = root.querySelector<HTMLElement>("#replay-list")!;
+    const firstBtn = list.querySelector<HTMLButtonElement>("[data-index='0']")!;
+    firstBtn.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    vi.useRealTimers();
+  });
+
+  it("reload stops playback before reloading", async () => {
+    vi.useFakeTimers();
+    const entries = [makeEntry({ screen: "a" }), makeEntry({ screen: "b" })];
+    const state = { ...makeReplayState(entries), index: 0 };
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(state);
+    await renderReplay(root, makeBootstrap());
+
+    root.querySelector<HTMLButtonElement>("#btn-play")?.click();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Pause");
+
+    vi.mocked(stateModule.loadReplayState).mockResolvedValue(makeReplayState(entries));
+    root.querySelector<HTMLButtonElement>("#btn-load")?.click();
+    await vi.runAllTimersAsync();
+    expect(root.querySelector<HTMLButtonElement>("#btn-play")?.textContent).toBe("Play");
+
+    vi.useRealTimers();
   });
 
   it("updateReplayUi returns early when meta element is missing (line 31)", async () => {

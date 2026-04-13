@@ -63,7 +63,7 @@ def make_presence_update(user_id: str, name: str, color: str, role: str, **field
         "color": color,
         "role": role,
     }
-    for k in ("scroll_line", "scroll_range", "selection", "pin", "typing", "queued_keys", "is_owner"):
+    for k in ("scroll_line", "scroll_range", "total_lines", "selection", "pin", "typing", "queued_keys", "is_owner"):
         if k in fields:
             msg[k] = fields[k]
     return msg

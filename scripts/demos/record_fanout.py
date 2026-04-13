@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import random as _random
 import sys
 import time
 from typing import TYPE_CHECKING
@@ -21,7 +22,7 @@ from scripts.demos import (
     BASE_OUT,
     asciinema_record,
     banner,
-    fanout_send_results,
+    fanout_send,
     info,
     kv,
     ok,
@@ -31,6 +32,7 @@ from scripts.demos import (
     start_server,
     stop_server,
     trim_clip,
+    warn,
 )
 from scripts.demos.output import clean_terminal_output
 
@@ -42,6 +44,50 @@ HIGHLIGHT_START_S: float = 13.0
 HIGHLIGHT_DURATION_S: float = 8.0
 
 SESSION_IDS = [f"fleet-{i}" for i in range(9)]
+
+# These workers are on "staging" environment — they receive a dry-run override
+STAGING_NODES = {"fleet-1", "fleet-6"}
+
+# Config key pool — each terminal gets a random sample
+_CONFIG_KEYS = [
+    "api.timeout_ms",
+    "auth.token_exp_s",
+    "cache.ttl_s",
+    "circuit.threshold",
+    "db.pool_size",
+    "grpc.deadline_ms",
+    "log.sampling_rate",
+    "rate.limit_rps",
+    "retry.max_attempts",
+    "tls.cert_rotation_h",
+    "tracing.sample_pct",
+    "ws.ping_interval_s",
+]
+_REV_PREFIX = "a3f2d91"  # same rev shipped to all — only env differs
+
+
+def _config_push_cmd(sid: str, rng: _random.Random, staging: bool) -> str:
+    """Build a unique config-push command sequence for one terminal."""
+    n_keys = rng.randint(3, 6)
+    keys = rng.sample(_CONFIG_KEYS, n_keys)
+    checksum = format(rng.getrandbits(32), "08x")
+    ttl = rng.choice([300, 600, 900, 1800, 3600])
+    ms = rng.randint(18, 185)
+
+    lines = [
+        f"config push [rev={_REV_PREFIX}, chk={checksum}]",
+        f"  keys: {n_keys} updated",
+    ]
+    lines += [f"  + {k}" for k in keys[:3]]
+    if n_keys > 3:
+        lines.append(f"  ... +{n_keys - 3} more")
+    if staging:
+        lines += ["  env: staging — dry-run only", "⚠ not applied"]
+    else:
+        lines += [f"  ttl: {ttl}s | verified ({ms}ms)", "✓ applied"]
+
+    cmd = "; ".join(f'echo "{line}"' for line in lines)
+    return f"{cmd}\r"
 
 
 async def run_terminal_demo() -> None:
@@ -79,24 +125,24 @@ async def run_terminal_demo() -> None:
         kv("group_id", group_id[:12] + "...")
         kv("worker_count", group_data["session_count"])
 
-        info('Broadcasting: echo "worker-$$: config applied"; uptime | awk ...')
+        info("Broadcasting config push trigger to all workers...")
         r = await client.post(
             f"/api/fanout/groups/{group_id}/send",
-            json={
-                "data": 'echo "worker-$$: config applied"; uptime | awk \'{print "up "$3}\'\r',
-                "quiesce_ms": 1500,
-                "max_response_ms": 5000,
-            },
+            json={"data": f"printf 'config push {_REV_PREFIX} broadcast received\\n'\r", "quiesce_ms": 1000, "max_response_ms": 8000},
         )
         r.raise_for_status()
-        send_data = r.json()
 
-        info("Per-worker responses (PIDs differ — separate processes):")
-        for i, result in enumerate(send_data.get("results", [])):
-            output = clean_terminal_output(result.get("output_delta", ""))
-            ok(f"  fleet-{i}: {output}")
+        rng = _random.Random(7)
+        info("Sending per-worker config output...")
+        for sid in SESSION_IDS:
+            cmd = _config_push_cmd(sid, rng, sid in STAGING_NODES)
+            send_to_session(base_url, sid, cmd, wait_s=0.2)
+            if sid in STAGING_NODES:
+                warn(f"  {sid}: ⚠ staging — dry-run only")
+            else:
+                ok(f"  {sid}: ✓ applied")
 
-        ok(f"All {len(SESSION_IDS)} workers responded — fan-out complete")
+        ok(f"All {len(SESSION_IDS)} workers responded — {len(STAGING_NODES)} on staging env")
 
     stop_server(server)
 
@@ -110,6 +156,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     time.sleep(1.5)
 
     group_id = ""
+    session_groups: dict[str, str] = {}  # sid → single-session fanout group_id
     try:
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             for sid in SESSION_IDS:
@@ -129,37 +176,49 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             )
             if r.status_code == 200:
                 group_id = r.json().get("group_id", "")
+            # Pre-create single-session groups for per-terminal unique output
+            for sid in SESSION_IDS:
+                r2 = client.post("/api/fanout/groups", json={"name": f"solo-{sid}", "worker_ids": [sid]})
+                if r2.status_code == 200:
+                    session_groups[sid] = r2.json().get("group_id", "")
     except Exception as exc:
         print(f"  [WARN] setup failed: {exc}", flush=True)
 
     for sid in SESSION_IDS:
-        send_to_session(
-            base_url,
-            sid,
-            f"echo '{sid}: idle — awaiting fanout broadcast'\r",
-            wait_s=0.3,
-        )
+        send_to_session(base_url, sid, "clear\r", wait_s=0.1)
+        label = "staging — awaiting config broadcast" if sid in STAGING_NODES else "idle — awaiting config broadcast"
+        send_to_session(base_url, sid, f"echo '{sid}: {label}'\r", wait_s=0.3)
 
     def do_broadcast(page: object) -> None:
         if not group_id:
             return
-        results = fanout_send_results(
-            base_url,
-            group_id,
-            'echo "worker-$$: config applied"; uptime | awk \'{print "up "$3}\'\r',
-            wait_s=2.5,
+        rng = _random.Random(7)
+
+        # Fanout: broadcast config push trigger to all 9 simultaneously
+        fanout_send(base_url, group_id, f"printf 'config push {_REV_PREFIX} broadcast received\\n'\r", wait_s=0.8)
+
+        # Per-session: send unique config output via pre-created single-session groups
+        for sid in SESSION_IDS:
+            gid = session_groups.get(sid)
+            if gid:
+                cmd = _config_push_cmd(sid, rng, sid in STAGING_NODES)
+                fanout_send(base_url, gid, cmd, wait_s=0.1)
+
+        # Populate results panel: 7 green (✓ applied), 2 orange (⚠ staging)
+        majority = "✓ applied"
+        results = [
+            {"worker_id": sid, "output": "⚠ staging" if sid in STAGING_NODES else "✓ applied"}
+            for sid in SESSION_IDS
+        ]
+        stmts = "\n".join(
+            f"var el{i} = document.getElementById('rc{i}');"
+            f"if (el{i}) {{ el{i}.querySelector('.rout').textContent = {r['output']!r};"
+            + (f"  el{i}.querySelector('.rout').classList.add('differ');" if r["output"] != majority else "")
+            + "}"
+            for i, r in enumerate(results)
         )
-        if results:
-            outputs = [r["output"] for r in results]
-            all_same = len(set(outputs)) == 1
-            js_calls = "\n".join(
-                f"var el = document.getElementById('rc{i}');"
-                f"if (el) {{ el.querySelector('.rout').textContent = {r['output']!r};"
-                f"  if (!{str(all_same).lower()}) el.querySelector('.rout').classList.add('differ'); }}"
-                for i, r in enumerate(results)
-            )
-            with contextlib.suppress(Exception):
-                page.evaluate(js_calls)  # type: ignore[union-attr]
+        with contextlib.suppress(Exception):
+            page.evaluate(f"(function(){{{stmts}}})()")  # type: ignore[union-attr]
 
     vids = record_fleet_complete(
         base_url,

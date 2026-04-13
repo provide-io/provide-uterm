@@ -22,6 +22,7 @@ class UserPresence:
     initials: str = ""
     scroll_line: int = 0
     scroll_range: tuple[int, int] = (0, 0)
+    total_lines: int = 0
     selection: dict[str, Any] | None = None
     pin: dict[str, Any] | None = None
     typing: bool = False
@@ -45,6 +46,7 @@ class UserPresence:
             "initials": self.initials,
             "scroll_line": self.scroll_line,
             "scroll_range": list(self.scroll_range),
+            "total_lines": self.total_lines,
             "selection": self.selection,
             "pin": self.pin,
             "typing": self.typing,
