@@ -11,6 +11,7 @@ export interface DeckMuxUser {
   initials: string;
   scrollLine: number;
   scrollRange: [number, number];
+  totalLines: number;
   cols: number; // terminal width (0 = unknown)
   rows: number; // terminal height (0 = unknown)
   joinTime: number; // Date.now() ms when first seen

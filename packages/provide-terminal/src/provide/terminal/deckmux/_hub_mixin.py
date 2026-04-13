@@ -117,11 +117,16 @@ class DeckMuxMixin:
         worker_id: str,
         ws: Any,
         msg: dict[str, Any],
+        principal: Any = None,
     ) -> None:
         """Route a DeckMux message from a browser."""
         msg_type = msg.get("type")
         store = self._get_presence_store(worker_id)
+        # Resolve user_id the same way as deckmux_on_browser_connect so
+        # the store lookup succeeds (must match the ID used during add()).
         user_id = str(id(ws))
+        if principal and hasattr(principal, "subject_id"):
+            user_id = getattr(principal, "subject_id", user_id)
 
         if msg_type == MSG_PRESENCE_UPDATE:
             fields = {
@@ -129,6 +134,7 @@ class DeckMuxMixin:
                 for k in (
                     "scroll_line",
                     "scroll_range",
+                    "total_lines",
                     "selection",
                     "pin",
                     "typing",

@@ -36,10 +36,11 @@ class Principal:
     roles: frozenset[str] = frozenset()
     scopes: frozenset[str] = frozenset()
     claims: dict[str, Any] = field(default_factory=dict)
+    display_name: str | None = None
 
     @property
     def name(self) -> str:
-        return self.subject_id
+        return self.display_name or self.subject_id
 
 
 def _cookie_value(cookies: dict[str, str], key: str) -> str | None:
@@ -147,7 +148,8 @@ def _principal_from_local_mode(headers: Any, cookies: Any, auth: AuthConfig) -> 
     principal = headers.get(auth.principal_header) or _cookie_value(cookies, auth.principal_cookie) or "local-dev"
     role = str(headers.get(auth.role_header, "")).strip().lower()
     roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"admin"})
-    return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}))
+    display_name = str(headers.get("x-display-name", "")).strip() or None
+    return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}), display_name=display_name)
 
 
 def _principal_from_api_key(headers: Any, auth: AuthConfig) -> Principal | None:

@@ -162,6 +162,11 @@ export class ProvideHijack {
     return this._q("terminal");
   }
 
+  /** The xterm.js Terminal instance, or null if not yet initialized. */
+  get terminal(): XTerminal | null {
+    return this._term;
+  }
+
   // ── Internal helpers ────────────────────────────────────────────────────────
 
   /** Query by ID within this instance's root (IDs are prefixed with h-{uid}-). */
@@ -293,6 +298,11 @@ export class ProvideHijack {
 
     this._root = root;
     this._container.appendChild(root);
+
+    // Expose widget on the root element for programmatic access (demo recording, tests).
+    // biome-ignore lint/suspicious/noExplicitAny: bridge for external callers
+    (root as any).__provideHijack = this;
+
     this._bindEvents();
   }
 

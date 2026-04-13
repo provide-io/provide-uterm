@@ -22,6 +22,7 @@ from scripts.demos.ffmpeg import (
     asciinema_record,
     concat_clips,
     ffmpeg_to_mp4,
+    hstack_clips,
     trim_clip,
 )
 from scripts.demos.fleet import record_fleet_complete, record_simultaneous_perspectives
@@ -52,6 +53,7 @@ __all__ = [
     "fanout_send_results",
     "ffmpeg_to_mp4",
     "free_port",
+    "hstack_clips",
     "info",
     "kv",
     "ok",

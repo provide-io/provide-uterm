@@ -312,7 +312,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
 
         _dm_connect: Any = getattr(hub, "deckmux_on_browser_connect", None)
         if _dm_connect is not None:
-            sync_msg = await _dm_connect(worker_id, websocket, role)
+            _dm_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+            sync_msg = await _dm_connect(worker_id, websocket, role, principal=_dm_principal)
             if sync_msg:
                 await websocket.send_text(encode_control(sync_msg))
 
@@ -367,7 +368,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     if mtype in ("presence_update", "queued_input", "control_request"):
                         _dm_handle: Any = getattr(hub, "deckmux_handle_message", None)
                         if _dm_handle is not None:
-                            await _dm_handle(worker_id, websocket, msg_b)
+                            _dm_msg_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+                            await _dm_handle(worker_id, websocket, msg_b, principal=_dm_msg_principal)
                         continue
 
                     if mtype == "fanout_send":

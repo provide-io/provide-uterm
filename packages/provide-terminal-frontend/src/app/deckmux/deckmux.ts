@@ -32,6 +32,8 @@ export class DeckMux {
   private _users = new Map<string, DeckMuxUser>();
   private _myUserId: string | null = null;
   private _barContainer: HTMLElement | null = null;
+  private _ownCols = 0;
+  private _ownRows = 0;
 
   // wsConnection is reserved for future direct WS dispatch; coordination currently
   // uses CustomEvent bubbling on the terminal container.
@@ -312,6 +314,7 @@ export class DeckMux {
       initials: this._initials(name),
       scrollLine: typeof msg.scroll_line === "number" ? (msg.scroll_line as number) : 0,
       scrollRange: Array.isArray(msg.scroll_range) ? (msg.scroll_range as [number, number]) : [0, 1],
+      totalLines: typeof msg.total_lines === "number" ? (msg.total_lines as number) : 0,
       cols: typeof msg.cols === "number" ? (msg.cols as number) : 0,
       rows: typeof msg.rows === "number" ? (msg.rows as number) : 0,
       joinTime: Date.now(),
@@ -330,6 +333,7 @@ export class DeckMux {
     if (typeof msg.role === "string") fields.role = msg.role as string;
     if (typeof msg.scroll_line === "number") fields.scrollLine = msg.scroll_line as number;
     if (Array.isArray(msg.scroll_range)) fields.scrollRange = msg.scroll_range as [number, number];
+    if (typeof msg.total_lines === "number") fields.totalLines = msg.total_lines as number;
     if ("selection" in msg) fields.selection = this._extractSelection(msg.selection);
     if ("pin" in msg) fields.pin = this._extractPin(msg.pin);
     if (typeof msg.typing === "boolean") fields.typing = msg.typing as boolean;
@@ -363,8 +367,10 @@ export class DeckMux {
   }
 
   private _updateEdge(user: DeckMuxUser): void {
-    const [top, bottom] = user.scrollRange;
-    const height = Math.max(0.01, bottom - top);
+    const [scrollStart, scrollEnd] = user.scrollRange;
+    const total = user.totalLines || Math.max(scrollEnd, 1);
+    const top = scrollStart / total;
+    const height = Math.max(0.01, (scrollEnd - scrollStart) / total);
     const edgeOptions: {
       isOwner?: boolean;
       selection?: { top: number; height: number };
