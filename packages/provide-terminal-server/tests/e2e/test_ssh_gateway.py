@@ -181,7 +181,7 @@ class TestWsToSshPumpUnit:
         async def _gen() -> Any:
             yield "from ws"
 
-        await _ws_to_ssh(_gen(), cast("Any", _MockProcess()))
+        await _ws_to_ssh(_gen(), cast("Any", _MockProcess()), token_holder=[None])
         assert "from ws" in written
 
     async def test_bytes_message_decoded_latin1(self) -> None:
@@ -197,7 +197,7 @@ class TestWsToSshPumpUnit:
         async def _gen() -> Any:
             yield b"\xff\xfe"
 
-        await _ws_to_ssh(_gen(), cast("Any", _MockProcess()))
+        await _ws_to_ssh(_gen(), cast("Any", _MockProcess()), token_holder=[None])
         assert b"\xff\xfe".decode("latin-1", errors="replace") in written
 
 
@@ -364,29 +364,37 @@ class TestSshWsGatewayStart:
             await ssh_srv.wait_closed()
             ws_srv.close()
 
-    async def test_process_handler_sends_resume_token(self, tmp_path: Any) -> None:
-        """When a token_file has a saved token, _process_handler sends a resume message."""
+    async def test_process_handler_resumes_after_token_received(self) -> None:
+        """After server sends session_token, next WS reconnect sends a resume frame."""
         import asyncssh
 
-        from provide.terminal.gateway import SshWsGateway, _write_token
+        from provide.terminal.control_channel import encode_control
+        from provide.terminal.gateway import SshWsGateway
 
+        connection_count = 0
         resume_msgs: list[str] = []
 
         async def _handler(ws: Any) -> None:
-            async for msg in ws:
-                if isinstance(msg, str):
-                    with contextlib.suppress(AssertionError):
-                        payload = decode_control_payload(msg)
-                        if payload.get("type") == "resume":
-                            resume_msgs.append(str(payload.get("token") or ""))
-                break  # only care about first message
+            nonlocal connection_count
+            connection_count += 1
+            if connection_count == 1:
+                # First connection: send a session_token frame, then close
+                await ws.send(encode_control({"type": "session_token", "token": "in_memory_token"}))
+                await ws.close()
+            else:
+                # Second connection: capture the first frame (should be a resume)
+                async for msg in ws:
+                    if isinstance(msg, str):
+                        with contextlib.suppress(Exception):
+                            payload = decode_control_payload(msg)
+                            if payload.get("type") == "resume":
+                                resume_msgs.append(str(payload.get("token") or ""))
+                    break
 
         ws_srv = await websockets.serve(_handler, "127.0.0.1", 0)
         ws_port: int = ws_srv.sockets[0].getsockname()[1]
 
-        token_file = tmp_path / "tok"
-        _write_token(token_file, "my_resume_token")
-        gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}", token_file=token_file)
+        gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}")
         ssh_srv = await gw.start("127.0.0.1", 0)
         ssh_port: int = ssh_srv.sockets[0].getsockname()[1]
         try:
@@ -399,6 +407,8 @@ class TestSshWsGatewayStart:
                     config=[],
                 ) as conn:
                     async with conn.create_process() as proc:
+                        # Give time for first WS to close and reconnect to happen
+                        await asyncio.sleep(0.5)
                         proc.stdin.write_eof()
                         await asyncio.wait_for(proc.stdout.read(4096), timeout=3.0)
         finally:
@@ -406,7 +416,7 @@ class TestSshWsGatewayStart:
             await ssh_srv.wait_closed()
             ws_srv.close()
 
-        assert "my_resume_token" in resume_msgs
+        assert "in_memory_token" in resume_msgs
 
     async def test_process_handler_exception_is_swallowed(self) -> None:
         """If WS is unreachable, _process_handler logs and exits cleanly (no hang)."""

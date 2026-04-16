@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -45,27 +44,6 @@ _IP = 244
 _AO = 245
 _EOF = 236
 
-# ---------------------------------------------------------------------------
-# Token file helpers
-# ---------------------------------------------------------------------------
-
-
-def _read_token(path: Path) -> str | None:
-    try:
-        return path.read_text().strip() or None
-    except FileNotFoundError:
-        return None
-
-
-def _write_token(path: Path, token: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(token)
-
-
-def _delete_token(path: Path) -> None:
-    with contextlib.suppress(FileNotFoundError):
-        path.unlink()
-
 
 # ---------------------------------------------------------------------------
 # JSON control message handler
@@ -74,7 +52,7 @@ def _delete_token(path: Path) -> None:
 
 async def _handle_ws_control(
     message: str,
-    token_file: Path | None,
+    token_holder: list[dict | None],
     write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
 ) -> bool:
     """Return True if *message* is a gateway control frame (intercept it)."""
@@ -89,7 +67,7 @@ async def _handle_ws_control(
             return False
         if not isinstance(data, dict):
             return False
-        return await _handle_ws_control_frame(data, token_file, write_fn)
+        return await _handle_ws_control_frame(data, token_holder, write_fn)
 
     if not events:
         return False
@@ -97,28 +75,31 @@ async def _handle_ws_control(
     for event in events:
         if isinstance(event, DataChunk):
             return False
-        handled = await _handle_ws_control_frame(event.control, token_file, write_fn) or handled
+        handled = await _handle_ws_control_frame(event.control, token_holder, write_fn) or handled
     return handled
 
 
 async def _handle_ws_control_frame(
     data: dict[str, object],
-    token_file: Path | None,
+    token_holder: list[dict | None],
     write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
 ) -> bool:
     try:
         msg_type = data.get("type") if isinstance(data.get("type"), str) else None
     except AttributeError:
         return False
-    if msg_type == "session_token" and token_file and "token" in data:
-        _write_token(token_file, str(data["token"]))
+    if msg_type == "session_token" and "token" in data:
+        pid = data.get("player_id")
+        token_dict: dict[str, object] = {"token": str(data["token"])}
+        if isinstance(pid, int):
+            token_dict["player_id"] = pid
+        token_holder[0] = token_dict
         return True
     if msg_type == "resume_ok":
         await write_fn(b"\r\n[Session resumed]\r\n")
         return True
     if msg_type == "resume_failed":
-        if token_file:
-            _delete_token(token_file)
+        token_holder[0] = None
         return True
     return False
 
@@ -226,7 +207,7 @@ async def _ws_to_tcp(
     ws: object,
     writer: asyncio.StreamWriter,
     *,
-    token_file: Path | None = None,
+    token_holder: list[dict | None],
     color_mode: str = "passthrough",
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
@@ -244,7 +225,7 @@ async def _ws_to_tcp(
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
-                    await _handle_ws_control_frame(event.control, token_file, _write_fn)
+                    await _handle_ws_control_frame(event.control, token_holder, _write_fn)
                     continue
                 raw = event.data.encode("latin-1", errors="replace")
                 raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
@@ -266,7 +247,7 @@ async def _pipe_ws(
     writer: asyncio.StreamWriter,
     ws_url: str,
     *,
-    token_file: Path | None = None,
+    token_holder: list[dict | None],
     color_mode: str = "passthrough",
     telnet: bool = False,
 ) -> None:
@@ -274,11 +255,14 @@ async def _pipe_ws(
     import websockets
 
     async with websockets.connect(ws_url) as ws:
-        token = _read_token(token_file) if token_file else None
-        if token:
-            await ws.send(encode_control({"type": "resume", "token": token}))
+        token_data = token_holder[0]
+        if token_data:
+            resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
+            if "player_id" in token_data:
+                resume_msg["player_id"] = token_data["player_id"]
+            await ws.send(encode_control(resume_msg))
         t1 = asyncio.create_task(_tcp_to_ws(reader, ws, telnet=telnet))
-        t2 = asyncio.create_task(_ws_to_tcp(ws, writer, token_file=token_file, color_mode=color_mode))
+        t2 = asyncio.create_task(_ws_to_tcp(ws, writer, token_holder=token_holder, color_mode=color_mode))
         _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
         for task in pending:  # pragma: no branch — may be empty if both finish
             task.cancel()
@@ -308,7 +292,7 @@ async def _ws_to_ssh(
     ws: object,
     process: object,
     *,
-    token_file: Path | None = None,
+    token_holder: list[dict | None],
     color_mode: str = "passthrough",
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
@@ -326,7 +310,7 @@ async def _ws_to_ssh(
                 continue
             for event in events:
                 if isinstance(event, ControlChunk):
-                    await _handle_ws_control_frame(event.control, token_file, _write_fn)
+                    await _handle_ws_control_frame(event.control, token_holder, _write_fn)
                     continue
                 raw = event.data.encode("latin-1", errors="replace")
                 raw = _apply_color_mode(raw, color_mode)
@@ -358,25 +342,63 @@ def _make_no_auth_server_class() -> type:
 
 async def _make_process_handler(
     ws_url: str,
-    token_file: Path | None,
     color_mode: str,
 ) -> collections.abc.Callable[[object], collections.abc.Coroutine[object, object, None]]:
-    """Return an asyncssh process_factory coroutine bound to ws_url/token_file/color_mode."""
+    """Return an asyncssh process_factory coroutine bound to ws_url/color_mode."""
 
     async def _process_handler(process: object) -> None:
+        max_reconnects = 12
+        reconnect_delay = 3.0
+        stdin = process.stdin  # type: ignore[attr-defined]
+        stdout = process.stdout  # type: ignore[attr-defined]
+
+        # Per-connection in-memory token. Starts empty; updated when the server
+        # sends a session_token frame. Discarded when this coroutine returns.
+        token_holder: list[dict | None] = [None]
+
         try:
             import websockets
 
-            async with websockets.connect(ws_url) as ws:
-                token = _read_token(token_file) if token_file else None
-                if token:
-                    await ws.send(encode_control({"type": "resume", "token": token}))
-                t1 = asyncio.create_task(_ssh_to_ws(process, ws))
-                t2 = asyncio.create_task(_ws_to_ssh(ws, process, token_file=token_file, color_mode=color_mode))
-                _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
-                for task in pending:  # pragma: no branch — may be empty if both finish
-                    task.cancel()
-                await asyncio.gather(*[*_done, *pending], return_exceptions=True)
+            for attempt in range(max_reconnects + 1):
+                # SSH client disconnected — nothing to do
+                if hasattr(stdin, "at_eof") and stdin.at_eof():
+                    break
+
+                try:
+                    async with websockets.connect(ws_url) as ws:
+                        token_data = token_holder[0]
+                        if token_data:
+                            resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
+                            if "player_id" in token_data:
+                                resume_msg["player_id"] = token_data["player_id"]
+                            await ws.send(encode_control(resume_msg))
+                        t1 = asyncio.create_task(_ssh_to_ws(process, ws))
+                        t2 = asyncio.create_task(_ws_to_ssh(ws, process, token_holder=token_holder, color_mode=color_mode))
+                        _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+                        for task in pending:  # pragma: no branch — may be empty if both finish
+                            task.cancel()
+                        await asyncio.gather(*[*_done, *pending], return_exceptions=True)
+                except Exception as exc:
+                    logger.debug("ssh_ws_pipe_error attempt=%d: %s", attempt, exc)
+
+                # SSH client disconnected — done
+                if hasattr(stdin, "at_eof") and stdin.at_eof():
+                    break
+
+                # WS closed but SSH client still connected — show reconnect indicator
+                if attempt < max_reconnects:
+                    logger.debug(
+                        "ssh_ws_disconnected: reconnecting in %.1fs (attempt %d/%d)",
+                        reconnect_delay,
+                        attempt + 1,
+                        max_reconnects,
+                    )
+                    try:
+                        stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
+                    except Exception:
+                        pass
+                    await asyncio.sleep(reconnect_delay)
+
         except Exception as exc:
             logger.debug("ssh_ws_session_ended: %s", exc)
         finally:
@@ -398,13 +420,14 @@ class TelnetWsGateway:
     Both directions are pumped concurrently; whichever side closes first
     cancels the other and the TCP connection is cleaned up.
 
+    If the upstream WebSocket closes while the TCP client is still connected
+    (e.g. Cloudflare DO hibernation), the gateway reconnects automatically
+    using the session token received in-memory from the server. The token is
+    never written to disk and is discarded when the TCP client disconnects.
+
     Args:
         ws_url: WebSocket URL of the upstream terminal server
             (e.g. ``"wss://warp.provide.io/ws/terminal"``).
-        token_file: Path to persist the resume token.  When set, the gateway
-            sends a ``{"type": "resume", "token": "..."}`` message on
-            reconnect if a token is on disk, and saves new tokens received
-            from the server.
         color_mode: ANSI color downgrade mode — ``"passthrough"`` (default),
             ``"256"``, or ``"16"``.
 
@@ -419,12 +442,10 @@ class TelnetWsGateway:
         self,
         ws_url: str,
         *,
-        token_file: Path | None = None,
         color_mode: str = "passthrough",
     ) -> None:
         _require_websockets()
         self._ws_url = ws_url
-        self._token_file = token_file
         self._color_mode = color_mode
 
     async def start(
@@ -449,12 +470,16 @@ class TelnetWsGateway:
 
         When the upstream WebSocket closes unexpectedly (e.g. Cloudflare DO
         hibernation) while the TCP client is still connected, this method
-        waits briefly and reconnects — using the resume token so the DO
-        restores the session.  If the TCP client closes first, no retry is
-        attempted.
+        waits briefly and reconnects — using the in-memory resume token so
+        the DO restores the session seamlessly.  If the TCP client closes
+        first, no retry is attempted.
         """
         max_reconnects = 12
         reconnect_delay = 3.0
+
+        # Per-connection in-memory token. Starts empty; updated when the server
+        # sends a session_token frame. Discarded when this method returns.
+        token_holder: list[dict | None] = [None]
 
         try:
             for attempt in range(max_reconnects + 1):
@@ -465,7 +490,7 @@ class TelnetWsGateway:
                         reader,
                         writer,
                         self._ws_url,
-                        token_file=self._token_file,
+                        token_holder=token_holder,
                         color_mode=self._color_mode,
                         telnet=True,
                     )
@@ -484,6 +509,14 @@ class TelnetWsGateway:
                         attempt + 1,
                         max_reconnects,
                     )
+                    # Show a reconnect indicator on the bottom row so telnet/SSH
+                    # clients get the same feedback as the browser WebSocket client.
+                    # Uses save/restore cursor so the game display is not disturbed.
+                    try:
+                        writer.write(b"\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
+                        await writer.drain()
+                    except Exception:
+                        pass
                     await asyncio.sleep(reconnect_delay)
                 else:
                     logger.debug("ws_reconnect_exhausted: giving up after %d attempts", max_reconnects)

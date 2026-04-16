@@ -56,15 +56,17 @@ def _make_ws_context(ws_mock: MagicMock) -> MagicMock:
 
 class TestMakeProcessHandler:
     async def test_returns_callable(self) -> None:
-        handler = await _make_process_handler("ws://test", None, "passthrough")
+        handler = await _make_process_handler("ws://test", "passthrough")
         assert callable(handler)
 
     async def test_handler_connects_and_pipes(self) -> None:
-        handler = await _make_process_handler("ws://test", None, "passthrough")
+        handler = await _make_process_handler("ws://test", "passthrough")
 
         process = MagicMock()
         process.stdin = AsyncMock()
         process.stdin.read = AsyncMock(return_value=b"")
+        # at_eof: False → enter loop; True → exit after first session ends
+        process.stdin.at_eof = MagicMock(side_effect=[False, True])
         process.stdout = MagicMock()
         process.exit = MagicMock()
 
@@ -77,14 +79,14 @@ class TestMakeProcessHandler:
 
         process.exit.assert_called_once_with(0)
 
-    async def test_handler_with_resume_token(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
-        tf.write_text("resume_tok")
-        handler = await _make_process_handler("ws://test", tf, "passthrough")
+    async def test_handler_no_resume_on_fresh_connect(self) -> None:
+        """Fresh connection with empty token_holder sends no resume frame."""
+        handler = await _make_process_handler("ws://test", "passthrough")
 
         process = MagicMock()
         process.stdin = AsyncMock()
         process.stdin.read = AsyncMock(return_value=b"")
+        process.stdin.at_eof = MagicMock(side_effect=[False, True])
         process.stdout = MagicMock()
         process.exit = MagicMock()
 
@@ -95,14 +97,16 @@ class TestMakeProcessHandler:
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
             await handler(process)
 
-        first = ws_mock.send.call_args_list[0][0][0]
-        assert "resume" in first
+        # No resume frame should have been sent (no token in holder)
+        ws_mock.send.assert_not_called()
 
     async def test_handler_exception_calls_exit(self) -> None:
-        handler = await _make_process_handler("ws://test", None, "passthrough")
+        handler = await _make_process_handler("ws://test", "passthrough")
 
         process = MagicMock()
         process.stdin = AsyncMock()
+        # at_eof: False → enter loop; True → exit after exception
+        process.stdin.at_eof = MagicMock(side_effect=[False, True])
         process.stdout = MagicMock()
         process.exit = MagicMock()
 
@@ -115,10 +119,11 @@ class TestMakeProcessHandler:
         process.exit.assert_called_once_with(0)
 
     async def test_handler_exit_exception_suppressed(self) -> None:
-        handler = await _make_process_handler("ws://test", None, "passthrough")
+        handler = await _make_process_handler("ws://test", "passthrough")
 
         process = MagicMock()
         process.stdin = AsyncMock()
+        process.stdin.at_eof = MagicMock(side_effect=[False, True])
         process.stdout = MagicMock()
         process.exit = MagicMock(side_effect=RuntimeError("exit failed"))
 
@@ -129,10 +134,10 @@ class TestMakeProcessHandler:
             await handler(process)
 
     async def test_handler_cancels_pending(self) -> None:
-        """Cover line 379: task.cancel() in _process_handler."""
+        """Cover task.cancel() in _process_handler."""
         from provide.terminal.control_channel import encode_data
 
-        handler = await _make_process_handler("ws://test", None, "passthrough")
+        handler = await _make_process_handler("ws://test", "passthrough")
 
         process = MagicMock()
         process.stdin = AsyncMock()
@@ -142,6 +147,7 @@ class TestMakeProcessHandler:
             return b""
 
         process.stdin.read = slow_read
+        process.stdin.at_eof = MagicMock(side_effect=[False, True])
         process.stdout = MagicMock()
         process.exit = MagicMock()
 
@@ -156,6 +162,49 @@ class TestMakeProcessHandler:
 
         process.exit.assert_called_once_with(0)
 
+    async def test_handler_ssh_reconnect_indicator(self) -> None:
+        """SSH handler writes reconnect indicator when WS drops but SSH client stays."""
+        from provide.terminal.control_channel import encode_data
+
+        handler = await _make_process_handler("ws://test", "passthrough")
+
+        process = MagicMock()
+        process.stdin = AsyncMock()
+
+        async def slow_read(_n: int = 4096) -> bytes:
+            await asyncio.sleep(100)
+            return b""
+
+        process.stdin.read = slow_read
+        # at_eof: False → enter loop 1; False → check after drop (reconnect path);
+        # False → enter loop 2; True → exit after second session
+        process.stdin.at_eof = MagicMock(side_effect=[False, False, False, True])
+        process.stdout = MagicMock()
+        process.exit = MagicMock()
+
+        call_count = 0
+
+        def make_ws_context_for_call() -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            ws = _mock_ws([encode_data("x")])  # yields one message then closes
+            return _make_ws_context(ws)
+
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.side_effect = lambda *a, **kw: make_ws_context_for_call()
+
+        with (
+            patch.dict("sys.modules", {"websockets": mock_ws_mod}),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await handler(process)
+
+        # Reconnect indicator should have been written to SSH stdout
+        written = "".join(call[0][0] for call in process.stdout.write.call_args_list)
+        assert "reconnecting" in written
+        assert "\x1b7" in written
+        assert "\x1b8" in written
+
 
 # ---------------------------------------------------------------------------
 # TelnetWsGateway
@@ -167,12 +216,9 @@ class TestTelnetWsGateway:
         gw = TelnetWsGateway("ws://test")
         assert gw._ws_url == "ws://test"
         assert gw._color_mode == "passthrough"
-        assert gw._token_file is None
 
-    def test_init_with_options(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
-        gw = TelnetWsGateway("ws://test", token_file=tf, color_mode="256")
-        assert gw._token_file == tf
+    def test_init_with_color_mode(self) -> None:
+        gw = TelnetWsGateway("ws://test", color_mode="256")
         assert gw._color_mode == "256"
 
     async def test_start_returns_server(self) -> None:
@@ -294,3 +340,66 @@ class TestTelnetWsGateway:
 
         with patch("provide.terminal.gateway._gateway._pipe_ws", new_callable=AsyncMock):
             await gw._handle(reader, writer)
+
+    async def test_handle_reconnect_indicator_write_error_suppressed(self) -> None:
+        """Cover lines 515-516: exception writing reconnect indicator is swallowed."""
+        gw = TelnetWsGateway("ws://test")
+
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        writer.write = MagicMock(side_effect=OSError("pipe broken"))
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        # at_eof: False → enter loop, False → after drop, False → retry, True → done
+        reader.at_eof = MagicMock(side_effect=[False, False, False, True])
+
+        call_count = 0
+
+        async def mock_pipe(*args: Any, **kwargs: Any) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("ws dropped")
+
+        with (
+            patch("provide.terminal.gateway._gateway._pipe_ws", side_effect=mock_pipe),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await gw._handle(reader, writer)  # should not raise despite write error
+
+        assert call_count >= 1
+
+    async def test_handle_writes_reconnect_indicator(self) -> None:
+        """Reconnect indicator is written to TCP client on WS drop."""
+        gw = TelnetWsGateway("ws://test")
+
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        # at_eof: False (enter), False (after drop), False (enter retry), True (after retry)
+        reader.at_eof = MagicMock(side_effect=[False, False, False, True])
+
+        call_count = 0
+
+        async def mock_pipe(*args: Any, **kwargs: Any) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("ws dropped")
+
+        with (
+            patch("provide.terminal.gateway._gateway._pipe_ws", side_effect=mock_pipe),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await gw._handle(reader, writer)
+
+        # Verify the reconnect indicator was written (cursor-save + bottom-row + cyan text)
+        written_data = b"".join(call[0][0] for call in writer.write.call_args_list)
+        assert b"reconnecting" in written_data
+        assert b"\x1b7" in written_data  # cursor save
+        assert b"\x1b8" in written_data  # cursor restore

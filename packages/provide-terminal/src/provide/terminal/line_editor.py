@@ -7,8 +7,8 @@
 Provides a stateful line editor that can be used by any terminal session.
 Supports:
 - Character accumulation until Enter
-- Backspace/Delete handling
-- Readline shortcuts (Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+K)
+- Backspace/Delete handling with cursor position tracking
+- Readline shortcuts (Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+K, Ctrl+B, Ctrl+F, Ctrl+W)
 - Password masking
 - Configurable line length limits
 """
@@ -29,9 +29,12 @@ class LineEditor:
 
     Features:
         - Character-by-character buffering until Enter/Return
-        - Backspace/Delete handling (removes last character)
-        - Readline shortcuts: Ctrl+A (start), Ctrl+E (end), Ctrl+U (clear),
-          Ctrl+K (clear EOL)
+        - Full cursor position tracking enabling mid-line editing
+        - Backspace/Delete handling (removes character before cursor)
+        - Readline shortcuts: Ctrl+A (start of line), Ctrl+E (end of line),
+          Ctrl+U (kill backward to start), Ctrl+K (kill forward to end),
+          Ctrl+B (left one char), Ctrl+F (right one char),
+          Ctrl+W (kill word backward)
         - Password masking: echoes '*' instead of actual characters
         - Configurable maximum line length (prevents DoS)
         - Optional async write callback for terminal output
@@ -39,14 +42,8 @@ class LineEditor:
     Terminal Assumptions:
         - Assumes VT100-compatible terminal (ANSI escape codes)
         - This is true for all BBS systems (Telnet, SSH, WebSocket)
-        - Cursor positioning (Ctrl+A/E) uses: Home key (\\x1b[H) and
-          absolute column positioning (\\x1b[Col]G)
-
-    Readline Behavior Notes:
-        - Ctrl+U and Ctrl+K clear the ENTIRE buffer (not just to cursor)
-        - This differs from GNU readline (U=kill-backward, K=kill-forward)
-        - Rationale: Simplifies implementation, matches BBS usage patterns
-        - Full partial-deletion readline may be added in future versions
+        - Cursor movement uses relative ANSI sequences so the editor does
+          not need to know the screen column where input began
 
     Args:
         max_length: Maximum number of characters to accept (default 80).
@@ -77,43 +74,16 @@ class LineEditor:
         self.password_mode = password_mode
         self.on_write = on_write
         self.buffer = ""
+        self.cursor_pos = 0  # index into buffer; 0 = before first char
 
     async def _emit(self, text: str) -> None:
         """Write to terminal if output callback is set."""
         if self.on_write:
             await self.on_write(text)
 
-    async def _apply_cursor_shortcut(self, ch: str) -> bool:
-        """Handle Ctrl+A/E cursor movement shortcuts. Returns True if handled."""
-        if ch == "\x01":  # Ctrl+A: move to beginning of line
-            if self.buffer:
-                await self._emit("\x1b[H")
-            return True
-        if ch == "\x05":  # Ctrl+E: move to end of line
-            if self.buffer:
-                await self._emit(f"\x1b[{len(self.buffer)}G")
-            return True
-        return False
-
-    async def _apply_clear_shortcut(self, ch: str) -> bool:
-        """Handle Ctrl+U/K line-clear shortcuts. Returns True if handled."""
-        if ch == "\x15":  # Ctrl+U: delete entire line
-            if self.buffer:
-                self.buffer = ""
-                if self.on_write:
-                    await self.on_write("\x1b[2K\r")
-            return True
-        if ch == "\x0b":  # Ctrl+K: delete to end of line
-            if self.buffer:
-                self.buffer = ""
-                if self.on_write:
-                    await self.on_write("\x1b[K")
-            return True
-        return False
-
-    async def _apply_edit_shortcut(self, ch: str) -> bool:
-        """Handle Ctrl+A/E/U/K readline shortcuts. Returns True if the character was handled."""
-        return await self._apply_cursor_shortcut(ch) or await self._apply_clear_shortcut(ch)
+    def _display(self, s: str) -> str:
+        """Return displayable version of s (masked in password mode)."""
+        return "*" * len(s) if self.password_mode else s
 
     async def process_char(self, ch: str) -> str | None:
         """Process a single character.
@@ -124,26 +94,115 @@ class LineEditor:
         Returns:
             Completed line if Enter was pressed, None otherwise.
         """
+        # ── Enter ──────────────────────────────────────────────────────────
         if ch in ("\r", "\n"):
             result = self.buffer
             self.buffer = ""
+            self.cursor_pos = 0
             await self._emit("\r\n")
             return result
+
+        # ── Backspace / Delete ─────────────────────────────────────────────
         if ch in ("\x7f", "\x08"):
-            if self.buffer:
-                self.buffer = self.buffer[:-1]
-                await self._emit("\x08 \x08")
+            if self.cursor_pos > 0:
+                tail = self.buffer[self.cursor_pos:]
+                self.buffer = self.buffer[: self.cursor_pos - 1] + tail
+                self.cursor_pos -= 1
+                display = self._display(tail)
+                # Move left 1, redraw tail, overwrite extra char at end, move back
+                seq = "\x08" + display + " " + f"\x1b[{len(tail) + 1}D"
+                await self._emit(seq)
             return None
-        if await self._apply_edit_shortcut(ch):
+
+        # ── Ctrl+A: move to beginning of line ─────────────────────────────
+        if ch == "\x01":
+            if self.cursor_pos > 0:
+                await self._emit(f"\x1b[{self.cursor_pos}D")
+                self.cursor_pos = 0
             return None
+
+        # ── Ctrl+E: move to end of line ────────────────────────────────────
+        if ch == "\x05":
+            n = len(self.buffer) - self.cursor_pos
+            if n > 0:
+                await self._emit(f"\x1b[{n}C")
+                self.cursor_pos = len(self.buffer)
+            return None
+
+        # ── Ctrl+B: move left one character ───────────────────────────────
+        if ch == "\x02":
+            if self.cursor_pos > 0:
+                await self._emit("\x1b[D")
+                self.cursor_pos -= 1
+            return None
+
+        # ── Ctrl+F: move right one character ──────────────────────────────
+        if ch == "\x06":
+            if self.cursor_pos < len(self.buffer):
+                await self._emit("\x1b[C")
+                self.cursor_pos += 1
+            return None
+
+        # ── Ctrl+U: kill backward (cursor to start of line) ───────────────
+        if ch == "\x15":
+            if self.cursor_pos > 0:
+                remaining = self.buffer[self.cursor_pos:]
+                self.buffer = remaining
+                seq = f"\x1b[{self.cursor_pos}D"  # move to start of input
+                seq += self._display(remaining)    # redraw remaining chars
+                seq += "\x1b[K"                    # erase from here to EOL
+                if remaining:
+                    seq += f"\x1b[{len(remaining)}D"  # cursor back to start
+                await self._emit(seq)
+                self.cursor_pos = 0
+            return None
+
+        # ── Ctrl+K: kill forward (cursor to end of line) ──────────────────
+        if ch == "\x0b":
+            if self.cursor_pos < len(self.buffer):
+                self.buffer = self.buffer[: self.cursor_pos]
+                await self._emit("\x1b[K")
+            return None
+
+        # ── Ctrl+W: kill word backward ─────────────────────────────────────
+        if ch == "\x17":
+            if self.cursor_pos > 0:
+                pos = self.cursor_pos
+                while pos > 0 and self.buffer[pos - 1] == " ":
+                    pos -= 1
+                while pos > 0 and self.buffer[pos - 1] != " ":
+                    pos -= 1
+                deleted = self.cursor_pos - pos
+                remaining = self.buffer[self.cursor_pos:]
+                self.buffer = self.buffer[:pos] + remaining
+                seq = f"\x1b[{deleted}D"
+                seq += self._display(remaining)
+                seq += "\x1b[K"
+                if remaining:
+                    seq += f"\x1b[{len(remaining)}D"
+                await self._emit(seq)
+                self.cursor_pos = pos
+            return None
+
+        # ── Regular character insertion ────────────────────────────────────
         if len(self.buffer) < self.max_length:
-            self.buffer += ch
-            await self._emit("*" if self.password_mode else ch)
+            tail = self.buffer[self.cursor_pos:]
+            self.buffer = self.buffer[: self.cursor_pos] + ch + tail
+            self.cursor_pos += 1
+            if not tail:
+                # Inserting at end: simple echo
+                await self._emit("*" if self.password_mode else ch)
+            else:
+                # Mid-line insert: echo new char + redraw tail, move cursor back
+                display = self._display(ch + tail)
+                seq = display + f"\x1b[{len(tail)}D"
+                await self._emit(seq)
         return None
 
     def reset(self) -> None:
-        """Reset the buffer to empty state."""
+        """Reset the buffer and cursor to empty state."""
         self.buffer = ""
+        self.cursor_pos = 0
 
     def get_buffer(self) -> str:
         """Get current buffer contents."""

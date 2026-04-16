@@ -136,6 +136,46 @@ class TestApplyColorMode:
         assert b"48;2;" not in result
         assert b"48;5;" not in result
 
+    def test_16_fg_red_maps_to_sgr_31(self) -> None:
+        """Exact red (205,0,0) → fg red = \x1b[31m."""
+        raw = b"\x1b[38;2;205;0;0mRed"
+        assert _apply_color_mode(raw, "16") == b"\x1b[31mRed"
+
+    def test_16_bg_red_maps_to_sgr_41(self) -> None:
+        """Exact red background → bg red = \x1b[41m."""
+        raw = b"\x1b[48;2;205;0;0mRed"
+        assert _apply_color_mode(raw, "16") == b"\x1b[41mRed"
+
+    def test_16_fg_white_maps_to_sgr_37(self) -> None:
+        """Near-white (229,229,229) → fg white = \x1b[37m."""
+        raw = b"\x1b[38;2;229;229;229mWhite"
+        assert _apply_color_mode(raw, "16") == b"\x1b[37mWhite"
+
+    def test_16_fg_bright_white_maps_to_sgr_97(self) -> None:
+        """Pure white (255,255,255) → fg bright white = \x1b[97m."""
+        raw = b"\x1b[38;2;255;255;255mBrightWhite"
+        assert _apply_color_mode(raw, "16") == b"\x1b[97mBrightWhite"
+
+    def test_16_fg_black_maps_to_sgr_30(self) -> None:
+        """Pure black (0,0,0) → fg black = \x1b[30m."""
+        raw = b"\x1b[38;2;0;0;0mBlack"
+        assert _apply_color_mode(raw, "16") == b"\x1b[30mBlack"
+
+    def test_16_fg_cyan_maps_to_sgr_36(self) -> None:
+        """Exact cyan (0,205,205) → fg cyan = \x1b[36m."""
+        raw = b"\x1b[38;2;0;205;205mCyan"
+        assert _apply_color_mode(raw, "16") == b"\x1b[36mCyan"
+
+    def test_16_fg_bright_red_maps_to_sgr_91(self) -> None:
+        """Bright red (255,92,92) → fg bright red = \x1b[91m."""
+        raw = b"\x1b[38;2;255;92;92mBrightRed"
+        assert _apply_color_mode(raw, "16") == b"\x1b[91mBrightRed"
+
+    def test_256_passthrough_in_16_mode(self) -> None:
+        """256-color codes pass through unchanged in 16 mode (no 256→16 conversion)."""
+        raw = b"\x1b[38;5;196mRed256"
+        assert _apply_color_mode(raw, "16") == raw
+
     def test_non_color_sgr_passes_through(self) -> None:
         # Bold + reset are left alone
         raw = b"\x1b[1mBold\x1b[0mPlain"

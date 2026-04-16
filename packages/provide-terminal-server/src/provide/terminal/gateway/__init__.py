@@ -44,15 +44,12 @@ from provide.terminal.gateway._colors import (
 )
 from provide.terminal.gateway._gateway import (
     TelnetWsGateway,
-    _delete_token,
     _handle_ws_control,
     _normalize_crlf,
     _pipe_ws,
-    _read_token,
     _ssh_to_ws,
     _strip_iac,
     _tcp_to_ws,
-    _write_token,
     _ws_to_ssh,
     _ws_to_tcp,
 )
@@ -63,17 +60,14 @@ __all__ = [
     "TelnetWsGateway",
     "_apply_color_mode",
     "_clamp8",
-    "_delete_token",
     "_handle_ws_control",
     "_normalize_crlf",
     "_pipe_ws",
-    "_read_token",
     "_rgb_to_16_index",
     "_rgb_to_256",
     "_ssh_to_ws",
     "_strip_iac",
     "_tcp_to_ws",
-    "_write_token",
     "_ws_to_ssh",
     "_ws_to_tcp",
 ]
