@@ -17,14 +17,11 @@ class TestSshWsGatewayInit:
         gw = SshWsGateway("ws://test")
         assert gw._ws_url == "ws://test"
         assert gw._server_key is None
-        assert gw._token_file is None
         assert gw._color_mode == "passthrough"
 
-    def test_init_with_options(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
-        gw = SshWsGateway("ws://test", server_key="/tmp/key", token_file=tf, color_mode="16")  # noqa: S108
+    def test_init_with_options(self) -> None:
+        gw = SshWsGateway("ws://test", server_key="/tmp/key", color_mode="16")  # noqa: S108
         assert gw._server_key == "/tmp/key"  # noqa: S108
-        assert gw._token_file == tf
         assert gw._color_mode == "16"
 
 

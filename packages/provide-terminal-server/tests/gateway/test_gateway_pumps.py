@@ -100,14 +100,14 @@ class TestWsToTcp:
         writer.drain = AsyncMock()
         msg = encode_data("hi")
         ws = _mock_ws([msg])
-        await _ws_to_tcp(ws, writer, color_mode="passthrough")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         assert writer.write.called
 
     async def test_forwards_binary_messages(self) -> None:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
         ws = _mock_ws([b"hello\n"])
-        await _ws_to_tcp(ws, writer, color_mode="passthrough")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         written = writer.write.call_args[0][0]
         assert b"\r\n" in written
 
@@ -115,32 +115,32 @@ class TestWsToTcp:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
         ws = _mock_ws([b"\x7f"])
-        await _ws_to_tcp(ws, writer, color_mode="passthrough")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         written = writer.write.call_args[0][0]
         assert b"\x08" in written
 
-    async def test_control_message_handled(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
+    async def test_control_message_handled(self) -> None:
+        holder: list[dict | None] = [None]
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
         msg = encode_control({"type": "session_token", "token": "t1"})
         ws = _mock_ws([msg])
-        await _ws_to_tcp(ws, writer, token_file=tf, color_mode="passthrough")
-        assert tf.read_text() == "t1"
+        await _ws_to_tcp(ws, writer, token_holder=holder, color_mode="passthrough")
+        assert holder[0] == {"token": "t1"}
 
     async def test_protocol_error_skipped(self) -> None:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
         bad_msg = "\x10\x02" + "000000xx:bad"
         ws = _mock_ws([bad_msg])
-        await _ws_to_tcp(ws, writer, color_mode="passthrough")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
 
     async def test_color_mode_applied(self) -> None:
         writer = MagicMock(spec=asyncio.StreamWriter)
         writer.drain = AsyncMock()
         msg = encode_data("\x1b[38;2;255;0;0mRed")
         ws = _mock_ws([msg])
-        await _ws_to_tcp(ws, writer, color_mode="256")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="256")
         written = writer.write.call_args[0][0]
         assert b"38;5;" in written
 
@@ -149,7 +149,7 @@ class TestWsToTcp:
         writer.drain = AsyncMock()
         msg = encode_data("\x7f")
         ws = _mock_ws([msg])
-        await _ws_to_tcp(ws, writer, color_mode="passthrough")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         written = writer.write.call_args[0][0]
         assert b"\x08" in written
 
@@ -159,7 +159,7 @@ class TestWsToTcp:
         writer.drain = AsyncMock()
         msg = encode_control({"type": "resume_ok"})
         ws = _mock_ws([msg])
-        await _ws_to_tcp(ws, writer, color_mode="passthrough")
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
         writer.write.assert_called_once_with(b"\r\n[Session resumed]\r\n")
         writer.drain.assert_called()
 
@@ -182,11 +182,10 @@ class TestPipeWs:
         mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
 
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
-            await _pipe_ws(reader, writer, "ws://test", telnet=False)
+            await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
 
-    async def test_sends_resume_token(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
-        tf.write_text("mytoken")
+    async def test_sends_resume_token(self) -> None:
+        holder: list[dict | None] = [{"token": "mytoken"}]
 
         reader = AsyncMock(spec=asyncio.StreamReader)
         reader.read = AsyncMock(return_value=b"")
@@ -199,14 +198,31 @@ class TestPipeWs:
         mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
 
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
-            await _pipe_ws(reader, writer, "ws://test", token_file=tf, telnet=False)
+            await _pipe_ws(reader, writer, "ws://test", token_holder=holder, telnet=False)
             first_send = ws_mock.send.call_args_list[0][0][0]
             assert "resume" in first_send
             assert "mytoken" in first_send
 
-    async def test_no_resume_without_token(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
+    async def test_sends_resume_token_with_player_id(self) -> None:
+        """Cover player_id included in resume when token has player_id."""
+        holder: list[dict | None] = [{"token": "mytoken", "player_id": 7}]
 
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(return_value=b"")
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(reader, writer, "ws://test", token_holder=holder, telnet=False)
+            first_send = ws_mock.send.call_args_list[0][0][0]
+            assert "player_id" in first_send
+            assert "7" in first_send
+
+    async def test_no_resume_without_token(self) -> None:
         reader = AsyncMock(spec=asyncio.StreamReader)
         reader.read = AsyncMock(return_value=b"")
         writer = MagicMock(spec=asyncio.StreamWriter)
@@ -218,7 +234,7 @@ class TestPipeWs:
         mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
 
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
-            await _pipe_ws(reader, writer, "ws://test", token_file=tf, telnet=False)
+            await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
 
     async def test_cancels_pending_task(self) -> None:
         """Cover line 285: task.cancel() when one pump finishes first."""
@@ -239,7 +255,7 @@ class TestPipeWs:
         mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
 
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
-            await _pipe_ws(reader, writer, "ws://test", telnet=False)
+            await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
 
 
 # ---------------------------------------------------------------------------
@@ -292,38 +308,38 @@ class TestWsToSsh:
         process.stdout = MagicMock()
         msg = encode_data("hi")
         ws = _mock_ws([msg])
-        await _ws_to_ssh(ws, process, color_mode="passthrough")
+        await _ws_to_ssh(ws, process, token_holder=[None], color_mode="passthrough")
         assert process.stdout.write.called
 
     async def test_forwards_binary_messages(self) -> None:
         process = MagicMock()
         process.stdout = MagicMock()
         ws = _mock_ws([b"hello"])
-        await _ws_to_ssh(ws, process, color_mode="passthrough")
+        await _ws_to_ssh(ws, process, token_holder=[None], color_mode="passthrough")
         assert process.stdout.write.called
 
-    async def test_handles_control_message(self, tmp_path: Path) -> None:
-        tf = tmp_path / "token"
+    async def test_handles_control_message(self) -> None:
+        holder: list[dict | None] = [None]
         process = MagicMock()
         process.stdout = MagicMock()
         msg = encode_control({"type": "session_token", "token": "t2"})
         ws = _mock_ws([msg])
-        await _ws_to_ssh(ws, process, token_file=tf, color_mode="passthrough")
-        assert tf.read_text() == "t2"
+        await _ws_to_ssh(ws, process, token_holder=holder, color_mode="passthrough")
+        assert holder[0] == {"token": "t2"}
 
     async def test_protocol_error_skipped(self) -> None:
         process = MagicMock()
         process.stdout = MagicMock()
         bad_msg = "\x10\x02" + "000000xx:bad"
         ws = _mock_ws([bad_msg])
-        await _ws_to_ssh(ws, process, color_mode="passthrough")
+        await _ws_to_ssh(ws, process, token_holder=[None], color_mode="passthrough")
 
     async def test_color_mode_applied(self) -> None:
         process = MagicMock()
         process.stdout = MagicMock()
         msg = encode_data("\x1b[38;2;255;0;0mRed")
         ws = _mock_ws([msg])
-        await _ws_to_ssh(ws, process, color_mode="256")
+        await _ws_to_ssh(ws, process, token_holder=[None], color_mode="256")
         written = process.stdout.write.call_args[0][0]
         assert "38;5;" in written
 
@@ -331,7 +347,7 @@ class TestWsToSsh:
         process = MagicMock()
         process.stdout = MagicMock()
         ws = _mock_ws([b"\x1b[38;2;255;0;0mRed"])
-        await _ws_to_ssh(ws, process, color_mode="256")
+        await _ws_to_ssh(ws, process, token_holder=[None], color_mode="256")
         written = process.stdout.write.call_args[0][0]
         assert "38;5;" in written
 
@@ -341,7 +357,7 @@ class TestWsToSsh:
         process.stdout = MagicMock()
         msg = encode_control({"type": "resume_ok"})
         ws = _mock_ws([msg])
-        await _ws_to_ssh(ws, process, color_mode="passthrough")
+        await _ws_to_ssh(ws, process, token_holder=[None], color_mode="passthrough")
         process.stdout.write.assert_called_once()
         written = process.stdout.write.call_args[0][0]
         assert "Session resumed" in written

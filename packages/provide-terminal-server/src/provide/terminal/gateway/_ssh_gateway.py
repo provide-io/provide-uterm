@@ -25,7 +25,9 @@ class SshWsGateway:
 
     Accepts standard SSH client connections (``ssh``, ``putty``, etc.).
     Each shell channel gets its own outbound WebSocket connection and the
-    I/O is bridged bidirectionally.
+    I/O is bridged bidirectionally. The session token received from the server
+    is kept in-memory per connection and used for transparent WS reconnects;
+    it is never written to disk.
 
     Requires the ``[ssh]`` extra (asyncssh)::
 
@@ -35,7 +37,6 @@ class SshWsGateway:
         ws_url: WebSocket URL of the upstream terminal server.
         server_key: Path to a PEM-encoded SSH host private key file.
             If ``None`` an ephemeral RSA key is generated for each run.
-        token_file: Path to persist the resume token.
         color_mode: ANSI color downgrade mode — ``"passthrough"`` (default),
             ``"256"``, or ``"16"``.
 
@@ -51,7 +52,6 @@ class SshWsGateway:
         ws_url: str,
         *,
         server_key: str | Path | None = None,
-        token_file: Path | None = None,
         color_mode: str = "passthrough",
     ) -> None:
         _require_websockets()
@@ -63,7 +63,6 @@ class SshWsGateway:
             ) from exc
         self._ws_url = ws_url
         self._server_key = server_key
-        self._token_file = token_file
         self._color_mode = color_mode
 
     async def start(
@@ -92,7 +91,7 @@ class SshWsGateway:
             host_keys = [asyncssh.generate_private_key("ssh-ed25519")]
 
         no_auth_server_cls = _make_no_auth_server_class()
-        process_handler = await _make_process_handler(self._ws_url, self._token_file, self._color_mode)
+        process_handler = await _make_process_handler(self._ws_url, self._color_mode)
 
         return await asyncssh.create_server(
             no_auth_server_cls,

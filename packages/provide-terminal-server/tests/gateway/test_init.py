@@ -20,17 +20,14 @@ class TestPublicExports:
             "TelnetWsGateway",
             "_apply_color_mode",
             "_clamp8",
-            "_delete_token",
             "_handle_ws_control",
             "_normalize_crlf",
             "_pipe_ws",
-            "_read_token",
             "_rgb_to_16_index",
             "_rgb_to_256",
             "_ssh_to_ws",
             "_strip_iac",
             "_tcp_to_ws",
-            "_write_token",
             "_ws_to_ssh",
             "_ws_to_tcp",
         }
@@ -47,9 +44,6 @@ class TestPublicExports:
         assert callable(gateway._rgb_to_16_index)
         assert callable(gateway._normalize_crlf)
         assert callable(gateway._strip_iac)
-        assert callable(gateway._read_token)
-        assert callable(gateway._write_token)
-        assert callable(gateway._delete_token)
         assert callable(gateway._handle_ws_control)
         assert callable(gateway._pipe_ws)
         assert callable(gateway._tcp_to_ws)
