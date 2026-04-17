@@ -56,7 +56,6 @@ dev = [
 members = ["packages/provide-terminal", "packages/provide-terminal-cloudflare", "packages/provide-terminal-platform", "packages/provide-terminal-server", "packages/provide-terminal-client"]
 
 [tool.uv.sources]
-provide-telemetry = { path = "/REDACTED_ABS_PATH", editable = true }
 provide-terminal = { workspace = true }
 provide-terminal-cloudflare = { workspace = true }
 provide-terminal-platform = { workspace = true }

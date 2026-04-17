@@ -223,6 +223,22 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # Other exceptions (e.g. network errors fetching JWKS) propagate so the
         # caller returns a 5xx rather than silently downgrading the caller to viewer.
 
+    async def browser_subject_for_request(self, request: object) -> str | None:
+        """Return the JWT subject_id for the caller, or ``None`` in open-access modes.
+
+        Used by session route handlers to check per-session ownership.
+        """
+        if self.config.jwt.mode in {"none", "dev"}:
+            return None
+        token = self._extract_token(request)
+        if not token:
+            return None
+        try:
+            principal = await decode_jwt(token, self.config.jwt)
+            return principal.subject_id
+        except JwtValidationError:
+            return None
+
     # ------------------------------------------------------------------
     # Fetch / WS lifecycle
     # ------------------------------------------------------------------
@@ -260,7 +276,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # skipped entirely and the request falls through to _resolve_principal()
         # which permits all callers in those modes.  In JWT mode, from_env()
         # guarantees worker_bearer_token is set (ValueError otherwise).
-        _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/"))
+        _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/", "/ws/raw/"))
         if _is_worker_ws and self.config.worker_bearer_token:
             # CF Access service tokens bypass worker bearer token check.
             _cf_client = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[union-attr]
@@ -299,11 +315,28 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 socket_role = "raw"
 
             # Resolve browser role from JWT (defaults to "admin" in dev/none mode).
-            # Workers authenticate via bearer token, not JWT — default to "admin".
-            if socket_role == "worker":
+            # Workers and raw sockets authenticate via bearer token, not JWT —
+            # they are unconditionally admitted and assigned "admin" role.
+            if socket_role in ("worker", "raw"):
                 browser_role = "admin"
             else:
                 browser_role = await self.browser_role_for_request(request)
+                # Enforce session visibility before upgrading browser WebSockets.
+                # Only browser sockets carry a JWT and require visibility checks.
+                visibility = str(self.meta.get("visibility") or "public")
+                if visibility != "public":
+                    if browser_role != "admin":
+                        subject = await self.browser_subject_for_request(request)
+                        owner = self.meta.get("owner")
+                        permitted = subject is not None and subject == owner
+                        if not permitted and visibility == "operator":
+                            permitted = browser_role == "operator"
+                        if not permitted:
+                            return Response(
+                                json.dumps({"error": "forbidden"}),
+                                status=403,
+                                headers={"content-type": "application/json"},
+                            )
 
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)
@@ -380,6 +413,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
         ws_id = self.ws_key(ws)
         role = self._socket_role(ws)
+        # Check before _register_socket so we can detect fetch()-initialized browser sockets.
+        # fetch() sends hello before the 101 response; webSocketOpen() fires after the upgrade.
+        # For the normal (non-hibernation) path the socket is already registered — skip hello.
+        already_initialized = ws_id in self.browser_sockets
         self._register_socket(ws, role)
         if role == "worker":
             self.worker_ws = ws
@@ -402,28 +439,30 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         else:
             self.browser_sockets[ws_id] = ws
             browser_role = self._socket_browser_role(ws)
-            # Issue a resume token for this browser session
-            _open_resume_token = secrets.token_urlsafe(32)
-            _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
-            self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
-            await self.send_ws(
-                ws,
-                {
-                    "type": "hello",
-                    "worker_id": self.worker_id,
-                    "worker_online": self.worker_ws is not None or self._ushell is not None,
-                    # can_hijack and role reflect the JWT-resolved browser role.
-                    "can_hijack": browser_role == "admin",
-                    "input_mode": self.input_mode,
-                    "role": browser_role,
-                    "hijack_control": "rest",
-                    "hijack_step_supported": True,
-                    "resume_supported": True,
-                    "resume_token": _open_resume_token,
-                    "presence_enabled": bool(self.meta.get("presence")),
-                    "ts": time.time(),
-                },
-            )
+            if not already_initialized:
+                # Hibernation-restore path: fetch() did not run for this connection, so
+                # send hello here.  For normal upgrades fetch() already sent it.
+                _open_resume_token = secrets.token_urlsafe(32)
+                _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
+                self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
+                await self.send_ws(
+                    ws,
+                    {
+                        "type": "hello",
+                        "worker_id": self.worker_id,
+                        "worker_online": self.worker_ws is not None or self._ushell is not None,
+                        # can_hijack and role reflect the JWT-resolved browser role.
+                        "can_hijack": browser_role == "admin",
+                        "input_mode": self.input_mode,
+                        "role": browser_role,
+                        "hijack_control": "rest",
+                        "hijack_step_supported": True,
+                        "resume_supported": True,
+                        "resume_token": _open_resume_token,
+                        "presence_enabled": bool(self.meta.get("presence")),
+                        "ts": time.time(),
+                    },
+                )
             await self._maybe_send_presence_sync(ws, exclude_self=True)
             await self.send_hijack_state(ws)
             if self.last_snapshot is not None:

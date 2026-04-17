@@ -120,6 +120,13 @@ def create_manager_mcp_tools(
         name_base: str = "",
     ) -> dict[str, Any]:
         """Spawn a batch of agents from config files with staggered groups."""
+        from provide.terminal.manager.routes.spawn import _validate_config_path
+
+        for path in config_paths:
+            try:
+                _validate_config_path(path)
+            except ValueError as e:
+                return {"error": str(e)}
         if manager is not None:
             total = len(config_paths)
             await manager.start_spawn_swarm(

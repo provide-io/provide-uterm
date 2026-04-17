@@ -51,7 +51,7 @@ try:
     )
     from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
-    from provide.terminal.cloudflare.state.registry import delete_kv_session, list_kv_sessions
+    from provide.terminal.cloudflare.state.registry import delete_kv_session, get_kv_session, list_kv_sessions
     from provide.terminal.cloudflare.ui.assets import read_asset_text, serve_asset
 except ImportError:
     try:
@@ -67,7 +67,7 @@ except ImportError:
         )
         from config import CloudflareConfig  # type: ignore[import-not-found]
         from do.session_runtime import SessionRuntime  # type: ignore[import-not-found]
-        from state.registry import delete_kv_session, list_kv_sessions  # type: ignore[import-not-found]
+        from state.registry import delete_kv_session, get_kv_session, list_kv_sessions  # type: ignore[import-not-found]
         from ui.assets import read_asset_text, serve_asset  # type: ignore[import-not-found]
     except Exception as _exc2:  # pragma: no cover — Pyodide validation phase only
         # Last resort for Pyodide validation phase — stubs for non-handler imports.
@@ -238,25 +238,69 @@ async def _require_jwt(request: object, config: CloudflareConfig) -> Response | 
     return None
 
 
-async def _handle_sessions(request: object, env: object, _config: CloudflareConfig) -> Response:
+async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> object | None:
+    """Decode the JWT and return the principal for ownership/role checks.
+
+    Returns ``None`` in ``none``/``dev`` mode (open access — no enforcement).
+    """
+    if config.jwt.mode in {"none", "dev"}:
+        return None
+    token = extract_bearer_or_cookie(request)
+    if not token:
+        return None
+    try:
+        return await decode_jwt(token, config.jwt)
+    except JwtValidationError:
+        return None
+
+
+async def _handle_sessions(request: object, env: object, config: CloudflareConfig) -> Response:
     """Handle GET/DELETE /api/sessions."""
     method = str(getattr(request, "method", "GET")).upper()
     if method == "DELETE":
+        # Bulk delete is admin-only: any JWT principal must carry the admin role.
+        principal = await _decode_jwt_principal(request, config)
+        if principal is not None and "admin" not in principal.roles:  # type: ignore[union-attr]
+            return json_response({"error": "admin role required"}, status=403)
         kv = getattr(env, "SESSION_REGISTRY", None)
         if kv is None:
             return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
-        keys_resp = await kv.list()
+        keys_resp = await kv.list(prefix="session:")
         keys = [k.name for k in keys_resp.keys]
         for key in keys:
             await kv.delete(key)
         return json_response({"ok": True, "deleted": len(keys)})
+    # GET: mirror FastAPI's can_read_session policy so the fleet listing matches
+    # what individual session reads would allow.
+    # - admin/owner: see all sessions
+    # - operator role: see public + operator-visibility + own sessions
+    # - viewer/unauthenticated (None principal): see public sessions only
+    principal = await _decode_jwt_principal(request, config)
     kv_configured = getattr(env, "SESSION_REGISTRY", None) is not None
     sessions = await list_kv_sessions(env)
+    if principal is not None and "admin" not in principal.roles:  # type: ignore[union-attr]
+        is_operator = "operator" in principal.roles  # type: ignore[union-attr]
+        subject_id = principal.subject_id  # type: ignore[union-attr]
+
+        def _can_read(s: dict) -> bool:  # type: ignore[type-arg]
+            if s.get("owner") == subject_id:
+                return True
+            vis = s.get("visibility", "public")
+            if vis == "public":
+                return True
+            if vis == "operator" and is_operator:
+                return True
+            return False
+
+        sessions = [s for s in sessions if _can_read(s)]
+    elif principal is None:
+        # No JWT (open/dev mode) — return all sessions as-is.
+        pass
     scope = "fleet" if kv_configured else "local"
     return json_response(sessions, headers={"X-Sessions-Scope": scope})
 
 
-async def _handle_connect(request: object, env: object) -> Response:
+async def _handle_connect(request: object, env: object, config: CloudflareConfig) -> Response:
     """Handle POST /api/connect — create a session in KV."""
     import json as _json
     import uuid
@@ -276,6 +320,9 @@ async def _handle_connect(request: object, env: object) -> Response:
     input_mode = str(body.get("input_mode", "open"))
     tags = list(body.get("tags") or [])
     created_at = time.time()
+    principal = await _decode_jwt_principal(request, config)
+    owner = principal.subject_id if principal is not None else None  # type: ignore[union-attr]
+    visibility = "private" if principal is not None else "public"
     entry = {
         "session_id": session_id,
         "display_name": display_name,
@@ -288,26 +335,42 @@ async def _handle_connect(request: object, env: object) -> Response:
         "tags": tags,
         "recording_enabled": True,
         "recording_available": False,
-        "owner": None,
-        "visibility": "public",
+        "owner": owner,
+        "visibility": visibility,
         "last_error": None,
     }
     kv = getattr(env, "SESSION_REGISTRY", None)
-    if kv is not None:
-        await kv.put(f"session:{session_id}", _json.dumps({**entry, "hijacked": False}))
+    if kv is None:
+        return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
+    await kv.put(f"session:{session_id}", _json.dumps({**entry, "hijacked": False}))
     return json_response({**entry, "url": f"/app/session/{session_id}"})
 
 
-async def _handle_session_delete(request: object, env: object, sid: str) -> Response:
+async def _handle_session_delete(request: object, env: object, sid: str, config: CloudflareConfig) -> Response:
     """Handle DELETE /api/sessions/{id}."""
-    await delete_kv_session(env, sid)
+    principal = await _decode_jwt_principal(request, config)
+    if principal is not None:
+        # In JWT mode, verify the caller is the session owner or an admin.
+        # KV is the auth source — a missing row means the session doesn't exist;
+        # fail closed with 404 rather than letting the delete proceed unauthenticated.
+        session_data = await get_kv_session(env, sid)
+        if session_data is None:
+            return json_response({"error": "not_found"}, status=404)
+        session_owner = session_data.get("owner")
+        is_admin = "admin" in principal.roles  # type: ignore[union-attr]
+        is_owner = session_owner is not None and principal.subject_id == session_owner  # type: ignore[union-attr]
+        if not is_admin and not is_owner:
+            return json_response({"error": "forbidden"}, status=403)
+    # Attempt DO cleanup before removing the KV entry so a failed DO cleanup
+    # doesn't orphan a live DO while the session disappears from all API views.
     namespace = getattr(env, "SESSION_RUNTIME", None)
     if namespace is not None:
-        import contextlib as _contextlib
-
-        with _contextlib.suppress(Exception):
+        try:
             stub = namespace.get(namespace.idFromName(sid))
             await stub.fetch(request)
+        except Exception as _exc:
+            return json_response({"error": "do_cleanup_failed", "detail": str(_exc)}, status=500)
+    await delete_kv_session(env, sid)
     return json_response({"ok": True, "session_id": sid, "deleted": True})
 
 
@@ -394,7 +457,7 @@ def _match_api_route(path: str, request: object) -> object | None:
     session_delete_match = _SESSION_ID_RE.match(path)
     if session_delete_match and str(getattr(request, "method", "GET")).upper() == "DELETE":
         # Stash the match for the handler.
-        return lambda req, env, _cfg: _handle_session_delete(req, env, session_delete_match.group("session_id"))
+        return lambda req, env, cfg: _handle_session_delete(req, env, session_delete_match.group("session_id"), cfg)
     spa = _resolve_spa_route(path)
     if spa is not None:
         return lambda _req, _env, _cfg: _as_future(_spa_response(spa[0], **spa[1]))
@@ -405,8 +468,8 @@ async def _api_sessions(request: object, env: object, config: CloudflareConfig) 
     return await _handle_sessions(request, env, config)
 
 
-async def _api_connect(request: object, env: object, _config: CloudflareConfig) -> Response:
-    return await _handle_connect(request, env)
+async def _api_connect(request: object, env: object, config: CloudflareConfig) -> Response:
+    return await _handle_connect(request, env, config)
 
 
 async def _api_tunnels(request: object, env: object, _config: CloudflareConfig) -> Response:

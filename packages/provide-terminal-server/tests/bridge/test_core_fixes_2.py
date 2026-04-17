@@ -18,8 +18,6 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
 from tests.bridge.control_channel_helpers import decode_control_payloads
@@ -307,9 +305,9 @@ class TestDisconnectWorkerCloseException:
     that change 'worker_id=%s' to not contain the real worker_id, or corrupt 'exc'.
     """
 
-    async def test_close_exception_logged_with_worker_id(self, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_close_exception_logged_with_worker_id(self) -> None:
         """close() exception is caught and logged at DEBUG level with the correct worker_id."""
-        import logging
+        from unittest.mock import MagicMock, patch
 
         hub = _make_hub()
         browser_ws = _make_async_ws()
@@ -322,17 +320,19 @@ class TestDisconnectWorkerCloseException:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
-        with caplog.at_level(logging.DEBUG, logger="provide.terminal.bridge.hub.core"):
+        mock_logger = MagicMock()
+        with patch("provide.terminal.bridge.hub.core.logger", mock_logger):
             await hub.disconnect_worker("w1")
 
-        close_logs = [r for r in caplog.records if "disconnect_worker" in r.message]
-        assert close_logs, "Expected at least one debug log for disconnect_worker close error"
-        assert "w1" in close_logs[0].message, (
-            f"Log message must contain worker_id 'w1', got: {close_logs[0].message!r} — "
+        debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
+        close_logs = [c for c in debug_calls if "disconnect_worker" in c]
+        assert close_logs, f"Expected at least one debug log for disconnect_worker close error, got {debug_calls}"
+        assert "w1" in close_logs[0], (
+            f"Log message must contain worker_id 'w1', got: {close_logs[0]!r} — "
             "mutmut_17-24 corrupt the worker_id argument in logger.debug"
         )
-        assert "close failed" in close_logs[0].message, (
-            f"Log message must contain the exception text, got: {close_logs[0].message!r}"
+        assert "close failed" in close_logs[0], (
+            f"Log message must contain the exception text, got: {close_logs[0]!r}"
         )
 
 

@@ -4,8 +4,13 @@
 #
 """OutputCollector — adaptive EventBus output accumulator for a single session.
 
-Subscribes to EventBus ``term`` and ``snapshot`` events for a given worker, accumulates the
-output text, and returns when the stream quiesces or the hard cap is hit.
+Subscribes to EventBus ``term`` and ``snapshot`` events for a given worker,
+accumulates the output text, and returns when the stream quiesces or the hard
+cap is hit.
+
+Primary source: ``term`` event deltas (PTY / raw-output connectors).
+Fallback source: last ``snapshot.screen`` value, used when no ``term`` events
+arrive (e.g. the shell and SSH control connectors that are snapshot-only).
 
 Usage::
 
@@ -26,12 +31,18 @@ if TYPE_CHECKING:
 class OutputCollector:
     """Collect terminal output from a single session via the EventBus.
 
-    Subscribes to ``term`` and ``snapshot`` events, accumulates text from output,
-    and returns when:
+    Subscribes to both ``term`` and ``snapshot`` events, returning when:
 
     * no new output has arrived for *quiesce_ms* milliseconds (adaptive), or
     * the total elapsed time reaches *max_ms* (hard cap), or
     * the worker disconnects (``None`` sentinel from the bus).
+
+    **Output selection** — ``term`` events (PTY deltas) take priority.  If any
+    ``term`` events arrive, their ``data.data`` text is concatenated and
+    returned.  When *only* ``snapshot`` events arrive (e.g. the shell connector
+    and SSH control operations), the last snapshot's ``data.screen`` text is
+    returned instead so callers always get meaningful output regardless of
+    connector type.
 
     If *hub* has no EventBus attached, returns ``("", 0)`` immediately.
     """
@@ -61,7 +72,8 @@ class OutputCollector:
 
         quiesce_s = quiesce_ms / 1000.0
         max_s = max_ms / 1000.0
-        chunks: list[str] = []
+        term_chunks: list[str] = []
+        last_snapshot_screen: str = ""
         start = time.monotonic()
 
         async with hub.event_bus.watch(worker_id, event_types=["term", "snapshot"]) as sub:
@@ -80,16 +92,20 @@ class OutputCollector:
                 if event is None:
                     # Worker disconnected sentinel
                     break
-                # Extract text from term events (data.data) or snapshot events (data.screen)
-                data = event.get("data", {})
-                if isinstance(data, dict):
-                    text = data.get("data", "") or data.get("screen", "")
-                elif isinstance(data, str):
-                    text = data
-                else:
-                    text = ""
-                if text:
-                    chunks.append(text)
+                event_type = event.get("type")
+                data = event.get("data") or {}
+                if event_type == "term":
+                    text = data.get("data", "") if isinstance(data, dict) else ""
+                    if text:
+                        term_chunks.append(text)
+                elif event_type == "snapshot":
+                    # Track last snapshot screen as fallback for snapshot-only connectors.
+                    screen = data.get("screen", "") if isinstance(data, dict) else ""
+                    if screen:
+                        last_snapshot_screen = screen
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        return ("".join(chunks), elapsed_ms)
+        # Use term deltas when present; fall back to last snapshot screen for
+        # connectors (e.g. shell, SSH control) that never emit term events.
+        output = "".join(term_chunks) if term_chunks else last_snapshot_screen
+        return (output, elapsed_ms)

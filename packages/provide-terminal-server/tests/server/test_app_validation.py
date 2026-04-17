@@ -6,10 +6,17 @@
 
 from __future__ import annotations
 
+import importlib.resources
+
 import pytest
 
 from provide.terminal.server.app import _validate_auth_config, _validate_frontend_assets
 from provide.terminal.server.models import AuthConfig, ServerConfig
+
+# True only when frontend assets have been built (npm run build:frontend).
+# Used to skip tests that exercise the real asset presence check so that
+# the server package can be tested in isolation without a Node build.
+_FRONTEND_BUILT = importlib.resources.files("provide.terminal").joinpath("frontend/hijack.html").is_file()
 
 
 class TestValidateAuthConfigDevMode:
@@ -213,9 +220,9 @@ class TestValidateAuthConfigModeEdgeCases:
 class TestValidateFrontendAssets:
     """Test frontend asset validation."""
 
+    @pytest.mark.skipif(not _FRONTEND_BUILT, reason="frontend not built; run npm run build:frontend first")
     def test_validate_frontend_assets_succeeds(self) -> None:
-        """Frontend assets should exist (test environment has them)."""
-        # This should succeed in the test environment where frontend is built
+        """Frontend assets should exist when the frontend has been built."""
         _validate_frontend_assets()
 
     def test_missing_assets_raises(self) -> None:
@@ -236,6 +243,60 @@ class TestValidateFrontendAssets:
             pytest.raises(RuntimeError, match="missing required frontend"),
         ):
             _validate_frontend_assets()
+
+
+class TestCreateServerAppApiOnly:
+    """Test the api_only parameter and UTERM_API_ONLY env var."""
+
+    def test_api_only_param_skips_frontend_validation(self) -> None:
+        """create_server_app(api_only=True) must not call _validate_frontend_assets."""
+        from unittest.mock import patch
+
+        from provide.terminal.server.app import create_server_app
+        from provide.terminal.server.models import AuthConfig, ServerConfig
+
+        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+            create_server_app(config, api_only=True)
+        mock_validate.assert_not_called()
+
+    def test_api_only_env_var_skips_frontend_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UTERM_API_ONLY=1 env var must skip _validate_frontend_assets."""
+        from unittest.mock import patch
+
+        from provide.terminal.server.app import create_server_app
+        from provide.terminal.server.models import AuthConfig, ServerConfig
+
+        monkeypatch.setenv("UTERM_API_ONLY", "1")
+        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+            create_server_app(config)
+        mock_validate.assert_not_called()
+
+    def test_default_calls_frontend_validation(self) -> None:
+        """By default (api_only=False, no env var), _validate_frontend_assets is called."""
+        from unittest.mock import patch
+
+        from provide.terminal.server.app import create_server_app
+        from provide.terminal.server.models import AuthConfig, ServerConfig
+
+        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+            create_server_app(config)
+        mock_validate.assert_called_once()
+
+    def test_api_only_env_var_zero_does_not_skip_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UTERM_API_ONLY=0 must NOT skip _validate_frontend_assets (presence-based check was a bug)."""
+        from unittest.mock import patch
+
+        from provide.terminal.server.app import create_server_app
+        from provide.terminal.server.models import AuthConfig, ServerConfig
+
+        monkeypatch.setenv("UTERM_API_ONLY", "0")
+        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+            create_server_app(config)
+        mock_validate.assert_called_once()
 
 
 class TestIncMetricHelper:

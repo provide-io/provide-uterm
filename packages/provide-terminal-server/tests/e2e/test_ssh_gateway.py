@@ -63,10 +63,11 @@ async def _make_ssh_server(
     host_key = asyncssh.generate_private_key("ssh-ed25519")
 
     async def _process_handler(process: asyncssh.SSHServerProcess[bytes]) -> None:
+        token_holder: list[dict | None] = [None]
         try:
             async with websockets.connect(f"ws://127.0.0.1:{ws_port}") as ws:
                 t1 = asyncio.create_task(_ssh_to_ws(process, ws))
-                t2 = asyncio.create_task(_ws_to_ssh(ws, process))
+                t2 = asyncio.create_task(_ws_to_ssh(ws, process, token_holder=token_holder))
                 _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
                 # Grace period: let the echo arrive at SSH stdout before cancelling.
                 if pending:
@@ -373,6 +374,8 @@ class TestSshWsGatewayStart:
 
         connection_count = 0
         resume_msgs: list[str] = []
+        # Event set once the second WS connection has captured the resume frame.
+        reconnected = asyncio.Event()
 
         async def _handler(ws: Any) -> None:
             nonlocal connection_count
@@ -389,6 +392,7 @@ class TestSshWsGatewayStart:
                             payload = decode_control_payload(msg)
                             if payload.get("type") == "resume":
                                 resume_msgs.append(str(payload.get("token") or ""))
+                    reconnected.set()
                     break
 
         ws_srv = await websockets.serve(_handler, "127.0.0.1", 0)
@@ -407,10 +411,13 @@ class TestSshWsGatewayStart:
                     config=[],
                 ) as conn:
                     async with conn.create_process() as proc:
-                        # Give time for first WS to close and reconnect to happen
-                        await asyncio.sleep(0.5)
+                        # Wait for the second WS connection (with resume frame) to arrive.
+                        # The SSH gateway has a 3-second reconnect delay — allow up to 5s.
+                        with contextlib.suppress(asyncio.TimeoutError):
+                            await asyncio.wait_for(reconnected.wait(), timeout=5.0)
                         proc.stdin.write_eof()
-                        await asyncio.wait_for(proc.stdout.read(4096), timeout=3.0)
+                        with contextlib.suppress(Exception):
+                            await asyncio.wait_for(proc.stdout.read(4096), timeout=1.0)
         finally:
             ssh_srv.close()
             await ssh_srv.wait_closed()

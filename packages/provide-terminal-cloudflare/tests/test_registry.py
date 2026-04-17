@@ -6,7 +6,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from provide.terminal.cloudflare.state.registry import list_kv_sessions, update_kv_session
+from provide.terminal.cloudflare.state.registry import get_kv_session, list_kv_sessions, update_kv_session
 
 
 def _make_kv() -> SimpleNamespace:
@@ -80,3 +80,29 @@ async def test_list_kv_sessions_returns_all_connected() -> None:
     assert ids == {"w1", "w2"}
     hijacked = next(s for s in sessions if s["session_id"] == "w2")
     assert hijacked["hijacked"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_kv_session_returns_none_without_binding() -> None:
+    env = SimpleNamespace()
+    result = await get_kv_session(env, "w1")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_kv_session_returns_none_for_missing_key() -> None:
+    kv = _make_kv()
+    env = SimpleNamespace(SESSION_REGISTRY=kv)
+    result = await get_kv_session(env, "nonexistent")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_kv_session_returns_session_data() -> None:
+    kv = _make_kv()
+    env = SimpleNamespace(SESSION_REGISTRY=kv)
+    await update_kv_session(env, "w1", connected=True, meta={"owner": "alice", "display_name": "Test"})
+    result = await get_kv_session(env, "w1")
+    assert result is not None
+    assert result["session_id"] == "w1"
+    assert result["owner"] == "alice"

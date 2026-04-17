@@ -350,6 +350,12 @@ class TestSwarmSpawnBatch:
         assert result["total_groups"] == 2
         assert result["estimated_time_seconds"] > 0
 
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_path(self, mcp_app, manager, pm):
+        """Batch spawn must validate paths — not just single spawn."""
+        result = await _call(mcp_app, "swarm_spawn_batch", {"config_paths": ["bad.json"]})
+        assert "error" in result
+
 
 class TestAgentKillErrors:
     @pytest.mark.asyncio

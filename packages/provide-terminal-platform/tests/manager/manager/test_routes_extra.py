@@ -102,6 +102,15 @@ class TestSpawnRoute:
         assert data["total_agents"] == 1
         assert manager.desired_agents == 1
 
+    def test_spawn_batch_rejects_invalid_path(self, client):
+        """Batch spawn must validate every path — not just single spawn."""
+        resp = client.post(
+            "/swarm/spawn-batch",
+            json={"config_paths": ["bad.json"], "group_size": 1, "group_delay": 0},
+        )
+        assert resp.status_code == 400
+        assert "error" in resp.json()
+
 
 class TestKillAgentWithProcess:
     def test_kill_running_agent_with_process(self, client, manager):

@@ -33,17 +33,20 @@ def default_server_config() -> ServerConfig:
 
 
 def _merged_config_mapping(data: dict[str, Any]) -> dict[str, Any]:
-    unknown_sections = set(data) - {"server", "auth", "ui", "recording", "sessions"}
+    unknown_sections = set(data) - set(ServerConfig.model_fields)
     if unknown_sections:
         raise ValueError(f"Extra inputs are not permitted: {sorted(unknown_sections)!r}")
     base = default_server_config().model_dump(mode="python")
     merged = dict(base)
-    for section in ("server", "auth", "ui", "recording"):
+    for section in ("server", "auth", "ui", "recording", "profiles", "security", "tunnel", "pam"):
         if section in data:
             if not isinstance(data[section], dict):
                 raise ValueError(f"[{section}] must be a table, got {type(data[section]).__name__!r}")
             merged[section] = {**merged[section], **data[section]}
-    if data.get("sessions"):
+    for field in ("session_idle_timeout_s", "session_retention_s", "browser_rate_limit_per_sec"):
+        if field in data:
+            merged[field] = data[field]
+    if "sessions" in data:
         merged["sessions"] = [entry for entry in data["sessions"] if isinstance(entry, dict)]
     return merged
 

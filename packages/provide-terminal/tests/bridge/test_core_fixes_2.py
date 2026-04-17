@@ -307,9 +307,9 @@ class TestDisconnectWorkerCloseException:
     that change 'worker_id=%s' to not contain the real worker_id, or corrupt 'exc'.
     """
 
-    async def test_close_exception_logged_with_worker_id(self, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_close_exception_logged_with_worker_id(self) -> None:
         """close() exception is caught and logged at DEBUG level with the correct worker_id."""
-        import logging
+        from unittest.mock import patch
 
         hub = _make_hub()
         browser_ws = _make_async_ws()
@@ -322,18 +322,16 @@ class TestDisconnectWorkerCloseException:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
-        with caplog.at_level(logging.DEBUG, logger="provide.terminal.bridge.hub.core"):
+        with patch("provide.terminal.bridge.hub.core.logger") as mock_logger:
             await hub.disconnect_worker("w1")
 
-        close_logs = [r for r in caplog.records if "disconnect_worker" in r.message]
-        assert close_logs, "Expected at least one debug log for disconnect_worker close error"
-        assert "w1" in close_logs[0].message, (
-            f"Log message must contain worker_id 'w1', got: {close_logs[0].message!r} — "
-            "mutmut_17-24 corrupt the worker_id argument in logger.debug"
-        )
-        assert "close failed" in close_logs[0].message, (
-            f"Log message must contain the exception text, got: {close_logs[0].message!r}"
-        )
+        mock_logger.debug.assert_called_once()
+        call_args = mock_logger.debug.call_args
+        # Positional args: (format_string, worker_id, exc)
+        msg, wid, exc = call_args.args
+        assert "disconnect_worker" in msg, f"log format must mention disconnect_worker, got {msg!r}"
+        assert wid == "w1", f"worker_id arg must be 'w1', got {wid!r}"
+        assert "close failed" in str(exc), f"exc arg must contain exception text, got {exc!r}"
 
 
 # ---------------------------------------------------------------------------
