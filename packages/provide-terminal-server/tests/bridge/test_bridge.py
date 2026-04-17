@@ -346,9 +346,9 @@ class TestHelperEdgeCases:
 class TestTermBridgeDroppedFrameLogging:
     """Regression fix 6: queue-full drops must be logged at DEBUG level."""
 
-    def test_watch_logs_debug_on_queue_full(self, caplog) -> None:
+    def test_watch_logs_debug_on_queue_full(self) -> None:
         """Regression fix 6: when the send queue is full, a debug log is emitted for each dropped frame."""
-        import logging
+        from unittest.mock import MagicMock, patch
 
         session = MockSession()
         bot = MockBot(session)
@@ -361,17 +361,20 @@ class TestTermBridgeDroppedFrameLogging:
 
         watch_fn = session._watches[0]
 
-        with caplog.at_level(logging.DEBUG, logger="provide.terminal.bridge.worker_link"):
+        mock_logger = MagicMock()
+        with patch("provide.terminal.bridge.worker_link.logger", mock_logger):
             # This call should drop the frame and emit a debug log
             watch_fn({"screen": "test"}, b"dropped data")
 
-        assert any("term_bridge_drop" in r.message for r in caplog.records), (
-            "expected debug log for dropped frame when queue is full"
+        assert mock_logger.debug.called, "expected debug log for dropped frame when queue is full"
+        debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
+        assert any("term_bridge_drop" in c for c in debug_calls), (
+            f"expected debug log for dropped frame when queue is full, got: {debug_calls}"
         )
 
-    def test_watch_does_not_log_when_queue_has_space(self, caplog) -> None:
+    def test_watch_does_not_log_when_queue_has_space(self) -> None:
         """Regression fix 6: no debug log when the queue is not full."""
-        import logging
+        from unittest.mock import MagicMock, patch
 
         session = MockSession()
         bot = MockBot(session)
@@ -380,7 +383,9 @@ class TestTermBridgeDroppedFrameLogging:
 
         watch_fn = session._watches[0]
 
-        with caplog.at_level(logging.DEBUG, logger="provide.terminal.bridge.worker_link"):
+        mock_logger = MagicMock()
+        with patch("provide.terminal.bridge.worker_link.logger", mock_logger):
             watch_fn({"screen": "test"}, b"normal data")
 
-        assert not any("term_bridge_drop" in r.message for r in caplog.records)
+        debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
+        assert not any("term_bridge_drop" in c for c in debug_calls)

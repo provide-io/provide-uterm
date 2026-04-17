@@ -74,6 +74,29 @@ jobs:
       - run: uv run pytest -q packages/provide-terminal-cloudflare/tests
       - run: uv run python scripts/verify_package_artifacts.py
 
+  server-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Build frontend assets so test_validate_frontend_assets_succeeds runs (not skipped)
+      - run: npm ci
+      - run: npm run build:frontend
+      - run: uv sync --group dev
+      # Run server package tests with its own 100% branch coverage gate
+      - run: uv run pytest -q packages/provide-terminal-server/tests/
+
   pty-unit:
     runs-on: ubuntu-latest
     strategy:
@@ -89,6 +112,23 @@ jobs:
       - run: uv venv && uv pip install -e "packages/provide-terminal-platform/[dev]"
       - name: Run PTY unit tests (no PAM/root/native)
         run: uv run pytest packages/provide-terminal-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-terminal-platform/tests/pty/e2e -o "addopts="
+
+  manager-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --group dev
+      # Run platform manager tests with its own 100% branch coverage gate
+      - run: uv run pytest -q packages/provide-terminal-platform/tests/manager/
 
   # TODO: restore pty-docker job — Dockerfile.test needs to be recreated for
   # the provide-terminal-platform package layout (was packages/provide-terminal-pty/)

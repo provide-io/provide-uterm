@@ -91,6 +91,11 @@ async def spawn(config_path: str, agent_id: str = "", manager: AgentManager = De
 
 @router.post("/swarm/spawn-batch")
 async def spawn_batch(request: SpawnBatchRequest, manager: AgentManager = Depends(require_manager)) -> Any:  # noqa: B008
+    for path in request.config_paths:
+        try:
+            _validate_config_path(path)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
     total = len(request.config_paths)
     groups = (total + request.group_size - 1) // request.group_size
 

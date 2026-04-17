@@ -115,16 +115,28 @@ def _validate_auth_config(config: ServerConfig) -> None:
         raise ValueError("configure auth.jwt_public_key_pem or auth.jwt_jwks_url when auth.mode='jwt'")
 
 
-def create_server_app(config: ServerConfig, hub_class: type[TermHub] | None = None) -> FastAPI:
+def create_server_app(
+    config: ServerConfig,
+    hub_class: type[TermHub] | None = None,
+    *,
+    api_only: bool = False,
+) -> FastAPI:
     """Create the standalone reference server application.
 
     Args:
         config: Server configuration.
         hub_class: Optional TermHub subclass to use instead of the default TermHub.
                    Useful for injecting mixins such as DeckMuxMixin.
+        api_only: When True (or ``UTERM_API_ONLY=1`` is set in the environment),
+                  skip the frontend-asset presence check.  Useful for headless /
+                  API-only deployments and unit tests that don't need the UI.
     """
+    import os
+
     _validate_auth_config(config)
-    _validate_frontend_assets()
+    _api_only_env = os.environ.get("UTERM_API_ONLY", "").strip().lower() in {"1", "true", "yes"}
+    if not api_only and not _api_only_env:
+        _validate_frontend_assets()
     authz = AuthorizationService()
     policy = SessionPolicyResolver(config.auth, authz=authz)
     registry: SessionRegistry | None = None

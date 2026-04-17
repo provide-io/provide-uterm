@@ -33,6 +33,32 @@ _WEBHOOK_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/webhooks(?
 _RECORDING_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/recording(?:/(entries|download))?$")
 
 
+async def _check_session_visibility(runtime: RuntimeProtocol, request: object) -> object | None:
+    """Return a 403 Response if the caller cannot access the session, or None.
+
+    Mirrors the FastAPI ``can_read_session`` policy:
+
+    * ``public``   — any authenticated caller may read (JWT already validated).
+    * ``operator`` — requires operator or admin role (or session ownership).
+    * ``private``  — requires session ownership or admin role.
+
+    Any other/missing visibility value is treated as ``public`` (safe default).
+    """
+    visibility = str(runtime.meta.get("visibility") or "public")
+    if visibility == "public":
+        return None
+    role = await runtime.browser_role_for_request(request)
+    if role == "admin":
+        return None
+    subject = await runtime.browser_subject_for_request(request)
+    owner = runtime.meta.get("owner")
+    if subject is not None and subject == owner:
+        return None
+    if visibility == "operator" and role == "operator":
+        return None
+    return json_response({"error": "forbidden"}, status=403)
+
+
 async def route_http(runtime: RuntimeProtocol, request: object) -> object:
     url = str(getattr(request, "url", ""))
     path = urlparse(url).path
@@ -50,18 +76,30 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> object:
 
     sse_match = _SSE_ROUTE_RE.match(path)
     if sse_match and method == "GET":
+        guard = await _check_session_visibility(runtime, request)
+        if guard is not None:
+            return guard
         return await route_sse(runtime, request, url, sse_match.group(1))
 
     webhook_match = _WEBHOOK_ROUTE_RE.match(path)
     if webhook_match:
+        guard = await _check_session_visibility(runtime, request)
+        if guard is not None:
+            return guard
         return await route_webhooks(runtime, request, path, url, method, webhook_match.group(1), webhook_match.group(2))
 
     recording_match = _RECORDING_ROUTE_RE.match(path)
     if recording_match and method == "GET":
+        guard = await _check_session_visibility(runtime, request)
+        if guard is not None:
+            return guard
         return await route_recording(runtime, request, url, recording_match)
 
     session_match = _SESSION_ROUTE_RE.match(path)
     if session_match:
+        guard = await _check_session_visibility(runtime, request)
+        if guard is not None:
+            return guard
         return await route_session(runtime, request, path, url, method, session_match)
 
     return json_response({"error": "not_found", "path": path}, status=404)

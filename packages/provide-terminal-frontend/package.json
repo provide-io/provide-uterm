@@ -11,10 +11,11 @@
     "fix": "biome check --write --unsafe src/"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.9",
-    "@vitest/coverage-v8": "4.1.2",
-    "jsdom": "29.0.1",
+    "@biomejs/biome": "2.4.12",
+    "@vitest/coverage-v8": "4.1.4",
+    "jsdom": "29.0.2",
     "typescript": "6.0.2",
-    "vitest": "4.1.2"
+    "vite": "8.0.8",
+    "vitest": "4.1.4"
   }
 }

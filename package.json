@@ -13,5 +13,8 @@
     "lint:app": "npm run lint --workspace=packages/provide-terminal-app",
     "fix:frontend": "npm run fix --workspace=packages/provide-terminal-frontend",
     "fix:app": "npm run fix --workspace=packages/provide-terminal-app"
+  },
+  "overrides": {
+    "vite": "8.0.8"
   }
 }

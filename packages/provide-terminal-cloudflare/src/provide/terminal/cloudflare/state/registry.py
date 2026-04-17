@@ -74,6 +74,20 @@ async def update_kv_session(
         logger.debug("kv put %s failed: %s", key, exc)
 
 
+async def get_kv_session(env: Any, worker_id: str) -> dict[str, Any] | None:
+    """Return a single session entry from KV, or None if absent or KV is unconfigured."""
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return None
+    key = f"{_KV_PREFIX}{worker_id}"
+    try:
+        raw = await kv.get(key)
+        return json.loads(raw) if raw else None
+    except Exception as exc:
+        logger.debug("kv get %s failed: %s", key, exc)
+        return None
+
+
 async def delete_kv_session(env: Any, worker_id: str) -> None:
     """Delete a session entry from the KV registry.
 

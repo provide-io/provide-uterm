@@ -41,6 +41,8 @@ async def route_session(
         return json_response({"error": "not_found", "path": path}, status=404)
 
     if sub == "" and method == "GET":
+        # Visibility is enforced at the dispatch boundary (_dispatch.py route_http)
+        # before this handler is reached — no additional check needed here.
         return json_response(_session_status_item(runtime))
 
     if sub == "snapshot" and method == "GET":

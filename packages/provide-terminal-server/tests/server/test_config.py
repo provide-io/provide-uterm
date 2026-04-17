@@ -173,6 +173,12 @@ def test_config_from_mapping_skips_non_dict_session_entry() -> None:
     assert config.sessions[0].session_id == "s1"
 
 
+def test_config_from_mapping_empty_sessions_list_clears_defaults() -> None:
+    """sessions: [] must disable the default shell session, not be treated as absent."""
+    config = config_from_mapping({"sessions": []})
+    assert config.sessions == []
+
+
 def test_config_from_mapping_rejects_empty_session_id() -> None:
     with pytest.raises(ValueError, match="session_id is required"):
         config_from_mapping({"sessions": [{"session_id": "", "connector_type": "shell"}]})
@@ -240,7 +246,7 @@ def test_config_from_mapping_rejects_invalid_control_channel_mode() -> None:
         config_from_mapping({"recording": {"control_channel_mode": "bogus"}})
 
 
-@pytest.mark.parametrize("section", ["server", "auth", "ui", "recording"])
+@pytest.mark.parametrize("section", ["server", "auth", "ui", "recording", "profiles", "security", "tunnel", "pam"])
 def test_config_from_mapping_rejects_non_dict_known_section(section: str) -> None:
     # Malformed TOML (e.g. `server = []`) must raise ValueError, not TypeError.
     with pytest.raises(ValueError, match=rf"\[{section}\] must be a table"):
@@ -250,6 +256,31 @@ def test_config_from_mapping_rejects_non_dict_known_section(section: str) -> Non
 def test_config_from_mapping_rejects_unknown_top_level_section() -> None:
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         config_from_mapping({"bogus": {"x": 1}})
+
+
+def test_config_from_mapping_accepts_session_idle_timeout_s() -> None:
+    config = config_from_mapping({"session_idle_timeout_s": 120})
+    assert config.session_idle_timeout_s == 120
+
+
+def test_config_from_mapping_accepts_session_retention_s() -> None:
+    config = config_from_mapping({"session_retention_s": 3600})
+    assert config.session_retention_s == 3600
+
+
+def test_config_from_mapping_accepts_browser_rate_limit_per_sec() -> None:
+    config = config_from_mapping({"browser_rate_limit_per_sec": 50.0})
+    assert config.browser_rate_limit_per_sec == 50.0
+
+
+def test_config_from_mapping_accepts_tunnel_section() -> None:
+    config = config_from_mapping({"tunnel": {"token_ttl_s": 7200}})
+    assert config.tunnel.token_ttl_s == 7200
+
+
+def test_config_from_mapping_accepts_security_section() -> None:
+    config = config_from_mapping({"security": {"mode": "dev"}})
+    assert config.security.mode == "dev"
 
 
 def test_config_from_mapping_rejects_unknown_nested_field() -> None:

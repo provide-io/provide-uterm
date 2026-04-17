@@ -201,6 +201,7 @@ def test_has_cf_service_token_exception_handling() -> None:
 
 
 async def test_handle_connect_post_creates_session() -> None:
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_connect
 
     async def _json():
@@ -209,7 +210,7 @@ async def test_handle_connect_post_creates_session() -> None:
     req = SimpleNamespace(method="POST", json=_json)
     kv = AsyncMock()
     env = SimpleNamespace(SESSION_REGISTRY=kv)
-    resp = await _handle_connect(req, env)
+    resp = await _handle_connect(req, env, CloudflareConfig())
     assert resp.status == 200
     data = json.loads(resp.body)
     assert data["connector_type"] == "telnet"
@@ -220,40 +221,62 @@ async def test_handle_connect_post_creates_session() -> None:
 
 
 async def test_handle_connect_non_post_returns_405() -> None:
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_connect
 
-    resp = await _handle_connect(SimpleNamespace(method="GET"), SimpleNamespace())
+    resp = await _handle_connect(SimpleNamespace(method="GET"), SimpleNamespace(), CloudflareConfig())
     assert resp.status == 405
 
 
 async def test_handle_connect_ushell_prefix() -> None:
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_connect
 
     async def _json():
         return {"connector_type": "ushell"}
 
-    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json), SimpleNamespace(SESSION_REGISTRY=None))
+    kv = AsyncMock()
+    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json), SimpleNamespace(SESSION_REGISTRY=kv), CloudflareConfig())
     assert json.loads(resp.body)["session_id"].startswith("ushell-")
 
 
-async def test_handle_connect_no_kv_still_succeeds() -> None:
+async def test_handle_connect_no_kv_returns_500() -> None:
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_connect
 
     async def _json():
         return {}
 
-    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json), SimpleNamespace(SESSION_REGISTRY=None))
-    assert resp.status == 200
+    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json), SimpleNamespace(SESSION_REGISTRY=None), CloudflareConfig())
+    assert resp.status == 500
 
 
 async def test_handle_connect_bad_json_uses_defaults() -> None:
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_connect
 
     async def _json():
         raise ValueError("bad json")
 
-    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json), SimpleNamespace(SESSION_REGISTRY=None))
+    kv = AsyncMock()
+    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json), SimpleNamespace(SESSION_REGISTRY=kv), CloudflareConfig())
     assert json.loads(resp.body)["connector_type"] == "shell"
+
+
+async def test_handle_connect_dev_mode_sets_public_no_owner() -> None:
+    """In dev/none mode, quick-connect sessions must be public with no owner."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _handle_connect
+
+    async def _json():
+        return {}
+
+    kv = AsyncMock()
+    cfg = CloudflareConfig()  # defaults to dev/none
+    resp = await _handle_connect(SimpleNamespace(method="POST", json=_json, headers=SimpleNamespace(get=lambda k, d=None: None)), SimpleNamespace(SESSION_REGISTRY=kv), cfg)
+    data = json.loads(resp.body)
+    assert data["owner"] is None
+    assert data["visibility"] == "public"
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +295,30 @@ async def test_handle_sessions_delete_purges_kv() -> None:
     )
     data = json.loads(resp.body)
     assert data["ok"] is True and data["deleted"] == 1
+    # Must filter to session: prefix so profile keys are not deleted.
+    kv.list.assert_awaited_once_with(prefix="session:")
+
+
+async def test_handle_sessions_delete_preserves_profile_keys() -> None:
+    """Bulk delete must only remove session:* keys, not profile:* keys."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _handle_sessions
+
+    deleted: list[str] = []
+
+    class _FakeKV:
+        async def list(self, *, prefix: str = "") -> object:
+            # Simulate registry containing both session and profile keys;
+            # only return keys matching the given prefix.
+            all_keys = ["session:s1", "session:s2", "profile:p1"]
+            return SimpleNamespace(keys=[SimpleNamespace(name=k) for k in all_keys if k.startswith(prefix)])
+
+        async def delete(self, key: str) -> None:
+            deleted.append(key)
+
+    await _handle_sessions(SimpleNamespace(method="DELETE"), SimpleNamespace(SESSION_REGISTRY=_FakeKV()), CloudflareConfig())
+    assert sorted(deleted) == ["session:s1", "session:s2"]
+    assert "profile:p1" not in deleted
 
 
 async def test_handle_sessions_delete_no_kv_returns_500() -> None:
@@ -282,6 +329,20 @@ async def test_handle_sessions_delete_no_kv_returns_500() -> None:
     assert resp.status == 500
 
 
+async def test_handle_sessions_delete_non_admin_returns_403() -> None:
+    """Bulk DELETE requires admin role; non-admin principals receive 403."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _handle_sessions
+
+    with patch(
+        "provide.terminal.cloudflare.entry._decode_jwt_principal",
+        new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
+    ):
+        resp = await _handle_sessions(SimpleNamespace(method="DELETE"), SimpleNamespace(), CloudflareConfig())
+    assert resp.status == 403
+    assert "admin role required" in json.loads(resp.body)["error"]
+
+
 # ---------------------------------------------------------------------------
 # _handle_session_delete (lines 284-294)
 # ---------------------------------------------------------------------------
@@ -289,28 +350,34 @@ async def test_handle_sessions_delete_no_kv_returns_500() -> None:
 
 async def test_handle_session_delete_forwards_to_do() -> None:
     from provide.terminal.cloudflare.cf_types import Response
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_session_delete
 
     stub = SimpleNamespace(fetch=AsyncMock(return_value=Response(body='{"ok":true}', status=200)))
     ns = SimpleNamespace(idFromName=lambda wid: "sid", get=lambda sid: stub)
     env = SimpleNamespace(SESSION_REGISTRY=AsyncMock(), SESSION_RUNTIME=ns)
     with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()) as mock_del:
-        resp = await _handle_session_delete(SimpleNamespace(method="DELETE"), env, "sess-123")
+        with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
+            resp = await _handle_session_delete(SimpleNamespace(method="DELETE"), env, "sess-123", CloudflareConfig())
     mock_del.assert_awaited_once_with(env, "sess-123")
     assert json.loads(resp.body)["deleted"] is True
 
 
 async def test_handle_session_delete_no_do_binding() -> None:
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_session_delete
 
     with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()):
-        resp = await _handle_session_delete(
-            SimpleNamespace(method="DELETE"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), "s1"
-        )
+        with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
+            resp = await _handle_session_delete(
+                SimpleNamespace(method="DELETE"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), "s1", CloudflareConfig()
+            )
     assert resp.status == 200
 
 
-async def test_handle_session_delete_do_exception_suppressed() -> None:
+async def test_handle_session_delete_do_exception_returns_500() -> None:
+    """DO cleanup failure returns 500 and does NOT delete the KV entry."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.entry import _handle_session_delete
 
     async def _bad_fetch(req):
@@ -318,11 +385,37 @@ async def test_handle_session_delete_do_exception_suppressed() -> None:
 
     stub = SimpleNamespace(fetch=_bad_fetch)
     ns = SimpleNamespace(idFromName=lambda wid: "sid", get=lambda sid: stub)
-    with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()):
-        resp = await _handle_session_delete(
-            SimpleNamespace(), SimpleNamespace(SESSION_REGISTRY=AsyncMock(), SESSION_RUNTIME=ns), "s1"
-        )
-    assert resp.status == 200
+    mock_del = AsyncMock()
+    with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=mock_del):
+        with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
+            resp = await _handle_session_delete(
+                SimpleNamespace(), SimpleNamespace(SESSION_REGISTRY=AsyncMock(), SESSION_RUNTIME=ns), "s1", CloudflareConfig()
+            )
+    assert resp.status == 500
+    assert "do_cleanup_failed" in json.loads(resp.body)["error"]
+    mock_del.assert_not_awaited()
+
+
+async def test_handle_session_delete_forbidden_for_non_owner() -> None:
+    """In JWT mode, non-owner non-admin callers must receive 403."""
+    import time
+
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _handle_session_delete
+
+    session_data = {"owner": "alice", "visibility": "private"}
+    cfg = CloudflareConfig()
+
+    async def _fake_get_kv(env, sid):
+        return session_data
+
+    with patch("provide.terminal.cloudflare.entry.get_kv_session", new=_fake_get_kv):
+        with patch(
+            "provide.terminal.cloudflare.entry._decode_jwt_principal",
+            new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
+        ):
+            resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", cfg)
+    assert resp.status == 403
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +495,9 @@ def test_match_api_route_tunnel_rotate() -> None:
 
 async def test_default_fetch_api_connect_post() -> None:
     """POST /api/connect through Default.fetch() exercises _api_connect (line 349)."""
-    d = _make_default()
+    kv = AsyncMock()
+    kv.put = AsyncMock()
+    d = _make_default({"SESSION_REGISTRY": kv})
 
     async def _json():
         return {"connector_type": "telnet", "display_name": "Test"}
@@ -481,3 +576,99 @@ async def test_delete_kv_session_exception_suppressed() -> None:
     kv = AsyncMock()
     kv.delete.side_effect = RuntimeError("kv error")
     await delete_kv_session(SimpleNamespace(SESSION_REGISTRY=kv), "my-worker")
+
+
+# ---------------------------------------------------------------------------
+# _decode_jwt_principal — JwtValidationError path (entry.py:251-254)
+# ---------------------------------------------------------------------------
+
+
+async def test_decode_jwt_principal_bad_token_returns_none() -> None:
+    """_decode_jwt_principal swallows JwtValidationError and returns None."""
+    import time
+
+    import jwt as pyjwt
+
+    from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
+    from provide.terminal.cloudflare.entry import _decode_jwt_principal
+
+    good_key = "test-secret-key-32-bytes-minimum!"
+    wrong_key = "wrong-secret-key-32-bytes-minimum"
+    now = int(time.time())
+    # Token signed with wrong_key — will fail validation against good_key
+    token = pyjwt.encode({"sub": "u1", "exp": now + 600}, wrong_key, algorithm="HS256")
+
+    cfg = CloudflareConfig(
+        jwt=JwtConfig(mode="jwt", public_key_pem=good_key, algorithms=("HS256",))
+    )
+    req = SimpleNamespace(headers=SimpleNamespace(get=lambda k, default=None: f"Bearer {token}"))
+    result = await _decode_jwt_principal(req, cfg)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _handle_session_delete — session not in KV skips auth (entry.py:327->333)
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_session_delete_session_not_in_kv_returns_404() -> None:
+    """When session is absent from KV and principal is present, delete fails closed with 404."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _handle_session_delete
+
+    mock_del = AsyncMock()
+    with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=mock_del):
+        with patch(
+            "provide.terminal.cloudflare.entry._decode_jwt_principal",
+            new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
+        ):
+            with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
+                resp = await _handle_session_delete(
+                    SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig()
+                )
+    # KV is the auth source — missing row must deny (fail closed), not proceed.
+    assert resp.status == 404
+    mock_del.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _handle_session_delete — admin/owner is authorized (entry.py:331->333)
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_session_delete_admin_allowed() -> None:
+    """Admin callers can delete any session."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _handle_session_delete
+
+    session_data = {"owner": "alice", "visibility": "private"}
+
+    with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()):
+        with patch(
+            "provide.terminal.cloudflare.entry._decode_jwt_principal",
+            new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("admin",))),
+        ):
+            with patch(
+                "provide.terminal.cloudflare.entry.get_kv_session",
+                new=AsyncMock(return_value=session_data),
+            ):
+                resp = await _handle_session_delete(
+                    SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig()
+                )
+    assert resp.status == 200
+    assert json.loads(resp.body)["deleted"] is True
+
+
+# ---------------------------------------------------------------------------
+# state/registry.py — get_kv_session exception handler (lines 86-88)
+# ---------------------------------------------------------------------------
+
+
+async def test_get_kv_session_kv_exception_returns_none() -> None:
+    """get_kv_session catches KV errors and returns None."""
+    from provide.terminal.cloudflare.state.registry import get_kv_session
+
+    kv = AsyncMock()
+    kv.get.side_effect = RuntimeError("kv unavailable")
+    result = await get_kv_session(SimpleNamespace(SESSION_REGISTRY=kv), "w1")
+    assert result is None
