@@ -51,10 +51,19 @@ class AuthorizationService:
     """Role/capability and session visibility policy."""
 
     def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
-        caps: set[Capability] = set()
+        """Return the capability set granted to ``principal``.
+
+        Roles define the maximum set.  When scopes are explicitly set on the
+        principal (non-empty and not the ``"*"`` wildcard) they *narrow* the
+        role-granted set — only capabilities named in scopes are granted.
+        Empty scopes or ``{"*"}`` mean "unrestricted — use full role set".
+        """
+        role_caps: set[Capability] = set()
         for role in principal.roles:
-            caps.update(ROLE_CAPABILITIES.get(role, frozenset()))
-        return frozenset(caps)
+            role_caps.update(ROLE_CAPABILITIES.get(role, frozenset()))
+        if principal.scopes and "*" not in principal.scopes:
+            return frozenset(cap for cap in role_caps if cap in principal.scopes)
+        return frozenset(role_caps)
 
     def has_role(self, principal: Principal, role: Role) -> bool:
         return role in principal.roles
@@ -72,6 +81,11 @@ class AuthorizationService:
         if not self.has_capability(principal, "session.read"):
             return False
         if self.is_admin(principal) or self.is_owner(principal, session):
+            return True
+        # Tunnel share-token principals carry ``subject_id=share:{id}:{role}``
+        # and are bound to the specific session the token was issued for.
+        # Treat that as authoritative read access to *that* session only.
+        if principal.subject_id.startswith(f"share:{session.session_id}:"):
             return True
         if session.visibility == "public":
             return True

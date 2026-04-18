@@ -73,6 +73,14 @@ class UiConfig(ServerBaseModel):
     xterm_cdn: str = XTERM_CDN_DEFAULT
     fitaddon_cdn: str = FITADDON_CDN_DEFAULT
     fonts_cdn: str = FONTS_CDN_DEFAULT
+    # Subresource Integrity (SRI) hashes for the CDN scripts.  When set, the
+    # <script> tags are emitted with integrity= and crossorigin=anonymous so
+    # a compromised CDN swap would make the browser refuse to execute the
+    # asset.  Hashes must match the exact version pinned in xterm_cdn /
+    # fitaddon_cdn above.  Empty = no integrity check (default, but strongly
+    # discouraged for production tunnel deployments).
+    xterm_cdn_integrity: str = ""
+    fitaddon_cdn_integrity: str = ""
 
     @field_validator("app_path")
     @classmethod

@@ -88,6 +88,7 @@ async def route_session(
             return json_response({"error": "Cannot switch to open while hijack is active."}, status=409)
         runtime.input_mode = mode
         runtime.store.save_input_mode(runtime.worker_id, mode)
+        await runtime.broadcast_hijack_state()
         return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 
     if sub == "clear" and method == "POST":

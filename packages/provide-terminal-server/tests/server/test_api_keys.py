@@ -90,11 +90,6 @@ class TestApiKeyStore:
         _raw, record = store.create("scoped", scopes=frozenset({"read", "write"}))
         assert record.scopes == frozenset({"read", "write"})
 
-    def test_create_with_rate_limit(self) -> None:
-        store = ApiKeyStore()
-        _raw, record = store.create("limited", rate_limit_per_sec=10.0)
-        assert record.rate_limit_per_sec == 10.0
-
     def test_expires_at_none_when_no_expiry(self) -> None:
         store = ApiKeyStore()
         _raw, record = store.create("permanent")
@@ -129,7 +124,6 @@ class TestApiKeyDataclass:
         key = ApiKey(key_id="abc", key_hash="def", name="test")
         assert key.revoked is False
         assert key.scopes == frozenset()
-        assert key.rate_limit_per_sec == 0
         assert key.last_used_at is None
         assert key.expires_at is None
 
@@ -201,50 +195,46 @@ class TestApiKeyPrincipalRoles:
     """Test role mapping from API key scopes."""
 
     def test_empty_scopes_gets_admin(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("admin-key")
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        set_api_key_store_hook(lambda: store)
-        principal = _principal_from_api_key({"x-api-key": raw_key}, auth)
+        principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "admin" in principal.roles
 
     def test_admin_scope_gets_admin(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("admin-key", scopes=frozenset({"admin"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        set_api_key_store_hook(lambda: store)
-        principal = _principal_from_api_key({"x-api-key": raw_key}, auth)
+        principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "admin" in principal.roles
 
     def test_operator_scope_gets_operator(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("op-key", scopes=frozenset({"operator"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        set_api_key_store_hook(lambda: store)
-        principal = _principal_from_api_key({"x-api-key": raw_key}, auth)
+        principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "operator" in principal.roles
 
     def test_other_scope_gets_viewer(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("read-key", scopes=frozenset({"session.read"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        set_api_key_store_hook(lambda: store)
-        principal = _principal_from_api_key({"x-api-key": raw_key}, auth)
+        principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "viewer" in principal.roles
 
@@ -253,37 +243,48 @@ class TestApiKeyPrincipalRoles:
         from provide.terminal.server.models import AuthConfig
 
         auth = AuthConfig(api_keys_enabled=False, mode="dev")
-        result = _principal_from_api_key({"x-api-key": "some-key"}, auth)
+        result = _principal_from_api_key({"x-api-key": "some-key"}, auth, None)
         assert result is None
 
     def test_empty_header_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
-        set_api_key_store_hook(lambda: store)
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        result = _principal_from_api_key({"x-api-key": ""}, auth)
+        result = _principal_from_api_key({"x-api-key": ""}, auth, store)
         assert result is None
 
     def test_no_store_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
-        set_api_key_store_hook(lambda: None)
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        result = _principal_from_api_key({"x-api-key": "some-key"}, auth)
+        result = _principal_from_api_key({"x-api-key": "some-key"}, auth, None)
         assert result is None
 
+    def test_per_app_isolation(self) -> None:
+        """Two apps with separate stores must not share key validity."""
+        from provide.terminal.server.auth import _principal_from_api_key
+        from provide.terminal.server.models import AuthConfig
+
+        store_a = ApiKeyStore()
+        store_b = ApiKeyStore()
+        raw_key_a, _ = store_a.create("app-a-key")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        # Key from store_a validates under store_a
+        assert _principal_from_api_key({"x-api-key": raw_key_a}, auth, store_a) is not None
+        # ...but NOT under store_b
+        assert _principal_from_api_key({"x-api-key": raw_key_a}, auth, store_b) is None
+
     def test_invalid_key_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
         store.create("real-key")
-        set_api_key_store_hook(lambda: store)
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        result = _principal_from_api_key({"x-api-key": "wrong-key"}, auth)
+        result = _principal_from_api_key({"x-api-key": "wrong-key"}, auth, store)
         assert result is None
 
 
@@ -445,23 +446,15 @@ class TestApiKeyRoutes:
     # Scoped keys: principal has correct scopes
 
     def test_scoped_key_principal_has_scopes(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key, set_api_key_store_hook
+        from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("scoped", scopes=frozenset({"session.read", "session.write"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
-        set_api_key_store_hook(lambda: store)
-        principal = _principal_from_api_key({"x-api-key": raw_key}, auth)
+        principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert principal.scopes == frozenset({"session.read", "session.write"})
-
-    def test_create_key_with_rate_limit(self, admin_client: TestClient) -> None:
-        resp = admin_client.post(
-            "/api/keys",
-            json={"name": "limited", "rate_limit_per_sec": 5.0},
-        )
-        assert resp.status_code == 200
 
     def test_create_key_scopes_non_list_ignored(self, admin_client: TestClient) -> None:
         resp = admin_client.post("/api/keys", json={"name": "bad-scopes", "scopes": "not-a-list"})

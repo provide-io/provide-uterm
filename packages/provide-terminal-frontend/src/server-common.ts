@@ -45,6 +45,7 @@ export interface ProvideHijackConfig {
   showAnalysis?: boolean;
   mobileKeys?: boolean;
   authToken?: string;
+  onResize?: (cols: number, rows: number) => void;
   onPresenceMessage?: (msg: Record<string, unknown>) => void;
 }
 

@@ -94,6 +94,8 @@ def _shell(
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
+    xterm_cdn_integrity: str = "",
+    fitaddon_cdn_integrity: str = "",
 ) -> str:
     vite_tags = _vite_entry_tags(assets_path)
     # When Vite manifest is available, the React app takes over rendering —
@@ -110,9 +112,22 @@ def _shell(
     pre_vite_tags = "".join(
         f"<script type='module' src='{escape(assets_path)}/{escape(name)}'></script>" for name in pre_vite_modules
     )
+    # SRI: when an integrity hash is provided, emit integrity= and
+    # crossorigin=anonymous on the <script> tag so the browser refuses to
+    # execute a tampered CDN asset.  This is the primary defense against a
+    # compromised third-party CDN exfiltrating share/control tokens from the
+    # DOM or making authenticated requests with the page's cookies.
+    _xterm_sri = (
+        f" integrity='{escape(xterm_cdn_integrity)}' crossorigin='anonymous'" if xterm_cdn_integrity else ""
+    )
+    _fitaddon_sri = (
+        f" integrity='{escape(fitaddon_cdn_integrity)}' crossorigin='anonymous'" if fitaddon_cdn_integrity else ""
+    )
     xterm_css = f"<link rel='stylesheet' href='{escape(xterm_cdn)}/css/xterm.css'>" if xterm_cdn else ""
-    xterm_js = f"<script src='{escape(xterm_cdn)}/lib/xterm.js'></script>" if xterm_cdn else ""
-    fitaddon_js = f"<script src='{escape(fitaddon_cdn)}/lib/addon-fit.js'></script>" if fitaddon_cdn else ""
+    xterm_js = f"<script src='{escape(xterm_cdn)}/lib/xterm.js'{_xterm_sri}></script>" if xterm_cdn else ""
+    fitaddon_js = (
+        f"<script src='{escape(fitaddon_cdn)}/lib/addon-fit.js'{_fitaddon_sri}></script>" if fitaddon_cdn else ""
+    )
     fonts_link = f"<link href='{escape(fonts_cdn)}' rel='stylesheet'>" if fonts_cdn else ""
     # When React app is active, skip legacy vanilla CSS files
     legacy_css = ""
@@ -142,7 +157,15 @@ def _bootstrap_tag(payload: Mapping[str, object]) -> str:
 
 
 def operator_dashboard_html(
-    title: str, app_path: str, assets_path: str, xterm_cdn: str = "", fitaddon_cdn: str = "", fonts_cdn: str = ""
+    title: str,
+    app_path: str,
+    assets_path: str,
+    xterm_cdn: str = "",
+    fitaddon_cdn: str = "",
+    fonts_cdn: str = "",
+    *,
+    xterm_cdn_integrity: str = "",
+    fitaddon_cdn_integrity: str = "",
 ) -> str:
     bootstrap = {
         "page_kind": "dashboard",
@@ -165,6 +188,8 @@ def operator_dashboard_html(
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
+        xterm_cdn_integrity=xterm_cdn_integrity,
+        fitaddon_cdn_integrity=fitaddon_cdn_integrity,
     )
 
 
@@ -180,6 +205,8 @@ def session_page_html(
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
+    xterm_cdn_integrity: str = "",
+    fitaddon_cdn_integrity: str = "",
 ) -> str:
     bootstrap = {
         "page_kind": "operator" if operator else "session",
@@ -210,11 +237,21 @@ def session_page_html(
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
+        xterm_cdn_integrity=xterm_cdn_integrity,
+        fitaddon_cdn_integrity=fitaddon_cdn_integrity,
     )
 
 
 def connect_page_html(
-    title: str, assets_path: str, app_path: str, *, xterm_cdn: str = "", fitaddon_cdn: str = "", fonts_cdn: str = ""
+    title: str,
+    assets_path: str,
+    app_path: str,
+    *,
+    xterm_cdn: str = "",
+    fitaddon_cdn: str = "",
+    fonts_cdn: str = "",
+    xterm_cdn_integrity: str = "",
+    fitaddon_cdn_integrity: str = "",
 ) -> str:
     """Return the quick-connect page, rendered by the frontend connect-view."""
     bootstrap = {
@@ -238,6 +275,8 @@ def connect_page_html(
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
+        xterm_cdn_integrity=xterm_cdn_integrity,
+        fitaddon_cdn_integrity=fitaddon_cdn_integrity,
     )
 
 
@@ -252,6 +291,8 @@ def inspect_page_html(
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
+    xterm_cdn_integrity: str = "",
+    fitaddon_cdn_integrity: str = "",
 ) -> str:
     bootstrap = {
         "page_kind": "inspect",
@@ -279,6 +320,8 @@ def inspect_page_html(
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
+        xterm_cdn_integrity=xterm_cdn_integrity,
+        fitaddon_cdn_integrity=fitaddon_cdn_integrity,
     )
 
 
@@ -293,6 +336,8 @@ def replay_page_html(
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
+    xterm_cdn_integrity: str = "",
+    fitaddon_cdn_integrity: str = "",
 ) -> str:
     bootstrap = {
         "page_kind": "replay",
@@ -319,4 +364,6 @@ def replay_page_html(
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
+        xterm_cdn_integrity=xterm_cdn_integrity,
+        fitaddon_cdn_integrity=fitaddon_cdn_integrity,
     )

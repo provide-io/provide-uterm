@@ -586,6 +586,10 @@ def create_api_router() -> APIRouter:
         import secrets
         import time
 
+        principal = _principal(request)
+        authz = _authz(request)
+        if not authz.can_create_session(principal):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
         cfg = request.app.state.uterm_config
         tunnel_cfg = cfg.tunnel
 
@@ -615,7 +619,7 @@ def create_api_router() -> APIRouter:
                 span,
                 session_id=tunnel_id,
                 operation="tunnel.create",
-                principal=_principal(request).subject_id,
+                principal=principal.subject_id,
                 http_method="POST",
                 http_path="/api/tunnels",
             )
@@ -629,7 +633,12 @@ def create_api_router() -> APIRouter:
                         "input_mode": "open",
                         "auto_start": False,
                         "ephemeral": True,
-                        "visibility": "public",
+                        # Tunnels rely on bearer-capability URLs (share_url /
+                        # control_url).  The session itself is private and owned
+                        # by the creator so other authenticated principals cannot
+                        # list/read/mutate it without the token.
+                        "owner": principal.subject_id,
+                        "visibility": "private",
                         "recording_enabled": True,
                     }
                 )
@@ -677,7 +686,17 @@ def create_api_router() -> APIRouter:
 
     @router.delete("/tunnels/{tunnel_id}/tokens")
     async def revoke_tunnel_tokens(request: Request, tunnel_id: _SessionId) -> dict[str, Any]:
-        """Revoke all tokens for a tunnel session."""
+        """Revoke all tokens for a tunnel session. Owner or admin only.
+
+        Idempotent: if the tunnel session no longer exists, return 200 (the
+        tokens are effectively already revoked).  If the session exists but
+        the caller is not the owner/admin, return 403.
+        """
+        principal = _principal(request)
+        authz = _authz(request)
+        session = await _registry(request).get_definition(tunnel_id)
+        if session is not None and not (authz.is_admin(principal) or authz.is_owner(principal, session)):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
         removed = tunnel_tokens.pop(tunnel_id, None)
         from provide.telemetry import get_logger
@@ -693,9 +712,17 @@ def create_api_router() -> APIRouter:
 
     @router.post("/tunnels/{tunnel_id}/tokens/rotate")
     async def rotate_tunnel_tokens(request: Request, tunnel_id: _SessionId) -> dict[str, Any]:
-        """Rotate all tokens for a tunnel session. Returns new tokens and URLs."""
+        """Rotate all tokens for a tunnel session. Owner or admin only."""
         import secrets
         import time
+
+        principal = _principal(request)
+        authz = _authz(request)
+        session = await _registry(request).get_definition(tunnel_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"unknown session: {tunnel_id}")
+        if not (authz.is_admin(principal) or authz.is_owner(principal, session)):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
 
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
         old = tunnel_tokens.get(tunnel_id)

@@ -4,29 +4,10 @@
 //
 
 import { DeckMux } from "@provide-terminal-frontend/app/deckmux/deckmux";
+import type { ProvideHijackInstance } from "@provide-terminal-frontend/server-common";
 import { useEffect, useRef } from "react";
 import type { SessionSurface } from "../../api/types";
 import { useTerminalStore } from "../../stores/terminalStore";
-
-interface ProvideHijackInstance {
-  sendControlMessage(msg: Record<string, unknown>): void;
-  readonly terminalElement: HTMLElement | null;
-}
-
-declare global {
-  interface Window {
-    ProvideHijack?: new (
-      container: HTMLElement,
-      config: {
-        workerId: string;
-        showAnalysis?: boolean;
-        mobileKeys?: boolean;
-        onResize?: (cols: number, rows: number) => void;
-        onPresenceMessage?: (msg: Record<string, unknown>) => void;
-      },
-    ) => ProvideHijackInstance;
-  }
-}
 
 interface HijackHostProps {
   sessionId: string;

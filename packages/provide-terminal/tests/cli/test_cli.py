@@ -292,7 +292,7 @@ class TestCmdListen:
             from provide.terminal.gateway import SshWsGateway, TelnetWsGateway
 
             task = asyncio.create_task(
-                _run_listen(ws_url, "127.0.0.1", 0, 0, None, None, "passthrough", TelnetWsGateway, SshWsGateway)
+                _run_listen(ws_url, "127.0.0.1", 0, 0, None, "passthrough", TelnetWsGateway, SshWsGateway)
             )
             await asyncio.sleep(0)
             task.cancel()
@@ -383,7 +383,7 @@ class TestRunListen:
 
         task = asyncio.create_task(
             _run_listen(
-                "ws://localhost/ws", "127.0.0.1", 2112, 0, None, None, "passthrough", _FakeGateway, _FakeSshGateway
+                "ws://localhost/ws", "127.0.0.1", 2112, 0, None, "passthrough", _FakeGateway, _FakeSshGateway
             )
         )
         await asyncio.sleep(0.05)
@@ -400,7 +400,7 @@ class TestRunListen:
             async def start(self, host: str, port: int) -> object:
                 raise AssertionError("Should not be called")
 
-        await _run_listen("ws://localhost/ws", "127.0.0.1", 0, 0, None, None, "passthrough", _FakeGateway, _FakeGateway)
+        await _run_listen("ws://localhost/ws", "127.0.0.1", 0, 0, None, "passthrough", _FakeGateway, _FakeGateway)
 
     async def test_run_listen_ssh_port_starts_ssh(self) -> None:
         """_run_listen with ssh_port > 0 starts an SSH gateway."""
@@ -432,7 +432,6 @@ class TestRunListen:
                 "127.0.0.1",
                 0,
                 12345,
-                None,
                 None,
                 "passthrough",
                 _FakeTelnetGateway,
@@ -473,7 +472,6 @@ class TestRunListen:
                 "127.0.0.1",
                 2112,
                 2222,
-                None,
                 None,
                 "passthrough",
                 _FakeTelnetGatewayWithStart,

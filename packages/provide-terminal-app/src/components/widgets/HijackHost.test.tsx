@@ -27,6 +27,8 @@ function mockHijackCtor() {
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     function (this: any, container: HTMLElement, config: CapturedCall["config"]) {
       calls.push({ container, config });
+      this.sendControlMessage = () => {};
+      this.terminalElement = null;
     },
   );
 }
@@ -82,11 +84,14 @@ describe("HijackHost", () => {
     expect(useTerminalStore.getState().mounted).toBe(true);
   });
 
-  it("does not call setInterval (no polling)", () => {
+  it("installs a 15s keepalive interval for idle-prune protection", () => {
     mockHijackCtor();
     const spy = vi.spyOn(globalThis, "setInterval");
     render(<HijackHost sessionId="s1" />);
-    expect(spy).not.toHaveBeenCalled();
+    // Exactly one interval, at 15s cadence — anything faster is a regression
+    // to per-keystroke polling.
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[1]).toBe(15_000);
     spy.mockRestore();
   });
 

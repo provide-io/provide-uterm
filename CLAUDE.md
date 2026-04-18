@@ -14,8 +14,14 @@ Key capabilities: session control (hijack leasing with viewer/operator/admin rol
 # Install dependencies
 uv sync --group dev
 
-# Run all tests (100% branch coverage enforced)
+# Run the core + Cloudflare test suites (what root `pytest` covers — see
+# [tool.pytest.ini_options].testpaths). 100% branch coverage enforced.
 uv run pytest
+
+# Run every workspace package's tests sequentially with its own coverage
+# config (core, cloudflare, server, platform/manager, platform/pty). This
+# mirrors the CI job split and is the real repo-wide gate.
+uv run python scripts/run_all_tests.py
 
 # Run a single test
 uv run pytest packages/provide-terminal/tests/bridge/test_hub.py::test_name -vv

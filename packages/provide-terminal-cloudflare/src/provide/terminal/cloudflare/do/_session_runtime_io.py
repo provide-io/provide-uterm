@@ -123,6 +123,7 @@ class _SessionRuntimeIoMixin:
                 "hijacked": session is not None,
                 "owner": owner,
                 "lease_expires_at": (_mono_to_wall(session.lease_expires_at) if session is not None else None),
+                "input_mode": self.input_mode,  # type: ignore[attr-defined]
                 "ts": time.time(),
             },
         )

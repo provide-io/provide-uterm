@@ -152,23 +152,21 @@ def _principal_from_local_mode(headers: Any, cookies: Any, auth: AuthConfig) -> 
     return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}), display_name=display_name)
 
 
-def _principal_from_api_key(headers: Any, auth: AuthConfig) -> Principal | None:
+def _principal_from_api_key(headers: Any, auth: AuthConfig, api_key_store: Any) -> Principal | None:
     """Check for X-API-Key header and validate against the store.
 
     Returns a Principal on success or None if no API key header is present
-    or the key is invalid.  The store is resolved lazily from a callback
-    to avoid a hard import-time dependency on the app layer.
+    or the key is invalid.  The store is passed in from the resolver so
+    each app instance uses its own store (no process-global state).
     """
     if not auth.api_keys_enabled:
         return None
     raw_key = str(headers.get("x-api-key", "")).strip()
     if not raw_key:
         return None
-    # The store is attached by the caller via the module-level hook.
-    store = _api_key_store_hook()
-    if store is None:
+    if api_key_store is None:
         return None
-    record = store.validate(raw_key)
+    record = api_key_store.validate(raw_key)
     if record is None:
         logger.warning("api_key_auth_failed key_id=unknown")
         audit_event("auth.failure", detail={"method": "api_key"})
@@ -192,22 +190,9 @@ def _principal_from_api_key(headers: Any, auth: AuthConfig) -> Principal | None:
     )
 
 
-# Module-level hook for the API key store. Set by app.py at startup.
-
-
-def _api_key_store_hook() -> Any:
-    return None
-
-
-def set_api_key_store_hook(hook: Any) -> None:
-    """Register a callable that returns the active ApiKeyStore (or None)."""
-    global _api_key_store_hook
-    _api_key_store_hook = hook
-
-
-def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig) -> Principal:
+def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig, api_key_store: Any) -> Principal:
     # API key authentication takes precedence (when enabled).
-    api_key_principal = _principal_from_api_key(headers, auth)
+    api_key_principal = _principal_from_api_key(headers, auth, api_key_store)
     if api_key_principal is not None:
         return api_key_principal
     mode = str(auth.mode).strip().lower()
@@ -230,15 +215,22 @@ def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig) -> Principa
     return principal
 
 
+def _api_key_store_from(connection: object) -> Any:
+    """Pull the per-app ApiKeyStore off ``connection.app.state`` when present."""
+    app = getattr(connection, "app", None)
+    state = getattr(app, "state", None) if app is not None else None
+    return getattr(state, "uterm_api_key_store", None) if state is not None else None
+
+
 def resolve_http_principal(request: object, auth: AuthConfig) -> Principal:
     """Resolve a principal from a FastAPI/Starlette Request-like object."""
     headers = getattr(request, "headers", {})
     cookies = getattr(request, "cookies", {})
-    return _resolve_principal(headers, cookies, auth)
+    return _resolve_principal(headers, cookies, auth, _api_key_store_from(request))
 
 
 def resolve_ws_principal(websocket: object, auth: AuthConfig) -> Principal:
     """Resolve a principal from a FastAPI/Starlette WebSocket-like object."""
     headers = getattr(websocket, "headers", {})
     cookies = getattr(websocket, "cookies", {})
-    return _resolve_principal(headers, cookies, auth)
+    return _resolve_principal(headers, cookies, auth, _api_key_store_from(websocket))

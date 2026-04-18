@@ -173,6 +173,61 @@ def test_tunnel_control_token_allows_operator_page_without_jwt() -> None:
     assert '"share_token": "control-token-123"' in r.text
 
 
+def test_tunnel_share_token_sets_httponly_cookie() -> None:
+    """Page serving a valid share token must persist it as an HttpOnly cookie.
+
+    This is what allows the WebSocket upgrade to authenticate via cookie
+    instead of a JS-readable query-param token embedded in the DOM.
+    """
+    token = "share-token-cookie-xyz"
+    app = _jwt_app_public_session("cookie-sess")
+    app.state.uterm_tunnel_tokens = {
+        "cookie-sess": {
+            "share_token": token,
+            "control_token": "ct",
+            "worker_token": "wt",
+        }
+    }
+    with TestClient(app) as c:
+        r = c.get(f"/app/session/cookie-sess?token={token}")
+    assert r.status_code == 200
+    cookies = r.headers.get_list("set-cookie")
+    matches = [c for c in cookies if c.startswith("uterm_tunnel_cookie-sess=")]
+    assert matches, f"expected uterm_tunnel_cookie-sess cookie, got: {cookies}"
+    assert "HttpOnly" in matches[0]
+    assert token in matches[0]
+
+
+def test_cdn_sri_emitted_when_configured() -> None:
+    """When xterm_cdn_integrity is set, the <script> tag must include integrity=."""
+    from provide.terminal.server import create_server_app, default_server_config
+
+    config = default_server_config()
+    config.auth.mode = "dev"
+    config.ui.xterm_cdn_integrity = "sha384-xtermhash"
+    config.ui.fitaddon_cdn_integrity = "sha384-fitaddonhash"
+    app = create_server_app(config)
+    with TestClient(app) as c:
+        r = c.get("/app/")
+    assert r.status_code == 200
+    assert "integrity='sha384-xtermhash'" in r.text
+    assert "integrity='sha384-fitaddonhash'" in r.text
+    assert "crossorigin='anonymous'" in r.text
+
+
+def test_cdn_sri_omitted_by_default() -> None:
+    """Without configured integrity, the CDN <script> tags have no integrity= attr."""
+    from provide.terminal.server import create_server_app, default_server_config
+
+    config = default_server_config()
+    config.auth.mode = "dev"
+    app = create_server_app(config)
+    with TestClient(app) as c:
+        r = c.get("/app/")
+    assert r.status_code == 200
+    assert "integrity=" not in r.text
+
+
 # ── replay_view ──────────────────────────────────────────────────────────────
 
 

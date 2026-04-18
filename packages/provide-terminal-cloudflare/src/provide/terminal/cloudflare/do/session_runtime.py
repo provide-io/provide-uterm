@@ -57,6 +57,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self.browser_sockets: dict[str, CFWebSocket] = {}
         self.raw_sockets: dict[str, CFWebSocket] = {}
         self.browser_hijack_owner: dict[str, str] = {}
+        self.browser_resume_tokens: dict[str, str] = {}
         self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
@@ -381,6 +382,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 resume_token = secrets.token_urlsafe(32)
                 resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
                 self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
+                self.browser_resume_tokens[self.ws_key(server)] = resume_token
                 try:
                     server.send(
                         encode_control(
@@ -445,6 +447,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 _open_resume_token = secrets.token_urlsafe(32)
                 _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
                 self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
+                self.browser_resume_tokens[ws_id] = _open_resume_token
                 await self.send_ws(
                     ws,
                     {
@@ -506,9 +509,16 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # self.worker_ws is None so the identity check would always be False.
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
-        if role == "browser" and self.meta.get("presence"):
-            user_id = self.ws_key(ws)
-            await self.broadcast_to_browsers({"type": "presence_leave", "user_id": user_id, "ts": time.time()})
+        if role == "browser":
+            ws_id = self.ws_key(ws)
+            if self.meta.get("presence"):
+                await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
+            # Mark the resume token as hijack owner before removing socket, so the
+            # browser can reclaim ownership on reconnect.
+            if ws_id in self.browser_hijack_owner:
+                token = self.browser_resume_tokens.get(ws_id)
+                if token:
+                    self.store.mark_resume_hijack_owner(token, True)
         self._remove_ws(ws)
         if role == "worker":
             self.lifecycle_state = "stopped"
@@ -519,9 +529,14 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
-        if role == "browser" and self.meta.get("presence"):
-            user_id = self.ws_key(ws)
-            await self.broadcast_to_browsers({"type": "presence_leave", "user_id": user_id, "ts": time.time()})
+        if role == "browser":
+            ws_id = self.ws_key(ws)
+            if self.meta.get("presence"):
+                await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
+            if ws_id in self.browser_hijack_owner:
+                token = self.browser_resume_tokens.get(ws_id)
+                if token:
+                    self.store.mark_resume_hijack_owner(token, True)
         self._remove_ws(ws)
         if role == "worker":
             self.lifecycle_state = "error"

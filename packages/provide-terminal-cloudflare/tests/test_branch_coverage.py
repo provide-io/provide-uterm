@@ -99,6 +99,7 @@ async def test_acquire_renewal_skips_pause() -> None:
         lifecycle_state = "stopped"
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
+        browser_resume_tokens: dict = {}
 
         async def browser_role_for_request(self, req):
             return "admin"

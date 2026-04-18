@@ -23,6 +23,7 @@ def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:
             self.browser_sockets: dict = {}
             self.raw_sockets: dict = {}
             self.browser_hijack_owner: dict = {}
+            self.browser_resume_tokens: dict = {}
             self.config = SimpleNamespace(jwt=SimpleNamespace(mode=jwt_mode))
 
     return _Host()  # type: ignore[return-value]

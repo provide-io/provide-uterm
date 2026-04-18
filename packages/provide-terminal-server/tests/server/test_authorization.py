@@ -65,6 +65,38 @@ class TestCapabilitiesFor:
         caps = authz.capabilities_for(p)
         assert len(caps) == 0
 
+    def test_wildcard_scope_grants_full_role_caps(self, authz: AuthorizationService) -> None:
+        """``scopes={'*'}`` is treated as unrestricted — full role caps are kept."""
+        p = Principal(subject_id="u", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+        caps = authz.capabilities_for(p)
+        assert "session.control.delete" in caps
+
+    def test_empty_scopes_grants_full_role_caps(self, authz: AuthorizationService) -> None:
+        """Empty ``scopes`` is treated as unrestricted (no constraint)."""
+        p = Principal(subject_id="u", roles=frozenset({"admin"}), scopes=frozenset())
+        caps = authz.capabilities_for(p)
+        assert "session.control.delete" in caps
+
+    def test_scopes_narrow_role_caps(self, authz: AuthorizationService) -> None:
+        """An admin with scope ``{'session.read'}`` keeps ONLY session.read."""
+        p = Principal(subject_id="u", roles=frozenset({"admin"}), scopes=frozenset({"session.read"}))
+        caps = authz.capabilities_for(p)
+        assert caps == frozenset({"session.read"})
+        assert "session.control.delete" not in caps
+
+    def test_scopes_cannot_grant_caps_beyond_role(self, authz: AuthorizationService) -> None:
+        """Scope ``{'session.control.delete'}`` on a viewer doesn't upgrade to delete."""
+        p = Principal(
+            subject_id="u",
+            roles=frozenset({"viewer"}),
+            scopes=frozenset({"session.control.delete"}),
+        )
+        caps = authz.capabilities_for(p)
+        # session.control.delete is not in viewer role → scope can't grant it
+        assert "session.control.delete" not in caps
+        # And session.read is not in the narrowed set either (scope excludes it)
+        assert "session.read" not in caps
+
 
 class TestCanReadSession:
     def test_viewer_can_read_public(self, authz: AuthorizationService) -> None:
@@ -101,6 +133,18 @@ class TestCanReadSession:
     def test_viewer_cannot_read_private(self, authz: AuthorizationService) -> None:
         p = _principal(subject_id="bob", roles=["viewer"])
         s = _session(visibility="private", owner="alice")
+        assert authz.can_read_session(p, s) is False
+
+    def test_share_token_principal_can_read_its_tunnel(self, authz: AuthorizationService) -> None:
+        """A share-token principal bound to tunnel-abc sees that specific session."""
+        p = _principal(subject_id="share:tunnel-abc:viewer", roles=["viewer"])
+        s = _session(session_id="tunnel-abc", visibility="private", owner="alice")
+        assert authz.can_read_session(p, s) is True
+
+    def test_share_token_principal_cannot_read_other_tunnel(self, authz: AuthorizationService) -> None:
+        """A share-token principal for tunnel-abc must NOT read tunnel-xyz."""
+        p = _principal(subject_id="share:tunnel-abc:viewer", roles=["viewer"])
+        s = _session(session_id="tunnel-xyz", visibility="private", owner="alice")
         assert authz.can_read_session(p, s) is False
 
 
