@@ -56,6 +56,7 @@ def _set_page_cookies(
     surface: str,
     *,
     secure: bool,
+    session_id: str | None = None,
 ) -> None:
     _set_auth_cookie(response, cfg.auth.principal_cookie, principal_name, secure=secure)
     _set_auth_cookie(response, cfg.auth.surface_cookie, surface, secure=secure)
@@ -63,6 +64,13 @@ def _set_page_cookies(
         token = extract_bearer_token(request.headers)
         if token:
             _set_auth_cookie(response, cfg.auth.token_cookie, token, secure=secure)
+    # Persist tunnel share token as an HttpOnly cookie so subsequent
+    # WebSocket auth rides on the cookie rather than a JS-readable token
+    # embedded in the page JSON.  Prevents a compromised CDN asset (or any
+    # XSS) from exfiltrating the live share token.
+    share_token = getattr(request.state, "uterm_share_token", None)
+    if share_token and session_id:
+        _set_auth_cookie(response, f"uterm_tunnel_{session_id}", str(share_token), secure=secure)
 
 
 def _share_context(request: Request) -> tuple[str | None, str | None]:
@@ -87,6 +95,8 @@ def create_page_router() -> APIRouter:
                 xterm_cdn=cfg.ui.xterm_cdn,
                 fitaddon_cdn=cfg.ui.fitaddon_cdn,
                 fonts_cdn=cfg.ui.fonts_cdn,
+                xterm_cdn_integrity=cfg.ui.xterm_cdn_integrity,
+                fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
             )
         )
         principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
@@ -115,9 +125,11 @@ def create_page_router() -> APIRouter:
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
+            xterm_cdn_integrity=cfg.ui.xterm_cdn_integrity,
+            fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
         )
         response = HTMLResponse(html)
-        _set_page_cookies(response, request, cfg, principal.name, "user", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "user", secure=secure, session_id=session_id)
         return response
 
     @router.get("/operator/{session_id}", response_class=HTMLResponse)
@@ -142,9 +154,11 @@ def create_page_router() -> APIRouter:
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
+            xterm_cdn_integrity=cfg.ui.xterm_cdn_integrity,
+            fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
         )
         response = HTMLResponse(html)
-        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure, session_id=session_id)
         return response
 
     @router.get("/replay/{session_id}", response_class=HTMLResponse)
@@ -168,9 +182,11 @@ def create_page_router() -> APIRouter:
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
+            xterm_cdn_integrity=cfg.ui.xterm_cdn_integrity,
+            fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
         )
         response = HTMLResponse(html)
-        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure, session_id=session_id)
         return response
 
     @router.get("/inspect/{session_id}", response_class=HTMLResponse)
@@ -194,9 +210,11 @@ def create_page_router() -> APIRouter:
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
+            xterm_cdn_integrity=cfg.ui.xterm_cdn_integrity,
+            fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
         )
         response = HTMLResponse(html)
-        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure, session_id=session_id)
         return response
 
     @router.get("/connect", response_class=HTMLResponse)
@@ -212,6 +230,8 @@ def create_page_router() -> APIRouter:
                 xterm_cdn=cfg.ui.xterm_cdn,
                 fitaddon_cdn=cfg.ui.fitaddon_cdn,
                 fonts_cdn=cfg.ui.fonts_cdn,
+                xterm_cdn_integrity=cfg.ui.xterm_cdn_integrity,
+                fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
             )
         )
         _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)

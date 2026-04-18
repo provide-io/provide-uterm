@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-export type AppPageKind = "dashboard" | "session" | "operator" | "replay" | "connect";
+export type AppPageKind = "dashboard" | "session" | "operator" | "replay" | "connect" | "inspect";
 export type SessionMode = "open" | "hijack";
 export type SessionSurface = "user" | "operator";
 

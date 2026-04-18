@@ -35,6 +35,7 @@ class _Runtime:
         self.last_snapshot: dict | None = None
         self.last_analysis: str | None = None
         self.browser_hijack_owner: dict[str, str] = {}
+        self.browser_resume_tokens: dict[str, str] = {}
         self.browser_sockets: dict[str, object] = {}
         self._browser_role = browser_role
         self._sent: list[dict] = []

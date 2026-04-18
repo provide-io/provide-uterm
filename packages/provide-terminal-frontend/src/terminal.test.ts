@@ -101,7 +101,10 @@ class MockXterm {
     this._onDataCb = cb;
     return { dispose: () => {} };
   }
-  attachCustomKeyEventHandler(_cb: (e: KeyboardEvent) => boolean): void {}
+  customKeyHandlerCallCount = 0;
+  attachCustomKeyEventHandler(_cb: (e: KeyboardEvent) => boolean): void {
+    this.customKeyHandlerCallCount++;
+  }
   simulateInput(data: string): void {
     this._onDataCb?.(data);
   }
@@ -663,11 +666,19 @@ describe("ProvideTerminal input sending via onData", () => {
     expect(ws.sent.length).toBe(sentBefore);
   });
 
-  it("key event handler allows normal keys (no ctrl/meta)", async () => {
+  it("does not install a custom key event handler (ctrl+c reaches terminal)", async () => {
     await makeTerminal();
-    // The key event handler is attached but we can't easily test it via MockXterm
-    // since attachCustomKeyEventHandler just stores a callback we ignore
-    // Just verify no errors during construction
+    // No custom handler means xterm processes all keys normally — Ctrl+C sends \x03,
+    // readline shortcuts work, tmux prefixes are not swallowed.
+    expect(getXterm().customKeyHandlerCallCount).toBe(0);
+  });
+
+  it("ctrl-c data is forwarded to websocket", async () => {
+    await makeTerminal({ wsUrl: "/ws/terminal" });
+    const ws = getWs();
+    ws.open();
+    getXterm().simulateInput("\x03");
+    expect(ws.sent).toContain("\x03");
   });
 });
 

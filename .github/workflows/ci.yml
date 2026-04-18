@@ -61,16 +61,8 @@ jobs:
       - run: uv run python -m pip_audit --path .
       - run: uv run python scripts/check_licenses.py
       - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-terminal/tests/playwright/test_example.py --ignore=packages/provide-terminal/tests/playwright/test_frontend_coverage.py
-      - name: Check provide.shell vendor tree
-        run: |
-          if [ ! -d "packages/provide-terminal-cloudflare/python_modules/provide/shell" ]; then
-            echo "ERROR: provide.shell missing from CF vendor tree"
-            exit 1
-          fi
-          if [ -z "$(find packages/provide-terminal-cloudflare/python_modules/provide/shell -name '*.py' -print -quit)" ]; then
-            echo "ERROR: provide.shell vendor tree is empty"
-            exit 1
-          fi
+      - name: Check CF vendor tree
+        run: bash .ci/check_cf_vendor_tree.sh
       - run: uv run pytest -q packages/provide-terminal-cloudflare/tests
       - run: uv run python scripts/verify_package_artifacts.py
 
@@ -112,6 +104,26 @@ jobs:
       - run: uv venv && uv pip install -e "packages/provide-terminal-platform/[dev]"
       - name: Run PTY unit tests (no PAM/root/native)
         run: uv run pytest packages/provide-terminal-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-terminal-platform/tests/pty/e2e -o "addopts="
+
+  npm-quality:
+    # Frontend unit tests + typecheck for both npm workspaces. Previously only
+    # build + Python gates ran in CI, so vitest regressions in the app/frontend
+    # workspaces could ship silently.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm run typecheck:frontend
+      - run: npm run typecheck:app
+      - run: npm run lint:frontend
+      - run: npm run lint:app
+      # Both workspaces have their own vitest suite.
+      - run: npm test --workspace=packages/provide-terminal-frontend
+      - run: npm test --workspace=packages/provide-terminal-app
 
   manager-quality:
     runs-on: ubuntu-latest

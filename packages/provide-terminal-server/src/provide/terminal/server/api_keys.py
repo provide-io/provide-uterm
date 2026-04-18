@@ -22,7 +22,6 @@ class ApiKey:
     scopes: frozenset[str] = frozenset()  # Allowed scopes (empty = all)
     created_at: float = field(default_factory=time.time)
     expires_at: float | None = None  # None = never expires
-    rate_limit_per_sec: float = 0  # 0 = no rate limit
     last_used_at: float | None = None
     revoked: bool = False
 
@@ -39,7 +38,6 @@ class ApiKeyStore:
         *,
         scopes: frozenset[str] = frozenset(),
         expires_in_s: int | None = None,
-        rate_limit_per_sec: float = 0,
     ) -> tuple[str, ApiKey]:
         """Create a new API key. Returns ``(raw_key, api_key_record)``.
 
@@ -55,7 +53,6 @@ class ApiKeyStore:
             name=name,
             scopes=scopes,
             expires_at=expires_at,
-            rate_limit_per_sec=rate_limit_per_sec,
         )
         self._keys[key_id] = record
         return raw_key, record

@@ -614,7 +614,6 @@ class ProvideTerminal {
 
     this.term.focus();
     this.term.onData((data) => this.handleTerminalInput(data));
-    this.term.attachCustomKeyEventHandler((event) => !(event.ctrlKey || event.metaKey));
 
     const loading = this.q<HTMLElement>("loadingScreen");
     loading.style.removeProperty("display");

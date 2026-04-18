@@ -335,7 +335,7 @@ class TestResolvePrincipal:
         from provide.terminal.server.models import AuthConfig
 
         auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
-        p = _resolve_principal({}, {}, auth)
+        p = _resolve_principal({}, {}, auth, None)
         assert "admin" in p.roles
 
     def test_none_mode_returns_admin_scopes(self) -> None:
@@ -343,7 +343,7 @@ class TestResolvePrincipal:
         from provide.terminal.server.models import AuthConfig
 
         auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
-        p = _resolve_principal({}, {}, auth)
+        p = _resolve_principal({}, {}, auth, None)
         assert "admin" in p.roles
 
     def test_header_mode_uses_header_auth(self) -> None:
@@ -351,7 +351,7 @@ class TestResolvePrincipal:
         from provide.terminal.server.models import AuthConfig
 
         auth = AuthConfig(mode="header", worker_bearer_token=_make_token())
-        p = _resolve_principal({"x-uterm-principal": "charlie", "x-uterm-role": "viewer"}, {}, auth)
+        p = _resolve_principal({"x-uterm-principal": "charlie", "x-uterm-role": "viewer"}, {}, auth, None)
         assert p.subject_id == "charlie"
         assert "viewer" in p.roles
 
@@ -362,28 +362,28 @@ class TestResolvePrincipal:
         auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
         auth.mode = "mystery_mode"  # type: ignore[assignment]
         with pytest.raises(ValueError, match="unknown auth mode"):
-            _resolve_principal({}, {}, auth)
+            _resolve_principal({}, {}, auth, None)
 
     def test_jwt_mode_valid_bearer_token(self) -> None:
         from provide.terminal.server.auth import _resolve_principal
 
         auth = _jwt_auth_config()
         token = _make_token(sub="david", roles=["operator"])
-        p = _resolve_principal({"authorization": f"Bearer {token}"}, {}, auth)
+        p = _resolve_principal({"authorization": f"Bearer {token}"}, {}, auth, None)
         assert p.subject_id == "david"
 
     def test_jwt_mode_no_token_returns_anonymous(self) -> None:
         from provide.terminal.server.auth import _resolve_principal
 
         auth = _jwt_auth_config()
-        p = _resolve_principal({}, {}, auth)
+        p = _resolve_principal({}, {}, auth, None)
         assert p.subject_id == "anonymous"
 
     def test_jwt_mode_invalid_token_returns_anonymous(self) -> None:
         from provide.terminal.server.auth import _resolve_principal
 
         auth = _jwt_auth_config()
-        p = _resolve_principal({"authorization": "Bearer notavalidtoken"}, {}, auth)
+        p = _resolve_principal({"authorization": "Bearer notavalidtoken"}, {}, auth, None)
         assert p.subject_id == "anonymous"
 
     def test_jwt_mode_cookie_fallback(self) -> None:
@@ -392,5 +392,5 @@ class TestResolvePrincipal:
         auth = _jwt_auth_config()
         # Use the token_cookie field name (default: "uterm_token")
         token = _make_token(sub="eve", roles=["viewer"])
-        p = _resolve_principal({}, {"uterm_token": token}, auth)
+        p = _resolve_principal({}, {"uterm_token": token}, auth, None)
         assert p.subject_id == "eve"

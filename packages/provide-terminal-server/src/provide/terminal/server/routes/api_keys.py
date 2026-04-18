@@ -63,12 +63,10 @@ def create_api_keys_router() -> APIRouter:
             expires_in_s = int(expires_in_s)
             if expires_in_s < 60:
                 raise HTTPException(status_code=422, detail="expires_in_s must be >= 60")
-        rate_limit = float(payload.get("rate_limit_per_sec", 0))
         raw_key, record = store.create(
             name,
             scopes=scopes,
             expires_in_s=expires_in_s,
-            rate_limit_per_sec=rate_limit,
         )
         audit_event(
             "api_key.create",

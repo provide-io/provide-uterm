@@ -31,7 +31,6 @@ from provide.terminal.server.auth import (
     extract_bearer_token,
     resolve_http_principal,
     resolve_ws_principal,
-    set_api_key_store_hook,
 )
 from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
@@ -446,7 +445,6 @@ def create_server_app(
     app.state.uterm_tunnel_tokens = tunnel_tokens
     api_key_store = ApiKeyStore()
     app.state.uterm_api_key_store = api_key_store
-    set_api_key_store_hook(lambda: api_key_store)
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:

@@ -185,6 +185,127 @@ def test_create_session_owner_mismatch_forbidden() -> None:
         assert r.status_code == 403
 
 
+def _two_principal_jwt_app() -> tuple[TestClient, str, str]:
+    """Helper: build a JWT-mode app and return (client, alice_token, bob_token).
+
+    Used by tunnel access-control tests to verify that one authenticated
+    user cannot rotate/revoke another user's tunnel.
+    """
+    import time
+
+    import jwt as _jwt
+
+    from provide.terminal.server.models import AuthConfig
+
+    key = "uterm-test-secret-32-byte-minimum-key"
+    now = int(time.time())
+
+    def _tok(sub: str, roles: list[str]) -> str:
+        return _jwt.encode(
+            {
+                "sub": sub,
+                "roles": roles,
+                "iss": "provide-terminal",
+                "aud": "provide-terminal-server",
+                "iat": now,
+                "nbf": now,
+                "exp": now + 600,
+            },
+            key=key,
+            algorithm="HS256",
+        )
+
+    alice = _tok("alice", ["operator"])
+    bob = _tok("bob", ["operator"])
+    worker = _tok("worker", ["admin"])
+    config = default_server_config()
+    config.auth = AuthConfig(
+        mode="jwt", jwt_public_key_pem=key, jwt_algorithms=["HS256"], worker_bearer_token=worker
+    )
+    app = create_server_app(config)
+    return TestClient(app), alice, bob
+
+
+def test_tunnel_non_owner_cannot_revoke_tokens() -> None:
+    """A second authenticated user must not be able to revoke alice's tunnel tokens."""
+    client, alice, bob = _two_principal_jwt_app()
+    with client:
+        r = client.post(
+            "/api/tunnels",
+            json={"tunnel_type": "terminal"},
+            headers={"Authorization": f"Bearer {alice}"},
+        )
+        assert r.status_code == 200
+        tunnel_id = r.json()["tunnel_id"]
+
+        r = client.delete(
+            f"/api/tunnels/{tunnel_id}/tokens",
+            headers={"Authorization": f"Bearer {bob}"},
+        )
+        assert r.status_code == 403
+
+
+def test_tunnel_non_owner_cannot_rotate_tokens() -> None:
+    """A second authenticated user must not be able to rotate alice's tunnel tokens."""
+    client, alice, bob = _two_principal_jwt_app()
+    with client:
+        r = client.post(
+            "/api/tunnels",
+            json={"tunnel_type": "terminal"},
+            headers={"Authorization": f"Bearer {alice}"},
+        )
+        assert r.status_code == 200
+        tunnel_id = r.json()["tunnel_id"]
+
+        r = client.post(
+            f"/api/tunnels/{tunnel_id}/tokens/rotate",
+            headers={"Authorization": f"Bearer {bob}"},
+        )
+        assert r.status_code == 403
+
+
+def test_tunnel_owner_can_rotate_and_revoke() -> None:
+    """The creator of a tunnel retains rotate/revoke privileges."""
+    client, alice, _bob = _two_principal_jwt_app()
+    with client:
+        r = client.post(
+            "/api/tunnels",
+            json={"tunnel_type": "terminal"},
+            headers={"Authorization": f"Bearer {alice}"},
+        )
+        tunnel_id = r.json()["tunnel_id"]
+        assert client.post(
+            f"/api/tunnels/{tunnel_id}/tokens/rotate",
+            headers={"Authorization": f"Bearer {alice}"},
+        ).status_code == 200
+        assert client.delete(
+            f"/api/tunnels/{tunnel_id}/tokens",
+            headers={"Authorization": f"Bearer {alice}"},
+        ).status_code == 200
+
+
+def test_tunnel_rotate_on_missing_session_404() -> None:
+    """Rotating a non-existent tunnel returns 404 (cannot rotate what's gone)."""
+    client, alice, _ = _two_principal_jwt_app()
+    with client:
+        r = client.post(
+            "/api/tunnels/tunnel-nonexistent/tokens/rotate",
+            headers={"Authorization": f"Bearer {alice}"},
+        )
+        assert r.status_code == 404
+
+
+def test_tunnel_revoke_missing_session_is_idempotent() -> None:
+    """Revoking a non-existent tunnel is idempotent (200) — tokens are already gone."""
+    client, alice, _ = _two_principal_jwt_app()
+    with client:
+        r = client.delete(
+            "/api/tunnels/tunnel-nonexistent/tokens",
+            headers={"Authorization": f"Bearer {alice}"},
+        )
+        assert r.status_code == 200
+
+
 def test_recording_download_no_config_on_app_state(app_client: TestClient, sid: str) -> None:
     """Recording download returns 404 when uterm_config is absent from app state."""
     config = default_server_config()

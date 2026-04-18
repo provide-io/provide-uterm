@@ -53,6 +53,7 @@ class _Runtime:
         self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
         self.browser_hijack_owner: dict[str, str] = {}
+        self.browser_resume_tokens: dict[str, str] = {}
         self._sent: list[dict] = []
 
     async def request_json(self, request: object) -> dict:

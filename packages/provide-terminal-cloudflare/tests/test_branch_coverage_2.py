@@ -27,6 +27,7 @@ def test_socket_role_colon_format_invalid_first_part_falls_back() -> None:
         browser_sockets: dict = {}
         raw_sockets: dict = {}
         browser_hijack_owner: dict = {}
+        browser_resume_tokens: dict = {}
         config = SimpleNamespace(jwt=SimpleNamespace(mode="dev"))
 
     host = _Host()
@@ -53,6 +54,7 @@ def test_socket_role_to_py_returns_other_type_falls_back() -> None:
         browser_sockets: dict = {}
         raw_sockets: dict = {}
         browser_hijack_owner: dict = {}
+        browser_resume_tokens: dict = {}
         config = SimpleNamespace(jwt=SimpleNamespace(mode="dev"))
 
     host = _Host()
