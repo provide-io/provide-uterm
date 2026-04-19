@@ -407,11 +407,15 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnel_revoke_dispatch(self) -> None:
         """Lines 422-427: _api_tunnel_revoke calls handler."""
+        from provide.terminal.cloudflare.config import CloudflareConfig
         from provide.terminal.cloudflare.entry import _api_tunnel_revoke
 
+        cfg = CloudflareConfig.from_env(
+            SimpleNamespace(AUTH_MODE="dev", JWT_ALGORITHMS="HS256", WORKER_BEARER_TOKEN="t")
+        )
         req = _req("/api/tunnels/tid/tokens", method="DELETE")
         env = SimpleNamespace(SESSION_REGISTRY=None)
-        resp = await _api_tunnel_revoke(req, env, "tid")
+        resp = await _api_tunnel_revoke(req, env, cfg, "tid")
         assert resp.status in {200, 404, 500}
 
     async def test_api_tunnel_rotate_dispatch(self) -> None:

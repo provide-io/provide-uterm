@@ -239,12 +239,45 @@ async def _require_jwt(request: object, config: CloudflareConfig) -> Response | 
 
 
 async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> object | None:
-    """Decode the JWT and return the principal for ownership/role checks.
+    """Decode the caller's principal for ownership/role checks.
 
     Returns ``None`` in ``none``/``dev`` mode (open access — no enforcement).
+
+    In ``jwt`` mode, accepts every auth path the middleware already trusts:
+
+    * ``Cf-Access-Authenticated-User-Email`` → synthesized Principal with
+      the email as subject_id (role: ``viewer``) — CF Access already
+      validated the end-user identity upstream.
+    * ``CF-Access-Client-Id`` (suffix ``.access``) → synthesized Principal
+      with ``service:<client_id>`` as subject_id and ``admin`` role —
+      service tokens are deployed with machine-to-machine intent and
+      don't carry user-level scopes.
+    * App JWT bearer/cookie → ``decode_jwt`` (handles public_key_pem AND
+      jwks_url via Web Crypto).
+
+    Previously this function only decoded app JWTs, which meant a request
+    authenticated by CF Access Service Auth passed ``_require_jwt`` but
+    then collapsed to ``principal=None`` downstream — bulk delete and
+    ownerless session creation were executed as if the caller were anonymous.
     """
     if config.jwt.mode in {"none", "dev"}:
         return None
+    # CF Access authenticated user
+    email = _read_header(
+        request,
+        "cf-access-authenticated-user-email",
+        "Cf-Access-Authenticated-User-Email",
+    )
+    if email:
+        from provide.terminal.cloudflare.auth.jwt import Principal as _Principal
+
+        return _Principal(subject_id=email, roles=("viewer",))
+    # CF Access service token
+    client_id = _read_header(request, "cf-access-client-id", "CF-Access-Client-Id")
+    if client_id.endswith(".access"):
+        from provide.terminal.cloudflare.auth.jwt import Principal as _Principal
+
+        return _Principal(subject_id=f"service:{client_id}", roles=("admin",))
     token = extract_bearer_or_cookie(request)
     if not token:
         return None
@@ -449,7 +482,7 @@ def _match_api_route(path: str, request: object) -> object | None:
         method = str(getattr(request, "method", "GET")).upper()
         if method == "DELETE":
             tid = revoke_match.group("tunnel_id")
-            return lambda req, env, _cfg: _api_tunnel_revoke(req, env, tid)
+            return lambda req, env, cfg: _api_tunnel_revoke(req, env, cfg, tid)
     if path == "/api/pam-events":
         return _api_pam_events
     if path.startswith("/api/profiles"):
@@ -472,22 +505,24 @@ async def _api_connect(request: object, env: object, config: CloudflareConfig) -
     return await _handle_connect(request, env, config)
 
 
-async def _api_tunnels(request: object, env: object, _config: CloudflareConfig) -> Response:
+async def _api_tunnels(request: object, env: object, config: CloudflareConfig) -> Response:
     try:
         from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
     except ImportError:  # pragma: no cover
         from api._tunnel_api import handle_tunnels  # type: ignore[import-not-found]
 
-    return await handle_tunnels(request, env)
+    principal = await _decode_jwt_principal(request, config)
+    return await handle_tunnels(request, env, principal)
 
 
-async def _api_tunnel_revoke(request: object, env: object, tunnel_id: str) -> Response:
+async def _api_tunnel_revoke(request: object, env: object, config: CloudflareConfig, tunnel_id: str) -> Response:
     try:
         from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
     except ImportError:  # pragma: no cover
         from api._tunnel_api import handle_tunnel_revoke_tokens  # type: ignore[import-not-found]
 
-    return await handle_tunnel_revoke_tokens(request, env, tunnel_id)
+    principal = await _decode_jwt_principal(request, config)
+    return await handle_tunnel_revoke_tokens(request, env, tunnel_id, principal)
 
 
 async def _api_tunnel_rotate(request: object, env: object, config: CloudflareConfig, tunnel_id: str) -> Response:
@@ -496,7 +531,10 @@ async def _api_tunnel_rotate(request: object, env: object, config: CloudflareCon
     except ImportError:  # pragma: no cover
         from api._tunnel_api import handle_tunnel_rotate_tokens  # type: ignore[import-not-found]
 
-    return await handle_tunnel_rotate_tokens(request, env, tunnel_id, ttl_s=config.tunnel_token_ttl_s)
+    principal = await _decode_jwt_principal(request, config)
+    return await handle_tunnel_rotate_tokens(
+        request, env, tunnel_id, principal, ttl_s=config.tunnel_token_ttl_s
+    )
 
 
 async def _api_pam_events(request: object, env: object, _config: CloudflareConfig) -> Response:
@@ -514,28 +552,57 @@ async def _api_profiles(request: object, env: object, config: CloudflareConfig) 
     path = urlparse(str(getattr(request, "url", ""))).path
     method = str(getattr(request, "method", "GET")).upper()
     # In dev mode, use a fixed principal. In JWT mode, resolve from token.
-    principal_id = "dev-user" if config.jwt.mode == "dev" else _resolve_principal_id(request, config)
+    principal_id = "dev-user" if config.jwt.mode == "dev" else await _resolve_principal_id(request, config)
     return await route_profiles(request, env, path, method, principal_id)
 
 
-def _resolve_principal_id(request: object, config: CloudflareConfig) -> str:
-    """Extract principal subject_id from JWT token on a pre-authenticated request.
+def _read_header(request: object, *names: str) -> str:
+    """Read the first non-empty value of ``names`` from ``request.headers``."""
+    try:
+        headers = request.headers  # type: ignore[attr-defined]
+    except Exception:
+        return ""
+    for name in names:
+        try:
+            val = str(headers.get(name) or "")
+        except Exception:  # noqa: S112
+            continue
+        if val:
+            return val
+    return ""
 
-    Uses synchronous PyJWT decode (not the async Web Crypto path) since this runs
-    in the entry worker, not inside a DO.
+
+async def _resolve_principal_id(request: object, config: CloudflareConfig) -> str:
+    """Extract principal subject_id on a pre-authenticated request.
+
+    Supports every path the auth layer already accepts:
+
+    * CF Access authenticated user → ``Cf-Access-Authenticated-User-Email``
+    * CF Access service token      → ``CF-Access-Client-Id`` (suffix ``.access``)
+    * App JWT bearer/cookie        → ``decode_jwt`` (handles both
+      ``public_key_pem`` AND ``jwks_url``; the previous implementation used
+      sync PyJWT with ``public_key_pem`` only, silently degrading every
+      JWKS-based deployment to ``anonymous`` ownership on profile CRUD.)
+
+    Returns ``"anonymous"`` only when none of those produce an identity.
     """
-    from provide.terminal.cloudflare.auth.jwt import extract_bearer_or_cookie
-
+    email = _read_header(
+        request,
+        "cf-access-authenticated-user-email",
+        "Cf-Access-Authenticated-User-Email",
+    )
+    if email:
+        return email
+    client_id = _read_header(request, "cf-access-client-id", "CF-Access-Client-Id")
+    if client_id.endswith(".access"):
+        return f"service:{client_id}"
     token = extract_bearer_or_cookie(request)
     if not token:
         return "anonymous"
     try:
-        import jwt as pyjwt
-
-        key = config.jwt.public_key_pem or ""
-        claims = pyjwt.decode(token, key, algorithms=list(config.jwt.algorithms), options={"verify_exp": True})
-        return str(claims.get("sub") or claims.get("common_name") or "anonymous")
-    except Exception:
+        principal = await decode_jwt(token, config.jwt)
+        return str(principal.subject_id or "anonymous")
+    except JwtValidationError:
         return "anonymous"
 
 

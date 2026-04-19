@@ -88,8 +88,6 @@ export interface AppBootstrap {
   session_id?: string;
   surface?: SessionSurface;
   share_role?: "viewer" | "operator";
-  /** SECURITY: ephemeral credential — do not log, cache, or persist. Expires with tunnel TTL. */
-  share_token?: string;
 }
 
 export interface ConnectionProfile {

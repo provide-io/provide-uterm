@@ -118,6 +118,20 @@ class TestExtractMenuOptions:
         assert len(result) >= 1
 
 
+class TestExtractMenuOptionsEmptyDescription:
+    """Covers the ``if description`` false branch in extract_menu_options."""
+
+    def test_whitespace_only_description_skipped(self) -> None:
+        from provide.terminal.screen import extract_menu_options
+
+        # <A> has only a space before the next menu entry → description is empty
+        screen = "<A>   <B> real option"
+        result = extract_menu_options(screen)
+        keys = [k for k, _d in result]
+        assert "A" not in keys  # empty description → skipped
+        assert "B" in keys
+
+
 class TestExtractNumberedList:
     def test_dot_format(self) -> None:
         screen = "1. Alpha\n2. Beta\n3. Gamma"
@@ -139,6 +153,16 @@ class TestExtractNumberedList:
         result = extract_numbered_list(screen, pattern=r"Item (\d+) - (.+)")
         assert ("1", "description") in result
         assert len(result) == 2
+
+    def test_empty_description_is_skipped(self) -> None:
+        """A matching line whose description is whitespace is dropped.
+
+        Covers the ``if description`` false branch — without this the
+        extractor would append (number, "") to the result.
+        """
+        screen = "1.    \n2. real item"
+        result = extract_numbered_list(screen)
+        assert result == [("2", "real item")]
 
     def test_invalid_pattern_returns_empty(self) -> None:
         result = extract_numbered_list("1. test", pattern=r"(invalid(?P<bad>)")

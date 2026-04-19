@@ -18,9 +18,11 @@ uv sync --group dev
 # [tool.pytest.ini_options].testpaths). 100% branch coverage enforced.
 uv run pytest
 
-# Run every workspace package's tests sequentially with its own coverage
-# config (core, cloudflare, server, platform/manager, platform/pty). This
-# mirrors the CI job split and is the real repo-wide gate.
+# Run every workspace package's Python tests sequentially with its own
+# coverage config (core, cloudflare, server, platform/manager, platform/pty).
+# This covers the Python side of what CI runs. CI also runs npm vitest
+# (npm-quality job) + CF python_modules vendor check (.ci/check_cf_vendor_tree.sh)
+# — run those separately if you want full CI parity locally.
 uv run python scripts/run_all_tests.py
 
 # Run a single test

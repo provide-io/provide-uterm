@@ -29,6 +29,9 @@ function mockHijackCtor() {
       calls.push({ container, config });
       this.sendControlMessage = () => {};
       this.terminalElement = null;
+      // Production HijackHost cleanup calls widget.dispose() on unmount;
+      // a missing dispose() crashes the teardown of every test that mounts.
+      this.dispose = () => {};
     },
   );
 }

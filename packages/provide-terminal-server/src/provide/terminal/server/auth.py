@@ -172,20 +172,37 @@ def _principal_from_api_key(headers: Any, auth: AuthConfig, api_key_store: Any) 
         audit_event("auth.failure", detail={"method": "api_key"})
         return None
     roles: frozenset[str]
+    scopes: frozenset[str]
+    # Scope list carries two independent signals:
+    #   (a) role-marker scopes ({"admin"}, {"operator"}, {"viewer"}) — legacy
+    #       shorthand that assigns the named role with unrestricted scope
+    #   (b) capability-name scopes ({"session.read", "session.control.create"})
+    #       — the scope list is authoritative; the principal gets admin role
+    #       so scope narrowing in AuthorizationService.capabilities_for() is
+    #       the only authorization gate.
+    # Empty scopes = legacy full-access (admin, unrestricted).
     if "admin" in record.scopes:
         roles = frozenset({"admin"})
+        scopes = frozenset({"*"})
     elif "operator" in record.scopes:
         roles = frozenset({"operator"})
-    elif record.scopes:
+        scopes = frozenset({"*"})
+    elif "viewer" in record.scopes:
         roles = frozenset({"viewer"})
+        scopes = frozenset({"*"})
+    elif record.scopes:
+        # Capability-only scopes: role=admin, scope narrowing enforces caps
+        roles = frozenset({"admin"})
+        scopes = record.scopes
     else:
         # Empty scopes = full access
         roles = frozenset({"admin"})
+        scopes = frozenset()
     audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
     return Principal(
         subject_id=f"apikey:{record.key_id}",
         roles=roles,
-        scopes=record.scopes,
+        scopes=scopes,
         claims={"key_id": record.key_id, "key_name": record.name},
     )
 

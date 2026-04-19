@@ -801,7 +801,6 @@ class TestUiGaps:
             "sess-1",
             app_path="/app",
             share_role="operator",
-            share_token="tok-123",
             xterm_cdn="https://cdn.example.com/xterm",
             fitaddon_cdn="https://cdn.example.com/fitaddon",
             fonts_cdn="https://fonts.example.com/font",
@@ -809,7 +808,9 @@ class TestUiGaps:
         assert '"page_kind": "inspect"' in html
         assert '"session_id": "sess-1"' in html
         assert '"share_role": "operator"' in html
-        assert '"share_token": "tok-123"' in html
+        # share_token must NOT be embedded in the bootstrap JSON (security:
+        # capability tokens travel via HttpOnly cookie only).
+        assert '"share_token"' not in html
         assert "hijack.js" in html
         assert "xterm.js" in html
 

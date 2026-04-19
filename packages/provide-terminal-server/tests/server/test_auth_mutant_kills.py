@@ -285,7 +285,7 @@ class TestResolvePrincipalMutations:
         from provide.terminal.server.auth import _resolve_principal
 
         auth = _jwt_auth_config()
-        p = _resolve_principal({"authorization": "Bearer invalid.token.here"}, {}, auth)
+        p = _resolve_principal({"authorization": "Bearer invalid.token.here"}, {}, auth, None)
         assert p.subject_id == "anonymous"
 
     def test_cookies_passed_to_header_auth_not_none(self) -> None:
@@ -295,7 +295,7 @@ class TestResolvePrincipalMutations:
 
         auth = AuthConfig(mode="header", worker_bearer_token=_make_token())
         # With cookies containing a principal, it should be accessible
-        p = _resolve_principal({}, {"uterm_principal": "cookie_user"}, auth)
+        p = _resolve_principal({}, {"uterm_principal": "cookie_user"}, auth, None)
         assert p.subject_id == "cookie_user"
 
 

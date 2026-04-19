@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -365,3 +366,146 @@ class TestTunnelRotateTokens:
 
         resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-bad")
         assert resp.status == 500
+
+
+class TestTunnelAuthz:
+    """Ownership enforcement on tunnel management in CF worker.
+
+    Mirrors the FastAPI server's tunnel access control: creating a tunnel
+    records the caller as owner and marks the session private; rotate and
+    revoke require owner-or-admin; service-token principals (admin) bypass.
+    """
+
+    @pytest.mark.asyncio
+    async def test_create_tunnel_records_owner_and_private_visibility(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
+
+        kv = MagicMock()
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.method = "POST"
+        request.url = "https://example.com/api/tunnels"
+        request.json = AsyncMock(return_value={"tunnel_type": "terminal"})
+
+        principal = SimpleNamespace(subject_id="alice", roles=("viewer",))
+        resp = await handle_tunnels(request, env, principal)
+        assert resp.status == 200
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["owner"] == "alice"
+        assert stored["visibility"] == "private"
+
+    @pytest.mark.asyncio
+    async def test_create_tunnel_open_mode_keeps_public_ownerless(self) -> None:
+        """None principal (dev/none mode) → visibility=public, no owner."""
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
+
+        kv = MagicMock()
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.method = "POST"
+        request.url = "https://example.com/api/tunnels"
+        request.json = AsyncMock(return_value={"tunnel_type": "terminal"})
+
+        resp = await handle_tunnels(request, env, None)
+        assert resp.status == 200
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["owner"] is None
+        assert stored["visibility"] == "public"
+
+    @pytest.mark.asyncio
+    async def test_revoke_non_owner_gets_403(self) -> None:
+        """Bob cannot revoke Alice's tunnel."""
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        entry = {"session_id": "tunnel-abc", "owner": "alice", "share_token": "s", "control_token": "c"}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        bob = SimpleNamespace(subject_id="bob", roles=("viewer",))
+        resp = await handle_tunnel_revoke_tokens(MagicMock(), env, "tunnel-abc", bob)
+        assert resp.status == 403
+        kv.put.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revoke_owner_allowed(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        entry = {"session_id": "tunnel-abc", "owner": "alice", "share_token": "s", "control_token": "c"}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        alice = SimpleNamespace(subject_id="alice", roles=("viewer",))
+        resp = await handle_tunnel_revoke_tokens(MagicMock(), env, "tunnel-abc", alice)
+        assert resp.status == 200
+
+    @pytest.mark.asyncio
+    async def test_revoke_admin_bypass(self) -> None:
+        """An admin principal can revoke any tunnel."""
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        entry = {"session_id": "tunnel-abc", "owner": "alice", "share_token": "s", "control_token": "c"}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        admin = SimpleNamespace(subject_id="svc:ops", roles=("admin",))
+        resp = await handle_tunnel_revoke_tokens(MagicMock(), env, "tunnel-abc", admin)
+        assert resp.status == 200
+
+    @pytest.mark.asyncio
+    async def test_rotate_non_owner_gets_403(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        entry = {
+            "session_id": "tunnel-abc",
+            "owner": "alice",
+            "worker_token": "w",
+            "share_token": "s",
+            "control_token": "c",
+            "expires_at": time.time() + 100,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-abc/tokens/rotate"
+
+        bob = SimpleNamespace(subject_id="bob", roles=("viewer",))
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-abc", bob, ttl_s=3600)
+        assert resp.status == 403
+        kv.put.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rotate_owner_allowed(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        entry = {
+            "session_id": "tunnel-abc",
+            "owner": "alice",
+            "worker_token": "w",
+            "share_token": "s",
+            "control_token": "c",
+            "expires_at": time.time() + 100,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-abc/tokens/rotate"
+
+        alice = SimpleNamespace(subject_id="alice", roles=("viewer",))
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-abc", alice, ttl_s=3600)
+        assert resp.status == 200

@@ -201,10 +201,15 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             )
 
     async def browser_role_for_request(self, request: object) -> str:
-        """Return the caller's role string based on JWT or auth mode.
+        """Return the caller's role string based on JWT, ownership, or auth mode.
 
         Returns ``"admin"`` in ``none``/``dev`` mode (open access). In ``jwt`` mode,
         decodes the token and returns ``"admin"``, ``"operator"``, or ``"viewer"``.
+        Owners of a private session are elevated to ``"operator"`` when their
+        JWT role is lower — matching the hosted FastAPI server's
+        ``resolve_browser_role``.  Without this elevation an owner with a
+        ``viewer``-role JWT could read their session via the visibility check
+        but would get 403 on every mutation route (mode/hijack/…).
         Falls back to ``"viewer"`` if the token is missing or invalid (the token
         was already validated in ``fetch()``; this is only for role extraction).
         """
@@ -218,11 +223,17 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             return "viewer"
         try:
             principal = await decode_jwt(token, self.config.jwt)
-            return _resolve_jwt_role(principal)
         except JwtValidationError:
             return "viewer"
         # Other exceptions (e.g. network errors fetching JWKS) propagate so the
         # caller returns a 5xx rather than silently downgrading the caller to viewer.
+        jwt_role = _resolve_jwt_role(principal)
+        if jwt_role == "admin":
+            return "admin"
+        owner = self.meta.get("owner")
+        if owner is not None and principal.subject_id == owner:
+            return "operator"
+        return jwt_role
 
     async def browser_subject_for_request(self, request: object) -> str | None:
         """Return the JWT subject_id for the caller, or ``None`` in open-access modes.

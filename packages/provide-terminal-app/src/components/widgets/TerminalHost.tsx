@@ -8,7 +8,7 @@ import { useTerminalStore } from "../../stores/terminalStore";
 
 declare global {
   interface Window {
-    ProvideTerminal?: new (container: HTMLElement, config: Record<string, unknown>) => unknown;
+    ProvideTerminal?: new (container: HTMLElement, config: Record<string, unknown>) => { dispose(): void };
   }
 }
 
@@ -28,9 +28,10 @@ export function TerminalHost({ config }: TerminalHostProps) {
       setMounted(false, "ProvideTerminal is not available");
       return;
     }
-    new TermWidget(containerRef.current, config ?? {});
+    const widget = new TermWidget(containerRef.current, config ?? {});
     mountedRef.current = true;
     setMounted(true);
+    return () => { widget.dispose(); };
   }, [config, setMounted]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;

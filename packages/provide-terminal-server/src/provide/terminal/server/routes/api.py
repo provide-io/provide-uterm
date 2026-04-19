@@ -278,6 +278,11 @@ def create_api_router() -> APIRouter:
                 http_path=f"/api/sessions/{session_id}",
             )
             await _registry(request).delete_session(session_id)
+        # Revoke any tunnel tokens bound to this session_id — otherwise an
+        # old share_token could authorize a replacement session created later
+        # under the same ID.
+        tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
+        tunnel_tokens.pop(session_id, None)
         audit_event(
             "session.delete",
             principal=principal.subject_id,
