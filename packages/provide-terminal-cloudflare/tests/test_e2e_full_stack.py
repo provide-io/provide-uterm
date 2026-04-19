@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Full-stack E2E tests: HostedSessionRuntime + CF proxy + hibernation.
 
 Tests the complete Python-library-to-CF-DO proxy chain:

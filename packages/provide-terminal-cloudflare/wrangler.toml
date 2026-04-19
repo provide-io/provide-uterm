@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 name = "provide-terminal-cloudflare"
 account_id = "0cd7f4f58f13e02c5bf57aa9dc347d1d"
 main = "src/provide/terminal/cloudflare/entry.py"

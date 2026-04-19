@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """E2E smoke tests against a live pywrangler dev server.
 
 These tests are skipped by default.  Run with:
