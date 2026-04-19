@@ -446,23 +446,31 @@ class TestTunnelCreationDetails:
 class TestTokenTransportEnforcement:
     """Verify token_transport config is actually enforced."""
 
-    def test_query_only_rejects_cookie(self) -> None:
-        """When token_transport='query', cookie is not accepted."""
+    def test_query_mode_accepts_cookie_for_followon_requests(self) -> None:
+        """token_transport='query' must still accept the HttpOnly cookie.
+
+        Regression guard for the transport-mode mismatch: the page handler
+        always stamps uterm_tunnel_{id}, and the current frontend drops
+        ?token= after the initial page load.  If the server only reads the
+        query param in "query" mode, all follow-on REST/WS requests would
+        degrade to anonymous — breaking the deployment.
+        """
         cfg, app = _make_app()
         cfg.tunnel.token_transport = "query"
         client = TestClient(app)
         tunnel = _create_tunnel(client)
         tid = tunnel["tunnel_id"]
         share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        # Simulate a follow-on request: cookie only, no query param.
         resp = TestClient(app).get(
             f"/app/session/{tid}",
             cookies={f"uterm_tunnel_{tid}": share_tok},
         )
         cookies = {c.name: c.value for c in resp.cookies.jar}
-        assert "share:" not in cookies.get("uterm_principal", "")
+        assert "share:" in cookies.get("uterm_principal", "")
 
-    def test_query_only_accepts_query(self) -> None:
-        """When token_transport='query', query param still works."""
+    def test_query_mode_accepts_query(self) -> None:
+        """When token_transport='query', query param still works on initial load."""
         cfg, app = _make_app()
         cfg.tunnel.token_transport = "query"
         client = TestClient(app)

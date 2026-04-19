@@ -155,7 +155,10 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
       }
     }, 15_000);
 
-    return () => clearInterval(keepaliveInterval);
+    return () => {
+      clearInterval(keepaliveInterval);
+      widget.dispose();
+    };
   }, [sessionId, surface, setMounted, setDimensions]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;

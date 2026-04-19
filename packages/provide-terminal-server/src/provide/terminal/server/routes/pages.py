@@ -38,13 +38,20 @@ def _is_secure_request(request: Request) -> bool:
     return request.url.scheme == "https"
 
 
-def _set_auth_cookie(response: HTMLResponse, key: str, value: str, *, secure: bool) -> None:
+def _set_auth_cookie(
+    response: HTMLResponse,
+    key: str,
+    value: str,
+    *,
+    secure: bool,
+    samesite: str = "lax",
+) -> None:
     response.set_cookie(
         key=key,
         value=value,
         secure=secure,
         httponly=True,
-        samesite="lax",
+        samesite=samesite,
     )
 
 
@@ -70,14 +77,21 @@ def _set_page_cookies(
     # XSS) from exfiltrating the live share token.
     share_token = getattr(request.state, "uterm_share_token", None)
     if share_token and session_id:
-        _set_auth_cookie(response, f"uterm_tunnel_{session_id}", str(share_token), secure=secure)
+        tunnel_cfg = cfg.tunnel
+        # Honour operator-configured cookie attributes for the tunnel cookie.
+        # cookie_secure=False lets operators run without HTTPS in local dev.
+        tunnel_secure = secure if tunnel_cfg.cookie_secure else False
+        _set_auth_cookie(
+            response,
+            f"uterm_tunnel_{session_id}",
+            str(share_token),
+            secure=tunnel_secure,
+            samesite=tunnel_cfg.cookie_samesite,
+        )
 
 
-def _share_context(request: Request) -> tuple[str | None, str | None]:
-    return (
-        getattr(request.state, "uterm_share_role", None),
-        getattr(request.state, "uterm_share_token", None),
-    )
+def _share_role(request: Request) -> str | None:
+    return getattr(request.state, "uterm_share_role", None)
 
 
 def create_page_router() -> APIRouter:
@@ -120,8 +134,7 @@ def create_page_router() -> APIRouter:
             session_id,
             operator=False,
             app_path=cfg.ui.app_path,
-            share_role=_share_context(request)[0],
-            share_token=_share_context(request)[1],
+            share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -149,8 +162,7 @@ def create_page_router() -> APIRouter:
             session_id,
             operator=True,
             app_path=cfg.ui.app_path,
-            share_role=_share_context(request)[0],
-            share_token=_share_context(request)[1],
+            share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -177,8 +189,7 @@ def create_page_router() -> APIRouter:
             cfg.ui.assets_path,
             session_id,
             app_path=cfg.ui.app_path,
-            share_role=_share_context(request)[0],
-            share_token=_share_context(request)[1],
+            share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -205,8 +216,7 @@ def create_page_router() -> APIRouter:
             cfg.ui.assets_path,
             session_id,
             app_path=cfg.ui.app_path,
-            share_role=_share_context(request)[0],
-            share_token=_share_context(request)[1],
+            share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,

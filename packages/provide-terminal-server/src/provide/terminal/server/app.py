@@ -14,7 +14,7 @@ import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qs
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
@@ -57,7 +57,11 @@ logger = get_logger(__name__)
 _AUTO_START_DELAY_S = 0.15
 _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)(?:/.*)?$"),
-    re.compile(r"^/app/(?:session|operator|replay)/(?P<session_id>[\w\-]+)$"),
+    # ``inspect`` is included so HTTP-tunnel share tokens reach the inspector
+    # page that the CLI documents.  Without it, /app/inspect/{id}?token=...
+    # falls through to normal JWT auth and returns 401 even with a valid share
+    # token — a docs-vs-behavior mismatch the reviewer flagged.
+    re.compile(r"^/app/(?:session|operator|replay|inspect)/(?P<session_id>[\w\-]+)$"),
     re.compile(r"^/ws/browser/(?P<session_id>[\w\-]+)/term$"),
     re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack(?:/.*)?$"),
 )
@@ -172,23 +176,31 @@ def create_server_app(
         session_id = _share_session_id_for(path)
         if session_id is None:
             return None
-        # Check query param and/or cookie based on token_transport config.
+        # The page handler always stamps the HttpOnly ``uterm_tunnel_{id}``
+        # cookie on initial load (routes/pages.py:_set_page_cookies), so the
+        # cookie is the primary transport for follow-on REST/WS requests that
+        # no longer carry ``?token=...``.  ``token_transport`` controls whether
+        # a query-string token is ALSO accepted (legacy bearer-URL flow):
+        #   "cookie" — cookie only, reject query
+        #   "both"   — cookie + query
+        #   "query"  — treated same as "both" (legacy; frontend no longer
+        #              emits ?token= after initial page load, so cookie must
+        #              still be read to avoid stranding follow-on requests)
         transport = config.tunnel.token_transport
         provided = None
-        if transport in ("query", "both"):
+        from http.cookies import SimpleCookie
+
+        cookie_header = (
+            dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
+        )
+        cookies = SimpleCookie(cookie_header)
+        cookie_key = f"uterm_tunnel_{session_id}"
+        if cookie_key in cookies:
+            provided = cookies[cookie_key].value
+        if not provided and transport in ("query", "both"):
             raw_qs = connection.scope.get("query_string", b"")
             query = raw_qs.decode("utf-8", errors="ignore") if isinstance(raw_qs, bytes) else str(raw_qs)
             provided = (parse_qs(query).get("token", [None]) or [None])[0]
-        if not provided and transport in ("cookie", "both"):
-            from http.cookies import SimpleCookie
-
-            cookie_header = (
-                dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
-            )
-            cookies = SimpleCookie(cookie_header)
-            cookie_key = f"uterm_tunnel_{session_id}"
-            if cookie_key in cookies:
-                provided = cookies[cookie_key].value
         if not provided:
             return None
         app = connection.scope.get("app")
@@ -274,6 +286,71 @@ def create_server_app(
             _inc_metric("auth_failures_http_total")
             logger.info("authn_denied surface=http")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+
+    # Per-path capability matcher for the hub's /worker/{id}/... REST routes.
+    # rest.py intentionally carries no built-in authz (see its module docstring);
+    # the protecting layer is us.  Without this, any authenticated principal —
+    # including a viewer-role share token — could POST /worker/{id}/hijack/acquire
+    # and seize control of a session.
+    _HUB_WRITE_PATH = re.compile(
+        r"^/worker/(?P<session_id>[\w\-]+)/"
+        r"(?:hijack/(?:acquire|[\w\-]+/(?:send|step|heartbeat|release)))$"
+    )
+    _HUB_MODE_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/input_mode$")
+    _HUB_ADMIN_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/disconnect_worker$")
+    _HUB_READ_PATH = re.compile(
+        r"^/worker/(?P<session_id>[\w\-]+)/hijack/[\w\-]+/(?:snapshot|events)$"
+    )
+
+    async def _require_hub_route_authz(connection: HTTPConnection) -> None:
+        """Gate /worker/{id}/... REST routes on session-level capabilities.
+
+        Runs after _require_authenticated, so connection.state.uterm_principal
+        is populated.  Applies only to REST paths served by the hub router;
+        WebSocket routes handle their own per-session role resolution via
+        _resolve_browser_role, so this dependency is a no-op for them.
+        Uses HTTPConnection so the same dependency works for both the REST
+        Request and WebSocket code paths FastAPI invokes.
+        """
+        path = str(connection.scope.get("path", ""))
+        session_id: str | None = None
+        required: str | None = None
+        require_admin = False
+        for pattern, cap in (
+            (_HUB_WRITE_PATH, "session.control.hijack"),
+            (_HUB_MODE_PATH, "session.control.mode"),
+            (_HUB_READ_PATH, "session.read"),
+        ):
+            m = pattern.match(path)
+            if m is not None:
+                session_id = m.group("session_id")
+                required = cap
+                break
+        if session_id is None:
+            m = _HUB_ADMIN_PATH.match(path)
+            if m is not None:
+                session_id = m.group("session_id")
+                require_admin = True
+        if session_id is None:
+            return  # Not a capability-gated hub route.
+        principal = getattr(connection.state, "uterm_principal", None)
+        if principal is None:  # pragma: no cover — _require_authenticated always sets this first
+            raise HTTPException(status_code=401, detail="authentication required")
+        authz_service = cast("AuthorizationService", connection.app.state.uterm_authz)
+        if require_admin:
+            if not authz_service.is_admin(principal):
+                raise HTTPException(status_code=403, detail="admin role required")
+            return
+        assert required is not None
+        session = await registry.get_definition(session_id) if registry is not None else None
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
+        if required == "session.read":
+            if not authz_service.can_read_session(principal, session):
+                raise HTTPException(status_code=403, detail="insufficient privileges")
+        else:
+            if not authz_service.can_mutate_session(principal, session, required):
+                raise HTTPException(status_code=403, detail="insufficient privileges")
 
     async def _on_resume(_token: str, session: ResumeSession) -> bool:
         """Reject resume if the backing session no longer exists or has been recreated."""
@@ -486,7 +563,7 @@ def create_server_app(
 
     app.include_router(
         hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
-        dependencies=[Depends(_require_authenticated)],
+        dependencies=[Depends(_require_authenticated), Depends(_require_hub_route_authz)],
     )
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])

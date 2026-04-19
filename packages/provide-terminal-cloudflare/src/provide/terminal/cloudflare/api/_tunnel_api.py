@@ -18,8 +18,16 @@ except ImportError:  # pragma: no cover
     from cf_types import Response, json_response  # type: ignore[import-not-found]
 
 
-async def handle_tunnels(request: object, env: object) -> object:
-    """Handle POST /api/tunnels — create a tunnel session with share tokens."""
+async def handle_tunnels(request: object, env: object, principal: object | None = None) -> object:
+    """Handle POST /api/tunnels — create a tunnel session with share tokens.
+
+    When ``principal`` is provided (JWT mode with authenticated caller),
+    the tunnel is created with ``owner=principal.subject_id`` and
+    ``visibility="private"``.  Tunnels authenticate their guests via
+    bearer-capability URLs (share/control tokens), so the session itself
+    should NOT be publicly listable — otherwise any authenticated caller
+    can discover it through the normal fleet-listing API.
+    """
     method = str(getattr(request, "method", "GET")).upper()
     if method != "POST":
         return json_response({"error": "method not allowed"}, status=405)
@@ -43,6 +51,9 @@ async def handle_tunnels(request: object, env: object) -> object:
     ttl_s = max(60, min(ttl_s, 86400))
     expires_at = now + ttl_s
 
+    owner = getattr(principal, "subject_id", None) if principal is not None else None
+    visibility = "private" if owner is not None else "public"
+
     entry = {
         "session_id": tunnel_id,
         "display_name": display_name,
@@ -56,8 +67,8 @@ async def handle_tunnels(request: object, env: object) -> object:
         "tags": list(body.get("tags") or []),
         "recording_enabled": True,
         "recording_available": False,
-        "owner": None,
-        "visibility": "public",
+        "owner": owner,
+        "visibility": visibility,
         "last_error": None,
         "hijacked": False,
         "tunnel_type": tunnel_type,
@@ -85,8 +96,32 @@ async def handle_tunnels(request: object, env: object) -> object:
     )
 
 
-async def handle_tunnel_revoke_tokens(_request: object, env: object, tunnel_id: str) -> object:
-    """Handle DELETE /api/tunnels/{id}/tokens — revoke all tokens."""
+def _principal_can_manage_tunnel(principal: object | None, entry: dict) -> bool:
+    """Return True if ``principal`` is admin or the tunnel's owner.
+
+    ``principal=None`` (open-access / none/dev mode) is permitted so that
+    local development without JWT config keeps working.  In JWT mode a
+    non-None principal must pass ownership or admin-role check.
+    """
+    if principal is None:
+        return True
+    roles = tuple(getattr(principal, "roles", ()) or ())
+    if "admin" in roles:
+        return True
+    subject_id = getattr(principal, "subject_id", None)
+    owner = entry.get("owner")
+    return owner is not None and subject_id == owner
+
+
+async def handle_tunnel_revoke_tokens(
+    _request: object, env: object, tunnel_id: str, principal: object | None = None
+) -> object:
+    """Handle DELETE /api/tunnels/{id}/tokens — revoke all tokens.
+
+    Owner or admin only.  Without this check any authenticated caller
+    could revoke someone else's tunnel (the reviewer reproduced this
+    with a CF Access service token against an owned tunnel).
+    """
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
         return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
@@ -97,6 +132,8 @@ async def handle_tunnel_revoke_tokens(_request: object, env: object, tunnel_id: 
         entry = json.loads(str(raw))
     except (json.JSONDecodeError, TypeError):
         return json_response({"error": "corrupt entry"}, status=500)
+    if not _principal_can_manage_tunnel(principal, entry):
+        return json_response({"error": "forbidden"}, status=403)
     entry["worker_token"] = None
     entry["share_token"] = None
     entry["control_token"] = None
@@ -104,8 +141,18 @@ async def handle_tunnel_revoke_tokens(_request: object, env: object, tunnel_id: 
     return json_response({"ok": True, "session_id": tunnel_id})
 
 
-async def handle_tunnel_rotate_tokens(request: object, env: object, tunnel_id: str, ttl_s: int = 3600) -> object:
-    """Handle POST /api/tunnels/{id}/tokens/rotate — generate new tokens."""
+async def handle_tunnel_rotate_tokens(
+    request: object,
+    env: object,
+    tunnel_id: str,
+    principal: object | None = None,
+    *,
+    ttl_s: int = 3600,
+) -> object:
+    """Handle POST /api/tunnels/{id}/tokens/rotate — generate new tokens.
+
+    Owner or admin only (same justification as revoke above).
+    """
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
         return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
@@ -116,6 +163,8 @@ async def handle_tunnel_rotate_tokens(request: object, env: object, tunnel_id: s
         entry = json.loads(str(raw))
     except (json.JSONDecodeError, TypeError):
         return json_response({"error": "corrupt entry"}, status=500)
+    if not _principal_can_manage_tunnel(principal, entry):
+        return json_response({"error": "forbidden"}, status=403)
 
     new_worker = secrets.token_urlsafe(32)
     new_share = secrets.token_urlsafe(32)

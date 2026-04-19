@@ -52,6 +52,7 @@ export interface ProvideHijackConfig {
 export interface ProvideHijackInstance {
   sendControlMessage(msg: Record<string, unknown>): void;
   readonly terminalElement: HTMLElement | null;
+  dispose(): void;
 }
 
 export interface ProvideHijackConstructor {

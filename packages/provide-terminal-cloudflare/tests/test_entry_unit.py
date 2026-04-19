@@ -422,7 +422,7 @@ async def test_resolve_principal_id_no_token() -> None:
     config = CloudflareConfig.from_env(
         SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
     )
-    result = _resolve_principal_id(SimpleNamespace(headers={}), config)
+    result = await _resolve_principal_id(SimpleNamespace(headers=SimpleNamespace(get=lambda _k, d=None: d)), config)
     assert result == "anonymous"
 
 
@@ -437,7 +437,7 @@ async def test_resolve_principal_id_invalid_token() -> None:
     req = SimpleNamespace(
         headers=SimpleNamespace(get=lambda k, d=None: "Bearer invalid-token" if k.lower() == "authorization" else d)
     )
-    result = _resolve_principal_id(req, config)
+    result = await _resolve_principal_id(req, config)
     assert result == "anonymous"
 
 
@@ -455,5 +455,69 @@ async def test_resolve_principal_id_valid_token() -> None:
     req = SimpleNamespace(
         headers=SimpleNamespace(get=lambda k, d=None: f"Bearer {token}" if k.lower() == "authorization" else d)
     )
-    result = _resolve_principal_id(req, config)
+    result = await _resolve_principal_id(req, config)
     assert result == "alice"
+
+
+async def test_resolve_principal_id_cf_access_email_header() -> None:
+    """CF Access authenticated-user-email header resolves to the user's email.
+
+    Without this, a JWKS-only or CF-Access deployment that never configured
+    ``public_key_pem`` (because CF Access handles auth upstream) would have
+    every profile CRUD action attributed to ``anonymous`` — indistinguishable
+    across callers and effectively disabling ownership.
+    """
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _resolve_principal_id
+
+    config = CloudflareConfig.from_env(
+        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+    )
+    req = SimpleNamespace(
+        headers=SimpleNamespace(
+            get=lambda k, d=None: (
+                "alice@example.com" if k.lower() == "cf-access-authenticated-user-email" else d
+            )
+        )
+    )
+    result = await _resolve_principal_id(req, config)
+    assert result == "alice@example.com"
+
+
+def test_read_header_skips_individually_raising_names() -> None:
+    """_read_header continues past names whose .get() itself raises.
+
+    Pathological JS-bridged headers proxies can raise on specific keys
+    depending on character encoding; the defensive try/continue guards
+    that.  Without this test the ``except Exception: continue`` branch
+    is uncovered.
+    """
+    from provide.terminal.cloudflare.entry import _read_header
+
+    class _FlakyHeaders:
+        def get(self, k: str, default: object = None) -> object:
+            if k == "cf-access-client-id":
+                raise RuntimeError("boom")
+            return "svc.access" if k == "CF-Access-Client-Id" else default
+
+    req = SimpleNamespace(headers=_FlakyHeaders())
+    # First name raises → continue; second name returns a value.
+    assert _read_header(req, "cf-access-client-id", "CF-Access-Client-Id") == "svc.access"
+
+
+async def test_resolve_principal_id_cf_access_service_token() -> None:
+    """CF Access service token maps to a ``service:<client_id>`` principal."""
+    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.terminal.cloudflare.entry import _resolve_principal_id
+
+    config = CloudflareConfig.from_env(
+        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+    )
+    client_id = "abc123.access"
+    req = SimpleNamespace(
+        headers=SimpleNamespace(
+            get=lambda k, d=None: client_id if k.lower() == "cf-access-client-id" else d
+        )
+    )
+    result = await _resolve_principal_id(req, config)
+    assert result == f"service:{client_id}"

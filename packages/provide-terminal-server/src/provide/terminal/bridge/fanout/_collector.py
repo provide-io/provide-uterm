@@ -94,11 +94,16 @@ class OutputCollector:
                     break
                 event_type = event.get("type")
                 data = event.get("data") or {}
+                # The EventBus filter at line 79 restricts to {"term", "snapshot"},
+                # so the else branch is the snapshot path — no further type check
+                # needed (and coverage would treat ``elif event_type == "snapshot"``
+                # as a partially-covered branch because the False path is
+                # unreachable given the filter).
                 if event_type == "term":
                     text = data.get("data", "") if isinstance(data, dict) else ""
                     if text:
                         term_chunks.append(text)
-                elif event_type == "snapshot":
+                else:
                     # Track last snapshot screen as fallback for snapshot-only connectors.
                     screen = data.get("screen", "") if isinstance(data, dict) else ""
                     if screen:

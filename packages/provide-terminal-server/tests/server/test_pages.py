@@ -140,6 +140,9 @@ def test_operator_session_200_sets_cookies_and_fitaddon(client: TestClient) -> N
 
 
 def test_tunnel_share_token_allows_session_page_without_jwt() -> None:
+    """Valid share_token in query param grants access; the token itself is NOT
+    embedded in the returned HTML (security: no JS-readable capability token).
+    """
     token = "share-token-123"
     app = _jwt_app_public_session("tok-sess-share")
     app.state.uterm_tunnel_tokens = {
@@ -153,10 +156,15 @@ def test_tunnel_share_token_allows_session_page_without_jwt() -> None:
         r = c.get(f"/app/session/tok-sess-share?token={token}")
     assert r.status_code == 200
     assert '"share_role": "viewer"' in r.text
-    assert '"share_token": "share-token-123"' in r.text
+    # The capability token must NOT appear in the page body.
+    assert token not in r.text
+    assert '"share_token"' not in r.text
 
 
 def test_tunnel_control_token_allows_operator_page_without_jwt() -> None:
+    """Valid control_token in query param grants operator role; the token
+    itself is NOT embedded in the returned HTML.
+    """
     token = "control-token-123"
     app = _jwt_app_public_session("tok-sess-control")
     app.state.uterm_tunnel_tokens = {
@@ -170,7 +178,30 @@ def test_tunnel_control_token_allows_operator_page_without_jwt() -> None:
         r = c.get(f"/app/operator/tok-sess-control?token={token}")
     assert r.status_code == 200
     assert '"share_role": "operator"' in r.text
-    assert '"share_token": "control-token-123"' in r.text
+    assert token not in r.text
+    assert '"share_token"' not in r.text
+
+
+def test_tunnel_share_token_allows_inspect_page_without_jwt() -> None:
+    """HTTP-tunnel inspect page must accept share tokens.
+
+    Regression guard: /app/inspect/{id} was missing from the
+    _SHARE_SESSION_PATTERNS regex, so the CLI-printed share URL (which
+    points at the inspector for http-tunnels) would 401 on a valid token.
+    """
+    token = "inspect-share-token"
+    app = _jwt_app_public_session("tok-sess-inspect")
+    app.state.uterm_tunnel_tokens = {
+        "tok-sess-inspect": {
+            "share_token": token,
+            "control_token": "ct",
+            "worker_token": "wt",
+        }
+    }
+    with TestClient(app) as c:
+        r = c.get(f"/app/inspect/tok-sess-inspect?token={token}")
+    assert r.status_code == 200
+    assert '"page_kind": "inspect"' in r.text
 
 
 def test_tunnel_share_token_sets_httponly_cookie() -> None:

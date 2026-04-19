@@ -601,9 +601,65 @@ async def test_decode_jwt_principal_bad_token_returns_none() -> None:
     cfg = CloudflareConfig(
         jwt=JwtConfig(mode="jwt", public_key_pem=good_key, algorithms=("HS256",))
     )
-    req = SimpleNamespace(headers=SimpleNamespace(get=lambda k, default=None: f"Bearer {token}"))
+    req = SimpleNamespace(
+        headers=SimpleNamespace(
+            # Only return the bearer for the authorization header — other header
+            # names (CF Access) should return default so the bearer-fallback path
+            # runs and hits JwtValidationError.
+            get=lambda k, default=None: f"Bearer {token}" if k.lower() == "authorization" else default
+        )
+    )
     result = await _decode_jwt_principal(req, cfg)
     assert result is None
+
+
+async def test_decode_jwt_principal_cf_access_email_returns_viewer_principal() -> None:
+    """CF Access authenticated-user-email maps to a viewer-role Principal.
+
+    Regression guard for the service-token/CF-Access principal-collapse
+    bug: before this fix, _decode_jwt_principal returned None for a CF
+    Access authenticated request, and downstream handlers treated that as
+    anonymous open-access.
+    """
+    from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
+    from provide.terminal.cloudflare.entry import _decode_jwt_principal
+
+    cfg = CloudflareConfig(jwt=JwtConfig(mode="jwt", public_key_pem="k", algorithms=("HS256",)))
+    req = SimpleNamespace(
+        headers=SimpleNamespace(
+            get=lambda k, default=None: (
+                "alice@example.com" if k.lower() == "cf-access-authenticated-user-email" else default
+            )
+        )
+    )
+    result = await _decode_jwt_principal(req, cfg)
+    assert result is not None
+    assert result.subject_id == "alice@example.com"
+    assert "viewer" in result.roles
+
+
+async def test_decode_jwt_principal_cf_access_service_token_returns_admin_principal() -> None:
+    """CF Access service token maps to a service:<client_id> admin Principal.
+
+    Service tokens are machine-to-machine; they get admin role so
+    downstream ownership/capability checks enforce authorization while
+    still allowing the service caller the broad access a server-to-server
+    integration typically needs.
+    """
+    from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
+    from provide.terminal.cloudflare.entry import _decode_jwt_principal
+
+    cfg = CloudflareConfig(jwt=JwtConfig(mode="jwt", public_key_pem="k", algorithms=("HS256",)))
+    client_id = "svc123.access"
+    req = SimpleNamespace(
+        headers=SimpleNamespace(
+            get=lambda k, default=None: client_id if k.lower() == "cf-access-client-id" else default
+        )
+    )
+    result = await _decode_jwt_principal(req, cfg)
+    assert result is not None
+    assert result.subject_id == f"service:{client_id}"
+    assert "admin" in result.roles
 
 
 # ---------------------------------------------------------------------------

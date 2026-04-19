@@ -230,7 +230,13 @@ async def test_stream_route_403_insufficient_privileges() -> None:
 
 
 async def test_stream_route_no_bus_returns_empty_stream() -> None:
-    """No EventBus → stream closes immediately with no data."""
+    """No EventBus → stream closes immediately with no data.
+
+    ``create_server_app`` always wires an EventBus onto the hub, so we patch
+    the hub's ``event_bus`` attribute to None to simulate the legacy no-bus
+    deployment path.  Without this, the stream would block for 15s on a
+    heartbeat and hang the test.
+    """
     from fastapi.testclient import TestClient
 
     from provide.terminal.server.app import create_server_app
@@ -243,7 +249,8 @@ async def test_stream_route_no_bus_returns_empty_stream() -> None:
         }
     )
     app = create_server_app(cfg)
-    # No EventBus injected — stream should return empty response
+    # Unbind the EventBus so stream_session_events hits its early-return branch.
+    app.state.uterm_registry._hub._event_bus = None
     with (
         TestClient(app) as client,
         client.stream(

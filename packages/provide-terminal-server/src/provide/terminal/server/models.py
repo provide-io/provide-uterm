@@ -127,6 +127,13 @@ class TunnelConfig(ServerBaseModel):
     """Tunnel sharing security settings."""
 
     token_ttl_s: int = 3600
+    # Tunnel token transport. The HttpOnly ``uterm_tunnel_{id}`` cookie is the
+    # primary transport and is always read by the auth middleware (set by the
+    # page handler on initial load).  This knob controls whether a ``?token=``
+    # QUERY STRING is *also* accepted alongside the cookie:
+    #   "cookie" — cookie only; reject query-param tokens
+    #   "both"   — accept cookie or query (recommended)
+    #   "query"  — legacy alias for "both"; retained for config backward-compat
     token_transport: Literal["query", "cookie", "both"] = "both"  # noqa: S105
     cookie_secure: bool = True
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"

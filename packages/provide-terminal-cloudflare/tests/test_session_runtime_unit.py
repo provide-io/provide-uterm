@@ -408,6 +408,37 @@ async def test_browser_role_jwt_bad_token() -> None:
     assert await rt.browser_role_for_request(req) == "viewer"
 
 
+async def test_browser_role_owner_with_viewer_jwt_gets_operator() -> None:
+    """Owner of a session must be elevated to operator on mutations even if
+    their JWT role is only viewer.  Without this, the visibility layer would
+    let the owner READ their session but every POST (mode/hijack/…) would 403.
+    Mirrors the hosted FastAPI resolve_browser_role owner-elevation branch.
+    """
+    rt = _make_runtime(mode="jwt")
+    rt.meta["owner"] = "alice"
+    token = _make_token("alice", ["viewer"])
+    req = _MockRequest(headers={"Authorization": f"Bearer {token}"})
+    assert await rt.browser_role_for_request(req) == "operator"
+
+
+async def test_browser_role_non_owner_viewer_stays_viewer() -> None:
+    """A viewer who does NOT own the session stays viewer."""
+    rt = _make_runtime(mode="jwt")
+    rt.meta["owner"] = "alice"
+    token = _make_token("bob", ["viewer"])
+    req = _MockRequest(headers={"Authorization": f"Bearer {token}"})
+    assert await rt.browser_role_for_request(req) == "viewer"
+
+
+async def test_browser_role_owner_with_admin_jwt_stays_admin() -> None:
+    """An admin who is also owner keeps admin (elevation is a floor, not a cap)."""
+    rt = _make_runtime(mode="jwt")
+    rt.meta["owner"] = "alice"
+    token = _make_token("alice", ["admin"])
+    req = _MockRequest(headers={"Authorization": f"Bearer {token}"})
+    assert await rt.browser_role_for_request(req) == "admin"
+
+
 async def test_browser_role_share_token_viewer() -> None:
     rt = _make_runtime(mode="jwt")
     rt._share_token = "share-token-123"

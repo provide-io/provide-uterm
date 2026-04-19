@@ -196,7 +196,7 @@ class TestAuthEdgeCases:
 
         auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
         # This test verifies the mode is lowercased in the function
-        p = _resolve_principal({}, {}, auth)
+        p = _resolve_principal({}, {}, auth, None)
         assert "admin" in p.roles
 
     def test_resolve_principal_jwt_token_from_bearer_preferred(self) -> None:
@@ -218,6 +218,7 @@ class TestAuthEdgeCases:
             {"authorization": f"Bearer {token1}"},
             {"uterm_token": token2},
             auth,
+            None,
         )
         assert p.subject_id == "bearer-user"
 
@@ -327,7 +328,7 @@ class TestAuthMutationKilling:
 
         auth = AuthConfig(mode="JWT", worker_bearer_token="token")  # uppercase
         # With no token, should return anonymous (JWT mode recognized despite case)
-        p = _resolve_principal({}, {}, auth)
+        p = _resolve_principal({}, {}, auth, None)
         assert p.subject_id == "anonymous"
 
     def test_resolve_principal_bearer_tried_before_cookie(self) -> None:
@@ -352,6 +353,7 @@ class TestAuthMutationKilling:
             {"authorization": f"Bearer {token1}"},
             {"uterm_token": token2},
             auth,
+            None,
         )
         assert p.subject_id == "bearer_user"
 
@@ -368,7 +370,7 @@ class TestAuthMutationKilling:
         )
 
         # Completely invalid token (not a JWT)
-        p = _resolve_principal({"authorization": "Bearer not.a.jwt"}, {}, auth)
+        p = _resolve_principal({"authorization": "Bearer not.a.jwt"}, {}, auth, None)
         assert p.subject_id == "anonymous"
         assert "viewer" in p.roles
 
@@ -402,7 +404,7 @@ class TestAuthMutationKilling:
         # "none" mode → admin, "dev" mode → admin
         for mode_val in ["none", "dev"]:
             auth = AuthConfig(mode=mode_val, worker_bearer_token="token")
-            p = _resolve_principal({}, {}, auth)
+            p = _resolve_principal({}, {}, auth, None)
             assert "admin" in p.roles
 
     def test_principal_from_jwt_token_subject_strip_required(self) -> None:

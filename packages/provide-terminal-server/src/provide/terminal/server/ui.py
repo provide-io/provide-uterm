@@ -201,7 +201,6 @@ def session_page_html(
     operator: bool,
     app_path: str,
     share_role: str | None = None,
-    share_token: str | None = None,
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
@@ -216,7 +215,6 @@ def session_page_html(
         "session_id": session_id,
         "surface": "operator" if operator else "user",
         "share_role": share_role,
-        "share_token": share_token,
     }
     body = (
         "<body>"
@@ -287,7 +285,6 @@ def inspect_page_html(
     *,
     app_path: str,
     share_role: str | None = None,
-    share_token: str | None = None,
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
@@ -302,7 +299,6 @@ def inspect_page_html(
         "session_id": session_id,
         "surface": "operator",
         "share_role": share_role,
-        "share_token": share_token,
     }
     body = (
         "<body>"
@@ -332,7 +328,6 @@ def replay_page_html(
     *,
     app_path: str,
     share_role: str | None = None,
-    share_token: str | None = None,
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
@@ -347,7 +342,6 @@ def replay_page_html(
         "session_id": session_id,
         "surface": "operator",
         "share_role": share_role,
-        "share_token": share_token,
     }
     body = (
         "<body>"

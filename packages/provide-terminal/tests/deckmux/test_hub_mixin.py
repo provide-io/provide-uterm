@@ -102,6 +102,32 @@ async def test_presence_update_unknown_user_ignored() -> None:
 
 
 @pytest.mark.asyncio
+async def test_deckmux_handle_message_resolves_user_id_from_principal() -> None:
+    """When principal carries subject_id, deckmux_handle_message uses it as
+    the user_id so the presence store lookup matches the id set on connect.
+
+    Regression guard for the branch at _hub_mixin.py:129 where the
+    subject_id-based user_id resolution lives.  Without it, a JWT-auth
+    deployment would fail presence_update lookups (the connect path uses
+    subject_id but handle_message would fall back to id(ws)).
+    """
+    hub = _FakeHub()
+    ws = _FakeWS()
+    principal = _FakePrincipal(subject_id="user-abc", display_name="Alice")
+    await hub.deckmux_on_browser_connect("w1", ws, "operator", principal=principal)
+    hub.broadcast.reset_mock()
+
+    msg = {"type": "presence_update", "scroll_line": 99}
+    await hub.deckmux_handle_message("w1", ws, msg, principal=principal)
+
+    hub.broadcast.assert_called_once()
+    # The broadcast payload should carry the principal's subject_id, proving
+    # the handler resolved user_id via the subject_id branch.
+    broadcast_msg = hub.broadcast.call_args[0][1]
+    assert broadcast_msg["user_id"] == "user-abc"
+
+
+@pytest.mark.asyncio
 async def test_queued_input_buffered() -> None:
     hub = _FakeHub()
     ws = _FakeWS()
