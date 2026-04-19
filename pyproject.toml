@@ -6,12 +6,36 @@
 [project]
 name = "provide-terminal-workspace"
 version = "0.4.0"
+description = "Workspace root for the provide-terminal emulator, server, platform, client, and cloudflare packages"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+authors = [
+    { name = "provide.io", email = "code@provide.io" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Terminals",
+    "Topic :: Terminals :: Terminal Emulators/X Terminals",
+    "Topic :: System :: Shells",
+]
 dependencies = [
     "provide-terminal[emulator,ssh]",
     "provide-terminal-server[all]",
     "provide-telemetry>=0.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/provide-io/provide-terminal"
+Repository = "https://github.com/provide-io/provide-terminal"
+Issues = "https://github.com/provide-io/provide-terminal/issues"
 
 [dependency-groups]
 dev = [
