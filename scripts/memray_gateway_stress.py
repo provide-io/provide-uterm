@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Memray stress test for ControlChannel encoding/decoding."""
 
 from provide.terminal.control_channel import ControlChannelDecoder, encode_control, encode_data
