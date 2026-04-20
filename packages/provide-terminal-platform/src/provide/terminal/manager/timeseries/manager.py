@@ -49,7 +49,6 @@ class TimeseriesManager:
         self.samples_count = 0
         self._plugin = plugin
         self._max_bytes = TIMESERIES_MAX_BYTES
-        self._fh: Any = None  # persistent file handle for the current epoch
         # Cleanup old timeseries files from previous runs.
         self._cleanup_old(TIMESERIES_RETENTION_S)
 
@@ -174,18 +173,6 @@ class TimeseriesManager:
             except OSError:
                 continue
 
-    def _ensure_fh(self) -> Any:
-        """Return the persistent file handle, opening it if needed."""
-        if self._fh is None or self._fh.closed:
-            self._fh = self.path.open("a", encoding="utf-8")
-        return self._fh
-
-    def _close_fh(self) -> None:
-        """Close the persistent file handle if open."""
-        if self._fh is not None and not self._fh.closed:
-            self._fh.close()
-        self._fh = None
-
     def _rotate_if_needed(self) -> None:
         """Rotate the current file if it exceeds the size limit."""
         try:
@@ -193,7 +180,6 @@ class TimeseriesManager:
                 return
         except OSError:
             return
-        self._close_fh()  # close before rename
         archived = self.timeseries_dir / f"{self.path.stem}_{self.samples_count}.jsonl"
         self.path.rename(archived)
         logger.info("timeseries_rotated", archived=str(archived))
@@ -202,9 +188,8 @@ class TimeseriesManager:
         """Append one timeseries sample row (safe to call from a thread)."""
         try:
             row = self._build_row(status, reason=reason)
-            fh = self._ensure_fh()
-            fh.write(json.dumps(row, ensure_ascii=True) + "\n")
-            fh.flush()
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row, ensure_ascii=True) + "\n")
             self._rotate_if_needed()
         except Exception as e:
             self._close_fh()  # reset on error so next write retries open

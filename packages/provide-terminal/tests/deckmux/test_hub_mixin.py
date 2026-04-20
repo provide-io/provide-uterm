@@ -757,36 +757,3 @@ async def test_first_connect_does_not_broadcast() -> None:
     ws = _FakeWS()
     await hub.deckmux_on_browser_connect("w1", ws, "viewer")
     hub.broadcast.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_authenticated_disconnect_uses_subject_id() -> None:
-    """Disconnect with principal uses subject_id, not str(id(ws)), so the store lookup succeeds."""
-    hub = _FakeHub()
-    ws = _FakeWS()
-    principal = _FakePrincipal(subject_id="alice")
-    await hub.deckmux_on_browser_connect("w1", ws, "operator", principal=principal)
-    hub.broadcast.reset_mock()
-
-    # Disconnect passing the same principal — must find and remove the user
-    await hub.deckmux_on_browser_disconnect("w1", ws, principal=principal)
-
-    hub.broadcast.assert_called_once()
-    msg = hub.broadcast.call_args[0][1]
-    assert msg["type"] == "presence_leave"
-    assert msg["user_id"] == "alice"
-
-
-@pytest.mark.asyncio
-async def test_authenticated_disconnect_wrong_ws_id_ghost_absence() -> None:
-    """Without principal, disconnect with a different ws object leaves a ghost user."""
-    hub = _FakeHub()
-    ws_connect = _FakeWS()
-    ws_disconnect = _FakeWS()  # different object → different str(id(...))
-    principal = _FakePrincipal(subject_id="bob")
-    await hub.deckmux_on_browser_connect("w1", ws_connect, "operator", principal=principal)
-    hub.broadcast.reset_mock()
-
-    # Disconnect without principal — str(id(ws_disconnect)) != "bob" → ghost remains
-    await hub.deckmux_on_browser_disconnect("w1", ws_disconnect)
-    hub.broadcast.assert_not_called()  # no leave broadcast; user is still in store

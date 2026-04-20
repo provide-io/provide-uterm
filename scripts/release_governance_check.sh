@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 set -euo pipefail
 
 OUT_DIR="${1:-artifacts/release-governance}"
@@ -26,10 +23,9 @@ else
   exit 2
 fi
 
-# Post-deploy manual steps (require a live server URL):
-#   uv run python scripts/rollback_drill.py --base-url <URL> --session-id <ID>
-#   uv run python scripts/load_profile.py --base-url <URL>
-# SLSA provenance generation not yet implemented.
+# TODO: Generate SLSA provenance metadata (not yet implemented)
+# TODO: Execute rollback drill (scripts/rollback_drill.py)
+# TODO: Run load profile (scripts/load_profile.py)
 
 echo "[4/4] artifact signing (cosign keyless)"
 if ! command -v cosign >/dev/null 2>&1; then

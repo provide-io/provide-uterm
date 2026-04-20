@@ -36,11 +36,11 @@ try:
 except ImportError:  # pragma: no cover
     _SessionConnector = object  # type: ignore[assignment,misc]
 
-from provide.terminal.shell._commands import AnimatedResult, CommandDispatcher
-from provide.terminal.shell._output import BANNER, CLEAR_SCREEN, PROMPT
-from provide.terminal.shell._repl import LineBuffer
-from provide.terminal.shell._sandbox import Sandbox
-from provide.terminal.shell.terminal._output import term, worker_hello
+from provide.shell._commands import AnimatedResult, CommandDispatcher
+from provide.shell._output import BANNER, CLEAR_SCREEN, PROMPT
+from provide.shell._repl import LineBuffer
+from provide.shell._sandbox import Sandbox
+from provide.shell.terminal._output import term, worker_hello
 
 
 class UshellConnector(_SessionConnector):
@@ -71,7 +71,6 @@ class UshellConnector(_SessionConnector):
         ctx: dict[str, Any] = dict(extra_ctx or {})
         self._dispatcher = CommandDispatcher(ctx, self._sandbox)
         self._pending_frames: list[dict[str, Any]] = []
-        self._animation_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
     # SessionConnector lifecycle
@@ -127,9 +126,7 @@ class UshellConnector(_SessionConnector):
         for line in self._buf.take_completed():
             result = await self._dispatcher.dispatch(line)
             if isinstance(result, AnimatedResult):
-                if self._animation_task and not self._animation_task.done():
-                    self._animation_task.cancel()
-                self._animation_task = asyncio.create_task(self._stream_animation(result))
+                asyncio.ensure_future(self._stream_animation(result))  # noqa: RUF006
             else:
                 frames.extend(term(s) for s in result)
 

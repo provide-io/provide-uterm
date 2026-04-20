@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -18,7 +18,7 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.terminal.control_channel import encode_control, encode_data
+from provide.terminal.control_stream import encode_control, encode_data
 
 if TYPE_CHECKING:
     from provide.terminal.cloudflare.cf_types import CFWebSocket
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class _WsHelperMixin:
     """Mixin providing WebSocket helper methods for SessionRuntime."""
 
-    def ws_key(self, ws: CFWebSocket) -> str:
+    def ws_key(self, ws: Any) -> str:
         try:
             existing = getattr(ws, "_ut_ws_key", None)
             if isinstance(existing, str) and existing:
@@ -42,7 +42,7 @@ class _WsHelperMixin:
             ws._ut_ws_key = key
         return key
 
-    def _socket_role(self, ws: CFWebSocket) -> str:
+    def _socket_role(self, ws: Any) -> str:
         """Return the socket type: ``"browser"``, ``"worker"``, or ``"raw"``."""
         try:
             attachment = ws.deserializeAttachment()
@@ -77,7 +77,7 @@ class _WsHelperMixin:
                 return candidate
         return "browser"
 
-    def _socket_browser_role(self, ws: CFWebSocket) -> str:
+    def _socket_browser_role(self, ws: Any) -> str:
         """Return the JWT-resolved browser role from the socket attachment.
 
         Defaults to ``"admin"`` in ``none``/``dev`` mode (open access).  In
@@ -110,7 +110,7 @@ class _WsHelperMixin:
             logger.warning("browser role unavailable (post-hibernation fallback), defaulting to viewer")
         return "admin" if self.config.jwt.mode in {"none", "dev"} else "viewer"  # type: ignore[attr-defined]
 
-    def _socket_worker_id(self, ws: CFWebSocket) -> str:
+    def _socket_worker_id(self, ws: Any) -> str:
         """Return the worker_id from the socket attachment (stored at connect time).
 
         Falls back to ``self.worker_id`` when not encoded in the attachment
@@ -126,7 +126,7 @@ class _WsHelperMixin:
             logger.debug("failed to deserialize worker_id from attachment: %s", exc)
         return self.worker_id  # type: ignore[attr-defined]
 
-    def _register_socket(self, ws: CFWebSocket, role: str) -> None:
+    def _register_socket(self, ws: Any, role: str) -> None:
         ws_id = self.ws_key(ws)
         if role == "worker":
             self.worker_ws = ws  # type: ignore[attr-defined]
@@ -136,7 +136,7 @@ class _WsHelperMixin:
             return
         self.browser_sockets[ws_id] = ws  # type: ignore[attr-defined]
 
-    def _remove_ws(self, ws: CFWebSocket) -> None:
+    def _remove_ws(self, ws: Any) -> None:
         """Remove *ws* from all socket registries (worker, browser, raw)."""
         ws_id = self.ws_key(ws)
         if ws is self.worker_ws:  # type: ignore[attr-defined]
@@ -144,7 +144,6 @@ class _WsHelperMixin:
         self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
         self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
         self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
-        self.browser_resume_tokens.pop(ws_id, None)  # type: ignore[attr-defined]
 
     async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
         frame_type = str(payload.get("type") or "")
@@ -153,57 +152,7 @@ class _WsHelperMixin:
             return
         await self._send_text(ws, encode_control(payload))
 
-    async def _send_text(self, ws: CFWebSocket, payload: str) -> None:
+    async def _send_text(self, ws: Any, payload: str) -> None:
         result = ws.send(payload)
         if inspect.isawaitable(result):
             await result
-
-    async def _maybe_send_presence_sync(self, ws: CFWebSocket, *, exclude_self: bool = False) -> None:
-        """Send a ``presence_sync`` frame if the session has presence enabled.
-
-        Called after the hello message on browser connect.  ``exclude_self``
-        should be ``True`` in ``webSocketOpen`` (the socket is already
-        registered, so we exclude it from the peer list) and ``False`` in
-        ``fetch()`` (the socket is not yet in the registry).
-        """
-        if not self.meta.get("presence"):  # type: ignore[attr-defined]
-            return
-        exclude_ws: CFWebSocket | None = ws if exclude_self else None
-        connected_ids = self._get_presence_browser_ids(exclude_ws=exclude_ws)
-        await self.send_ws(  # type: ignore[attr-defined]
-            ws,
-            {
-                "type": "presence_sync",
-                "users": [{"user_id": uid} for uid in connected_ids],
-                "config": {
-                    "auto_transfer_idle_s": self.config.deckmux_auto_transfer_idle_s,  # type: ignore[attr-defined]
-                    "keystroke_queue": self.config.deckmux_keystroke_queue,  # type: ignore[attr-defined]
-                },
-                "ts": __import__("time").time(),
-            },
-        )
-
-    def _get_presence_browser_ids(self, *, exclude_ws: CFWebSocket | None) -> list[str]:
-        """Return ws_key IDs for all currently connected browser sockets.
-
-        Used to build ``presence_sync`` payloads on connect.  When
-        ``exclude_ws`` is provided (e.g. the just-connected socket in
-        ``webSocketOpen``), that socket is omitted from the list so the
-        joining browser only sees already-connected peers.
-        """
-        exclude_key = self.ws_key(exclude_ws) if exclude_ws is not None else None
-        try:
-            all_ws = list(self.ctx.getWebSockets())  # type: ignore[attr-defined]
-        except Exception:
-            all_ws = []
-        if not all_ws:
-            all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]
-        ids: list[str] = []
-        for candidate in all_ws:
-            if self._socket_role(candidate) != "browser":
-                continue
-            key = self.ws_key(candidate)
-            if key == exclude_key:
-                continue
-            ids.append(key)
-        return ids

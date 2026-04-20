@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Live interactive demo: pty_capture session visible in browser.
@@ -85,7 +85,6 @@ def _start_server() -> tuple[uvicorn.Server, str]:
     base_url = f"http://127.0.0.1:{_SERVER_PORT}"
     config = default_server_config()
     config.auth.mode = "dev"  # type: ignore[assignment]
-    config.session_idle_timeout_s = 1800  # auto-sweep idle sessions after 30 min
     config.server = ServerBindConfig(
         host="127.0.0.1",
         port=_SERVER_PORT,
@@ -295,7 +294,6 @@ def main() -> None:
     try:
         while True:
             if shell_proc.poll() is not None:
-                last_activity = time.monotonic()
                 print("\n  Shell exited — restarting...")
                 sys.stdout.flush()
                 master_fd2, slave_fd2 = pty.openpty()

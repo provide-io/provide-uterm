@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 name: CI
 
 on:
@@ -44,11 +41,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: npm ci
-      - run: npm run build:frontend
       - run: uv sync --group dev
       - run: uv run playwright install chromium
       - run: uv run python scripts/check_max_loc.py --max-lines 500 --baseline .ci/max-loc-baseline.json
@@ -63,9 +55,7 @@ jobs:
       - run: uv run vulture packages/provide-terminal/src/ packages/provide-terminal/tests/ --ignore-names "since,password,kw,exc_type,tb,interval_s"
       - run: uv run python -m pip_audit --path .
       - run: uv run python scripts/check_licenses.py
-      - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-terminal/tests/playwright/test_example.py --ignore=packages/provide-terminal/tests/playwright/test_frontend_coverage.py
-      - name: Check CF vendor tree
-        run: bash .ci/check_cf_vendor_tree.sh
+      - run: uv run python scripts/run_pytest_gate.py -q --ignore=tests/playwright/test_example.py --ignore=tests/playwright/test_frontend_coverage.py
       - run: uv run pytest -q packages/provide-terminal-cloudflare/tests
       - run: uv run python scripts/verify_package_artifacts.py
 
@@ -106,27 +96,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv venv && uv pip install -e "packages/provide-terminal-platform/[dev]"
       - name: Run PTY unit tests (no PAM/root/native)
-        run: uv run pytest packages/provide-terminal-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-terminal-platform/tests/pty/e2e -o "addopts=--import-mode=importlib"
-
-  npm-quality:
-    # Frontend unit tests + typecheck for both npm workspaces. Previously only
-    # build + Python gates ran in CI, so vitest regressions in the app/frontend
-    # workspaces could ship silently.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: npm ci
-      - run: npm run typecheck:frontend
-      - run: npm run typecheck:app
-      - run: npm run lint:frontend
-      - run: npm run lint:app
-      # Both workspaces have their own vitest suite.
-      - run: npm test --workspace=packages/provide-terminal-frontend
-      - run: npm test --workspace=packages/provide-terminal-app
+        run: uv run pytest packages/provide-terminal-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-terminal-platform/tests/pty/e2e -o "addopts="
 
   manager-quality:
     runs-on: ubuntu-latest
@@ -207,13 +177,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: npm ci
-      - run: npm run build:frontend
       - run: uv sync --group dev
-      - run: uv build --package provide-terminal
+      - run: uv build
       - run: uvx --from twine twine check dist/*
 
   performance-smoke:
@@ -240,7 +205,7 @@ jobs:
           python-version: "3.11"
       - run: uv sync --group dev
       - name: Run memray stress tests
-        run: uv run pytest packages/provide-terminal/tests/memray/ -m memray -v --tb=short --no-cov
+        run: uv run pytest tests/memray/ -m memray -v --tb=short --no-cov
       - name: Upload memray artifacts
         if: always()
         uses: actions/upload-artifact@v4

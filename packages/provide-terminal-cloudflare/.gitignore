@@ -10,7 +10,3 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.pymutant-state/
-mutants/
-.pymutant-ledger.json
-.pymutant-strict-campaign.json

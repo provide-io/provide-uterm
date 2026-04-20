@@ -31,7 +31,8 @@ Cookie attributes: `HttpOnly; Secure; SameSite=Lax; Max-Age={ttl}`. CF stays que
 
 ## Audit Logging
 
-All token operations logged at INFO with structured fields: `tunnel_token_{action} session_id={} token_type={} source_ip={} valid={} reason={}`
+All token operations logged at INFO with structured fields:
+`tunnel_token_{action} session_id={} token_type={} source_ip={} valid={} reason={}`
 
 Actions: `created`, `validated`, `expired`, `revoked`, `rotated`
 
@@ -55,10 +56,10 @@ Added to `ServerConfig.tunnel`. CF equivalent from env vars.
 ## Verification
 
 1. Token expiry enforced on both backends
-1. Revocation immediately rejects access
-1. Rotation invalidates old tokens, new tokens work
-1. Cookie mode sets HttpOnly cookie, subsequent requests work without query param
-1. IP binding rejects requests from different IPs
-1. Timing-safe comparison on all token checks
-1. No 403 responses that reveal session existence
-1. Audit logs emitted for all token operations
+2. Revocation immediately rejects access
+3. Rotation invalidates old tokens, new tokens work
+4. Cookie mode sets HttpOnly cookie, subsequent requests work without query param
+5. IP binding rejects requests from different IPs
+6. Timing-safe comparison on all token checks
+7. No 403 responses that reveal session existence
+8. Audit logs emitted for all token operations

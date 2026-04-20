@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Unit tests for do/_webhooks.py, state/store.py webhook methods, and dispatch."""
@@ -474,16 +474,12 @@ async def test_dispatch_sse_route() -> None:
         lifecycle_state = "stopped"
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
-        meta: dict = {"visibility": "public", "owner": None}
 
         def __init__(self, s: SqliteStateStore) -> None:
             self.store = s
 
         async def browser_role_for_request(self, request: object) -> str:
             return "admin"
-
-        async def browser_subject_for_request(self, request: object) -> str | None:
-            return None
 
         async def request_json(self, request: object) -> dict:
             return {}
@@ -535,16 +531,12 @@ async def test_dispatch_webhook_register_route() -> None:
         last_analysis: str | None = None
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
-        meta: dict = {"visibility": "public", "owner": None}
 
         def __init__(self, s: SqliteStateStore) -> None:
             self.store = s
 
         async def browser_role_for_request(self, request: object) -> str:
             return "admin"
-
-        async def browser_subject_for_request(self, request: object) -> str | None:
-            return None
 
         async def request_json(self, request: object) -> dict:
             return json.loads(getattr(request, "_body", "{}"))

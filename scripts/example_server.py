@@ -1,17 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 """
 Interactive example server for manual and Playwright testing of the hijack UI.
 
 Architecture
 ------------
 - Real TermHub handles the browser-side WebSocket protocol.
-- An in-memory session worker auto-connects as ``/ws/worker/provide-shell/term``.
+- An in-memory session worker auto-connects as ``/ws/worker/demo-session/term``.
 - The worker renders a deterministic interactive transcript, responds to
   snapshot/analyze/control requests, and reconnects automatically on disconnect.
 - Frontend static files are served at ``/hijack/``.
-- ``/hijack/hijack.html?worker=provide-shell`` loads the interactive example page.
+- ``/hijack/hijack.html?worker=demo-session`` loads the interactive example page.
 
 Run
 ---

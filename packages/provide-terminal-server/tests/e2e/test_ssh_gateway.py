@@ -26,6 +26,7 @@ import websockets
 import websockets.server
 
 from provide.terminal.gateway import _ssh_to_ws, _ws_to_ssh
+from tests.bridge.control_channel_helpers import decode_control_payload
 
 
 async def _start_ws_echo_server(banner: str = "") -> tuple[Any, int]:

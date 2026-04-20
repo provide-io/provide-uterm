@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     import collections.abc
 
 from provide.telemetry import get_logger
-from provide.terminal.colors import apply_color_mode
 from provide.terminal.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
@@ -35,42 +34,16 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _read_token(path: Path) -> dict | None:
-    """Read a persisted token record from disk.
-
-    The file is JSON: ``{"token": "...", "player_id": 42}``. ``player_id`` is
-    optional — absent when the upstream server issues tokens that aren't
-    keyed by player id. Returns ``None`` if the file is missing, empty, or
-    unparseable (stale format, partial write, etc).
-    """
+def _read_token(path: Path) -> str | None:
     try:
-        raw = path.read_text().strip()
-    except (FileNotFoundError, OSError):
+        return path.read_text().strip() or None
+    except FileNotFoundError:
         return None
-    if not raw:
-        return None
-    try:
-        data = json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
-        # Legacy bare-token file — keep it working so a proxy upgrade doesn't
-        # force the user to re-login. Normalise into the new dict shape.
-        return {"token": raw}
-    if not isinstance(data, dict) or not data.get("token"):
-        return None
-    return data
 
 
-def _write_token(path: Path, token: str, player_id: int | None = None) -> None:
-    """Persist a token record to disk with 0600 file / 0700 parent perms."""
+def _write_token(path: Path, token: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with contextlib.suppress(OSError):
-        path.parent.chmod(0o700)
-    payload: dict[str, object] = {"token": token}
-    if player_id is not None:
-        payload["player_id"] = player_id
-    path.write_text(json.dumps(payload))
-    with contextlib.suppress(OSError):
-        path.chmod(0o600)
+    path.write_text(token)
 
 
 def _delete_token(path: Path) -> None:
@@ -467,3 +440,188 @@ async def _ws_to_ssh(
 
 
 
+def _make_no_auth_server_class() -> type:
+    """Return an asyncssh.SSHServer subclass that accepts all connections."""
+    import asyncssh
+
+    class _NoAuthServer(asyncssh.SSHServer):
+        # begin_auth returns False → no credentials required from any SSH
+        # client.  This is intentional: the gateway trusts the caller to
+        # provide network-level access control.  Do NOT bind host="0.0.0.0"
+        # on a public interface without an external firewall or auth layer.
+        def begin_auth(self, username: str) -> bool:  # noqa: ARG002
+            return False
+
+    return _NoAuthServer
+
+
+async def _make_process_handler(
+    ws_url: str,
+    token_file: Path | None,
+    color_mode: str,
+) -> collections.abc.Callable[[object], collections.abc.Coroutine[object, object, None]]:
+    """Return an asyncssh process_factory coroutine bound to ws_url/token_file/color_mode."""
+
+    async def _process_handler(process: object) -> None:
+        max_reconnects = 12
+        reconnect_delay = 3.0
+        stdin = process.stdin  # type: ignore[attr-defined]
+        stdout = process.stdout  # type: ignore[attr-defined]
+
+        try:
+            import websockets
+
+            for attempt in range(max_reconnects + 1):
+                # SSH client disconnected — nothing to do
+                if hasattr(stdin, "at_eof") and stdin.at_eof():
+                    break
+
+                try:
+                    async with websockets.connect(ws_url) as ws:
+                        token_data = _read_token(token_file) if token_file else None
+                        if token_data:
+                            resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
+                            if "player_id" in token_data:
+                                resume_msg["player_id"] = token_data["player_id"]
+                            await ws.send(encode_control(resume_msg))
+                        t1 = asyncio.create_task(_ssh_to_ws(process, ws))
+                        t2 = asyncio.create_task(_ws_to_ssh(ws, process, token_file=token_file, color_mode=color_mode))
+                        _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+                        for task in pending:  # pragma: no branch — may be empty if both finish
+                            task.cancel()
+                        await asyncio.gather(*[*_done, *pending], return_exceptions=True)
+                except Exception as exc:
+                    logger.debug("ssh_ws_pipe_error attempt=%d: %s", attempt, exc)
+
+                # SSH client disconnected — done
+                if hasattr(stdin, "at_eof") and stdin.at_eof():
+                    break
+
+                # WS closed but SSH client still connected — show reconnect indicator
+                if attempt < max_reconnects:
+                    logger.debug(
+                        "ssh_ws_disconnected: reconnecting in %.1fs (attempt %d/%d)",
+                        reconnect_delay,
+                        attempt + 1,
+                        max_reconnects,
+                    )
+                    try:
+                        stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
+                    except Exception:
+                        pass
+                    await asyncio.sleep(reconnect_delay)
+
+        except Exception as exc:
+            logger.debug("ssh_ws_session_ended: %s", exc)
+        finally:
+            with contextlib.suppress(Exception):
+                process.exit(0)  # type: ignore[attr-defined]
+
+    return _process_handler
+
+
+# ---------------------------------------------------------------------------
+# TelnetWsGateway
+# ---------------------------------------------------------------------------
+
+
+class TelnetWsGateway:
+    """Raw TCP (telnet) listener that proxies connections to a WebSocket server.
+
+    Each inbound TCP connection gets its own outbound WebSocket connection.
+    Both directions are pumped concurrently; whichever side closes first
+    cancels the other and the TCP connection is cleaned up.
+
+    Args:
+        ws_url: WebSocket URL of the upstream terminal server
+            (e.g. ``"wss://warp.provide.io/ws/terminal"``).
+        token_file: Path to persist the resume token.  When set, the gateway
+            sends a ``{"type": "resume", "token": "..."}`` message on
+            reconnect if a token is on disk, and saves new tokens received
+            from the server.
+        color_mode: ANSI color downgrade mode — ``"passthrough"`` (default),
+            ``"256"``, or ``"16"``.
+
+    Example::
+
+        gw = TelnetWsGateway("wss://warp.provide.io/ws/terminal")
+        server = await gw.start(port=2112)
+        await server.serve_forever()
+    """
+
+    def __init__(
+        self,
+        ws_url: str,
+        *,
+        token_file: Path | None = None,
+        color_mode: str = "passthrough",
+    ) -> None:
+        _require_websockets()
+        self._ws_url = ws_url
+        self._token_file = token_file
+        self._color_mode = color_mode
+
+    async def start(
+        self,
+        host: str = TerminalDefaults.BIND_ALL,  # nosec B104
+        port: int = TerminalDefaults.GATEWAY_TELNET_PORT,
+    ) -> asyncio.AbstractServer:
+        """Start the TCP listener and return the server object.
+
+        Args:
+            host: Bind address. Defaults to ``"0.0.0.0"``.
+            port: TCP port. Defaults to ``2112``.
+
+        Returns:
+            An :class:`asyncio.AbstractServer` — call
+            ``await server.serve_forever()`` to block until shutdown.
+        """
+        return await asyncio.start_server(self._handle, host, port)
+
+    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Handle one inbound telnet connection, reconnecting on WS-side drops.
+
+        When the upstream WebSocket closes unexpectedly (e.g. Cloudflare DO
+        hibernation) while the TCP client is still connected, this method
+        waits briefly and reconnects — using the resume token so the DO
+        restores the session.  If the TCP client closes first, no retry is
+        attempted.
+        """
+        max_reconnects = 12
+        reconnect_delay = 3.0
+
+        try:
+            for attempt in range(max_reconnects + 1):
+                if reader.at_eof():
+                    break
+                try:
+                    await _pipe_ws(
+                        reader,
+                        writer,
+                        self._ws_url,
+                        token_file=self._token_file,
+                        color_mode=self._color_mode,
+                        telnet=True,
+                    )
+                except Exception as exc:
+                    logger.debug("telnet_ws_pipe_error attempt=%d: %s", attempt, exc)
+
+                # TCP client closed — we're done
+                if reader.at_eof():
+                    break
+
+                # WS closed while TCP is still alive (hibernation or transient drop)
+                if attempt < max_reconnects:
+                    logger.debug(
+                        "ws_disconnected_tcp_alive: reconnecting in %.1fs (attempt %d/%d)",
+                        reconnect_delay,
+                        attempt + 1,
+                        max_reconnects,
+                    )
+                    await asyncio.sleep(reconnect_delay)
+                else:
+                    logger.debug("ws_reconnect_exhausted: giving up after %d attempts", max_reconnects)
+        finally:
+            with contextlib.suppress(Exception):
+                writer.close()
+                await writer.wait_closed()

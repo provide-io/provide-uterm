@@ -6,15 +6,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from provide.terminal.bridge.hub.core import (
+from provide.terminal.hijack.hub.core import (
     BrowserRoleResolutionError,
     BrowserRoleResolver,
     HijackStateCallback,
     ResumeCallback,
     TermHub,
 )
-from provide.terminal.bridge.hub.event_bus import EventBus
-from provide.terminal.bridge.hub.resume import (
+from provide.terminal.hijack.hub.event_bus import EventBus
+from provide.terminal.hijack.hub.resume import (
     InMemoryResumeStore,
     ResumeSession,
     ResumeTokenStore,
@@ -39,6 +39,9 @@ class TermHubProtocol(Protocol):
     max_ws_message_bytes: int
     max_input_chars: int
     browser_rate_limit_per_sec: float
+
+    @property
+    def event_bus(self) -> EventBus | None: ...
 
     @property
     def event_bus(self) -> EventBus | None: ...

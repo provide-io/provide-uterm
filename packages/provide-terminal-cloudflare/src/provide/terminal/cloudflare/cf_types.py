@@ -1,22 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
-
-
-@runtime_checkable
-class CFWebSocket(Protocol):
-    """Structural type for CF Durable Object WebSocket handles (Pyodide JS proxy)."""
-
-    def send(self, message: str) -> Any: ...  # returns Awaitable | None in Pyodide
-    def close(self, code: int = 1000, reason: str = "") -> None: ...
-    def serializeAttachment(self, attachment: str) -> None: ...  # noqa: N802
-    def deserializeAttachment(self) -> Any: ...  # noqa: N802
-
+from typing import Any
 
 try:
     from workers import DurableObject, Response, WorkerEntrypoint  # type: ignore
@@ -47,7 +33,7 @@ except Exception:  # pragma: no cover
         body: str | None
         status: int = 200
         headers: dict[str, str] | None = None
-        web_socket: CFWebSocket | None = None
+        web_socket: Any | None = None
 
         @classmethod
         def json(cls, data: Any, *, status: int = 200, headers: dict[str, str] | None = None) -> Response:

@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable, Coroutine
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from provide.terminal.bridge.hub.event_bus import EventBus
+    from provide.terminal.hijack.hub.event_bus import EventBus
 
 from provide.telemetry import get_logger
 
@@ -102,7 +102,6 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         resume_ttl_s: float = 300,
         on_resume: ResumeCallback | None = None,
         event_bus: EventBus | None = None,
-        ws_idle_timeout_s: float = 300.0,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -127,29 +126,12 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
         self._on_resume = on_resume
         self._ws_to_resume_token: dict[WebSocket, str] = {}
-        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus: EventBus | None = event_bus
-        self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))
 
     @property
     def event_bus(self) -> EventBus | None:
         """Public accessor for the EventBus instance (None if not configured)."""
         return self._event_bus
-
-    async def shutdown(self) -> None:
-        """Cancel all background tasks for graceful shutdown."""
-        from provide.terminal.bridge.hub.connections import shutdown_background_tasks
-
-        count = await shutdown_background_tasks(self._background_tasks)
-        if count:
-            logger.info("hub_shutdown cancelled %d background tasks", count)
-
-    async def touch_activity(self, worker_id: str) -> None:
-        """Update the last-activity timestamp for *worker_id*."""
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is not None:  # pragma: no branch
-                st.last_activity_at = time.monotonic()
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
@@ -501,7 +483,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
 
     async def get_idle_candidates(self, timeout_s: float) -> list[tuple[str, float]]:
         """Return ``(worker_id, last_activity_at)`` for workers with no browsers idle beyond *timeout_s*."""
-        now = time.monotonic()
+        now = time.time()
         async with self._lock:
             return [
                 (wid, st.last_activity_at)
@@ -518,7 +500,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Update the role for *ws* in *worker_id*'s browser set."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None and ws in st.browsers:  # pragma: no branch
+            if st is not None and ws in st.browsers:
                 st.browsers[ws] = role
 
     async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:
@@ -536,7 +518,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 and not self.is_hijacked(st)
             ):
                 st.hijack_owner = ws
-                st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
+                st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
                 return True
         return False
 
@@ -568,19 +550,14 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 return []
             return list(st.events)[-max(1, min(limit, 500)) :]
 
-    def create_router(self, *, extra_route_registrars: list[Any] | None = None) -> APIRouter:
-        """Create and return a FastAPI ``APIRouter`` with all terminal routes registered.
-
-        *extra_route_registrars* is a list of callables ``(hub, router) -> None``
-        that register additional routes (e.g. tunnel routes). This avoids a hard
-        import dependency on the tunnel package.
-        """
-        from provide.terminal.bridge.routes.rest import register_rest_routes
-        from provide.terminal.bridge.routes.websockets import register_ws_routes
+    def create_router(self) -> APIRouter:
+        """Create and return a FastAPI ``APIRouter`` with all terminal routes registered."""
+        from provide.terminal.hijack.routes.rest import register_rest_routes
+        from provide.terminal.hijack.routes.websockets import register_ws_routes
+        from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
 
         router = APIRouter()
         register_rest_routes(self, router)
         register_ws_routes(self, router)
-        for registrar in extra_route_registrars or []:
-            registrar(self, router)
+        register_tunnel_routes(self, router)
         return router

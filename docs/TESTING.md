@@ -12,8 +12,6 @@ Run the standard test suite (excludes slow/memory tests):
 uv run pytest
 ```
 
-> **Note:** The root suite includes Cloudflare Worker tests. The CF vendor tree (`packages/provide-terminal-cloudflare/python_modules/`) is `.gitignore`d and not present on a clean checkout — the vendor guard test skips automatically in that case. To run the full CF suite including the vendor guard, initialise the CF working directory first (`pywrangler sync` from `packages/provide-terminal-cloudflare/`).
-
 Or use the pytest gate script (recommended for local development):
 
 ```bash
@@ -32,28 +30,24 @@ Tests are organized by markers, which allow selective execution:
 #### Deselected Tests (opt-in)
 
 - **`playwright`** - Browser-based UI tests
-
   - Run with: `uv run pytest -m playwright`
   - Files: `tests/playwright/`
   - Time: ~5-10 minutes
   - Note: Requires `playwright install chromium` first
 
 - **`mutant`** - Mutation testing and mutmut-focused tests
-
   - Run with: `uv run pytest -m mutant` or `uv run python scripts/run_mutation_gate.py --min-mutation-score 100`
   - Files: `tests_mutation/`, mutation-specific test files
   - Time: 5-15 minutes per test
   - Coverage: Validates test suite quality by checking test failure on code mutations
 
 - **`memray`** - Memory profiling and allocation stress tests
-
   - Run with: `uv run pytest tests/memray/ -m memray -v --no-cov`
   - Files: `tests/memray/`
   - Time: ~15-30 minutes total
   - Coverage: Monitors memory allocations across hot paths
 
 - **`slow`** - Tests taking >10s (typically long-running integrations)
-
   - Run with: `uv run pytest -m slow`
   - Examples: Long-running stress tests, full stack E2E tests
 
@@ -75,7 +69,7 @@ Memory profiling tests (memray) run with `--no-cov` to avoid inflating coverage 
 
 ## Memory Profiling
 
-Memory profiling uses [memray](https://github.com/bloomberg/memray) to detect allocation regressions in hot-path components (ANSI color processing, ControlChannel buffering, TermHub event management).
+Memory profiling uses [memray](https://github.com/bloomberg/memray) to detect allocation regressions in hot-path components (ANSI color processing, ControlStream buffering, TermHub event management).
 
 ### Running Memory Tests Locally
 
@@ -150,9 +144,9 @@ This updates `tests/memray/baselines.json` with new allocation counts.
 The GitHub Actions workflow (`.github/workflows/ci.yml`) includes:
 
 1. **quality** - Linting, type checking, formatting (main gate)
-1. **mutation-gate** - Mutation testing on changed code
-1. **performance-smoke** - Performance regression detection (scheduled)
-1. **memory-regression** - Memory allocation regression detection (scheduled)
+2. **mutation-gate** - Mutation testing on changed code
+3. **performance-smoke** - Performance regression detection (scheduled)
+4. **memory-regression** - Memory allocation regression detection (scheduled)
 
 ### Memory Regression Job
 
@@ -163,17 +157,16 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) includes:
 **Artifacts:** Uploaded memray `.bin` files for 30 days
 
 **View Results:**
-
 - GitHub Actions tab → memory-regression job → Artifacts
 - Download memray output and analyze locally with `memray stats` or `memray flamegraph`
 
 ### Example: Triggering Memory Regression Manually
 
 1. Navigate to: https://github.com/provide-io/provide-terminal/actions/workflows/ci.yml
-1. Click "Run workflow"
-1. Select branch
-1. Choose "memory-regression" from job selector (if available)
-1. Watch for completion; download artifacts if needed
+2. Click "Run workflow"
+3. Select branch
+4. Choose "memory-regression" from job selector (if available)
+5. Watch for completion; download artifacts if needed
 
 ## Mutation Testing
 
@@ -196,7 +189,6 @@ uv run python scripts/run_mutation_gate.py --min-mutation-score 100
 ### Mutation Test Configuration
 
 See `pyproject.toml` `[tool.mutmut]` section for:
-
 - `paths_to_mutate`: Which files to mutate
 - `tests_dir`: Where to find tests
 - `do_not_mutate`: Files to exclude (typically frontend, transports)
@@ -255,7 +247,6 @@ uv run pytest --cov=provide.terminal --cov-branch --cov-report=term-missing
 ```
 
 Then either:
-
 - Add test cases for uncovered branches
 - Use `# pragma: no cover` for intentionally untested code (e.g., error paths in logging)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -13,8 +13,7 @@ from dataclasses import dataclass
 from statistics import median
 from typing import TYPE_CHECKING
 
-from provide.terminal.ansi import normalize_colors
-from provide.terminal.screen import strip_ansi
+from provide.terminal.ansi import colorize, strip_colors
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,8 +21,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PerfResult:
-    normalize_colors_ns: float
-    strip_ansi_ns: float
+    colorize_ns: float
+    strip_colors_ns: float
 
 
 def _bench_ns_per_op(iterations: int, fn: Callable[[], object]) -> float:
@@ -35,27 +34,27 @@ def _bench_ns_per_op(iterations: int, fn: Callable[[], object]) -> float:
 
 
 def run_benchmarks(iterations: int) -> PerfResult:
-    payload = "~1hello~0 {F196}world |04red|00"
+    payload = "{-x}{+g}hello{-x} {-r}world{-x} {+c}ansi{-x}"
     return PerfResult(
-        normalize_colors_ns=_bench_ns_per_op(iterations, lambda: normalize_colors(payload)),
-        strip_ansi_ns=_bench_ns_per_op(iterations, lambda: strip_ansi(payload)),
+        colorize_ns=_bench_ns_per_op(iterations, lambda: colorize(payload)),
+        strip_colors_ns=_bench_ns_per_op(iterations, lambda: strip_colors(payload)),
     )
 
 
 def run_benchmarks_stable(iterations: int, runs: int) -> PerfResult:
     samples: list[PerfResult] = [run_benchmarks(iterations) for _ in range(max(1, runs))]
     return PerfResult(
-        normalize_colors_ns=float(median(sample.normalize_colors_ns for sample in samples)),
-        strip_ansi_ns=float(median(sample.strip_ansi_ns for sample in samples)),
+        colorize_ns=float(median(sample.colorize_ns for sample in samples)),
+        strip_colors_ns=float(median(sample.strip_colors_ns for sample in samples)),
     )
 
 
-def evaluate_thresholds(result: PerfResult, max_normalize_ns: float, max_strip_ns: float) -> list[str]:
+def evaluate_thresholds(result: PerfResult, max_colorize_ns: float, max_strip_colors_ns: float) -> list[str]:
     failures: list[str] = []
-    if result.normalize_colors_ns > max_normalize_ns:
-        failures.append(f"normalize_colors_ns {result.normalize_colors_ns:.2f} > {max_normalize_ns:.2f}")
-    if result.strip_ansi_ns > max_strip_ns:
-        failures.append(f"strip_ansi_ns {result.strip_ansi_ns:.2f} > {max_strip_ns:.2f}")
+    if result.colorize_ns > max_colorize_ns:
+        failures.append(f"colorize_ns {result.colorize_ns:.2f} > {max_colorize_ns:.2f}")
+    if result.strip_colors_ns > max_strip_colors_ns:
+        failures.append(f"strip_colors_ns {result.strip_colors_ns:.2f} > {max_strip_colors_ns:.2f}")
     return failures
 
 
@@ -64,8 +63,8 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=250_000)
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--enforce", action="store_true", help="Fail if thresholds are exceeded.")
-    parser.add_argument("--max-normalize-ns", type=float, default=6_000.0)
-    parser.add_argument("--max-strip-ns", type=float, default=4_500.0)
+    parser.add_argument("--max-colorize-ns", type=float, default=4_500.0)
+    parser.add_argument("--max-strip-colors-ns", type=float, default=3_500.0)
     parser.add_argument(
         "--ci-threshold-multiplier",
         type=float,
@@ -81,8 +80,8 @@ def main() -> int:
         {
             "iterations": args.iterations,
             "runs": args.runs,
-            "normalize_colors_ns": round(result.normalize_colors_ns, 2),
-            "strip_ansi_ns": round(result.strip_ansi_ns, 2),
+            "colorize_ns": round(result.colorize_ns, 2),
+            "strip_colors_ns": round(result.strip_colors_ns, 2),
             "enforced": args.enforce,
             "ci_detected": ci_detected,
             "threshold_multiplier": multiplier,
@@ -91,8 +90,8 @@ def main() -> int:
 
     failures = evaluate_thresholds(
         result,
-        max_normalize_ns=args.max_normalize_ns * multiplier,
-        max_strip_ns=args.max_strip_ns * multiplier,
+        max_colorize_ns=args.max_colorize_ns * multiplier,
+        max_strip_colors_ns=args.max_strip_colors_ns * multiplier,
     )
     if failures:
         print({"threshold_failures": failures})

@@ -1,5 +1,5 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
@@ -19,10 +19,6 @@ interface InspectState {
   exchanges: HttpExchangeEntry[];
   selected: string | null;
   ws: WebSocket | null;
-  inspectEnabled: boolean;
-  interceptEnabled: boolean;
-  interceptTimeout: number;
-  interceptTimeoutAction: string;
 }
 
 function statusClass(status: number): string {
@@ -77,7 +73,6 @@ function renderRow(ex: HttpExchangeEntry): string {
   return `<div class="inspect-row" data-id="${r.id}">
     <span class="method">${r.method}</span>
     <span class="url" title="${r.url}">${r.url}</span>
-    ${paused}${resolved}
     ${status}
     <span class="duration">${dur}</span>
     <span class="size">${size}</span>
@@ -122,24 +117,9 @@ function renderDetail(ex: HttpExchangeEntry): string {
     resBody = `(binary, ${humanSize(res.body_size)})`;
   }
 
-  // Intercept action bar
-  let actionBar = "";
-  if (ex.intercepted && !ex.interceptResolved && !res) {
-    actionBar = `
-      <div class="inspect-action-bar">
-        <span class="badge paused">PAUSED</span>
-        <button class="btn-action btn-forward" data-action="forward" data-id="${r.id}">Forward</button>
-        <button class="btn-action btn-drop" data-action="drop" data-id="${r.id}">Drop</button>
-        <button class="btn-action btn-modify" data-action="modify" data-id="${r.id}">Modify &amp; Forward</button>
-      </div>`;
-  } else if (ex.interceptAction) {
-    actionBar = `<div class="inspect-action-bar"><span class="badge resolved">${ex.interceptAction}</span></div>`;
-  }
-
   return `
     <div class="inspect-detail-section">
       <h3>${r.method} ${r.url}</h3>
-      ${actionBar}
       ${res ? `<div class="inspect-status ${statusClass(res.status)}">${res.status} ${res.status_text} — ${res.duration_ms.toFixed(0)}ms</div>` : '<div class="inspect-status">Pending…</div>'}
     </div>
     <div class="inspect-detail-section">
@@ -175,8 +155,6 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
           </select>
           <input id="inspect-url-filter" type="text" placeholder="Filter URL..." />
           <span id="inspect-count">0 requests</span>
-          <button id="inspect-inspect-toggle" class="btn-toggle active">Inspect: ON</button>
-          <button id="inspect-intercept-toggle" class="btn-toggle">Intercept: OFF</button>
           <span id="inspect-status" class="status-chip info">Connecting…</span>
         </div>
         <div class="inspect-split">
@@ -196,15 +174,7 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
   const methodFilter = requireElement<HTMLSelectElement>("#inspect-method-filter", root);
   const urlFilter = requireElement<HTMLInputElement>("#inspect-url-filter", root);
 
-  const state: InspectState = {
-    exchanges: [],
-    selected: null,
-    ws: null,
-    inspectEnabled: true,
-    interceptEnabled: false,
-    interceptTimeout: 30,
-    interceptTimeoutAction: "forward",
-  };
+  const state: InspectState = { exchanges: [], selected: null, ws: null };
 
   function updateList(): void {
     const mf = methodFilter.value;
@@ -232,19 +202,6 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
     }
     listEl.querySelectorAll(".inspect-row").forEach((el) => {
       el.classList.toggle("selected", el.getAttribute("data-id") === id);
-    });
-    // Wire action buttons for intercepted requests
-    detailEl.querySelectorAll(".btn-action").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const el = e.currentTarget as HTMLElement;
-        const action = el.dataset.action ?? "forward";
-        const btnId = el.dataset.id ?? "";
-        if (action === "modify") {
-          showModifyEditor(btnId);
-          return;
-        }
-        sendAction(btnId, action);
-      });
     });
   }
 
@@ -366,14 +323,7 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
 
       if (type === "http_req") {
         const req = frame as unknown as HttpRequestEntry;
-        state.exchanges.push({
-          id: req.id,
-          request: req,
-          response: null,
-          intercepted: req.intercepted ?? false,
-          interceptResolved: false,
-          interceptAction: null,
-        });
+        state.exchanges.push({ id: req.id, request: req, response: null });
         updateList();
         // Auto-scroll to bottom
         listEl.scrollTop = listEl.scrollHeight;
@@ -385,15 +335,6 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
           updateList();
           if (state.selected === res.id) showDetail(res.id);
         }
-      } else if (type === "http_intercept_state") {
-        state.inspectEnabled = frame.inspect_enabled !== false;
-        state.interceptEnabled = Boolean(frame.enabled);
-        state.interceptTimeout = Number(frame.timeout_s ?? 30);
-        state.interceptTimeoutAction = String(frame.timeout_action ?? "forward");
-        inspectToggle.textContent = `Inspect: ${state.inspectEnabled ? "ON" : "OFF"}`;
-        inspectToggle.classList.toggle("active", state.inspectEnabled);
-        interceptToggle.textContent = `Intercept: ${state.interceptEnabled ? "ON" : "OFF"}`;
-        interceptToggle.classList.toggle("active", state.interceptEnabled);
       }
     }
   });

@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import random as _random
 import sys
 import time
 from typing import TYPE_CHECKING
@@ -22,7 +20,7 @@ from scripts.demos import (
     BASE_OUT,
     asciinema_record,
     banner,
-    fanout_send,
+    fanout_send_results,
     info,
     kv,
     ok,
@@ -32,7 +30,6 @@ from scripts.demos import (
     start_server,
     stop_server,
     trim_clip,
-    warn,
 )
 from scripts.demos.output import clean_terminal_output
 
@@ -44,56 +41,6 @@ HIGHLIGHT_START_S: float = 13.0
 HIGHLIGHT_DURATION_S: float = 8.0
 
 SESSION_IDS = [f"fleet-{i}" for i in range(9)]
-
-# These workers are "degraded" — they fail the health check during deploy
-FAIL_NODES = {"fleet-2", "fleet-7"}
-
-# One service name per session slot (positional — fleet-N → _SERVICES[N])
-_SERVICES = [
-    "api-gateway",
-    "auth-svc",
-    "cache-worker",
-    "db-proxy",
-    "event-bus",
-    "fanout-relay",
-    "grpc-router",
-    "health-monitor",
-    "ingest-api",
-]
-_IMAGES = [
-    "nginx:1.25-alpine",
-    "node:20-slim",
-    "python:3.12-alpine",
-    "golang:1.22-bookworm",
-    "redis:7.2-alpine",
-    "envoy:v1.29",
-    "caddy:2.7-alpine",
-    "haproxy:2.9-alpine",
-    "traefik:v3.0",
-]
-
-
-def _deploy_cmd(sid: str, rng: _random.Random, fail: bool) -> str:
-    """Build a unique multi-step deploy command sequence for one terminal."""
-    idx = int(sid.split("-")[1])
-    svc = _SERVICES[idx % len(_SERVICES)]
-    img = rng.choice(_IMAGES)
-    rev = format(rng.getrandbits(28), "07x")
-    ms = rng.randint(88, 742)
-    n_secrets = rng.randint(2, 8)
-    n_migrations = rng.choice([0, 0, 0, 1, 2, 3])
-
-    lines = [
-        f"deploy {svc} [rev={rev}]",
-        f"  image: {img}",
-        f"  secrets: {n_secrets} injected",
-        f"  migrations: {n_migrations} applied",
-        "  health: CRITICAL — port unreachable" if fail else f"  health: ok ({ms}ms)",
-        "✗ aborted" if fail else "✓ ready",
-    ]
-    # Chain echo commands — simpler than printf, no quoting/escape issues
-    cmd = "; ".join(f'echo "{line}"' for line in lines)
-    return f"{cmd}\r"
 
 
 async def run_terminal_demo() -> None:
@@ -130,24 +77,25 @@ async def run_terminal_demo() -> None:
         kv("group_id", group_id[:12] + "...")
         kv("workers", group_data.get("session_count", len(SESSION_IDS)))
 
-        info("Broadcasting deploy trigger to all fleet workers...")
+        info("Broadcasting deploy command to all fleet workers...")
         r = await client.post(
             f"/api/fanout/groups/{group_id}/send",
-            json={"data": "printf 'deploy v2.1 broadcast received\\n'\r", "quiesce_ms": 1000, "max_response_ms": 8000},
+            json={
+                "data": 'printf "deploy v2.1 [pid=$$]\\n  image: ok\\n  config: applied\\n  health: pass\\n✓ ready\\n"\r',
+                "quiesce_ms": 1500,
+                "max_response_ms": 8000,
+            },
         )
         r.raise_for_status()
+        send_data = r.json()
 
-        rng = _random.Random(42)
-        info("Sending per-worker deploy output...")
-        for sid in SESSION_IDS:
-            cmd = _deploy_cmd(sid, rng, sid in FAIL_NODES)
-            send_to_session(base_url, sid, cmd, wait_s=0.2)
-            if sid in FAIL_NODES:
-                warn(f"  {sid}: ✗ aborted (health: CRITICAL)")
-            else:
-                ok(f"  {sid}: ✓ ready")
+        info("Per-worker responses:")
+        for i, result in enumerate(send_data.get("results", [])):
+            worker_id = result.get("worker_id", f"fleet-{i}")
+            output = clean_terminal_output(result.get("output_delta", ""))
+            ok(f"  {worker_id}: {output}")
 
-        ok(f"Fleet deploy complete — {len(SESSION_IDS) - len(FAIL_NODES)} ready, {len(FAIL_NODES)} need attention")
+        ok(f"Fleet deploy broadcast complete — {len(SESSION_IDS)} workers responded")
 
     stop_server(server)
 
@@ -161,7 +109,6 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     time.sleep(1.5)
 
     group_id = ""
-    session_groups: dict[str, str] = {}  # sid → single-session fanout group_id
     try:
         with httpx.Client(base_url=base_url, timeout=30.0) as client:
             for sid in SESSION_IDS:
@@ -181,50 +128,37 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             )
             if r.status_code == 200:
                 group_id = r.json().get("group_id", "")
-            # Pre-create single-session groups for per-terminal unique output
-            for sid in SESSION_IDS:
-                r2 = client.post("/api/fanout/groups", json={"name": f"solo-{sid}", "worker_ids": [sid]})
-                if r2.status_code == 200:
-                    session_groups[sid] = r2.json().get("group_id", "")
     except Exception as exc:
         print(f"  [WARN] setup failed: {exc}", flush=True)
 
     for sid in SESSION_IDS:
-        send_to_session(base_url, sid, "clear\r", wait_s=0.1)
-        label = "DEGRADED — awaiting deploy" if sid in FAIL_NODES else "idle — awaiting deploy broadcast"
-        send_to_session(base_url, sid, f"echo '{sid}: {label}'\r", wait_s=0.3)
+        send_to_session(
+            base_url,
+            sid,
+            f"echo '{sid}: idle — awaiting deploy broadcast'\r",
+            wait_s=0.3,
+        )
 
     def do_broadcast(page: object) -> None:
         if not group_id:
             return
-        rng = _random.Random(42)
-
-        # Fanout: broadcast deploy trigger to all 9 simultaneously
-        fanout_send(base_url, group_id, "printf 'deploy v2.1 broadcast received\\n'\r", wait_s=0.8)
-
-        # Per-session: send unique deploy output via pre-created single-session groups
-        # (uses fanout path → direct to PTY worker WebSocket, not hijack)
-        for sid in SESSION_IDS:
-            gid = session_groups.get(sid)
-            if gid:
-                cmd = _deploy_cmd(sid, rng, sid in FAIL_NODES)
-                fanout_send(base_url, gid, cmd, wait_s=0.1)
-
-        # Populate results panel: 7 green (✓ ready), 2 orange (✗ aborted)
-        majority = "✓ ready"
-        results = [
-            {"worker_id": sid, "output": "✗ aborted" if sid in FAIL_NODES else "✓ ready"}
-            for sid in SESSION_IDS
-        ]
-        stmts = "\n".join(
-            f"var el{i} = document.getElementById('rc{i}');"
-            f"if (el{i}) {{ el{i}.querySelector('.rout').textContent = {r['output']!r};"
-            + (f"  el{i}.querySelector('.rout').classList.add('differ');" if r["output"] != majority else "")
-            + "}"
-            for i, r in enumerate(results)
+        results = fanout_send_results(
+            base_url,
+            group_id,
+            'printf "deploy v2.1 [pid=$$]\\n  image: ok\\n  config: applied\\n  health: pass\\n✓ ready\\n"\r',
+            wait_s=2.5,
         )
-        with contextlib.suppress(Exception):
-            page.evaluate(f"(function(){{{stmts}}})()")  # type: ignore[union-attr]
+        if results:
+            outputs = [r["output"] for r in results]
+            all_same = len(set(outputs)) == 1
+            stmts = "\n".join(
+                f"var el{i} = document.getElementById('rc{i}');"
+                f"if (el{i}) {{ el{i}.querySelector('.rout').textContent = {r['output']!r};"
+                f"  if (!{str(all_same).lower()}) el{i}.querySelector('.rout').classList.add('differ'); }}"
+                for i, r in enumerate(results)
+            )
+            with contextlib.suppress(Exception):
+                page.evaluate(f"(function(){{{stmts}}})()")  # type: ignore[union-attr]
 
     vids = record_fleet_complete(
         base_url,

@@ -1,8 +1,10 @@
 # Design Spec: Observable Core
 
-**Date:** 2026-03-26 **Status:** Approved **Branch:** feat/observable-core
+**Date:** 2026-03-26
+**Status:** Approved
+**Branch:** feat/observable-core
 
-______________________________________________________________________
+---
 
 ## Problem
 
@@ -10,7 +12,7 @@ provide-terminal receives every byte of terminal output and records all signific
 
 The hub already has a rich event ring buffer, a well-structured `HubEvent` format, and existing callback hooks. What's missing is a fanout layer that lets async subscribers receive events in real time.
 
-______________________________________________________________________
+---
 
 ## Goals
 
@@ -20,7 +22,7 @@ ______________________________________________________________________
 - Provide a hybrid MCP tool: streaming where supported, long-poll batch fallback otherwise.
 - Establish the foundation for all planned ARDs (anomaly detection, command approval, presence, fan-out).
 
-______________________________________________________________________
+---
 
 ## Non-Goals
 
@@ -29,7 +31,7 @@ ______________________________________________________________________
 - Persistent subscriptions across restarts.
 - Replacing the FastAPI dependency in TermHub (deferred to follow-up).
 
-______________________________________________________________________
+---
 
 ## Architecture
 
@@ -38,7 +40,6 @@ ______________________________________________________________________
 Pure asyncio, zero framework deps. Lives alongside `TermHub` in the hub package.
 
 **Subscription lifecycle:**
-
 ```
 hub._event_bus.watch(worker_id, event_types=["snapshot"], pattern=r"\$\s*$")
     → asynccontextmanager yields _Subscription
@@ -47,7 +48,6 @@ hub._event_bus.watch(worker_id, event_types=["snapshot"], pattern=r"\$\s*$")
 ```
 
 **Hot path integration:**
-
 ```
 append_event(worker_id, "snapshot", {...})
     → lock released
@@ -58,7 +58,6 @@ append_event(worker_id, "snapshot", {...})
 ```
 
 **Worker disconnect:**
-
 ```
 deregister_worker() or disconnect_worker()
     → event_bus.close_worker(worker_id)
@@ -69,7 +68,6 @@ deregister_worker() or disconnect_worker()
 ### `HubEvent` shape
 
 Same as `append_event` output, plus `worker_id`:
-
 ```python
 {
     "worker_id": str,
@@ -87,7 +85,6 @@ Same as `append_event` output, plus `worker_id`:
 Query params: `timeout_ms` (100–30000, default 5000), `event_types` (comma-separated), `pattern` (regex), `max_events` (1–200, default 50).
 
 Response:
-
 ```json
 {
     "events": [...],
@@ -112,20 +109,20 @@ session_watch(
 
 Calls `GET /api/sessions/{session_id}/events/watch` via `HijackClient.watch_session_events()`. Works with any MCP host (no streaming runtime required).
 
-______________________________________________________________________
+---
 
 ## Error Handling
 
-| Scenario                                  | Behavior                                                                   |
-| ----------------------------------------- | -------------------------------------------------------------------------- |
-| Queue full                                | Drop oldest event, enqueue new. `dropped_count` incremented. Never blocks. |
-| Slow subscriber                           | Accumulates drops. `dropped_count` in response. Hot path unaffected.       |
-| Subscriber crash / abandoned `async with` | `finally` in `watch()` calls `unsubscribe`. No leak.                       |
-| Worker disconnect mid-watch               | `None` sentinel delivered; consumer loop exits cleanly.                    |
-| EventBus raises in `_enqueue`             | Caught, logged via `provide.telemetry`. Event skipped. Never propagates.   |
-| EventBus not configured                   | Watch endpoint returns recent ring-buffer events + `timed_out: false`.     |
+| Scenario | Behavior |
+|---|---|
+| Queue full | Drop oldest event, enqueue new. `dropped_count` incremented. Never blocks. |
+| Slow subscriber | Accumulates drops. `dropped_count` in response. Hot path unaffected. |
+| Subscriber crash / abandoned `async with` | `finally` in `watch()` calls `unsubscribe`. No leak. |
+| Worker disconnect mid-watch | `None` sentinel delivered; consumer loop exits cleanly. |
+| EventBus raises in `_enqueue` | Caught, logged via `provide.telemetry`. Event skipped. Never propagates. |
+| EventBus not configured | Watch endpoint returns recent ring-buffer events + `timed_out: false`. |
 
-______________________________________________________________________
+---
 
 ## Future: ARD Subscribers
 
@@ -141,19 +138,17 @@ hub.event_bus.register_handler("detector", TerminalDetector(rules=RULES, sink=We
 - `PresenceManager` → subscribes to browser lifecycle events
 - `FanOutController` → subscribes to `snapshot` during response-window collection
 
-______________________________________________________________________
+---
 
 ## Files
 
 **New:**
-
 - `packages/provide-terminal/src/provide/terminal/hijack/hub/event_bus.py`
 - `packages/provide-terminal/tests/hijack/test_event_bus.py`
 - `packages/provide-terminal/tests/hijack/test_event_bus_integration.py`
 - `packages/provide-terminal/tests/mcp/test_mcp_watch.py`
 
 **Modified:**
-
 - `packages/provide-terminal/src/provide/terminal/hijack/hub/core.py` — EventBus wiring
 - `packages/provide-terminal/src/provide/terminal/hijack/hub/__init__.py` — export EventBus
 - `packages/provide-terminal/src/provide/terminal/server/registry.py` — `watch_session_events()`

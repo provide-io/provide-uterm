@@ -402,6 +402,36 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             )
                         continue
 
+                    if mtype == "fanout_send":
+                        _fo_ctrl: Any = getattr(hub, "fan_out_controller", None)
+                        if _fo_ctrl is not None:
+                            from dataclasses import asdict
+
+                            _fo_group_id = msg_b.get("group_id", "")
+                            _fo_data = msg_b.get("data", "")
+                            _fo_principal = getattr(
+                                getattr(websocket, "state", None), "uterm_principal", None
+                            )
+                            _fo_subj = _fo_principal.subject_id if _fo_principal else "anonymous"
+                            # Verify caller has access to the group
+                            _fo_group = await _fo_ctrl.get_group(_fo_group_id, principal=_fo_subj)
+                            if _fo_group is None:
+                                continue  # caller doesn't own/have access
+                            _fo_result = await _fo_ctrl.send(
+                                _fo_group_id, _fo_data, principal=_fo_subj,
+                            )
+                            await websocket.send_text(
+                                encode_control({
+                                    "type": "fanout_result",
+                                    "group_id": _fo_result.group_id,
+                                    "send_id": _fo_result.send_id,
+                                    "results": [asdict(r) for r in _fo_result.results],
+                                    "divergent_sessions": _fo_result.divergent_sessions,
+                                    "failed_sessions": _fo_result.failed_sessions,
+                                })
+                            )
+                        continue
+
                     if mtype in ("input", "hijack_request", "hijack_release"):
                         await hub.touch_activity(worker_id)
                     owned_hijack = await handle_browser_message(hub, websocket, worker_id, role, msg_b, owned_hijack)

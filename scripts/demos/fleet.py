@@ -29,8 +29,6 @@ def record_simultaneous_perspectives(
     perspectives: dict[str, list[BrowserStep]],
     base_url: str,
     feature_dir: Path,
-    *,
-    context_options: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Path | None]:
     """Record multiple named browser perspectives with ALL contexts open simultaneously.
 
@@ -40,8 +38,6 @@ def record_simultaneous_perspectives(
     simultaneous broadcasts, hijack viewer/operator interaction).
 
     Each perspective gets its own <name>.mp4 in feature_dir.
-    Pass context_options={name: {extra_http_headers: {...}, ...}} to customise
-    individual Playwright browser contexts (e.g. for DeckMux display names).
     Returns {name: mp4_path_or_None}.
     """
     from playwright.sync_api import sync_playwright
@@ -65,12 +61,10 @@ def record_simultaneous_perspectives(
                 wd = feature_dir / f"_webm_{name}"
                 wd.mkdir(parents=True, exist_ok=True)
                 webm_dirs[name] = wd
-                extra = (context_options or {}).get(name, {})
                 ctx = browser.new_context(
                     viewport={"width": 1280, "height": 720},
                     record_video_dir=str(wd),
                     record_video_size={"width": 1280, "height": 720},
-                    **extra,
                 )
                 contexts[name] = ctx
                 pages[name] = ctx.new_page()
@@ -118,10 +112,8 @@ def record_simultaneous_perspectives(
 def _build_grid_html(session_ids: list[str], cols: int, cell_h: int, panel_h: int) -> str:
     """Build the iframe grid HTML for record_fleet_complete."""
     rows = math.ceil(len(session_ids) / cols)
-    # Clip exactly 30px from iframe top to hide the hijack toolbar
-    _TOOLBAR_PX = 30
     iframes_html = "".join(
-        f'<div class="cell"><div class="ifwrap"><iframe id="f{i}" src="/app/session/{sid}"></iframe></div></div>'
+        f'<div class="cell"><div class="label">{sid}</div><iframe id="f{i}" src="/app/session/{sid}"></iframe></div>'
         for i, sid in enumerate(session_ids)
     )
     results_cells = "".join(
@@ -135,11 +127,11 @@ def _build_grid_html(session_ids: list[str], cols: int, cell_h: int, panel_h: in
         " body { background:#0d1117; font-family:monospace; overflow:hidden; }"
         f" .grid {{ display:grid; grid-template-columns:{'1fr ' * cols};"
         f"   height:{cell_h * math.ceil(len(session_ids) / cols)}px; gap:3px; padding:3px 3px 0; }}"
-        " .cell { display:flex; flex-direction:column; background:#0d1117;"
+        " .cell { display:flex; flex-direction:column; background:#161b22;"
         "   border:1px solid #30363d; border-radius:4px; overflow:hidden; }"
-        " .ifwrap { flex:1; overflow:hidden; position:relative; }"
-        f" .ifwrap iframe {{ position:absolute; top:-{_TOOLBAR_PX}px; left:0;"
-        f"   width:100%; height:calc(100% + {_TOOLBAR_PX}px); border:none; }}"
+        " .label { color:#8b949e; font-size:11px; padding:3px 6px; background:#21262d;"
+        "   border-bottom:1px solid #30363d; flex-shrink:0; }"
+        " iframe { width:100%; flex:1; border:none; }"
         f" .panel {{ height:{panel_h}px; background:#0d1117; border-top:2px solid #30363d;"
         "   padding:8px; display:flex; flex-direction:column; gap:6px; }}"
         " .panel-title { color:#58a6ff; font-size:10px; font-weight:bold;"
@@ -215,65 +207,20 @@ def record_fleet_complete(
             )
             grid_page = grid_ctx.new_page()
 
-            _IFRAME_CSS = (
-                "<style>"
-                "html,body{margin:0!important;padding:0!important;height:100%!important;overflow:hidden!important}"
-                ".page{gap:0!important;padding:0!important;display:flex!important;flex-direction:column!important;height:100vh!important}"
-                ".app-header,header{display:none!important}"
-                ".card{padding:0!important;margin:0!important;border-radius:0!important}"
-                "#widget{min-height:0!important;height:100%!important;flex:1!important}"
-                ".hijack-toolbar{display:none!important}"
-                ".hijack-input-row{display:none!important}"
-                ".hijack-analysis{display:none!important}"
-                ".mobile-keys{display:none!important}"
-                ".provide-hijack{height:100%!important}"
-                ".hijack-terminal{height:100%!important}"
-                "</style>"
-                "<script>(function(){"
-                "function hide(el){if(el)el.style.setProperty('display','none','important');}"
-                "function applyLayout(){"
-                "hide(document.querySelector('.hijack-toolbar'));"
-                "hide(document.querySelector('.hijack-input-row'));"
-                "hide(document.querySelector('.hijack-analysis'));"
-                "hide(document.querySelector('.mobile-keys'));"
-                "hide(document.querySelector('.app-header,header'));"
-                "var ss=document.querySelector('#session-status');"
-                "if(ss&&ss.closest('.card'))ss.closest('.card').style.setProperty('display','none','important');"
-                "var w=document.getElementById('widget');"
-                "if(w&&w.closest('.card')){var wc=w.closest('.card');"
-                "wc.style.setProperty('flex','1','important');"
-                "wc.style.setProperty('overflow','hidden','important');}"
-                "}"
-                "var obs=new MutationObserver(applyLayout);"
-                "obs.observe(document.documentElement,{childList:true,subtree:true});"
-                "document.addEventListener('DOMContentLoaded',applyLayout);"
-                "})();</script>"
-            )
-
-            def _inject_css(route: object, _req: object) -> None:  # type: ignore[misc]
+            def _strip_frame_headers(route: object, _req: object) -> None:  # type: ignore[misc]
                 resp = route.fetch()  # type: ignore[union-attr]
                 headers = {
                     k: v
                     for k, v in resp.headers.items()
                     if k.lower() not in ("x-frame-options", "content-security-policy")
                 }
-                ct = headers.get("content-type", "")
-                if "text/html" in ct:
-                    html_body = resp.body().decode("utf-8", errors="replace")  # type: ignore[union-attr]
-                    # No explicit </head> in this SPA — inject before <body>
-                    if "<body>" in html_body:
-                        html_body = html_body.replace("<body>", _IFRAME_CSS + "<body>", 1)
-                    elif "</head>" in html_body:
-                        html_body = html_body.replace("</head>", _IFRAME_CSS + "</head>", 1)
-                    route.fulfill(body=html_body.encode("utf-8"), headers=headers, content_type=ct)  # type: ignore[union-attr]
-                else:
-                    route.fulfill(response=resp, headers=headers)  # type: ignore[union-attr]
+                route.fulfill(response=resp, headers=headers)  # type: ignore[union-attr]
 
             grid_page.route(
                 f"**{grid_route}",
                 lambda route, _req: route.fulfill(content_type="text/html; charset=utf-8", body=grid_html),
             )
-            grid_page.route("**/app/**", _inject_css)
+            grid_page.route("**/app/**", _strip_frame_headers)
             grid_page.goto(f"{base_url}{grid_route}", wait_until="domcontentloaded")
 
             # Worker contexts
@@ -302,6 +249,26 @@ def record_fleet_complete(
             for wp in worker_pages.values():
                 with contextlib.suppress(Exception):
                     wp.locator(".xterm-viewport").first.wait_for(state="attached", timeout=15_000)
+
+            # Inject CSS into grid iframes: hide all chrome, maximise terminal
+            hide_css_js = (
+                "var s = document.createElement('style');"
+                "s.textContent = '"
+                ".app-header, header { display: none !important; }"
+                " body, html { overflow: hidden !important; }"
+                " .card { margin: 0 !important; border-radius: 0 !important; height: 100vh !important; }"
+                " .widget, #widget { height: calc(100vh - 4px) !important; }"
+                " .hijack-toolbar { display: none !important; }"
+                " .hijack-input-row { display: none !important; }"
+                " .hijack-analysis { display: none !important; }"
+                " .hijack-terminal { height: 100% !important; }"
+                " .provide-hijack { height: 100% !important; }"
+                "';"
+                "document.head.appendChild(s);"
+            )
+            for frame in grid_page.frames[1:]:
+                with contextlib.suppress(Exception):
+                    frame.evaluate(hide_css_js)
 
             time.sleep(1.5)
             grid_page.screenshot(path=str(shots_dir / before_shot))

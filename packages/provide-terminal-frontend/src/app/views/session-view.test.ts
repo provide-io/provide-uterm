@@ -161,7 +161,7 @@ describe("renderSession", () => {
       widget: { mounted: false, error: null },
     });
     vi.mocked(widgetModule.mountHijackWidget).mockReturnValue({ mounted: true, error: null });
-    await renderSession(root, makeBootstrap({ share_role: "viewer" }));
+    await renderSession(root, makeBootstrap({ share_role: "viewer", share_token: "share-token-123" }));
     expect(root.querySelector('a[href*="/operator/"]')).toBeNull();
   });
 

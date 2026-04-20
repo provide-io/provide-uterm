@@ -36,7 +36,7 @@ _PRIMARY_KEY: dict[str, str] = {
     "record_fleet": "grid",
     "record_fanout": "grid",
     "record_hijack": "operator_mp4",
-    "record_deckmux": "composite",
+    "record_deckmux": "user1_mp4",
 }
 
 

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -14,6 +14,7 @@ from provide.terminal.cloudflare.api.http_routes import route_http
 from provide.terminal.cloudflare.api.http_routes._shared import (
     _wait_for_analysis,
     _wait_for_prompt,
+    route_http,
 )
 from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
 
@@ -53,7 +54,6 @@ class _Runtime:
         self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
         self.browser_hijack_owner: dict[str, str] = {}
-        self.browser_resume_tokens: dict[str, str] = {}
         self._sent: list[dict] = []
 
     async def request_json(self, request: object) -> dict:

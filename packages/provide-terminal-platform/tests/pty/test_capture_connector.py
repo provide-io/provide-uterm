@@ -3,13 +3,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 import asyncio
-import contextlib
-import socket
 import struct
-import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 

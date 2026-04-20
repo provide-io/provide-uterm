@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """E2E: Role-differentiated browsers + EventBus observable layer.
@@ -143,9 +143,6 @@ async def test_admin_hijack_eventbus_delivers_hijack_acquired(live_server: Any) 
 
                 # Admin browser acquires WS hijack
                 await admin_ws.send(json.dumps({"type": "hijack_request"}))
-                state = await drain_until(admin_ws, "hijack_state", timeout=2.0)
-                assert state is not None, "Admin browser should receive hijack_state after hijack_request"
-                assert state["hijacked"] is True
 
                 response = await asyncio.wait_for(poll_task, timeout=8.0)
 

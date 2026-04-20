@@ -1,13 +1,10 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 """Memray stress test for TermHub lifecycle and event ring buffer management."""
 
 import asyncio
 from typing import Any
 
-from provide.terminal.bridge.hub import TermHub
+from provide.terminal.hijack.hub import TermHub
 
 
 class _NoopWs:

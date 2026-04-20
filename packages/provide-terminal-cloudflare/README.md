@@ -36,21 +36,24 @@ uv run pywrangler deploy
   - `/ws/raw/{worker_id}/term` — raw stream mode for `uterm listen` telnet/SSH gateways
 - **Hibernation-safe** — uses CF WebSocket Hibernation API; state survives DO sleep/wake cycles.
 - **WS session resumption** — browser reconnects reclaim their role and hijack ownership via one-time tokens stored in DO SQLite; see `docs/cf-do-architecture.md`.
-- **Quick-connect** — `POST /api/connect` creates sessions in KV; SPA serves the connect form at `/app/connect`. Supports shell, websocket, and ushell connector types.
+- **Quick-connect** — not currently exposed as a dedicated Cloudflare page or `POST /api/connect` flow in this package.
 
 ## Auth modes
 
 Set `AUTH_MODE` in `wrangler.toml` or `.dev.vars`:
 
-| Mode  | Behavior                                                                                                                                                  |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev` | No auth checks; all requests accepted.                                                                                                                    |
-| `jwt` | Validates CF Access JWT; role from claim or `JWT_DEFAULT_ROLE`. CF Access service tokens (with `common_name` claim) are also accepted and get admin role. |
+| Mode | Behavior |
+|---|---|
+| `dev` | No auth checks; all requests accepted. |
+| `jwt` | Validates CF Access JWT; role from claim or `JWT_DEFAULT_ROLE`. |
 
 ## Current gaps
 
-- The quick-connect form creates sessions in KV but the CF worker cannot run shell/SSH/telnet connectors itself — a worker process must bridge in via WS.
-- The hijack REST surface is intended to match the FastAPI contract, but there are still backend-parity gaps; treat `docs/protocol-matrix.md` as the target contract, not a guarantee that every edge case is identical today.
+- There is no Cloudflare-hosted quick-connect page yet. The package serves the
+  dashboard and hijack surfaces, but not the FastAPI-style `/app/connect` flow.
+- The hijack REST surface is intended to match the FastAPI contract, but there
+  are still backend-parity gaps; treat `docs/protocol-matrix.md` as the target
+  contract, not a guarantee that every edge case is identical today.
 
 ## Commands
 

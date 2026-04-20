@@ -8,9 +8,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint src/",
-    "fix": "biome check --fix src/",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "fix": "biome check --fix src/"
   },
   "dependencies": {
     "react": "19.2.5",

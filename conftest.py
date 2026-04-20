@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Root conftest — copied by mutmut to mutants/conftest.py.
@@ -19,10 +19,8 @@ if not os.environ.get("MUTANT_UNDER_TEST"):
     _ROOT = Path(__file__).resolve().parent
     _PACKAGE_SRCS = [
         _ROOT / "packages" / "provide-terminal" / "src",
-        _ROOT / "packages" / "provide-terminal-server" / "src",
         _ROOT / "packages" / "provide-terminal-cloudflare" / "src",
-        _ROOT / "packages" / "provide-terminal-platform" / "src",
-        _ROOT / "packages" / "provide-terminal-client" / "src",
+        _ROOT / "packages" / "provide-terminal-pty" / "src",
     ]
     for _src in reversed(_PACKAGE_SRCS):
         _src_str = str(_src)
@@ -46,18 +44,6 @@ if os.environ.get("MUTANT_UNDER_TEST"):
             if _mod == "provide" or _mod.startswith("provide."):
                 del sys.modules[_mod]
 
-_here_for_reorder = Path(__file__).resolve().parent
-_mutants_src = _here_for_reorder / "src"
-if _mutants_src.exists():
-    # Ensure mutants/src stays at the front of sys.path even if subsequent
-    # conftest runs (e.g. clean-test phase with MUTANT_UNDER_TEST='') re-insert
-    # mutants/packages/*/src paths ahead of it.  This guarantees the trampoline
-    # module is imported instead of the original copy in mutants/packages/.
-    _mutants_src_str = str(_mutants_src)
-    if _mutants_src_str in sys.path:
-        sys.path.remove(_mutants_src_str)
-    sys.path.insert(0, _mutants_src_str)
-
     # mutmut calls set_start_method('fork') in the parent process; the forked
     # pytest worker inherits the already-set context, so the trampoline's second
     # call to set_start_method('fork') raises RuntimeError.  Suppress it.
@@ -79,13 +65,14 @@ if _mutants_src.exists():
     # Register an at-fork handler (runs in the child before any user code)
     # to replace the setproctitle binding in mutmut's module namespace with
     # a no-op, so the child survives long enough to run the mutated tests.
-    # The guard applies to all mutmut phases: "stats", "fail", and actual mutant names.
-    def _noop_setproctitle_in_child() -> None:
-        try:
-            import mutmut.__main__ as _mm
+    if os.environ.get("MUTANT_UNDER_TEST") == "stats":
 
-            _mm.setproctitle = lambda _t: None  # type: ignore[attr-defined]
-        except Exception:  # noqa: S110 # pragma: no cover
-            pass
+        def _noop_setproctitle_in_child() -> None:
+            try:
+                import mutmut.__main__ as _mm
 
-    os.register_at_fork(after_in_child=_noop_setproctitle_in_child)
+                _mm.setproctitle = lambda _t: None  # type: ignore[attr-defined]
+            except Exception:  # noqa: S110 # pragma: no cover
+                pass
+
+        os.register_at_fork(after_in_child=_noop_setproctitle_in_child)
