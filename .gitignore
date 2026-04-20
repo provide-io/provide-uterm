@@ -176,3 +176,7 @@ node_modules/
 *.tar.gz
 *.tgz
 *.whl
+
+# Tool output / generated artifacts
+artifacts/soak/
+artifacts/release-governance/pip-audit.txt
