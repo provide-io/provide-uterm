@@ -4,23 +4,23 @@ Browser UI for the [provide-terminal](../../README.md) platform. Vanilla TypeScr
 
 ## Views
 
-| View | Route | Purpose |
-|------|-------|---------|
-| Dashboard | `/app/` | Session list, status overview |
-| Session | `/app/session/{id}` | Read-only terminal viewer |
-| Operator | `/app/operator/{id}` | Full operator console with sidebar |
-| Inspect | `/app/inspect/{id}` | HTTP traffic inspection with intercept |
-| Connect | `/app/connect` | Quick-connect to new sessions |
-| Replay | `/app/replay/{id}` | Session replay viewer |
+| View      | Route                | Purpose                                |
+| --------- | -------------------- | -------------------------------------- |
+| Dashboard | `/app/`              | Session list, status overview          |
+| Session   | `/app/session/{id}`  | Read-only terminal viewer              |
+| Operator  | `/app/operator/{id}` | Full operator console with sidebar     |
+| Inspect   | `/app/inspect/{id}`  | HTTP traffic inspection with intercept |
+| Connect   | `/app/connect`       | Quick-connect to new sessions          |
+| Replay    | `/app/replay/{id}`   | Session replay viewer                  |
 
 ## Components
 
-| Component | Purpose |
-|-----------|---------|
-| `hijack.ts` | HijackWidget — xterm.js terminal with hijack controls |
+| Component         | Purpose                                                             |
+| ----------------- | ------------------------------------------------------------------- |
+| `hijack.ts`       | HijackWidget — xterm.js terminal with hijack controls               |
 | `inspect-view.ts` | HTTP inspection UI with intercept toggle, action bar, modify editor |
-| `deckmux/` | DeckMux overlay — avatar bar, edge indicators, control transfer |
-| `app-header.ts` | Navigation header with session status |
+| `deckmux/`        | DeckMux overlay — avatar bar, edge indicators, control transfer     |
+| `app-header.ts`   | Navigation header with session status                               |
 
 ## Build
 

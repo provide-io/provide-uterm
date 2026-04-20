@@ -10,7 +10,7 @@ HTTP Inspection     AI/MCP Tools          Tunnel Sharing
 Session Replay      Multi-Backend         Agent Management
 ```
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -53,7 +53,7 @@ graph TB
 
 **Bridge** — TermHub coordinates workers and browsers, enforces viewer/operator/admin roles, manages hijack ownership leases, and supports reconnect/resume tokens.
 
----
+______________________________________________________________________
 
 ## Quick Start
 
@@ -80,7 +80,7 @@ pip install 'provide-terminal-server[cli]'
 uterm inspect 3000 --server https://your-server.example.com --intercept
 ```
 
----
+______________________________________________________________________
 
 ## Core Capabilities
 
@@ -114,14 +114,14 @@ sequenceDiagram
 
 Pluggable connectors behind a unified session model:
 
-| Connector | What it does |
-|-----------|-------------|
-| `shell` | Local shell process |
-| `telnet` | Remote telnet (RFC 854) |
-| `ssh` | Remote SSH (asyncssh) |
-| `websocket` | WebSocket upstream |
-| `ushell` | Built-in Python REPL (shell module in `provide-terminal`) |
-| `pty` | Local PTY with PAM auth and LD_PRELOAD capture |
+| Connector   | What it does                                              |
+| ----------- | --------------------------------------------------------- |
+| `shell`     | Local shell process                                       |
+| `telnet`    | Remote telnet (RFC 854)                                   |
+| `ssh`       | Remote SSH (asyncssh)                                     |
+| `websocket` | WebSocket upstream                                        |
+| `ushell`    | Built-in Python REPL (shell module in `provide-terminal`) |
+| `pty`       | Local PTY with PAM auth and LD_PRELOAD capture            |
 
 The **gateway** converts between protocols: browser WebSocket ↔ telnet/SSH backends with ANSI color mode negotiation.
 
@@ -181,29 +181,29 @@ uterm-manager --config swarm.yaml
 
 Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-platform](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-platform).
 
----
+______________________________________________________________________
 
 ## CLI Tools
 
-| Entry Point | Purpose |
-|-------------|---------|
-| `uterm` | Terminal proxy, sharing, tunneling, inspection |
-| `uterm-server` | Hosted reference server with sessions, auth, UI |
-| `uterm-mcp` | MCP server for AI agents |
-| `uterm-manager` | Agent swarm orchestration |
+| Entry Point     | Purpose                                         |
+| --------------- | ----------------------------------------------- |
+| `uterm`         | Terminal proxy, sharing, tunneling, inspection  |
+| `uterm-server`  | Hosted reference server with sessions, auth, UI |
+| `uterm-mcp`     | MCP server for AI agents                        |
+| `uterm-manager` | Agent swarm orchestration                       |
 
 ### `uterm` commands
 
-| Command | Description |
-|---------|-------------|
-| `proxy HOST PORT` | Browser WS → telnet/SSH proxy |
-| `listen WS_URL` | Telnet/SSH client → WebSocket |
-| `share [CMD]` | Share local terminal via tunnel |
-| `tunnel PORT` | Forward TCP port via tunnel |
-| `inspect PORT` | HTTP traffic inspection (add `--intercept` for pause/edit) |
-| `watch` | TUI for watching HTTP tunnel traffic |
+| Command           | Description                                                |
+| ----------------- | ---------------------------------------------------------- |
+| `proxy HOST PORT` | Browser WS → telnet/SSH proxy                              |
+| `listen WS_URL`   | Telnet/SSH client → WebSocket                              |
+| `share [CMD]`     | Share local terminal via tunnel                            |
+| `tunnel PORT`     | Forward TCP port via tunnel                                |
+| `inspect PORT`    | HTTP traffic inspection (add `--intercept` for pause/edit) |
+| `watch`           | TUI for watching HTTP tunnel traffic                       |
 
----
+______________________________________________________________________
 
 ## Installation
 
@@ -217,24 +217,24 @@ pip install 'provide-terminal-client[all]'    # client + MCP tools
 
 **provide-terminal extras:**
 
-| Extra | Installs | Required for |
-|-------|----------|-------------|
-| `[emulator]` | pyte | Screen state tracking |
-| `[ssh]` | asyncssh | SSH transport |
-| `[client]` | httpx | HTTP client |
-| `[all]` | everything above | Full core feature set |
+| Extra        | Installs         | Required for          |
+| ------------ | ---------------- | --------------------- |
+| `[emulator]` | pyte             | Screen state tracking |
+| `[ssh]`      | asyncssh         | SSH transport         |
+| `[client]`   | httpx            | HTTP client           |
+| `[all]`      | everything above | Full core feature set |
 
 **provide-terminal-server extras:**
 
-| Extra | Installs | Required for |
-|-------|----------|-------------|
-| `[server]` | fastapi, uvicorn, pyjwt, websockets | Reference server |
-| `[cli]` | fastapi, uvicorn, websockets, textual, httpx | CLI tools |
-| `[tunnel]` | httpx, uvicorn, websockets, fastapi | Tunnel sharing |
-| `[gateway]` | asyncssh, websockets | Telnet/SSH gateways |
-| `[all]` | everything above | Full server feature set |
+| Extra       | Installs                                     | Required for            |
+| ----------- | -------------------------------------------- | ----------------------- |
+| `[server]`  | fastapi, uvicorn, pyjwt, websockets          | Reference server        |
+| `[cli]`     | fastapi, uvicorn, websockets, textual, httpx | CLI tools               |
+| `[tunnel]`  | httpx, uvicorn, websockets, fastapi          | Tunnel sharing          |
+| `[gateway]` | asyncssh, websockets                         | Telnet/SSH gateways     |
+| `[all]`     | everything above                             | Full server feature set |
 
----
+______________________________________________________________________
 
 ## Deployment
 
@@ -262,29 +262,30 @@ graph LR
 **Cloudflare Workers** — edge deployment on [Durable Objects](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-cloudflare) with CF Access JWT, KV session registry, WebSocket hibernation.
 
 **Docker** — both backends locally:
+
 ```bash
 docker compose -f docker/docker-compose.yml up
 # FastAPI: http://localhost:27780/app/
 # CF Worker: http://localhost:27788/api/health
 ```
 
----
+______________________________________________________________________
 
 ## Package Ecosystem
 
-| Package | Role | Tests |
-|---------|------|-------|
-| `provide-terminal` | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
-| `provide-terminal-server` | Server: bridge hub, FastAPI, CLI, tunnel, gateway | ~2800 |
-| `provide-terminal-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
-| `provide-terminal-platform` | Platform: PTY, PAM, capture, fleet manager | ~780 |
-| `provide-terminal-cloudflare` | CF Worker + Durable Object | ~890 |
-| `provide-terminal-frontend` | Browser UI (TypeScript, xterm.js) | — |
-| `provide-terminal-app` | App shell | — |
+| Package                       | Role                                                                               | Tests |
+| ----------------------------- | ---------------------------------------------------------------------------------- | ----- |
+| `provide-terminal`            | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
+| `provide-terminal-server`     | Server: bridge hub, FastAPI, CLI, tunnel, gateway                                  | ~2800 |
+| `provide-terminal-client`     | Client: HTTP/WS client, transports, AI/MCP                                         | ~690  |
+| `provide-terminal-platform`   | Platform: PTY, PAM, capture, fleet manager                                         | ~780  |
+| `provide-terminal-cloudflare` | CF Worker + Durable Object                                                         | ~890  |
+| `provide-terminal-frontend`   | Browser UI (TypeScript, xterm.js)                                                  | —     |
+| `provide-terminal-app`        | App shell                                                                          | —     |
 
 All packages at 100% branch+line coverage. 8760+ tests total.
 
----
+______________________________________________________________________
 
 ## Security & Quality
 
@@ -294,7 +295,7 @@ All packages at 100% branch+line coverage. 8760+ tests total.
 - **Pre-commit** — ruff, mypy strict, ty, bandit, biome (TS/JS) on every commit
 - **Security audit** — `pip-audit`, `bandit`, timing-safe token comparison
 
----
+______________________________________________________________________
 
 ## Docs
 
@@ -308,7 +309,7 @@ All packages at 100% branch+line coverage. 8760+ tests total.
 - [Architecture Diagrams](https://github.com/provide-io/provide-terminal/tree/main/docs/diagrams) (PlantUML)
 - [Cloudflare Workers](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-cloudflare/README.md)
 
----
+______________________________________________________________________
 
 ## License
 

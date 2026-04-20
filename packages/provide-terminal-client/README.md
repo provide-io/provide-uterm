@@ -1,10 +1,6 @@
 # provide-terminal-client
 
-Async HTTP and WebSocket client library for the provide-terminal control plane.
-Provides `HijackClient` for REST-based session and hijack management, plus
-inline WebSocket clients (`AsyncInlineWebSocketClient`,
-`SyncInlineWebSocketClient`) for real-time terminal data streams. Every method
-returns `tuple[bool, dict]` for straightforward success/error handling.
+Async HTTP and WebSocket client library for the provide-terminal control plane. Provides `HijackClient` for REST-based session and hijack management, plus inline WebSocket clients (`AsyncInlineWebSocketClient`, `SyncInlineWebSocketClient`) for real-time terminal data streams. Every method returns `tuple[bool, dict]` for straightforward success/error handling.
 
 ## Installation
 
@@ -17,21 +13,21 @@ Requires Python 3.11+.
 
 ## HijackClient API
 
-| Method | Description |
-|---|---|
-| `acquire(worker_id, owner, lease_s)` | Acquire a lease-based hijack session |
-| `heartbeat(worker_id, hijack_id, lease_s)` | Extend a hijack lease |
-| `send(worker_id, hijack_id, keys, ...)` | Send input with optional prompt guard |
-| `snapshot(worker_id, hijack_id, wait_ms)` | Read terminal snapshot |
-| `events(worker_id, hijack_id, after_seq)` | Read event log |
-| `step(worker_id, hijack_id)` | Single-step the worker loop |
-| `release(worker_id, hijack_id)` | Release hijack, resume automation |
-| `list_sessions()` | List all sessions |
-| `get_session(session_id)` | Get session details |
-| `session_snapshot(session_id)` | Get session terminal snapshot |
-| `watch_session_events(session_id, ...)` | Long-poll session event stream |
-| `quick_connect(connector_type, ...)` | Create an ephemeral session |
-| `health()` | Server health check |
+| Method                                     | Description                           |
+| ------------------------------------------ | ------------------------------------- |
+| `acquire(worker_id, owner, lease_s)`       | Acquire a lease-based hijack session  |
+| `heartbeat(worker_id, hijack_id, lease_s)` | Extend a hijack lease                 |
+| `send(worker_id, hijack_id, keys, ...)`    | Send input with optional prompt guard |
+| `snapshot(worker_id, hijack_id, wait_ms)`  | Read terminal snapshot                |
+| `events(worker_id, hijack_id, after_seq)`  | Read event log                        |
+| `step(worker_id, hijack_id)`               | Single-step the worker loop           |
+| `release(worker_id, hijack_id)`            | Release hijack, resume automation     |
+| `list_sessions()`                          | List all sessions                     |
+| `get_session(session_id)`                  | Get session details                   |
+| `session_snapshot(session_id)`             | Get session terminal snapshot         |
+| `watch_session_events(session_id, ...)`    | Long-poll session event stream        |
+| `quick_connect(connector_type, ...)`       | Create an ephemeral session           |
+| `health()`                                 | Server health check                   |
 
 ## Usage
 

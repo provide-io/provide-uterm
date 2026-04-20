@@ -6,7 +6,7 @@ Coordinated operations across a fleet of servers — rolling deployments, parall
 
 provide-terminal controls the input path for every managed session. A fan-out primitive at the hub layer can broadcast a single input stream to N sessions with full RBAC, audit trail, per-session output capture, and live divergence detection — without any host-side agent or SSH multiplexer.
 
----
+______________________________________________________________________
 
 ## Goals
 
@@ -18,7 +18,7 @@ provide-terminal controls the input path for every managed session. A fan-out pr
 - Emit a structured `FanOutEvent` to the audit trail for each command sent and each response captured.
 - Impose no additional latency on non-fan-out sessions.
 
----
+______________________________________________________________________
 
 ## Non-Goals
 
@@ -26,7 +26,7 @@ provide-terminal controls the input path for every managed session. A fan-out pr
 - Coordinating across multiple provide-terminal deployments (single-hub scope only for v1).
 - Modifying output on a per-session basis before delivery to the controlling browser.
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -152,7 +152,7 @@ hub.fan_out_controller = controller
 
 No changes to `TermHub.__init__` signature. The REST and WS routes check `hub.fan_out_controller is not None` before handling fan-out frames.
 
----
+______________________________________________________________________
 
 ## CF Backend Parity
 
@@ -160,7 +160,7 @@ Fan-out in the CF backend operates at the KV + DO level: the Default worker fans
 
 The `RuntimeProtocol` does not gain new methods for v1 CF fan-out — it is orchestrated at the Default worker layer.
 
----
+______________________________________________________________________
 
 ## MCP Integration
 
@@ -171,7 +171,7 @@ Two new MCP tools:
 
 This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operations with full result aggregation — a capability not available in any current MCP terminal tool.
 
----
+______________________________________________________________________
 
 ## Security Considerations
 
@@ -182,7 +182,7 @@ This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operat
 - Groups may not contain sessions to which the creating principal does not have `can_read_session` access. This is enforced at group creation time by checking `authz.can_read_session(principal, session_def)` for each `worker_id`.
 - Maximum group size is configurable (default 50 sessions) to prevent inadvertent fleet-wide destructive commands.
 
----
+______________________________________________________________________
 
 ## Testing
 
@@ -193,13 +193,13 @@ This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operat
 - `test_fanout_authz.py` — operator cannot create groups; groups may not include sessions the principal cannot read.
 - `test_fanout_mcp.py` — `fanout_send` MCP tool returns structured results consumable by an AI agent.
 
----
+______________________________________________________________________
 
 ## Open Questions
 
 1. Should fan-out groups be scoped to a principal (only creator can use) or shared (any admin can use)?
-2. Should there be a "dry run" mode that shows which sessions would receive the input without sending it?
-3. Should divergence detection use Levenshtein distance, semantic embedding similarity, or a configurable comparator?
-4. What is the right response window default (2000 ms)? Should it adapt based on session type (Telnet vs SSH vs WS)?
-5. Should sequential mode support a configurable inter-session delay to avoid thundering herd on shared infrastructure?
-6. Should the MCP `fanout_send` tool stream partial results as sessions respond, or batch the full result?
+1. Should there be a "dry run" mode that shows which sessions would receive the input without sending it?
+1. Should divergence detection use Levenshtein distance, semantic embedding similarity, or a configurable comparator?
+1. What is the right response window default (2000 ms)? Should it adapt based on session type (Telnet vs SSH vs WS)?
+1. Should sequential mode support a configurable inter-session delay to avoid thundering herd on shared infrastructure?
+1. Should the MCP `fanout_send` tool stream partial results as sessions respond, or batch the full result?

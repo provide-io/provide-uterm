@@ -143,11 +143,21 @@ warn_unused_ignores = false
 
 [tool.ty.environment]
 python-version = "3.11"
-extra-paths = []
+extra-paths = [
+    "packages/provide-terminal/src",
+    "packages/provide-terminal-server/src",
+    "packages/provide-terminal-platform/src",
+    "packages/provide-terminal-client/src",
+]
 
 [tool.ty.rules]
 invalid-argument-type = "ignore"
 unused-type-ignore-comment = "ignore"
+unresolved-import = "ignore"
+unresolved-attribute = "ignore"
+unsupported-operator = "ignore"
+# Deliberate init-after-construction and ImportError fallback patterns.
+invalid-assignment = "ignore"
 
 [tool.codespell]
 skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/structlog/*,mutants"

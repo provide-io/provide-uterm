@@ -40,11 +40,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import hashlib
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 __all__ = [
     "AuthorizedKeysFileResolver",
@@ -160,7 +163,7 @@ def _coerce_to_binary_pubkey(blob: bytes) -> bytes:
             raise ValueError("malformed OpenSSH public key line")
         try:
             return base64.b64decode(parts[1], validate=True)
-        except (ValueError, base64.binascii.Error) as exc:
+        except (ValueError, binascii.Error) as exc:
             raise ValueError(f"invalid base64 in public key: {exc}") from exc
     # Assume it's already the binary wire format.
     return stripped
@@ -273,7 +276,8 @@ def _parse_authorized_keys_line(line: str) -> _AuthorizedKeyEntry:
 
     opts = _parse_options(options_str) if options_str else {}
 
-    subject = opts.pop("subject", None) or comment.strip() or f"key:{fp}"
+    raw_subject = opts.pop("subject", None)
+    subject = (raw_subject if isinstance(raw_subject, str) else None) or comment.strip() or f"key:{fp}"
     claims: dict[str, Any] = {}
     leftover_options: dict[str, Any] = {}
     for key, value in opts.items():

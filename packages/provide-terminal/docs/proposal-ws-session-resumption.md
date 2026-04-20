@@ -4,18 +4,19 @@
 
 uwarp-space has **already implemented session resumption** in production, but it does **NOT use provide-terminal's WS infrastructure**. It has a complete parallel implementation:
 
-| Aspect | uwarp-space (deployed) | provide-terminal (this proposal) |
-|--------|------------------------|-------------------------------|
-| **Architecture** | Custom DO + SQLite, no provide-terminal dependency | Library-level, pluggable store |
-| **Storage** | DO SQLite `_meta` table | In-memory (FastAPI) or pluggable (Redis/DB/SQLite) |
-| **Token in** | WS frame (first message) | WS frame (first message) — same |
-| **TTL** | 3600s (1 hour) | 300s default (configurable) |
-| **State preserved** | Player ID, game state, command loop, input buffer | Role, hijack ownership, hello state |
-| **Resume anchor** | Player identity (login + password → player_id) | Browser session (role, hijack lease) |
-| **Hibernation** | Yes (CF attachment API + SQLite) | N/A for FastAPI; CF path uses SQLite |
-| **Testing** | Unit + E2E Playwright (653 lines) | Proposed |
+| Aspect              | uwarp-space (deployed)                             | provide-terminal (this proposal)                   |
+| ------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| **Architecture**    | Custom DO + SQLite, no provide-terminal dependency | Library-level, pluggable store                     |
+| **Storage**         | DO SQLite `_meta` table                            | In-memory (FastAPI) or pluggable (Redis/DB/SQLite) |
+| **Token in**        | WS frame (first message)                           | WS frame (first message) — same                    |
+| **TTL**             | 3600s (1 hour)                                     | 300s default (configurable)                        |
+| **State preserved** | Player ID, game state, command loop, input buffer  | Role, hijack ownership, hello state                |
+| **Resume anchor**   | Player identity (login + password → player_id)     | Browser session (role, hijack lease)               |
+| **Hibernation**     | Yes (CF attachment API + SQLite)                   | N/A for FastAPI; CF path uses SQLite               |
+| **Testing**         | Unit + E2E Playwright (653 lines)                  | Proposed                                           |
 
 **Key files in uwarp-space:**
+
 - `packages/uwarp-worker/src/uwarp_worker/terminal_session.py` — token lifecycle (85 KB)
 - `packages/uwarp-worker/src/uwarp_worker/ws_handlers.py` — resume message handling (371 lines)
 - `packages/uwarp/src/uwarp/frontend/web/static/terminal.js` — browser-side resume (1400+ lines)
@@ -23,7 +24,7 @@ uwarp-space has **already implemented session resumption** in production, but it
 
 **Conclusion:** uwarp's resume is game-specific and doesn't use provide-terminal. Adding resume to provide-terminal is still valuable for the library's own operator/admin dashboard use case and future consumers, but won't directly benefit uwarp unless uwarp adopts provide-terminal's WS infrastructure.
 
----
+______________________________________________________________________
 
 ## Problem
 
@@ -33,11 +34,12 @@ Server-side state IS preserved (worker output streams, snapshots, event logs, in
 
 **Consumer impact (uwarp):** Players in-game lose all progress on WS drop. The DO has hibernation rehydration (same WS survives DO sleep via CF attachment API), but client reconnection (new WS) creates a new anonymous session.
 
----
+______________________________________________________________________
 
 ## Decision: Protocol Extension, Not Separate "Meta" WS
 
 A second "meta" WS was considered but rejected:
+
 - Doubles connection count per browser
 - Adds a second reconnect state machine with its own failure modes
 - Complicates CF DO path (socket management via `ctx.getWebSockets()` and attachment serialization)
@@ -45,7 +47,7 @@ A second "meta" WS was considered but rejected:
 
 The resume token is sent **inside the WS frame as the first message**, not in the URL query string.
 
----
+______________________________________________________________________
 
 ## Design
 
@@ -71,13 +73,13 @@ The resume token is sent **inside the WS frame as the first message**, not in th
 
 ### Security Properties
 
-| Threat | Mitigation |
-|--------|-----------|
-| Token in URL/logs | Token sent inside encrypted WS frame only. Never in query string, access logs, browser history, CDN logs, or referrer headers |
-| Replay attack | Token revoked on successful resume. New token issued. Old token invalid immediately |
-| Token theft from server logs | WS frame content not logged by default. Token is opaque (no encoded identity) |
-| Brute force | 256-bit token space (token_urlsafe(32)). Infeasible |
-| MITM extraction | Requires TLS compromise. Same threat model as session cookies |
+| Threat                       | Mitigation                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Token in URL/logs            | Token sent inside encrypted WS frame only. Never in query string, access logs, browser history, CDN logs, or referrer headers |
+| Replay attack                | Token revoked on successful resume. New token issued. Old token invalid immediately                                           |
+| Token theft from server logs | WS frame content not logged by default. Token is opaque (no encoded identity)                                                 |
+| Brute force                  | 256-bit token space (token_urlsafe(32)). Infeasible                                                                           |
+| MITM extraction              | Requires TLS compromise. Same threat model as session cookies                                                                 |
 
 ### What the Library Preserves on Resume
 
@@ -106,7 +108,7 @@ hub = TermHub(resume_store=InMemoryResumeStore(), resume_ttl_s=300)
 hub = TermHub(resume_store=MyRedisResumeStore(), resume_ttl_s=3600)
 ```
 
----
+______________________________________________________________________
 
 ## API Surface
 
@@ -139,6 +141,7 @@ class InMemoryResumeStore:
 ### Protocol Messages
 
 **Hello (server → browser):**
+
 ```json
 {
   "type": "hello",
@@ -155,6 +158,7 @@ class InMemoryResumeStore:
 ```
 
 **Resume request (browser → server, first message after connect):**
+
 ```json
 {
   "type": "resume",
@@ -163,6 +167,7 @@ class InMemoryResumeStore:
 ```
 
 **Resume success (server → browser, replaces initial hello):**
+
 ```json
 {
   "type": "hello",
@@ -194,25 +199,26 @@ async def my_resume_validator(token: str, session: ResumeSession) -> bool:
     return player is not None and not player.banned
 ```
 
-The library treats resume tokens as opaque session handles. Without a
-consumer-supplied `on_resume` policy, a successful FastAPI resume restores the
-role cached in the token for that browser session.
+The library treats resume tokens as opaque session handles. Without a consumer-supplied `on_resume` policy, a successful FastAPI resume restores the role cached in the token for that browser session.
 
----
+______________________________________________________________________
 
 ## Files to Modify
 
 ### `src/provide/terminal/hijack/hub/core.py`
+
 - Add constructor params: `resume_store: ResumeTokenStore | None = None`, `resume_ttl_s: float = 300`, `on_resume: Callable | None = None`
 - Store as instance attributes
 
 ### `src/provide/terminal/hijack/hub/connections.py`
+
 - `register_browser()`: if resume_store configured, create token, store `ws → token` mapping
 - Return `resume_token` in the browser_state dict
 - `cleanup_browser_disconnect()`: look up token for disconnecting ws, mark `was_hijack_owner` if applicable. Do NOT revoke token (needed for resume)
 - Add `_ws_to_resume_token: dict[WebSocket, str]` tracking
 
 ### `src/provide/terminal/hijack/routes/websockets.py`
+
 - After sending initial hello + hijack_state + snapshot:
   - Peek at first message from browser (with short timeout, e.g. 0.5s)
   - If `{"type":"resume","token":"..."}`: validate in store, call `on_resume` if set
@@ -222,6 +228,7 @@ role cached in the token for that browser session.
 - Resume hello includes `"resume_token": new_token, "resumed": true`
 
 ### `packages/provide-terminal-frontend/src/hijack.js`
+
 - In hello handler: if `msg.resume_token`, store in `this._resumeToken` and `sessionStorage.setItem('uterm_resume_' + this._workerId, token)`
 - In `ws.onopen`: if stored token exists, immediately send `{"type":"resume","token":"..."}` as first message
 - In second hello handler (after resume): update stored token with new one
@@ -229,33 +236,35 @@ role cached in the token for that browser session.
 - On explicit release/quit (if consumer signals): clear token from sessionStorage
 
 ### `packages/provide-terminal-cloudflare/src/provide_terminal_cloudflare/do/session_runtime.py`
+
 - In `webSocketMessage()` for browser: detect `{"type":"resume","token":"..."}` as first message
 - Validate against sqlite store
 - If valid: update attachment with stored role, send updated hello with `resumed: true` + new token
 - If invalid: ignore, existing hello stands
 
 ### `packages/provide-terminal-cloudflare/src/provide_terminal_cloudflare/state/store.py`
+
 - Add `resume_tokens` table: `(token TEXT PK, worker_id TEXT, role TEXT, was_hijack_owner INT, created_at REAL, expires_at REAL)`
 - Methods: `create_resume_token()`, `validate_resume_token()`, `revoke_resume_token()`, `mark_hijack_owner()`
 
----
+______________________________________________________________________
 
 ## Edge Cases
 
-| Case | Behavior |
-|------|----------|
-| Token expired | Ignored, fresh flow. No error sent |
-| Wrong worker_id | Ignored, fresh flow |
-| Two tabs same token | First resume wins, new token issued. Old token revoked. Second tab gets fresh flow |
-| Token TTL > hijack lease TTL | Resume succeeds for role/snapshot but hijack not reclaimed (lease expired). Correct |
-| Explicit quit | Consumer calls hub method to revoke token. Client clears sessionStorage |
-| Server restart (FastAPI) | InMemoryResumeStore lost. Tokens invalid. Fresh flow. Consumer can use persistent store |
-| CF DO restart | Sqlite survives. Tokens valid until TTL |
-| WS drops during resume handshake | Old token already revoked, new token never received. Client has stale token → fresh flow on next reconnect |
-| Worker broadcast before resume | Terminal output arrives before client sends resume. Snapshot re-sent on resume overwrites. No data loss |
-| CF DO hibernation between connect and resume | Sqlite resume store survives hibernation. Attachment updated after validation. Works correctly |
+| Case                                         | Behavior                                                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Token expired                                | Ignored, fresh flow. No error sent                                                                         |
+| Wrong worker_id                              | Ignored, fresh flow                                                                                        |
+| Two tabs same token                          | First resume wins, new token issued. Old token revoked. Second tab gets fresh flow                         |
+| Token TTL > hijack lease TTL                 | Resume succeeds for role/snapshot but hijack not reclaimed (lease expired). Correct                        |
+| Explicit quit                                | Consumer calls hub method to revoke token. Client clears sessionStorage                                    |
+| Server restart (FastAPI)                     | InMemoryResumeStore lost. Tokens invalid. Fresh flow. Consumer can use persistent store                    |
+| CF DO restart                                | Sqlite survives. Tokens valid until TTL                                                                    |
+| WS drops during resume handshake             | Old token already revoked, new token never received. Client has stale token → fresh flow on next reconnect |
+| Worker broadcast before resume               | Terminal output arrives before client sends resume. Snapshot re-sent on resume overwrites. No data loss    |
+| CF DO hibernation between connect and resume | Sqlite resume store survives hibernation. Attachment updated after validation. Works correctly             |
 
----
+______________________________________________________________________
 
 ## Open Questions
 
@@ -273,10 +282,10 @@ Currently: old token revoked immediately on successful resume. New token issued.
 
 `sessionStorage` dies when the tab closes. `localStorage` persists indefinitely.
 
-| Storage | Survives tab close | Survives network blip | Stale token risk |
-|---------|-------------------|----------------------|------------------|
-| sessionStorage | No | Yes | Low (cleared on tab close) |
-| localStorage | Yes | Yes | High (tokens accumulate) |
+| Storage        | Survives tab close | Survives network blip | Stale token risk           |
+| -------------- | ------------------ | --------------------- | -------------------------- |
+| sessionStorage | No                 | Yes                   | Low (cleared on tab close) |
+| localStorage   | Yes                | Yes                   | High (tokens accumulate)   |
 
 **Recommendation:** `sessionStorage` for the library default. The primary use case is network blip recovery, not tab restoration. Consumers who want tab-survive can override client storage via a config option.
 
@@ -290,26 +299,26 @@ Should this be sync or async? Async allows DB lookups but adds latency to the re
 
 Each worker gets its own token. Storage key includes worker_id: `uterm_resume_{worker_id}`. No conflict.
 
----
+______________________________________________________________________
 
 ## Implementation Order
 
 1. **`resume.py`** — ResumeSession, ResumeTokenStore protocol, InMemoryResumeStore
-2. **`core.py`** — constructor params (resume_store, resume_ttl_s, on_resume)
-3. **`connections.py`** — wire token creation/tracking into register/disconnect
-4. **`websockets.py`** — resume message handling, hello extension
-5. **`hijack.js`** — store/send token across reconnects
-6. **CF `store.py`** — sqlite resume_tokens table
-7. **CF `session_runtime.py`** — wire resume into webSocketMessage()
-8. **Tests** — unit tests for store, WS route resume flow, hijack reclaim, edge cases, Playwright
+1. **`core.py`** — constructor params (resume_store, resume_ttl_s, on_resume)
+1. **`connections.py`** — wire token creation/tracking into register/disconnect
+1. **`websockets.py`** — resume message handling, hello extension
+1. **`hijack.js`** — store/send token across reconnects
+1. **CF `store.py`** — sqlite resume_tokens table
+1. **CF `session_runtime.py`** — wire resume into webSocketMessage()
+1. **Tests** — unit tests for store, WS route resume flow, hijack reclaim, edge cases, Playwright
 
 ## Verification
 
 1. Unit tests: `InMemoryResumeStore` create/get/revoke/expire
-2. WS route tests: connect → get token → disconnect → reconnect with token → verify role restored, hello has `resumed: true`
-3. Hijack reclaim test: acquire hijack → disconnect → reconnect with token → verify hijack reclaimed
-4. Expired token test: wait > TTL → reconnect → verify fresh flow
-5. Wrong worker_id test: token from worker A used on worker B → fresh flow
-6. Two-tab test: tab A resumes with token → tab B tries same token → fresh flow
-7. Playwright: connect, kill WS in devtools, verify auto-reconnect restores state
-8. CF E2E: same flow against live worker
+1. WS route tests: connect → get token → disconnect → reconnect with token → verify role restored, hello has `resumed: true`
+1. Hijack reclaim test: acquire hijack → disconnect → reconnect with token → verify hijack reclaimed
+1. Expired token test: wait > TTL → reconnect → verify fresh flow
+1. Wrong worker_id test: token from worker A used on worker B → fresh flow
+1. Two-tab test: tab A resumes with token → tab B tries same token → fresh flow
+1. Playwright: connect, kill WS in devtools, verify auto-reconnect restores state
+1. CF E2E: same flow against live worker
