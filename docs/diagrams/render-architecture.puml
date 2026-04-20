@@ -27,7 +27,7 @@ package "Optional Extras" #fefce8 {
 }
 
 package "Consumers" {
-  [provide-terminal\nansi_render.py shim] as SHIM
+  [provide-terminal\nrender leaf modules] as SHIM
   [provide-terminal\nshell render command] as SHREND
 }
 

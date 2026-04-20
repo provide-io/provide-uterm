@@ -222,7 +222,7 @@ def test_page_routes_set_explicit_cookie_security_flags() -> None:
 
 
 def test_compiled_frontend_views_escape_dynamic_values() -> None:
-    root = Path(__file__).resolve().parents[2] / "src" / "provide" / "terminal" / "frontend" / "app" / "views"
+    root = Path(__file__).resolve().parents[2] / "src" / "provide" / "terminal" / "server" / "frontend" / "app" / "views"
     dashboard_js = (root / "dashboard-view.js").read_text(encoding="utf-8")
     operator_js = (root / "operator-view.js").read_text(encoding="utf-8")
 

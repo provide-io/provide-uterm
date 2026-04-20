@@ -283,6 +283,22 @@ def test_config_from_mapping_accepts_security_section() -> None:
     assert config.security.mode == "dev"
 
 
+def test_config_from_mapping_accepts_profiles_security_tunnel_pam_together() -> None:
+    """H2: config with profiles, security, tunnel, and pam top-level keys must be accepted."""
+    config = config_from_mapping(
+        {
+            "profiles": {"directory": ".custom-profiles"},
+            "security": {"mode": "dev"},
+            "tunnel": {"token_ttl_s": 3600},
+            "pam": {"auto_session": True},
+        }
+    )
+    assert str(config.profiles.directory) == ".custom-profiles"
+    assert config.security.mode == "dev"
+    assert config.tunnel.token_ttl_s == 3600
+    assert config.pam.auto_session is True
+
+
 def test_config_from_mapping_rejects_unknown_nested_field() -> None:
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         config_from_mapping({"server": {"host": "127.0.0.1", "bogus": True}})

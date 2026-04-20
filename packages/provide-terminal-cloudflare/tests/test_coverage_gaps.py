@@ -316,6 +316,153 @@ class TestSessionRuntimeGaps:
         await rt.webSocketError(ws, "test error")
         assert ws_key not in rt.browser_sockets
 
+    def test_share_role_cookie_only_rejects_query_token(self) -> None:
+        """F1: tunnel_token_transport=cookie → query token ignored."""
+        import sqlite3
+
+        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+        ctx = SimpleNamespace(
+            storage=SimpleNamespace(
+                sql=SimpleNamespace(exec=sqlite3.connect(":memory:").execute),
+                setAlarm=lambda ms: None,
+            ),
+            id=SimpleNamespace(name=lambda: "rt-test"),
+            getWebSockets=list,
+        )
+        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_TOKEN_TRANSPORT="cookie")
+        rt = SessionRuntime(ctx, env)
+        rt._share_token = "tok"
+        rt._control_token = None
+        req = SimpleNamespace(
+            url="https://x/app/session/rt-test?token=tok",
+            headers=SimpleNamespace(get=lambda k, d=None: d),
+        )
+        assert rt._share_role_for_request(req) is None
+
+    def test_share_role_query_only_rejects_cookie_token(self) -> None:
+        """F1: tunnel_token_transport=query → cookie token ignored."""
+        import sqlite3
+
+        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+        ctx = SimpleNamespace(
+            storage=SimpleNamespace(
+                sql=SimpleNamespace(exec=sqlite3.connect(":memory:").execute),
+                setAlarm=lambda ms: None,
+            ),
+            id=SimpleNamespace(name=lambda: "rt-test2"),
+            getWebSockets=list,
+        )
+        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_TOKEN_TRANSPORT="query")
+        rt = SessionRuntime(ctx, env)
+        rt._share_token = "tok"
+        rt._control_token = None
+        req = SimpleNamespace(
+            url="https://x/app/session/rt-test2",
+            headers=SimpleNamespace(get=lambda k, d=None: "uterm_tunnel_rt-test2=tok" if k == "cookie" else d),
+        )
+        assert rt._share_role_for_request(req) is None
+
+    def test_share_role_ip_binding_mismatch_rejected(self) -> None:
+        """F1: tunnel_ip_binding=True + IP mismatch → None."""
+        import sqlite3
+
+        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+        ctx = SimpleNamespace(
+            storage=SimpleNamespace(
+                sql=SimpleNamespace(exec=sqlite3.connect(":memory:").execute),
+                setAlarm=lambda ms: None,
+            ),
+            id=SimpleNamespace(name=lambda: "rt-test3"),
+            getWebSockets=list,
+        )
+        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
+        rt = SessionRuntime(ctx, env)
+        rt._share_token = "tok"
+        rt._control_token = None
+        rt._issued_ip = "1.2.3.4"
+        req = SimpleNamespace(
+            url="https://x/app/session/rt-test3?token=tok",
+            headers=SimpleNamespace(get=lambda k, d=None: "9.9.9.9" if k == "CF-Connecting-IP" else d),
+        )
+        assert rt._share_role_for_request(req) is None
+
+    def test_share_role_ip_binding_match_allowed(self) -> None:
+        """F1: tunnel_ip_binding=True + IP match → role returned."""
+        import sqlite3
+
+        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+        ctx = SimpleNamespace(
+            storage=SimpleNamespace(
+                sql=SimpleNamespace(exec=sqlite3.connect(":memory:").execute),
+                setAlarm=lambda ms: None,
+            ),
+            id=SimpleNamespace(name=lambda: "rt-test4"),
+            getWebSockets=list,
+        )
+        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
+        rt = SessionRuntime(ctx, env)
+        rt._share_token = "tok"
+        rt._control_token = None
+        rt._issued_ip = "1.2.3.4"
+        req = SimpleNamespace(
+            url="https://x/app/session/rt-test4?token=tok",
+            headers=SimpleNamespace(get=lambda k, d=None: "1.2.3.4" if k == "CF-Connecting-IP" else d),
+        )
+        assert rt._share_role_for_request(req) == "viewer"
+
+    def test_ensure_meta_loads_issued_ip(self) -> None:
+        """F1: _ensure_meta populates _issued_ip from KV data."""
+        import sqlite3
+
+        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+        ctx = SimpleNamespace(
+            storage=SimpleNamespace(
+                sql=SimpleNamespace(exec=sqlite3.connect(":memory:").execute),
+                setAlarm=lambda ms: None,
+            ),
+            id=SimpleNamespace(name=lambda: "rt-ip-test"),
+            getWebSockets=list,
+        )
+        env = SimpleNamespace(AUTH_MODE="dev")
+        rt = SessionRuntime(ctx, env)
+        assert rt._issued_ip is None
+
+    def test_share_role_ip_binding_headers_exception_treats_as_no_ip(self) -> None:
+        """F1: if headers.get raises, client_ip defaults to '' which skips binding."""
+        import sqlite3
+
+        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+        ctx = SimpleNamespace(
+            storage=SimpleNamespace(
+                sql=SimpleNamespace(exec=sqlite3.connect(":memory:").execute),
+                setAlarm=lambda ms: None,
+            ),
+            id=SimpleNamespace(name=lambda: "rt-exc-test"),
+            getWebSockets=list,
+        )
+        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
+        rt = SessionRuntime(ctx, env)
+        rt._share_token = "tok"
+        rt._control_token = None
+        rt._issued_ip = "1.2.3.4"
+
+        class _BadHeaders:
+            def get(self, k, d=None):
+                raise RuntimeError("no headers")
+
+        req = SimpleNamespace(
+            url="https://x/app/session/rt-exc-test?token=tok",
+            headers=_BadHeaders(),
+        )
+        # client_ip becomes "" → issued_ip is "1.2.3.4" but client_ip != issued_ip → rejected
+        assert rt._share_role_for_request(req) is None
+
 
 # ---------------------------------------------------------------------------
 # ws_helpers.py gaps
@@ -452,6 +599,47 @@ class TestEntryDispatchGaps:
         loc = dict(resp.headers).get("location", "")
         assert "my-session" in loc
         assert "token=abc123" in loc
+
+    async def test_share_redirect_http_tunnel_uses_inspect_page(self) -> None:
+        """Short-share /s/{id} for an HTTP tunnel must redirect to /app/inspect/."""
+        import json
+
+        from provide.terminal.cloudflare.entry import Default
+
+        kv = AsyncMock()
+        kv.get = AsyncMock(return_value=json.dumps({"share_page": "inspect"}))
+        d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
+        req = _req("/s/my-http-tunnel?token=tok")
+        resp = await d.fetch(req)
+        assert resp.status == 302
+        loc = dict(resp.headers).get("location", "")
+        assert "/app/inspect/my-http-tunnel" in loc
+
+    async def test_share_redirect_kv_returns_none_falls_back_to_session(self) -> None:
+        """Short-share KV returning None must fall back to /app/session/."""
+        from provide.terminal.cloudflare.entry import Default
+
+        kv = AsyncMock()
+        kv.get = AsyncMock(return_value=None)
+        d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
+        req = _req("/s/missing-tunnel")
+        resp = await d.fetch(req)
+        assert resp.status == 302
+        loc = dict(resp.headers).get("location", "")
+        assert "/app/session/missing-tunnel" in loc
+
+    async def test_share_redirect_kv_exception_falls_back_to_session(self) -> None:
+        """Short-share KV lookup failure must fall back to /app/session/."""
+        from provide.terminal.cloudflare.entry import Default
+
+        kv = AsyncMock()
+        kv.get = AsyncMock(side_effect=RuntimeError("kv unavailable"))
+        d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
+        req = _req("/s/any-tunnel")
+        resp = await d.fetch(req)
+        assert resp.status == 302
+        loc = dict(resp.headers).get("location", "")
+        assert "/app/session/any-tunnel" in loc
 
     async def test_share_page_with_context(self) -> None:
         """Lines 344-345: SPA response for share page with context."""

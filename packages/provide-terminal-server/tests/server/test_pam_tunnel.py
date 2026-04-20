@@ -1,9 +1,13 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-
+#
 from __future__ import annotations
 
 import asyncio
+import sys
+import types
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide.terminal.server.pam_tunnel import PamTunnelBridge
@@ -100,16 +104,31 @@ async def test_bridge_stop_idempotent() -> None:
 # ── capture bridge ────────────────────────────────────────────────────────────
 
 
-async def test_capture_bridge_sends_stdout_to_tunnel() -> None:
-    from provide.terminal.pty.capture import CHANNEL_STDOUT, CaptureFrame
+def _fake_capture_module() -> types.ModuleType:
+    """Return a minimal stub for provide.terminal.pty.capture."""
+    mod = types.ModuleType("provide.terminal.pty.capture")
+    mod.CHANNEL_STDOUT = 1  # type: ignore[attr-defined]
+    mod.CHANNEL_STDIN = 0  # type: ignore[attr-defined]
+    return mod
 
+
+def _pty_modules_patch() -> dict[str, types.ModuleType]:
+    fake_capture = _fake_capture_module()
+    fake_pty = types.ModuleType("provide.terminal.pty")
+    return {
+        "provide.terminal.pty": fake_pty,
+        "provide.terminal.pty.capture": fake_capture,
+    }
+
+
+async def test_capture_bridge_sends_stdout_to_tunnel() -> None:
     tunnel = _make_tunnel_mock()
     connector = _make_capture_connector()
 
-    frame = CaptureFrame(channel=CHANNEL_STDOUT, data=b"hello world")
+    frame = SimpleNamespace(channel=1, data=b"hello world")  # CHANNEL_STDOUT == 1
     call_count = 0
 
-    async def _read_frame() -> CaptureFrame:
+    async def _read_frame() -> object:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -118,7 +137,10 @@ async def test_capture_bridge_sends_stdout_to_tunnel() -> None:
 
     connector._capture.read_frame = AsyncMock(side_effect=_read_frame)
 
-    with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+    with (
+        patch.dict(sys.modules, _pty_modules_patch()),
+        patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+    ):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
         await asyncio.sleep(0.05)
@@ -128,15 +150,13 @@ async def test_capture_bridge_sends_stdout_to_tunnel() -> None:
 
 
 async def test_capture_bridge_ignores_non_stdout_frames() -> None:
-    from provide.terminal.pty.capture import CHANNEL_STDIN, CaptureFrame
-
     tunnel = _make_tunnel_mock()
     connector = _make_capture_connector()
 
-    frame = CaptureFrame(channel=CHANNEL_STDIN, data=b"keystroke")
+    frame = SimpleNamespace(channel=0, data=b"keystroke")  # CHANNEL_STDIN == 0
     call_count = 0
 
-    async def _read_frame() -> CaptureFrame:
+    async def _read_frame() -> object:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -145,7 +165,10 @@ async def test_capture_bridge_ignores_non_stdout_frames() -> None:
 
     connector._capture.read_frame = AsyncMock(side_effect=_read_frame)
 
-    with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+    with (
+        patch.dict(sys.modules, _pty_modules_patch()),
+        patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+    ):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
         await asyncio.sleep(0.05)

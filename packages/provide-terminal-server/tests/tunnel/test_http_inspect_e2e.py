@@ -30,6 +30,45 @@ class TestHttpInspectE2E:
         assert body["tunnel_type"] == "http"
         assert body["tunnel_id"].startswith("tunnel-")
 
+    def test_http_tunnel_share_url_points_to_inspect_page(self, e2e_client):
+        """F3: share_url for http tunnels must use /app/inspect/ not /app/session/."""
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "http"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "/app/inspect/" in body["share_url"]
+        assert "token=" in body["share_url"]
+
+    def test_terminal_tunnel_share_url_points_to_session_page(self, e2e_client):
+        """F3: share_url for non-http tunnels uses /app/session/."""
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "/app/session/" in body["share_url"]
+
+    def test_rotate_http_tunnel_share_url_uses_inspect(self, e2e_client):
+        """Rotate tokens for an HTTP tunnel must return /app/inspect/ in share_url."""
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "http"})
+        assert resp.status_code == 200
+        tid = resp.json()["tunnel_id"]
+        resp2 = e2e_client.post(f"/api/tunnels/{tid}/tokens/rotate")
+        assert resp2.status_code == 200
+        assert "/app/inspect/" in resp2.json()["share_url"]
+
+    def test_short_share_redirect_http_tunnel_uses_inspect(self, e2e_client):
+        """GET /s/{id} for an HTTP tunnel must redirect to /app/inspect/."""
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "http"})
+        tid = resp.json()["tunnel_id"]
+        token = resp.json()["share_url"].split("token=")[1]
+        r = e2e_client.get(f"/s/{tid}?token={token}", follow_redirects=False)
+        assert r.status_code == 302
+        assert "/app/inspect/" in r.headers["location"]
+
+    def test_short_share_redirect_unknown_tunnel_defaults_to_session(self, e2e_client):
+        """GET /s/{unknown} falls back to /app/session/ when no token entry exists."""
+        r = e2e_client.get("/s/no-such-tunnel", follow_redirects=False)
+        assert r.status_code == 302
+        assert "/app/session/" in r.headers["location"]
+
     def test_http_channel_frame_accepted(self, e2e_client):
         resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "http"})
         tid = resp.json()["tunnel_id"]

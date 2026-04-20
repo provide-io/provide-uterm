@@ -68,7 +68,7 @@ _SHARE_SESSION_PATTERNS = (
 
 
 def _validate_frontend_assets() -> None:
-    frontend_root = importlib.resources.files("provide.terminal") / "frontend"
+    frontend_root = importlib.resources.files("provide.terminal.server") / "frontend"
     # Require only the critical entry points — the full file set is validated
     # at build time by scripts/verify_package_artifacts.py.
     # Accept either Vite manifest (React app built) or legacy app/boot.js.
@@ -571,11 +571,14 @@ def create_server_app(
 
     @app.get("/s/{session_id}")
     async def short_share_url(request: FastAPIRequest, session_id: str) -> object:
-        """Short share URL: /s/{id}?token=... → redirect to /app/session/{id}?token=..."""
+        """Short share URL: /s/{id}?token=... → redirect to /app/{inspect|session}/{id}?token=..."""
         from starlette.responses import RedirectResponse
 
+        tunnel_tokens: dict[str, dict[str, object]] = request.app.state.uterm_tunnel_tokens
+        entry = tunnel_tokens.get(session_id, {})
+        page = str(entry.get("share_page", "session"))
         qs = str(request.url.query)
-        target = f"{config.ui.app_path}/session/{session_id}"
+        target = f"{config.ui.app_path}/{page}/{session_id}"
         if qs:
             target += f"?{qs}"
         return RedirectResponse(url=target, status_code=302)
@@ -592,6 +595,6 @@ def create_server_app(
     app.add_middleware(SecurityHeadersMiddleware, config=config.security)
     app.add_middleware(TelemetryMiddleware)
 
-    frontend_path = importlib.resources.files("provide.terminal") / "frontend"
+    frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
     app.mount(config.ui.assets_path, StaticFiles(directory=str(frontend_path), html=False), name="uterm-assets")
     return app

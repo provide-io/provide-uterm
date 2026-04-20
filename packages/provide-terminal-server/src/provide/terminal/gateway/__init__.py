@@ -36,38 +36,34 @@ Example — serve both telnet and SSH clients against a WS game endpoint::
         tg.create_task((await gw_ssh.start("0.0.0.0", 2222)).wait_closed())
 """
 
-from provide.terminal.gateway._colors import (
-    _apply_color_mode,
-    _clamp8,
-    _rgb_to_16_index,
-    _rgb_to_256,
-)
 from provide.terminal.gateway._gateway import (
-    TelnetWsGateway,
+    _delete_token,
     _handle_ws_control,
     _normalize_crlf,
     _pipe_ws,
+    _read_token,
     _ssh_to_ws,
     _strip_iac,
     _tcp_to_ws,
+    _write_token,
     _ws_to_ssh,
     _ws_to_tcp,
 )
 from provide.terminal.gateway._ssh_gateway import SshWsGateway
+from provide.terminal.gateway._telnet_gateway import TelnetWsGateway
 
 __all__ = [
     "SshWsGateway",
     "TelnetWsGateway",
-    "_apply_color_mode",
-    "_clamp8",
+    "_delete_token",
     "_handle_ws_control",
     "_normalize_crlf",
     "_pipe_ws",
-    "_rgb_to_16_index",
-    "_rgb_to_256",
+    "_read_token",
     "_ssh_to_ws",
     "_strip_iac",
     "_tcp_to_ws",
+    "_write_token",
     "_ws_to_ssh",
     "_ws_to_tcp",
 ]

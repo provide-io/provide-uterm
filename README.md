@@ -28,7 +28,7 @@ graph TB
 
     subgraph Workers
         Agent["Worker / Agent"]
-        AI["AI Tools (MCP)<br/><i>16 session control tools</i>"]
+        AI["AI Tools (MCP)<br/><i>21 session control tools</i>"]
     end
 
     subgraph CLI
@@ -68,7 +68,7 @@ mount_terminal_ui(app)  # serves at /terminal
 ### Run the reference server
 
 ```bash
-pip install 'provide-terminal[server]'
+pip install 'provide-terminal-server[server]'
 uterm-server --config server.toml
 # Dashboard: http://localhost:27780/app/
 ```
@@ -76,7 +76,7 @@ uterm-server --config server.toml
 ### Inspect HTTP traffic with interception
 
 ```bash
-pip install 'provide-terminal[cli]'
+pip install 'provide-terminal-server[cli]'
 uterm inspect 3000 --server https://your-server.example.com --intercept
 ```
 

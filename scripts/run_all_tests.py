@@ -28,6 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("provide-terminal + provide-terminal-cloudflare (root pytest)", ()),
     ("provide-terminal-server", ("packages/provide-terminal-server/tests/",)),
+    ("provide-terminal-client", ("packages/provide-terminal-client/tests/",)),
     (
         "provide-terminal-platform/manager",
         ("packages/provide-terminal-platform/tests/manager/",),
@@ -40,7 +41,7 @@ _PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "--no-cov",
             "--timeout=10",
             "-o",
-            "addopts=",
+            "addopts=--import-mode=importlib",
         ),
     ),
 )

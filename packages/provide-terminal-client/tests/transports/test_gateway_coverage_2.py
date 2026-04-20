@@ -95,7 +95,7 @@ class TestHandleWsControlProtocolErrorFallback:
 
         with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
             msg = '{"type": "resume_ok"}'
-            result = await _handle_ws_control(msg, None, _write_fn)
+            result = await _handle_ws_control(msg, [None], _write_fn)
 
         # resume_ok should be handled → True, and writes a message
         assert result is True
@@ -120,7 +120,7 @@ class TestHandleWsControlProtocolErrorFallback:
 
         with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
             msg = "not-valid-json-at-all-{{{"
-            result = await _handle_ws_control(msg, None, _write_fn)
+            result = await _handle_ws_control(msg, [None], _write_fn)
 
         assert result is False
         assert written == []
@@ -145,7 +145,7 @@ class TestHandleWsControlProtocolErrorFallback:
         with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
             # Valid JSON list — not a dict
             msg = "[1, 2, 3]"
-            result = await _handle_ws_control(msg, None, _write_fn)
+            result = await _handle_ws_control(msg, [None], _write_fn)
 
         assert result is False
         assert written == []
@@ -169,7 +169,7 @@ class TestHandleWsControlProtocolErrorFallback:
 
         with patch.object(ControlChannelDecoder, "feed", _raise_protocol_error):
             msg = '"just a string"'
-            result = await _handle_ws_control(msg, None, _write_fn)
+            result = await _handle_ws_control(msg, [None], _write_fn)
 
         assert result is False
 
@@ -190,7 +190,7 @@ class TestHandleWsControlEmptyEvents:
             written.append(data)
 
         # Empty string: no events produced by decoder (finish also empty)
-        result = await _handle_ws_control("", None, _write_fn)
+        result = await _handle_ws_control("", [None], _write_fn)
         assert result is False
         assert written == []
 
@@ -255,6 +255,7 @@ class TestWsToTcpProtocolError:
             await _ws_to_tcp(
                 _async_iter(["corrupted", valid_msg]),
                 cast("asyncio.StreamWriter", writer),
+                token_holder=[None],
             )
 
         # The first message triggered ControlChannelProtocolError (continue),
@@ -269,6 +270,7 @@ class TestWsToTcpProtocolError:
         await _ws_to_tcp(
             _async_iter([raw_bytes]),
             cast("asyncio.StreamWriter", writer),
+            token_holder=[None],
         )
         # Binary data is written as-is (with DEL→BS and CRLF normalization applied)
         combined = b"".join(writer.written)
@@ -318,6 +320,7 @@ class TestWsToSshProtocolError:
             await _ws_to_ssh(
                 _async_iter(["corrupted", valid_msg]),
                 _MockProcess(),
+                token_holder=[None],
             )
 
         combined = "".join(stdout_writes)
@@ -339,6 +342,7 @@ class TestWsToSshProtocolError:
         await _ws_to_ssh(
             _async_iter([raw_bytes]),
             _MockProcess(),
+            token_holder=[None],
         )
 
         combined = "".join(stdout_writes)

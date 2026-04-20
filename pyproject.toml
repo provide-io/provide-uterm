@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "provide-terminal[emulator,ssh]",
     "provide-terminal-server[all]",
+    "provide-terminal-platform[all]",
     "provide-telemetry>=0.3",
 ]
 
@@ -187,6 +188,7 @@ markers = [
     "slow: slow tests (>10s)",
     "e2e: end-to-end tests against a live pywrangler dev server",
     "real_cf: tests requiring a real Cloudflare deployment",
+    "docker: tests requiring a running Docker daemon",
 ]
 
 [tool.xenon]

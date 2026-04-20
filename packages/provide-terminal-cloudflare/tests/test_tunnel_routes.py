@@ -170,7 +170,8 @@ class TestTunnelApi:
         body = json.loads(resp.body)
         assert body["tunnel_id"].startswith("tunnel-")
         assert "worker_token" in body
-        assert "/s/" in body["share_url"]
+        assert "/app/session/" in body["share_url"]
+        assert "token=" in body["share_url"]
         assert "token=" in body["control_url"]
         kv.put.assert_called_once()
 
@@ -318,7 +319,7 @@ class TestTunnelRotateTokens:
         assert resp.status == 200
         assert body["tunnel_id"] == "tunnel-abc"
         assert body["worker_token"] != "old_w"
-        assert "/s/tunnel-abc?token=" in body["share_url"]
+        assert "/app/session/tunnel-abc?token=" in body["share_url"]
         assert "/app/operator/tunnel-abc?token=" in body["control_url"]
         assert "expires_at" in body
         assert body["ws_endpoint"] == "/tunnel/tunnel-abc"
@@ -509,3 +510,275 @@ class TestTunnelAuthz:
         alice = SimpleNamespace(subject_id="alice", roles=("viewer",))
         resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-abc", alice, ttl_s=3600)
         assert resp.status == 200
+
+
+class TestTunnelSharePageKind:
+    """F3: share_url uses the right page kind (inspect for http, session otherwise)."""
+
+    @pytest.mark.asyncio
+    async def test_create_http_tunnel_share_url_points_to_inspect(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
+
+        kv = MagicMock()
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.method = "POST"
+        request.url = "https://example.com/api/tunnels"
+        request.json = AsyncMock(return_value={"tunnel_type": "http"})
+
+        resp = await handle_tunnels(request, env)
+        body = json.loads(resp.body)
+        assert "/app/inspect/" in body["share_url"]
+        assert "token=" in body["share_url"]
+
+    @pytest.mark.asyncio
+    async def test_create_terminal_tunnel_share_url_points_to_session(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
+
+        kv = MagicMock()
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.method = "POST"
+        request.url = "https://example.com/api/tunnels"
+        request.json = AsyncMock(return_value={"tunnel_type": "terminal"})
+
+        resp = await handle_tunnels(request, env)
+        body = json.loads(resp.body)
+        assert "/app/session/" in body["share_url"]
+
+    @pytest.mark.asyncio
+    async def test_rotate_http_tunnel_share_url_points_to_inspect(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
+
+        entry = {
+            "session_id": "tunnel-abc",
+            "tunnel_type": "http",
+            "worker_token": "w",
+            "share_token": "s",
+            "control_token": "c",
+            "expires_at": time.time() + 100,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/api/tunnels/tunnel-abc/tokens/rotate"
+
+        resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-abc", ttl_s=3600)
+        body = json.loads(resp.body)
+        assert "/app/inspect/tunnel-abc?token=" in body["share_url"]
+
+
+class TestTunnelRevocationBlocksAccess:
+    """F2: Revoked tunnels must not grant viewer access via resolve_share_context."""
+
+    @pytest.mark.asyncio
+    async def test_revoked_tunnel_returns_none_with_no_token(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {"share_token": None, "control_token": None, "revoked": True}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc"
+
+        result = await resolve_share_context(request, env, "tunnel-abc")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_revoke_sets_revoked_flag_in_kv(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
+
+        entry = {"session_id": "tunnel-abc", "share_token": "s", "control_token": "c"}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(entry))
+        kv.put = AsyncMock()
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+
+        await handle_tunnel_revoke_tokens(MagicMock(), env, "tunnel-abc")
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["revoked"] is True
+
+    @pytest.mark.asyncio
+    async def test_valid_token_on_revoked_tunnel_is_rejected(self) -> None:
+        """Even presenting a valid share_token on a revoked entry returns None."""
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {"share_token": "valid-tok", "control_token": "ctrl", "revoked": True}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc?token=valid-tok"
+
+        result = await resolve_share_context(request, env, "tunnel-abc")
+        assert result is None
+
+
+class TestTunnelTokenTransportEnforcement:
+    """F1: tunnel_token_transport config gates which transport(s) are accepted."""
+
+    @pytest.mark.asyncio
+    async def test_cookie_only_mode_rejects_query_token(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {"share_token": "tok", "control_token": "ctrl", "expires_at": time.time() + 3600}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        # Token is in the query string, but config says cookie-only.
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
+        config = SimpleNamespace(tunnel_token_transport="cookie", tunnel_ip_binding=False)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_cookie_only_mode_accepts_cookie_token(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {"share_token": "tok", "control_token": "ctrl", "expires_at": time.time() + 3600}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: "uterm_tunnel_tunnel-abc=tok" if k in ("cookie", "Cookie") else d
+        )
+        config = SimpleNamespace(tunnel_token_transport="cookie", tunnel_ip_binding=False)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result == ("session", "viewer")
+
+    @pytest.mark.asyncio
+    async def test_query_only_mode_rejects_cookie_token(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {"share_token": "tok", "control_token": "ctrl", "expires_at": time.time() + 3600}
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        # No token in query string; cookie header carries it.
+        request.url = "https://example.com/app/session/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: "uterm_tunnel_tunnel-abc=tok" if k in ("cookie", "Cookie") else d
+        )
+        config = SimpleNamespace(tunnel_token_transport="query", tunnel_ip_binding=False)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result is None
+
+
+class TestTunnelIpBinding:
+    """F1: tunnel_ip_binding config rejects tokens from mismatched IPs."""
+
+    @pytest.mark.asyncio
+    async def test_ip_match_allowed(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {
+            "share_token": "tok",
+            "control_token": "ctrl",
+            "issued_ip": "1.2.3.4",
+            "expires_at": time.time() + 3600,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
+        request.headers = SimpleNamespace(get=lambda k, d=None: "1.2.3.4" if "Connecting-IP" in k else d)
+        config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result == ("session", "viewer")
+
+    @pytest.mark.asyncio
+    async def test_ip_mismatch_rejected(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {
+            "share_token": "tok",
+            "control_token": "ctrl",
+            "issued_ip": "1.2.3.4",
+            "expires_at": time.time() + 3600,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
+        request.headers = SimpleNamespace(get=lambda k, d=None: "9.9.9.9" if "Connecting-IP" in k else d)
+        config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_issued_ip_skips_binding_check(self) -> None:
+        """Empty issued_ip means binding was not configured at create time — allow."""
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {
+            "share_token": "tok",
+            "control_token": "ctrl",
+            "issued_ip": "",
+            "expires_at": time.time() + 3600,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
+        request.headers = SimpleNamespace(get=lambda k, d=None: "9.9.9.9" if "Connecting-IP" in k else d)
+        config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result == ("session", "viewer")
+
+    @pytest.mark.asyncio
+    async def test_ip_binding_headers_get_exception_treats_as_no_client_ip(self) -> None:
+        """Exception from headers.get in IP binding silently caught; empty client_ip != issued_ip → rejected."""
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        session = {
+            "share_token": "tok",
+            "control_token": "ctrl",
+            "issued_ip": "1.2.3.4",
+            "expires_at": time.time() + 3600,
+        }
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps(session))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
+
+        class _BadHeaders:
+            def get(self, k, d=None):
+                raise RuntimeError("no headers")
+
+        request.headers = _BadHeaders()
+        config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
+
+        result = await resolve_share_context(request, env, "tunnel-abc", config)
+        assert result is None

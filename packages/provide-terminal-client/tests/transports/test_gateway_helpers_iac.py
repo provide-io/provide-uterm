@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.gateway — token helpers, WS control, IAC stripping, color helpers."""
+"""Tests for provide.terminal.gateway — token helpers, WS control, IAC stripping; color helpers from provide.terminal.colors."""
 
 from __future__ import annotations
 
@@ -11,14 +11,13 @@ from typing import Any
 
 import websockets
 from provide.terminal.control_channel import encode_control
+from provide.terminal.colors import apply_color_mode as _apply_color_mode, rgb_to_256 as _rgb_to_256
+from provide.terminal.colors.rgb import _clamp8
 from provide.terminal.gateway import (
     TelnetWsGateway,
-    _apply_color_mode,
-    _clamp8,
     _delete_token,
     _handle_ws_control,
     _read_token,
-    _rgb_to_256,
     _strip_iac,
     _tcp_to_ws,
     _write_token,
@@ -76,18 +75,19 @@ class TestTokenFileHelpers:
 
 
 class TestHandleWsControl:
-    async def test_session_token_saves_file_and_returns_true(self, tmp_path) -> None:
-        token_file = tmp_path / "tok"
+    async def test_session_token_stores_in_holder_and_returns_true(self) -> None:
+        holder: list[dict | None] = [None]
         written: list[bytes] = []
 
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
         result = await _handle_ws_control(
-            encode_control({"type": "session_token", "token": "abc123"}), token_file, _write_fn
+            encode_control({"type": "session_token", "token": "abc123"}), holder, _write_fn
         )
         assert result is True
-        assert token_file.read_text() == "abc123"
+        assert holder[0] is not None
+        assert holder[0]["token"] == "abc123"
         assert written == []
 
     async def test_resume_ok_writes_text_and_returns_true(self) -> None:
@@ -96,49 +96,53 @@ class TestHandleWsControl:
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control(encode_control({"type": "resume_ok"}), None, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "resume_ok"}), [None], _write_fn)
         assert result is True
         assert b"Session resumed" in written[0]
 
-    async def test_resume_failed_deletes_token_and_returns_true(self, tmp_path) -> None:
-        token_file = tmp_path / "tok"
-        token_file.write_text("old_token")
+    async def test_resume_failed_clears_holder_and_returns_true(self) -> None:
+        holder: list[dict | None] = [{"token": "old_token"}]
         written: list[bytes] = []
 
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), token_file, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), holder, _write_fn)
         assert result is True
-        assert not token_file.exists()
+        assert holder[0] is None
 
     async def test_plain_text_returns_false(self) -> None:
         async def _write_fn(data: bytes) -> None:
             pass
 
-        assert await _handle_ws_control("hello world", None, _write_fn) is False
+        assert await _handle_ws_control("hello world", [None], _write_fn) is False
 
     async def test_malformed_json_returns_false(self) -> None:
         async def _write_fn(data: bytes) -> None:
             pass
 
-        assert await _handle_ws_control("{not json}", None, _write_fn) is False
+        assert await _handle_ws_control("{not json}", [None], _write_fn) is False
 
-    async def test_no_token_file_skips_write(self) -> None:
-        """session_token with token_file=None should not write or raise."""
+    async def test_session_token_stores_token_and_returns_true(self) -> None:
+        """session_token always stores to holder and returns True."""
+        holder: list[dict | None] = [None]
 
         async def _write_fn(data: bytes) -> None:
             pass
 
-        result = await _handle_ws_control(encode_control({"type": "session_token", "token": "x"}), None, _write_fn)
-        assert result is False  # token_file is None → skip write
-
-    async def test_resume_failed_no_token_file_no_raise(self) -> None:
-        async def _write_fn(data: bytes) -> None:
-            pass
-
-        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), None, _write_fn)
+        result = await _handle_ws_control(encode_control({"type": "session_token", "token": "x"}), holder, _write_fn)
         assert result is True
+        assert holder[0] is not None
+
+    async def test_resume_failed_clears_holder_no_raise(self) -> None:
+        holder: list[dict | None] = [None]
+
+        async def _write_fn(data: bytes) -> None:
+            pass
+
+        result = await _handle_ws_control(encode_control({"type": "resume_failed"}), holder, _write_fn)
+        assert result is True
+        assert holder[0] is None
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +300,7 @@ class TestWsToTcpColorMode:
         from asyncio import StreamWriter
         from typing import cast
 
+        kwargs.setdefault("token_holder", [None])
         await _ws_to_tcp(_async_iter(messages), cast("StreamWriter", MockWriter()), **kwargs)
         return b"".join(written)
 

@@ -17,9 +17,9 @@ DIST = ROOT / "dist"
 
 def _expected_frontend_files() -> tuple[str, ...]:
     """Discover all frontend files from the source tree at build time."""
-    frontend = ROOT / "packages" / "provide-terminal" / "src" / "provide" / "terminal" / "frontend"
+    frontend = ROOT / "packages" / "provide-terminal-server" / "src" / "provide" / "terminal" / "server" / "frontend"
     return tuple(
-        str(p.relative_to(ROOT / "packages" / "provide-terminal" / "src")).replace("\\", "/")
+        str(p.relative_to(ROOT / "packages" / "provide-terminal-server" / "src")).replace("\\", "/")
         for p in frontend.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts and not p.name.startswith(".")
     )
@@ -29,7 +29,8 @@ def _build() -> None:
     uv = which("uv")
     if uv is None:
         raise RuntimeError("uv executable not found in PATH")
-    subprocess.run([uv, "build"], cwd=ROOT, check=True)  # noqa: S603
+    # Build the server package (which owns the frontend assets)
+    subprocess.run([uv, "build", "--package", "provide-terminal-server"], cwd=ROOT, check=True)  # noqa: S603
 
 
 def _wheel_members(path: Path) -> set[str]:
@@ -51,14 +52,15 @@ def _assert_contains(members: set[str], required: tuple[str, ...], label: str) -
 
 def main() -> int:
     _build()
-    wheels = sorted(DIST.glob("*.whl"))
-    sdists = sorted(DIST.glob("*.tar.gz"))
+    # Filter to provide-terminal-server artifacts only (not workspace meta-package)
+    wheels = sorted(DIST.glob("provide_terminal_server-*.whl"))
+    sdists = sorted(DIST.glob("provide_terminal_server-*.tar.gz"))
     if not wheels or not sdists:
-        raise RuntimeError("expected both wheel and sdist artifacts in dist/")
+        raise RuntimeError("expected provide-terminal-server wheel and sdist in dist/")
 
     required = _expected_frontend_files()
     if not required:
-        raise RuntimeError("no frontend files found in packages/provide-terminal/src/provide/terminal/frontend/")
+        raise RuntimeError("no frontend files found in packages/provide-terminal-server/src/provide/terminal/server/frontend/")
 
     wheel_members = _wheel_members(wheels[-1])
     sdist_members = _sdist_members(sdists[-1])

@@ -1,5 +1,7 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+#
 """PTYConnector: init/validation, lifecycle, register, and is_connected tests."""
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ from unittest.mock import patch
 import pytest
 
 from provide.terminal.pty.connector import PTYConnector
+
+_skip_needs_root = pytest.mark.skipif(os.getuid() != 0, reason="requires root or CAP_SETUID")
 
 from ._connector_helpers import make_connector
 
@@ -300,6 +304,7 @@ def test_register_no_refresh_when_known_connector_types_absent() -> None:
 # ── Root-only ─────────────────────────────────────────────────────────────────
 
 @pytest.mark.requires_root
+@_skip_needs_root
 async def test_user_switch_requires_root() -> None:
     conn = make_connector("/usr/bin/id", username="nobody")
     await conn.start()

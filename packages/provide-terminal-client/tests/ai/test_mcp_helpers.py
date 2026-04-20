@@ -40,6 +40,8 @@ class TestToolMetadata:
         tools = await mcp.list_tools()
         names = {t.name for t in tools}
         expected = {
+            "fanout_group_create",
+            "fanout_send",
             "hijack_begin",
             "hijack_heartbeat",
             "hijack_read",
@@ -53,6 +55,7 @@ class TestToolMetadata:
             "session_disconnect",
             "session_create",
             "server_health",
+            "session_annotate",
             "session_set_mode",
             "worker_input_mode",
             "worker_disconnect",

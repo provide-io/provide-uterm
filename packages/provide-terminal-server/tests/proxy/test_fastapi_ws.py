@@ -314,42 +314,38 @@ class TestWsTerminalProxyConnectionError:
 
 
 # ---------------------------------------------------------------------------
-# Regression: package-level __getattr__ exposes all fastapi/gateway exports (fix 5)
+# Regression: explicit fastapi/gateway leaf imports remain stable after root cleanup
 # ---------------------------------------------------------------------------
 
 
-class TestPackageGetattr:
-    """provide.terminal.__getattr__ must resolve all optional fastapi/gateway exports."""
+class TestExplicitImportSurface:
+    """Optional server exports must be imported from explicit leaf modules."""
 
-    def test_mount_terminal_ui_accessible(self) -> None:
+    def test_mount_terminal_ui_accessible_from_fastapi_utils(self) -> None:
+        from provide.terminal.fastapi_utils import mount_terminal_ui
+
+        assert callable(mount_terminal_ui)
+
+    def test_create_ws_terminal_router_accessible_from_fastapi_utils(self) -> None:
+        from provide.terminal.fastapi_utils import create_ws_terminal_router
+
+        assert callable(create_ws_terminal_router)
+
+    def test_ws_terminal_proxy_accessible_from_fastapi_utils(self) -> None:
+        from provide.terminal.fastapi_utils import WsTerminalProxy
+
+        assert isinstance(WsTerminalProxy, type)
+
+    def test_telnet_ws_gateway_accessible_from_gateway(self) -> None:
+        from provide.terminal.gateway import TelnetWsGateway
+
+        assert isinstance(TelnetWsGateway, type)
+
+    def test_root_package_does_not_expose_removed_lazy_exports(self) -> None:
         import provide.terminal as pkg
 
-        fn = pkg.mount_terminal_ui
-        assert callable(fn)
-
-    def test_create_ws_terminal_router_accessible(self) -> None:
-        import provide.terminal as pkg
-
-        fn = pkg.create_ws_terminal_router
-        assert callable(fn)
-
-    def test_ws_terminal_proxy_accessible(self) -> None:
-        import provide.terminal as pkg
-
-        cls = pkg.WsTerminalProxy
-        assert isinstance(cls, type)
-
-    def test_telnet_ws_gateway_accessible(self) -> None:
-        import provide.terminal as pkg
-
-        cls = pkg.TelnetWsGateway
-        assert isinstance(cls, type)
-
-    def test_unknown_attribute_raises(self) -> None:
-        import provide.terminal as pkg
-
-        with pytest.raises(AttributeError, match="no attribute"):
-            _ = pkg.nonexistent_symbol
+        with pytest.raises(AttributeError):
+            _ = pkg.mount_terminal_ui
 
     def test_mount_terminal_ui_raises_when_assets_missing(self) -> None:
         """mount_terminal_ui() must raise RuntimeError immediately if assets dir is absent."""

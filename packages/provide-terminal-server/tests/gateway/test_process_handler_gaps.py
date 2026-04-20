@@ -15,12 +15,10 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.gateway._gateway import _make_process_handler
-
+from provide.terminal.gateway._ssh_handler import _make_process_handler
 
 # ---------------------------------------------------------------------------
 # Async iterator helper
@@ -96,7 +94,6 @@ class TestHandlerTokenResume:
     async def test_handler_sends_resume_frame_with_player_id(self) -> None:
         """When token_holder[0] is populated with a token + player_id, the handler
         sends a resume control frame to the WS before starting the pipe tasks."""
-        from provide.terminal.control_channel import encode_control
 
         handler = await _make_process_handler("ws://test", "passthrough")
 

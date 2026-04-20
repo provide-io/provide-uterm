@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 from provide.terminal.defaults import TerminalDefaults
 from provide.terminal.server.models import FITADDON_CDN_DEFAULT, FONTS_CDN_DEFAULT, XTERM_CDN_DEFAULT
 
-_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "server" / "frontend"
 
 # ---------------------------------------------------------------------------
 # Subcommand: proxy  (WS server → outbound telnet/SSH)
@@ -164,6 +164,13 @@ def _cmd_listen(args: argparse.Namespace) -> None:
         print("error: at least one of --port or --ssh-port must be non-zero", file=sys.stderr)
         sys.exit(1)
 
+    if args.require_resolver and not args.authorized_keys:
+        print(
+            "error: --require-authorized-keys requires --authorized-keys to be set",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     asyncio.run(  # pragma: no cover
         _run_listen(
             args.ws_url,
@@ -174,6 +181,9 @@ def _cmd_listen(args: argparse.Namespace) -> None:
             args.color_mode,
             TelnetWsGateway,
             SshWsGateway,
+            iac_negotiate=args.iac_negotiate,
+            authorized_keys=args.authorized_keys,
+            require_resolver=args.require_resolver,
         )
     )
 
@@ -187,21 +197,41 @@ async def _run_listen(
     color_mode: str,
     TelnetWsGateway: type,  # noqa: N803
     SshWsGateway: type,  # noqa: N803
+    *,
+    iac_negotiate: bool = True,
+    authorized_keys: str | None = None,
+    require_resolver: bool = False,
 ) -> None:
     servers = []
 
     if telnet_port:
-        gw = TelnetWsGateway(ws_url, color_mode=color_mode)
+        gw = TelnetWsGateway(
+            ws_url, color_mode=color_mode, iac_negotiate=iac_negotiate
+        )
         srv = await gw.start(bind, telnet_port)
         servers.append(srv)
         print(f"uterm listen  telnet://{bind}:{telnet_port}  →  {ws_url}")
 
     if ssh_port:
         try:
-            gw_ssh = SshWsGateway(ws_url, server_key=server_key)
+            key_resolver = None
+            if authorized_keys:
+                from provide.terminal.auth import AuthorizedKeysFileResolver
+
+                key_resolver = AuthorizedKeysFileResolver(authorized_keys)
+            gw_ssh = SshWsGateway(
+                ws_url,
+                server_key=server_key,
+                key_resolver=key_resolver,
+                require_resolver=require_resolver,
+            )
             srv_ssh = await gw_ssh.start(bind, ssh_port)
             servers.append(srv_ssh)
-            print(f"uterm listen  ssh://{bind}:{ssh_port}     →  {ws_url}")
+            suffix = ""
+            if authorized_keys:
+                mode = "required" if require_resolver else "optional"
+                suffix = f"   [pubkey: {authorized_keys} ({mode})]"
+            print(f"uterm listen  ssh://{bind}:{ssh_port}     →  {ws_url}{suffix}")
         except ImportError as exc:
             print(f"warning: SSH gateway disabled — {exc}", file=sys.stderr)
 
@@ -308,6 +338,44 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["passthrough", "256", "16"],
         default="passthrough",
         help="ANSI color downgrade mode (default: passthrough)",
+    )
+    listen_p.add_argument(
+        "--no-iac-negotiate",
+        dest="iac_negotiate",
+        action="store_false",
+        default=True,
+        help=(
+            "Disable RFC 1091 TTYPE / RFC 1572 NEW-ENVIRON negotiation on the "
+            "telnet listener. The gateway otherwise reads the client's TERM "
+            "and COLORTERM, derives a colour palette, and forwards it to the "
+            "upstream WS as ?colormode=... — rarely needs turning off, but "
+            "useful for clients that mishandle IAC DO options."
+        ),
+    )
+    listen_p.add_argument(
+        "--authorized-keys",
+        metavar="FILE",
+        default=None,
+        help=(
+            "Path to an OpenSSH authorized_keys file. When set, the SSH "
+            "listener calls the resolver during pubkey auth; matching keys "
+            "inject a ResolvedIdentity forwarded to the upstream as an "
+            "``identity`` control frame (first WS message). Lines support "
+            "``subject=\"...\"`` + ``claim-<name>=\"...\"`` options to populate "
+            "the identity's subject and claims. Unknown keys fall through "
+            "to password auth unless --require-authorized-keys is set."
+        ),
+    )
+    listen_p.add_argument(
+        "--require-authorized-keys",
+        dest="require_resolver",
+        action="store_true",
+        default=False,
+        help=(
+            "Reject SSH connections whose pubkey is not in --authorized-keys. "
+            "Disables password and keyboard-interactive fallback so unknown "
+            "keys can't sneak through. Requires --authorized-keys."
+        ),
     )
     listen_p.set_defaults(func=_cmd_listen)
 

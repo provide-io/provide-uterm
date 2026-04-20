@@ -103,10 +103,13 @@ class DeckMuxMixin:
         self,
         worker_id: str,
         ws: Any,
+        principal: Any = None,
     ) -> None:
         """Called when a browser disconnects. Broadcasts presence_leave."""
         store = self._get_presence_store(worker_id)
         user_id = str(id(ws))
+        if principal and hasattr(principal, "subject_id"):
+            user_id = getattr(principal, "subject_id", user_id)
         removed = store.remove(user_id)
         if removed:
             msg = make_presence_leave(user_id)

@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-
 """ANSI SGR rendering utilities for pyte-backed terminal emulation.
 
 Provides :class:`AnsiBuffer` — a thin wrapper around a pyte ``Screen`` and

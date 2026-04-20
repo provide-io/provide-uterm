@@ -54,6 +54,10 @@ DEV_ONLY_SKIP: frozenset[str] = frozenset(
         "python-debian",  # GPLv2+   (transitive dep of reuse)
         "reuse",  # GPLv3+ (SPDX compliance tool)
         "docutils",
+        "dnspython",  # ISC (dev-only transitive dep)
+        "email-validator",  # CC0 (dev-only)
+        "pillow",  # HPND (dev-only)
+        "pytest-timeout",  # DFSG approved; MIT (dev-only test tool)
         "pipdeptree",
         "text-unidecode",
         "uv",

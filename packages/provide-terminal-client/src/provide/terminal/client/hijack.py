@@ -361,3 +361,7 @@ class HijackClient:
             body["display_name"] = display_name
         body.update(connector_config)
         return await self._request("POST", "/api/connect", json=body)
+
+    async def post(self, path: str, *, json: dict[str, Any] | None = None) -> tuple[bool, Any]:
+        """Generic POST helper for API paths not covered by a dedicated method."""
+        return await self._request("POST", path, json=json)

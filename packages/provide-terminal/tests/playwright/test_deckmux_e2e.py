@@ -116,7 +116,7 @@ ws.onmessage=function(ev){{parseFrames(ev.data).forEach(function(msg){{
   var ml=document.getElementById("messages");ml.appendChild(d);ml.scrollTop=ml.scrollHeight;
   if(msg.type==="presence_sync"){{window._users={{}};
     (msg.users||[]).forEach(function(u){{window._users[u.user_id]=u;}});
-    if(msg.users&&msg.users.length>0)window._myUserId=msg.users[msg.users.length-1].user_id;
+    if(msg.users&&msg.users.length>0&&!window._myUserId)window._myUserId=msg.users[msg.users.length-1].user_id;
     window._presenceSynced=true;render();
   }}else if(msg.type==="presence_update"){{
     if(msg.user_id)window._users[msg.user_id]=msg;render();
@@ -137,7 +137,7 @@ def deckmux_server() -> Generator[tuple[str, DeckMuxTermHub], None, None]:
     app = FastAPI()
     app.include_router(hub.create_router())
 
-    frontend_path = importlib.resources.files("provide.terminal") / "frontend"
+    frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
     app.mount("/ui", StaticFiles(directory=str(frontend_path), html=True), name="ui")
 
     @app.get("/deckmux-test/{worker_id}", response_class=HTMLResponse)

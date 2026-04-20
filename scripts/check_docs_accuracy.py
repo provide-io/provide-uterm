@@ -91,11 +91,33 @@ def _style_violations(path: Path, content: str) -> list[str]:
 
 def _link_violations(path: Path, content: str, anchor_map: dict[Path, set[str]]) -> list[str]:
     violations: list[str] = []
+    # Build a set of character offsets that fall inside code fences so we can
+    # skip links that appear in code blocks (e.g. f-strings, markdown examples).
+    fenced_ranges: list[tuple[int, int]] = []
+    in_fence = False
+    fence_start = 0
+    for line in content.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            if in_fence:
+                fenced_ranges.append((fence_start, content.index(line, fence_start) + len(line)))
+                in_fence = False
+            else:
+                fence_start = content.index(line)
+                in_fence = True
+
+    def _in_fence(pos: int) -> bool:
+        return any(start <= pos < end for start, end in fenced_ranges)
+
     for match in LINK_RE.finditer(content):
+        if _in_fence(match.start()):
+            continue
         link = match.group(1)
         if _is_external_link(link):
             continue
         if link.startswith("app://"):
+            continue
+        if link.startswith("{"):  # template placeholder, not a real path
             continue
 
         target_path: Path

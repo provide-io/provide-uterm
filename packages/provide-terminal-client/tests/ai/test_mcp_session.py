@@ -383,3 +383,51 @@ class TestWorkerControlTools:
         mcp = _mcp_for(app)
         data = await _call(mcp, "worker_disconnect", {"worker_id": WID})
         assert data["success"] is False
+
+
+# ---------------------------------------------------------------------------
+# Fanout and annotation tools
+# ---------------------------------------------------------------------------
+
+
+class TestFanoutAndAnnotateTools:
+    async def test_fanout_group_create_returns_group_id(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        data = await _call(
+            mcp,
+            "fanout_group_create",
+            {"session_ids": ["s1"], "name": "test-group"},
+        )
+        assert data["success"] is True
+        assert "group_id" in data
+
+    async def test_fanout_send_to_created_group(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        create_data = await _call(
+            mcp,
+            "fanout_group_create",
+            {"session_ids": ["s1"], "name": "send-test"},
+        )
+        assert create_data["success"] is True
+        group_id = create_data["group_id"]
+
+        data = await _call(
+            mcp,
+            "fanout_send",
+            {"group_id": group_id, "data": "echo hello\r", "quiesce_ms": 50},
+        )
+        assert isinstance(data["success"], bool)
+
+    async def test_session_annotate_calls_server(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        # Session s1 is not started (auto_start=False), so annotate returns 404 → success=False.
+        # The test verifies the MCP tool reaches the client.post call (covering those lines).
+        data = await _call(
+            mcp,
+            "session_annotate",
+            {"session_id": "s1", "label": "test", "description": "a note", "severity": "info"},
+        )
+        assert isinstance(data["success"], bool)

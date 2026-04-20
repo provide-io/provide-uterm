@@ -73,7 +73,7 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
           }
           const users = (msg.users as Array<Record<string, unknown>> | undefined) ?? [];
           const myUser = users[users.length - 1];
-          if (myUser) {
+          if (myUser && !myUserId) {
             myUserId = myUser.user_id as string;
             deckMux.handleMessage({ type: "dm_hello", user_id: myUser.user_id });
           }

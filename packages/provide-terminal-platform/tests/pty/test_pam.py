@@ -1,11 +1,25 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-
+#
+import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from provide.terminal.pty.pam import PamError, PamSession
+
+_PAM_SVC = Path("/etc/pam.d/provide-terminal")
+_IN_DOCKER = Path("/.dockerenv").exists()
+
+_skip_needs_pam = pytest.mark.skipif(
+    not _PAM_SVC.exists(), reason="requires /etc/pam.d/provide-terminal"
+)
+_skip_needs_pam_auth = pytest.mark.skipif(
+    not _PAM_SVC.exists() or _IN_DOCKER,
+    reason="requires /etc/pam.d/provide-terminal with working unix_chkpwd (skipped in Docker)",
+)
 
 
 def test_pam_error_is_runtime_error() -> None:
@@ -65,6 +79,7 @@ def test_context_manager_calls_close_on_exit() -> None:
 
 
 @pytest.mark.requires_pam_auth
+@_skip_needs_pam_auth
 def test_bad_credentials_raises_pam_error() -> None:
     """Requires /etc/pam.d/provide-terminal and a 'testuser' OS account."""
     session = PamSession()
@@ -73,6 +88,7 @@ def test_bad_credentials_raises_pam_error() -> None:
 
 
 @pytest.mark.requires_pam
+@_skip_needs_pam
 def test_good_credentials_succeed() -> None:
     """Requires /etc/pam.d/provide-terminal and testuser:testpass123."""
     session = PamSession()
@@ -92,6 +108,7 @@ def test_authenticate_validates_password_no_null_byte() -> None:
 
 
 @pytest.mark.requires_pam
+@_skip_needs_pam
 def test_full_pam_lifecycle() -> None:
     """authenticate → acct_mgmt → open_session → get_env → close_session."""
     session = PamSession()
@@ -106,6 +123,7 @@ def test_full_pam_lifecycle() -> None:
 
 
 @pytest.mark.requires_pam
+@_skip_needs_pam
 def test_context_manager_closes_session() -> None:
     """Context manager __exit__ calls close_session."""
     session = PamSession()
@@ -118,6 +136,7 @@ def test_context_manager_closes_session() -> None:
 
 
 @pytest.mark.requires_pam
+@_skip_needs_pam
 def test_open_session_get_env_copy_is_isolated() -> None:
     """get_env() returns a copy — mutations don't affect the session."""
     session = PamSession()

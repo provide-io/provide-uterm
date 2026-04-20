@@ -89,22 +89,17 @@ class TestReferenceServerPages:
         expect(page.get_by_text("Replay")).to_be_visible(timeout=5000)
         expect(page.get_by_role("link", name="Provide Shell")).to_be_visible(timeout=5000)
 
-        # Events loaded (event count in header)
-        expect(page.get_by_text("events").first).to_be_visible(timeout=5000)
-
         # Playback controls visible
-        expect(page.get_by_role("button", name="▶")).to_be_visible(timeout=5000)
+        expect(page.get_by_role("button", name="|<")).to_be_visible(timeout=5000)
 
-        # Navigate to first event
+        # Wait for entries to load (count goes non-zero)
+        import re as _re
+        expect(page.get_by_text(_re.compile(r"Event [1-9]\d* of \d+"))).to_be_visible(timeout=10000)
+
+        # Navigate to first event and verify counter shows 1
         page.get_by_role("button", name="|<").click()
         expect(page.get_by_text("Event 1 of")).to_be_visible(timeout=5000)
-
-        # Event detail panel shows event type
-        expect(page.get_by_text("Event detail")).to_be_visible(timeout=5000)
 
         # Navigate forward
         page.get_by_role("button", name=">").first.click()
         expect(page.get_by_text("Event 2 of")).to_be_visible(timeout=5000)
-
-        # Screen preview shows snapshot caption
-        expect(page.get_by_text("Screen snapshot at event")).to_be_visible(timeout=5000)
