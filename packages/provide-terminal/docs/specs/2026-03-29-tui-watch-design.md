@@ -11,6 +11,7 @@ uterm watch <tunnel-id-or-url> [--server URL] [--layout horizontal|vertical|moda
 ```
 
 **Arguments:**
+
 - `tunnel-id-or-url`: Either a tunnel ID (`tunnel-abc123`) or a full URL (`https://worker.dev/app/inspect/tunnel-abc123`). If a URL, extracts the tunnel ID.
 - `--server / -s`: Server URL (required if passing bare tunnel ID)
 - `--layout`: Initial layout mode (default: `horizontal`)
@@ -41,6 +42,7 @@ uterm watch (Textual TUI)
 ## TUI Layout
 
 ### Horizontal (default)
+
 ```
 ┌─────────────────────────────┬──────────────────────────────┐
 │ Method URL          Status  │ POST /api/login              │
@@ -64,6 +66,7 @@ uterm watch (Textual TUI)
 ```
 
 ### Vertical
+
 ```
 ┌────────────────────────────────────────────────────────────┐
 │ Method URL                    Status Duration  Size        │
@@ -82,6 +85,7 @@ uterm watch (Textual TUI)
 ```
 
 ### Modal
+
 ```
 ┌────────────────────────────────────────────────────────────┐
 │ Method URL                    Status Duration  Size        │
@@ -102,25 +106,25 @@ uterm watch (Textual TUI)
 
 ## Key Bindings
 
-| Key | Action | Status |
-|-----|--------|--------|
-| `q` | Quit | Implemented |
-| `l` | Cycle layout: horizontal → vertical → modal | Implemented |
-| `f` | Cycle method filter (All → GET → POST → ...) | Implemented |
-| `Enter` | Select row → show detail (split) or open modal | Implemented |
-| `↑` / `↓` | Navigate request list | Implemented (DataTable cursor) |
-| `Esc` | Close modal overlay | Implemented (DetailScreen) |
-| `j` / `k` | Vim-style navigation | Planned |
-| `/` | Focus filter input | Planned |
+| Key       | Action                                         | Status                         |
+| --------- | ---------------------------------------------- | ------------------------------ |
+| `q`       | Quit                                           | Implemented                    |
+| `l`       | Cycle layout: horizontal → vertical → modal    | Implemented                    |
+| `f`       | Cycle method filter (All → GET → POST → ...)   | Implemented                    |
+| `Enter`   | Select row → show detail (split) or open modal | Implemented                    |
+| `↑` / `↓` | Navigate request list                          | Implemented (DataTable cursor) |
+| `Esc`     | Close modal overlay                            | Implemented (DetailScreen)     |
+| `j` / `k` | Vim-style navigation                           | Planned                        |
+| `/`       | Focus filter input                             | Planned                        |
 
 ## Data Flow
 
 1. Connect WebSocket to `/ws/browser/{id}/term` (with share token if provided)
-2. Receive DLE/STX encoded control channel frames
-3. Parse JSON, filter for `_channel: "http"`
-4. For `http_req`: create new exchange entry in list
-5. For `http_res`: match by `id`, update exchange, refresh display
-6. Terminal frames (`type: "term"`) ignored in TUI mode
+1. Receive DLE/STX encoded control channel frames
+1. Parse JSON, filter for `_channel: "http"`
+1. For `http_req`: create new exchange entry in list
+1. For `http_res`: match by `id`, update exchange, refresh display
+1. Terminal frames (`type: "term"`) ignored in TUI mode
 
 ## Dependencies
 
@@ -128,10 +132,10 @@ Add `textual>=0.50` to the `[cli]` extra in `packages/provide-terminal/pyproject
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `cli/watch.py` | CLI entry point + Textual app class |
-| `cli/__init__.py` | Register `watch` subcommand |
+| File              | Purpose                             |
+| ----------------- | ----------------------------------- |
+| `cli/watch.py`    | CLI entry point + Textual app class |
+| `cli/__init__.py` | Register `watch` subcommand         |
 
 The Textual app, widgets, and styles all live in `watch.py` (single file — Textual CSS is inline). If it grows past 500 LOC, split into `cli/watch/` package.
 
@@ -146,7 +150,7 @@ The Textual app, widgets, and styles all live in `watch.py` (single file — Tex
 ## Verification
 
 1. Start `uterm inspect 3000 --server URL` in one terminal
-2. Run `uterm watch tunnel-abc --server URL` in another
-3. Make HTTP requests to the inspect proxy
-4. Watch them appear in the TUI in real time
-5. Navigate with keyboard, switch layouts, filter by method
+1. Run `uterm watch tunnel-abc --server URL` in another
+1. Make HTTP requests to the inspect proxy
+1. Watch them appear in the TUI in real time
+1. Navigate with keyboard, switch layouts, filter by method

@@ -6,7 +6,7 @@ Terminal sessions in privileged environments (production infrastructure, PCI-sco
 
 provide-terminal sits at the exact proxy layer where all terminal I/O passes. It is the right place to capture this data — without requiring changes to the remote host, the worker, or the terminal client.
 
----
+______________________________________________________________________
 
 ## Goals
 
@@ -17,7 +17,7 @@ provide-terminal sits at the exact proxy layer where all terminal I/O passes. It
 - Impose negligible latency on the live terminal path (< 1 ms per event on the hot path).
 - Integrate with existing `SessionRegistry`, `TermHub`, and principal identity infrastructure.
 
----
+______________________________________________________________________
 
 ## Non-Goals
 
@@ -25,7 +25,7 @@ provide-terminal sits at the exact proxy layer where all terminal I/O passes. It
 - Video-style screen capture (pixel-level recording).
 - Replacing an external SIEM — this is structured event emission, not log aggregation.
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -70,7 +70,7 @@ hub = TermHub(
 Two hook points in the existing WS pipeline:
 
 1. **Worker → browser** (`ws_worker_term` inner loop): after `hub.broadcast(worker_id, frame)`, call `store.write_event(session_id, output_event)` in a fire-and-forget `asyncio.create_task`.
-2. **Browser → worker** (input handler in `browser_handlers.py`): after `hub.send_worker(...)`, call `store.write_event(session_id, input_event)`.
+1. **Browser → worker** (input handler in `browser_handlers.py`): after `hub.send_worker(...)`, call `store.write_event(session_id, input_event)`.
 
 Both calls are non-blocking (task-based). Store implementations must be thread-safe but may buffer internally for batch writes.
 
@@ -97,7 +97,7 @@ The asciinema export converts output events to `[delay, "o", data]` frames and i
 
 `RecordingMeta` tracks `started_at`, `finalized_at`, `size_bytes`, `event_count`. Finalization happens on session disconnect or explicit `DELETE /api/sessions/{id}`. A background `retention_days` policy can auto-expire old recordings.
 
----
+______________________________________________________________________
 
 ## CF Backend Parity
 
@@ -109,7 +109,7 @@ def record_event(self, kind: str, data: str, *, principal: str | None = None) ->
 
 Export endpoints are added to `http_routes.py`.
 
----
+______________________________________________________________________
 
 ## Security Considerations
 
@@ -118,7 +118,7 @@ Export endpoints are added to `http_routes.py`.
 - Recordings containing credentials (accidentally typed passwords) are flagged via a configurable regex scanner at finalization time — a warning is appended to `RecordingMeta.warnings`, the bytes are not redacted (audit completeness), but the flag triggers an alert hook.
 - Access to replay endpoints is gated by `authz.can_read_session()` — same as live session access.
 
----
+______________________________________________________________________
 
 ## Testing
 
@@ -128,11 +128,11 @@ Export endpoints are added to `http_routes.py`.
 - `test_recording_export_asciinema.py` — compare export output against known-good fixture.
 - `test_recording_retention.py` — verify finalization and TTL behavior.
 
----
+______________________________________________________________________
 
 ## Open Questions
 
 1. Should `role="viewer"` browser connections be recorded? (They receive output but send no input.)
-2. Should the signing key be per-session (derived from session_id + master key) or global?
-3. What is the maximum recording size before the store must roll or reject new events?
-4. Should replay be gated by a separate `can_replay_session` capability distinct from `can_read_session`?
+1. Should the signing key be per-session (derived from session_id + master key) or global?
+1. What is the maximum recording size before the store must roll or reject new events?
+1. Should replay be gated by a separate `can_replay_session` capability distinct from `can_read_session`?

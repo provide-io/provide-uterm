@@ -97,7 +97,7 @@ def image_to_ansi_frames(
         (frames, fps) — list of ANSI strings and the source FPS (0.0 for static).
     """
     try:
-        from PIL import Image
+        from PIL import Image  # type: ignore[import-not-found]
     except ImportError as exc:
         raise ImportError(
             "missing dependency — Pillow\ninstall the images extra: pip install 'provide-terminal[emulator]'"
@@ -117,7 +117,7 @@ def image_to_ansi_frames(
 
     for frame_idx in range(n_frames):
         img.seek(frame_idx)
-        frame = img.convert("RGBA").resize((px_w, px_h), Image.LANCZOS)  # type: ignore[attr-defined]
+        frame = img.convert("RGBA").resize((px_w, px_h), Image.LANCZOS)
         pixels = frame.load()
         frames.append(render_frame(pixels, px_w, px_h, sgr_fn))
 

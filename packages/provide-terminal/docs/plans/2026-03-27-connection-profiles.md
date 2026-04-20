@@ -8,31 +8,33 @@
 
 **Tech Stack:** Python 3.11, Pydantic v2, FastAPI, asyncio.Lock, TypeScript, existing `apiJson` fetch helper.
 
----
+______________________________________________________________________
 
 ## File Map
 
-| File | Action |
-|---|---|
-| `packages/provide-terminal/src/provide/terminal/server/profiles.py` | **Create** — `ConnectionProfile` model + `FileProfileStore` |
-| `packages/provide-terminal/tests/server/test_profile_store.py` | **Create** — unit tests for `FileProfileStore` |
-| `packages/provide-terminal/src/provide/terminal/server/models.py` | **Modify** — add `ProfileStoreConfig`, extend `ServerConfig` and `ServerModel` |
-| `packages/provide-terminal/src/provide/terminal/server/authorization.py` | **Modify** — add `can_read_profile`, `can_mutate_profile` |
-| `packages/provide-terminal/tests/server/test_authorization.py` | **Modify** — add profile auth tests |
-| `packages/provide-terminal/src/provide/terminal/server/routes/profiles.py` | **Create** — 6 API endpoints |
-| `packages/provide-terminal/tests/server/test_api_profiles.py` | **Create** — API integration tests |
-| `packages/provide-terminal/src/provide/terminal/server/app.py` | **Modify** — instantiate `FileProfileStore`, mount profiles router |
-| `packages/provide-terminal-frontend/src/app/types.ts` | **Modify** — add `ConnectionProfile` interface |
-| `packages/provide-terminal-frontend/src/app/api.ts` | **Modify** — add 5 profile API functions |
-| `packages/provide-terminal-frontend/src/app/views/dashboard-view.ts` | **Modify** — add Profiles section, parallel fetch |
-| `packages/provide-terminal-frontend/src/app/views/connect-view.ts` | **Modify** — pre-fill from `?profile=<id>`, save-as-profile checkbox |
+| File                                                                       | Action                                                                         |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/provide-terminal/src/provide/terminal/server/profiles.py`        | **Create** — `ConnectionProfile` model + `FileProfileStore`                    |
+| `packages/provide-terminal/tests/server/test_profile_store.py`             | **Create** — unit tests for `FileProfileStore`                                 |
+| `packages/provide-terminal/src/provide/terminal/server/models.py`          | **Modify** — add `ProfileStoreConfig`, extend `ServerConfig` and `ServerModel` |
+| `packages/provide-terminal/src/provide/terminal/server/authorization.py`   | **Modify** — add `can_read_profile`, `can_mutate_profile`                      |
+| `packages/provide-terminal/tests/server/test_authorization.py`             | **Modify** — add profile auth tests                                            |
+| `packages/provide-terminal/src/provide/terminal/server/routes/profiles.py` | **Create** — 6 API endpoints                                                   |
+| `packages/provide-terminal/tests/server/test_api_profiles.py`              | **Create** — API integration tests                                             |
+| `packages/provide-terminal/src/provide/terminal/server/app.py`             | **Modify** — instantiate `FileProfileStore`, mount profiles router             |
+| `packages/provide-terminal-frontend/src/app/types.ts`                      | **Modify** — add `ConnectionProfile` interface                                 |
+| `packages/provide-terminal-frontend/src/app/api.ts`                        | **Modify** — add 5 profile API functions                                       |
+| `packages/provide-terminal-frontend/src/app/views/dashboard-view.ts`       | **Modify** — add Profiles section, parallel fetch                              |
+| `packages/provide-terminal-frontend/src/app/views/connect-view.ts`         | **Modify** — pre-fill from `?profile=<id>`, save-as-profile checkbox           |
 
----
+______________________________________________________________________
 
 ## Task 1: ConnectionProfile Model + FileProfileStore
 
 **Files:**
+
 - Create: `packages/provide-terminal/src/provide/terminal/server/profiles.py`
+
 - Create: `packages/provide-terminal/tests/server/test_profile_store.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -362,13 +364,16 @@ git add \
 git commit -m "feat: add ConnectionProfile model and FileProfileStore"
 ```
 
----
+______________________________________________________________________
 
 ## Task 2: Config + Authorization
 
 **Files:**
+
 - Modify: `packages/provide-terminal/src/provide/terminal/server/models.py`
+
 - Modify: `packages/provide-terminal/src/provide/terminal/server/authorization.py`
+
 - Modify: `packages/provide-terminal/tests/server/test_authorization.py`
 
 - [ ] **Step 1: Write the failing authorization tests**
@@ -505,6 +510,7 @@ ServerModel: TypeAlias = (
 In `packages/provide-terminal/src/provide/terminal/server/authorization.py`:
 
 Add to the `TYPE_CHECKING` block:
+
 ```python
 if TYPE_CHECKING:
     from provide.terminal.server.auth import Principal
@@ -553,13 +559,16 @@ git add \
 git commit -m "feat: add ProfileStoreConfig to ServerConfig and profile auth helpers"
 ```
 
----
+______________________________________________________________________
 
 ## Task 3: API Routes + App Wiring
 
 **Files:**
+
 - Create: `packages/provide-terminal/src/provide/terminal/server/routes/profiles.py`
+
 - Create: `packages/provide-terminal/tests/server/test_api_profiles.py`
+
 - Modify: `packages/provide-terminal/src/provide/terminal/server/app.py`
 
 - [ ] **Step 1: Write the failing API tests**
@@ -1015,14 +1024,18 @@ git add \
 git commit -m "feat: add /api/profiles endpoints and wire FileProfileStore into app"
 ```
 
----
+______________________________________________________________________
 
 ## Task 4: Frontend
 
 **Files:**
+
 - Modify: `packages/provide-terminal-frontend/src/app/types.ts`
+
 - Modify: `packages/provide-terminal-frontend/src/app/api.ts`
+
 - Modify: `packages/provide-terminal-frontend/src/app/views/dashboard-view.ts`
+
 - Modify: `packages/provide-terminal-frontend/src/app/views/connect-view.ts`
 
 - [ ] **Step 1: Add `ConnectionProfile` to `types.ts`**
@@ -1052,6 +1065,7 @@ export interface ConnectionProfile {
 In `packages/provide-terminal-frontend/src/app/api.ts`:
 
 Add `ConnectionProfile` to the import from `types.js`:
+
 ```typescript
 import type { ConnectionProfile, RecordingEntryView, SessionDetails, SessionSummary, SessionSurface } from "./types.js";
 ```
@@ -1524,6 +1538,7 @@ grep -n "renderConnect" /REDACTED_ABS_PATH
 ```
 
 If the result shows `renderConnect(root, bootstrap)` without `void` or `await`, change it to:
+
 ```typescript
 void renderConnect(root, bootstrap);
 ```
@@ -1558,7 +1573,7 @@ git add \
 git commit -m "feat(frontend): add connection profiles to dashboard and connect form"
 ```
 
----
+______________________________________________________________________
 
 ## Task 5: Full Quality Gate
 
@@ -1596,11 +1611,12 @@ git add -u
 git commit -m "test: add coverage for profile edge cases"
 ```
 
----
+______________________________________________________________________
 
 ## Self-Review
 
 **Spec coverage:**
+
 - ✅ `ConnectionProfile` model — Task 1
 - ✅ `FileProfileStore` (atomic write, lock, CRUD) — Task 1
 - ✅ `ProfileStoreConfig` in `ServerConfig` — Task 2
@@ -1617,6 +1633,7 @@ git commit -m "test: add coverage for profile edge cases"
 **Placeholder scan:** None found. All code is complete.
 
 **Type consistency:**
+
 - `input_mode: Literal["open", "hijack"]` used throughout Python and frontend (spec said `"exclusive"` — corrected to `"hijack"` to match the rest of the system)
 - `profile.model_dump(mode="python")` called directly (not via `model_dump()` helper) in routes — correct, since `ConnectionProfile` is not in `ServerModel`
 - `fetchProfile` returns `ConnectionProfile | null` — matches usage in `connect-view.ts`

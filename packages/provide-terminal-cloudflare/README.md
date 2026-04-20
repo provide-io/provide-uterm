@@ -42,18 +42,15 @@ uv run pywrangler deploy
 
 Set `AUTH_MODE` in `wrangler.toml` or `.dev.vars`:
 
-| Mode | Behavior |
-|---|---|
-| `dev` | No auth checks; all requests accepted. |
+| Mode  | Behavior                                                                                                                                                  |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev` | No auth checks; all requests accepted.                                                                                                                    |
 | `jwt` | Validates CF Access JWT; role from claim or `JWT_DEFAULT_ROLE`. CF Access service tokens (with `common_name` claim) are also accepted and get admin role. |
 
 ## Current gaps
 
-- The quick-connect form creates sessions in KV but the CF worker cannot run
-  shell/SSH/telnet connectors itself — a worker process must bridge in via WS.
-- The hijack REST surface is intended to match the FastAPI contract, but there
-  are still backend-parity gaps; treat `docs/protocol-matrix.md` as the target
-  contract, not a guarantee that every edge case is identical today.
+- The quick-connect form creates sessions in KV but the CF worker cannot run shell/SSH/telnet connectors itself — a worker process must bridge in via WS.
+- The hijack REST surface is intended to match the FastAPI contract, but there are still backend-parity gaps; treat `docs/protocol-matrix.md` as the target contract, not a guarantee that every edge case is identical today.
 
 ## Commands
 

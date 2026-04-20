@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:

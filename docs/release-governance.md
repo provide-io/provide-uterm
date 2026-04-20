@@ -10,14 +10,14 @@
 ## Required controls
 
 1. Dependency vulnerability scan passes policy (no high/critical findings).
-2. SBOM generated for wheel and sdist artifacts.
-3. Artifacts are signed. *(Provenance metadata attachment: planned)*
-4. *(Planned)* Rollback drill executed on staging (`scripts/rollback_drill.py`; artifact in `artifacts/rollback-drill/`).
+1. SBOM generated for wheel and sdist artifacts.
+1. Artifacts are signed. *(Provenance metadata attachment: planned)*
+1. *(Planned)* Rollback drill executed on staging (`scripts/rollback_drill.py`; artifact in `artifacts/rollback-drill/`).
 
 ## Release checklist
 
 1. Baseline capture complete (`scripts/capture_rc_baseline.sh`).
-2. Artifact verification complete (`scripts/verify_package_artifacts.py`).
-3. Supply-chain checks complete (`scripts/release_governance_check.sh`).
-4. SLO/load test report attached (`scripts/load_profile.py` output).
-5. On-call acknowledged current runbook and alert thresholds.
+1. Artifact verification complete (`scripts/verify_package_artifacts.py`).
+1. Supply-chain checks complete (`scripts/release_governance_check.sh`).
+1. SLO/load test report attached (`scripts/load_profile.py` output).
+1. On-call acknowledged current runbook and alert thresholds.

@@ -63,20 +63,21 @@ docker compose -f docker/docker-compose.yml up
 
 **Monorepo** using uv workspace (Python) + npm workspaces (TypeScript). 7 packages under `packages/`:
 
-| Package | Role |
-|---------|------|
-| `provide-terminal` | Core library: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay |
-| `provide-terminal-server` | Server stack: bridge hub, FastAPI server, CLI (`uterm`, `uterm-server`), tunnel, gateway |
-| `provide-terminal-client` | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`) |
-| `provide-terminal-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, fleet manager (`uterm-manager`) |
-| `provide-terminal-cloudflare` | CF Worker + Durable Object adapter |
-| `provide-terminal-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
-| `provide-terminal-app` | App shell |
+| Package                       | Role                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------ |
+| `provide-terminal`            | Core library: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay |
+| `provide-terminal-server`     | Server stack: bridge hub, FastAPI server, CLI (`uterm`, `uterm-server`), tunnel, gateway   |
+| `provide-terminal-client`     | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`)       |
+| `provide-terminal-platform`   | Platform targets: PTY connector, PAM, LD_PRELOAD capture, fleet manager (`uterm-manager`)  |
+| `provide-terminal-cloudflare` | CF Worker + Durable Object adapter                                                         |
+| `provide-terminal-frontend`   | Browser UI (vanilla TypeScript, xterm.js)                                                  |
+| `provide-terminal-app`        | App shell                                                                                  |
 
 **Three-Layer Bridge System** (core architecture):
+
 1. **HijackableMixin** — Worker-side mixin for hijackability at checkpoints
-2. **TermHub** (`bridge/hub/`) — Server-side registry managing leases, roles, presence, I/O routing
-3. **TermBridge** (`bridge/worker_link.py`) — Worker-side WebSocket client connecting to hub
+1. **TermHub** (`bridge/hub/`) — Server-side registry managing leases, roles, presence, I/O routing
+1. **TermBridge** (`bridge/worker_link.py`) — Worker-side WebSocket client connecting to hub
 
 **Control Channel**: JSON control frames (snapshots, hijack state, presence, analysis) mixed inline with raw terminal bytes in the same WebSocket stream.
 

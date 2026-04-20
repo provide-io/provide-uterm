@@ -39,6 +39,7 @@ make test            # unit + integration (excludes playwright, memray, mutant)
 ```
 
 Requirements:
+
 - **100% branch coverage** across all 5 packages (enforced).
 - **mypy strict**. No `type: ignore` without an inline justification.
 - Files ≤ 500 lines.
@@ -54,6 +55,6 @@ Requirements:
 ## Pull Requests
 
 1. Run `make quality` (must pass).
-2. For hijack/control-channel changes, run `packages/provide-terminal/tests/hijack/`.
-3. For UI changes, include a Playwright snapshot: `make test-playwright`.
-4. PR description notes any protocol or security impact.
+1. For hijack/control-channel changes, run `packages/provide-terminal/tests/hijack/`.
+1. For UI changes, include a Playwright snapshot: `make test-playwright`.
+1. PR description notes any protocol or security impact.
