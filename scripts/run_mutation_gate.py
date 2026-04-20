@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -59,12 +59,7 @@ def _seed_mutants_config(paths_to_mutate: list[str] | None = None) -> None:
     _sanitize_mutants_pyproject(mutants / "pyproject.toml", paths_to_mutate=paths_to_mutate)
 
 
-def _sanitize_mutants_pyproject(
-    path: Path,
-    *,
-    paths_to_mutate: list[str] | None,
-    strip_workspace: bool = True,
-) -> None:
+def _sanitize_mutants_pyproject(path: Path, *, paths_to_mutate: list[str] | None) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
@@ -72,26 +67,10 @@ def _sanitize_mutants_pyproject(
     for arg in MUTMUT_INCOMPATIBLE_PYTEST_ARGS:
         updated = updated.replace(f'"{arg}",\n', "")
         updated = updated.replace(f'"{arg}"', "")
-    if strip_workspace:
-        # Strip uv workspace config — mutants/ doesn't contain workspace members.
-        # Do NOT strip from the root pyproject.toml: uv needs workspace/sources
-        # to resolve packages like provide-terminal that aren't on PyPI.
-        updated = re.sub(
-            r"^\[tool\.uv\.workspace\]\n(?:.*\n)*?\n",
-            "\n",
-            updated,
-            flags=re.MULTILINE,
-        )
-        updated = re.sub(
-            r"^\[tool\.uv\.sources\]\n(?:.*\n)*?\n",
-            "\n",
-            updated,
-            flags=re.MULTILINE,
-        )
     if paths_to_mutate:
         encoded = ", ".join(f'"{item}"' for item in paths_to_mutate)
         updated, count = re.subn(
-            r"^paths_to_mutate\s*=\s*\[[\s\S]*?\]",
+            r"^paths_to_mutate\s*=\s*\[[^\]]*\]",
             f"paths_to_mutate = [{encoded}]",
             updated,
             count=1,
@@ -176,12 +155,8 @@ def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ..
             continue
         if not any(path.startswith(root) for root in roots):
             continue
-        if not Path(path).exists():
-            continue
-        # Translate to the path mutmut actually uses (may differ via symlinks)
-        resolved = _resolve_to_mutmut_path(path)
-        if resolved:
-            changed.append(resolved)
+        if Path(path).exists():
+            changed.append(path)
     return sorted(set(changed))
 
 
@@ -216,42 +191,17 @@ def run_mutation_gate(
     last_stats: dict[str, int] = {}
     mutation_env = dict(os.environ)
 
-    # mutmut reads paths_to_mutate from the ROOT pyproject.toml (not mutants/).
-    # When --changed-only narrows the targets, rewrite the root config temporarily.
-    root_pyproject = Path("pyproject.toml")
-    root_original = root_pyproject.read_text(encoding="utf-8") if root_pyproject.exists() else None
-
     for attempt in range(1, attempts + 1):
         mutants_dir = Path("mutants")
         if mutants_dir.exists():
             shutil.rmtree(mutants_dir)
         _seed_mutants_config(paths_to_mutate=paths_to_mutate)
 
-        # Also rewrite the root pyproject.toml so mutmut sees the narrowed targets
-        if paths_to_mutate and root_original is not None:
-            _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate, strip_workspace=False)
-
         children = max_children if attempt == 1 else 1
         print(f"Running mutation attempt {attempt}/{attempts} with max-children={children}")
 
-        # mutmut returns 0 = all killed, 1 = survivors exist, 2+ = error.
-        # Survivors are expected (equivalent mutants); only fail on real errors.
-        cmd = _uv_mutmut_cmd(python_version, "run", "--max-children", str(children))
-        print("+", " ".join(cmd))
-        try:
-            mutmut_result = subprocess.run(cmd, check=False, env=mutation_env)  # noqa: S603
-            # export-cicd-stats must run BEFORE restoring the root pyproject.toml:
-            # mutmut stores meta files under the paths_to_mutate prefix used during
-            # the run; export-cicd-stats re-reads paths_to_mutate to locate them.
-            # Restoring early causes a path mismatch → "No previous mutation data".
-            if mutmut_result.returncode <= 1:
-                _run(_uv_mutmut_cmd(python_version, "export-cicd-stats"), env=mutation_env)
-        finally:
-            # Restore root pyproject.toml (even on error so we never leave it modified)
-            if root_original is not None:
-                root_pyproject.write_text(root_original, encoding="utf-8")
-        if mutmut_result.returncode > 1:
-            raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
+        _run(_uv_mutmut_cmd(python_version, "run", "--max-children", str(children)), env=mutation_env)
+        _run(_uv_mutmut_cmd(python_version, "export-cicd-stats"), env=mutation_env)
         last_stats = _read_stats(stats_path)
         score = _mutation_score(last_stats)
         print(f"mutation_score={score:.2f}")

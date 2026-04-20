@@ -18,8 +18,6 @@ from provide.terminal.pty.connector import PTYConnector
 
 _skip_needs_root = pytest.mark.skipif(os.getuid() != 0, reason="requires root or CAP_SETUID")
 
-from ._connector_helpers import make_connector
-
 # ── Validation ────────────────────────────────────────────────────────────────
 
 def test_connector_requires_command() -> None:

@@ -15,7 +15,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+# Capture the original default _api_key_store_hook at import time,
+# before any test's create_server_app() replaces it.
+import provide.terminal.server.auth as _auth_mod
 from provide.terminal.server import create_server_app, default_server_config
+
+_ORIGINAL_API_KEY_STORE_HOOK = _auth_mod._api_key_store_hook
 
 # ---------------------------------------------------------------------------
 # 1. tracing.py — lines 33-35 (set_attribute loop when span has set_attribute)
@@ -50,7 +55,23 @@ class TestTracingSetAttribute:
 
 
 # ---------------------------------------------------------------------------
-# 2. models.py — line 131 (TunnelConfig.token_ttl_s < 60 raises ValueError)
+# 2. auth.py — line 197 (default _api_key_store_hook returns None)
+# ---------------------------------------------------------------------------
+
+
+class TestAuthDefaultStoreHook:
+    def test_default_api_key_store_hook_returns_none(self) -> None:
+        """The original default _api_key_store_hook returns None (line 197).
+
+        We call the original function captured at import time (before any
+        test's create_server_app replaced it).
+        """
+        result = _ORIGINAL_API_KEY_STORE_HOOK()
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# 3. models.py — line 131 (TunnelConfig.token_ttl_s < 60 raises ValueError)
 # ---------------------------------------------------------------------------
 
 

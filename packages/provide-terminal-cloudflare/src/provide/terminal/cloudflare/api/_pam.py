@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 POST /api/pam-events — accept PAM session notifications from a local bridge.
@@ -40,7 +40,7 @@ async def handle_pam_event(request: object, env: object) -> object:
     """Handle POST /api/pam-events."""
     try:
         from provide.terminal.cloudflare.cf_types import json_response
-    except ImportError:  # pragma: no cover
+    except ImportError:
         from cf_types import json_response  # type: ignore[import-not-found]
 
     method = str(getattr(request, "method", "GET")).upper()

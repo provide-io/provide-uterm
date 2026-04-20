@@ -35,8 +35,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 260px;
 }
 
 @media (max-width: 768px) {

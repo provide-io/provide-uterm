@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 """Inject failure scenarios and measure recovery.
 
 Scenarios:
@@ -184,7 +181,7 @@ async def run(base_url: str, session_id: str, scenario: str, rounds: int, timeou
 def main() -> int:
     parser = argparse.ArgumentParser(description="Inject failure scenarios and measure recovery.")
     parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8400")
-    parser.add_argument("--session-id", default="provide-shell", help="Session/worker ID")
+    parser.add_argument("--session-id", default="demo-session", help="Session/worker ID")
     parser.add_argument(
         "--scenario",
         choices=["restart", "ws_flap", "lease_expiry"],

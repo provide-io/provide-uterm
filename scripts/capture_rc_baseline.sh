@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 set -euo pipefail
 
 OUT_DIR="${1:-artifacts/rc-baseline}"

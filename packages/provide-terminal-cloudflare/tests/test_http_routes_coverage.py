@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -57,7 +57,6 @@ class _Runtime:
         self.lifecycle_state = "stopped"
         self.input_mode: str = "hijack"
         self.browser_hijack_owner: dict[str, str] = {}
-        self.browser_resume_tokens: dict[str, str] = {}
 
     async def request_json(self, request: object) -> dict:
         return json.loads(getattr(request, "_body", "{}"))

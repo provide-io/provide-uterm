@@ -1,71 +1,50 @@
 # provide-terminal
 
-A terminal access and control platform. Creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers.
+Shared terminal I/O primitives and WebSocket proxy infrastructure for the provide ecosystem.
 
-> xterm.js is the screen. Provide Terminal is the whole system around the screen.
+**Highlights:** WebSocket ↔ telnet/SSH proxy · hijack/observe control plane · browser role system (viewer/operator/admin) · open/shared input mode · WS session resumption (role + hijack survive reconnect) · quick-connect ephemeral sessions (`GET /app/connect`, `POST /api/connect`) · `ShellSessionConnector` for in-process shell sessions · JWT auth · 2000+ tests at 100% branch coverage
 
-```
-Terminal UI         Session Control       Collaborative Presence
-HTTP Inspection     AI/MCP Tools          Tunnel Sharing
-Session Replay      Multi-Backend         Agent Management
-```
+For Cloudflare Workers deployment, see [`provide-terminal-cloudflare`](packages/provide-terminal-cloudflare/README.md) — a companion package that runs the control plane on Durable Objects with CF Access JWT support.
 
-______________________________________________________________________
+## Installation
 
-## Architecture
-
-```mermaid
-graph TB
-    subgraph Browser
-        UI["Terminal UI<br/>Operator Dashboard<br/>Inspect View"]
-    end
-
-    subgraph Server ["Server (FastAPI or CF Worker)"]
-        Hub["TermHub Bridge<br/><i>roles, leases, presence</i>"]
-        Runtime["Session Host<br/><i>lifecycle, recording, policy</i>"]
-        Connectors["Connectors<br/><i>shell, telnet, ssh, pty, ushell</i>"]
-    end
-
-    subgraph Workers
-        Agent["Worker / Agent"]
-        AI["AI Tools (MCP)<br/><i>21 session control tools</i>"]
-    end
-
-    subgraph CLI
-        Proxy["uterm proxy / listen"]
-        Inspect["uterm inspect"]
-        Share["uterm share / tunnel"]
-    end
-
-    UI <-->|"WebSocket<br/>(control + terminal)"| Hub
-    Hub <--> Runtime
-    Runtime <--> Connectors
-    Agent <-->|"Bridge WS"| Hub
-    AI -.->|"tool calls"| Agent
-    Inspect <-->|"CHANNEL_HTTP"| Hub
-    Share <-->|"binary tunnel"| Hub
-    Proxy <-->|"gateway"| Hub
+```bash
+pip install provide-terminal
 ```
 
-**Control channel** — JSON control frames (snapshots, hijack state, presence, analysis) are mixed inline with raw terminal bytes in the same WebSocket stream. This makes the system a session orchestration platform, not just a proxy.
+### Extras
 
-**Session model** — Named sessions with pluggable connectors, lifecycle management, JSONL recording, and policy enforcement.
+| Extra | Installs | Required for |
+|---|---|---|
+| `[websocket]` | `fastapi`, `websockets` | `WsTerminalProxy`, `create_ws_terminal_router`, hijack hub |
+| `[emulator]` | `pyte` | `TerminalEmulator` (screen state tracking) |
+| `[ssh]` | `asyncssh` | SSH transport, `uterm proxy --transport ssh` |
+| `[server]` | `fastapi`, `uvicorn`, `pyjwt` | `uterm-server` hosted reference server |
+| `[cli]` | `fastapi`, `uvicorn`, `websockets` | `uterm` command-line tool |
+| `[all]` | everything above | Full feature set |
 
-**Bridge** — TermHub coordinates workers and browsers, enforces viewer/operator/admin roles, manages hijack ownership leases, and supports reconnect/resume tokens.
+```bash
+pip install 'provide-terminal[all]'
+```
 
-______________________________________________________________________
+---
 
 ## Quick Start
 
-### Embed a terminal in FastAPI
+### Serve the built-in terminal UI
+
+Mount the bundled `terminal.html` + `terminal.js` frontend into any FastAPI app:
 
 ```python
+from fastapi import FastAPI
 from provide.terminal.fastapi import mount_terminal_ui
+
 app = FastAPI()
-mount_terminal_ui(app)  # serves at /terminal
+mount_terminal_ui(app)           # serves ProvideTerminal at /terminal
+mount_terminal_ui(app, path="/t")  # custom path
 ```
 
-### Run the reference server
+### Browser WebSocket → remote telnet proxy
 
 ```bash
 pip install 'provide-terminal-server[server]'
@@ -73,80 +52,81 @@ uterm-server --config server.toml
 # Dashboard: http://localhost:27780/app/
 ```
 
-### Inspect HTTP traffic with interception
+The browser connects to `ws://yourhost/ws/terminal`; the proxy opens a raw TCP
+connection to the BBS for each session.
 
 ```bash
 pip install 'provide-terminal-server[cli]'
 uterm inspect 3000 --server https://your-server.example.com --intercept
 ```
 
-______________________________________________________________________
+---
 
-## Core Capabilities
+## Hijack Widget
 
-### Session Control (Bridge)
+The hijack system lets a human operator observe and take over a worker's terminal
+session in real time.
 
-The bridge system lets operators observe and take over terminal sessions in real time.
+### Backend — TermHub
 
-- **Roles** — `viewer` (observe only), `operator` (input in shared mode), `admin` (full hijack control)
-- **Hijack leases** — acquire/heartbeat/release with configurable TTL, auto-expire on disconnect
-- **Input modes** — `hijack` (exclusive, one owner) or `open` (shared, all operators can type)
-- **Session resumption** — browser reconnect restores role and hijack ownership via opaque tokens
+```python
+from provide.terminal.hijack.hub import TermHub
 
-```mermaid
-sequenceDiagram
-    participant B as Browser (admin)
-    participant H as TermHub
-    participant W as Worker
+def resolve_browser_role(ws, worker_id):
+    user = getattr(ws.state, "user", None)
+    if getattr(user, "is_admin", False):
+        return "admin"
+    if getattr(user, "can_operate_terminals", False):
+        return "operator"
+    return "viewer"
 
-    B->>H: POST /hijack/acquire
-    H->>W: control: pause
-    H-->>B: {ok: true, hijack_id}
-    B->>H: POST /hijack/send {keys: "ls\r"}
-    H->>W: input: "ls\r"
-    W-->>H: terminal output
-    H-->>B: terminal output
-    B->>H: POST /hijack/release
-    H->>W: control: resume
+hub = TermHub(
+    on_hijack_changed=lambda worker_id, enabled, owner: print(worker_id, enabled),
+    resolve_browser_role=resolve_browser_role,
+)
+app.include_router(hub.create_router())
 ```
 
-### Terminal Transports
+This adds:
+- `GET  /ws/browser/{worker_id}/term` — browser observer/hijack WebSocket
+- `GET  /ws/worker/{worker_id}/term` — worker WebSocket
+- REST endpoints for session management
 
-Pluggable connectors behind a unified session model:
+Browser roles are resolved on the server. The browser WebSocket does not accept
+a client-selected role parameter; without a resolver, browser sessions default
+to read-only (`viewer`).
 
-| Connector   | What it does                                              |
-| ----------- | --------------------------------------------------------- |
-| `shell`     | Local shell process                                       |
-| `telnet`    | Remote telnet (RFC 854)                                   |
-| `ssh`       | Remote SSH (asyncssh)                                     |
-| `websocket` | WebSocket upstream                                        |
-| `ushell`    | Built-in Python REPL (shell module in `provide-terminal`) |
-| `pty`       | Local PTY with PAM auth and LD_PRELOAD capture            |
+| Connector | What it does |
+|-----------|-------------|
+| `shell` | Local shell process |
+| `telnet` | Remote telnet (RFC 854) |
+| `ssh` | Remote SSH (asyncssh) |
+| `websocket` | WebSocket upstream |
+| `ushell` | Built-in Python REPL (shell module in `provide-terminal`) |
+| `pty` | Local PTY with PAM auth and LD_PRELOAD capture |
 
-The **gateway** converts between protocols: browser WebSocket ↔ telnet/SSH backends with ANSI color mode negotiation.
+WebSocket session resumption is opt-in on raw `TermHub` instances. Resume tokens
+are opaque session handles that restore the prior browser role unless the
+consumer supplies stricter validation via `on_resume`.
 
-### Tunnel Sharing & HTTP Inspection
+### Frontend — ProvideHijack
 
-Share terminals and inspect HTTP traffic through multiplexed binary tunnels.
+Embed the hijack control widget in any HTML page:
 
-```mermaid
-graph LR
-    subgraph "Tunnel Protocol (one WebSocket)"
-        C0["0x00 Control"]
-        C1["0x01 Terminal"]
-        C2["0x02 TCP"]
-        C3["0x03 HTTP"]
-    end
-
-    CLI["uterm share<br/>uterm inspect"] --> C0 & C1 & C2 & C3
-    C0 & C1 & C2 & C3 --> Server["TermHub"]
-    Server --> Browser["Browser UI"]
+```html
+<div id="hijack-container"></div>
+<script src="/static/hijack.js"></script>
+<script>
+  new ProvideHijack(document.getElementById('hijack-container'), {
+    workerId: 'myworker',     // connects to /ws/browser/myworker/term
+    mobileKeys: true,         // show collapsible special-key toolbar when hijacked
+    heartbeatInterval: 5000,  // ms between heartbeats while owner
+  });
+</script>
 ```
 
-- **`uterm share`** — share your local terminal through the tunnel server
-- **`uterm tunnel`** — forward a local TCP port through the tunnel
-- **`uterm inspect`** — HTTP reverse proxy with live traffic inspection
-- **`uterm inspect --intercept`** — pause requests, forward/drop/modify from the browser
+Mount the bundled frontend files via FastAPI's `StaticFiles` or use
+`mount_terminal_ui()` which includes `hijack.html`, `hijack.js`, and `hijack.css`.
 
 See [HTTP Inspection & Interception](https://github.com/provide-io/provide-terminal/blob/main/docs/inspect.md) for the full protocol reference.
 
@@ -166,136 +146,139 @@ Enable per-session with `presence: true`. Works on both FastAPI and CF backends 
 21 tools for AI agents to control terminal sessions via the [Model Context Protocol](https://modelcontextprotocol.io/):
 
 ```bash
-uterm-mcp  # starts MCP server for Claude, GPT, or any MCP-compatible agent
+uv run python scripts/example_server.py
 ```
 
 Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-terminal-client](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-client).
 
-### Agent Management
+- `http://127.0.0.1:8742/hijack/hijack.html?worker=demo-session`
 
-Orchestrate fleets of terminal workers:
+The built-in demo session is a general-purpose interactive worker rather than a
+static screen. It supports:
+
+- exclusive hijack mode (one browser owns input)
+- shared input mode (multiple browsers can type)
+- free-form text that appends to a live transcript
+- built-in commands: `/help`, `/mode open`, `/mode hijack`, `/clear`, `/status`, `/nick <name>`, `/say <text>`, `/demo`, `/reset`
+
+The demo page includes mode and reset controls backed by example-only HTTP
+endpoints:
+
+- `GET /demo/session/{worker_id}`
+- `POST /demo/session/{worker_id}/mode`
+- `POST /demo/session/{worker_id}/reset`
+
+These demo endpoints exist only for the example server and are not part of the
+library's public API.
+
+### Reference Server
+
+The repo now also includes a standalone reference server application:
 
 ```bash
-uterm-manager --config swarm.yaml
+uterm-server --config scripts/uterm-server.example.toml
 ```
 
 Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-platform](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-platform).
 
-______________________________________________________________________
+---
 
-## CLI Tools
+## CLI
 
-| Entry Point     | Purpose                                         |
-| --------------- | ----------------------------------------------- |
-| `uterm`         | Terminal proxy, sharing, tunneling, inspection  |
-| `uterm-server`  | Hosted reference server with sessions, auth, UI |
-| `uterm-mcp`     | MCP server for AI agents                        |
-| `uterm-manager` | Agent swarm orchestration                       |
+Install the `[cli]` extra, then:
 
-### `uterm` commands
+### `uterm proxy` — browser WS → telnet/SSH
 
-| Command           | Description                                                |
-| ----------------- | ---------------------------------------------------------- |
-| `proxy HOST PORT` | Browser WS → telnet/SSH proxy                              |
-| `listen WS_URL`   | Telnet/SSH client → WebSocket                              |
-| `share [CMD]`     | Share local terminal via tunnel                            |
-| `tunnel PORT`     | Forward TCP port via tunnel                                |
-| `inspect PORT`    | HTTP traffic inspection (add `--intercept` for pause/edit) |
-| `watch`           | TUI for watching HTTP tunnel traffic                       |
-
-______________________________________________________________________
-
-## Installation
+Accepts browser WebSocket connections and proxies to a remote BBS.
 
 ```bash
-pip install provide-terminal                  # core only
-pip install 'provide-terminal[emulator]'      # + pyte screen emulation
-pip install 'provide-terminal-server[cli]'    # CLI tools (uterm, uterm-server)
-pip install 'provide-terminal-server[server]' # hosted server
-pip install 'provide-terminal-client[all]'    # client + MCP tools
+# Basic telnet proxy
+uterm proxy bbs.example.com 23
+
+# Custom port and WS path
+uterm proxy bbs.example.com 23 --port 9000 --path /ws/term
+
+# SSH proxy (requires [ssh] extra)
+uterm proxy bbs.example.com 22 --transport ssh
 ```
 
-**provide-terminal extras:**
+### `uterm listen` — telnet/SSH client → WebSocket server
 
-| Extra        | Installs         | Required for          |
-| ------------ | ---------------- | --------------------- |
-| `[emulator]` | pyte             | Screen state tracking |
-| `[ssh]`      | asyncssh         | SSH transport         |
-| `[client]`   | httpx            | HTTP client           |
-| `[all]`      | everything above | Full core feature set |
+Accepts traditional telnet and/or SSH clients and proxies to a remote WebSocket
+terminal endpoint.
 
-**provide-terminal-server extras:**
+```bash
+# Telnet listener
+uterm listen wss://warp.provide.io/ws/terminal
 
-| Extra       | Installs                                     | Required for            |
-| ----------- | -------------------------------------------- | ----------------------- |
-| `[server]`  | fastapi, uvicorn, pyjwt, websockets          | Reference server        |
-| `[cli]`     | fastapi, uvicorn, websockets, textual, httpx | CLI tools               |
-| `[tunnel]`  | httpx, uvicorn, websockets, fastapi          | Tunnel sharing          |
-| `[gateway]` | asyncssh, websockets                         | Telnet/SSH gateways     |
-| `[all]`     | everything above                             | Full server feature set |
+# With custom ports
+uterm listen wss://warp.provide.io/ws/terminal --port 2112 --ssh-port 2222
 
-______________________________________________________________________
-
-## Deployment
-
-```mermaid
-graph LR
-    subgraph "Self-Hosted"
-        FA["FastAPI Server<br/><code>uterm-server</code>"]
-    end
-
-    subgraph "Edge"
-        CF["Cloudflare Workers<br/>Durable Objects"]
-    end
-
-    subgraph "Local"
-        Docker["Docker Compose<br/>both backends"]
-    end
-
-    Browser["Browser"] --> FA & CF
-    FA --- Docker
-    CF --- Docker
+# With host key (SSH)
+uterm listen wss://warp.provide.io/ws/terminal --server-key /etc/host_key
 ```
 
-**FastAPI** — full control, named sessions, auth, recording, policy. Deploy anywhere Python runs.
+---
+
+## Docker
+
+Pre-built Docker targets are provided for local testing of both backends.
+
+### FastAPI reference server
+
+```bash
+# Build (from repo root)
+docker build -f docker/Dockerfile.server -t provide-terminal-server .
+
+# Run — dashboard at http://localhost:27780/app/
+docker run --rm -p 27780:27780 provide-terminal-server
+
+# Custom config
+docker run --rm -p 27780:27780 \
+  -v /path/to/my.toml:/config/server.toml:ro \
+  provide-terminal-server
+```
+
+The default config (`docker/server.toml`) starts in `dev` auth mode with one pre-configured shell session. Mount a custom TOML to add JWT, real connectors, or additional sessions — see `scripts/uterm-server.jwt.example.toml` for a full JWT example.
 
 **Cloudflare Workers** — edge deployment on [Durable Objects](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-cloudflare) with CF Access JWT, KV session registry, WebSocket hibernation.
 
-**Docker** — both backends locally:
-
 ```bash
 docker compose -f docker/docker-compose.yml up
-# FastAPI: http://localhost:27780/app/
-# CF Worker: http://localhost:27788/api/health
 ```
 
-______________________________________________________________________
+---
 
 ## Package Ecosystem
 
-| Package                       | Role                                                                               | Tests |
-| ----------------------------- | ---------------------------------------------------------------------------------- | ----- |
-| `provide-terminal`            | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
-| `provide-terminal-server`     | Server: bridge hub, FastAPI, CLI, tunnel, gateway                                  | ~2800 |
-| `provide-terminal-client`     | Client: HTTP/WS client, transports, AI/MCP                                         | ~690  |
-| `provide-terminal-platform`   | Platform: PTY, PAM, capture, fleet manager                                         | ~780  |
-| `provide-terminal-cloudflare` | CF Worker + Durable Object                                                         | ~890  |
-| `provide-terminal-frontend`   | Browser UI (TypeScript, xterm.js)                                                  | —     |
-| `provide-terminal-app`        | App shell                                                                          | —     |
+| Package | Role | Tests |
+|---------|------|-------|
+| `provide-terminal` | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
+| `provide-terminal-server` | Server: bridge hub, FastAPI, CLI, tunnel, gateway | ~2800 |
+| `provide-terminal-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
+| `provide-terminal-platform` | Platform: PTY, PAM, capture, fleet manager | ~780 |
+| `provide-terminal-cloudflare` | CF Worker + Durable Object | ~890 |
+| `provide-terminal-frontend` | Browser UI (TypeScript, xterm.js) | — |
+| `provide-terminal-app` | App shell | — |
 
 All packages at 100% branch+line coverage. 8760+ tests total.
 
-______________________________________________________________________
+---
 
-## Security & Quality
+## Quality Guarantees
 
-- **Auth modes** — `dev` (local), `jwt` (production), fail-closed on misconfiguration
-- **Security headers** — CSP, HSTS, X-Frame-Options, SRI integrity hashes (configurable per-header)
-- **100% branch coverage** — enforced via `--cov-fail-under=100` in every package
-- **Pre-commit** — ruff, mypy strict, ty, bandit, biome (TS/JS) on every commit
-- **Security audit** — `pip-audit`, `bandit`, timing-safe token comparison
+- Test gate runs at **100% branch coverage** (`--cov-branch`), enforced via `addopts` in `pyproject.toml`.
+- Memory regressions caught in **nightly CI** via memray profiling (stress tests for hot paths).
+- Pre-commit hooks enforce ruff, mypy strict, ty, bandit, and biome on every commit.
+- Security audit via `pip-audit` and `bandit`; timing-safe token comparison in auth paths.
+- All input size limits enforced at boundaries; fail-closed auth on misconfiguration.
 
-______________________________________________________________________
+## Documentation Ownership
+
+- README: installation, quick-start, and API overview.
+- Operations: runbook, SLOs, and production readiness gates.
+- Protocol: backend capability matrix and client contract.
+- Release: governance, tagging, and publishing workflow.
 
 ## Docs
 
@@ -309,8 +292,8 @@ ______________________________________________________________________
 - [Architecture Diagrams](https://github.com/provide-io/provide-terminal/tree/main/docs/diagrams) (PlantUML)
 - [Cloudflare Workers](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-cloudflare/README.md)
 
-______________________________________________________________________
+---
 
 ## License
 
-AGPL-3.0-or-later. Copyright (c) 2025-2026 provide.io llc.
+AGPL-3.0-or-later. Copyright (c) 2025-2026 MindTenet LLC.

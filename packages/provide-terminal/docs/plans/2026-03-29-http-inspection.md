@@ -8,14 +8,12 @@
 
 **Tech Stack:** Python asyncio (aiohttp for proxy), TypeScript (vanilla DOM for inspect UI), existing tunnel protocol + WebSocket infrastructure.
 
-______________________________________________________________________
+---
 
 ### Task 1: HTTP Message Types
 
 **Files:**
-
 - Modify: `packages/provide-terminal/src/provide/terminal/tunnel/types.py`
-
 - Test: `packages/provide-terminal/tests/tunnel/test_types.py`
 
 - [ ] **Step 1: Write failing test for HttpRequest/HttpResponse types**
@@ -81,7 +79,8 @@ def test_http_response_truncated():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_types.py -v --no-cov` Expected: `ImportError: cannot import name 'HttpRequestMessage'`
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_types.py -v --no-cov`
+Expected: `ImportError: cannot import name 'HttpRequestMessage'`
 
 - [ ] **Step 3: Add TypedDicts to types.py**
 
@@ -121,7 +120,8 @@ class HttpResponseMessage(TypedDict, total=False):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_types.py -v --no-cov` Expected: all PASS
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_types.py -v --no-cov`
+Expected: all PASS
 
 - [ ] **Step 5: Add channel constant to protocol.py**
 
@@ -140,14 +140,12 @@ git add packages/provide-terminal/src/provide/terminal/tunnel/types.py \
 git commit -m "feat: add HTTP message types and CHANNEL_HTTP constant"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 2: HTTP Proxy Core
 
 **Files:**
-
 - Create: `packages/provide-terminal/src/provide/terminal/tunnel/http_proxy.py`
-
 - Test: `packages/provide-terminal/tests/tunnel/test_http_proxy.py`
 
 - [ ] **Step 1: Write failing tests for body encoding and log formatting**
@@ -202,7 +200,8 @@ def test_format_log_line_request_only():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_proxy.py -v --no-cov` Expected: `ModuleNotFoundError`
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_proxy.py -v --no-cov`
+Expected: `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement http_proxy.py**
 
@@ -270,7 +269,8 @@ def _human_size(n: int) -> str:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_proxy.py -v --no-cov` Expected: all PASS
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_proxy.py -v --no-cov`
+Expected: all PASS
 
 - [ ] **Step 5: Commit**
 
@@ -280,16 +280,13 @@ git add packages/provide-terminal/src/provide/terminal/tunnel/http_proxy.py \
 git commit -m "feat: add HTTP proxy helpers (body encoding, log formatting)"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 3: CLI `uterm inspect` Command
 
 **Files:**
-
 - Create: `packages/provide-terminal/src/provide/terminal/cli/inspect.py`
-
 - Modify: `packages/provide-terminal/src/provide/terminal/cli/__init__.py`
-
 - Test: `packages/provide-terminal/tests/tunnel/test_inspect_cli.py`
 
 - [ ] **Step 1: Write failing tests for arg parsing and subcommand registration**
@@ -329,9 +326,10 @@ class TestInspectArgParsing:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_inspect_cli.py -v --no-cov` Expected: FAIL — `inspect` subcommand not registered
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_inspect_cli.py -v --no-cov`
+Expected: FAIL — `inspect` subcommand not registered
 
-- [ ] **Step 3: Create inspect.py with subcommand registration and \_cmd_inspect stub**
+- [ ] **Step 3: Create inspect.py with subcommand registration and _cmd_inspect stub**
 
 Create `packages/provide-terminal/src/provide/terminal/cli/inspect.py`:
 
@@ -555,7 +553,8 @@ Add after the tunnel subcommand registration in `packages/provide-terminal/src/p
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_inspect_cli.py -v --no-cov` Expected: all PASS
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_inspect_cli.py -v --no-cov`
+Expected: all PASS
 
 - [ ] **Step 6: Commit**
 
@@ -566,18 +565,14 @@ git add packages/provide-terminal/src/provide/terminal/cli/inspect.py \
 git commit -m "feat: add uterm inspect — HTTP reverse proxy with traffic inspection CLI"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 4: Server-Side Channel 0x03 Handling
 
 **Files:**
-
 - Modify: `packages/provide-terminal/src/provide/terminal/tunnel/fastapi_routes.py`
-
 - Modify: `packages/provide-terminal-cloudflare/src/provide/terminal/cloudflare/api/tunnel_routes.py`
-
 - Modify: `packages/provide-terminal/src/provide/terminal/server/routes/api.py`
-
 - Test: `packages/provide-terminal/tests/tunnel/test_http_channel.py`
 
 - [ ] **Step 1: Write failing test for channel 0x03 broadcast**
@@ -610,7 +605,8 @@ class TestHttpChannelBroadcast:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_channel.py -v --no-cov` Expected: FAIL — `CHANNEL_HTTP` not defined
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_channel.py -v --no-cov`
+Expected: FAIL — `CHANNEL_HTTP` not defined
 
 - [ ] **Step 3: Update fastapi_routes.py to handle channel 0x03**
 
@@ -665,11 +661,13 @@ _CHANNEL_HTTP = 0x03
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_channel.py -v --no-cov` Expected: PASS
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_channel.py -v --no-cov`
+Expected: PASS
 
 - [ ] **Step 6: Run full test suite**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/ -q --no-cov` Expected: all PASS
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/ -q --no-cov`
+Expected: all PASS
 
 - [ ] **Step 7: Commit**
 
@@ -681,18 +679,14 @@ git add packages/provide-terminal/src/provide/terminal/tunnel/fastapi_routes.py 
 git commit -m "feat: handle channel 0x03 HTTP inspection frames on both backends"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 5: SPA Inspect View — Types and Boot
 
 **Files:**
-
 - Modify: `packages/provide-terminal-frontend/src/app/types.ts`
-
 - Modify: `packages/provide-terminal-frontend/src/app/boot.ts`
-
 - Modify: `packages/provide-terminal-frontend/src/app/router.ts`
-
 - Test: `packages/provide-terminal-frontend/src/app/boot.test.ts`
 
 - [ ] **Step 1: Add "inspect" to AppPageKind**
@@ -762,7 +756,8 @@ import { renderInspect } from "./views/inspect-view.js";
 
 - [ ] **Step 4: Run frontend tests**
 
-Run: `cd packages/provide-terminal-frontend && npm test -- --run` Expected: existing tests pass (inspect view import will fail until Task 6)
+Run: `cd packages/provide-terminal-frontend && npm test -- --run`
+Expected: existing tests pass (inspect view import will fail until Task 6)
 
 - [ ] **Step 5: Commit**
 
@@ -773,16 +768,13 @@ git add packages/provide-terminal-frontend/src/app/types.ts \
 git commit -m "feat: register inspect page kind in frontend types and router"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 6: SPA Inspect View — UI Component
 
 **Files:**
-
 - Create: `packages/provide-terminal-frontend/src/app/views/inspect-view.ts`
-
 - Create: `packages/provide-terminal-frontend/src/app/views/inspect-view.css`
-
 - Test: `packages/provide-terminal-frontend/src/app/views/inspect-view.test.ts`
 
 - [ ] **Step 1: Write test for renderInspect**
@@ -881,7 +873,8 @@ export async function renderInspect(root: HTMLElement, bootstrap: AppBootstrap):
 
 - [ ] **Step 4: Run frontend tests**
 
-Run: `cd packages/provide-terminal-frontend && npm test -- --run` Expected: all PASS
+Run: `cd packages/provide-terminal-frontend && npm test -- --run`
+Expected: all PASS
 
 - [ ] **Step 5: Commit**
 
@@ -892,18 +885,14 @@ git add packages/provide-terminal-frontend/src/app/views/inspect-view.ts \
 git commit -m "feat: add inspect view UI component (request list + detail pane)"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 7: Server-Side Inspect Page Route
 
 **Files:**
-
 - Modify: `packages/provide-terminal/src/provide/terminal/server/routes/pages.py`
-
 - Modify: `packages/provide-terminal/src/provide/terminal/server/ui.py`
-
 - Modify: `packages/provide-terminal-cloudflare/src/provide/terminal/cloudflare/entry.py`
-
 - Test: `packages/provide-terminal/tests/server/test_pages.py`
 
 - [ ] **Step 1: Add inspect page route to FastAPI**
@@ -927,7 +916,9 @@ And in `_spa_response`, add inspect to the page kinds that load hijack.js (since
 
 - [ ] **Step 3: Run tests**
 
-Run: `uv run pytest packages/provide-terminal/tests/server/test_pages.py -v --no-cov` Run: `uv run pytest packages/provide-terminal-cloudflare/tests/test_entry_unit.py -v --no-cov` Expected: all PASS
+Run: `uv run pytest packages/provide-terminal/tests/server/test_pages.py -v --no-cov`
+Run: `uv run pytest packages/provide-terminal-cloudflare/tests/test_entry_unit.py -v --no-cov`
+Expected: all PASS
 
 - [ ] **Step 4: Commit**
 
@@ -938,12 +929,11 @@ git add packages/provide-terminal/src/provide/terminal/server/routes/pages.py \
 git commit -m "feat: add /app/inspect/{id} page route on FastAPI and CF"
 ```
 
-______________________________________________________________________
+---
 
 ### Task 8: Integration Test — Full HTTP Inspection Flow
 
 **Files:**
-
 - Create: `packages/provide-terminal/tests/tunnel/test_http_inspect_e2e.py`
 
 - [ ] **Step 1: Write E2E test**
@@ -989,7 +979,8 @@ class TestHttpInspectE2E:
 
 - [ ] **Step 2: Run tests**
 
-Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_inspect_e2e.py -v --no-cov` Expected: all PASS
+Run: `uv run pytest packages/provide-terminal/tests/tunnel/test_http_inspect_e2e.py -v --no-cov`
+Expected: all PASS
 
 - [ ] **Step 3: Commit**
 
@@ -998,12 +989,11 @@ git add packages/provide-terminal/tests/tunnel/test_http_inspect_e2e.py
 git commit -m "test: add E2E tests for HTTP inspection tunnel flow"
 ```
 
-______________________________________________________________________
+---
 
 ## Self-Review
 
 **Spec coverage:**
-
 - ✅ Channel 0x03 protocol (Tasks 1, 4)
 - ✅ Agent HTTP proxy (Task 3)
 - ✅ CLI output with color (Task 2, 3)

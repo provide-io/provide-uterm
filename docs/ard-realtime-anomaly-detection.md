@@ -6,7 +6,7 @@ Terminal sessions in privileged environments can expose credentials, trigger pri
 
 provide-terminal receives every byte of terminal output *before* it reaches the browser. This is the earliest possible interception point — before the operator sees the output, before screenshots are taken, before any downstream system processes it. A rule engine at this layer can emit alerts in real time, with session context that host-level tools cannot see (who is connected, what role they hold, whether a hijack is active).
 
-______________________________________________________________________
+---
 
 ## Goals
 
@@ -17,7 +17,7 @@ ______________________________________________________________________
 - Integrate with the existing `append_event` audit trail in `TermHub`.
 - Require zero changes to workers, browsers, or remote hosts.
 
-______________________________________________________________________
+---
 
 ## Non-Goals
 
@@ -25,7 +25,7 @@ ______________________________________________________________________
 - Replacing a SIEM — this emits events *to* a SIEM, not replaces one.
 - Running LLM inference in the hot broadcast path (LLM checks run in a background task).
 
-______________________________________________________________________
+---
 
 ## Architecture
 
@@ -79,7 +79,6 @@ class DetectionSink(Protocol):
 ```
 
 Built-in sinks:
-
 - `LogDetectionSink` — structured log via `provide.telemetry`
 - `WebhookDetectionSink` — HTTP POST to a configurable URL (with retry and dead-letter queue)
 - `CallbackDetectionSink` — asyncio callback for programmatic consumers (tests, MCP tools)
@@ -115,15 +114,15 @@ if hub._detector is not None and data:
 
 A default `provide.terminal.detection.rules` module ships a curated starter set:
 
-| Rule ID    | Name               | Severity | Pattern                          |
-| ---------- | ------------------ | -------- | -------------------------------- |
-| `cred-001` | AWS key exposure   | critical | `AKIA[0-9A-Z]{16}`               |
+| Rule ID | Name | Severity | Pattern |
+|---|---|---|---|
+| `cred-001` | AWS key exposure | critical | `AKIA[0-9A-Z]{16}` |
 | `cred-002` | Private key header | critical | `-----BEGIN .* PRIVATE KEY-----` |
-| `cred-003` | Password in prompt | warn     | \`(?i)(password                  |
-| `priv-001` | sudo su            | warn     | `sudo su` / `sudo -i`            |
-| `priv-002` | chmod 777          | warn     | `chmod\s+[0-7]*7[0-7]*7`         |
-| `dest-001` | rm -rf /           | critical | `rm\s+-[a-z]*r[a-z]*f\s+/`       |
-| `dest-002` | DROP TABLE         | critical | `(?i)DROP\s+TABLE`               |
+| `cred-003` | Password in prompt | warn | `(?i)(password|passwd|secret)\s*[:=]` |
+| `priv-001` | sudo su | warn | `sudo su` / `sudo -i` |
+| `priv-002` | chmod 777 | warn | `chmod\s+[0-7]*7[0-7]*7` |
+| `dest-001` | rm -rf / | critical | `rm\s+-[a-z]*r[a-z]*f\s+/` |
+| `dest-002` | DROP TABLE | critical | `(?i)DROP\s+TABLE` |
 
 ### Rolling-Window Engine
 
@@ -133,7 +132,7 @@ For multi-line patterns (e.g., a failed `sudo` followed by a password entry), th
 
 Rules with `engine="llm"` submit a background task that calls a configurable LLM endpoint (OpenAI-compatible, Claude API via `anthropic`) with the matched text and a prompt template. The task calls `sink.emit()` asynchronously if the model classifies the event as a true positive. This path is strictly opt-in and has no effect on the hot path.
 
-______________________________________________________________________
+---
 
 ## CF Backend Parity
 
@@ -145,7 +144,7 @@ def get_detector(self) -> TerminalDetector | None: ...
 
 Webhook sink fires via `fetch()` in the CF runtime.
 
-______________________________________________________________________
+---
 
 ## MCP Integration
 
@@ -154,7 +153,7 @@ Two new MCP tools:
 - `detection_rules_list` — list active rules for a session
 - `detection_events_recent` — return the last N `DetectionEvent` objects for a session (from the in-memory ring buffer, capacity configurable)
 
-______________________________________________________________________
+---
 
 ## Security Considerations
 
@@ -163,7 +162,7 @@ ______________________________________________________________________
 - LLM engine never sends raw credentials to the model — the matched text is truncated to 256 chars and the prompt instructs the model not to log or store it.
 - Detection sinks with external HTTP calls run in background tasks with a circuit breaker to prevent a slow webhook from accumulating unbounded goroutines.
 
-______________________________________________________________________
+---
 
 ## Testing
 
@@ -173,12 +172,12 @@ ______________________________________________________________________
 - `test_detector_sink_webhook.py` — webhook sink emits correct payload, retries on 5xx, does not block broadcast.
 - `test_detector_llm_async.py` — LLM engine submits task, does not block, emits event when model returns True.
 
-______________________________________________________________________
+---
 
 ## Open Questions
 
 1. Should detection rules be configurable at runtime (hot-reload) or only at startup?
-1. Should the rolling-window buffer survive worker reconnects, or reset on each new connection?
-1. Should `DetectionEvent` objects be included in the compliance recording (ARD: Session Audit)?
-1. What is the cardinality limit on per-session rolling buffers (max sessions × window_lines × avg line length)?
-1. Should there be a per-rule suppression window (e.g., same rule fires at most once per 60s per session) to prevent alert storms?
+2. Should the rolling-window buffer survive worker reconnects, or reset on each new connection?
+3. Should `DetectionEvent` objects be included in the compliance recording (ARD: Session Audit)?
+4. What is the cardinality limit on per-session rolling buffers (max sessions × window_lines × avg line length)?
+5. Should there be a per-rule suppression window (e.g., same rule fires at most once per 60s per session) to prevent alert storms?

@@ -14,13 +14,10 @@ export async function renderSession(root, bootstrap) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
-    // Share-token auth rides on the HttpOnly uterm_tunnel_{id} cookie set by
-    // the server when the page was served.  We deliberately do not append the
-    // token as a query param; embedding capability tokens in the DOM lets a
-    // compromised asset (or any XSS) exfiltrate them.
+    const shareQuery = bootstrap.share_token ? `?token=${encodeURIComponent(bootstrap.share_token)}` : "";
     const controlLink = bootstrap.share_role === "viewer"
         ? ""
-        : `<a class="btn" style="margin-left:auto" href="${safeAppPath}/operator/${encodeURIComponent(bootstrap.session_id)}">→ Control</a>`;
+        : `<a class="btn" style="margin-left:auto" href="${safeAppPath}/operator/${encodeURIComponent(bootstrap.session_id)}${shareQuery}">→ Control</a>`;
     root.innerHTML = `
     <div class="page">
       ${renderAppHeader(bootstrap, "session")}

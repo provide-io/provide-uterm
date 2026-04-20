@@ -14,7 +14,6 @@ export function mountHijackWidget(container, sessionId, surface) {
     const shareToken = getShareToken();
     // DeckMux state — lazily initialised on first presence_sync
     let deckMux = null;
-    let myUserId = null;
     const presenceUsers = new Map();
     const config = {
         workerId: sessionId,
@@ -36,10 +35,8 @@ export function mountHijackWidget(container, sessionId, surface) {
                 }
                 const users = msg.users ?? [];
                 const myUser = users[users.length - 1];
-                if (myUser && !myUserId) {
-                    myUserId = myUser.user_id;
+                if (myUser)
                     deckMux.handleMessage({ type: "dm_hello", user_id: myUser.user_id });
-                }
                 for (const u of users) {
                     const uid = u.user_id;
                     if (uid)

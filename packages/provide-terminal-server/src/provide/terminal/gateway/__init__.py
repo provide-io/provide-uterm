@@ -37,6 +37,7 @@ Example — serve both telnet and SSH clients against a WS game endpoint::
 """
 
 from provide.terminal.gateway._gateway import (
+    TelnetWsGateway,
     _delete_token,
     _handle_ws_control,
     _normalize_crlf,
@@ -55,11 +56,15 @@ from provide.terminal.gateway._telnet_gateway import TelnetWsGateway
 __all__ = [
     "SshWsGateway",
     "TelnetWsGateway",
+    "_apply_color_mode",
+    "_clamp8",
     "_delete_token",
     "_handle_ws_control",
     "_normalize_crlf",
     "_pipe_ws",
     "_read_token",
+    "_rgb_to_16_index",
+    "_rgb_to_256",
     "_ssh_to_ws",
     "_strip_iac",
     "_tcp_to_ws",

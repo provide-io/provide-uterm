@@ -44,7 +44,7 @@ def _set_auth_cookie(
     value: str,
     *,
     secure: bool,
-    samesite: Literal["lax", "strict", "none"] = "lax",
+    samesite: str = "lax",
 ) -> None:
     response.set_cookie(
         key=key,
@@ -94,6 +94,13 @@ def _share_role(request: Request) -> str | None:
     return getattr(request.state, "uterm_share_role", None)
 
 
+def _share_context(request: Request) -> tuple[str | None, str | None]:
+    return (
+        getattr(request.state, "uterm_share_role", None),
+        getattr(request.state, "uterm_share_token", None),
+    )
+
+
 def create_page_router() -> APIRouter:
     router = APIRouter()
 
@@ -134,7 +141,8 @@ def create_page_router() -> APIRouter:
             session_id,
             operator=False,
             app_path=cfg.ui.app_path,
-            share_role=_share_role(request),
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -162,7 +170,8 @@ def create_page_router() -> APIRouter:
             session_id,
             operator=True,
             app_path=cfg.ui.app_path,
-            share_role=_share_role(request),
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -189,7 +198,8 @@ def create_page_router() -> APIRouter:
             cfg.ui.assets_path,
             session_id,
             app_path=cfg.ui.app_path,
-            share_role=_share_role(request),
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
             fonts_cdn=cfg.ui.fonts_cdn,
@@ -225,6 +235,32 @@ def create_page_router() -> APIRouter:
         )
         response = HTMLResponse(html)
         _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure, session_id=session_id)
+        return response
+
+    @router.get("/inspect/{session_id}", response_class=HTMLResponse)
+    async def inspect_view(request: Request, session_id: _SessionId) -> HTMLResponse:
+        session = await request.app.state.uterm_registry.get_definition(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
+        cfg = request.app.state.uterm_config
+        secure = _is_secure_request(request)
+        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        authz = request.app.state.uterm_authz
+        if not authz.can_read_session(principal, session):
+            raise HTTPException(status_code=403, detail="insufficient privileges")
+        html = inspect_page_html(
+            session.display_name,
+            cfg.ui.assets_path,
+            session_id,
+            app_path=cfg.ui.app_path,
+            share_role=_share_context(request)[0],
+            share_token=_share_context(request)[1],
+            xterm_cdn=cfg.ui.xterm_cdn,
+            fitaddon_cdn=cfg.ui.fitaddon_cdn,
+            fonts_cdn=cfg.ui.fonts_cdn,
+        )
+        response = HTMLResponse(html)
+        _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
         return response
 
     @router.get("/connect", response_class=HTMLResponse)

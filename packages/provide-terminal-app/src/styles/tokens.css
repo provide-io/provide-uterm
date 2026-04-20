@@ -58,7 +58,6 @@
 
 html, body, #app-root {
   height: 100%;
-  overflow: hidden;
 }
 
 body {
@@ -372,8 +371,7 @@ a:hover {
 .page-shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
   background: var(--bg-primary);
 }
 

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Shared async context manager for e2e tests that need a live uvicorn server.
@@ -23,7 +23,7 @@ from typing import Any
 
 import uvicorn
 
-from provide.terminal.bridge.hub import EventBus
+from provide.terminal.hijack.hub import EventBus
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.config import config_from_mapping
 

@@ -15,18 +15,6 @@
       "recommended": true
     }
   },
-  "overrides": [
-    {
-      "includes": ["packages/provide-terminal-frontend/src/**/*.test.ts"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noNonNullAssertion": "off"
-          }
-        }
-      }
-    }
-  ],
   "assist": {
     "actions": {
       "source": {

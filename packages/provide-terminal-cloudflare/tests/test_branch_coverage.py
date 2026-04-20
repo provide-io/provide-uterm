@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -99,7 +99,6 @@ async def test_acquire_renewal_skips_pause() -> None:
         lifecycle_state = "stopped"
         input_mode = "hijack"
         browser_hijack_owner: dict = {}
-        browser_resume_tokens: dict = {}
 
         async def browser_role_for_request(self, req):
             return "admin"
@@ -474,38 +473,3 @@ async def test_alarm_no_worker_active_hijack_no_set_alarm() -> None:
 
     # Should not raise — setAlarm just won't be called
     await rt.alarm()
-
-
-# ---------------------------------------------------------------------------
-# _mono_to_wall: None branch (both modules have identical helpers)
-# ---------------------------------------------------------------------------
-
-
-def test_mono_to_wall_none_shared() -> None:
-    """_shared._mono_to_wall(None) → None  (line 52)."""
-    from provide.terminal.cloudflare.api.http_routes._shared import _mono_to_wall
-
-    assert _mono_to_wall(None) is None
-
-
-def test_mono_to_wall_value_shared() -> None:
-    """_shared._mono_to_wall(float) → wall-clock float."""
-    from provide.terminal.cloudflare.api.http_routes._shared import _mono_to_wall
-
-    result = _mono_to_wall(1000.0)
-    assert isinstance(result, float)
-
-
-def test_mono_to_wall_none_io() -> None:
-    """_session_runtime_io._mono_to_wall(None) → None  (line 47)."""
-    from provide.terminal.cloudflare.do._session_runtime_io import _mono_to_wall
-
-    assert _mono_to_wall(None) is None
-
-
-def test_mono_to_wall_value_io() -> None:
-    """_session_runtime_io._mono_to_wall(float) → wall-clock float."""
-    from provide.terminal.cloudflare.do._session_runtime_io import _mono_to_wall
-
-    result = _mono_to_wall(1000.0)
-    assert isinstance(result, float)

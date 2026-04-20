@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -58,15 +55,6 @@ class CloudflareConfig:
     tunnel_token_ttl_s: int = 3600
     tunnel_token_transport: str = "both"  # noqa: S105 — "query", "cookie", or "both"
     tunnel_ip_binding: bool = False
-    security_mode: str = "strict"
-    security_csp: str | None = None
-    security_hsts: str | None = None
-    security_x_frame_options: str | None = None
-    security_x_content_type_options: str | None = None
-    security_referrer_policy: str | None = None
-    security_permissions_policy: str | None = None
-    deckmux_auto_transfer_idle_s: int = 30
-    deckmux_keystroke_queue: str = "display"
 
     @classmethod
     def from_env(cls, env: Any) -> CloudflareConfig:
@@ -84,15 +72,6 @@ class CloudflareConfig:
         def _get_bool(name: str, default: bool) -> bool:
             raw = _get(name, "1" if default else "0").strip().lower()
             return raw in {"1", "true", "yes", "y", "on"}
-
-        def _get_optional(name: str) -> str | None:
-            """Return the env var value if set (including empty string), else None."""
-            val = getattr(source, name, None)
-            if val is None and isinstance(source, dict):
-                val = source.get(name)
-            if val is None:
-                return None
-            return str(val)
 
         environment = _get("ENVIRONMENT", "development")
         env_lower = environment.strip().lower()
@@ -147,9 +126,6 @@ class CloudflareConfig:
         worker_bearer_token = _get("WORKER_BEARER_TOKEN") or None
         if mode == "jwt" and not worker_bearer_token:
             raise ValueError("WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'")
-        security_mode = _get("SECURITY_MODE", "strict").strip().lower() or "strict"
-        if security_mode not in {"strict", "dev"}:
-            security_mode = "strict"
         return cls(
             environment=environment,
             log_level=_get("LOG_LEVEL", "info"),
@@ -161,13 +137,4 @@ class CloudflareConfig:
             tunnel_token_ttl_s=max(60, int(_get("TUNNEL_TOKEN_TTL_S", "3600"))),
             tunnel_token_transport=_get("TUNNEL_TOKEN_TRANSPORT", "both") or "both",
             tunnel_ip_binding=_get_bool("TUNNEL_IP_BINDING", default=False),
-            security_mode=security_mode,
-            security_csp=_get_optional("SECURITY_CSP"),
-            security_hsts=_get_optional("SECURITY_HSTS"),
-            security_x_frame_options=_get_optional("SECURITY_X_FRAME_OPTIONS"),
-            security_x_content_type_options=_get_optional("SECURITY_X_CONTENT_TYPE_OPTIONS"),
-            security_referrer_policy=_get_optional("SECURITY_REFERRER_POLICY"),
-            security_permissions_policy=_get_optional("SECURITY_PERMISSIONS_POLICY"),
-            deckmux_auto_transfer_idle_s=max(1, int(_get("DECKMUX_AUTO_TRANSFER_IDLE_S", "30"))),
-            deckmux_keystroke_queue=_get("DECKMUX_KEYSTROKE_QUEUE", "display") or "display",
         )

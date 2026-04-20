@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
+import { setShareToken } from "../server-common.js";
 import { routeApp } from "./router.js";
 function readBootstrap() {
     const script = document.getElementById("app-bootstrap");
@@ -30,7 +31,6 @@ export async function bootApp() {
         throw new Error("Missing #app-root");
     }
     const bootstrap = readBootstrap();
-    // Share-token auth rides on the HttpOnly uterm_tunnel_{id} cookie set by
-    // the page handler — the token is never exposed to JS.
+    setShareToken(bootstrap.share_token ?? null);
     await routeApp(root, bootstrap);
 }

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -164,34 +164,35 @@ async def test_default_fetch_worker_route_with_binding_calls_stub() -> None:
 
 
 async def test_default_fetch_app_path() -> None:
-    """/app → SPA dashboard shell."""
+    """/app → read_asset_text('terminal.html') with <base href="/assets/"> injected."""
     d = _make_default()
-    resp = await d.fetch(_req("/app"))
+    with patch("provide_terminal_cloudflare.entry.read_asset_text", return_value="<head><title>T</title>") as mock_rat:
+        resp = await d.fetch(_req("/app"))
+    mock_rat.assert_called_once_with("terminal.html")
     assert resp.status == 200
-    assert "dashboard" in str(resp.body)
+    assert '<base href="/assets/">' in str(resp.body)
 
 
 async def test_default_fetch_app_slash_path() -> None:
-    """/app/ → SPA dashboard shell."""
+    """/app/ → same base-tag injection as /app."""
     d = _make_default()
-    resp = await d.fetch(_req("/app/"))
+    with patch("provide_terminal_cloudflare.entry.read_asset_text", return_value="<head><title>T</title>") as mock_rat:
+        resp = await d.fetch(_req("/app/"))
+    mock_rat.assert_called_once_with("terminal.html")
     assert resp.status == 200
-    assert "dashboard" in str(resp.body)
 
 
-async def test_default_fetch_spa_routes() -> None:
-    """SPA routes serve correct page_kind in bootstrap JSON."""
+async def test_default_fetch_app_path_fallback() -> None:
+    """/app falls back to serve_asset when read_asset_text returns None."""
     d = _make_default()
-    for path, expected_kind in [
-        ("/", "dashboard"),
-        ("/app/connect", "connect"),
-        ("/app/session/test-123", "session"),
-        ("/app/operator/test-123", "operator"),
-        ("/app/replay/test-123", "replay"),
-    ]:
-        resp = await d.fetch(_req(path))
-        assert resp.status == 200, f"{path} returned {resp.status}"
-        assert expected_kind in str(resp.body), f"{path} missing {expected_kind}"
+    mock_resp = Response(body="terminal", status=200)
+    with (
+        patch("provide_terminal_cloudflare.entry.read_asset_text", return_value=None),
+        patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp) as mock_sa,
+    ):
+        resp = await d.fetch(_req("/app"))
+    mock_sa.assert_called_once_with("terminal.html")
+    assert resp.status == 200
 
 
 async def test_default_fetch_share_route() -> None:
@@ -206,11 +207,12 @@ async def test_default_fetch_share_route() -> None:
 
 
 async def test_default_fetch_root_path() -> None:
-    """/ → SPA dashboard."""
+    """Lines 69-70: / → serve_asset('hijack.html')."""
     d = _make_default()
-    resp = await d.fetch(_req("/"))
-    assert resp.status == 200
-    assert "dashboard" in str(resp.body)
+    mock_resp = Response(body="hijack", status=200)
+    with patch("provide_terminal_cloudflare.entry.serve_asset", return_value=mock_resp) as mock_sa:
+        await d.fetch(_req("/"))
+    mock_sa.assert_called_once_with("hijack.html")
 
 
 async def test_default_fetch_unknown_path_returns_404() -> None:
@@ -422,7 +424,7 @@ async def test_resolve_principal_id_no_token() -> None:
     config = CloudflareConfig.from_env(
         SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
     )
-    result = await _resolve_principal_id(SimpleNamespace(headers=SimpleNamespace(get=lambda _k, d=None: d)), config)
+    result = _resolve_principal_id(SimpleNamespace(headers={}), config)
     assert result == "anonymous"
 
 
@@ -437,7 +439,7 @@ async def test_resolve_principal_id_invalid_token() -> None:
     req = SimpleNamespace(
         headers=SimpleNamespace(get=lambda k, d=None: "Bearer invalid-token" if k.lower() == "authorization" else d)
     )
-    result = await _resolve_principal_id(req, config)
+    result = _resolve_principal_id(req, config)
     assert result == "anonymous"
 
 
@@ -455,118 +457,5 @@ async def test_resolve_principal_id_valid_token() -> None:
     req = SimpleNamespace(
         headers=SimpleNamespace(get=lambda k, d=None: f"Bearer {token}" if k.lower() == "authorization" else d)
     )
-    result = await _resolve_principal_id(req, config)
+    result = _resolve_principal_id(req, config)
     assert result == "alice"
-
-
-async def test_resolve_principal_id_cf_access_email_header() -> None:
-    """CF Access authenticated-user-email header resolves to the user's email.
-
-    Without this, a JWKS-only or CF-Access deployment that never configured
-    ``public_key_pem`` (because CF Access handles auth upstream) would have
-    every profile CRUD action attributed to ``anonymous`` — indistinguishable
-    across callers and effectively disabling ownership.
-    """
-    from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
-
-    config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
-    )
-    req = SimpleNamespace(
-        headers=SimpleNamespace(
-            get=lambda k, d=None: (
-                "alice@example.com" if k.lower() == "cf-access-authenticated-user-email" else d
-            )
-        )
-    )
-    result = await _resolve_principal_id(req, config)
-    assert result == "alice@example.com"
-
-
-def test_read_header_skips_individually_raising_names() -> None:
-    """_read_header continues past names whose .get() itself raises.
-
-    Pathological JS-bridged headers proxies can raise on specific keys
-    depending on character encoding; the defensive try/continue guards
-    that.  Without this test the ``except Exception: continue`` branch
-    is uncovered.
-    """
-    from provide.terminal.cloudflare.entry import _read_header
-
-    class _FlakyHeaders:
-        def get(self, k: str, default: object = None) -> object:
-            if k == "cf-access-client-id":
-                raise RuntimeError("boom")
-            return "svc.access" if k == "CF-Access-Client-Id" else default
-
-    req = SimpleNamespace(headers=_FlakyHeaders())
-    # First name raises → continue; second name returns a value.
-    assert _read_header(req, "cf-access-client-id", "CF-Access-Client-Id") == "svc.access"
-
-
-async def test_resolve_principal_id_cf_access_service_token() -> None:
-    """CF Access service token maps to a ``service:<client_id>`` principal."""
-    from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
-
-    config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
-    )
-    client_id = "abc123.access"
-    req = SimpleNamespace(
-        headers=SimpleNamespace(
-            get=lambda k, d=None: client_id if k.lower() == "cf-access-client-id" else d
-        )
-    )
-    result = await _resolve_principal_id(req, config)
-    assert result == f"service:{client_id}"
-
-
-# ---------------------------------------------------------------------------
-# F3: SPA page_kind honors the URL path kind (inspect / replay)
-# ---------------------------------------------------------------------------
-
-
-async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
-    """F3: /app/inspect/{id}?token=... must render page_kind='inspect', not 'session'."""
-    import json as _json
-
-    from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
-
-    session = {
-        "share_token": "shared-tok",
-        "control_token": "ctrl-tok",
-        "expires_at": __import__("time").time() + 3600,
-    }
-    kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
-    d = _make_default({"SESSION_REGISTRY": kv})
-    req = SimpleNamespace(
-        url="https://x/app/inspect/tun-abc?token=shared-tok",
-        headers=SimpleNamespace(get=lambda *a, **k: None),
-    )
-    resp = await d.fetch(req)
-    assert resp.status == 200
-    bootstrap = _json.loads(resp.body.split("id='app-bootstrap'>")[1].split("</script>")[0])  # type: ignore[union-attr]
-    assert bootstrap["page_kind"] == "inspect"
-
-
-async def test_replay_page_with_valid_share_token_gets_replay_kind() -> None:
-    """F3: /app/replay/{id}?token=... must render page_kind='replay'."""
-    import json as _json
-
-    session = {
-        "share_token": "replay-tok",
-        "control_token": "ctrl-tok",
-        "expires_at": __import__("time").time() + 3600,
-    }
-    kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
-    d = _make_default({"SESSION_REGISTRY": kv})
-    req = SimpleNamespace(
-        url="https://x/app/replay/tun-abc?token=replay-tok",
-        headers=SimpleNamespace(get=lambda *a, **k: None),
-    )
-    resp = await d.fetch(req)
-    assert resp.status == 200
-    bootstrap = _json.loads(resp.body.split("id='app-bootstrap'>")[1].split("</script>")[0])  # type: ignore[union-attr]
-    assert bootstrap["page_kind"] == "replay"

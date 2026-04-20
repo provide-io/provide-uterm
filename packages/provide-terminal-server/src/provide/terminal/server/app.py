@@ -563,7 +563,7 @@ def create_server_app(
 
     app.include_router(
         hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
-        dependencies=[Depends(_require_authenticated), Depends(_require_hub_route_authz)],
+        dependencies=[Depends(_require_authenticated)],
     )
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
@@ -571,14 +571,11 @@ def create_server_app(
 
     @app.get("/s/{session_id}")
     async def short_share_url(request: FastAPIRequest, session_id: str) -> object:
-        """Short share URL: /s/{id}?token=... → redirect to /app/{inspect|session}/{id}?token=..."""
+        """Short share URL: /s/{id}?token=... → redirect to /app/session/{id}?token=..."""
         from starlette.responses import RedirectResponse
 
-        tunnel_tokens: dict[str, dict[str, object]] = request.app.state.uterm_tunnel_tokens
-        entry = tunnel_tokens.get(session_id, {})
-        page = str(entry.get("share_page", "session"))
         qs = str(request.url.query)
-        target = f"{config.ui.app_path}/{page}/{session_id}"
+        target = f"{config.ui.app_path}/session/{session_id}"
         if qs:
             target += f"?{qs}"
         return RedirectResponse(url=target, status_code=302)

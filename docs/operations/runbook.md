@@ -18,7 +18,7 @@ This runbook is for incident triage of the hosted terminal server.
 
 1. Confirm service health:
    - `GET /api/health`
-1. Pull request counters:
+2. Pull request counters:
    - `GET /api/metrics`
    - Focus counters:
      - `hijack_conflicts_total`
@@ -26,7 +26,7 @@ This runbook is for incident triage of the hosted terminal server.
      - `ws_disconnect_total`
      - `ws_disconnect_worker_total`
      - `ws_disconnect_browser_total`
-1. Correlate failing calls with request IDs:
+3. Correlate failing calls with request IDs:
    - use `x-request-id` response header from failed requests
    - filter logs with `request_id=<id>`
 
@@ -35,26 +35,25 @@ This runbook is for incident triage of the hosted terminal server.
 ### Auth failures spike
 
 1. Check deployment auth mode/config changes.
-1. Verify JWT issuer/audience and system clock skew.
-1. Confirm cookie policy changes at edge/proxy.
-1. Roll back auth config to last known-good RC if user lockout is ongoing.
+2. Verify JWT issuer/audience and system clock skew.
+3. Confirm cookie policy changes at edge/proxy.
+4. Roll back auth config to last known-good RC if user lockout is ongoing.
 
 ### 5xx increase
 
 1. Identify dominant failing endpoint path.
-1. Check backend connector/session status for affected sessions.
-1. Restart only impacted sessions before considering full service restart.
-1. If regression is tied to latest RC, execute rollback drill procedure.
+2. Check backend connector/session status for affected sessions.
+3. Restart only impacted sessions before considering full service restart.
+4. If regression is tied to latest RC, execute rollback drill procedure.
 
 ### Reconnect instability
 
 1. Run `scripts/failure_injection.py` against staging.
-1. Compare reconnect p95/p99 against SLO targets.
-1. If p99 exceeds target, pause promotion and triage connector lifecycle regressions.
+2. Compare reconnect p95/p99 against SLO targets.
+3. If p99 exceeds target, pause promotion and triage connector lifecycle regressions.
 
 ## Rollback trigger
 
 Execute rollback when either condition is true:
-
 - Sev1/Sev2 incident persists beyond 15 minutes with no clear mitigation.
 - SLO breach persists for 30 minutes after first mitigation attempt.

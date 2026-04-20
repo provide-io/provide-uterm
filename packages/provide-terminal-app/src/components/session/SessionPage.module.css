@@ -21,8 +21,7 @@
 .terminal {
   flex: 1;
   background: var(--bg-terminal);
-  min-height: 0;
-  overflow: hidden;
+  min-height: 400px;
 }
 
 .statusBar {
@@ -33,5 +32,5 @@
   border-top: 0.5px solid var(--border-primary);
   background: var(--bg-secondary);
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }

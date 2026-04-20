@@ -6,7 +6,7 @@ Multiple browsers can observe the same terminal session simultaneously, but they
 
 provide-terminal already broadcasts terminal output to all connected browsers and tracks per-browser roles. The infrastructure for a real-time collaboration layer is already in place. What is missing is the presence model, the annotation data model, and the broadcast mechanism for non-terminal events.
 
-______________________________________________________________________
+---
 
 ## Goals
 
@@ -17,7 +17,7 @@ ______________________________________________________________________
 - Require no changes to workers, the remote host, or the terminal transport.
 - Impose zero overhead on sessions with a single browser (the common case).
 
-______________________________________________________________________
+---
 
 ## Non-Goals
 
@@ -26,7 +26,7 @@ ______________________________________________________________________
 - Collaborative *editing* of terminal input (fan-out is covered in the separate ARD).
 - Cross-session presence (presence is scoped to one worker session).
 
-______________________________________________________________________
+---
 
 ## Architecture
 
@@ -141,7 +141,6 @@ annotations: dict[str, TerminalAnnotation]   # annotation_id → annotation
 ```
 
 A new `broadcast_presence_state(worker_id)` method on `TermHub` sends the current presence snapshot to all connected browsers. It is called on:
-
 - New browser connect
 - Browser disconnect
 - `presence_cursor` update (debounced: max 1 broadcast per 50 ms per session)
@@ -168,14 +167,12 @@ Updates `st.presences[browser_id].cursor_row/col` under `hub._lock` and schedule
 ### `_handle_annotation`
 
 For `annotation_set`:
-
 - Validates `row`, `col`, `text` (length ≤ 280).
 - Rejects if `browser_id` already has ≥ 20 annotations (per-browser cap).
 - Writes to `st.annotations` under `hub._lock`.
 - Broadcasts `annotation_update` to all browsers.
 
 For `annotation_clear`:
-
 - Requires `annotation.browser_id == browser_id` OR `role == "admin"`.
 - Removes from `st.annotations` under `hub._lock`.
 - Broadcasts `annotation_removed`.
@@ -191,7 +188,7 @@ For `annotation_clear`:
 
 When a browser resumes (from `_handle_resume`), the resumed hello includes `browser_id` (restored from the resume token). The browser's presence entry is updated in-place rather than creating a new entry, preserving continuity for other browsers who observed the reconnect.
 
-______________________________________________________________________
+---
 
 ## CF Backend Parity
 
@@ -205,7 +202,7 @@ async def broadcast_chat_message(self, message: dict) -> None: ...
 
 Annotations are persisted in DO SQLite for the session lifetime (cleared on all-browser disconnect via a cleanup trigger).
 
-______________________________________________________________________
+---
 
 ## MCP Integration
 
@@ -216,7 +213,7 @@ Two new MCP tools:
 
 This allows an AI agent to leave visible notes on a terminal session that all connected browsers can see, without disrupting the terminal stream.
 
-______________________________________________________________________
+---
 
 ## Security Considerations
 
@@ -227,7 +224,7 @@ ______________________________________________________________________
 - `browser_id` in presence state is opaque (uuid4 hex). It does not encode or leak `subject_id`.
 - Rate limits on presence and annotation frames prevent a malicious browser from flooding all observers with presence broadcasts.
 
-______________________________________________________________________
+---
 
 ## Testing
 
@@ -240,13 +237,13 @@ ______________________________________________________________________
 - `test_presence_resume.py` — resumed browser retains same `browser_id`; presence entry is updated, not duplicated.
 - `test_presence_rate_limit.py` — 100 `presence_cursor` frames from one browser: ≤ 10 broadcasts reach others.
 
-______________________________________________________________________
+---
 
 ## Open Questions
 
 1. Should annotations survive a snapshot change (coordinates may be stale)? Or should they auto-clear when the snapshot changes?
-1. Should `display_name` be user-configurable (a nickname) or strictly derived from `principal.subject_id`?
-1. Should chat history be replayed to browsers that join mid-session (last N messages), or strictly ephemeral?
-1. Should there be a "pointer" annotation type that tracks the cursor position of a specific browser as an always-on overlay?
-1. Should the MCP agent's chat messages be visually distinguished from human messages in the browser UI?
-1. Is 20 annotations per browser the right cap, or should the cap be per-session (across all browsers)?
+2. Should `display_name` be user-configurable (a nickname) or strictly derived from `principal.subject_id`?
+3. Should chat history be replayed to browsers that join mid-session (last N messages), or strictly ephemeral?
+4. Should there be a "pointer" annotation type that tracks the cursor position of a specific browser as an always-on overlay?
+5. Should the MCP agent's chat messages be visually distinguished from human messages in the browser UI?
+6. Is 20 annotations per browser the right cap, or should the cap be per-session (across all browsers)?

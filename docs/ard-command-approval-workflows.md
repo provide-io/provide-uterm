@@ -6,7 +6,7 @@ In high-stakes environments — production infrastructure, regulated systems, di
 
 provide-terminal holds the hijack input stream: it is the only place in the stack that can intercept a command *before* it reaches the remote host. A policy-driven approval gate at this layer can hold a command for async human approval without any changes to the remote host, the operator's terminal client, or the worker.
 
-______________________________________________________________________
+---
 
 ## Goals
 
@@ -18,7 +18,7 @@ ______________________________________________________________________
 - Support both synchronous (blocking) and asynchronous (webhook callback) approval flows.
 - Degrade gracefully: if the approval service is unreachable, apply a configurable default policy (fail-open or fail-closed).
 
-______________________________________________________________________
+---
 
 ## Non-Goals
 
@@ -26,7 +26,7 @@ ______________________________________________________________________
 - Blocking output from the remote host while an approval is pending (output continues to flow).
 - Modifying or redacting the command (approved as-is, or rejected outright).
 
-______________________________________________________________________
+---
 
 ## Architecture
 
@@ -92,15 +92,14 @@ class CommandApprovalGate:
 ```
 
 On a policy match, `intercept()`:
-
 1. Creates an `ApprovalRequest` with a unique `request_id`.
-1. Pauses the worker (sends `control:pause` via `hub.send_worker`).
-1. Dispatches an approval webhook (HTTP POST) with the request payload.
-1. Broadcasts a `{"type": "approval_pending", "request_id": ..., "command": ..., "expires_at": ...}` message to all connected browsers.
-1. Awaits resolution via a per-request `asyncio.Event`, up to `timeout_s`.
-1. On approval: forwards the command and resumes the worker.
-1. On rejection or timeout: discards the command and resumes the worker.
-1. Emits an `ApprovalEvent` to the sink in all cases.
+2. Pauses the worker (sends `control:pause` via `hub.send_worker`).
+3. Dispatches an approval webhook (HTTP POST) with the request payload.
+4. Broadcasts a `{"type": "approval_pending", "request_id": ..., "command": ..., "expires_at": ...}` message to all connected browsers.
+5. Awaits resolution via a per-request `asyncio.Event`, up to `timeout_s`.
+6. On approval: forwards the command and resumes the worker.
+7. On rejection or timeout: discards the command and resumes the worker.
+8. Emits an `ApprovalEvent` to the sink in all cases.
 
 Non-matching commands return `True` immediately (zero overhead path).
 
@@ -192,7 +191,7 @@ hub = TermHub(
 
 Pending requests are held in an in-memory `dict[str, ApprovalRequest]` with a TTL-based cleanup task (same pattern as `InMemoryResumeStore`). A `SqliteApprovalStore` is provided for the CF backend and for deployments requiring durability across restarts.
 
-______________________________________________________________________
+---
 
 ## CF Backend Parity
 
@@ -204,7 +203,7 @@ async def intercept_input(self, data: str, *, ws: CFWebSocket) -> bool: ...
 
 CF approval callbacks hit the DO's HTTP fetch handler at `POST /api/approvals/{request_id}/approve`.
 
-______________________________________________________________________
+---
 
 ## Security Considerations
 
@@ -214,7 +213,7 @@ ______________________________________________________________________
 - The approval webhook URL must use HTTPS. The gate validates the URL scheme at startup.
 - Approval decisions are idempotent — a double-approve is a 409 Conflict, not a double-forward.
 
-______________________________________________________________________
+---
 
 ## Testing
 
@@ -226,12 +225,12 @@ ______________________________________________________________________
 - `test_approval_gate_service_unreachable.py` — webhook fails, `default_action` applied, circuit breaker triggered.
 - `test_approval_browser_notify.py` — `approval_pending` and `approval_resolved` messages reach all connected browsers.
 
-______________________________________________________________________
+---
 
 ## Open Questions
 
 1. Should pending approvals survive a worker disconnect and re-attach on reconnect, or be auto-cancelled?
-1. Should the held command be shown to the operator's browser in a "waiting for approval" UI state, or obscured?
-1. Should approvers be resolvable from the session's `Principal` registry, or externally (LDAP, Slack users)?
-1. Should there be a maximum number of concurrent pending approvals per session (to prevent DoS via approval queue flooding)?
-1. Is there a "self-approval" escape hatch for break-glass situations, and how is it audited?
+2. Should the held command be shown to the operator's browser in a "waiting for approval" UI state, or obscured?
+3. Should approvers be resolvable from the session's `Principal` registry, or externally (LDAP, Slack users)?
+4. Should there be a maximum number of concurrent pending approvals per session (to prevent DoS via approval queue flooding)?
+5. Is there a "self-approval" escape hatch for break-glass situations, and how is it audited?

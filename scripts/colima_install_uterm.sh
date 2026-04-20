@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # colima_install_uterm.sh
@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-PTY_PKG="/REDACTED_ABS_PATH"
+PTY_PKG="/Users/tim/code/gh/provide-io/provide-terminal/packages/provide-terminal-platform"
 CAPTURE_SRC="$PTY_PKG/native/capture"
 PAM_SRC="$PTY_PKG/native/pam_uterm"
 # Socket inside the Colima VM (/run is root-owned; /tmp is world-writable)
@@ -64,7 +64,7 @@ _run "PAM_ARCH_DIR=\$(ls -d /lib/aarch64-linux-gnu/security /lib/x86_64-linux-gn
 echo "==> Verifying .so files are valid ELF..."
 _run "readelf -h $CAP_LIB | grep 'Type:' && readelf -h $PAM_MODULE | grep 'Type:'"
 
-UTERM_PKG="/REDACTED_ABS_PATH"
+UTERM_PKG="/Users/tim/code/gh/provide-io/provide-terminal/packages/provide-terminal"
 
 echo "==> Installing provide-terminal-platform Python package into Colima system Python..."
 _run "python3 -m pip install -q --break-system-packages -e $PTY_PKG"

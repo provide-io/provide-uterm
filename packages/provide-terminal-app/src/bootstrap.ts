@@ -1,11 +1,11 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
 import type { AppBootstrap } from "./api/types";
 
-const VALID_PAGE_KINDS = new Set(["dashboard", "session", "operator", "replay", "connect", "inspect"]);
+const VALID_PAGE_KINDS = new Set(["dashboard", "session", "operator", "replay", "connect"]);
 
 export function readBootstrap(): AppBootstrap {
   const script = document.getElementById("app-bootstrap");

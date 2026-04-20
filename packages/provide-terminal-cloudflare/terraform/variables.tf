@@ -12,16 +12,11 @@ variable "cloudflare_account_id" {
 variable "worker_name" {
   description = "Name of the Cloudflare Worker (must match wrangler.toml `name`)."
   type        = string
-  default     = "provide-terminal-cloudflare"
+  default     = "undef-terminal-cloudflare"
 }
 
 variable "environment" {
   description = "Deployment environment label (e.g. production, staging)."
   type        = string
   default     = "production"
-}
-
-variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for neurotic.org (found in domain settings)."
-  type        = string
 }

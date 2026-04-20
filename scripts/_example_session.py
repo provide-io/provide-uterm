@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 """Session state and worker simulation for example_server.py."""
 
 from __future__ import annotations
@@ -14,14 +11,14 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
+from provide.terminal.control_stream import (
+    ControlStreamDecoder,
+    ControlStreamProtocolError,
     DataChunk,
     encode_control,
     encode_data,
 )
+from provide.terminal.hijack.hub import TermHub
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +400,7 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
                 attempt = 0
                 session.connected = True
                 session.outbound_queue = asyncio.Queue()
-                decoder = ControlChannelDecoder()
+                decoder = ControlStreamDecoder()
                 logger.info("demo_session_connected worker_id=%s", worker_id)
 
                 await ws.send(_encode_frame(_worker_hello(session)))
@@ -433,7 +430,7 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
 
                     try:
                         events = decoder.feed(raw)
-                    except ControlChannelProtocolError:
+                    except ControlStreamProtocolError:
                         continue
 
                     for event in events:

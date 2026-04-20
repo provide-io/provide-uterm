@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 from __future__ import annotations
 
 from provide.terminal.cloudflare.entry import _extract_worker_id

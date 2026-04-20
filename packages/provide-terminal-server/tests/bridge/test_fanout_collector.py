@@ -145,30 +145,3 @@ async def test_collector_ignores_non_term_events() -> None:
     await task
 
     assert delta == "captured"
-
-
-async def test_collector_skips_empty_payload_events() -> None:
-    """Term with empty data and snapshot with empty screen must not crash
-    or accumulate; both fall through to the loop's next iteration.
-
-    Exercises the falsy-branch paths in _run_collect: term with empty data
-    is filtered by ``if text:`` and snapshot with empty screen is filtered
-    by ``if screen:``.  Without this, the collector partial-branch coverage
-    would sit at 96%.
-    """
-    hub = await _make_hub_with_worker("w1")
-    collector = OutputCollector()
-
-    async def _emit() -> None:
-        await asyncio.sleep(0.05)
-        # Empty payload variants — must be skipped without contributing output.
-        await hub.append_event("w1", "term", {"data": ""})
-        await hub.append_event("w1", "snapshot", {"screen": ""})
-        # Then a real term event so the collector has something to return.
-        await hub.append_event("w1", "term", {"data": "real"})
-
-    task = asyncio.create_task(_emit())
-    delta, _elapsed = await collector.collect(hub, "w1", quiesce_ms=300, max_ms=5_000)
-    await task
-
-    assert delta == "real"

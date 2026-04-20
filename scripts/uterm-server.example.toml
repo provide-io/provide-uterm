@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 [server]
 host = "127.0.0.1"
 port = 8780
@@ -23,8 +20,8 @@ enabled_by_default = false
 directory = ".uterm-recordings"
 
 [[sessions]]
-session_id = "provide-shell"
-display_name = "Provide Shell"
+session_id = "demo-session"
+display_name = "Interactive Demo Session"
 connector_type = "shell"
 input_mode = "open"
 auto_start = true

@@ -1,6 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026 provide.io llc. All rights reserved.
-# SPDX-License-Identifier: AGPL-3.0-or-later
-
 """Playwright proxy test: two browser windows connected to the same CF DO session.
 
 Verifies the core proxy claim: a raw worker WS sends a snapshot to the CF DO,
@@ -58,24 +55,15 @@ _OPEN_WS_JS = """\
         'overflow-y:auto\">(waiting for frames)</pre>';
 
     window.__wsFrames = [];
-    // Strip control-channel framing: DLE(0x10) STX(0x02) {8 hex chars}:{json}
-    function decodeFrame(raw) {
-        if (raw.charCodeAt(0) === 0x10 && raw.charCodeAt(1) === 0x02) {
-            var colon = raw.indexOf(':', 2);
-            if (colon !== -1) return raw.slice(colon + 1);
-        }
-        return raw;
-    }
     var ws = new WebSocket(wsUrl);
     ws.onopen = function() {
         document.getElementById('status').textContent = 'WS open \u2014 waiting for snapshot\u2026';
     };
     ws.onmessage = function(e) {
         if (typeof e.data !== 'string') return;
-        var raw = decodeFrame(e.data);
-        window.__wsFrames.push(raw);
+        window.__wsFrames.push(e.data);
         try {
-            var m = JSON.parse(raw);
+            var m = JSON.parse(e.data);
             var out = document.getElementById('out');
             if (m.type === 'snapshot') {
                 document.getElementById('status').textContent =
