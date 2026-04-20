@@ -9,3 +9,7 @@ License: AGPL-3.0-or-later
 Files: .tmp-*/* test-results/* .playwright-mcp/* .uterm-recordings*/**
 Copyright: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 License: AGPL-3.0-or-later
+
+Files: packages/provide-terminal-cloudflare/python_modules/**
+Copyright: Their respective upstream authors
+License: Apache-2.0 OR MIT

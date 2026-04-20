@@ -25,7 +25,7 @@ _vite_manifest_loaded = False
 def _hijack_js_version() -> str:
     """Return a short cache-busting token based on hijack.js mtime."""
     try:
-        path = importlib.resources.files("provide.terminal") / "frontend" / "hijack.js"
+        path = importlib.resources.files("provide.terminal.server") / "frontend" / "hijack.js"
         if path.is_file():
             return format(int(path.stat().st_mtime_ns), "x")[-8:]  # type: ignore[attr-defined]
     except Exception:  # noqa: S110
@@ -44,7 +44,7 @@ def _read_vite_manifest() -> dict[str, object] | None:
         return _vite_manifest
     _vite_manifest_loaded = True
     try:
-        manifest_path = importlib.resources.files("provide.terminal") / "frontend" / ".vite" / "manifest.json"
+        manifest_path = importlib.resources.files("provide.terminal.server") / "frontend" / ".vite" / "manifest.json"
         if manifest_path.is_file():
             raw = manifest_path.read_text(encoding="utf-8")
             _vite_manifest = json.loads(raw)

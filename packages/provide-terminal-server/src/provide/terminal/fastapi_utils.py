@@ -269,10 +269,10 @@ def mount_terminal_ui(
     """
     from starlette.staticfiles import StaticFiles
 
-    frontend_path = Path(__file__).parent / "frontend"
+    frontend_path = Path(__file__).parent / "server" / "frontend"
     if not frontend_path.is_dir():
         raise RuntimeError(
             f"terminal UI assets not found at {frontend_path} — "
-            "is the package installed correctly? (try: pip install 'provide-terminal[websocket]')"
+            "is the package installed correctly? (try: pip install provide-terminal-server)"
         )
     app.mount(path, StaticFiles(directory=frontend_path, html=True), name="terminal-ui")

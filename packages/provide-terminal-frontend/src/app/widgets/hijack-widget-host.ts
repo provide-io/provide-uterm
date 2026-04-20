@@ -22,6 +22,7 @@ export function mountHijackWidget(
 
   // DeckMux state — lazily initialised on first presence_sync
   let deckMux: DeckMux | null = null;
+  let myUserId: string | null = null;
   const presenceUsers = new Map<string, { name: string; color: string }>();
 
   const config: {
@@ -50,7 +51,10 @@ export function mountHijackWidget(
         }
         const users = (msg.users as Array<Record<string, unknown>> | undefined) ?? [];
         const myUser = users[users.length - 1];
-        if (myUser) deckMux.handleMessage({ type: "dm_hello", user_id: myUser.user_id });
+        if (myUser && !myUserId) {
+          myUserId = myUser.user_id as string;
+          deckMux.handleMessage({ type: "dm_hello", user_id: myUser.user_id });
+        }
         for (const u of users) {
           const uid = u.user_id as string | undefined;
           if (uid) presenceUsers.set(uid, { name: String(u.name ?? uid), color: String(u.color ?? "#888") });

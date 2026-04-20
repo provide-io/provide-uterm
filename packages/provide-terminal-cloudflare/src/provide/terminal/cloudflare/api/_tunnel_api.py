@@ -76,12 +76,15 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
         "share_token": share_token,
         "control_token": control_token,
         "issued_ip": str(getattr(request, "headers", {}).get("CF-Connecting-IP") or ""),
+        "share_page": "inspect" if tunnel_type == "http" else "session",
     }
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is not None:
         await kv.put(f"session:{tunnel_id}", json.dumps(entry))
 
     base_url = str(getattr(request, "url", "")).split("/api/")[0]
+    # Mirrored in server/routes/api.py — keep both in sync.
+    share_page = "inspect" if tunnel_type == "http" else "session"
     return json_response(
         {
             "tunnel_id": tunnel_id,
@@ -89,7 +92,7 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
             "tunnel_type": tunnel_type,
             "ws_endpoint": f"/tunnel/{tunnel_id}",
             "worker_token": worker_token,
-            "share_url": f"{base_url}/s/{tunnel_id}?token={share_token}",
+            "share_url": f"{base_url}/app/{share_page}/{tunnel_id}?token={share_token}",
             "control_url": f"{base_url}/app/operator/{tunnel_id}?token={control_token}",
             "expires_at": expires_at,
         }
@@ -137,6 +140,7 @@ async def handle_tunnel_revoke_tokens(
     entry["worker_token"] = None
     entry["share_token"] = None
     entry["control_token"] = None
+    entry["revoked"] = True
     await kv.put(f"session:{tunnel_id}", json.dumps(entry))
     return json_response({"ok": True, "session_id": tunnel_id})
 
@@ -175,6 +179,11 @@ async def handle_tunnel_rotate_tokens(
     entry["share_token"] = new_share
     entry["control_token"] = new_control
     entry["expires_at"] = expires_at
+    entry.pop("revoked", None)  # rotation re-enables a revoked tunnel
+    tunnel_type = str(entry.get("tunnel_type") or "terminal")
+    # Mirrored in server/routes/api.py — keep both in sync.
+    share_page = "inspect" if tunnel_type == "http" else "session"
+    entry["share_page"] = share_page
     await kv.put(f"session:{tunnel_id}", json.dumps(entry))
 
     base_url = str(getattr(request, "url", "")).split("/api/")[0]
@@ -183,15 +192,22 @@ async def handle_tunnel_rotate_tokens(
             "tunnel_id": tunnel_id,
             "ws_endpoint": f"/tunnel/{tunnel_id}",
             "worker_token": new_worker,
-            "share_url": f"{base_url}/s/{tunnel_id}?token={new_share}",
+            "share_url": f"{base_url}/app/{share_page}/{tunnel_id}?token={new_share}",
             "control_url": f"{base_url}/app/operator/{tunnel_id}?token={new_control}",
             "expires_at": expires_at,
         }
     )
 
 
-async def resolve_share_context(request: object, env: object, tunnel_id: str) -> tuple[str, str] | None:
-    """Return ``(page_kind, share_role)`` for a valid share token."""
+async def resolve_share_context(
+    request: object, env: object, tunnel_id: str, config: object = None
+) -> tuple[str, str] | None:
+    """Return ``(page_kind, share_role)`` for a valid share token.
+
+    ``config`` is optional: when supplied, ``tunnel_token_transport`` and
+    ``tunnel_ip_binding`` are enforced.  Without it (e.g. legacy call-sites
+    in tests) the defaults are ``transport="both"`` and ``ip_binding=False``.
+    """
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
         return None
@@ -203,17 +219,31 @@ async def resolve_share_context(request: object, env: object, tunnel_id: str) ->
     except (json.JSONDecodeError, TypeError):
         return None
 
+    # Explicit revocation: handle_tunnel_revoke_tokens sets this flag.  Without
+    # the check the implicit-viewer branch below would grant access when both
+    # tokens are None (the post-revocation state).
+    if session.get("revoked"):
+        return None
+
     share_tok = session.get("share_token")
     control_tok = session.get("control_token")
 
+    # Effective transport mode and IP-binding from config (defaults: both / off).
+    transport = "both"
+    ip_binding = False
+    if config is not None:
+        transport = str(getattr(config, "tunnel_token_transport", "both"))
+        ip_binding = bool(getattr(config, "tunnel_ip_binding", False))
+
     provided = None
-    try:
-        qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-        provided = (qs.get("token", [None]) or [None])[0]
-    except Exception:  # noqa: S110
-        pass
+    if transport != "cookie":  # "query" or "both": try query string first
+        try:
+            qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
+            provided = (qs.get("token", [None]) or [None])[0]
+        except Exception:  # noqa: S110
+            pass
     # Cookie fallback: uterm_tunnel_{tunnel_id}
-    if not provided:
+    if not provided and transport != "query":  # "cookie" or "both"
         try:
             from http.cookies import SimpleCookie
 
@@ -243,6 +273,18 @@ async def resolve_share_context(request: object, env: object, tunnel_id: str) ->
 
     if role is None:
         return None
+
+    # IP binding: a valid token from the wrong origin IP is rejected.
+    if ip_binding:
+        issued_ip = session.get("issued_ip") or ""
+        client_ip = ""
+        try:
+            headers = getattr(request, "headers", {})
+            client_ip = str(headers.get("CF-Connecting-IP") or headers.get("cf-connecting-ip") or "")
+        except Exception:  # noqa: S110
+            pass
+        if issued_ip and client_ip != issued_ip:
+            return None
 
     return ("operator" if role == "operator" else "session", role)
 

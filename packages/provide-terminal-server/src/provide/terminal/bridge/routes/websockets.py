@@ -416,7 +416,8 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             await hub.touch_activity(worker_id)
             _dm_disconnect: Any = getattr(hub, "deckmux_on_browser_disconnect", None)
             if _dm_disconnect is not None:
-                await _dm_disconnect(worker_id, websocket)
+                _dm_disc_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+                await _dm_disconnect(worker_id, websocket, principal=_dm_disc_principal)
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task

@@ -7,6 +7,11 @@
 from __future__ import annotations
 
 from provide.terminal.deckmux._edge import viewport_to_edge_range
+from provide.terminal.deckmux._identity import (
+    identity_as_principal,
+    parse_identity_frame,
+    presence_from_identity,
+)
 from provide.terminal.deckmux._names import generate_color, generate_name
 from provide.terminal.deckmux._presence import PresenceStore, UserPresence
 from provide.terminal.deckmux._protocol import (
@@ -29,5 +34,8 @@ __all__ = [
     "UserPresence",
     "generate_color",
     "generate_name",
+    "identity_as_principal",
+    "parse_identity_frame",
+    "presence_from_identity",
     "viewport_to_edge_range",
 ]

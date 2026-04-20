@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -160,6 +161,20 @@ class TestSetupAuth:
             os.environ.pop("UTERM_MANAGER_API_TOKEN", None)
             setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN")
         app.add_middleware.assert_not_called()
+
+    def test_no_token_emits_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """L2: setup_auth must log a warning at WARNING level when no token is configured."""
+        app = MagicMock()
+        with (
+            patch.dict(os.environ, {}, clear=False),
+            caplog.at_level(logging.WARNING, logger="provide.terminal.manager.auth"),
+        ):
+            os.environ.pop("UTERM_MANAGER_API_TOKEN", None)
+            setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN")
+        assert any(
+            "api_token_auth_disabled" in r.message or "UTERM_MANAGER_API_TOKEN" in r.message
+            for r in caplog.records
+        ), f"Expected a warning about missing token, got: {[r.message for r in caplog.records]}"
 
     def test_with_token_adds_middleware(self):
         app = MagicMock()

@@ -11,7 +11,7 @@ dynamic = ["version"]
 description = "Client libraries, transports, and AI/MCP integration for provide-terminal"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
-dependencies = []
+dependencies = ["provide-terminal>=0.4.0"]
 
 [project.optional-dependencies]
 http = ["httpx>=0.27"]
@@ -40,6 +40,9 @@ version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"provide.terminal" = ["py.typed"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

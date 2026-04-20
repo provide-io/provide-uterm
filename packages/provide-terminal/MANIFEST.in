@@ -1,5 +1,3 @@
-recursive-include src/provide/terminal/frontend *
-recursive-include packages/provide-terminal-frontend/src *
 prune .uterm-recordings
 prune .uterm-recordings-proof
 prune .tmp-proof-reel

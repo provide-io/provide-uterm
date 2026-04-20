@@ -40,7 +40,7 @@ def read_asset_text(path: str) -> str | None:
     except OSError:
         pass
     try:
-        frontend_root = importlib.resources.files("provide.terminal") / "frontend"
+        frontend_root = importlib.resources.files("provide.terminal.server") / "frontend"
         target = frontend_root / rel
         if target.is_file():
             return target.read_text(encoding="utf-8")
@@ -77,7 +77,7 @@ def serve_asset(path: str) -> Response:
 
     # 3. Fall back to the main provide-terminal package (installed alongside this package).
     try:
-        frontend_root = importlib.resources.files("provide.terminal") / "frontend"
+        frontend_root = importlib.resources.files("provide.terminal.server") / "frontend"
     except ModuleNotFoundError:
         return Response("asset package unavailable", status=404, headers={"content-type": "text/plain"})
     target = frontend_root / rel

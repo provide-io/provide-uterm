@@ -14,13 +14,12 @@ from provide.terminal.control_channel import encode_control, encode_data
 from provide.terminal.gateway._gateway import (
     _handle_ws_control,
     _handle_ws_control_frame,
-    _make_no_auth_server_class,
     _normalize_crlf,
     _require_websockets,
     _skip_subneg_sequence,
     _strip_iac,
 )
-
+from provide.terminal.gateway._ssh_handler import _make_no_auth_server_class
 
 # ---------------------------------------------------------------------------
 # CRLF normalization
@@ -266,7 +265,15 @@ class TestMakeNoAuthServerClass:
         cls = _make_no_auth_server_class()
         assert issubclass(cls, asyncssh.SSHServer)
 
-    def test_begin_auth_returns_false(self) -> None:
+    async def test_begin_auth_requires_auth_but_accepts_all(self) -> None:
+        """begin_auth returns True so asyncssh exercises the pubkey handler,
+        but validate_public_key / validate_password accept unconditionally so
+        the gate behaves no-auth to callers while making the offered pubkey
+        available for per-fingerprint token routing."""
         cls = _make_no_auth_server_class()
         server = cls()
-        assert server.begin_auth("anyuser") is False
+        assert server.begin_auth("anyuser") is True
+        assert await server.validate_public_key("anyuser", object()) is True
+        assert server.validate_password("anyuser", "anything") is True
+        assert server.public_key_auth_supported() is True
+        assert server.password_auth_supported() is True

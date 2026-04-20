@@ -81,7 +81,7 @@ def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
     app = FastAPI()
     app.include_router(hub.create_router())
 
-    frontend_path = importlib.resources.files("provide.terminal") / "frontend"
+    frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
     app.mount("/ui", StaticFiles(directory=str(frontend_path), html=True), name="ui")
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)

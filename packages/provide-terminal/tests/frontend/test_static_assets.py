@@ -10,7 +10,17 @@ from pathlib import Path
 
 
 def _frontend_path(name: str) -> Path:
-    return Path(__file__).resolve().parents[2] / "src" / "provide" / "terminal" / "frontend" / name
+    # Frontend assets live in provide-terminal-server after packaging restructure
+    return (
+        Path(__file__).resolve().parents[3]
+        / "provide-terminal-server"
+        / "src"
+        / "provide"
+        / "terminal"
+        / "server"
+        / "frontend"
+        / name
+    )
 
 
 def test_terminal_html_uses_external_page_assets_only() -> None:

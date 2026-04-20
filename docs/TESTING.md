@@ -12,6 +12,13 @@ Run the standard test suite (excludes slow/memory tests):
 uv run pytest
 ```
 
+> **Note:** The root suite includes Cloudflare Worker tests. The CF vendor tree
+> (`packages/provide-terminal-cloudflare/python_modules/`) is `.gitignore`d and
+> not present on a clean checkout — the vendor guard test skips automatically in
+> that case. To run the full CF suite including the vendor guard, initialise the
+> CF working directory first (`pywrangler sync` from
+> `packages/provide-terminal-cloudflare/`).
+
 Or use the pytest gate script (recommended for local development):
 
 ```bash
@@ -36,7 +43,7 @@ Tests are organized by markers, which allow selective execution:
   - Note: Requires `playwright install chromium` first
 
 - **`mutant`** - Mutation testing and mutmut-focused tests
-  - Run with: `uv run pytest -m mutant` or `uv run python scripts/run_mutation_gate.py`
+  - Run with: `uv run pytest -m mutant` or `uv run python scripts/run_mutation_gate.py --min-mutation-score 100`
   - Files: `tests_mutation/`, mutation-specific test files
   - Time: 5-15 minutes per test
   - Coverage: Validates test suite quality by checking test failure on code mutations
@@ -177,13 +184,13 @@ Mutation testing validates test quality by introducing small code changes (mutat
 For changed files (recommended for PRs):
 
 ```bash
-uv run python scripts/run_mutation_gate.py --changed-only
+uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 ```
 
 For full suite:
 
 ```bash
-uv run python scripts/run_mutation_gate.py
+uv run python scripts/run_mutation_gate.py --min-mutation-score 100
 ```
 
 ### Mutation Test Configuration
@@ -204,7 +211,7 @@ Before pushing or creating a PR:
 uv run python scripts/run_pytest_gate.py -q
 
 # 2. Run mutation tests on changed files (validates test quality)
-uv run python scripts/run_mutation_gate.py --changed-only
+uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 
 # 3. Run memray tests locally (optional, ~15-30 min)
 MEMRAY_UPDATE_BASELINE=1 uv run pytest tests/memray/ -m memray -v --no-cov

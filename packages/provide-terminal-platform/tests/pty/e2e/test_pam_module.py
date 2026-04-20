@@ -1,5 +1,7 @@
+#
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+#
 """
 E2E tests for pam_uterm.so — the C PAM session module.
 

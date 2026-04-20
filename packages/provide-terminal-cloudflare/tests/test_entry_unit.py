@@ -521,3 +521,52 @@ async def test_resolve_principal_id_cf_access_service_token() -> None:
     )
     result = await _resolve_principal_id(req, config)
     assert result == f"service:{client_id}"
+
+
+# ---------------------------------------------------------------------------
+# F3: SPA page_kind honors the URL path kind (inspect / replay)
+# ---------------------------------------------------------------------------
+
+
+async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
+    """F3: /app/inspect/{id}?token=... must render page_kind='inspect', not 'session'."""
+    import json as _json
+
+    from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+    session = {
+        "share_token": "shared-tok",
+        "control_token": "ctrl-tok",
+        "expires_at": __import__("time").time() + 3600,
+    }
+    kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
+    d = _make_default({"SESSION_REGISTRY": kv})
+    req = SimpleNamespace(
+        url="https://x/app/inspect/tun-abc?token=shared-tok",
+        headers=SimpleNamespace(get=lambda *a, **k: None),
+    )
+    resp = await d.fetch(req)
+    assert resp.status == 200
+    bootstrap = _json.loads(resp.body.split("id='app-bootstrap'>")[1].split("</script>")[0])  # type: ignore[union-attr]
+    assert bootstrap["page_kind"] == "inspect"
+
+
+async def test_replay_page_with_valid_share_token_gets_replay_kind() -> None:
+    """F3: /app/replay/{id}?token=... must render page_kind='replay'."""
+    import json as _json
+
+    session = {
+        "share_token": "replay-tok",
+        "control_token": "ctrl-tok",
+        "expires_at": __import__("time").time() + 3600,
+    }
+    kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
+    d = _make_default({"SESSION_REGISTRY": kv})
+    req = SimpleNamespace(
+        url="https://x/app/replay/tun-abc?token=replay-tok",
+        headers=SimpleNamespace(get=lambda *a, **k: None),
+    )
+    resp = await d.fetch(req)
+    assert resp.status == 200
+    bootstrap = _json.loads(resp.body.split("id='app-bootstrap'>")[1].split("</script>")[0])  # type: ignore[union-attr]
+    assert bootstrap["page_kind"] == "replay"

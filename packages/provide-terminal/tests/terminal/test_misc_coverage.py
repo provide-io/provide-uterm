@@ -33,32 +33,7 @@ class TestProtocols:
 
 
 # ---------------------------------------------------------------------------
-# 2. __init__.py lines 91-93 — _SERVER_EXPORTS branch
-# ---------------------------------------------------------------------------
-
-
-class TestInitServerExports:
-    def test_create_server_app_accessible_via_init(self) -> None:
-        import provide.terminal as ut
-
-        fn = ut.create_server_app
-        assert callable(fn)
-
-    def test_load_server_config_accessible_via_init(self) -> None:
-        import provide.terminal as ut
-
-        fn = ut.load_server_config
-        assert callable(fn)
-
-    def test_default_server_config_accessible_via_init(self) -> None:
-        import provide.terminal as ut
-
-        fn = ut.default_server_config
-        assert callable(fn)
-
-
-# ---------------------------------------------------------------------------
-# 3. screen.py — except re.error branches
+# 2. screen.py — except re.error branches
 # ---------------------------------------------------------------------------
 
 
@@ -357,22 +332,3 @@ class TestAnsiCoverage:
 #  TestServerConfigRelativeDir, TestRegistryRuntimeStop, TestIoBranches
 #  moved to test_misc_coverage_2.py)
 
-
-class TestLazySessionExports:
-    """Test lazy import of TelnetSession / connect_telnet via __getattr__ (lines 107-109)."""
-
-    def test_lazy_import_telnet_session(self) -> None:
-        import provide.terminal
-
-        cls = provide.terminal.TelnetSession
-        from provide.terminal.telnet_session import TelnetSession
-
-        assert cls is TelnetSession
-
-    def test_lazy_import_connect_telnet(self) -> None:
-        import provide.terminal
-
-        fn = provide.terminal.connect_telnet
-        from provide.terminal.telnet_session import connect_telnet
-
-        assert fn is connect_telnet

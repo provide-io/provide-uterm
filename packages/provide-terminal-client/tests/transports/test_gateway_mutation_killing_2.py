@@ -109,6 +109,7 @@ class TestWsToTcpMutationKilling:
         from asyncio import StreamWriter
         from typing import cast
 
+        kwargs.setdefault("token_holder", [None])
         await _ws_to_tcp(_async_iter(messages), cast("StreamWriter", MockWriter()), **kwargs)
         return b"".join(written)
 
@@ -161,7 +162,7 @@ class TestWsToTcpMutationKilling:
         from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(["hello"]), cast("StreamWriter", MockWriter()))
+        await _ws_to_tcp(_async_iter(["hello"]), cast("StreamWriter", MockWriter()), token_holder=[None])
         assert len(drains) >= 1
 
 

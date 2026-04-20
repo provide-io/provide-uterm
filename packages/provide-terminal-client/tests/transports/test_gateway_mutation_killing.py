@@ -2,16 +2,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for gateway/_gateway.py and gateway/_colors.py."""
+"""Mutation-killing tests for gateway/_gateway.py and provide.terminal.colors."""
 
 from __future__ import annotations
 
-from provide.terminal.gateway._colors import (
-    _apply_color_mode,
-    _clamp8,
-    _rgb_to_16_index,
-    _rgb_to_256,
+from provide.terminal.colors import (
+    apply_color_mode,
+    rgb_to_16_index,
+    rgb_to_256,
 )
+from provide.terminal.colors.rgb import _clamp8
 from provide.terminal.gateway._gateway import (
     _strip_iac,
 )
@@ -76,7 +76,7 @@ class TestClamp8MutationKilling:
 
 
 # ---------------------------------------------------------------------------
-# _rgb_to_256 mutation killers
+# rgb_to_256 mutation killers
 # mutmut_3: r <= 8  (fails when r==8, which maps to 16 in orig but to grayscale ramp in mutant)
 # mutmut_4: r < 9   (same issue at r==8 boundary — 8<9=True so would still return 16)
 # mutmut_6: r >= 248 (fails for r==248, which should go to grayscale ramp but mutant returns 231)
@@ -89,54 +89,54 @@ class TestRgbTo256MutationKilling:
         """r=g=b=8: r < 8 is False so falls through to grayscale ramp.
         mutmut_3 (r<=8) would return 16. mutmut_4 (r<9) would return 16.
         Original: 232 + int((8-8)/247*24) = 232. Not 16."""
-        result = _rgb_to_256(8, 8, 8)
+        result = rgb_to_256(8, 8, 8)
         assert result == 232  # grayscale ramp, not 16
         assert result != 16
 
     def test_gray_below_8_returns_16(self):
         """r=g=b=7: r < 8 is True → returns 16."""
-        assert _rgb_to_256(7, 7, 7) == 16
+        assert rgb_to_256(7, 7, 7) == 16
 
     def test_gray_exactly_248_in_grayscale_ramp(self):
         """r=g=b=248: r > 248 is False in original → uses grayscale ramp formula.
         mutmut_6 (r>=248) would return 231."""
-        result = _rgb_to_256(248, 248, 248)
+        result = rgb_to_256(248, 248, 248)
         # Original: 232 + int((248-8)/247*24) = 232 + int(240/247*24) = 232 + int(23.3..) = 232+23 = 255
         assert result == 255
         assert result != 231
 
     def test_gray_above_248_returns_231(self):
         """r=g=b=249: r > 248 is True → returns 231."""
-        assert _rgb_to_256(249, 249, 249) == 231
+        assert rgb_to_256(249, 249, 249) == 231
 
     def test_gray_exactly_249_returns_231(self):
         """r=g=b=249: boundary test. mutmut_7 (r>249) would send to grayscale ramp."""
-        assert _rgb_to_256(249, 249, 249) == 231
+        assert rgb_to_256(249, 249, 249) == 231
 
     def test_gray_exactly_248_not_231(self):
         """Confirm 248 is NOT 231 (grayscale ramp). Kills mutmut_6."""
-        assert _rgb_to_256(248, 248, 248) != 231
+        assert rgb_to_256(248, 248, 248) != 231
 
     def test_non_gray_uses_color_cube(self):
         """Non-equal r,g,b uses the color cube formula, returns 16+36*rc+6*gc+bc."""
-        result = _rgb_to_256(0, 0, 0)
+        result = rgb_to_256(0, 0, 0)
         assert result == 16
 
     def test_non_gray_pure_red(self):
         """(255, 0, 0) → rc=5, gc=0, bc=0 → 16+36*5=196."""
-        assert _rgb_to_256(255, 0, 0) == 196
+        assert rgb_to_256(255, 0, 0) == 196
 
     def test_non_gray_pure_blue(self):
         """(0, 0, 255) → rc=0, gc=0, bc=5 → 16+5=21."""
-        assert _rgb_to_256(0, 0, 255) == 21
+        assert rgb_to_256(0, 0, 255) == 21
 
     def test_non_gray_pure_green(self):
         """(0, 255, 0) → rc=0, gc=5, bc=0 → 16+30=46."""
-        assert _rgb_to_256(0, 255, 0) == 46
+        assert rgb_to_256(0, 255, 0) == 46
 
 
 # ---------------------------------------------------------------------------
-# _rgb_to_16_index mutation killers
+# rgb_to_16_index mutation killers
 # The function computes minimum Euclidean distance from 16 ANSI palette entries.
 # Mutations affect the distance formula components (rr-tr)*(rr-tr) etc.
 # Key: test with known colors that map to specific indices.
@@ -146,50 +146,50 @@ class TestRgbTo256MutationKilling:
 class TestRgbTo16IndexMutationKilling:
     def test_black_maps_to_index_0(self):
         """(0,0,0) → index 0 (black)."""
-        assert _rgb_to_16_index(0, 0, 0) == 0
+        assert rgb_to_16_index(0, 0, 0) == 0
 
     def test_pure_red_maps_to_index_4(self):
         """(205, 0, 0) → index 4 (dark red). Distance to palette[4]=(205,0,0) is 0."""
-        assert _rgb_to_16_index(205, 0, 0) == 4
+        assert rgb_to_16_index(205, 0, 0) == 4
 
     def test_pure_green_maps_to_index_2(self):
         """(0, 205, 0) → index 2 (dark green). Distance to palette[2]=(0,205,0) is 0."""
-        assert _rgb_to_16_index(0, 205, 0) == 2
+        assert rgb_to_16_index(0, 205, 0) == 2
 
     def test_pure_blue_maps_to_index_1(self):
         """(0, 0, 205) → index 1 (dark blue). Distance to palette[1]=(0,0,205) is 0."""
-        assert _rgb_to_16_index(0, 0, 205) == 1
+        assert rgb_to_16_index(0, 0, 205) == 1
 
     def test_pure_white_maps_to_index_15(self):
         """(255, 255, 255) → index 15 (bright white). palette[15]=(255,255,255)."""
-        assert _rgb_to_16_index(255, 255, 255) == 15
+        assert rgb_to_16_index(255, 255, 255) == 15
 
     def test_bright_cyan_maps_to_index_11(self):
         """(92, 255, 255) → index 11. palette[11]=(92,255,255)."""
-        assert _rgb_to_16_index(92, 255, 255) == 11
+        assert rgb_to_16_index(92, 255, 255) == 11
 
     def test_bright_magenta_maps_to_index_13(self):
         """(255, 92, 255) → index 13. palette[13]=(255,92,255)."""
-        assert _rgb_to_16_index(255, 92, 255) == 13
+        assert rgb_to_16_index(255, 92, 255) == 13
 
     def test_bright_yellow_maps_to_index_14(self):
         """(255, 255, 92) → index 14. palette[14]=(255,255,92)."""
-        assert _rgb_to_16_index(255, 255, 92) == 14
+        assert rgb_to_16_index(255, 255, 92) == 14
 
     def test_dark_gray_maps_to_index_8(self):
         """(127, 127, 127) → index 8 (dark gray). palette[8]=(127,127,127)."""
-        assert _rgb_to_16_index(127, 127, 127) == 8
+        assert rgb_to_16_index(127, 127, 127) == 8
 
     def test_distance_formula_all_components_matter(self):
         """A color close to palette[4]=(205,0,0) vs palette[6]=(205,205,0).
         (200, 1, 1) is closer to (205,0,0) than to (205,205,0)."""
-        idx = _rgb_to_16_index(200, 1, 1)
+        idx = rgb_to_16_index(200, 1, 1)
         # Should be index 4 (dark red), not index 6 (dark yellow)
         assert idx == 4
 
 
 # ---------------------------------------------------------------------------
-# _apply_color_mode mutation killers
+# apply_color_mode mutation killers
 # mutmut_7, _8: i+4 < len(parts) boundary
 # mutmut_10, _11, _12: parts[i] in {"38","48"} check
 # mutmut_30, _31: parts[i+1] == "2"
@@ -204,14 +204,14 @@ class TestApplyColorModeMutationKilling:
     def test_256_fg_exact_codes(self):
         """fg RGB → 38;5;N format."""
         raw = b"\x1b[38;2;255;0;0m"
-        out = _apply_color_mode(raw, "256")
+        out = apply_color_mode(raw, "256")
         # pure red maps to 196
         assert b"38;5;196m" in out
 
     def test_256_bg_exact_codes(self):
         """bg RGB → 48;5;N format, not 38;5;N."""
         raw = b"\x1b[48;2;0;0;255m"
-        out = _apply_color_mode(raw, "256")
+        out = apply_color_mode(raw, "256")
         # pure blue maps to 21
         assert b"48;5;21m" in out
         assert b"38;5;" not in out
@@ -219,14 +219,14 @@ class TestApplyColorModeMutationKilling:
     def test_16_fg_produces_ansi_color_code(self):
         """fg RGB in 16-color mode → produces _FG_16 code."""
         raw = b"\x1b[38;2;205;0;0m"
-        out = _apply_color_mode(raw, "16")
+        out = apply_color_mode(raw, "16")
         # palette index 4 = dark red → _FG_16[4] = 31
         assert b"\x1b[31m" in out
 
     def test_16_bg_produces_ansi_color_code(self):
         """bg RGB in 16-color mode → produces _BG_16 code."""
         raw = b"\x1b[48;2;205;0;0m"
-        out = _apply_color_mode(raw, "16")
+        out = apply_color_mode(raw, "16")
         # palette index 4 = dark red → _BG_16[4] = 41
         assert b"\x1b[41m" in out
 
@@ -234,8 +234,8 @@ class TestApplyColorModeMutationKilling:
         """38 and 48 must produce different output codes."""
         raw_fg = b"\x1b[38;2;255;0;0m"
         raw_bg = b"\x1b[48;2;255;0;0m"
-        out_fg = _apply_color_mode(raw_fg, "256")
-        out_bg = _apply_color_mode(raw_bg, "256")
+        out_fg = apply_color_mode(raw_fg, "256")
+        out_bg = apply_color_mode(raw_bg, "256")
         assert b"38;5;" in out_fg
         assert b"48;5;" in out_bg
         assert b"48;5;" not in out_fg
@@ -244,25 +244,25 @@ class TestApplyColorModeMutationKilling:
     def test_passthrough_returns_raw_unchanged(self):
         """passthrough mode must return raw bytes unchanged."""
         raw = b"\x1b[38;2;255;0;0m"
-        assert _apply_color_mode(raw, "passthrough") is raw
+        assert apply_color_mode(raw, "passthrough") is raw
 
     def test_256_requires_5_parts_for_rgb(self):
         """Short param (only 3 parts after split) does not get rewritten."""
         raw = b"\x1b[38;2;255m"  # only 3 parts (38, 2, 255)
-        out = _apply_color_mode(raw, "256")
+        out = apply_color_mode(raw, "256")
         # Should NOT rewrite (not enough parts)
         assert b"38;5;" not in out
 
     def test_needs_part_index_1_equals_2(self):
         """If part[i+1] != '2', no rewrite. Using '1' instead of '2'."""
         raw = b"\x1b[38;1;255;0;0m"
-        out = _apply_color_mode(raw, "256")
+        out = apply_color_mode(raw, "256")
         assert b"38;5;" not in out
 
     def test_part_must_be_38_or_48(self):
         """Code 37 (not 38 or 48) should not trigger RGB rewrite."""
         raw = b"\x1b[37;2;255;0;0m"
-        out = _apply_color_mode(raw, "256")
+        out = apply_color_mode(raw, "256")
         assert b"38;5;" not in out
         assert b"48;5;" not in out
 

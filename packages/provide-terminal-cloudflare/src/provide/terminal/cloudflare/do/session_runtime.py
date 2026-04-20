@@ -77,6 +77,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self._tunnel_worker_token: str | None = None
         self._share_token: str | None = None
         self._control_token: str | None = None
+        self._issued_ip: str | None = None
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
         self._ushell: Any = None  # UshellConnector | None
@@ -116,19 +117,24 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 self._tunnel_worker_token = str(data.get("worker_token") or "") or None
                 self._share_token = str(data.get("share_token") or "") or None
                 self._control_token = str(data.get("control_token") or "") or None
+                self._issued_ip = str(data.get("issued_ip") or "") or None
         except Exception:
             logger.debug("_ensure_meta kv read failed for %s", self.worker_id)
         self.store.save_session_meta(self.worker_id, self.meta)
 
     def _share_role_for_request(self, request: object) -> str | None:
+        transport = str(getattr(self.config, "tunnel_token_transport", "both"))
+        ip_binding = bool(getattr(self.config, "tunnel_ip_binding", False))
+
         token = None
-        try:
-            qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-            token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
-        except Exception as exc:
-            logger.debug("failed to parse share token: %s", exc)
+        if transport != "cookie":  # "query" or "both"
+            try:
+                qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
+                token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
+            except Exception as exc:
+                logger.debug("failed to parse share token: %s", exc)
         # Cookie fallback: uterm_tunnel_{worker_id}
-        if not token:
+        if not token and transport != "query":  # "cookie" or "both"
             try:
                 from http.cookies import SimpleCookie
 
@@ -141,11 +147,27 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 pass
         if not token:
             return None
+
+        role: str | None = None
         if self._control_token and secrets.compare_digest(token, self._control_token):
-            return "admin"
-        if self._share_token and secrets.compare_digest(token, self._share_token):
-            return "viewer"
-        return None
+            role = "admin"
+        elif self._share_token and secrets.compare_digest(token, self._share_token):
+            role = "viewer"
+
+        if role is None:
+            return None
+
+        if ip_binding:
+            issued_ip = self._issued_ip or ""
+            client_ip = ""
+            try:
+                client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[union-attr]
+            except Exception:  # noqa: S110
+                pass
+            if issued_ip and client_ip != issued_ip:
+                return None
+
+        return role
 
     # ------------------------------------------------------------------
     # Auth helpers

@@ -15,7 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "rootDir": "src",
-    "outDir": "../../packages/provide-terminal/src/provide/terminal/frontend"
+    "outDir": "../../packages/provide-terminal-server/src/provide/terminal/server/frontend"
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]

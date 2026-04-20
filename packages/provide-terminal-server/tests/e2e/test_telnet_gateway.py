@@ -48,8 +48,13 @@ async def _start_ws_echo_server(*, banner: str = "") -> tuple[Any, int]:
 
 
 async def _make_gateway(ws_port: int) -> tuple[asyncio.AbstractServer, int]:
-    """Create a TelnetWsGateway bound to an ephemeral port; returns (server, port)."""
-    gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
+    """Create a TelnetWsGateway bound to an ephemeral port; returns (server, port).
+
+    ``iac_negotiate=False`` — these tests assert echo-only behaviour, so
+    disable the TTYPE/NEW-ENVIRON handshake that would otherwise send
+    unsolicited IAC bytes to the raw TCP client.
+    """
+    gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
     tcp_srv = await gw.start("127.0.0.1", 0)
     from asyncio import Server
 

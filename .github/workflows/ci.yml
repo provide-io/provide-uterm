@@ -60,7 +60,7 @@ jobs:
       - run: uv run ty check packages/provide-terminal/src/
       - run: uv run bandit -r packages/provide-terminal/src/ -ll
       - run: uv run xenon --max-absolute B --max-modules B --max-average A packages/provide-terminal/src/
-      - run: uv run vulture packages/provide-terminal/src/ packages/provide-terminal/tests/ --ignore-names "since,password,kw,exc_type,tb"
+      - run: uv run vulture packages/provide-terminal/src/ packages/provide-terminal/tests/ --ignore-names "since,password,kw,exc_type,tb,interval_s"
       - run: uv run python -m pip_audit --path .
       - run: uv run python scripts/check_licenses.py
       - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-terminal/tests/playwright/test_example.py --ignore=packages/provide-terminal/tests/playwright/test_frontend_coverage.py
@@ -106,7 +106,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv venv && uv pip install -e "packages/provide-terminal-platform/[dev]"
       - name: Run PTY unit tests (no PAM/root/native)
-        run: uv run pytest packages/provide-terminal-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-terminal-platform/tests/pty/e2e -o "addopts="
+        run: uv run pytest packages/provide-terminal-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-terminal-platform/tests/pty/e2e -o "addopts=--import-mode=importlib"
 
   npm-quality:
     # Frontend unit tests + typecheck for both npm workspaces. Previously only
@@ -145,16 +145,8 @@ jobs:
       # Run platform manager tests with its own 100% branch coverage gate
       - run: uv run pytest -q packages/provide-terminal-platform/tests/manager/
 
-  # TODO: restore pty-docker job — Dockerfile.test needs to be recreated for
-  # the provide-terminal-platform package layout (was packages/provide-terminal-pty/)
-  # pty-docker:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Build and run PTY Docker test suite (PAM + native libs)
-  #       run: |
-  #         docker build -t provide-pty-test -f packages/provide-terminal-platform/Dockerfile.test .
-  #         docker run --rm provide-pty-test
+  # pty-docker (PAM + native libs) is not yet enabled — Dockerfile.test for
+  # packages/provide-terminal-platform/ needs to be created first.
 
   windows-process-tree-smoke:
     runs-on: windows-latest
@@ -166,7 +158,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --group dev
-      - run: uv run pytest packages/provide-terminal/tests/manager/test_process.py -q -k kill_bot_terminates_spawned_child_process_tree --no-cov -vv
+      - run: uv run pytest packages/provide-terminal-platform/tests/manager/manager/test_process.py -q -k kill_bot_terminates_spawned_child_process_tree --no-cov -vv
 
   mutation-gate:
     runs-on: ubuntu-latest

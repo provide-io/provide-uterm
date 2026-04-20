@@ -162,7 +162,7 @@ class TestWsToSsh:
         async def _gen():
             yield "hello"
 
-        await _ws_to_ssh(_gen(), _MockProcess())
+        await _ws_to_ssh(_gen(), _MockProcess(), token_holder=[None])
         assert "hello" in written
 
     async def test_ws_to_ssh_bytes_message(self) -> None:
@@ -178,7 +178,7 @@ class TestWsToSsh:
         async def _gen():
             yield b"world"
 
-        await _ws_to_ssh(_gen(), _MockProcess())
+        await _ws_to_ssh(_gen(), _MockProcess(), token_holder=[None])
         assert "world" in written[0]
 
 
@@ -202,13 +202,13 @@ class TestWsToSshControl:
         async def _gen():
             yield encode_control({"type": "resume_ok"})
 
-        await _ws_to_ssh(_gen(), _MockProcess())
+        await _ws_to_ssh(_gen(), _MockProcess(), token_holder=[None])
         assert any("Session resumed" in w for w in written)
 
-    async def test_session_token_control_intercepted(self, tmp_path) -> None:
-        """session_token control message is intercepted and not written to stdout."""
+    async def test_session_token_control_intercepted(self) -> None:
+        """session_token control message is intercepted and stored in token_holder."""
         written: list[str] = []
-        token_file = tmp_path / "tok"
+        token_holder: list[dict | None] = [None]
 
         class _MockStdout:
             def write(self, data: object) -> None:
@@ -220,9 +220,10 @@ class TestWsToSshControl:
         async def _gen():
             yield encode_control({"type": "session_token", "token": "abc"})
 
-        await _ws_to_ssh(_gen(), _MockProcess(), token_file=token_file)
+        await _ws_to_ssh(_gen(), _MockProcess(), token_holder=token_holder)
         assert written == []
-        assert token_file.read_text() == "abc"
+        assert token_holder[0] is not None
+        assert token_holder[0]["token"] == "abc"
 
 
 # ---------------------------------------------------------------------------

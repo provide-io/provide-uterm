@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "../../packages/provide-terminal/src/provide/terminal/frontend",
+    outDir: "../../packages/provide-terminal-server/src/provide/terminal/server/frontend",
     emptyOutDir: false,
     manifest: true,
     rollupOptions: {

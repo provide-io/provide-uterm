@@ -58,7 +58,7 @@ def inspect_server():
     )
 
     # Mount frontend assets
-    frontend = importlib.resources.files("provide.terminal") / "frontend"
+    frontend = importlib.resources.files("provide.terminal.server") / "frontend"
     frontend_str = str(frontend)
 
     from starlette.staticfiles import StaticFiles

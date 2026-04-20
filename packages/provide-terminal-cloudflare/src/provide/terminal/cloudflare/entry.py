@@ -429,18 +429,32 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
 
     spa = _resolve_spa_route(path)
     if spa is not None and spa[0] == "share" and "session_id" in spa[1]:
-        # /s/{id} → 302 redirect to /app/session/{id} (parity with FastAPI)
+        # /s/{id} → 302 redirect to /app/{inspect|session}/{id}
         sid = str(spa[1]["session_id"])
+        page = "session"
+        kv_s = getattr(env, "SESSION_REGISTRY", None)
+        if kv_s is not None:
+            try:
+                import json as _json_s
+
+                raw_s = await kv_s.get(f"session:{sid}")
+                if raw_s is not None:
+                    page = str(_json_s.loads(str(raw_s)).get("share_page", "session"))
+            except Exception:
+                pass
         qs = urlparse(str(request.url)).query
-        target = f"/app/session/{sid}"
+        target = f"/app/{page}/{sid}"
         if qs:
             target += f"?{qs}"
         return Response(None, status=302, headers={"location": target})
 
     if spa is not None and "session_id" in spa[1]:
-        share_context = await resolve_share_context(request, env, str(spa[1]["session_id"]))
+        share_context = await resolve_share_context(request, env, str(spa[1]["session_id"]), config)
         if share_context is not None:
-            page_kind, share_role = share_context
+            _, share_role = share_context
+            # Use the URL-requested page kind (inspect, replay, session, operator)
+            # rather than the token-derived kind from resolve_share_context.
+            page_kind = spa[0]
             return _spa_response(
                 page_kind,
                 session_id=str(spa[1]["session_id"]),

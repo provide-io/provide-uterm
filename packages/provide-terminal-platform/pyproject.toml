@@ -11,7 +11,7 @@ dynamic = ["version"]
 description = "Platform-specific deployment targets (PTY, PAM, fleet manager) for provide-terminal"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
-dependencies = []
+dependencies = ["provide-terminal>=0.4.0"]
 
 [project.optional-dependencies]
 pty = ["provide-terminal>=0.4.0"]
@@ -42,6 +42,7 @@ version = {file = "VERSION"}
 where = ["src"]
 
 [tool.setuptools.package-data]
+"provide.terminal" = ["py.typed"]
 "provide.terminal.pty" = ["py.typed", "_native/*"]
 
 [tool.pytest.ini_options]

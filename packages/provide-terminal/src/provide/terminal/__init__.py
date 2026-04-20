@@ -3,7 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""provide-terminal: shared terminal I/O primitives for the provide ecosystem."""
+"""provide-terminal: shared terminal I/O primitives for the provide ecosystem.
+
+Server, gateway, bridge, manager, and telnet session APIs live in split
+packages and should be imported from their explicit submodules.
+"""
 
 from __future__ import annotations
 
@@ -34,6 +38,30 @@ from provide.terminal.ansi import (
     upgrade_to_256,
     upgrade_to_truecolor,
 )
+from provide.terminal.auth import (
+    AuthorizedKeysFileResolver,
+    NullResolver,
+    ResolvedIdentity,
+    SSHKeyResolver,
+    fingerprint_from_openssh_blob,
+)
+from provide.terminal.colors import (
+    apply_color_mode,
+    downgrade_to_16,
+    downgrade_to_256,
+    rgb_to_16_index,
+    rgb_to_256,
+)
+from provide.terminal.control_channel_builders import (
+    make_identity,
+    make_link_patterns,
+    make_presence_update,
+    make_resume,
+    make_resume_failed,
+    make_resume_ok,
+    make_session_token,
+)
+from provide.terminal.control_channel_patterns import LinkPattern, LinkPatternRegistry
 from provide.terminal.file_io import load_ans, load_palette, load_txt
 from provide.terminal.line_editor import LineEditor
 from provide.terminal.screen import (
@@ -63,6 +91,12 @@ __all__ = [
     "registered_dialects",
     "upgrade_to_256",
     "upgrade_to_truecolor",
+    # colors — downgrade counterparts
+    "apply_color_mode",
+    "downgrade_to_16",
+    "downgrade_to_256",
+    "rgb_to_16_index",
+    "rgb_to_256",
     # file_io
     "load_ans",
     "load_txt",
@@ -79,32 +113,21 @@ __all__ = [
     "extract_menu_options",
     "extract_numbered_list",
     "extract_key_value_pairs",
-    # fastapi (optional — requires [websocket] extra; excluded from import *)
-    # "mount_terminal_ui",  -- intentionally omitted: raises ImportError without fastapi
+    # control_channel_builders — typed builders for ControlChannel protocol messages
+    "make_identity",
+    "make_session_token",
+    "make_resume",
+    "make_resume_ok",
+    "make_resume_failed",
+    "make_link_patterns",
+    "make_presence_update",
+    # control_channel_patterns — server-side link_patterns registry
+    "LinkPattern",
+    "LinkPatternRegistry",
+    # auth — pluggable SSH pubkey → identity
+    "AuthorizedKeysFileResolver",
+    "NullResolver",
+    "ResolvedIdentity",
+    "SSHKeyResolver",
+    "fingerprint_from_openssh_blob",
 ]
-
-
-_FASTAPI_EXPORTS: frozenset[str] = frozenset({"mount_terminal_ui", "create_ws_terminal_router", "WsTerminalProxy"})
-_GATEWAY_EXPORTS: frozenset[str] = frozenset({"TelnetWsGateway", "SshWsGateway"})
-_SERVER_EXPORTS: frozenset[str] = frozenset({"create_server_app", "load_server_config", "default_server_config"})
-_SESSION_EXPORTS: frozenset[str] = frozenset({"TelnetSession", "connect_telnet"})
-
-
-def __getattr__(name: str) -> object:
-    if name in _FASTAPI_EXPORTS:
-        import provide.terminal.fastapi_utils as _fastapi_mod
-
-        return getattr(_fastapi_mod, name)
-    if name in _GATEWAY_EXPORTS:
-        import provide.terminal.gateway as _gateway_mod
-
-        return getattr(_gateway_mod, name)
-    if name in _SERVER_EXPORTS:
-        import provide.terminal.server as _server_mod
-
-        return getattr(_server_mod, name)
-    if name in _SESSION_EXPORTS:
-        import provide.terminal.telnet_session as _session_mod
-
-        return getattr(_session_mod, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

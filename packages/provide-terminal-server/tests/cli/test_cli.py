@@ -270,6 +270,49 @@ class TestListenParser:
         with pytest.raises(SystemExit):
             _build_parser().parse_args(["listen"])
 
+    def test_listen_authorized_keys_defaults(self) -> None:
+        """Without --authorized-keys, resolver is absent; require flag is False."""
+        args = _build_parser().parse_args(["listen", "ws://x"])
+        assert args.authorized_keys is None
+        assert args.require_resolver is False
+
+    def test_listen_authorized_keys_flag(self) -> None:
+        args = _build_parser().parse_args(
+            ["listen", "ws://x", "--authorized-keys", "/etc/ssh_keys"]
+        )
+        assert args.authorized_keys == "/etc/ssh_keys"
+        assert args.require_resolver is False
+
+    def test_listen_require_authorized_keys_flag(self) -> None:
+        args = _build_parser().parse_args(
+            [
+                "listen",
+                "ws://x",
+                "--authorized-keys",
+                "/etc/ssh_keys",
+                "--require-authorized-keys",
+            ]
+        )
+        assert args.authorized_keys == "/etc/ssh_keys"
+        assert args.require_resolver is True
+
+    def test_listen_require_without_file_errors(self) -> None:
+        """--require-authorized-keys alone (no file) must fail fast."""
+        # parse succeeds; the validation runs in _cmd_listen.
+        args = _build_parser().parse_args(
+            ["listen", "ws://x", "--ssh-port", "2222", "--require-authorized-keys"]
+        )
+        assert args.authorized_keys is None
+        assert args.require_resolver is True
+
+        captured = io.StringIO()
+        with pytest.raises(SystemExit) as exc_info, contextlib.redirect_stderr(captured):
+            from provide.terminal.cli import _cmd_listen
+
+            _cmd_listen(args)
+        assert exc_info.value.code == 1
+        assert "--require-authorized-keys" in captured.getvalue()
+
 
 # ---------------------------------------------------------------------------
 # _cmd_listen tests
@@ -317,7 +360,10 @@ class TestCmdListen:
         try:
             from provide.terminal.gateway import TelnetWsGateway
 
-            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
+            # iac_negotiate=False: this test asserts on byte-level banner
+            # echo; the default TTYPE/NEW-ENVIRON handshake would otherwise
+            # race the banner on a short read.
+            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
 

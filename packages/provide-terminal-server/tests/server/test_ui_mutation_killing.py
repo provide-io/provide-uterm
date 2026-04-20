@@ -73,7 +73,7 @@ class TestReadViteManifestMutationKilling:
         assert result == {"cached": "yes"}
 
     def test_uses_correct_package_name(self):
-        """importlib.resources.files called with 'provide.terminal'.
+        """importlib.resources.files called with 'provide.terminal.server'.
         Kills mutmut_7 (None) and mutmut_8 ('XXprovide.terminalXX')."""
         captured_args = []
 
@@ -93,7 +93,7 @@ class TestReadViteManifestMutationKilling:
             ui._read_vite_manifest()
 
         assert len(captured_args) == 1
-        assert captured_args[0] == "provide.terminal"
+        assert captured_args[0] == "provide.terminal.server"
 
     def test_manifest_path_reads_utf8(self):
         """manifest.read_text called with encoding='utf-8'.

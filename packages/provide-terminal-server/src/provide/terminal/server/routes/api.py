@@ -652,6 +652,8 @@ def create_api_router() -> APIRouter:
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+        # Mirrored in cloudflare/api/_tunnel_api.py — keep both in sync.
+        share_page = "inspect" if tunnel_type == "http" else "session"
         tunnel_tokens[tunnel_id] = {
             "worker_token": worker_token,
             "share_token": share_token,
@@ -660,6 +662,7 @@ def create_api_router() -> APIRouter:
             "expires_at": expires_at,
             "issued_ip": source_ip if tunnel_cfg.ip_binding else None,
             "tunnel_type": tunnel_type,
+            "share_page": share_page,
         }
 
         from provide.telemetry import get_logger
@@ -677,14 +680,13 @@ def create_api_router() -> APIRouter:
             source_ip=source_ip,
             detail={"tunnel_type": tunnel_type, "ttl_s": ttl_s},
         )
-
         return {
             "tunnel_id": tunnel_id,
             "display_name": display_name,
             "tunnel_type": tunnel_type,
             "ws_endpoint": f"{ws_base}/tunnel/{tunnel_id}",
             "worker_token": worker_token,
-            "share_url": f"{base}{cfg.ui.app_path}/session/{tunnel_id}?token={share_token}",
+            "share_url": f"{base}{cfg.ui.app_path}/{share_page}/{tunnel_id}?token={share_token}",
             "control_url": f"{base}{cfg.ui.app_path}/operator/{tunnel_id}?token={control_token}",
             "expires_at": expires_at,
         }
@@ -742,6 +744,8 @@ def create_api_router() -> APIRouter:
         control_token = secrets.token_urlsafe(32)
         source_ip = str(getattr(request.client, "host", "unknown")) if request.client else "unknown"
 
+        tunnel_type_r = str(old.get("tunnel_type", "terminal"))
+        share_page_r = "inspect" if tunnel_type_r == "http" else "session"
         tunnel_tokens[tunnel_id] = {
             "worker_token": worker_token,
             "share_token": share_token,
@@ -749,7 +753,8 @@ def create_api_router() -> APIRouter:
             "created_at": now,
             "expires_at": now + ttl_s,
             "issued_ip": source_ip if cfg.tunnel.ip_binding else None,
-            "tunnel_type": str(old.get("tunnel_type", "terminal")),
+            "tunnel_type": tunnel_type_r,
+            "share_page": share_page_r,
         }
 
         base = cfg.server.public_base_url or str(request.base_url).rstrip("/")
@@ -768,7 +773,7 @@ def create_api_router() -> APIRouter:
             "tunnel_id": tunnel_id,
             "ws_endpoint": f"{ws_base}/tunnel/{tunnel_id}",
             "worker_token": worker_token,
-            "share_url": f"{base}{cfg.ui.app_path}/session/{tunnel_id}?token={share_token}",
+            "share_url": f"{base}{cfg.ui.app_path}/{share_page_r}/{tunnel_id}?token={share_token}",
             "control_url": f"{base}{cfg.ui.app_path}/operator/{tunnel_id}?token={control_token}",
             "expires_at": now + ttl_s,
         }

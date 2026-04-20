@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -256,6 +255,123 @@ class TestPipeWs:
 
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
             await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
+
+
+class TestPipeWsIacNegotiate:
+    """Covers the pre-WS TTYPE/NEW-ENVIRON window in _pipe_ws."""
+
+    async def test_ttype_reply_appends_colormode(self) -> None:
+        """Client replies with TTYPE IS xterm-256color → ws_url gains ?colormode=256."""
+        IAC, SB, SE, SUB_IS, TTYPE = 255, 250, 240, 0, 24
+        ttype_reply = bytes([IAC, SB, TTYPE, SUB_IS]) + b"xterm-256color" + bytes([IAC, SE])
+        # Also advertise both options so done() returns True quickly.
+        new_environ_empty = bytes([IAC, SB, 39, SUB_IS, IAC, SE])
+
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        # Deliver TTYPE + NEW-ENVIRON subnegotiations, then EOF.
+        reader.read = AsyncMock(side_effect=[ttype_reply + new_environ_empty, b""])
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(
+                reader,
+                writer,
+                "ws://test",
+                token_holder=[None],
+                telnet=True,
+                iac_negotiate=True,
+                iac_negotiate_timeout=0.2,
+            )
+
+        # The URL passed to websockets.connect should carry ?colormode=256.
+        connected_url = mock_ws_mod.connect.call_args[0][0]
+        assert connected_url.startswith("ws://test")
+        assert "colormode=256" in connected_url
+
+    async def test_no_client_reply_leaves_url_untouched(self) -> None:
+        """Silent client → negotiation times out cleanly, ws_url unchanged."""
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        # Simulate a silent client: read() returns nothing before deadline.
+        reader.read = AsyncMock(side_effect=TimeoutError)
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(
+                reader,
+                writer,
+                "ws://test",
+                token_holder=[None],
+                telnet=True,
+                iac_negotiate=True,
+                iac_negotiate_timeout=0.01,
+            )
+
+        connected_url = mock_ws_mod.connect.call_args[0][0]
+        assert connected_url == "ws://test"
+
+    async def test_disabled_when_not_telnet(self) -> None:
+        """iac_negotiate=True + telnet=False → skip negotiation entirely."""
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(return_value=b"")
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(
+                reader,
+                writer,
+                "ws://test",
+                token_holder=[None],
+                telnet=False,  # <-- the gate
+                iac_negotiate=True,
+                iac_negotiate_timeout=0.01,
+            )
+
+        # start_bytes() should never have been written to the client.
+        writer.write.assert_not_called()
+
+    async def test_existing_query_string_uses_ampersand(self) -> None:
+        """ws_url already has ?x=1 → appended param uses &, not ?."""
+        IAC, SB, SE, SUB_IS, TTYPE = 255, 250, 240, 0, 24
+        ttype_reply = bytes([IAC, SB, TTYPE, SUB_IS]) + b"xterm-256color" + bytes([IAC, SE])
+        new_environ_empty = bytes([IAC, SB, 39, SUB_IS, IAC, SE])
+
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(side_effect=[ttype_reply + new_environ_empty, b""])
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(
+                reader,
+                writer,
+                "ws://test?token=abc",
+                token_holder=[None],
+                telnet=True,
+                iac_negotiate=True,
+                iac_negotiate_timeout=0.2,
+            )
+
+        connected_url = mock_ws_mod.connect.call_args[0][0]
+        assert connected_url == "ws://test?token=abc&colormode=256"
 
 
 # ---------------------------------------------------------------------------

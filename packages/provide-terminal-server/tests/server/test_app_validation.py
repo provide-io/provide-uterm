@@ -16,7 +16,7 @@ from provide.terminal.server.models import AuthConfig, ServerConfig
 # True only when frontend assets have been built (npm run build:frontend).
 # Used to skip tests that exercise the real asset presence check so that
 # the server package can be tested in isolation without a Node build.
-_FRONTEND_BUILT = importlib.resources.files("provide.terminal").joinpath("frontend/hijack.html").is_file()
+_FRONTEND_BUILT = importlib.resources.files("provide.terminal.server").joinpath("frontend/hijack.html").is_file()
 
 
 class TestValidateAuthConfigDevMode:

@@ -103,6 +103,7 @@ markers = [
     "memray: memory profiling and allocation stress tests (deselected by default, run with -m memray)",
     "slow: slow tests >10s (deselected by default)",
     "docker: Docker-based E2E tests requiring a running Docker daemon (deselected by default, run with -m docker)",
+    "unit: fast unit tests with no I/O or external dependencies",
 ]
 addopts = [
     "--import-mode=importlib",
@@ -115,7 +116,7 @@ addopts = [
     "not playwright and not memray and not slow and not docker",
     "--cov=provide.terminal.__init__",
     "--cov=provide.terminal.ansi",
-    "--cov=provide.terminal.ansi_render",
+    "--cov=provide.terminal.colors",
     "--cov=provide.terminal.control_channel",
     "--cov=provide.terminal.deckmux",
     "--cov=provide.terminal.defaults",
@@ -141,7 +142,6 @@ addopts = [
 source = [
     "provide.terminal.__init__",
     "provide.terminal.ansi",
-    "provide.terminal.ansi_render",
     "provide.terminal.control_channel",
     "provide.terminal.deckmux",
     "provide.terminal.defaults",

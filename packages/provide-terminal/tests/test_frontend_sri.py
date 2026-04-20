@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]  # tests/ → provide-terminal/ → packages/ → repo root
-FRONTEND_DIR = _REPO_ROOT / "packages/provide-terminal/src/provide/terminal/frontend"
+FRONTEND_DIR = _REPO_ROOT / "packages/provide-terminal-server/src/provide/terminal/server/frontend"
 CF_FRONTEND_DIR = _REPO_ROOT / "packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend"
 DEMO_DIR = _REPO_ROOT / "demo"
 
