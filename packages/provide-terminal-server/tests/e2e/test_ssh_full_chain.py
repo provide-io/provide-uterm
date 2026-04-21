@@ -85,7 +85,7 @@ async def _run_fake_hub(hub: _FakeDeckMuxHub) -> tuple[Any, int]:
         # mixin through its principal contract.
         try:
             msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-        except (asyncio.TimeoutError, websockets.ConnectionClosed):
+        except (TimeoutError, websockets.ConnectionClosed):
             return
         if not isinstance(msg, str):
             return
@@ -118,11 +118,7 @@ async def _write_authorized_keys(
     display_name: str,
 ) -> Path:
     line_body = pubkey.export_public_key().decode("ascii").strip()
-    opts = (
-        f'subject="{subject}",'
-        f'claim-role="{role}",'
-        f'claim-display_name="{display_name}"'
-    )
+    opts = f'subject="{subject}",claim-role="{role}",claim-display_name="{display_name}"'
     path = tmp_path / "authorized_keys"
     path.write_text(f"{opts} {line_body}\n", encoding="utf-8")
     return path
@@ -131,9 +127,7 @@ async def _write_authorized_keys(
 class TestFullChain:
     """One test to rule them all: SSH → resolver → identity → DeckMux."""
 
-    async def test_pubkey_identity_term_colorterm_all_land(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_pubkey_identity_term_colorterm_all_land(self, tmp_path: Path) -> None:
         """SRE with registered pubkey + TERM=xterm-256color + COLORTERM
         lands in DeckMux as their real subject with proper role & display."""
         # --- proxy-side setup: pubkey, authorized_keys file, resolver --

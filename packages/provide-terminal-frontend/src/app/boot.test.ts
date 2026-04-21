@@ -123,7 +123,6 @@ describe("bootApp", () => {
       assets_path: "/assets",
       session_id: "tun-1",
       share_role: "viewer",
-      share_token: "tok-1",
     });
     await bootApp();
     expect(routerModule.routeApp).toHaveBeenCalledWith(root, {
@@ -133,7 +132,6 @@ describe("bootApp", () => {
       assets_path: "/assets",
       session_id: "tun-1",
       share_role: "viewer",
-      share_token: "tok-1",
     });
   });
 

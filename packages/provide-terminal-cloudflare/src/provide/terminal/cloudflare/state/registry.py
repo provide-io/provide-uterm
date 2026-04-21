@@ -74,6 +74,36 @@ async def update_kv_session(
         logger.debug("kv put %s failed: %s", key, exc)
 
 
+async def get_kv_session(env: Any, worker_id: str) -> dict[str, Any] | None:
+    """Return a single session entry from KV, or None if absent or KV is unconfigured."""
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return None
+    key = f"{_KV_PREFIX}{worker_id}"
+    try:
+        raw = await kv.get(key)
+        return json.loads(raw) if raw else None
+    except Exception as exc:
+        logger.debug("kv get %s failed: %s", key, exc)
+        return None
+
+
+async def delete_kv_session(env: Any, worker_id: str) -> None:
+    """Delete a session entry from the KV registry.
+
+    Safe to call from the Default Worker.  Does nothing if the KV binding is
+    absent or the key does not exist.
+    """
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return
+    key = f"{_KV_PREFIX}{worker_id}"
+    try:
+        await kv.delete(key)
+    except Exception as exc:
+        logger.debug("kv delete %s failed: %s", key, exc)
+
+
 async def list_kv_sessions(env: Any) -> list[dict[str, Any]]:
     """Return all session entries from the KV registry.
 

@@ -23,7 +23,6 @@ from provide.terminal.gateway import (
     _normalize_crlf,
     _pipe_ws,
     _tcp_to_ws,
-    _write_token,
     _ws_to_tcp,
 )
 

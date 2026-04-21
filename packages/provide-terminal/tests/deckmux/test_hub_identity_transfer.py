@@ -58,12 +58,8 @@ async def test_identity_principals_have_real_subject_keys() -> None:
     ws_alice = _FakeWS()
     ws_bob = _FakeWS()
 
-    principal_alice = identity_as_principal(
-        ResolvedIdentity(subject="sre:alice", claims={"display_name": "Alice"})
-    )
-    principal_bob = identity_as_principal(
-        ResolvedIdentity(subject="sre:bob", claims={"display_name": "Bob"})
-    )
+    principal_alice = identity_as_principal(ResolvedIdentity(subject="sre:alice", claims={"display_name": "Alice"}))
+    principal_bob = identity_as_principal(ResolvedIdentity(subject="sre:bob", claims={"display_name": "Bob"}))
 
     await hub.deckmux_on_browser_connect("w1", ws_alice, "operator", principal=principal_alice)
     result = await hub.deckmux_on_browser_connect("w1", ws_bob, "viewer", principal=principal_bob)
@@ -104,12 +100,8 @@ async def test_control_request_grants_to_real_subject() -> None:
     ws_alice = _FakeWS()
     ws_bob = _FakeWS()
 
-    principal_alice = identity_as_principal(
-        ResolvedIdentity(subject="sre:alice", claims={"display_name": "Alice"})
-    )
-    principal_bob = identity_as_principal(
-        ResolvedIdentity(subject="sre:bob", claims={"display_name": "Bob"})
-    )
+    principal_alice = identity_as_principal(ResolvedIdentity(subject="sre:alice", claims={"display_name": "Alice"}))
+    principal_bob = identity_as_principal(ResolvedIdentity(subject="sre:bob", claims={"display_name": "Bob"}))
 
     await hub.deckmux_on_browser_connect("w1", ws_alice, "operator", principal=principal_alice)
     await hub.deckmux_on_browser_connect("w1", ws_bob, "viewer", principal=principal_bob)
@@ -150,12 +142,8 @@ async def test_disconnect_clears_owner_and_leaves_alice() -> None:
     ws_alice = _FakeWS()
     ws_bob = _FakeWS()
 
-    principal_alice = identity_as_principal(
-        ResolvedIdentity(subject="sre:alice", claims={"display_name": "Alice"})
-    )
-    principal_bob = identity_as_principal(
-        ResolvedIdentity(subject="sre:bob", claims={"display_name": "Bob"})
-    )
+    principal_alice = identity_as_principal(ResolvedIdentity(subject="sre:alice", claims={"display_name": "Alice"}))
+    principal_bob = identity_as_principal(ResolvedIdentity(subject="sre:bob", claims={"display_name": "Bob"}))
 
     await hub.deckmux_on_browser_connect("w1", ws_alice, "operator", principal=principal_alice)
     await hub.deckmux_on_browser_connect("w1", ws_bob, "viewer", principal=principal_bob)
@@ -172,11 +160,7 @@ async def test_disconnect_clears_owner_and_leaves_alice() -> None:
 
     # Bob's leave broadcast should have fired
     hub.broadcast.assert_called()
-    leave_msgs = [
-        call[0][1]
-        for call in hub.broadcast.call_args_list
-        if call[0][1].get("type") == "presence_leave"
-    ]
+    leave_msgs = [call[0][1] for call in hub.broadcast.call_args_list if call[0][1].get("type") == "presence_leave"]
     assert leave_msgs, "no presence_leave broadcast after bob disconnected"
     assert leave_msgs[0]["user_id"] == "sre:bob"
 
@@ -186,9 +170,7 @@ async def test_disconnect_clears_owner_and_leaves_alice() -> None:
 
     # Ownership is cleared (mixin does not auto-reassign)
     owner_after = store.get_owner()
-    assert owner_after is None, (
-        f"expected no owner after bob disconnected, got {owner_after.user_id!r}"
-    )
+    assert owner_after is None, f"expected no owner after bob disconnected, got {owner_after.user_id!r}"
 
 
 # ---------------------------------------------------------------------------

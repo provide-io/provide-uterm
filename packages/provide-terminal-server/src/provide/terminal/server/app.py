@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qs
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
 from fastapi import Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,7 +33,6 @@ from provide.terminal.server.auth import (
     resolve_http_principal,
     resolve_ws_principal,
 )
-from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
 from provide.terminal.server.profiles import FileProfileStore
 from provide.terminal.server.registry import SessionRegistry
@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
+    from provide.terminal.server.authorization import AuthorizationService
     from provide.terminal.server.models import ServerConfig
 
 logger = get_logger(__name__)
@@ -140,7 +141,21 @@ def create_server_app(
     _api_only_env = os.environ.get("UTERM_API_ONLY", "").strip().lower() in {"1", "true", "yes"}
     if not api_only and not _api_only_env:
         _validate_frontend_assets()
-    authz = AuthorizationService()
+
+    from provide.terminal.server.authorization import (
+        AuthorizationService,
+        LocalAuthorizationProvider,
+        WebhookAuthorizationProvider,
+    )
+
+    authz_provider = LocalAuthorizationProvider()
+    if config.governance.authz_webhook_url:
+        authz_provider = WebhookAuthorizationProvider(
+            url=config.governance.authz_webhook_url,
+            secret=config.governance.authz_webhook_secret,
+            timeout_s=config.governance.authz_webhook_timeout_s,
+        )
+    authz = AuthorizationService(authz_provider)
     policy = SessionPolicyResolver(config.auth, authz=authz)
     registry: SessionRegistry | None = None
     metrics: dict[str, int] = {
@@ -190,9 +205,7 @@ def create_server_app(
         provided = None
         from http.cookies import SimpleCookie
 
-        cookie_header = (
-            dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
-        )
+        cookie_header = dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
         cookies = SimpleCookie(cookie_header)
         cookie_key = f"uterm_tunnel_{session_id}"
         if cookie_key in cookies:
@@ -298,9 +311,7 @@ def create_server_app(
     )
     _HUB_MODE_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/input_mode$")
     _HUB_ADMIN_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/disconnect_worker$")
-    _HUB_READ_PATH = re.compile(
-        r"^/worker/(?P<session_id>[\w\-]+)/hijack/[\w\-]+/(?:snapshot|events)$"
-    )
+    _HUB_READ_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack/[\w\-]+/(?:snapshot|events)$")
 
     async def _require_hub_route_authz(connection: HTTPConnection) -> None:
         """Gate /worker/{id}/... REST routes on session-level capabilities.
@@ -338,7 +349,7 @@ def create_server_app(
             raise HTTPException(status_code=401, detail="authentication required")
         authz_service = cast("AuthorizationService", connection.app.state.uterm_authz)
         if require_admin:
-            if not authz_service.is_admin(principal):
+            if not await authz_service.is_admin(principal):
                 raise HTTPException(status_code=403, detail="admin role required")
             return
         assert required is not None
@@ -346,10 +357,10 @@ def create_server_app(
         if session is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         if required == "session.read":
-            if not authz_service.can_read_session(principal, session):
+            if not await authz_service.can_read_session(principal, session):
                 raise HTTPException(status_code=403, detail="insufficient privileges")
         else:
-            if not authz_service.can_mutate_session(principal, session, required):
+            if not await authz_service.can_mutate_session(principal, session, required):
                 raise HTTPException(status_code=403, detail="insufficient privileges")
 
     async def _on_resume(_token: str, session: ResumeSession) -> bool:
@@ -370,9 +381,19 @@ def create_server_app(
         session = await registry.get_definition(worker_id) if registry is not None else None
         if session is None:
             return "admin" if config.auth.mode in {"none", "dev"} else "viewer"
-        if not authz.can_read_session(principal, session):
+        if not await authz.can_read_session(principal, session):
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
-        return policy.role_for(principal, session)
+        return await policy.role_for(principal, session)
+
+    from provide.terminal.bridge.hub.ext import WebhookPolicyGate
+
+    policy_gate = None
+    if config.governance.policy_webhook_url:
+        policy_gate = WebhookPolicyGate(
+            url=config.governance.policy_webhook_url,
+            secret=config.governance.policy_webhook_secret,
+            timeout_s=config.governance.policy_webhook_timeout_s,
+        )
 
     _hub_class = hub_class if hub_class is not None else TermHub
     hub = _hub_class(
@@ -383,6 +404,7 @@ def create_server_app(
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
         event_bus=EventBus(),
+        policy_gate=policy_gate,
     )
     # Attach the fan-out controller so routes and WS dispatch can find it.
     from provide.terminal.bridge.fanout import FanOutController, InMemoryFanOutStore
@@ -463,6 +485,31 @@ def create_server_app(
                 tunnel_tokens.pop(sid, None)
                 logger.info("tunnel_token_expired session_id=%s swept=true", sid)
 
+    async def _node_registry_heartbeat() -> None:
+        """Periodically announce Node status to the Fleet Manager."""
+        url = config.governance.registry_webhook_url
+        if not url:
+            return
+
+        interval = config.governance.registry_webhook_interval_s
+        node_id = getattr(config.server, "node_id", "default")
+
+        while True:
+            try:
+                status = {
+                    "node_id": node_id,
+                    "active_sessions": await hub.browser_count_total(),
+                    "worker_count": len(hub._workers),
+                    "timestamp": time.time(),
+                }
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.post(url, json=status)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("node_registry_heartbeat_failed")
+            await asyncio.sleep(interval)
+
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         async def _delayed_boot() -> None:
@@ -482,6 +529,7 @@ def create_server_app(
         sweep_task = asyncio.create_task(_sweep_expired_tunnel_tokens())
         idle_sweep_task = asyncio.create_task(_sweep_idle_sessions())
         retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
+        heartbeat_task = asyncio.create_task(_node_registry_heartbeat())
         pam_task: asyncio.Task[None] | None = None
         with contextlib.suppress(ImportError):
             from provide.terminal.server.pam_integration import run_pam_integration
@@ -494,10 +542,13 @@ def create_server_app(
                 pam_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pam_task
+            heartbeat_task.cancel()
             retention_sweep_task.cancel()
             idle_sweep_task.cancel()
             sweep_task.cancel()
             boot_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
             with contextlib.suppress(asyncio.CancelledError):
                 await boot_task
             with contextlib.suppress(asyncio.CancelledError):
@@ -563,7 +614,7 @@ def create_server_app(
 
     app.include_router(
         hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
-        dependencies=[Depends(_require_authenticated)],
+        dependencies=[Depends(_require_authenticated), Depends(_require_hub_route_authz)],
     )
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
@@ -571,11 +622,14 @@ def create_server_app(
 
     @app.get("/s/{session_id}")
     async def short_share_url(request: FastAPIRequest, session_id: str) -> object:
-        """Short share URL: /s/{id}?token=... → redirect to /app/session/{id}?token=..."""
+        """Short share URL: /s/{id}?token=... → redirect to /app/{inspect|session}/{id}?token=..."""
         from starlette.responses import RedirectResponse
 
+        tunnel_tokens: dict[str, dict[str, object]] = request.app.state.uterm_tunnel_tokens
+        entry = tunnel_tokens.get(session_id, {})
+        page = str(entry.get("share_page", "session"))
         qs = str(request.url.query)
-        target = f"{config.ui.app_path}/session/{session_id}"
+        target = f"{config.ui.app_path}/{page}/{session_id}"
         if qs:
             target += f"?{qs}"
         return RedirectResponse(url=target, status_code=302)

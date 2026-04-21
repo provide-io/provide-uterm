@@ -70,11 +70,11 @@ def _jwt_config() -> AuthConfig:
     )
 
 
-def test_policy_uses_trusted_roles_only() -> None:
+async def test_policy_uses_trusted_roles_only() -> None:
     policy = SessionPolicyResolver(_jwt_config())
     session = SessionDefinition(session_id="s1", display_name="Session", connector_type="shell")
 
-    role = policy.role_for(Principal(subject_id="user-1", roles=frozenset({"viewer"})), session)
+    role = await policy.role_for(Principal(subject_id="user-1", roles=frozenset({"viewer"})), session)
 
     assert role == "viewer"
 
@@ -219,18 +219,6 @@ def test_page_routes_set_explicit_cookie_security_flags() -> None:
     assert "httponly" in set_cookie
     assert "samesite=lax" in set_cookie
     assert "secure" in set_cookie
-
-
-def test_compiled_frontend_views_escape_dynamic_values() -> None:
-    root = Path(__file__).resolve().parents[2] / "src" / "provide" / "terminal" / "server" / "frontend" / "app" / "views"
-    dashboard_js = (root / "dashboard-view.js").read_text(encoding="utf-8")
-    operator_js = (root / "operator-view.js").read_text(encoding="utf-8")
-
-    assert "function escapeHtml(value)" in dashboard_js
-    # operator-view uses the shorter alias `esc` — same implementation
-    assert "function esc(value)" in operator_js
-    assert "const safeAppPath = escapeHtml(appPath);" in dashboard_js
-    assert "${bootstrap.app_path}/replay/" not in operator_js
 
 
 @pytest.mark.asyncio

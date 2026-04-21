@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Connection profiles CRUD — stored in KV (``profile:{id}`` keys).
@@ -194,9 +194,9 @@ async def _connect(
         return json_response({"detail": "insufficient privileges"}, status=403)
     try:
         raw = await request.json()  # type: ignore[union-attr]
-        body = raw.to_py() if hasattr(raw, "to_py") else raw
+        raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
-        body = {}
+        pass
     # Build session entry (same shape as /api/connect)
     import json as _json
 
@@ -210,13 +210,14 @@ async def _connect(
         connector_config["port"] = p["port"]
     if p.get("username"):
         connector_config["username"] = p["username"]
-    if body.get("password"):
-        connector_config["password"] = body["password"]
+    # Password is intentionally excluded from KV storage (credentials must not be persisted).
+    # The DO runtime receives the password through the initial worker connection handshake.
     entry = {
         "session_id": session_id,
         "display_name": str(p.get("name") or session_id),
         "created_at": time.time(),
         "connector_type": ct,
+        "connector_config": connector_config,
         "lifecycle_state": "waiting",
         "input_mode": str(p.get("input_mode") or "open"),
         "connected": False,
@@ -229,6 +230,7 @@ async def _connect(
         "last_error": None,
     }
     session_kv = getattr(env, "SESSION_REGISTRY", None)
-    if session_kv is not None:
-        await session_kv.put(f"session:{session_id}", _json.dumps({**entry, "hijacked": False}))
+    if session_kv is None:
+        return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
+    await session_kv.put(f"session:{session_id}", _json.dumps({**entry, "hijacked": False}))
     return json_response({**entry, "url": f"/app/session/{session_id}"})

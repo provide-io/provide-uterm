@@ -31,7 +31,6 @@ import contextlib
 import datetime
 import ipaddress
 import ssl
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +38,6 @@ import asyncssh
 import pytest
 import websockets
 import websockets.server
-
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -73,7 +71,7 @@ def _generate_self_signed_cert(tmp_path: Path) -> tuple[Path, Path]:
             x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
         ]
     )
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -135,9 +133,7 @@ def _client_ssl_context(cert_path: Path) -> ssl.SSLContext:
 # ---------------------------------------------------------------------------
 
 
-async def _start_tls_ws_server(
-    cert_path: Path, key_path: Path
-) -> tuple[Any, int, list[dict[str, Any]]]:
+async def _start_tls_ws_server(cert_path: Path, key_path: Path) -> tuple[Any, int, list[dict[str, Any]]]:
     """Start a ``wss://`` server that captures the first control frame.
 
     Returns ``(server, port, captured_frames)``.
@@ -272,9 +268,7 @@ class TestSshTlsPipeline:
 
         try:
             client_ctx = _client_ssl_context(cert_path)
-            async with websockets.connect(
-                f"wss://127.0.0.1:{port}/", ssl=client_ctx
-            ) as ws:
+            async with websockets.connect(f"wss://127.0.0.1:{port}/", ssl=client_ctx) as ws:
                 await ws.send("hello-tls")
                 reply = await asyncio.wait_for(ws.recv(), timeout=3.0)
         finally:

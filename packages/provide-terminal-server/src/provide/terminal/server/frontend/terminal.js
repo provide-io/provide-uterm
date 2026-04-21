@@ -477,7 +477,6 @@ class ProvideTerminal {
         this.resizeObserver.observe(terminalDiv);
         this.term.focus();
         this.term.onData((data) => this.handleTerminalInput(data));
-        this.term.attachCustomKeyEventHandler((event) => !(event.ctrlKey || event.metaKey));
         const loading = this.q("loadingScreen");
         loading.style.removeProperty("display");
         let firstData = false;

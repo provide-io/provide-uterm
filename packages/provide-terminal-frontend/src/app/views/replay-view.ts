@@ -1,5 +1,5 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
@@ -64,6 +64,7 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
           <button class="btn" id="btn-next">Next</button>
           <button class="btn" id="btn-first">First</button>
           <button class="btn" id="btn-last">Last</button>
+          <button class="btn" id="btn-play">Play</button>
           <label class="small toolbar-label">Event
             <select id="replay-filter" class="toolbar-select">
               <option value="">All</option>
@@ -100,11 +101,23 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
   const filter = root.querySelector<HTMLSelectElement>("#replay-filter");
   const limit = root.querySelector<HTMLSelectElement>("#replay-limit");
   const scrubber = root.querySelector<HTMLInputElement>("#replay-scrubber");
-  if (!filter || !limit || !scrubber) throw new Error("replay shell is incomplete");
+  const btnPlay = root.querySelector<HTMLButtonElement>("#btn-play");
+  if (!filter || !limit || !scrubber || !btnPlay) throw new Error("replay shell is incomplete");
   let state = await loadReplayState(sessionId, filter.value, Number(limit.value));
   updateReplayUi(root, state);
 
+  let playIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  const stopPlay = (): void => {
+    if (playIntervalId !== null) {
+      clearInterval(playIntervalId);
+      playIntervalId = null;
+      btnPlay.textContent = "Play";
+    }
+  };
+
   const reload = async (): Promise<void> => {
+    stopPlay();
     state = await loadReplayState(sessionId, filter.value, Number(limit.value));
     updateReplayUi(root, state);
   };
@@ -114,20 +127,51 @@ export async function renderReplay(root: HTMLElement, bootstrap: AppBootstrap): 
   };
 
   root.querySelector<HTMLButtonElement>("#btn-load")?.addEventListener("click", () => void reload());
-  root.querySelector<HTMLButtonElement>("#btn-prev")?.addEventListener("click", () => clampIndex(state.index - 1));
-  root.querySelector<HTMLButtonElement>("#btn-next")?.addEventListener("click", () => clampIndex(state.index + 1));
-  root.querySelector<HTMLButtonElement>("#btn-first")?.addEventListener("click", () => clampIndex(0));
-  root
-    .querySelector<HTMLButtonElement>("#btn-last")
-    ?.addEventListener("click", () => clampIndex(state.entries.length - 1));
+  root.querySelector<HTMLButtonElement>("#btn-prev")?.addEventListener("click", () => {
+    stopPlay();
+    clampIndex(state.index - 1);
+  });
+  root.querySelector<HTMLButtonElement>("#btn-next")?.addEventListener("click", () => {
+    stopPlay();
+    clampIndex(state.index + 1);
+  });
+  root.querySelector<HTMLButtonElement>("#btn-first")?.addEventListener("click", () => {
+    stopPlay();
+    clampIndex(0);
+  });
+  root.querySelector<HTMLButtonElement>("#btn-last")?.addEventListener("click", () => {
+    stopPlay();
+    clampIndex(state.entries.length - 1);
+  });
+  btnPlay.addEventListener("click", () => {
+    if (playIntervalId !== null) {
+      stopPlay();
+      return;
+    }
+    if (state.entries.length === 0) return;
+    clampIndex(0);
+    btnPlay.textContent = "Pause";
+    playIntervalId = setInterval(() => {
+      const next = state.index + 1;
+      if (next >= state.entries.length) {
+        stopPlay();
+        return;
+      }
+      clampIndex(next);
+    }, 800);
+  });
   filter.addEventListener("change", () => void reload());
   limit.addEventListener("change", () => void reload());
-  scrubber.addEventListener("input", () => clampIndex(Number(scrubber.value)));
+  scrubber.addEventListener("input", () => {
+    stopPlay();
+    clampIndex(Number(scrubber.value));
+  });
   root.querySelector<HTMLElement>("#replay-list")?.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const index = target.getAttribute("data-index");
     if (index === null) return;
+    stopPlay();
     clampIndex(Number(index));
   });
 }

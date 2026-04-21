@@ -66,18 +66,12 @@ class CaptureConnector:
     connector_type = "pty_capture"
     """
 
-    def __init__(
-        self, session_id: str, display_name: str, config: dict[str, Any]
-    ) -> None:
+    def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
         unknown = set(config) - _VALID_CONFIG_KEYS
         if unknown:
-            raise ValueError(
-                f"unknown config keys for CaptureConnector: {sorted(unknown)}"
-            )
+            raise ValueError(f"unknown config keys for CaptureConnector: {sorted(unknown)}")
         if "socket_path" not in config:
-            raise ValueError(
-                "CaptureConnector requires 'socket_path' in connector_config"
-            )
+            raise ValueError("CaptureConnector requires 'socket_path' in connector_config")
 
         self._session_id = session_id
         self._display_name = display_name
@@ -86,9 +80,7 @@ class CaptureConnector:
         self._rows: int = int(config.get("rows", 24))
         self._connect_timeout: float = float(config.get("connect_timeout_s", 5.0))
         self._stdin_socket_path: str | None = (
-            str(config["stdin_socket_path"])
-            if config.get("stdin_socket_path")
-            else None
+            str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
         )
 
         self._capture: CaptureSocket | None = None
@@ -196,11 +188,7 @@ class CaptureConnector:
             f"connected={self._connected} buffer_len={len(self._buffer)} "
             f"stdin_keystrokes={self._stdin_count} "
             f"outbound_connections={len(self._connect_log)}"
-            + (
-                f" recent_connect={self._connect_log[-1]!r}"
-                if self._connect_log
-                else ""
-            )
+            + (f" recent_connect={self._connect_log[-1]!r}" if self._connect_log else "")
         )
 
     def _snapshot(self) -> dict[str, Any]:

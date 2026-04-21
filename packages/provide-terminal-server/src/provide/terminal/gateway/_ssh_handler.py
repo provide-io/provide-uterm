@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import collections.abc
+    from pathlib import Path
 
     from provide.terminal.auth import SSHKeyResolver
 
@@ -87,7 +87,7 @@ def _make_no_auth_server_class(
             with contextlib.suppress(Exception):
                 conn._warp_gateway_server = self  # type: ignore[attr-defined]
 
-        def begin_auth(self, username: str) -> bool:  # noqa: ARG002
+        def begin_auth(self, username: str) -> bool:
             # Require auth so asyncssh actually exercises the pubkey
             # handler below. Callers still get no-gate behaviour because
             # we accept everything (unless require_resolver is set).
@@ -144,7 +144,7 @@ def _make_no_auth_server_class(
             )
             return True
 
-        def validate_password(self, username: str, password: str) -> bool:  # noqa: ARG002
+        def validate_password(self, username: str, password: str) -> bool:
             return True
 
         def kbdint_auth_supported(self) -> bool:
@@ -352,7 +352,8 @@ async def _make_process_handler(
                         t1 = asyncio.create_task(_ssh_to_ws(process, ws))
                         t2 = asyncio.create_task(
                             _ws_to_ssh(
-                                ws, process,
+                                ws,
+                                process,
                                 token_holder=token_holder,
                                 color_mode=color_mode,
                                 token_file=effective_token_file,
@@ -377,10 +378,8 @@ async def _make_process_handler(
                         attempt + 1,
                         max_reconnects,
                     )
-                    try:
+                    with contextlib.suppress(Exception):
                         stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
-                    except Exception:
-                        pass
                     await asyncio.sleep(reconnect_delay)
 
         except Exception as exc:

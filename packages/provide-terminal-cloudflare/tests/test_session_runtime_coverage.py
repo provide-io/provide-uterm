@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -19,6 +19,18 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
+
+
+def _decode_control(raw: str) -> dict:
+    decoder = ControlChannelDecoder()
+    events = decoder.feed(raw)
+    events.extend(decoder.finish())
+    ctrl = [e.control for e in events if isinstance(e, ControlChunk)]
+    assert len(ctrl) == 1, f"expected 1 control frame, got {len(ctrl)}"
+    return ctrl[0]
+
 
 # ---------------------------------------------------------------------------
 # Shared helpers (mirrors test_session_runtime_unit.py)
@@ -148,7 +160,7 @@ async def test_fetch_websocket_browser_upgrade() -> None:
     assert resp.web_socket is client
     # hello frame sent synchronously in fetch()
     assert server.send.called
-    hello = __import__("json").loads(server.send.call_args[0][0])
+    hello = _decode_control(server.send.call_args[0][0])
     assert hello["type"] == "hello"
     assert hello["role"] == "admin"  # dev mode
 

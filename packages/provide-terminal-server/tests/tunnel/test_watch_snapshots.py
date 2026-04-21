@@ -11,9 +11,9 @@ suite is portable across environments without font/DPI-sensitive baselines.
 from __future__ import annotations
 
 import pytest
+from textual.widgets import DataTable
 
 from provide.terminal.cli._watch_app import WatchApp
-from textual.widgets import DataTable
 
 
 @pytest.fixture

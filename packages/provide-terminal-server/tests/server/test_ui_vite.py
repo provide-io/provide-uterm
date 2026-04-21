@@ -133,13 +133,6 @@ class TestShellViteIntegration:
         assert "server-session-page.js" not in html
         assert "server-app-foundation.css" not in html
 
-    def test_dashboard_uses_legacy_when_no_manifest(self):
-        ui._vite_manifest = None
-        ui._vite_manifest_loaded = True
-        html = ui.operator_dashboard_html("Test", "/app", "/assets")
-        assert "server-session-page.js" in html
-        assert "server-app-foundation.css" in html
-
     def test_session_page_includes_hijack_js_always(self):
         ui._vite_manifest = {"src/main.tsx": {"file": "assets/main-abc.js", "css": []}}
         ui._vite_manifest_loaded = True

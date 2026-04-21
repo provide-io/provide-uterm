@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml system-overview
-title provide-terminal — 7-Package System Overview
+title provide-terminal — System Overview & Extensibility Hooks
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333
@@ -20,24 +20,29 @@ skinparam rectangle {
   FontColor #1e40af
 }
 
-' --- Core package (absorbed: render, shell, deckmux, detection) ---
+' --- External Tier (Enterprise/Proprietary) ---
+rectangle "External Fleet Manager" as FLEET #fff7ed {
+  note bottom: (Proprietary / Managed Tier)
+}
+
+' --- Core package ---
 package "provide-terminal (core)" as CORE {
   [ansi / screen / emulator\nprotocols / detection\ndeckmux / shell / render / replay] as CORE_C
 }
 
-' --- Server package (absorbed: tunnel, gateway) ---
+' --- Server package ---
 package "provide-terminal-server" as SRV {
   [bridge hub / FastAPI / CLI\ntunnel / gateway] as SRV_C
 }
 
-' --- Client package (absorbed: transports, ai/MCP) ---
+' --- Client package ---
 package "provide-terminal-client" as CLIENT {
   [HTTP/WS client\ntransports / AI/MCP] as CLIENT_C
 }
 
-' --- Platform package (absorbed: pty, manager) ---
+' --- Platform package ---
 package "provide-terminal-platform" as PLAT {
-  [PTY / PAM / capture\nfleet manager] as PLAT_C
+  [PTY / PAM / capture\nmanager] as PLAT_C
 }
 
 ' --- Edge packages ---
@@ -46,7 +51,7 @@ package "provide-terminal-cloudflare" as CF {
 }
 
 package "provide-terminal-frontend" as FE {
-  [Browser UI\n(TypeScript, xterm.js)] as FE_C
+  [Browser UI\n(React / Vite)] as FE_C
 }
 
 package "provide-terminal-app" as APP {
@@ -54,7 +59,7 @@ package "provide-terminal-app" as APP {
 }
 
 package "provide-telemetry" as TELEM {
-  [structured logging\n& trace context] as TELEM_C
+  [structured logging\n& DAS schema] as TELEM_C
 }
 
 ' --- Dependencies ---
@@ -70,5 +75,11 @@ SRV_C <-- CF_C : adapter
 FE_C --> SRV_C : WebSocket / REST
 FE_C --> CF_C : WebSocket / REST
 APP_C --> FE_C : embeds
+
+' --- Extensibility Hooks (Monetization Path) ---
+SRV_C --right--> FLEET : **Policy / Auth Hooks**\n(Webhooks)
+SRV_C --right--> FLEET : **Discovery**\n(Heartbeat)
+SRV_C ..> FLEET : **Telemetry**\n(DAS Events / OTLP)
+PLAT_C --right--> FLEET : **Spawn Policy**\n(Webhooks)
 
 @enduml

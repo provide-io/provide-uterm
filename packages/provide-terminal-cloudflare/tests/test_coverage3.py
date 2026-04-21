@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -18,6 +18,20 @@ import pytest
 from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
 from provide.terminal.cloudflare.config import JwtConfig
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
+
+
+def _decode_control_frames(messages: list[str]) -> list[dict]:
+    """Decode a list of control-channel-encoded messages into plain dicts."""
+    result = []
+    for raw in messages:
+        decoder = ControlChannelDecoder()
+        events = decoder.feed(raw)
+        events.extend(decoder.finish())
+        result.extend(e.control for e in events if isinstance(e, ControlChunk))
+    return result
+
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -140,7 +154,7 @@ async def test_decode_jwt_unexpected_signing_key_error_wrapped() -> None:
             "provide.terminal.cloudflare.auth.jwt._resolve_signing_key",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
-        pytest.raises(JwtValidationError, match="failed to resolve signing key"),
+        pytest.raises(JwtValidationError, match="failed to verify token"),
     ):
         await decode_jwt(token, config)
 
@@ -312,6 +326,75 @@ async def test_browser_role_for_request_network_error_propagates() -> None:
 
 
 # ---------------------------------------------------------------------------
+# do/session_runtime.py — browser_subject_for_request
+# ---------------------------------------------------------------------------
+
+
+async def test_browser_subject_for_request_returns_none_in_dev_mode() -> None:
+    """In dev/none mode, browser_subject_for_request returns None (no ownership enforcement)."""
+    rt = _make_runtime(mode="dev")
+
+    class _Req:
+        headers = SimpleNamespace(get=lambda name, default=None: None)
+        url = "http://localhost/"
+
+    result = await rt.browser_subject_for_request(_Req())
+    assert result is None
+
+
+async def test_browser_subject_for_request_returns_subject_in_jwt_mode() -> None:
+    """In jwt mode, browser_subject_for_request returns the JWT subject_id."""
+    from provide.terminal.cloudflare.auth.jwt import Principal
+
+    rt = _make_runtime(mode="jwt")
+    token = _make_token(sub="alice")
+
+    class _Req:
+        headers = SimpleNamespace(get=lambda name, default=None: f"Bearer {token}")
+        url = "http://localhost/"
+
+    with patch(
+        "provide.terminal.cloudflare.do.session_runtime.decode_jwt",
+        new=AsyncMock(return_value=Principal(subject_id="alice", roles=("viewer",))),
+    ):
+        result = await rt.browser_subject_for_request(_Req())
+
+    assert result == "alice"
+
+
+async def test_browser_subject_for_request_returns_none_without_token() -> None:
+    """Missing token in JWT mode returns None."""
+    rt = _make_runtime(mode="jwt")
+
+    class _Req:
+        headers = SimpleNamespace(get=lambda name, default=None: None)
+        url = "http://localhost/"
+
+    result = await rt.browser_subject_for_request(_Req())
+    assert result is None
+
+
+async def test_browser_subject_for_request_returns_none_on_jwt_error() -> None:
+    """JwtValidationError returns None instead of propagating."""
+    from provide.terminal.cloudflare.auth.jwt import JwtValidationError
+
+    rt = _make_runtime(mode="jwt")
+    token = _make_token(sub="u1")
+
+    class _Req:
+        headers = SimpleNamespace(get=lambda name, default=None: f"Bearer {token}")
+        url = "http://localhost/"
+
+    with patch(
+        "provide.terminal.cloudflare.do.session_runtime.decode_jwt",
+        new=AsyncMock(side_effect=JwtValidationError("bad")),
+    ):
+        result = await rt.browser_subject_for_request(_Req())
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
 # do/session_runtime.py — webSocketOpen browser with existing last_snapshot (line 308)
 # ---------------------------------------------------------------------------
 
@@ -325,7 +408,33 @@ async def test_websocket_open_browser_sends_last_snapshot() -> None:
     ws = _AsyncWs(attachment="browser:admin:test-worker")
     await rt.webSocketOpen(ws)
 
-    sent = [json.loads(m) for m in ws.sent]
+    sent = _decode_control_frames(ws.sent)
     types = [m["type"] for m in sent]
     assert "hello" in types
     assert "snapshot" in types
+
+
+# ---------------------------------------------------------------------------
+# do/session_runtime.py — webSocketOpen skips hello when fetch() already sent it
+# ---------------------------------------------------------------------------
+
+
+async def test_websocket_open_skips_hello_when_already_initialized() -> None:
+    """webSocketOpen emits exactly one hello per connection.
+
+    When the socket was registered by fetch() before the 101 upgrade (the normal
+    non-hibernation path), webSocketOpen() must not send a second hello frame.
+    """
+    rt = _make_runtime()
+    ws = _AsyncWs(attachment="browser:admin:test-worker")
+
+    # Simulate fetch() registering the socket in browser_sockets (and sending the first hello).
+    ws_id = rt.ws_key(ws)
+    rt.browser_sockets[ws_id] = ws  # type: ignore[assignment]
+
+    await rt.webSocketOpen(ws)
+
+    sent = _decode_control_frames(ws.sent)
+    hello_frames = [m for m in sent if m.get("type") == "hello"]
+    # webSocketOpen must NOT add a second hello — fetch() already sent one.
+    assert len(hello_frames) == 0

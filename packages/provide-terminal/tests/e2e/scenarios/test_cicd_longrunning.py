@@ -16,7 +16,6 @@ import json
 from typing import Any
 
 import httpx
-
 from provide.terminal.client import connect_async_ws
 
 from .conftest import (
@@ -70,16 +69,12 @@ async def test_build_output_event_polling(live_hub: Any) -> None:
 
             # Should have captured many events (snapshots + control)
             snapshot_events = [e for e in all_events if e.get("type") == "snapshot"]
-            assert len(snapshot_events) >= 30, (
-                f"Should capture ≥30 snapshot events, got {len(snapshot_events)}"
-            )
+            assert len(snapshot_events) >= 30, f"Should capture ≥30 snapshot events, got {len(snapshot_events)}"
 
             # Sequence numbers should be contiguous
             seqs = [e["seq"] for e in all_events]
             for i in range(1, len(seqs)):
-                assert seqs[i] == seqs[i - 1] + 1, (
-                    f"Seq gap at index {i}: {seqs[i - 1]} → {seqs[i]}"
-                )
+                assert seqs[i] == seqs[i - 1] + 1, f"Seq gap at index {i}: {seqs[i - 1]} → {seqs[i]}"
 
             # Release
             await http.post(f"/worker/build1/hijack/{hijack_id}/release")
@@ -171,10 +166,7 @@ async def test_session_survives_brief_network_blip(resume_hub: Any) -> None:
                     break
 
             # Verify browser got the snapshot
-            got_snapshot = any(
-                m.get("type") == "snapshot" and "pre-blip" in m.get("screen", "")
-                for m in initial_msgs
-            )
+            got_snapshot = any(m.get("type") == "snapshot" and "pre-blip" in m.get("screen", "") for m in initial_msgs)
             assert got_snapshot, f"Browser should get pre-blip snapshot: {initial_msgs}"
 
         # Browser disconnected — brief blip
@@ -200,8 +192,5 @@ async def test_session_survives_brief_network_blip(resume_hub: Any) -> None:
             await asyncio.sleep(0.5)
 
             post_msgs = await drain_all(browser_new, timeout=1.0)
-            got_post = any(
-                m.get("type") == "snapshot" and "post-blip" in m.get("screen", "")
-                for m in post_msgs
-            )
+            got_post = any(m.get("type") == "snapshot" and "post-blip" in m.get("screen", "") for m in post_msgs)
             assert got_post, f"Resumed browser should receive new snapshots: {post_msgs}"

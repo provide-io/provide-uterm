@@ -1,5 +1,5 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,7 +60,10 @@ class MockTerminal {
   opened = false;
   disposed = false;
   focused = false;
+  cols = 0;
+  rows = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   addon: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _onData: ((data: string) => void) | null = null;
@@ -80,6 +83,7 @@ class MockTerminal {
     this.disposed = true;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   loadAddon(a: any): void {
     this.addon = a;
   }
@@ -130,9 +134,9 @@ beforeEach(() => {
   instances = [];
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", MockWebSocket);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).Terminal = MockTerminal;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (window as any).FitAddon = { FitAddon: MockFitAddon };
 });
 
@@ -453,6 +457,7 @@ describe("message dispatch", () => {
   it("heartbeat_ack is a no-op", () => {
     const { container } = makeWidget();
     getWs().open();
+    sendMessage({ type: "worker_connected" });
     sendMessage({ type: "heartbeat_ack" });
     expect(q(container, "statustext")?.textContent).toBe("Connected (watching)");
   });
@@ -752,14 +757,11 @@ describe("mobileKeys=false option", () => {
 describe("local echo and activity indicator", () => {
   it("widget has local echo tracking state variables", () => {
     const { widget } = makeWidget();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
-    // Verify state variables exist for local echo feature
-    expect(w._lastLocalEcho).toBeDefined();
-    expect(w._lastLocalEchoTimer).toBeNull();
+    // Verify state variables exist for activity indicator feature
     expect(w._activityFlashTimer).toBeNull();
-    expect(w._indicatorStyleCache).toBeNull();
     expect(w._statusDotElement).toBeNull();
   });
 
@@ -801,18 +803,16 @@ describe("local echo and activity indicator", () => {
     const { widget } = makeWidget();
     getWs().open();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     const w = widget as any;
 
-    // Set up timers
-    w._lastLocalEchoTimer = setTimeout(() => {}, 500);
+    // Set up timer
     w._activityFlashTimer = setTimeout(() => {}, 200);
 
-    // Dispose should clear them
+    // Dispose should clear it
     widget.dispose();
 
-    // After dispose, timers should be null and cache cleared
-    expect(w._lastLocalEchoTimer).toBeNull();
+    // After dispose, timers should be null
     expect(w._activityFlashTimer).toBeNull();
     expect(w._statusDotElement).toBeNull();
   });

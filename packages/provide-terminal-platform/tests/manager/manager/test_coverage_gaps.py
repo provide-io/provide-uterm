@@ -61,9 +61,7 @@ class TestCoreLoadStateSkipsBadAgent:
 
     def test_load_state_skips_already_known_agent(self, manager, tmp_path):
         """arc 223->221: known agent_id skips load, not overwritten."""
-        manager.agents["agent_known"] = AgentStatusBase(
-            agent_id="agent_known", state="running"
-        )
+        manager.agents["agent_known"] = AgentStatusBase(agent_id="agent_known", state="running")
         state = {
             "agents": {
                 "agent_known": {"agent_id": "agent_known", "state": "stopped"},

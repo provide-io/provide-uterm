@@ -289,9 +289,13 @@ class SessionRegistry:
             runtime = self._runtime_for(session)
             runtime_any = cast("Any", runtime)
             runtime_any._connected = connected
-            runtime_any._state = "running" if connected else "stopped"
             if connected:
+                runtime_any._state = "running"
                 runtime_any._last_error = None
+                runtime_any._stopped_at = None
+            else:
+                runtime_any._state = "stopped"
+                runtime_any._stopped_at = time.time()
         return runtime.status()
 
     async def analyze_session(self, session_id: str) -> str:

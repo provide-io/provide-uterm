@@ -87,9 +87,7 @@ async def test_human_interrupts_ai_agent(live_hub: Any) -> None:
 
             post_msgs = await drain_all(human, timeout=2.0)
             post_snapshots = [m for m in post_msgs if m.get("type") == "snapshot"]
-            assert len(post_snapshots) >= 3, (
-                f"Human should receive post-release snapshots, got {len(post_snapshots)}"
-            )
+            assert len(post_snapshots) >= 3, f"Human should receive post-release snapshots, got {len(post_snapshots)}"
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +212,4 @@ async def test_agent_recovery_output_resumes(live_hub: Any) -> None:
 
             post_msgs = await drain_all(browser, timeout=2.0)
             post_snaps = [m for m in post_msgs if m.get("type") == "snapshot"]
-            assert len(post_snaps) >= 2, (
-                f"Browser should receive post-release snapshots, got {len(post_snaps)}"
-            )
+            assert len(post_snaps) >= 2, f"Browser should receive post-release snapshots, got {len(post_snaps)}"

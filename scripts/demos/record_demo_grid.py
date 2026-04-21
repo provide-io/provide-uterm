@@ -235,7 +235,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
                 timeout=15000,
             )
 
-    def _send_animations(page: object) -> None:  # noqa: ARG001
+    def _send_animations(page: object) -> None:
         """Send looping GIF render to all 9 terminals via hijack endpoints."""
         import httpx as _h
 
@@ -264,7 +264,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         with _h.Client(base_url=base_url, timeout=10.0) as http:
             for sid, hid in hijack_ids.items():
                 http.post(f"/worker/{sid}/hijack/{hid}/release")
-    except Exception:  # noqa: S110
+    except Exception:
         pass
 
     img_server.shutdown()

@@ -17,21 +17,19 @@ Run with::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shutil
+import socket
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
-import contextlib
-import socket
-import threading
-
 import httpx
 import pytest
 import uvicorn
-
 from provide.terminal.bridge.hub import EventBus
 from provide.terminal.server import create_server_app, default_server_config
 
@@ -204,19 +202,22 @@ def docker_server(docker_ssh_fleet: list[tuple[str, int]]) -> Any:  # type: igno
         for i, (host, sshport) in enumerate(docker_ssh_fleet):
             sid = f"ssh-{i}"
             wids.append(sid)
-            resp = http.post("/api/sessions", json={
-                "session_id": sid,
-                "display_name": f"SSH Container {i}",
-                "connector_type": "ssh",
-                "auto_start": True,
-                "connector_config": {
-                    "host": host,
-                    "port": sshport,
-                    "username": _SSH_USER,
-                    "password": _SSH_PASS,
-                    "insecure_no_host_check": True,
+            resp = http.post(
+                "/api/sessions",
+                json={
+                    "session_id": sid,
+                    "display_name": f"SSH Container {i}",
+                    "connector_type": "ssh",
+                    "auto_start": True,
+                    "connector_config": {
+                        "host": host,
+                        "port": sshport,
+                        "username": _SSH_USER,
+                        "password": _SSH_PASS,
+                        "insecure_no_host_check": True,
+                    },
                 },
-            })
+            )
             assert resp.status_code == 200, f"Failed to create {sid}: {resp.text}"
 
         # Poll until all connected
@@ -271,17 +272,22 @@ def _live_server_ctx(fleet: list[tuple[str, int]], wids: list[str], prefix: str 
     with _httpx.Client(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         for i, (host, sshport) in enumerate(fleet):
             sid = f"{prefix}-{i}"
-            http.post("/api/sessions", json={
-                "session_id": sid,
-                "display_name": f"SSH {prefix} {i}",
-                "connector_type": "ssh",
-                "auto_start": True,
-                "connector_config": {
-                    "host": host, "port": sshport,
-                    "username": _SSH_USER, "password": _SSH_PASS,
-                    "insecure_no_host_check": True,
+            http.post(
+                "/api/sessions",
+                json={
+                    "session_id": sid,
+                    "display_name": f"SSH {prefix} {i}",
+                    "connector_type": "ssh",
+                    "auto_start": True,
+                    "connector_config": {
+                        "host": host,
+                        "port": sshport,
+                        "username": _SSH_USER,
+                        "password": _SSH_PASS,
+                        "insecure_no_host_check": True,
+                    },
                 },
-            })
+            )
 
         poll_deadline = time.monotonic() + 60.0
         for sid in wids:
@@ -457,9 +463,11 @@ async def test_fanout_large_output(docker_server: tuple[str, list[str]]) -> None
     async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="large-output-test")
         body = await _send_command(
-            http, group_id,
+            http,
+            group_id,
             "dd if=/dev/urandom bs=1024 count=10 2>/dev/null | base64\n",
-            quiesce_ms=3000, max_response_ms=15000,
+            quiesce_ms=3000,
+            max_response_ms=15000,
         )
         assert len(body["results"]) == _NUM_CONTAINERS
         for r in body["results"]:
@@ -534,7 +542,15 @@ async def test_fanout_partial_failure(docker_ssh_fleet: list[tuple[str, int]]) -
     host, port = docker_ssh_fleet[stopped_idx]
     for _attempt in range(20):
         try:
-            conn = await asyncssh.connect(host, port=port, username=_SSH_USER, password=_SSH_PASS, known_hosts=None, client_keys=[], agent_path=None)
+            conn = await asyncssh.connect(
+                host,
+                port=port,
+                username=_SSH_USER,
+                password=_SSH_PASS,
+                known_hosts=None,
+                client_keys=[],
+                agent_path=None,
+            )
             conn.close()
             break
         except (OSError, asyncssh.Error):
@@ -583,8 +599,11 @@ async def test_fanout_adaptive_quiesce(docker_server: tuple[str, list[str]]) -> 
     async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="quiesce-test")
         body = await _send_command(
-            http, group_id, "sleep 0.3 && echo done\n",
-            quiesce_ms=2000, max_response_ms=10000,
+            http,
+            group_id,
+            "sleep 0.3 && echo done\n",
+            quiesce_ms=2000,
+            max_response_ms=10000,
         )
         assert len(body["results"]) == _NUM_CONTAINERS
         for r in body["results"]:

@@ -14,7 +14,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import HijackSession, WorkerTermState
 

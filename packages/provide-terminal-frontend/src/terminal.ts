@@ -1,9 +1,9 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-type ThemeName = "crt" | "bbs" | "glass";
+type ThemeName = "crt" | "bbs" | "glass" | "code";
 
 interface TerminalConfig {
   wsUrl?: string;
@@ -87,7 +87,7 @@ interface Window {
 }
 
 const DEFAULTS: TerminalSettings = {
-  theme: "crt",
+  theme: "code",
   cols: 80,
   rows: 25,
   fontSize: 14,
@@ -104,6 +104,7 @@ const THEME_DEFAULTS: Record<ThemeName, Pick<TerminalSettings, "scanlines" | "vi
   crt: { scanlines: true, vignette: true, glow: false },
   bbs: { scanlines: false, vignette: false, glow: false },
   glass: { scanlines: false, vignette: false, glow: true },
+  code: { scanlines: false, vignette: false, glow: false },
 };
 
 let cssInjected = false;
@@ -124,7 +125,7 @@ function injectCss(): void {
 }
 
 function asThemeName(value: string | null | undefined): ThemeName {
-  return value === "bbs" || value === "glass" ? value : "crt";
+  return value === "bbs" || value === "glass" || value === "crt" ? value : "code";
 }
 
 class ProvideTerminal {
@@ -211,6 +212,7 @@ class ProvideTerminal {
       <div class="settings-panel" id="settingsPanel-${this.uid}">
         <h3>Theme</h3>
         <div class="theme-options">
+          <button class="theme-btn" data-theme="code">Code</button>
           <button class="theme-btn" data-theme="crt">CRT</button>
           <button class="theme-btn" data-theme="bbs">BBS/DOS</button>
           <button class="theme-btn" data-theme="glass">Glass</button>
@@ -407,7 +409,15 @@ class ProvideTerminal {
 
   private applyThemeClasses(): void {
     if (this.root === null) return;
-    this.root.classList.remove("theme-crt", "theme-bbs", "theme-glass", "fx-scanlines", "fx-vignette", "fx-glow");
+    this.root.classList.remove(
+      "theme-crt",
+      "theme-bbs",
+      "theme-glass",
+      "theme-code",
+      "fx-scanlines",
+      "fx-vignette",
+      "fx-glow",
+    );
     this.root.classList.add(`theme-${this.settings.theme}`);
     if (this.settings.scanlines) this.root.classList.add("fx-scanlines");
     if (this.settings.vignette) this.root.classList.add("fx-vignette");
@@ -604,7 +614,6 @@ class ProvideTerminal {
 
     this.term.focus();
     this.term.onData((data) => this.handleTerminalInput(data));
-    this.term.attachCustomKeyEventHandler((event) => !(event.ctrlKey || event.metaKey));
 
     const loading = this.q<HTMLElement>("loadingScreen");
     loading.style.removeProperty("display");

@@ -299,7 +299,7 @@ class TestCtrlUK:
         assert ed.cursor_pos == 0
         combined = _joined(writes)
         assert "\x1b[2D" in combined  # moved left 2
-        assert "\x1b[K" in combined   # erased to EOL
+        assert "\x1b[K" in combined  # erased to EOL
 
     async def test_ctrl_u_from_middle_kills_backward(self) -> None:
         ed, writes = _editor()
@@ -483,7 +483,7 @@ class TestMidlineBackspace:
         assert ed.cursor_pos == 1
         combined = _joined(writes)
         assert "\x08" in combined  # moved left
-        assert "c" in combined     # tail redrawn
+        assert "c" in combined  # tail redrawn
 
     async def test_backspace_at_start_noop(self) -> None:
         ed, writes = _editor()
@@ -545,7 +545,7 @@ class TestPasswordMode:
         for ch in "ab":
             await ed.process_char(ch)
         await ed.process_char("\x01")  # go to start
-        await ed.process_char("x")    # insert at start
+        await ed.process_char("x")  # insert at start
         assert ed.get_buffer() == "xab"
         assert ed.cursor_pos == 1
 

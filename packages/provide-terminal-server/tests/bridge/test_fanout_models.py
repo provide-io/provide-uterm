@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import time
-
 from provide.terminal.bridge.fanout import FanOutGroup, FanOutResult, SessionFanOutResult
 
 
@@ -115,7 +113,7 @@ class TestSessionFanOutResult:
         r = SessionFanOutResult(worker_id="w", ok=True, output_delta=None, elapsed_ms=1, divergent=False)
         try:
             r.extra = "nope"  # type: ignore[attr-defined]
-            assert False, "Should have raised AttributeError"  # pragma: no cover
+            raise AssertionError("Should have raised AttributeError")  # pragma: no cover
         except AttributeError:
             pass
 
@@ -157,9 +155,7 @@ class TestFanOutResult:
         assert fr.failed_sessions == []
 
     def test_results_list_contains_session_results(self) -> None:
-        session_result = SessionFanOutResult(
-            worker_id="w5", ok=True, output_delta="data", elapsed_ms=5, divergent=True
-        )
+        session_result = SessionFanOutResult(worker_id="w5", ok=True, output_delta="data", elapsed_ms=5, divergent=True)
         fr = FanOutResult(
             group_id="g3",
             send_id="s1",

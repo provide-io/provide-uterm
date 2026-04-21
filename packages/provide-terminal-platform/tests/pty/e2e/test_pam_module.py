@@ -58,17 +58,13 @@ def _find_pam_module_dir() -> Path:
     for d in candidates:
         if d.exists():
             return d
-    raise RuntimeError(
-        "Cannot find PAM module directory (looked for pam_unix.so in standard paths)"
-    )
+    raise RuntimeError("Cannot find PAM module directory (looked for pam_unix.so in standard paths)")
 
 
 def _install_module() -> Path:
     """Copy pam_uterm.so into the system PAM module directory. Returns dest path."""
     if not _SO_SRC.exists():
-        pytest.skip(
-            f"pam_uterm.so not built (run: make -C native/pam_uterm/) [{_SO_SRC}]"
-        )
+        pytest.skip(f"pam_uterm.so not built (run: make -C native/pam_uterm/) [{_SO_SRC}]")
     dest = _find_pam_module_dir() / "pam_uterm.so"
     shutil.copy2(_SO_SRC, dest)
     return dest
@@ -129,9 +125,7 @@ async def test_pam_module_open_sends_event() -> None:
             session = await _open_session(svc_name)
             await asyncio.sleep(0.1)
 
-            assert len(events) >= 1, (
-                "Expected at least one event — pam_uterm.so may have failed to connect"
-            )
+            assert len(events) >= 1, "Expected at least one event — pam_uterm.so may have failed to connect"
             ev = events[0]
             assert ev.event == "open"
             assert ev.username == _TEST_USER
@@ -181,9 +175,7 @@ async def test_pam_module_close_sends_event() -> None:
             await asyncio.sleep(0.1)
 
             close_events = [e for e in events if e.event == "close"]
-            assert len(close_events) >= 1, (
-                "Expected a close event from pam_sm_close_session"
-            )
+            assert len(close_events) >= 1, "Expected a close event from pam_sm_close_session"
             assert close_events[0].username == _TEST_USER
         finally:
             if session:
@@ -252,9 +244,7 @@ async def test_pam_module_custom_socket_path_arg() -> None:
         try:
             session = await _open_session(svc_name)
             await asyncio.sleep(0.1)
-            assert any(e.username == _TEST_USER for e in events), (
-                f"No event received on custom socket {custom_sock!r}"
-            )
+            assert any(e.username == _TEST_USER for e in events), f"No event received on custom socket {custom_sock!r}"
         finally:
             if session:
                 try:

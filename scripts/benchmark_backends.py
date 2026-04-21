@@ -78,7 +78,6 @@ def _fastapi_server():
 
     import uvicorn
     from fastapi import FastAPI
-
     from provide.terminal.bridge.hub.core import TermHub
 
     logging.getLogger("provide").setLevel(logging.CRITICAL)
@@ -118,7 +117,7 @@ def _pywrangler_server():
     original = dev_vars.read_text() if dev_vars.exists() else None
     dev_vars.write_text("AUTH_MODE=dev\n")
 
-    proc = subprocess.Popen(  # noqa: S603
+    proc = subprocess.Popen(
         [pywrangler, "dev", "--port", str(_CF_PORT), "--ip", "127.0.0.1", "--var", "ENVIRONMENT:development"],
         cwd=_CF_PACKAGE,
         stdout=subprocess.PIPE,
@@ -490,7 +489,7 @@ def main() -> int:
         for flag, key in [("--fastapi-only", "fastapi"), ("--cf-only", "cf_worker")]:
             tmp = out_dir / f"_tmp_{key}.json"
             print(f"\n--- Running {key} benchmark (subprocess) ---")
-            rc = subprocess.call(  # noqa: S603
+            rc = subprocess.call(
                 [sys.executable, __file__, flag],
                 timeout=300,
             )

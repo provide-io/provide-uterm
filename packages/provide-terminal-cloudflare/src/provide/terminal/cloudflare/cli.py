@@ -14,7 +14,7 @@ def _package_root() -> Path:
 
 
 def _run(cmd: list[str], cwd: Path) -> int:
-    proc = subprocess.run(cmd, cwd=cwd)  # noqa: S603 - command is built from trusted literals and argparse values
+    proc = subprocess.run(cmd, cwd=cwd)
     return int(proc.returncode)
 
 

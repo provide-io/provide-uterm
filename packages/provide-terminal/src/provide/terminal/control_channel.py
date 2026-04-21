@@ -83,9 +83,7 @@ class ControlChannelDecoder:
         if total > self._max_buffer_bytes:
             self._buffer_parts.clear()
             self._buffer = ""
-            raise ControlChannelProtocolError(
-                f"control channel buffer overflow: {total} > {self._max_buffer_bytes}"
-            )
+            raise ControlChannelProtocolError(f"control channel buffer overflow: {total} > {self._max_buffer_bytes}")
         self._buffer = "".join(self._buffer_parts)
         events = self._drain(final=False)
         # After _drain, self._buffer contains only unconsumed data.

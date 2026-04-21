@@ -317,7 +317,7 @@ class HostedSessionRuntime:
                 if recv_task is not None and recv_task.done():
                     try:
                         raw = recv_task.result()
-                    except asyncio.CancelledError:
+                    except asyncio.CancelledError:  # pragma: no cover — WS teardown race
                         break
                     recv_task = None
                     raw_text = raw if isinstance(raw, str) else raw.decode("latin-1", errors="replace")

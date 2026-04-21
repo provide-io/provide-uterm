@@ -25,9 +25,7 @@ async def test_inject_start_creates_capture_socket() -> None:
 
     mock_cap = AsyncMock(spec=CaptureSocket)
     with patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap):
-        conn = make_connector(
-            __import__("sys").executable, ["-c", "import time; time.sleep(0.1)"], inject=True
-        )
+        conn = make_connector(__import__("sys").executable, ["-c", "import time; time.sleep(0.1)"], inject=True)
         await conn.start()
         assert conn._capture_socket is mock_cap
         assert conn._capture_tmpdir is not None
@@ -106,6 +104,7 @@ async def test_stop_cleans_up_orphaned_master_fd() -> None:
     await conn.stop()
     assert conn._master_fd is None
     import pytest
+
     with pytest.raises(OSError):
         os.close(r_fd)
 

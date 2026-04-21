@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from provide.telemetry import get_logger
 from provide.terminal.defaults import TerminalDefaults
@@ -23,6 +23,9 @@ from provide.terminal.gateway._gateway import (
     _read_token,
     _require_websockets,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

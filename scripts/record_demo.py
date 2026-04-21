@@ -17,7 +17,6 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import json
 import socket
 import subprocess
 import sys
@@ -28,7 +27,6 @@ from typing import Any
 
 import httpx
 import uvicorn
-
 from provide.terminal.server import create_server_app, default_server_config
 
 DEMO_DIR = Path("demo/recordings")
@@ -71,33 +69,42 @@ async def demo_fanout(http: httpx.AsyncClient) -> None:
 
     # Create 3 shell sessions
     for i in range(3):
-        r = await http.post("/api/sessions", json={
-            "session_id": f"fleet-{i}",
-            "display_name": f"Fleet Node {i}",
-            "connector_type": "shell",
-            "auto_start": True,
-        })
+        r = await http.post(
+            "/api/sessions",
+            json={
+                "session_id": f"fleet-{i}",
+                "display_name": f"Fleet Node {i}",
+                "connector_type": "shell",
+                "auto_start": True,
+            },
+        )
         print(f"  Created session fleet-{i}: {r.status_code}")
 
     await asyncio.sleep(1.0)  # let sessions start
 
     # Create fan-out group
-    r = await http.post("/api/fanout/groups", json={
-        "name": "demo-fleet",
-        "worker_ids": ["fleet-0", "fleet-1", "fleet-2"],
-        "mode": "parallel",
-    })
+    r = await http.post(
+        "/api/fanout/groups",
+        json={
+            "name": "demo-fleet",
+            "worker_ids": ["fleet-0", "fleet-1", "fleet-2"],
+            "mode": "parallel",
+        },
+    )
     group_id = r.json()["group_id"]
     print(f"  Created fan-out group: {group_id[:12]}...")
 
     # Broadcast a command
-    r = await http.post(f"/api/fanout/groups/{group_id}/send", json={
-        "data": "help\r",
-        "quiesce_ms": 1500,
-        "max_response_ms": 5000,
-    })
+    r = await http.post(
+        f"/api/fanout/groups/{group_id}/send",
+        json={
+            "data": "help\r",
+            "quiesce_ms": 1500,
+            "max_response_ms": 5000,
+        },
+    )
     result = r.json()
-    print(f"  Broadcast 'help' to 3 sessions:")
+    print("  Broadcast 'help' to 3 sessions:")
     for sr in result["results"]:
         ok = "\033[32m✓\033[0m" if sr["ok"] else "\033[31m✗\033[0m"
         delta_len = len(sr.get("output_delta") or "")
@@ -111,11 +118,14 @@ async def demo_annotation(http: httpx.AsyncClient) -> None:
     print("\n\033[1;36m=== Annotation Demo ===\033[0m\n")
 
     # Agent self-annotation
-    r = await http.post("/api/sessions/provide-shell/annotate", json={
-        "label": "demo_started",
-        "description": "Provide-terminal demo recording in progress",
-        "severity": "info",
-    })
+    r = await http.post(
+        "/api/sessions/provide-shell/annotate",
+        json={
+            "label": "demo_started",
+            "description": "Provide-terminal demo recording in progress",
+            "severity": "info",
+        },
+    )
     print(f"  Agent annotation: {r.status_code} (seq={r.json().get('seq', '?')})")
 
     # Query annotations
@@ -175,8 +185,14 @@ def record_asciinema() -> Path:
     cast_path = DEMO_DIR / "demo.cast"
     print(f"Recording asciinema to {cast_path}...")
     subprocess.run(
-        ["asciinema", "rec", str(cast_path), "--overwrite", "-c",
-         f"{sys.executable} scripts/record_demo.py --run-demo"],
+        [
+            "asciinema",
+            "rec",
+            str(cast_path),
+            "--overwrite",
+            "-c",
+            f"{sys.executable} scripts/record_demo.py --run-demo",
+        ],
         check=True,
         timeout=120,
     )

@@ -82,12 +82,8 @@ async def test_hijack_acquire_release_50_cycles_no_corruption(live_hub: Any) -> 
 
             # Worker should have received pause/resume messages
             worker_msgs = await _drain_all(worker, timeout=1.0)
-            pause_count = sum(
-                1 for m in worker_msgs if m.get("type") == "control" and m.get("action") == "pause"
-            )
-            resume_count = sum(
-                1 for m in worker_msgs if m.get("type") == "control" and m.get("action") == "resume"
-            )
+            pause_count = sum(1 for m in worker_msgs if m.get("type") == "control" and m.get("action") == "pause")
+            resume_count = sum(1 for m in worker_msgs if m.get("type") == "control" and m.get("action") == "resume")
             # At minimum some pauses and resumes should have been delivered
             assert pause_count >= 10, f"Expected ≥10 pauses, got {pause_count}"
             assert resume_count >= 10, f"Expected ≥10 resumes, got {resume_count}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """End-to-end walkthrough of the provide-terminal hijack lifecycle.
@@ -26,7 +26,6 @@ from typing import Any
 
 import httpx
 import uvicorn
-
 from provide.terminal.client import HijackClient
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.config import config_from_mapping

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from provide.terminal.cloudflare.do.ws_helpers import _WsHelperMixin
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
 
 
 def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:
@@ -23,6 +23,7 @@ def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:
             self.browser_sockets: dict = {}
             self.raw_sockets: dict = {}
             self.browser_hijack_owner: dict = {}
+            self.browser_resume_tokens: dict = {}
             self.config = SimpleNamespace(jwt=SimpleNamespace(mode=jwt_mode))
 
     return _Host()  # type: ignore[return-value]
@@ -259,7 +260,7 @@ async def test_send_ws_encodes_control_frame() -> None:
     await host.send_ws(ws, {"type": "hello", "v": 1})
     ws.send.assert_called_once()
     payload = ws.send.call_args[0][0]
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
     events = decoder.feed(payload)
     assert len(events) == 1
     assert isinstance(events[0], ControlChunk)

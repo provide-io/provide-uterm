@@ -59,11 +59,11 @@ def test_config_from_mapping_parses_sessions_and_paths() -> None:
     assert config.sessions[0].connector_config["port"] == 23
 
 
-def test_policy_fails_closed_for_anonymous_in_non_dev_mode() -> None:
+async def test_policy_fails_closed_for_anonymous_in_non_dev_mode() -> None:
     policy = SessionPolicyResolver(AuthConfig(mode="jwt", jwt_public_key_pem="x", jwt_algorithms=["HS256"]))
     session = SessionDefinition(session_id="s1", display_name="Session", connector_type="shell")
 
-    role = policy.role_for(Principal(subject_id="anonymous", roles=frozenset({"viewer"})), session)
+    role = await policy.role_for(Principal(subject_id="anonymous", roles=frozenset({"viewer"})), session)
 
     assert role == "viewer"
 

@@ -17,6 +17,7 @@ kv set <key> <val>  — write a KV entry
 kv delete <key>     — delete a KV entry
 fetch [-X METHOD] <url> [body] — HTTP request (GET by default)
 render [flags] <url>    — render image as ANSI art (requires provide-terminal[emulator])
+cast [--fps N] [--loop] <url> — fetch and replay an asciicast v2 (.cast) file
 storage list        — list DO storage keys
 storage get <key>   — read a DO storage value
 env                 — show available context keys
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from provide.terminal.shell._output import (
     BOLD,
@@ -56,16 +57,6 @@ class AnimatedResult:
     loop: bool
 
 
-
-@dataclass
-class AnimatedResult:
-    """Return type for animated render output — caller handles frame timing."""
-
-    frames: list[str]
-    fps: float
-    loop: bool
-
-
 # ---------------------------------------------------------------------------
 # Help text
 # ---------------------------------------------------------------------------
@@ -83,6 +74,7 @@ _HELP = (
     f"{fmt_kv('kv delete <key>', 'delete a KV entry')}"
     f"{fmt_kv('fetch [-X METHOD] <url> [body]', 'HTTP request (GET by default)')}"
     f"{fmt_kv('render [flags] <url>', 'render image as ANSI art')}"
+    f"{fmt_kv('cast [--fps N] [--loop] <url>', 'fetch and replay an asciicast v2 file')}"
     f"{fmt_kv('storage list', 'list DO storage keys')}"
     f"{fmt_kv('storage get <key>', 'read a DO storage value')}"
     f"{fmt_kv('env', 'show available context keys')}"
@@ -122,6 +114,13 @@ _COMMAND_HELP: dict[str, str] = {
         "  Supports PNG, JPEG, GIF, APNG, WebP, BMP, TIFF, and more.\r\n"
         "  Animated images stream frames; use --loop to repeat.\r\n"
         "  Requires: pip install 'provide-terminal[emulator]'\r\n"
+    ),
+    "cast": (
+        "cast [--fps N] [--loop] <url>\r\n"
+        "  Fetch and replay an asciicast v2 (.cast) recording file.\r\n"
+        "  Supports http://, https://, and file:// URLs.\r\n"
+        "  --fps N    playback speed (default: 15)\r\n"
+        "  --loop     repeat the recording until interrupted\r\n"
     ),
     "exit": "exit / quit — end this shell session.\r\n",
     "quit": "exit / quit — end this shell session.\r\n",
@@ -198,6 +197,9 @@ class CommandDispatcher:
 
         if cmd == "render":
             return await self._cmd_render(arg)
+
+        if cmd == "cast":
+            return await self._cmd_cast(arg)
 
         return [error_msg(f"unknown command: {cmd!r} — type {BOLD}help{RESET}") + PROMPT]
 
@@ -418,7 +420,7 @@ class CommandDispatcher:
             ]
 
         # Parse flags
-        mode = "truecolor"
+        mode: Literal["truecolor", "256", "16"] = "truecolor"
         cols = 80
         rows = 24
         fps_override: float | None = None
@@ -429,9 +431,10 @@ class CommandDispatcher:
         while i < len(tokens):
             tok = tokens[i]
             if tok == "--mode" and i + 1 < len(tokens):
-                mode = tokens[i + 1]
-                if mode not in {"truecolor", "256", "16"}:
-                    return [error_msg(f"unknown mode {mode!r} (use truecolor, 256, or 16)") + PROMPT]
+                _mode_raw = tokens[i + 1]
+                if _mode_raw not in {"truecolor", "256", "16"}:
+                    return [error_msg(f"unknown mode {_mode_raw!r} (use truecolor, 256, or 16)") + PROMPT]
+                mode = cast('Literal["truecolor", "256", "16"]', _mode_raw)
                 i += 2
             elif tok == "--cols" and i + 1 < len(tokens):
                 cols = int(tokens[i + 1])
@@ -477,9 +480,9 @@ class CommandDispatcher:
 
         # Convert to ANSI frames
         try:
-            from provide.shell._render import image_to_ansi_frames
+            from provide.terminal.shell._render import image_to_ansi_frames
 
-            frames, source_fps = image_to_ansi_frames(data, cols=cols, rows=rows, mode=mode)  # type: ignore[arg-type]
+            frames, source_fps = image_to_ansi_frames(data, cols=cols, rows=rows, mode=mode)
         except ImportError as exc:
             return [error_msg(str(exc)) + PROMPT]
         except Exception as exc:
@@ -491,3 +494,96 @@ class CommandDispatcher:
             return [frames[0] + PROMPT] if frames else [error_msg("empty image") + PROMPT]
 
         return AnimatedResult(frames=frames, fps=fps_final, loop=loop)
+
+    async def _cmd_cast(self, arg: str) -> list[str] | AnimatedResult:
+        """Fetch and replay an asciicast v2 (.cast) file."""
+        import json as _json
+
+        tokens = arg.split()
+        url = ""
+        loop = False
+        fps_override: float | None = None
+
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok == "--loop":
+                loop = True
+                i += 1
+            elif tok == "--fps" and i + 1 < len(tokens):
+                fps_override = float(tokens[i + 1])
+                i += 2
+            elif not tok.startswith("--"):
+                url = tok
+                i += 1
+            else:
+                return [error_msg(f"unknown flag: {tok}") + PROMPT]
+
+        if not url:
+            return [error_msg("usage: cast [--fps N] [--loop] <url>") + PROMPT]
+
+        # Fetch the cast file
+        try:
+            if url.startswith("file://"):
+                file_path = Path(url[7:])
+                if not file_path.is_file():
+                    return [error_msg(f"file not found: {file_path}") + PROMPT]
+                text = file_path.read_text(encoding="utf-8", errors="replace")
+            elif url.startswith(("http://", "https://")):
+                import urllib.request
+
+                req = urllib.request.Request(url, headers={"User-Agent": "provide-terminal/1.0"})  # noqa: S310
+                with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310  # nosec B310
+                    text = resp.read().decode("utf-8", errors="replace")
+            else:
+                return [error_msg("unsupported URL scheme (use http://, https://, or file://)") + PROMPT]
+        except Exception as exc:
+            return [error_msg(f"cannot fetch: {exc}") + PROMPT]
+
+        # Parse asciicast v2 format
+        raw_lines = [ln for ln in text.splitlines() if ln.strip()]
+        if not raw_lines:
+            return [error_msg("empty cast file") + PROMPT]
+
+        try:
+            header = _json.loads(raw_lines[0])
+            if header.get("version") != 2:
+                return [error_msg(f"unsupported asciicast version: {header.get('version')}") + PROMPT]
+        except Exception as exc:
+            return [error_msg(f"invalid cast header: {exc}") + PROMPT]
+
+        events: list[tuple[float, str]] = []
+        for raw in raw_lines[1:]:
+            try:
+                ev = _json.loads(raw)
+                if isinstance(ev, list) and len(ev) >= 3 and ev[1] == "o":
+                    events.append((float(ev[0]), str(ev[2])))
+            except Exception:
+                continue
+
+        if not events:
+            return [error_msg("no output events in cast file") + PROMPT]
+
+        # Group events into time-bucketed frames at target FPS
+        target_fps = fps_override if fps_override is not None else 15.0
+        frame_dur = 1.0 / target_fps
+        total_dur = events[-1][0] + frame_dur
+        n_frames = max(1, int(total_dur / frame_dur))
+
+        buckets: list[str] = [""] * n_frames
+        for ts, data in events:
+            idx = min(int(ts / frame_dur), n_frames - 1)
+            buckets[idx] += data
+
+        # Build frame list: clear screen first, then non-empty time slices
+        frames: list[str] = ["\x1b[2J\x1b[H"]
+        started = False
+        for bucket in buckets:
+            if bucket or started:
+                started = True
+                frames.append(bucket)
+
+        if len(frames) <= 1:
+            return [error_msg("cast file has no displayable output") + PROMPT]
+
+        return AnimatedResult(frames=frames, fps=target_fps, loop=loop)

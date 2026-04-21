@@ -105,7 +105,7 @@ class LineEditor:
         # ── Backspace / Delete ─────────────────────────────────────────────
         if ch in ("\x7f", "\x08"):
             if self.cursor_pos > 0:
-                tail = self.buffer[self.cursor_pos:]
+                tail = self.buffer[self.cursor_pos :]
                 self.buffer = self.buffer[: self.cursor_pos - 1] + tail
                 self.cursor_pos -= 1
                 display = self._display(tail)
@@ -146,11 +146,11 @@ class LineEditor:
         # ── Ctrl+U: kill backward (cursor to start of line) ───────────────
         if ch == "\x15":
             if self.cursor_pos > 0:
-                remaining = self.buffer[self.cursor_pos:]
+                remaining = self.buffer[self.cursor_pos :]
                 self.buffer = remaining
                 seq = f"\x1b[{self.cursor_pos}D"  # move to start of input
-                seq += self._display(remaining)    # redraw remaining chars
-                seq += "\x1b[K"                    # erase from here to EOL
+                seq += self._display(remaining)  # redraw remaining chars
+                seq += "\x1b[K"  # erase from here to EOL
                 if remaining:
                     seq += f"\x1b[{len(remaining)}D"  # cursor back to start
                 await self._emit(seq)
@@ -173,7 +173,7 @@ class LineEditor:
                 while pos > 0 and self.buffer[pos - 1] != " ":
                     pos -= 1
                 deleted = self.cursor_pos - pos
-                remaining = self.buffer[self.cursor_pos:]
+                remaining = self.buffer[self.cursor_pos :]
                 self.buffer = self.buffer[:pos] + remaining
                 seq = f"\x1b[{deleted}D"
                 seq += self._display(remaining)
@@ -186,7 +186,7 @@ class LineEditor:
 
         # ── Regular character insertion ────────────────────────────────────
         if len(self.buffer) < self.max_length:
-            tail = self.buffer[self.cursor_pos:]
+            tail = self.buffer[self.cursor_pos :]
             self.buffer = self.buffer[: self.cursor_pos] + ch + tail
             self.cursor_pos += 1
             if not tail:

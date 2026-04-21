@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
 from provide.terminal.client import connect_test_ws
+
 from tests.helpers import decode_chunk
 
 

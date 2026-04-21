@@ -90,8 +90,7 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         principal = request.state.uterm_principal
         groups = await ctrl.list_groups(principal.subject_id)
         return [
-            {"group_id": g.group_id, "name": g.name, "session_count": len(g.worker_ids), "mode": g.mode}
-            for g in groups
+            {"group_id": g.group_id, "name": g.name, "session_count": len(g.worker_ids), "mode": g.mode} for g in groups
         ]
 
     @router.delete("/api/fanout/groups/{group_id}")

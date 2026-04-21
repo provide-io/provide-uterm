@@ -140,7 +140,9 @@ class FanOutController:
             if ok is True:
                 tasks.append(asyncio.create_task(_collect(wid)))
 
-        collected: list[tuple[str, int] | BaseException] = await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
+        collected: list[tuple[str, int] | BaseException] = (
+            await asyncio.gather(*tasks, return_exceptions=True) if tasks else []
+        )
 
         # Build per-session results
         results: list[SessionFanOutResult] = []
@@ -154,21 +156,39 @@ class FanOutController:
                 item = collected[collect_idx]
                 collect_idx += 1
                 if isinstance(item, BaseException):
-                    results.append(SessionFanOutResult(
-                        worker_id=wid, ok=False, output_delta=None, elapsed_ms=0, divergent=False,
-                    ))
+                    results.append(
+                        SessionFanOutResult(
+                            worker_id=wid,
+                            ok=False,
+                            output_delta=None,
+                            elapsed_ms=0,
+                            divergent=False,
+                        )
+                    )
                     failed_sessions.append(wid)
                 else:
                     delta, elapsed = item
-                    results.append(SessionFanOutResult(
-                        worker_id=wid, ok=True, output_delta=delta, elapsed_ms=elapsed, divergent=False,
-                    ))
+                    results.append(
+                        SessionFanOutResult(
+                            worker_id=wid,
+                            ok=True,
+                            output_delta=delta,
+                            elapsed_ms=elapsed,
+                            divergent=False,
+                        )
+                    )
                     successful_outputs.append(delta)
                     successful_indices.append(len(results) - 1)
             else:
-                results.append(SessionFanOutResult(
-                    worker_id=wid, ok=False, output_delta=None, elapsed_ms=0, divergent=False,
-                ))
+                results.append(
+                    SessionFanOutResult(
+                        worker_id=wid,
+                        ok=False,
+                        output_delta=None,
+                        elapsed_ms=0,
+                        divergent=False,
+                    )
+                )
                 failed_sessions.append(wid)
 
         # Compute divergence on successful outputs
@@ -211,25 +231,43 @@ class FanOutController:
 
         for wid in group.worker_ids:
             if stopped:
-                results.append(SessionFanOutResult(
-                    worker_id=wid, ok=False, output_delta=None, elapsed_ms=0, divergent=False,
-                ))
+                results.append(
+                    SessionFanOutResult(
+                        worker_id=wid,
+                        ok=False,
+                        output_delta=None,
+                        elapsed_ms=0,
+                        divergent=False,
+                    )
+                )
                 failed_sessions.append(wid)
                 continue
 
             ok = await self._hub.send_worker(wid, frame)
             if not ok:
-                results.append(SessionFanOutResult(
-                    worker_id=wid, ok=False, output_delta=None, elapsed_ms=0, divergent=False,
-                ))
+                results.append(
+                    SessionFanOutResult(
+                        worker_id=wid,
+                        ok=False,
+                        output_delta=None,
+                        elapsed_ms=0,
+                        divergent=False,
+                    )
+                )
                 failed_sessions.append(wid)
                 continue
 
             collector = OutputCollector()
             delta, elapsed = await collector.collect(self._hub, wid, quiesce_ms=quiesce_ms, max_ms=max_response_ms)
-            results.append(SessionFanOutResult(
-                worker_id=wid, ok=True, output_delta=delta, elapsed_ms=elapsed, divergent=False,
-            ))
+            results.append(
+                SessionFanOutResult(
+                    worker_id=wid,
+                    ok=True,
+                    output_delta=delta,
+                    elapsed_ms=elapsed,
+                    divergent=False,
+                )
+            )
             successful_outputs.append(delta)
             successful_indices.append(len(results) - 1)
 

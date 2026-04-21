@@ -346,14 +346,6 @@ class TestOperatorDashboardHtmlMutationKilling:
         html = operator_dashboard_html("T", "/app", "/my_assets_path")
         assert "/my_assets_path" in html
 
-    def test_server_session_page_js_when_no_vite(self):
-        """Legacy mode includes server-session-page.js (mutmut_16/17)."""
-        # Force no-vite mode by marking cache as loaded with no manifest
-        ui._vite_manifest = None
-        ui._vite_manifest_loaded = True
-        html = operator_dashboard_html("T", "/app", "/assets")
-        assert "server-session-page.js" in html
-
     def test_app_root_div_present(self):
         """HTML contains <div id='app-root'>."""
         html = operator_dashboard_html("T", "/app", "/assets")

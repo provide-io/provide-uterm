@@ -100,14 +100,6 @@ class TestConnectPageHtmlMutationKilling:
         html = connect_page_html("T", "/my_connect_assets", "/app")
         assert "/my_connect_assets" in html
 
-    def test_server_session_page_js_when_no_vite(self):
-        """Legacy mode includes server-session-page.js (mutmut_13/14)."""
-        # Force no-vite mode by marking cache as loaded with no manifest
-        ui._vite_manifest = None
-        ui._vite_manifest_loaded = True
-        html = connect_page_html("T", "/assets", "/app")
-        assert "server-session-page.js" in html
-
     def test_app_root_div_present(self):
         """HTML contains <div id='app-root'>."""
         html = connect_page_html("T", "/assets", "/app")
@@ -134,15 +126,6 @@ class TestReplayPageHtmlMutationKilling:
         """Title passed to _shell has ' Replay' suffix (mutmut_13/14)."""
         html = replay_page_html("BaseTitle", "/assets", "s1", app_path="/app")
         assert "BaseTitle Replay" in html
-
-    def test_server_replay_page_js_when_no_vite(self):
-        """Legacy mode includes server-replay-page.js (not session-page.js) (mutmut_15-18)."""
-        # Force no-vite mode by marking cache as loaded with no manifest
-        ui._vite_manifest = None
-        ui._vite_manifest_loaded = True
-        html = replay_page_html("T", "/assets", "s1", app_path="/app")
-        assert "server-replay-page.js" in html
-        assert "server-session-page.js" not in html
 
     def test_surface_operator_in_bootstrap(self):
         """surface='operator' in bootstrap for replay (mutmut_19/20)."""

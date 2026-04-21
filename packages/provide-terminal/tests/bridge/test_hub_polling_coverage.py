@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock
 
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
+
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 # ---------------------------------------------------------------------------

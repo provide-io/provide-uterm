@@ -16,7 +16,6 @@ import json
 from typing import Any
 
 import httpx
-
 from provide.terminal.client import connect_async_ws
 
 from .conftest import (
@@ -132,8 +131,7 @@ async def test_viewer_escalation_denied(single_session_server: Any) -> None:
             await asyncio.sleep(0.3)
             viewer_msgs2 = await drain_all(viewer, timeout=1.0)
             snapshot_received = any(
-                m.get("type") == "snapshot" and "visible output" in m.get("screen", "")
-                for m in viewer_msgs2
+                m.get("type") == "snapshot" and "visible output" in m.get("screen", "") for m in viewer_msgs2
             )
             assert snapshot_received, "Viewer should receive snapshots"
 

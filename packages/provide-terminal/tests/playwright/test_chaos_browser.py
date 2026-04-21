@@ -182,12 +182,11 @@ class TestRapidHijackPingPong:
             # Verify worker received all 6 inputs in order
             page_a.wait_for_timeout(500)
             input_msgs = [
-                m for m in ctrl.received
+                m
+                for m in ctrl.received
                 if m.get("type") == "input" or ("data" in m and "round-" in str(m.get("data", "")))
             ]
-            assert len(input_msgs) >= 6, (
-                f"Worker should receive 6 inputs, got {len(input_msgs)}: {input_msgs}"
-            )
+            assert len(input_msgs) >= 6, f"Worker should receive 6 inputs, got {len(input_msgs)}: {input_msgs}"
             # Verify all round-N-A and round-N-B are present
             data_strs = [str(m.get("data", "")) for m in input_msgs]
             for r in range(1, 4):
@@ -262,9 +261,7 @@ class TestThreeBrowserChurn:
 
             # A should still own hijack after C's departure
             status_a = _status_text(page_a)
-            assert "Hijacked (you)" in status_a, (
-                f"A should still own hijack after C leaves, got: {status_a}"
-            )
+            assert "Hijacked (you)" in status_a, f"A should still own hijack after C leaves, got: {status_a}"
 
             # A sends more input
             _input_field(page_a).fill("after-crash\r")  # type: ignore[union-attr]
@@ -292,36 +289,20 @@ class TestThreeBrowserChurn:
 
             # Verify worker got all 3 inputs
             page_a.wait_for_timeout(500)
-            input_msgs = [
-                m for m in ctrl.received
-                if m.get("type") == "input" or "data" in m
-            ]
+            input_msgs = [m for m in ctrl.received if m.get("type") == "input" or "data" in m]
             data_strs = [str(m.get("data", "")) for m in input_msgs]
-            assert any("before-crash" in d for d in data_strs), (
-                f"Worker missing 'before-crash' input: {data_strs}"
-            )
-            assert any("after-crash" in d for d in data_strs), (
-                f"Worker missing 'after-crash' input: {data_strs}"
-            )
-            assert any("b-takes-over" in d for d in data_strs), (
-                f"Worker missing 'b-takes-over' input: {data_strs}"
-            )
+            assert any("before-crash" in d for d in data_strs), f"Worker missing 'before-crash' input: {data_strs}"
+            assert any("after-crash" in d for d in data_strs), f"Worker missing 'after-crash' input: {data_strs}"
+            assert any("b-takes-over" in d for d in data_strs), f"Worker missing 'b-takes-over' input: {data_strs}"
 
             # Worker should have received exactly 1 pause from A's hijack,
             # then a resume when A released, then another pause from B.
             # C's disconnect should NOT cause any hijack state changes.
-            control_msgs = [
-                m for m in ctrl.received
-                if m.get("type") == "control"
-            ]
+            control_msgs = [m for m in ctrl.received if m.get("type") == "control"]
             pause_count = sum(1 for m in control_msgs if m.get("action") == "pause")
             resume_count = sum(1 for m in control_msgs if m.get("action") == "resume")
-            assert pause_count >= 2, (
-                f"Worker should get >= 2 pauses (A + B), got {pause_count}: {control_msgs}"
-            )
-            assert resume_count >= 1, (
-                f"Worker should get >= 1 resume (A release), got {resume_count}: {control_msgs}"
-            )
+            assert pause_count >= 2, f"Worker should get >= 2 pauses (A + B), got {pause_count}: {control_msgs}"
+            assert resume_count >= 1, f"Worker should get >= 1 resume (A release), got {resume_count}: {control_msgs}"
 
         finally:
             ctrl.stop()

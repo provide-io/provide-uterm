@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable, Coroutine
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from provide.terminal.hijack.hub.event_bus import EventBus
+    from provide.terminal.bridge.hub.event_bus import EventBus
 
 from provide.telemetry import get_logger
 
@@ -29,6 +29,11 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.terminal.bridge.frames import HijackStateFrame, make_hijack_state_frame, make_worker_disconnected_frame
 from provide.terminal.bridge.hub.connections import _ConnectionMixin
+from provide.terminal.bridge.hub.ext import (
+    NoOpPolicyGate,
+    PolicyContext,
+    PolicyGate,
+)
 from provide.terminal.bridge.hub.ownership import _HijackOwnershipMixin
 from provide.terminal.bridge.hub.polling import _PollingMixin
 from provide.terminal.bridge.hub.resume import ResumeSession, ResumeTokenStore
@@ -81,6 +86,8 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             ``"viewer"``, ``"operator"``, or ``"admin"`` for each browser; ``None``
             defaults to ``"viewer"``. Raise :class:`BrowserRoleResolutionError`
             to close the socket with 1008.
+        policy_gate: Optional :class:`PolicyGate` for input interception.
+        telemetry_sink: Optional :class:`TelemetrySink` for lifecycle event reporting.
     """
 
     def __init__(
@@ -102,6 +109,8 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         resume_ttl_s: float = 300,
         on_resume: ResumeCallback | None = None,
         event_bus: EventBus | None = None,
+        ws_idle_timeout_s: float = 300.0,
+        policy_gate: PolicyGate | None = None,
     ) -> None:
         self._lock = asyncio.Lock()
         self._workers: dict[str, WorkerTermState] = {}
@@ -126,12 +135,30 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
         self._on_resume = on_resume
         self._ws_to_resume_token: dict[WebSocket, str] = {}
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus: EventBus | None = event_bus
+        self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))
+        self._policy_gate = policy_gate or NoOpPolicyGate()
 
     @property
     def event_bus(self) -> EventBus | None:
         """Public accessor for the EventBus instance (None if not configured)."""
         return self._event_bus
+
+    async def shutdown(self) -> None:
+        """Cancel all background tasks for graceful shutdown."""
+        from provide.terminal.bridge.hub.connections import shutdown_background_tasks
+
+        count = await shutdown_background_tasks(self._background_tasks)
+        if count:
+            logger.info("hub_shutdown cancelled %d background tasks", count)
+
+    async def touch_activity(self, worker_id: str) -> None:
+        """Update the last-activity timestamp for *worker_id*."""
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is not None:  # pragma: no branch
+                st.last_activity_at = time.monotonic()
 
     def metric(self, name: str, value: int = 1) -> None:
         """Emit a named metric via the configured on_metric callback."""
@@ -216,6 +243,26 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         if resolved_role is not None:
             logger.warning("resolve_browser_role_invalid worker_id=%s role=%r", worker_id, resolved_role)
         return role
+
+    async def prepare_policy_context(self, ws: WebSocket, worker_id: str, action: str | None = None) -> PolicyContext:
+        """Create a PolicyContext for the given browser WebSocket and worker."""
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            role = st.browsers.get(ws) if st else None
+
+        principal = getattr(getattr(ws, "state", None), "uterm_principal", None)
+        client_id = "anonymous"
+        if principal:
+            client_id = str(principal.subject_id) if hasattr(principal, "subject_id") else str(principal)
+
+        metadata = {"principal": principal} if principal else {}
+        return PolicyContext(
+            worker_id=worker_id,
+            client_id=client_id,
+            role=role,
+            action=action,
+            metadata=metadata,
+        )
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it.
@@ -483,7 +530,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
 
     async def get_idle_candidates(self, timeout_s: float) -> list[tuple[str, float]]:
         """Return ``(worker_id, last_activity_at)`` for workers with no browsers idle beyond *timeout_s*."""
-        now = time.time()
+        now = time.monotonic()
         async with self._lock:
             return [
                 (wid, st.last_activity_at)
@@ -500,7 +547,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Update the role for *ws* in *worker_id*'s browser set."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None and ws in st.browsers:
+            if st is not None and ws in st.browsers:  # pragma: no branch
                 st.browsers[ws] = role
 
     async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:
@@ -518,7 +565,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 and not self.is_hijacked(st)
             ):
                 st.hijack_owner = ws
-                st.hijack_owner_expires_at = time.time() + self._dashboard_hijack_lease_s
+                st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
                 return True
         return False
 
@@ -542,6 +589,11 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             st = self._workers.get(worker_id)
             return 0 if st is None else len(st.browsers)
 
+    async def browser_count_total(self) -> int:
+        """Return the total number of browser WebSockets connected across all workers."""
+        async with self._lock:
+            return sum(len(st.browsers) for st in self._workers.values())
+
     async def get_recent_events(self, worker_id: str, limit: int) -> list[dict[str, Any]]:
         """Return the most recent events for *worker_id* (up to *limit*, clamped to 1-500)."""
         async with self._lock:
@@ -550,14 +602,19 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 return []
             return list(st.events)[-max(1, min(limit, 500)) :]
 
-    def create_router(self) -> APIRouter:
-        """Create and return a FastAPI ``APIRouter`` with all terminal routes registered."""
-        from provide.terminal.hijack.routes.rest import register_rest_routes
-        from provide.terminal.hijack.routes.websockets import register_ws_routes
-        from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
+    def create_router(self, *, extra_route_registrars: list[Any] | None = None) -> APIRouter:
+        """Create and return a FastAPI ``APIRouter`` with all terminal routes registered.
+
+        *extra_route_registrars* is a list of callables ``(hub, router) -> None``
+        that register additional routes (e.g. tunnel routes). This avoids a hard
+        import dependency on the tunnel package.
+        """
+        from provide.terminal.bridge.routes.rest import register_rest_routes
+        from provide.terminal.bridge.routes.websockets import register_ws_routes
 
         router = APIRouter()
         register_rest_routes(self, router)
         register_ws_routes(self, router)
-        register_tunnel_routes(self, router)
+        for registrar in extra_route_registrars or []:
+            registrar(self, router)
         return router

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """E2E tunnel tests against pywrangler dev (or real CF deployment).
@@ -23,7 +23,6 @@ import urllib.error
 import urllib.request
 
 import pytest
-
 from provide.terminal.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_control, encode_frame
 
 _HTTP_UA = "provide-terminal-e2e-tunnel/1.0"

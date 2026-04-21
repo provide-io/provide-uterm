@@ -10,9 +10,10 @@ import asyncio
 from typing import Any
 
 import websockets
-from provide.terminal.control_channel import encode_control
-from provide.terminal.colors import apply_color_mode as _apply_color_mode, rgb_to_256 as _rgb_to_256
+from provide.terminal.colors import apply_color_mode as _apply_color_mode
+from provide.terminal.colors import rgb_to_256 as _rgb_to_256
 from provide.terminal.colors.rgb import _clamp8
+from provide.terminal.control_channel import encode_control
 from provide.terminal.gateway import (
     TelnetWsGateway,
     _delete_token,

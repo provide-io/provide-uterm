@@ -57,7 +57,7 @@ async def _handle_shell(process: asyncssh.SSHServerProcess) -> None:  # type: ig
 class _DemoSSHServer(asyncssh.SSHServer):
     """SSH server that accepts any user without authentication."""
 
-    def begin_auth(self, username: str) -> bool:  # type: ignore[override]  # noqa: ARG002
+    def begin_auth(self, username: str) -> bool:  # type: ignore[override]
         # Return False to skip authentication
         return False
 

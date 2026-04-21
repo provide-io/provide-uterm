@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Live DYLD_INSERT_LIBRARIES injection demo.
@@ -40,7 +40,6 @@ sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
 sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
 
 import uvicorn  # noqa: E402
-
 from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
 from provide.terminal.server.models import ServerBindConfig  # noqa: E402
 
@@ -63,7 +62,7 @@ def _wait_http(url: str, timeout: float = 20.0, token: str | None = None) -> Non
             with urllib.request.urlopen(req, timeout=2) as resp:  # noqa: S310
                 if resp.status < 500:
                     return
-        except Exception:  # noqa: S110
+        except Exception:
             pass
         time.sleep(0.2)
     raise RuntimeError(f"server not ready at {url} within {timeout}s")
@@ -108,6 +107,7 @@ def _find_injectable_binary() -> tuple[str, list[str], str]:
 def _start_server() -> uvicorn.Server:
     config = default_server_config()
     config.auth.mode = "dev"  # type: ignore[assignment]
+    config.session_idle_timeout_s = 1800  # auto-sweep idle sessions after 30 min
     config.server = ServerBindConfig(
         host="127.0.0.1",
         port=_SERVER_PORT,
@@ -289,7 +289,7 @@ def main() -> None:
         # the DYLD hook and visible in the browser.
         env["TERM"] = "dumb"
 
-    proc = subprocess.Popen(  # noqa: S603
+    proc = subprocess.Popen(
         argv,
         stdin=slave_fd,
         stdout=slave_fd,
@@ -322,6 +322,7 @@ def main() -> None:
     try:
         while True:
             if proc.poll() is not None:
+                last_activity = time.monotonic()
                 print("\n  Process exited — restarting...")
                 sys.stdout.flush()
                 _api_post(f"/api/sessions/{_SESSION_ID}/clear", {})
@@ -332,7 +333,7 @@ def main() -> None:
                 attrs2 = termios.tcgetattr(slave_fd2)
                 attrs2[3] &= ~termios.ECHO
                 termios.tcsetattr(slave_fd2, termios.TCSANOW, attrs2)
-                proc = subprocess.Popen(  # noqa: S603
+                proc = subprocess.Popen(
                     argv,
                     stdin=slave_fd2,
                     stdout=slave_fd2,

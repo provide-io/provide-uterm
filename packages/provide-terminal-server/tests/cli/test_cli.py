@@ -277,9 +277,7 @@ class TestListenParser:
         assert args.require_resolver is False
 
     def test_listen_authorized_keys_flag(self) -> None:
-        args = _build_parser().parse_args(
-            ["listen", "ws://x", "--authorized-keys", "/etc/ssh_keys"]
-        )
+        args = _build_parser().parse_args(["listen", "ws://x", "--authorized-keys", "/etc/ssh_keys"])
         assert args.authorized_keys == "/etc/ssh_keys"
         assert args.require_resolver is False
 
@@ -299,9 +297,7 @@ class TestListenParser:
     def test_listen_require_without_file_errors(self) -> None:
         """--require-authorized-keys alone (no file) must fail fast."""
         # parse succeeds; the validation runs in _cmd_listen.
-        args = _build_parser().parse_args(
-            ["listen", "ws://x", "--ssh-port", "2222", "--require-authorized-keys"]
-        )
+        args = _build_parser().parse_args(["listen", "ws://x", "--ssh-port", "2222", "--require-authorized-keys"])
         assert args.authorized_keys is None
         assert args.require_resolver is True
 
@@ -428,9 +424,7 @@ class TestRunListen:
             pass
 
         task = asyncio.create_task(
-            _run_listen(
-                "ws://localhost/ws", "127.0.0.1", 2112, 0, None, "passthrough", _FakeGateway, _FakeSshGateway
-            )
+            _run_listen("ws://localhost/ws", "127.0.0.1", 2112, 0, None, "passthrough", _FakeGateway, _FakeSshGateway)
         )
         await asyncio.sleep(0.05)
         task.cancel()

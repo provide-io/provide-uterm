@@ -23,9 +23,10 @@ else
   exit 2
 fi
 
-# TODO: Generate SLSA provenance metadata (not yet implemented)
-# TODO: Execute rollback drill (scripts/rollback_drill.py)
-# TODO: Run load profile (scripts/load_profile.py)
+# Post-deploy manual steps (require a live server URL):
+#   uv run python scripts/rollback_drill.py --base-url <URL> --session-id <ID>
+#   uv run python scripts/load_profile.py --base-url <URL>
+# SLSA provenance generation not yet implemented.
 
 echo "[4/4] artifact signing (cosign keyless)"
 if ! command -v cosign >/dev/null 2>&1; then

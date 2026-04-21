@@ -23,6 +23,7 @@ from provide.terminal.control_channel_builders import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _round_trip(payload: dict) -> dict:
     """Encode *payload* via encode_control, decode via ControlChannelDecoder, return the control dict."""
     decoder = ControlChannelDecoder()
@@ -37,6 +38,7 @@ def _round_trip(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 # make_identity
 # ---------------------------------------------------------------------------
+
 
 class TestMakeIdentity:
     def test_happy_path_minimal(self) -> None:
@@ -88,6 +90,7 @@ class TestMakeIdentity:
 # make_session_token
 # ---------------------------------------------------------------------------
 
+
 class TestMakeSessionToken:
     def test_happy_path_minimal(self) -> None:
         msg = make_session_token("tok-abc")
@@ -121,6 +124,7 @@ class TestMakeSessionToken:
 # make_resume
 # ---------------------------------------------------------------------------
 
+
 class TestMakeResume:
     def test_happy_path_minimal(self) -> None:
         msg = make_resume("resume-tok")
@@ -147,6 +151,7 @@ class TestMakeResume:
 # make_resume_ok
 # ---------------------------------------------------------------------------
 
+
 class TestMakeResumeOk:
     def test_type_field(self) -> None:
         msg = make_resume_ok()
@@ -165,6 +170,7 @@ class TestMakeResumeOk:
 # ---------------------------------------------------------------------------
 # make_resume_failed
 # ---------------------------------------------------------------------------
+
 
 class TestMakeResumeFailed:
     def test_happy_path_no_reason(self) -> None:
@@ -191,6 +197,7 @@ class TestMakeResumeFailed:
 # ---------------------------------------------------------------------------
 # make_link_patterns
 # ---------------------------------------------------------------------------
+
 
 class TestMakeLinkPatterns:
     def test_single_pattern_round_trip(self) -> None:
@@ -234,10 +241,12 @@ class TestMakeLinkPatterns:
 
     def test_error_mentions_entry_index(self) -> None:
         with pytest.raises(ValueError, match=r"entry\[1\]"):
-            make_link_patterns([
-                {"pattern": "good", "action": "cmd"},
-                {"action": "cmd"},  # missing pattern at index 1
-            ])
+            make_link_patterns(
+                [
+                    {"pattern": "good", "action": "cmd"},
+                    {"action": "cmd"},  # missing pattern at index 1
+                ]
+            )
 
     def test_all_optional_fields_populated(self) -> None:
         entry = {
@@ -287,6 +296,7 @@ class TestMakeLinkPatterns:
 # ---------------------------------------------------------------------------
 # make_presence_update
 # ---------------------------------------------------------------------------
+
 
 class TestMakePresenceUpdate:
     def test_happy_path_minimal(self) -> None:

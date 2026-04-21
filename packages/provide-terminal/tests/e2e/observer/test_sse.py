@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """E2E: SSE streaming endpoint via live uvicorn server.
@@ -22,8 +22,8 @@ from typing import Any
 
 import httpx
 import pytest
-
 from provide.terminal.client import connect_async_ws
+
 from tests.e2e._live_server import live_server_with_bus
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
@@ -176,7 +176,7 @@ async def test_sse_worker_disconnect_closes_stream(shell_server: Any) -> None:
             ):
                 async for line in resp.aiter_lines():
                     if line.startswith("data: "):
-                        events.append(json.loads(line[6:]))  # noqa: PERF401
+                        events.append(json.loads(line[6:]))
 
         stream_task = asyncio.create_task(_stream())
         await asyncio.sleep(0.15)

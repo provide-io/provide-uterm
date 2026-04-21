@@ -124,7 +124,7 @@ def main() -> int:
         description="Measure hub->browser WS broadcast delivery latency via hijack-state frames."
     )
     parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8400")
-    parser.add_argument("--worker-id", default="demo-session", help="Worker/session ID")
+    parser.add_argument("--worker-id", default="provide-shell", help="Worker/session ID")
     parser.add_argument("--rounds", type=int, default=40, help="Probe rounds")
     parser.add_argument("--timeout-s", type=float, default=5.0, help="Per-probe timeout in seconds")
     args = parser.parse_args()

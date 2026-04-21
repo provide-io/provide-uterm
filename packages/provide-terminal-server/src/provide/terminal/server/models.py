@@ -111,6 +111,18 @@ class RecordingConfig(ServerBaseModel):
         return value
 
 
+class SecurityConfig(ServerBaseModel):
+    """Configurable security response headers."""
+
+    mode: Literal["strict", "dev"] = "strict"
+    csp: str | None = None
+    hsts: str | None = None
+    x_frame_options: str | None = None
+    x_content_type_options: str | None = None
+    referrer_policy: str | None = None
+    permissions_policy: str | None = None
+
+
 class TunnelConfig(ServerBaseModel):
     """Tunnel sharing security settings."""
 
@@ -148,6 +160,7 @@ class ServerBindConfig(ServerBaseModel):
     port: int = TerminalDefaults.SERVER_PORT
     public_base_url: str = ""
     title: str = "provide-terminal-server"
+    node_id: str = "default"
     allowed_origins: list[str] = Field(default_factory=list)
     max_sessions: int | None = None
 
@@ -282,6 +295,19 @@ class PamConfig(ServerBaseModel):
     relay_token: str | None = None  # Bearer token for relay service API
 
 
+class GovernanceConfig(ServerBaseModel):
+    """Configuration for external policy and telemetry hooks."""
+
+    policy_webhook_url: str | None = None
+    policy_webhook_secret: str | None = None
+    policy_webhook_timeout_s: float = 2.0
+    registry_webhook_url: str | None = None
+    registry_webhook_interval_s: float = 60.0
+    authz_webhook_url: str | None = None
+    authz_webhook_secret: str | None = None
+    authz_webhook_timeout_s: float = 2.0
+
+
 class ServerConfig(ServerBaseModel):
     """Top-level application config for the standalone server."""
 
@@ -290,8 +316,10 @@ class ServerConfig(ServerBaseModel):
     ui: UiConfig = Field(default_factory=UiConfig)
     recording: RecordingConfig = Field(default_factory=RecordingConfig)
     profiles: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
     tunnel: TunnelConfig = Field(default_factory=TunnelConfig)
     pam: PamConfig = Field(default_factory=PamConfig)
+    governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     sessions: list[SessionDefinition] = Field(default_factory=list)
     session_idle_timeout_s: int = 0  # 0 = disabled, >0 = seconds of inactivity before auto-cleanup
     session_retention_s: int = 0  # 0 = disabled, >0 = auto-delete stopped sessions older than N seconds
@@ -303,12 +331,14 @@ ServerModel: TypeAlias = (
     | UiConfig
     | RecordingConfig
     | ProfileStoreConfig
+    | SecurityConfig
     | TunnelConfig
     | PamConfig
     | ServerBindConfig
     | SessionDefinition
     | SessionRuntimeStatus
     | ServerConfig
+    | GovernanceConfig
 )
 
 

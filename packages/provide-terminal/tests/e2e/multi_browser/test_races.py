@@ -20,7 +20,6 @@ from typing import Any
 import httpx
 import uvicorn
 from fastapi import FastAPI
-
 from provide.terminal.bridge.hub import InMemoryResumeStore, TermHub
 from provide.terminal.client import connect_async_ws
 
@@ -53,9 +52,7 @@ async def test_thundering_herd_5_browsers_simultaneous_hijack(live_server: Any) 
                 await drain_all(ws)
 
             # All 5 send hijack_request simultaneously
-            await asyncio.gather(
-                *(ws.send(json.dumps({"type": "hijack_request"})) for ws, _ in browsers)
-            )
+            await asyncio.gather(*(ws.send(json.dumps({"type": "hijack_request"})) for ws, _ in browsers))
             await asyncio.sleep(0.5)
 
             # Drain all browsers and count who got owner=me
@@ -72,9 +69,7 @@ async def test_thundering_herd_5_browsers_simultaneous_hijack(live_server: Any) 
             # acquiring the lock, so multiple pauses are expected. The key
             # invariant is that exactly one browser owns it.
             worker_msgs = await drain_all(worker, timeout=1.0)
-            pause_count = sum(
-                1 for m in worker_msgs if m.get("type") == "control" and m.get("action") == "pause"
-            )
+            pause_count = sum(1 for m in worker_msgs if m.get("type") == "control" and m.get("action") == "pause")
             assert pause_count >= 1, "Worker should receive at least one pause"
         finally:
             for _ws, ctx in reversed(browsers):
@@ -110,9 +105,7 @@ async def test_mode_switch_during_active_hijack() -> None:
             await drain_until(worker, "control", timeout=3.0)
 
             # REST PATCH: switch to open mode
-            async with httpx.AsyncClient(
-                base_url=base_url, headers=ADMIN_H, timeout=10.0
-            ) as http:
+            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.patch(
                     "/api/sessions/mode1",
                     json={"input_mode": "open"},
@@ -123,22 +116,16 @@ async def test_mode_switch_during_active_hijack() -> None:
             await asyncio.sleep(0.5)
 
             # Verify via REST that the mode changed
-            async with httpx.AsyncClient(
-                base_url=base_url, headers=ADMIN_H, timeout=10.0
-            ) as http2:
+            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http2:
                 status_resp = await http2.get("/api/sessions/mode1")
                 assert status_resp.status_code == 200
                 session_data = status_resp.json()
                 actual_mode = session_data.get("input_mode", session_data.get("definition", {}).get("input_mode"))
-                assert actual_mode == "open", (
-                    f"Session mode should be 'open' after PATCH, got {actual_mode}"
-                )
+                assert actual_mode == "open", f"Session mode should be 'open' after PATCH, got {actual_mode}"
 
             # The mode is now "open" — verify a second acquire would fail
             # (open mode doesn't allow hijack)
-            async with httpx.AsyncClient(
-                base_url=base_url, headers=ADMIN_H, timeout=10.0
-            ) as http3:
+            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http3:
                 acq_resp = await http3.post(
                     "/worker/mode1/hijack/acquire",
                     json={"owner": "should-fail", "lease_s": 10},
@@ -222,8 +209,7 @@ async def test_resume_token_reclaim_vs_competing_browser() -> None:
                     ) as b1_new:
                         b1_new_msgs = await drain_all(b1_new, timeout=1.0)
                         b1_new_owns = any(
-                            m.get("type") == "hijack_state"
-                            and (m.get("hijacked_by_me") or m.get("owner") == "me")
+                            m.get("type") == "hijack_state" and (m.get("hijacked_by_me") or m.get("owner") == "me")
                             for m in b1_new_msgs
                         )
                         # At most one can own it

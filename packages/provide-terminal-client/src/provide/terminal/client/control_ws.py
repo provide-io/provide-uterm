@@ -73,7 +73,7 @@ class SyncInlineWebSocketClient:
     def send_frame(self, payload: Mapping[str, Any]) -> None:
         self._ws.send_text(encode_logical_frame(payload))
 
-    def send_json(self, data: Any, mode: str = "text") -> None:  # noqa: ARG002
+    def send_json(self, data: Any, mode: str = "text") -> None:
         if not isinstance(data, Mapping):
             raise TypeError(f"expected mapping payload, got {type(data).__name__}")
         self.send_frame(data)
@@ -84,7 +84,7 @@ class SyncInlineWebSocketClient:
                 return self._pending.pop(0)
             self._pending.extend(self._decoder.feed(self._ws.receive_text()))
 
-    def receive_json(self, mode: str = "text") -> dict[str, Any]:  # noqa: ARG002
+    def receive_json(self, mode: str = "text") -> dict[str, Any]:
         return self.recv_frame()
 
 

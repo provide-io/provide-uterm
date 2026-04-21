@@ -265,18 +265,20 @@ class TestReferenceServerApp:
             assert len(paged_entries.json()) == 1
             assert paged_entries.json()[0]["event"] == "read"
 
-            # Recording download can intermittently fail with RemoteProtocolError
-            # when the server is under load from concurrent test ordering, so retry.
-            for attempt in range(3):
+            # Recording download can intermittently fail with protocol errors
+            # when the server thread is starved during large test suites.
+            # Use a fresh client with retries to avoid stale connection pooling.
+            for attempt in range(5):
                 try:
-                    download = await http.get("/api/sessions/scratch/recording/download")
-                    assert download.status_code == 200
-                    assert "log_start" in download.text
-                    break
-                except (httpx.RemoteProtocolError, httpx.ReadError):
-                    if attempt == 2:
+                    async with httpx.AsyncClient(base_url=live_reference_server, timeout=10.0) as dl_http:
+                        download = await dl_http.get("/api/sessions/scratch/recording/download")
+                        assert download.status_code == 200
+                        assert "log_start" in download.text
+                        break
+                except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout):
+                    if attempt == 4:
                         raise
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.5 * (attempt + 1))
 
     async def test_ssh_connector_can_host_a_local_shell(
         self, live_reference_server: str, free_port: int, tmp_path: Path

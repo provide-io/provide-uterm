@@ -35,6 +35,7 @@ from provide.terminal.control_channel import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def collect_chunks(stream: str, chunk_sizes: list[int]) -> list[ControlChannelChunk]:
     """Feed *stream* to a fresh decoder in pieces defined by *chunk_sizes*.
 
@@ -101,6 +102,7 @@ BASELINE_CHUNKS: list[ControlChannelChunk] = [
 # 1. Baseline — whole stream in one feed()
 # ---------------------------------------------------------------------------
 
+
 def test_baseline_whole_feed() -> None:
     """Feeding the full stream at once yields the four chunks in order."""
     chunks = collect_chunks(BASELINE_STREAM, [len(BASELINE_STREAM)])
@@ -111,6 +113,7 @@ def test_baseline_whole_feed() -> None:
 # 2. Byte-level split invariant
 # ---------------------------------------------------------------------------
 
+
 def test_byte_by_byte_feed() -> None:
     """Feeding one byte at a time must produce the same ordered sequence."""
     chunks = collect_chunks(BASELINE_STREAM, [1] * len(BASELINE_STREAM))
@@ -120,6 +123,7 @@ def test_byte_by_byte_feed() -> None:
 # ---------------------------------------------------------------------------
 # 3. Arbitrary chunk boundaries (every possible split point)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("split", list(range(1, len(BASELINE_STREAM))))
 def test_all_split_positions(split: int) -> None:
@@ -132,6 +136,7 @@ def test_all_split_positions(split: int) -> None:
 # 4. Control frame header split — splits inside DLE STX, length hex, ':', JSON
 # ---------------------------------------------------------------------------
 
+
 def _header_split_stream() -> str:
     """A simple stream: data + one control frame."""
     return encode_data("pre") + encode_control({"k": "v"})
@@ -141,15 +146,18 @@ def _header_split_expected() -> list[ControlChannelChunk]:
     return [DataChunk("pre"), ControlChunk({"k": "v"})]
 
 
-@pytest.mark.parametrize("split_offset", [
-    0,   # split before DLE (in the data portion)
-    3,   # split on DLE itself (first byte of header)
-    4,   # split between DLE and STX
-    5,   # split after STX (inside first hex digit)
-    7,   # split mid-length hex
-    11,  # split after ':' separator
-    13,  # split inside JSON body
-])
+@pytest.mark.parametrize(
+    "split_offset",
+    [
+        0,  # split before DLE (in the data portion)
+        3,  # split on DLE itself (first byte of header)
+        4,  # split between DLE and STX
+        5,  # split after STX (inside first hex digit)
+        7,  # split mid-length hex
+        11,  # split after ':' separator
+        13,  # split inside JSON body
+    ],
+)
 def test_control_header_splits(split_offset: int) -> None:
     """Splits at various positions inside/around a control frame header."""
     stream = _header_split_stream()
@@ -161,6 +169,7 @@ def test_control_header_splits(split_offset: int) -> None:
 # ---------------------------------------------------------------------------
 # 5. Data containing literal DLE byte — split between the two escaped DLEs
 # ---------------------------------------------------------------------------
+
 
 def test_data_with_dle_not_mistaken_for_control() -> None:
     """A literal DLE in data is escaped as DLE DLE; splitting between them is safe.
@@ -206,6 +215,7 @@ def test_data_with_dle_then_control() -> None:
 # 6. Multiple control frames back-to-back (no data between)
 # ---------------------------------------------------------------------------
 
+
 def test_back_to_back_control_frames_whole() -> None:
     """Two adjacent control frames without data emit in order."""
     ctrl1 = encode_control({"type": "one"})
@@ -235,6 +245,7 @@ def test_back_to_back_three_control_frames() -> None:
 # 7. Interleaved many — 5 data + 5 control frames, byte-at-a-time
 # ---------------------------------------------------------------------------
 
+
 def test_interleaved_many_byte_by_byte() -> None:
     """Five data and five control frames interleaved, fed one byte at a time."""
     expected: list[ControlChannelChunk] = []
@@ -255,6 +266,7 @@ def test_interleaved_many_byte_by_byte() -> None:
 # 8. Parametrised sweep over multiple chunk sizes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("chunk_size", [1, 2, 3, 5, 7, 11, 16, 64, 1024])
 def test_chunk_size_sweep(chunk_size: int) -> None:
     """Output ordering is identical for chunk sizes 1, 2, 3, 5, 7, 11, 16, 64, 1024."""
@@ -266,6 +278,7 @@ def test_chunk_size_sweep(chunk_size: int) -> None:
 # ---------------------------------------------------------------------------
 # 9. Control never jumps ahead of preceding data (explicit ordering checks)
 # ---------------------------------------------------------------------------
+
 
 def test_control_does_not_precede_data_byte_by_byte() -> None:
     """Control chunk B must appear after ALL of data-A, never before any of it."""

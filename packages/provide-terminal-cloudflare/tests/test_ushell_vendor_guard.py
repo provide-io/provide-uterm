@@ -15,9 +15,9 @@ fires when the CF developer environment has been initialised but the vendor
 tree is stale or incomplete.
 """
 
-import pytest
-
 from pathlib import Path
+
+import pytest
 
 
 def test_ushell_vendor_tree_exists() -> None:

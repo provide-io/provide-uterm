@@ -1,0 +1,17 @@
+[server]
+port = 9000
+node_id = "proof-node-01"
+
+[governance]
+registry_webhook_url = "http://localhost:8888/discovery"
+registry_webhook_interval_s = 5.0
+policy_webhook_url = "http://localhost:8888/policy/input"
+authz_webhook_url = "http://localhost:8888/authz"
+
+[manager]
+spawn_policy_webhook_url = "http://localhost:8888/policy/spawn"
+
+[[sessions]]
+session_id = "test-session"
+display_name = "Proof Session"
+connector_type = "shell"

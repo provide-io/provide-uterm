@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -57,6 +57,7 @@ DEV_ONLY_SKIP: frozenset[str] = frozenset(
         "dnspython",  # ISC (dev-only transitive dep)
         "email-validator",  # CC0 (dev-only)
         "pillow",  # HPND (dev-only)
+        "pytest-timeout",  # DFSG approved; MIT (dev-only test tool)
         "pipdeptree",
         "text-unidecode",
         "uv",
@@ -66,7 +67,7 @@ DEV_ONLY_SKIP: frozenset[str] = frozenset(
 
 def _get_installed_licenses() -> list[dict[str, str]]:
     pip_licenses = Path(sys.executable).parent / "pip-licenses"
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [str(pip_licenses), "--format=json"],
         capture_output=True,
         text=True,

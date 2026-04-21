@@ -9,7 +9,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from provide.terminal.bridge.coordinator import HijackCoordinator
 
 

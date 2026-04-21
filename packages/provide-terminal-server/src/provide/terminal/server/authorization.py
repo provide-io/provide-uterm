@@ -2,12 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Authorization policy for hosted terminal server surfaces."""
+"""Pluggable authorization policy for hosted terminal server surfaces."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+import httpx
 
 if TYPE_CHECKING:
     from provide.terminal.server.auth import Principal
@@ -46,18 +48,47 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
 }
 
 
-@dataclass(slots=True)
-class AuthorizationService:
-    """Role/capability and session visibility policy."""
+@runtime_checkable
+class AuthorizationProvider(Protocol):
+    """Protocol for pluggable authorization decision engines."""
 
-    def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
-        """Return the capability set granted to ``principal``.
+    async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
+        """Return the capability set granted to ``principal``."""
+        ...
 
-        Roles define the maximum set.  When scopes are explicitly set on the
-        principal (non-empty and not the ``"*"`` wildcard) they *narrow* the
-        role-granted set — only capabilities named in scopes are granted.
-        Empty scopes or ``{"*"}`` mean "unrestricted — use full role set".
-        """
+    async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
+        """Return True if ``principal`` can read the terminal data of ``session``."""
+        ...
+
+    async def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
+        """Return True if ``principal`` can read the recording of ``session``."""
+        ...
+
+    async def can_create_session(self, principal: Principal) -> bool:
+        """Return True if ``principal`` can create new terminal sessions."""
+        ...
+
+    async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
+        """Return True if ``principal`` can perform ``action`` on ``session``."""
+        ...
+
+    async def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        """Return True if ``principal`` can read ``profile``."""
+        ...
+
+    async def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        """Return True if ``principal`` can modify or delete ``profile``."""
+        ...
+
+    async def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
+        """Resolve the browser-facing role string for ``principal`` on ``session``."""
+        ...
+
+
+class LocalAuthorizationProvider:
+    """Standard AGPL RBAC implementation of AuthorizationProvider."""
+
+    async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
         role_caps: set[Capability] = set()
         for role in principal.roles:
             role_caps.update(ROLE_CAPABILITIES.get(role, frozenset()))
@@ -65,63 +96,190 @@ class AuthorizationService:
             return frozenset(cap for cap in role_caps if cap in principal.scopes)
         return frozenset(role_caps)
 
-    def has_role(self, principal: Principal, role: Role) -> bool:
-        return role in principal.roles
+    async def has_capability(self, principal: Principal, capability: Capability) -> bool:
+        return capability in await self.capabilities_for(principal)
 
-    def has_capability(self, principal: Principal, capability: Capability) -> bool:
-        return capability in self.capabilities_for(principal)
+    async def is_admin(self, principal: Principal) -> bool:
+        return "admin" in principal.roles
 
-    def is_admin(self, principal: Principal) -> bool:
-        return self.has_role(principal, "admin")
-
-    def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
+    async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
         return session.owner is not None and session.owner == principal.subject_id
 
-    def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
-        if not self.has_capability(principal, "session.read"):
+    async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
+        if not await self.has_capability(principal, "session.read"):
             return False
-        if self.is_admin(principal) or self.is_owner(principal, session):
+        if await self.is_admin(principal) or await self.is_owner(principal, session):
             return True
-        # Tunnel share-token principals carry ``subject_id=share:{id}:{role}``
-        # and are bound to the specific session the token was issued for.
-        # Treat that as authoritative read access to *that* session only.
         if principal.subject_id.startswith(f"share:{session.session_id}:"):
             return True
         if session.visibility == "public":
             return True
         if session.visibility == "operator":
-            return self.has_role(principal, "operator")
+            return "operator" in principal.roles
         return False
 
-    def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
-        return self.can_read_session(principal, session) and self.has_capability(principal, "session.recording.read")
+    async def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
+        return await self.can_read_session(principal, session) and await self.has_capability(
+            principal, "session.recording.read"
+        )
 
-    def can_create_session(self, principal: Principal) -> bool:
-        return self.has_capability(principal, "session.control.create")
+    async def can_create_session(self, principal: Principal) -> bool:
+        return await self.has_capability(principal, "session.control.create")
 
-    def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
-        if not self.has_capability(principal, action):
+    async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
+        if not await self.has_capability(principal, action):
             return False
-        if self.is_admin(principal):
+        if await self.is_admin(principal):
             return True
-        # Sessions without an explicit owner are system-managed and treated as
-        # admin-only for mutation.  Non-admin principals can only mutate sessions
-        # they own (i.e. sessions they created with their subject_id as owner).
         if session.owner is None:
             return False
-        return self.is_owner(principal, session)
+        return await self.is_owner(principal, session)
 
-    def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
-        return profile.owner == principal.subject_id or profile.visibility == "shared" or self.is_admin(principal)
+    async def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return profile.owner == principal.subject_id or profile.visibility == "shared" or await self.is_admin(principal)
 
-    def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
-        return profile.owner == principal.subject_id or self.is_admin(principal)
+    async def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return profile.owner == principal.subject_id or await self.is_admin(principal)
 
-    def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
-        if not self.can_read_session(principal, session):
+    async def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
+        if not await self.can_read_session(principal, session):
             return "viewer"
-        if self.can_mutate_session(principal, session, "session.control.hijack"):
+        if await self.can_mutate_session(principal, session, "session.control.hijack"):
             return "admin"
-        if self.has_role(principal, "operator") or self.is_owner(principal, session):
+        if "operator" in principal.roles or await self.is_owner(principal, session):
             return "operator"
         return "viewer"
+
+
+class WebhookAuthorizationProvider:
+    """Authorization provider that delegates decisions to an external webhook."""
+
+    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):
+        self.url = url
+        self.secret = secret
+        self.timeout = timeout_s
+
+    async def _check(self, principal: Principal, action: str, **context: Any) -> bool:
+        payload = {
+            "principal": {
+                "subject_id": principal.subject_id,
+                "roles": list(principal.roles),
+                "scopes": list(principal.scopes),
+                "claims": principal.claims,
+            },
+            "action": action,
+            "context": context,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(self.url, json=payload)
+                if resp.status_code == 200:
+                    return bool(resp.json().get("allow", False))
+                return False
+        except Exception:
+            return False
+
+    async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
+        # Webhooks usually return specific booleans, but for full cap sets we might need a separate endpoint.
+        # Fallback to empty if not implemented or error.
+        payload = {"subject_id": principal.subject_id, "action": "capabilities"}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(self.url, json=payload)
+                if resp.status_code == 200:
+                    return frozenset(resp.json().get("capabilities", []))
+        except Exception:
+            pass
+        return frozenset()
+
+    async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
+        return await self._check(principal, "session.read", session_id=session.session_id)
+
+    async def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
+        return await self._check(principal, "session.recording.read", session_id=session.session_id)
+
+    async def can_create_session(self, principal: Principal) -> bool:
+        return await self._check(principal, "session.control.create")
+
+    async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
+        return await self._check(principal, action, session_id=session.session_id)
+
+    async def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return await self._check(principal, "profile.read", profile_id=profile.profile_id)
+
+    async def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return await self._check(principal, "profile.mutate", profile_id=profile.profile_id)
+
+    async def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
+        # Complex resolution might be handled by the Fleet Manager directly
+        payload = {
+            "principal": {
+                "subject_id": principal.subject_id,
+                "roles": list(principal.roles),
+            },
+            "session_id": session.session_id,
+            "action": "resolve_role",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(self.url, json=payload)
+                if resp.status_code == 200:
+                    return str(resp.json().get("role", "viewer"))
+        except Exception:
+            pass
+        return "viewer"
+
+
+@dataclass(slots=True)
+class AuthorizationService:
+    """Pluggable gateway for authorization decisions."""
+
+    _provider: AuthorizationProvider = field(default_factory=LocalAuthorizationProvider)
+
+    async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
+        return await self._provider.capabilities_for(principal)
+
+    async def has_role(self, principal: Principal, role: Role) -> bool:
+        return role in principal.roles
+
+    async def has_capability(self, principal: Principal, capability: Capability) -> bool:
+        provider = self._provider
+        if hasattr(provider, "has_capability"):
+            return await provider.has_capability(principal, capability)
+        return capability in await provider.capabilities_for(principal)
+
+    async def is_admin(self, principal: Principal) -> bool:
+        provider = self._provider
+        if hasattr(provider, "is_admin"):
+            return await provider.is_admin(principal)
+        return await LocalAuthorizationProvider().is_admin(principal)
+
+    async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
+        provider = self._provider
+        if hasattr(provider, "is_owner"):
+            return await provider.is_owner(principal, session)
+        return await LocalAuthorizationProvider().is_owner(principal, session)
+
+    async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
+        return await self._provider.can_read_session(principal, session)
+
+    async def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
+        return await self._provider.can_read_recording(principal, session)
+
+    async def can_create_session(self, principal: Principal) -> bool:
+        return await self._provider.can_create_session(principal)
+
+    async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
+        return await self._provider.can_mutate_session(principal, session, action)
+
+    async def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return await self._provider.can_read_profile(principal, profile)
+
+    async def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
+        return await self._provider.can_mutate_profile(principal, profile)
+
+    async def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
+        provider = self._provider
+        if hasattr(provider, "resolve_browser_role"):
+            return await provider.resolve_browser_role(principal, session)
+        return await LocalAuthorizationProvider().resolve_browser_role(principal, session)

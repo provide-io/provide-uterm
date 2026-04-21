@@ -18,9 +18,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
+from provide.terminal.bridge.hub import TermHub
 
 from provide.terminal.control_channel import encode_control
-from provide.terminal.hijack.hub import TermHub
 
 
 def pytest_collection_modifyitems(items: list) -> None:

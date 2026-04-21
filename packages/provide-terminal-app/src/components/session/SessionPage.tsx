@@ -1,10 +1,10 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
 import { useEffect } from "react";
-import type { AppBootstrap } from "../../api/types";
+import type { AppBootstrap, SessionSummary } from "../../api/types";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useTerminalStore } from "../../stores/terminalStore";
 import { StatusBadge } from "../common/StatusBadge";
@@ -12,8 +12,6 @@ import { AppHeader } from "../layout/AppHeader";
 import { PageShell } from "../layout/PageShell";
 import { HijackHost } from "../widgets/HijackHost";
 import styles from "./SessionPage.module.css";
-
-import type { SessionSummary } from "../../api/types";
 
 interface SessionPageProps {
   bootstrap: AppBootstrap;
@@ -34,15 +32,20 @@ function SessionStatusBar({ summary }: { summary: SessionSummary | null }) {
   const rows = useTerminalStore((s) => s.rows);
   return (
     <div className={styles.statusBar}>
-      <div className="status-dot" style={{
-        background: mounted ? "var(--success)" : "var(--text-tertiary)",
-        boxShadow: mounted ? "0 0 4px var(--success)" : undefined,
-      }} />
+      <div
+        className="status-dot"
+        style={{
+          background: mounted ? "var(--success)" : "var(--text-tertiary)",
+          boxShadow: mounted ? "0 0 4px var(--success)" : undefined,
+        }}
+      />
       <span>{mounted ? "Connected" : "Disconnected"}</span>
       {cols > 0 && rows > 0 && (
         <>
           <span>·</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{cols}×{rows}</span>
+          <span style={{ fontFamily: "var(--font-mono)" }}>
+            {rows}×{cols}
+          </span>
         </>
       )}
       {summary && (
@@ -71,11 +74,13 @@ export function SessionPage({ bootstrap }: SessionPageProps) {
       <AppHeader
         bootstrap={bootstrap}
         crumbs={[{ label: summary?.displayName ?? sessionId }]}
-        right={summary && (
-          <StatusBadge tone={summary.connected ? "ok" : summary.lastError ? "error" : "neutral"}>
-            {summary.connected ? "Live" : summary.lastError ? "Error" : "Stopped"}
-          </StatusBadge>
-        )}
+        right={
+          summary && (
+            <StatusBadge tone={summary.connected ? "ok" : summary.lastError ? "error" : "neutral"}>
+              {summary.connected ? "Live" : summary.lastError ? "Error" : "Stopped"}
+            </StatusBadge>
+          )
+        }
       />
 
       {loading && <div className={styles.loading}>Loading session…</div>}

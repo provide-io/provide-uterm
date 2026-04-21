@@ -70,7 +70,7 @@ class PamTunnelBridge:
                 frame = await self._tunnel.recv()
                 if frame.is_eof:
                     break
-                if frame.channel == CHANNEL_DATA and frame.payload:
+                if frame.channel == CHANNEL_DATA and frame.payload:  # pragma: no branch
                     os.write(master_fd, frame.payload)
         except asyncio.CancelledError:
             pass
@@ -78,7 +78,7 @@ class PamTunnelBridge:
             logger.warning("tunnel_to_pty_error: %s", exc)
 
     async def _capture_to_tunnel_loop(self) -> None:
-        from provide.terminal.pty.capture import CHANNEL_STDOUT  # type: ignore[import-untyped]
+        from provide.terminal.pty.capture import CHANNEL_STDOUT
 
         capture_socket = self._connector._capture
         try:

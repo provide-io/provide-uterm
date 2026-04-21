@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -244,11 +244,23 @@ def test_session_runtime_module_level_fallback() -> None:
     bridge_hijack.HijackSession = HijackSession  # type: ignore[attr-defined]
 
     cf = ModuleType("cf_types")
+    cf.CFWebSocket = CFWebSocket  # type: ignore[attr-defined]
     cf.DurableObject = DurableObject  # type: ignore[attr-defined]
     cf.Response = Response  # type: ignore[attr-defined]
 
     _config_mod = ModuleType("config")
     _config_mod.CloudflareConfig = CloudflareConfig  # type: ignore[attr-defined]
+
+    do_io = ModuleType("do._session_runtime_io")
+    do_io._SessionRuntimeIoMixin = _SessionRuntimeIoMixin  # type: ignore[attr-defined]
+
+    do_persistence = ModuleType("do.persistence")
+    do_persistence.clear_lease = _clear_lease  # type: ignore[attr-defined]
+    do_persistence.persist_lease = _persist_lease  # type: ignore[attr-defined]
+
+    do_ushell = ModuleType("do.ushell")
+    do_ushell.init_ushell = init_ushell  # type: ignore[attr-defined]
+    do_ushell.on_browser_connected = on_browser_connected  # type: ignore[attr-defined]
 
     do_ws = ModuleType("do.ws_helpers")
     do_ws._WsHelperMixin = _WsHelperMixin  # type: ignore[attr-defined]
@@ -272,6 +284,9 @@ def test_session_runtime_module_level_fallback() -> None:
         "cf_types": cf,
         "config": _config_mod,
         "do": ModuleType("do"),
+        "do._session_runtime_io": do_io,
+        "do.persistence": do_persistence,
+        "do.ushell": do_ushell,
         "do.ws_helpers": do_ws,
         "state": ModuleType("state"),
         "state.registry": state_reg,

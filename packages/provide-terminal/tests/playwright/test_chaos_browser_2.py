@@ -130,7 +130,8 @@ class TestTabBackgroundedDuringHijack:
 
             # No JS console errors (ignore resource loading and WebSocket close noise)
             real_errors = [
-                e for e in console_errors
+                e
+                for e in console_errors
                 if "favicon" not in e.lower()
                 and "websocket" not in e.lower()
                 and "failed to load resource" not in e.lower()
@@ -210,12 +211,15 @@ class TestNetworkThrottleDuringHijack:
             # Enable network throttling via CDP (very slow: 6400 bytes/sec ≈ 50kbps)
             cdp = page.context.new_cdp_session(page)
             cdp.send("Network.enable")
-            cdp.send("Network.emulateNetworkConditions", {
-                "offline": False,
-                "downloadThroughput": 6400,
-                "uploadThroughput": 6400,
-                "latency": 500,
-            })
+            cdp.send(
+                "Network.emulateNetworkConditions",
+                {
+                    "offline": False,
+                    "downloadThroughput": 6400,
+                    "uploadThroughput": 6400,
+                    "latency": 500,
+                },
+            )
 
             # Click hijack under throttled conditions
             _hijack_btn(page).click()  # type: ignore[union-attr]
@@ -224,12 +228,15 @@ class TestNetworkThrottleDuringHijack:
             _wait_stable_state(page, timeout=15000)
 
             # Remove throttle
-            cdp.send("Network.emulateNetworkConditions", {
-                "offline": False,
-                "downloadThroughput": -1,
-                "uploadThroughput": -1,
-                "latency": 0,
-            })
+            cdp.send(
+                "Network.emulateNetworkConditions",
+                {
+                    "offline": False,
+                    "downloadThroughput": -1,
+                    "uploadThroughput": -1,
+                    "latency": 0,
+                },
+            )
 
             # After throttle removed, widget should recover
             page.wait_for_timeout(2000)

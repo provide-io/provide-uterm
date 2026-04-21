@@ -143,17 +143,11 @@ def test_stdout_frames_arrive_from_printf() -> None:
             sock_path,
         )
 
-    assert frames, (
-        "no frames received — libuterm_capture.so did not connect or send data"
-    )
+    assert frames, "no frames received — libuterm_capture.so did not connect or send data"
     channels = [ch for ch, _ in frames]
-    assert CHANNEL_STDOUT in channels, (
-        f"no CHANNEL_STDOUT frame; got channels: {channels}"
-    )
+    assert CHANNEL_STDOUT in channels, f"no CHANNEL_STDOUT frame; got channels: {channels}"
     stdout_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDOUT)
-    assert b"hello-ld-preload" in stdout_data, (
-        f"expected 'hello-ld-preload' in stdout frames, got: {stdout_data!r}"
-    )
+    assert b"hello-ld-preload" in stdout_data, f"expected 'hello-ld-preload' in stdout frames, got: {stdout_data!r}"
 
 
 def test_all_three_words_arrive_in_stdout() -> None:
@@ -181,9 +175,7 @@ def test_no_frames_without_env_var() -> None:
     with tempfile.TemporaryDirectory() as td:
         sock_path = str(Path(td) / "cap.sock")
         # Remove UTERM_CAPTURE_SOCKET from env; keep LD_PRELOAD
-        env_no_socket = {
-            k: v for k, v in os.environ.items() if k != "UTERM_CAPTURE_SOCKET"
-        }
+        env_no_socket = {k: v for k, v in os.environ.items() if k != "UTERM_CAPTURE_SOCKET"}
         env_no_socket["LD_PRELOAD"] = str(lib)
 
         # Start server thread — expect no connection within 0.5s
@@ -225,9 +217,7 @@ def test_stdin_read_produces_channel_stdin_frame() -> None:
         )
 
     channels = [ch for ch, _ in frames]
-    assert CHANNEL_STDIN in channels, (
-        f"expected CHANNEL_STDIN frame from /bin/cat; got channels: {channels}"
-    )
+    assert CHANNEL_STDIN in channels, f"expected CHANNEL_STDIN frame from /bin/cat; got channels: {channels}"
     stdin_data = b"".join(data for ch, data in frames if ch == CHANNEL_STDIN)
     assert b"keystroke-data" in stdin_data
 

@@ -150,9 +150,7 @@ class TestIdentityClaimsVariants:
 
         assert frame["subject"] == "sre:bob"
         received = frame["claims"].get("notes", "")
-        assert received == notes, (
-            f"notes value truncated or corrupted: length {len(received)} vs {len(notes)}"
-        )
+        assert received == notes, f"notes value truncated or corrupted: length {len(received)} vs {len(notes)}"
 
     async def test_punctuation_in_value(self, tmp_path: Path) -> None:
         """Email (with +) and note (with commas and semicolons) survive the parser.
@@ -163,21 +161,13 @@ class TestIdentityClaimsVariants:
         """
         email = "alice+tag@example.com"
         note = "a, b; c: d"
-        options_str = (
-            f'subject="sre:carol",'
-            f'claim-email="{email}",'
-            f'claim-note="{note}"'
-        )
+        options_str = f'subject="sre:carol",claim-email="{email}",claim-note="{note}"'
         frame = await _connect_and_capture(tmp_path, options_str)
 
         assert frame["subject"] == "sre:carol"
         claims = frame["claims"]
-        assert claims.get("email") == email, (
-            f"email claim wrong: {claims.get('email')!r} (expected {email!r})"
-        )
-        assert claims.get("note") == note, (
-            f"note claim wrong: {claims.get('note')!r} (expected {note!r})"
-        )
+        assert claims.get("email") == email, f"email claim wrong: {claims.get('email')!r} (expected {email!r})"
+        assert claims.get("note") == note, f"note claim wrong: {claims.get('note')!r} (expected {note!r})"
 
     async def test_multiple_claims_five_keys(self, tmp_path: Path) -> None:
         """Five distinct claim keys on one authorized_keys line all arrive in the frame."""
@@ -218,7 +208,7 @@ class TestIdentityClaimsVariants:
         # Document current behaviour: empty string preserved.
         # If the parser drops it, "notes" will be absent from claims.
         assert "notes" in claims, (
-            "FINDING: parser drops empty-string claim values (claim-notes=\"\" disappears from claims). "
+            'FINDING: parser drops empty-string claim values (claim-notes="" disappears from claims). '
             f"Actual claims: {claims!r}"
         )
         assert claims["notes"] == "", (

@@ -4,7 +4,7 @@
 import asyncio
 from typing import Any
 
-from provide.terminal.hijack.hub import TermHub
+from provide.terminal.bridge.hub import TermHub
 
 
 class _NoopWs:

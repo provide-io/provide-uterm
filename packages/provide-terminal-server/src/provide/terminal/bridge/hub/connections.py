@@ -17,7 +17,12 @@ import uuid
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger
+from provide.telemetry import get_logger, logger
+from provide.terminal.bridge.hub.ext import (
+    EVENT_RATE_LIMIT_TRIGGERED,
+    EVENT_SESSION_DISCONNECTED,
+    EVENT_SESSION_REGISTERED,
+)
 from provide.terminal.bridge.models import WorkerTermState
 
 if TYPE_CHECKING:
@@ -25,6 +30,7 @@ if TYPE_CHECKING:
 from provide.terminal.bridge.ratelimit import TokenBucket
 
 logger = get_logger(__name__)
+
 
 async def shutdown_background_tasks(task_set: set[asyncio.Task[Any]]) -> int:
     """Cancel and await all pending background tasks. Returns count cancelled."""
@@ -99,7 +105,10 @@ class _ConnectionMixin:
             for k in list(self._rest_acquire_per_client)[:_REST_CLIENT_EVICT_COUNT]:
                 del self._rest_acquire_per_client[k]
         bucket = self._rest_acquire_per_client.setdefault(client_id, TokenBucket(self._rest_acquire_rate))
-        return bucket.allow() and self._rest_acquire_bucket.allow()
+        allowed = bucket.allow() and self._rest_acquire_bucket.allow()
+        if not allowed:
+            logger.warning(EVENT_RATE_LIMIT_TRIGGERED, client_id=client_id, limit_type="rest_acquire")
+        return allowed
 
     def allow_rest_send_for(self, client_id: str) -> bool:
         """Per-client REST send/step rate limit (also checks the global bucket).
@@ -111,7 +120,10 @@ class _ConnectionMixin:
             for k in list(self._rest_send_per_client)[:_REST_CLIENT_EVICT_COUNT]:
                 del self._rest_send_per_client[k]
         bucket = self._rest_send_per_client.setdefault(client_id, TokenBucket(self._rest_send_rate))
-        return bucket.allow() and self._rest_send_bucket.allow()
+        allowed = bucket.allow() and self._rest_send_bucket.allow()
+        if not allowed:
+            logger.warning(EVENT_RATE_LIMIT_TRIGGERED, client_id=client_id, limit_type="rest_send")
+        return allowed
 
     # -- Token access ----------------------------------------------------------
 
@@ -137,6 +149,7 @@ class _ConnectionMixin:
                 st.hijack_owner = None
                 st.hijack_owner_expires_at = None
             st.worker_ws = ws
+        logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="worker")
         return prev_was_hijacked
 
     async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
@@ -206,7 +219,7 @@ class _ConnectionMixin:
         async with self._lock:
             st = self._workers.setdefault(worker_id, WorkerTermState())
             st.browsers[ws] = role
-            return {
+            initial_state = {
                 "is_hijacked": self.is_hijacked(st),
                 "hijacked_by_me": self.is_dashboard_hijack_active(st) and st.hijack_owner is ws,
                 "worker_online": st.worker_ws is not None,
@@ -214,6 +227,8 @@ class _ConnectionMixin:
                 "initial_snapshot": st.last_snapshot,
                 "resume_token": resume_token,
             }
+        logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="browser", role=role)
+        return initial_state
 
     @staticmethod
     def _scan_events_for_resume(st: Any) -> bool:
@@ -282,6 +297,7 @@ class _ConnectionMixin:
             task = asyncio.create_task(on_empty(worker_id))
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
+        logger.info(EVENT_SESSION_DISCONNECTED, worker_id=worker_id, session_type="browser")
         return {
             "was_owner": was_owner,
             "rest_still_active": rest_still_active,

@@ -23,7 +23,6 @@ from fastapi.testclient import TestClient
 from provide.terminal.server import create_server_app, default_server_config
 from provide.terminal.server.models import SessionDefinition
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -140,7 +139,7 @@ class TestSseStreamEvents403:
 class TestSseStreamEventsSuccess:
     """Covers sse.py lines 73-80: successful streaming response path."""
 
-    def test_stream_events_authorized_session_returns_streaming_response(self) -> None:
+    async def test_stream_events_authorized_session_returns_streaming_response(self) -> None:
         """An authorized caller gets a 200 streaming response for a known session.
 
         Uses a hub without an EventBus so stream_session_events returns immediately,
@@ -149,9 +148,6 @@ class TestSseStreamEventsSuccess:
         from fastapi import FastAPI
 
         from provide.terminal.bridge.hub import TermHub
-        from provide.terminal.server.registry import SessionRegistry
-        from provide.terminal.server.models import AuthConfig
-        from provide.terminal.server.authorization import AuthorizationService
         from provide.terminal.server.routes.sse import create_sse_router
 
         # Build a minimal app with only the SSE router and a known session.
@@ -169,7 +165,6 @@ class TestSseStreamEventsSuccess:
         )
 
         # Create a mock registry that knows about the session.
-        import asyncio
         from unittest.mock import AsyncMock, MagicMock
 
         registry = MagicMock()
@@ -178,7 +173,7 @@ class TestSseStreamEventsSuccess:
         registry._hub = hub
 
         authz = MagicMock()
-        authz.can_read_session = MagicMock(return_value=True)
+        authz.can_read_session = AsyncMock(return_value=True)
 
         app.state.uterm_hub = hub
         app.state.uterm_registry = registry
@@ -199,12 +194,11 @@ class TestSseStreamEventsSuccess:
         app.add_middleware(_SetPrincipal)
         app.include_router(create_sse_router(), prefix="/api")
 
-        with TestClient(app) as client:
-            with client.stream("GET", "/api/sessions/s-stream/events/stream") as resp:
-                assert resp.status_code == 200
-                assert "text/event-stream" in resp.headers["content-type"]
-                # Consume all bytes — stream returns empty immediately (no EventBus).
-                body = b"".join(resp.iter_bytes())
+        with TestClient(app) as client, client.stream("GET", "/api/sessions/s-stream/events/stream") as resp:
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers["content-type"]
+            # Consume all bytes — stream returns empty immediately (no EventBus).
+            body = b"".join(resp.iter_bytes())
         assert body == b""
 
 
@@ -252,9 +246,10 @@ class TestRegistryStreamHeartbeat:
     async def test_stream_session_events_emits_heartbeat_then_stops(self) -> None:
         """When no event arrives within heartbeat_s, a heartbeat line is yielded.
         Then the worker disconnect sentinel stops the generator."""
+        from unittest.mock import AsyncMock
+
         from provide.terminal.bridge.hub import EventBus, TermHub
         from provide.terminal.server.registry import SessionRegistry
-        from unittest.mock import AsyncMock
 
         hub = TermHub(event_bus=EventBus())
 
@@ -291,9 +286,10 @@ class TestRegistryStreamHeartbeat:
 
     async def test_stream_session_events_yields_regular_event(self) -> None:
         """When an event arrives, it is yielded as a data: line (line 388)."""
+        from unittest.mock import AsyncMock
+
         from provide.terminal.bridge.hub import EventBus, TermHub
         from provide.terminal.server.registry import SessionRegistry
-        from unittest.mock import AsyncMock
 
         hub = TermHub(event_bus=EventBus())
 

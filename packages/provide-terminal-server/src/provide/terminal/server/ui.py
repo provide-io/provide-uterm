@@ -28,7 +28,7 @@ def _hijack_js_version() -> str:
         path = importlib.resources.files("provide.terminal.server") / "frontend" / "hijack.js"
         if path.is_file():
             return format(int(path.stat().st_mtime_ns), "x")[-8:]  # type: ignore[attr-defined]
-    except Exception:  # noqa: S110
+    except Exception:
         pass
     return "0"
 
@@ -117,9 +117,7 @@ def _shell(
     # execute a tampered CDN asset.  This is the primary defense against a
     # compromised third-party CDN exfiltrating share/control tokens from the
     # DOM or making authenticated requests with the page's cookies.
-    _xterm_sri = (
-        f" integrity='{escape(xterm_cdn_integrity)}' crossorigin='anonymous'" if xterm_cdn_integrity else ""
-    )
+    _xterm_sri = f" integrity='{escape(xterm_cdn_integrity)}' crossorigin='anonymous'" if xterm_cdn_integrity else ""
     _fitaddon_sri = (
         f" integrity='{escape(fitaddon_cdn_integrity)}' crossorigin='anonymous'" if fitaddon_cdn_integrity else ""
     )
@@ -184,7 +182,6 @@ def operator_dashboard_html(
         title,
         assets_path,
         body,
-        scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
@@ -201,7 +198,6 @@ def session_page_html(
     operator: bool,
     app_path: str,
     share_role: str | None = None,
-    share_token: str | None = None,
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
@@ -216,7 +212,6 @@ def session_page_html(
         "session_id": session_id,
         "surface": "operator" if operator else "user",
         "share_role": share_role,
-        "share_token": share_token,
     }
     body = (
         "<body>"
@@ -233,7 +228,6 @@ def session_page_html(
         # is set before React's useEffect runs (both are deferred modules; document
         # order determines execution order).
         pre_vite_modules=(f"hijack.js?v={_hijack_js_version()}",),
-        scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
@@ -271,7 +265,6 @@ def connect_page_html(
         title,
         assets_path,
         body,
-        scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
@@ -313,54 +306,11 @@ def inspect_page_html(
         title,
         assets_path,
         body,
-        pre_vite_modules=(f"hijack.js?v={_hijack_js_version()}",),
-        scripts=("server-session-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
         xterm_cdn_integrity=xterm_cdn_integrity,
         fitaddon_cdn_integrity=fitaddon_cdn_integrity,
-    )
-
-
-def inspect_page_html(
-    title: str,
-    assets_path: str,
-    session_id: str,
-    *,
-    app_path: str,
-    share_role: str | None = None,
-    share_token: str | None = None,
-    xterm_cdn: str = "",
-    fitaddon_cdn: str = "",
-    fonts_cdn: str = "",
-) -> str:
-    bootstrap = {
-        "page_kind": "inspect",
-        "title": title,
-        "app_path": app_path,
-        "assets_path": assets_path,
-        "session_id": session_id,
-        "surface": "operator",
-        "share_role": share_role,
-        "share_token": share_token,
-    }
-    body = (
-        "<body>"
-        "<div id='app-root'></div>"
-        "<noscript><div class='page'><div class='card'>This application requires JavaScript.</div></div></noscript>"
-        f"{_bootstrap_tag(bootstrap)}"
-        "</body>"
-    )
-    return _shell(
-        title,
-        assets_path,
-        body,
-        pre_vite_modules=("hijack.js",),
-        scripts=("server-session-page.js",),
-        xterm_cdn=xterm_cdn,
-        fitaddon_cdn=fitaddon_cdn,
-        fonts_cdn=fonts_cdn,
     )
 
 
@@ -371,7 +321,6 @@ def replay_page_html(
     *,
     app_path: str,
     share_role: str | None = None,
-    share_token: str | None = None,
     xterm_cdn: str = "",
     fitaddon_cdn: str = "",
     fonts_cdn: str = "",
@@ -386,7 +335,6 @@ def replay_page_html(
         "session_id": session_id,
         "surface": "operator",
         "share_role": share_role,
-        "share_token": share_token,
     }
     body = (
         "<body>"
@@ -399,7 +347,6 @@ def replay_page_html(
         f"{title} Replay",
         assets_path,
         body,
-        scripts=("server-replay-page.js",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,

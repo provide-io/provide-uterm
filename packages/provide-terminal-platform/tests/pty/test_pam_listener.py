@@ -8,6 +8,7 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -39,16 +40,11 @@ def test_parse_bad_json_returns_none() -> None:
 
 
 def test_parse_unknown_event_returns_none() -> None:
-    assert (
-        _parse_event(b'{"event":"reboot","username":"root","tty":"","pid":1}\n') is None
-    )
+    assert _parse_event(b'{"event":"reboot","username":"root","tty":"","pid":1}\n') is None
 
 
 def test_parse_missing_username_returns_none() -> None:
-    assert (
-        _parse_event(b'{"event":"open","username":"","tty":"/dev/pts/1","pid":5}\n')
-        is None
-    )
+    assert _parse_event(b'{"event":"open","username":"","tty":"/dev/pts/1","pid":5}\n') is None
 
 
 def test_parse_missing_pid_defaults_zero() -> None:
@@ -117,9 +113,7 @@ async def test_receives_close_event() -> None:
         events: list[PamEvent] = []
         await listener.start(lambda e: _collect(events, e))
 
-        await _send_line(
-            path, {"event": "close", "username": "bob", "tty": "/dev/pts/5", "pid": 222}
-        )
+        await _send_line(path, {"event": "close", "username": "bob", "tty": "/dev/pts/5", "pid": 222})
         await asyncio.sleep(0.05)
 
         await listener.stop()
@@ -215,9 +209,7 @@ async def test_multiple_concurrent_connections() -> None:
         await listener.start(lambda e: _collect(events, e))
 
         async def send(username: str, pid: int) -> None:
-            await _send_line(
-                path, {"event": "open", "username": username, "tty": "", "pid": pid}
-            )
+            await _send_line(path, {"event": "open", "username": username, "tty": "", "pid": pid})
 
         await asyncio.gather(send("u1", 1), send("u2", 2), send("u3", 3))
         await asyncio.sleep(0.1)

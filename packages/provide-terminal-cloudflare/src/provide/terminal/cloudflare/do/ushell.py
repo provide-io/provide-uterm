@@ -78,7 +78,7 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
                 return await _lks(env)
 
             ctx["list_kv_sessions"] = _list_sessions2
-        except Exception:  # noqa: S110
+        except Exception:
             pass
 
     return UshellConnector(session_id=session_id, extra_ctx=ctx)

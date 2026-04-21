@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Webhook delivery manager for the hosted terminal server.
@@ -34,7 +34,7 @@ import httpx
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
-    from provide.terminal.hijack.hub import EventBus
+    from provide.terminal.bridge.hub import EventBus
 
 logger = get_logger(__name__)
 

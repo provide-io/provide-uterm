@@ -20,8 +20,8 @@ enabled_by_default = false
 directory = ".uterm-recordings"
 
 [[sessions]]
-session_id = "demo-session"
-display_name = "Interactive Demo Session"
+session_id = "provide-shell"
+display_name = "Provide Shell"
 connector_type = "shell"
 input_mode = "open"
 auto_start = true

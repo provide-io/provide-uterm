@@ -47,6 +47,11 @@ class ManagerConfig(BaseModel):
     # Worker env-var prefix forwarded to subprocesses.
     worker_env_prefix: str = "UTERM_"
 
+    # Governance & Policy
+    spawn_policy_webhook_url: str = ""
+    spawn_policy_webhook_secret: str = ""
+    spawn_policy_webhook_timeout_s: float = 2.0
+
     # Auto-shutdown when all MCP clients disconnect and no agents are active.
     auto_shutdown_enabled: bool = False
     auto_shutdown_grace_s: float = 30.0

@@ -12,7 +12,6 @@ import time
 from typing import Any
 
 import httpx
-
 from provide.terminal.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
@@ -43,9 +42,7 @@ class TestHijackLeaseExpiryDuringConcurrentAcquireRace:
 
             # Three concurrent REST acquires race for the now-expired slot
             async def rest_acquire(owner: str) -> httpx.Response:
-                return await http.post(
-                    "/worker/race1/hijack/acquire", json={"owner": owner, "lease_s": 60}
-                )
+                return await http.post("/worker/race1/hijack/acquire", json={"owner": owner, "lease_s": 60})
 
             r1, r2, r3 = await asyncio.gather(
                 rest_acquire("race-a"),
@@ -56,18 +53,12 @@ class TestHijackLeaseExpiryDuringConcurrentAcquireRace:
             results = [r1.status_code, r2.status_code, r3.status_code]
             winners = results.count(200)
 
-            assert winners == 1, (
-                f"Exactly one REST acquire should win, got {winners}: {results}"
-            )
+            assert winners == 1, f"Exactly one REST acquire should win, got {winners}: {results}"
 
             # Worker should have received at least one pause from the winner
             pause_msgs = await _drain_all(worker, timeout=1.0)
-            pause_controls = [
-                m for m in pause_msgs if m.get("type") == "control" and m.get("action") == "pause"
-            ]
-            assert len(pause_controls) >= 1, (
-                f"Worker should get at least one pause, got {len(pause_controls)}"
-            )
+            pause_controls = [m for m in pause_msgs if m.get("type") == "control" and m.get("action") == "pause"]
+            assert len(pause_controls) >= 1, f"Worker should get at least one pause, got {len(pause_controls)}"
 
 
 # ---------------------------------------------------------------------------
@@ -106,9 +97,7 @@ class TestWorkerReconnectClearsStaleHijack:
                 )
 
                 # New acquire against W2 succeeds
-                r2 = await http.post(
-                    "/worker/reconn1/hijack/acquire", json={"owner": "new-owner", "lease_s": 60}
-                )
+                r2 = await http.post("/worker/reconn1/hijack/acquire", json={"owner": "new-owner", "lease_s": 60})
                 assert r2.status_code == 200, (
                     f"New acquire after worker replacement should succeed, got {r2.status_code}: {r2.text}"
                 )
@@ -124,9 +113,7 @@ class TestEventbusQueueOverflowPreservesSentinel:
         """Flooding snapshots saturates the queue; events are dropped but sequence continues."""
         from tests.e2e._live_server import live_server_with_bus
 
-        sessions = [
-            {"session_id": "flood1", "display_name": "Flood", "connector_type": "shell", "auto_start": False}
-        ]
+        sessions = [{"session_id": "flood1", "display_name": "Flood", "connector_type": "shell", "auto_start": False}]
 
         async with live_server_with_bus(sessions) as (hub, base_url):
             # Use a small queue to force overflow
@@ -159,15 +146,11 @@ class TestEventbusQueueOverflowPreservesSentinel:
                     seqs = [e["seq"] for e in items]
                     if len(items) < 20:
                         # First seq should be > 1, confirming early events were dropped
-                        assert seqs[0] > 1, (
-                            f"First seq should be > 1 (early events dropped), got {seqs[0]}"
-                        )
+                        assert seqs[0] > 1, f"First seq should be > 1 (early events dropped), got {seqs[0]}"
 
                     # Verify all events are for the correct worker
                     for event in items:
-                        assert event["worker_id"] == "flood1", (
-                            f"Event has wrong worker_id: {event['worker_id']}"
-                        )
+                        assert event["worker_id"] == "flood1", f"Event has wrong worker_id: {event['worker_id']}"
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +179,7 @@ class TestHeartbeatRaceWithLeaseCleanup:
                 await _drain_all(worker)
 
                 # Shorten the lease to expire fast
-                hub._workers["hb-race1"].hijack_owner_expires_at = time.time() + 0.5
+                hub._workers["hb-race1"].hijack_owner_expires_at = time.monotonic() + 0.5
 
                 # Wait so we are near/past expiry
                 await asyncio.sleep(0.4)
@@ -223,7 +206,7 @@ class TestHeartbeatRaceWithLeaseCleanup:
 
                 # Check final state: either alive or fully released, never zombie
                 st = hub._workers["hb-race1"]
-                now = time.time()
+                now = time.monotonic()
 
                 hijack_alive = (
                     st.hijack_owner is not None

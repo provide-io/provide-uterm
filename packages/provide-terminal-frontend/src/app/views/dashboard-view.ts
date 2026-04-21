@@ -1,5 +1,5 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
@@ -80,7 +80,7 @@ function sectionMarkup(title: string, sessions: SessionSummary[], appPath: strin
           <article class="session-card ${session.connected ? "live" : ""} ${session.lastError ? "error" : ""}" data-session-id="${escapeHtml(session.sessionId)}">
             <div class="session-header">
               <div>
-                <div class="session-title">${escapeHtml(session.displayName)}</div>
+                <a class="session-title" href="${safeAppPath}/operator/${encodeURIComponent(session.sessionId)}">${escapeHtml(session.displayName)}</a>
                 <div class="small">${escapeHtml(session.sessionId)} • ${escapeHtml(session.connectorType)}</div>
               </div>
               <div class="session-badges">
@@ -92,17 +92,17 @@ function sectionMarkup(title: string, sessions: SessionSummary[], appPath: strin
                 }</span>
               </div>
             </div>
-            <div class="small">Mode: ${escapeHtml(session.inputMode)} • State: ${escapeHtml(session.lifecycleState)}</div>
             ${
               session.tags.length > 0
                 ? `<div class="tag-list">${session.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>`
                 : ""
             }
             <div class="toolbar">
-              <a class="btn" href="${safeAppPath}/operator/${encodeURIComponent(session.sessionId)}">Operator</a>
-              <a class="btn" href="${safeAppPath}/session/${encodeURIComponent(session.sessionId)}">User view</a>
+              <a class="btn" href="${safeAppPath}/operator/${encodeURIComponent(session.sessionId)}">Control</a>
+              <a class="btn" href="${safeAppPath}/session/${encodeURIComponent(session.sessionId)}">Watch</a>
               <a class="btn" href="${safeAppPath}/replay/${encodeURIComponent(session.sessionId)}">Replay</a>
               <button class="btn btn-restart" data-session-id="${escapeHtml(session.sessionId)}">Restart</button>
+              <button class="btn btn-delete" data-session-id="${escapeHtml(session.sessionId)}">Delete</button>
             </div>
           </article>
         `,
@@ -119,7 +119,6 @@ export async function renderDashboard(root: HTMLElement, bootstrap: AppBootstrap
     <div class="page">
       ${renderAppHeader(bootstrap, "dashboard")}
       <section class="card stack">
-        <div class="small">Reference implementation</div>
         <h1>${safeTitle}</h1>
         <div class="toolbar">
           <button id="dashboard-refresh" class="btn">Refresh</button>

@@ -12,7 +12,12 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger
+from provide.telemetry import get_logger, logger
+from provide.terminal.bridge.hub.ext import (
+    EVENT_HIJACK_ACQUIRED,
+    EVENT_HIJACK_EXPIRED,
+    EVENT_HIJACK_RELEASED,
+)
 from provide.terminal.bridge.models import HijackSession
 
 if TYPE_CHECKING:
@@ -98,8 +103,10 @@ class _HijackOwnershipMixin:
             await self._recheck_and_resume(worker_id, now)
         if rest_expired:
             await self.append_event(worker_id, "hijack_lease_expired")  # type: ignore[attr-defined]
+            logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="rest")
         if dashboard_expired:
             await self.append_event(worker_id, "hijack_owner_expired")  # type: ignore[attr-defined]
+            logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="dashboard")
         await self.broadcast_hijack_state(worker_id)  # type: ignore[attr-defined]
         await self.prune_if_idle(worker_id)  # type: ignore[attr-defined]
         return True
@@ -147,6 +154,7 @@ class _HijackOwnershipMixin:
                 lease_expires_at=now + lease_s,
                 last_heartbeat=now,
             )
+        logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
         return True, None
 
     async def try_acquire_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
@@ -166,6 +174,7 @@ class _HijackOwnershipMixin:
             ttl = self._dashboard_hijack_lease_s
             st.hijack_owner = ws
             st.hijack_owner_expires_at = time.monotonic() + ttl
+        logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="dashboard", lease_s=ttl)
         return True, None
 
     async def touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
@@ -202,6 +211,7 @@ class _HijackOwnershipMixin:
             st.hijack_owner = None
             st.hijack_owner_expires_at = None
             rest_active = self.has_valid_rest_lease(st)  # type: ignore[attr-defined]
+        logger.info(EVENT_HIJACK_RELEASED, worker_id=worker_id, hijack_type="dashboard")
         return True, rest_active
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:

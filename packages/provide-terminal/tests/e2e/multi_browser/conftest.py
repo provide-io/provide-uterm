@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Shared fixtures for multi-browser e2e scenarios."""
@@ -14,8 +14,8 @@ from typing import Any
 
 import httpx
 import pytest
-
 from provide.terminal.client import connect_async_ws
+
 from tests.e2e._live_server import live_server_with_bus
 
 # ---------------------------------------------------------------------------

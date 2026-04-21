@@ -93,7 +93,7 @@ class TestSshReconnectIdentity:
 
             try:
                 msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-            except (asyncio.TimeoutError, websockets.ConnectionClosed):
+            except (TimeoutError, websockets.ConnectionClosed):
                 identity_frames_per_conn.append(frames_this_conn)
                 return
 
@@ -148,9 +148,7 @@ class TestSshReconnectIdentity:
         assert len(identity_frames_per_conn) >= 2, (
             f"Expected frames from at least 2 WS connections, got {len(identity_frames_per_conn)}"
         )
-        assert identity_frames_per_conn[0], (
-            f"No identity frame on first WS connection: {identity_frames_per_conn}"
-        )
+        assert identity_frames_per_conn[0], f"No identity frame on first WS connection: {identity_frames_per_conn}"
         assert identity_frames_per_conn[1], (
             "No identity frame re-emitted on second (reconnected) WS connection — "
             "current behaviour is to re-send identity on every new WS. "
@@ -179,7 +177,7 @@ class TestSshReconnectIdentity:
 
             try:
                 msg = await asyncio.wait_for(ws.recv(), timeout=3.0)
-            except (asyncio.TimeoutError, websockets.ConnectionClosed):
+            except (TimeoutError, websockets.ConnectionClosed):
                 return
 
             payload: dict[str, Any] | None = None
@@ -235,16 +233,14 @@ class TestSshReconnectIdentity:
         )
 
         assert second_identity["subject"] == first_identity["subject"], (
-            f"Subject changed across reconnect: {first_identity['subject']!r} → "
-            f"{second_identity['subject']!r}"
+            f"Subject changed across reconnect: {first_identity['subject']!r} → {second_identity['subject']!r}"
         )
         assert second_identity["fingerprint"] == first_identity["fingerprint"], (
             f"Fingerprint changed across reconnect: {first_identity['fingerprint']!r} → "
             f"{second_identity['fingerprint']!r}"
         )
         assert second_identity["claims"] == first_identity["claims"], (
-            f"Claims changed across reconnect: {first_identity['claims']!r} → "
-            f"{second_identity['claims']!r}"
+            f"Claims changed across reconnect: {first_identity['claims']!r} → {second_identity['claims']!r}"
         )
         # Sanity-check the values themselves.
         assert first_identity["subject"] == "sre:alice"

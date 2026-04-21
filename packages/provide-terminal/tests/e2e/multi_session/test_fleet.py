@@ -22,8 +22,8 @@ import json
 from typing import Any
 
 import httpx
-
 from provide.terminal.client import connect_async_ws
+
 from tests.e2e._live_server import live_server_with_bus
 from tests.e2e.conftest import _drain_all, _snapshot_msg
 
@@ -155,9 +155,7 @@ async def test_ephemeral_session_reconnect_during_grace_period() -> None:
             async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.get("/api/sessions/eph1")
                 # Session should still be accessible (200 or similar)
-                assert resp.status_code == 200, (
-                    f"Session eph1 disappeared after reconnect: status={resp.status_code}"
-                )
+                assert resp.status_code == 200, f"Session eph1 disappeared after reconnect: status={resp.status_code}"
 
             await _drain_all(browser2, timeout=0.5)
 
@@ -204,9 +202,7 @@ async def test_fleet_broadcast_storm_with_dead_socket_cleanup() -> None:
             # First batch: each worker sends 5 snapshots concurrently
             async def _send_snapshots(ws: Any, sid: str, batch: int, count: int = 5) -> None:
                 for i in range(count):
-                    await ws.send(json.dumps(
-                        _snapshot_msg(f"{sid}-screen-batch{batch}-{i}")
-                    ))
+                    await ws.send(json.dumps(_snapshot_msg(f"{sid}-screen-batch{batch}-{i}")))
 
             await asyncio.gather(
                 _send_snapshots(w1, "bs1", 1),
@@ -243,10 +239,7 @@ async def test_fleet_broadcast_storm_with_dead_socket_cleanup() -> None:
                 assert len(browsers[sid]) == 4, f"{sid} should have 4 surviving browsers"
                 for idx, msgs in enumerate(results[sid]):
                     snapshot_msgs = [m for m in msgs if m.get("type") == "snapshot"]
-                    batch2_msgs = [
-                        m for m in snapshot_msgs
-                        if f"{sid}-screen-batch2" in m.get("screen", "")
-                    ]
+                    batch2_msgs = [m for m in snapshot_msgs if f"{sid}-screen-batch2" in m.get("screen", "")]
                     assert len(batch2_msgs) >= 5, (
                         f"{sid} browser[{idx}] got {len(batch2_msgs)} batch-2 snapshots, expected >= 5"
                     )

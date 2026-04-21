@@ -5,7 +5,6 @@
 `uterm inspect` is an HTTP reverse proxy that forwards traffic to a local port while capturing structured request/response data for live viewing in the browser. With `--intercept`, requests pause before forwarding, letting you forward, drop, or modify them.
 
 **Use cases:**
-
 - API debugging — see exact payloads, headers, timing
 - Security testing — intercept and tamper with auth flows
 - AI agent supervision — pause and review agent API calls before they hit production
@@ -27,16 +26,16 @@ The proxy binds to a local port (auto-assigned by default, or `--listen-port POR
 
 ## CLI Flags
 
-| Flag                         | Default    | Description                            |
-| ---------------------------- | ---------- | -------------------------------------- |
-| `PORT`                       | (required) | Target HTTP port to inspect            |
-| `--server URL`               | (required) | Tunnel server URL                      |
-| `--listen-port PORT`         | 0 (auto)   | Local proxy listen port                |
-| `--intercept`                | off        | Pause requests for browser action      |
-| `--intercept-timeout SEC`    | 30         | Seconds to wait for browser action     |
-| `--intercept-timeout-action` | forward    | Action on timeout: `forward` or `drop` |
-| `--token TOKEN`              | —          | Bearer token for API auth              |
-| `--display-name NAME`        | http:PORT  | Override session display name          |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `PORT` | (required) | Target HTTP port to inspect |
+| `--server URL` | (required) | Tunnel server URL |
+| `--listen-port PORT` | 0 (auto) | Local proxy listen port |
+| `--intercept` | off | Pause requests for browser action |
+| `--intercept-timeout SEC` | 30 | Seconds to wait for browser action |
+| `--intercept-timeout-action` | forward | Action on timeout: `forward` or `drop` |
+| `--token TOKEN` | — | Bearer token for API auth |
+| `--display-name NAME` | http:PORT | Override session display name |
 
 ## Browser UI
 
@@ -50,10 +49,10 @@ Open the inspect page in your browser (the share URL is printed at startup). The
 ### Intercept Workflow
 
 1. Enable intercept (click toggle or start with `--intercept`)
-1. Send HTTP requests to the proxy port
-1. Requests appear in the list with **PAUSED** badge
-1. Click a paused request to see details
-1. Choose an action:
+2. Send HTTP requests to the proxy port
+3. Requests appear in the list with **PAUSED** badge
+4. Click a paused request to see details
+5. Choose an action:
    - **Forward** — send request to target unchanged
    - **Drop** — block the request, client gets 502
    - **Modify & Forward** — edit headers/body, then send modified request
@@ -65,7 +64,6 @@ All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
 ### Proxy → Browser
 
 **`http_req`** — captured request:
-
 ```json
 {"type": "http_req", "id": "r1", "ts": 1234567890.0, "method": "POST",
  "url": "/api/data", "headers": {"content-type": "application/json"},
@@ -73,7 +71,6 @@ All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
 ```
 
 **`http_res`** — captured response:
-
 ```json
 {"type": "http_res", "id": "r1", "ts": 1234567890.1, "status": 200,
  "status_text": "OK", "headers": {"content-type": "application/json"},
@@ -81,7 +78,6 @@ All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
 ```
 
 **`http_intercept_state`** — current intercept/inspect mode:
-
 ```json
 {"type": "http_intercept_state", "enabled": true, "inspect_enabled": true,
  "timeout_s": 30, "timeout_action": "forward"}
@@ -90,7 +86,6 @@ All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
 ### Browser → Proxy
 
 **`http_action`** — resolve a paused request:
-
 ```json
 {"type": "http_action", "id": "r1", "action": "forward"}
 {"type": "http_action", "id": "r1", "action": "drop"}
@@ -99,7 +94,6 @@ All messages use CHANNEL_HTTP (0x03) in the tunnel binary protocol.
 ```
 
 **`http_intercept_toggle`** / **`http_inspect_toggle`**:
-
 ```json
 {"type": "http_intercept_toggle", "enabled": true}
 {"type": "http_inspect_toggle", "enabled": false}

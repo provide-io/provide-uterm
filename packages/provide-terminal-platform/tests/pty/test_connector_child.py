@@ -21,6 +21,7 @@ from ._connector_helpers import (
 
 # ── Env setup helpers ─────────────────────────────────────────────────────────
 
+
 def _strip_user_vars() -> dict[str, str]:
     """Return os.environ without HOME/SHELL/USER/LOGNAME so setdefault fires."""
     return {k: v for k, v in os.environ.items() if k not in ("HOME", "SHELL", "USER", "LOGNAME")}
@@ -28,13 +29,29 @@ def _strip_user_vars() -> dict[str, str]:
 
 # ── Basic child-branch coverage ───────────────────────────────────────────────
 
+
 async def test_start_env_sets_user_home_shell_logname() -> None:
     """start() with run_as_uid populates HOME/SHELL/USER/LOGNAME in the child env."""
     import pwd
+
     pw = pwd.getpwuid(os.geteuid())
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches(captured_env)
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
+    ):
         conn = make_connector("/bin/echo", ["x"], run_as_uid=os.geteuid())
         with pytest.raises(SystemExit):
             await conn.start()
@@ -48,7 +65,21 @@ async def test_start_env_without_resolved_user_keeps_process_env() -> None:
     """start() without user resolution uses process env unchanged."""
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches(captured_env)
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
+    ):
         conn = make_connector("/bin/echo", ["x"])
         with pytest.raises(SystemExit):
             await conn.start()
@@ -61,8 +92,19 @@ async def test_start_inject_no_lib_path_skips_env_var() -> None:
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
         patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
     ):
@@ -80,8 +122,19 @@ async def test_start_inject_sets_lib_env_when_lib_present() -> None:
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=fake_lib),
         patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
         patch("provide.terminal.pty.connector.sys") as mock_sys,
@@ -101,8 +154,19 @@ async def test_start_inject_sets_ld_preload_on_linux() -> None:
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=fake_lib),
         patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
         patch("provide.terminal.pty.connector.sys") as mock_sys,
@@ -117,6 +181,7 @@ async def test_start_inject_sets_ld_preload_on_linux() -> None:
 
 # ── Mutation-killing tests ────────────────────────────────────────────────────
 
+
 async def test_start_env_setdefault_keys_fire_when_vars_absent() -> None:
     """start() env.setdefault uses exact key names HOME/SHELL/USER/LOGNAME.
 
@@ -124,13 +189,25 @@ async def test_start_env_setdefault_keys_fire_when_vars_absent() -> None:
     Use patch.dict with clear=True to strip those vars so setdefault fires.
     """
     import pwd
+
     pw = pwd.getpwuid(os.geteuid())
     captured_env: dict[str, str] = {}
     safe_env = _strip_user_vars()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch.dict(os.environ, safe_env, clear=True),
     ):
         conn = make_connector("/bin/echo", run_as_uid=os.geteuid())
@@ -164,8 +241,19 @@ async def test_start_env_setdefault_values_from_resolved_user() -> None:
     safe_env = _strip_user_vars()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
         patch.dict(os.environ, safe_env, clear=True),
     ):
@@ -196,8 +284,19 @@ async def test_start_resolve_called_with_run_as_only() -> None:
     safe_env = _strip_user_vars()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
         patch.dict(os.environ, safe_env, clear=True),
     ):
@@ -225,8 +324,19 @@ async def test_start_resolve_args_include_run_as_and_gid() -> None:
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
     ):
         conn = make_connector("/bin/echo", run_as_uid=os.geteuid(), run_as="myuser", run_as_gid=999)
@@ -252,8 +362,19 @@ async def test_start_capture_socket_path_uses_cap_sock() -> None:
 
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.tempfile.mkdtemp", return_value=known_tmpdir),
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
         patch("provide.terminal.pty.connector.CaptureSocket", side_effect=_fake_capture_socket),
@@ -276,8 +397,19 @@ async def test_start_capture_socket_env_key_exact() -> None:
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.tempfile.mkdtemp", return_value=known_tmpdir),
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
         patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
@@ -295,8 +427,19 @@ async def test_start_inject_uterm_capture_socket_value() -> None:
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
         patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
     ):
@@ -315,7 +458,21 @@ async def test_start_child_dup2_fd_numbers() -> None:
     dup2_calls: list[tuple[int, int]] = []
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches_recording(captured_env, dup2_calls=dup2_calls)
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
+    ):
         conn = make_connector("/bin/echo")
         with pytest.raises(SystemExit):
             await conn.start()
@@ -350,8 +507,19 @@ async def test_start_child_setgid_initgroups_setuid_args() -> None:
         setuid_calls=setuid_calls,
     )
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
     ):
         conn = make_connector("/bin/echo", run_as_uid=5001)
@@ -372,7 +540,21 @@ async def test_start_child_termios_echo_bit_cleared() -> None:
     tcsetattr_calls: list[tuple[Any, ...]] = []
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches_recording(captured_env, tcsetattr_calls=tcsetattr_calls)
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
+    ):
         conn = make_connector("/bin/echo")
         with pytest.raises(SystemExit):
             await conn.start()
@@ -391,7 +573,21 @@ async def test_start_child_ioctl_tiocsctty_zero() -> None:
     ioctl_calls: list[tuple[Any, ...]] = []
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches_recording(captured_env, ioctl_calls=ioctl_calls)
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
+    ):
         conn = make_connector("/bin/echo")
         with pytest.raises(SystemExit):
             await conn.start()
@@ -417,7 +613,21 @@ async def test_start_child_exit_code_is_127() -> None:
     # Replace execve with no-raise version
     patches[8] = patch("provide.terminal.pty.connector.os.execve", side_effect=_fake_execve_no_raise)
 
-    with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12]:
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
+    ):
         conn = make_connector("/bin/echo")
         await conn.start()  # must not raise since execve mock returns normally
 
@@ -441,8 +651,19 @@ async def test_start_resolve_username_fallback_is_empty_string() -> None:
     captured_env: dict[str, str] = {}
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
     ):
         conn = make_connector("/bin/echo", run_as_uid=os.geteuid())
@@ -474,8 +695,19 @@ async def test_start_mkdtemp_prefix_is_uterm_cap() -> None:
     mock_cap = AsyncMock()
     patches = _child_fork_patches(captured_env)
     with (
-        patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
-        patches[6], patches[7], patches[8], patches[9], patches[10], patches[11], patches[12],
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patches[9],
+        patches[10],
+        patches[11],
+        patches[12],
         patch("provide.terminal.pty.connector.tempfile.mkdtemp", side_effect=_fake_mkdtemp),
         patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
         patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),

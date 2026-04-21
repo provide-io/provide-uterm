@@ -49,6 +49,7 @@ packages/provide-terminal-cloudflare/python_modules/
 mutants/
 .pymutant-ledger.json
 .pymutant-strict-campaign.json
+mutation-score.json
 .wrangler
 memray-output/
 .worktrees/
