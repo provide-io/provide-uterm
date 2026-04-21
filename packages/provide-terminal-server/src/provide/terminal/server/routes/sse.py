@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """SSE streaming route for the hosted server app.
@@ -67,7 +67,7 @@ def create_sse_router() -> APIRouter:
         definition = await registry.get_definition(session_id)
         if definition is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
-        if not authz.can_read_session(principal, definition):
+        if not await authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
 
         event_types_list = [e.strip() for e in event_types.split(",") if e.strip()] if event_types else None

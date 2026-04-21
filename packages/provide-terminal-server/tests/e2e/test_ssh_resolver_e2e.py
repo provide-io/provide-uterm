@@ -62,17 +62,14 @@ class TestResolverE2E:
     async def test_registered_key_emits_identity_frame(self, tmp_path: Path) -> None:
         """Real SSH client with registered key → upstream WS receives identity frame."""
         client_key = asyncssh.generate_private_key("ssh-ed25519")
-        authorized_keys = await _write_authorized_keys(
-            tmp_path, client_key, subject="sre:alice", role="oncall"
-        )
+        authorized_keys = await _write_authorized_keys(tmp_path, client_key, subject="sre:alice", role="oncall")
         # Sanity-check the file contents + fingerprint round-trip so any
         # test-infrastructure bug surfaces before we look at gateway wiring.
         expected_fp = client_key.get_fingerprint("sha256")
         direct = AuthorizedKeysFileResolver(authorized_keys)
         sanity = await direct.resolve(expected_fp, pubkey_blob=b"", username="alice")
         assert sanity is not None, (
-            f"test fixture broken — resolver can't find {expected_fp} in "
-            f"{authorized_keys.read_text()!r}"
+            f"test fixture broken — resolver can't find {expected_fp} in {authorized_keys.read_text()!r}"
         )
 
         resolver = AuthorizedKeysFileResolver(authorized_keys)
@@ -128,9 +125,7 @@ class TestResolverE2E:
         """
         # Authorized file contains a DIFFERENT key from the one the client will use.
         registered_key = asyncssh.generate_private_key("ssh-ed25519")
-        await _write_authorized_keys(
-            tmp_path, registered_key, subject="sre:someone-else", role="admin"
-        )
+        await _write_authorized_keys(tmp_path, registered_key, subject="sre:someone-else", role="admin")
         resolver = AuthorizedKeysFileResolver(tmp_path / "authorized_keys")
 
         client_key = asyncssh.generate_private_key("ssh-ed25519")
@@ -171,9 +166,7 @@ class TestResolverE2E:
     async def test_require_resolver_rejects_unregistered_key(self, tmp_path: Path) -> None:
         """require_resolver=True → unknown key is rejected; no SSH session opens."""
         registered_key = asyncssh.generate_private_key("ssh-ed25519")
-        await _write_authorized_keys(
-            tmp_path, registered_key, subject="sre:someone", role="admin"
-        )
+        await _write_authorized_keys(tmp_path, registered_key, subject="sre:someone", role="admin")
         resolver = AuthorizedKeysFileResolver(tmp_path / "authorized_keys")
 
         client_key = asyncssh.generate_private_key("ssh-ed25519")

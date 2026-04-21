@@ -6,15 +6,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from provide.terminal.hijack.hub.core import (
+from provide.terminal.bridge.hub.core import (
     BrowserRoleResolutionError,
     BrowserRoleResolver,
     HijackStateCallback,
     ResumeCallback,
     TermHub,
 )
-from provide.terminal.hijack.hub.event_bus import EventBus
-from provide.terminal.hijack.hub.resume import (
+from provide.terminal.bridge.hub.event_bus import EventBus
+from provide.terminal.bridge.hub.ext import (
+    NoOpPolicyGate,
+    PolicyContext,
+    PolicyGate,
+)
+from provide.terminal.bridge.hub.resume import (
     InMemoryResumeStore,
     ResumeSession,
     ResumeTokenStore,
@@ -39,9 +44,6 @@ class TermHubProtocol(Protocol):
     max_ws_message_bytes: int
     max_input_chars: int
     browser_rate_limit_per_sec: float
-
-    @property
-    def event_bus(self) -> EventBus | None: ...
 
     @property
     def event_bus(self) -> EventBus | None: ...
@@ -85,6 +87,7 @@ class TermHubProtocol(Protocol):
     async def get_last_snapshot(self, worker_id: str) -> dict[str, Any] | None: ...
     async def get_recent_events(self, worker_id: str, limit: int) -> list[dict[str, Any]]: ...
     async def browser_count(self, worker_id: str) -> int: ...
+    async def browser_count_total(self) -> int: ...
 
     # -- Hijack state ----------------------------------------------------------
     async def cleanup_expired_hijack(self, worker_id: str) -> bool: ...
@@ -101,6 +104,9 @@ __all__ = [
     "EventBus",
     "HijackStateCallback",
     "InMemoryResumeStore",
+    "NoOpPolicyGate",
+    "PolicyContext",
+    "PolicyGate",
     "ResumeCallback",
     "ResumeSession",
     "ResumeTokenStore",

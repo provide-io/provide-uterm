@@ -15,7 +15,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import socket
 import threading
 import time
@@ -24,7 +23,6 @@ from pathlib import Path
 import httpx
 import uvicorn
 from playwright.sync_api import sync_playwright
-
 from provide.terminal.server import create_server_app, default_server_config
 
 DEMO_DIR = Path("demo/recordings")
@@ -62,35 +60,47 @@ def _setup_demo_data(base_url: str) -> str:
     with httpx.Client(base_url=base_url, timeout=30.0) as http:
         # Create fleet sessions
         for i in range(3):
-            http.post("/api/sessions", json={
-                "session_id": f"fleet-{i}",
-                "display_name": f"Fleet Node {i}",
-                "connector_type": "shell",
-                "auto_start": True,
-            })
+            http.post(
+                "/api/sessions",
+                json={
+                    "session_id": f"fleet-{i}",
+                    "display_name": f"Fleet Node {i}",
+                    "connector_type": "shell",
+                    "auto_start": True,
+                },
+            )
 
         time.sleep(1.0)
 
         # Create fan-out group
-        r = http.post("/api/fanout/groups", json={
-            "name": "demo-fleet",
-            "worker_ids": ["fleet-0", "fleet-1", "fleet-2"],
-        })
+        r = http.post(
+            "/api/fanout/groups",
+            json={
+                "name": "demo-fleet",
+                "worker_ids": ["fleet-0", "fleet-1", "fleet-2"],
+            },
+        )
         group_id = r.json()["group_id"]
 
         # Send a fan-out command
-        http.post(f"/api/fanout/groups/{group_id}/send", json={
-            "data": "help\r",
-            "quiesce_ms": 1500,
-            "max_response_ms": 5000,
-        })
+        http.post(
+            f"/api/fanout/groups/{group_id}/send",
+            json={
+                "data": "help\r",
+                "quiesce_ms": 1500,
+                "max_response_ms": 5000,
+            },
+        )
 
         # Add annotation
-        http.post("/api/sessions/provide-shell/annotate", json={
-            "label": "demo_started",
-            "description": "Automated demo recording",
-            "severity": "info",
-        })
+        http.post(
+            "/api/sessions/provide-shell/annotate",
+            json={
+                "label": "demo_started",
+                "description": "Automated demo recording",
+                "severity": "info",
+            },
+        )
 
         return group_id
 
@@ -172,10 +182,12 @@ def record_browser(base_url: str) -> None:
 
             # Convert to mp4
             import subprocess
+
             mp4_path = DEMO_DIR / "browser-demo.mp4"
             subprocess.run(
                 ["ffmpeg", "-y", "-i", str(target), "-c:v", "libx264", "-preset", "fast", str(mp4_path)],
-                capture_output=True, timeout=60,
+                capture_output=True,
+                timeout=60,
             )
             if mp4_path.exists():
                 print(f"  🎬 MP4 saved to {mp4_path}")
@@ -194,14 +206,27 @@ def main() -> None:
 
     # Create GIF from screenshots
     import subprocess
+
     gif_path = DEMO_DIR / "demo.gif"
     pngs = sorted(SCREENSHOTS_DIR.glob("*.png"))
     if pngs and len(pngs) >= 3:
         # Use ffmpeg to create GIF from screenshots
         subprocess.run(
-            ["ffmpeg", "-y", "-framerate", "1", "-pattern_type", "glob", "-i",
-             str(SCREENSHOTS_DIR / "*.png"), "-vf", "scale=1280:-1", str(gif_path)],
-            capture_output=True, timeout=60,
+            [
+                "ffmpeg",
+                "-y",
+                "-framerate",
+                "1",
+                "-pattern_type",
+                "glob",
+                "-i",
+                str(SCREENSHOTS_DIR / "*.png"),
+                "-vf",
+                "scale=1280:-1",
+                str(gif_path),
+            ],
+            capture_output=True,
+            timeout=60,
         )
         if gif_path.exists():
             print(f"  🎞️  GIF saved to {gif_path}")

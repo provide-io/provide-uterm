@@ -1,9 +1,9 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-/** Types and codec for the inline control stream framing used by ProvideHijack. */
+/** Types and codec for the inline control channel framing used by ProvideHijack. */
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -18,6 +18,9 @@ export interface HijackConfig {
   heartbeatInterval?: number;
   mobileKeys?: boolean;
   role?: string;
+  onResize?: (cols: number, rows: number) => void;
+  /** Called for presence messages (presence_sync, presence_update, presence_leave, control_transfer). */
+  onPresenceMessage?: (msg: Record<string, unknown>) => void;
 }
 
 /** Resolved config after defaults are merged in. */
@@ -32,6 +35,8 @@ export interface ResolvedConfig {
   heartbeatInterval: number;
   mobileKeys: boolean;
   role: string | undefined;
+  onResize: ((cols: number, rows: number) => void) | undefined;
+  onPresenceMessage: ((msg: Record<string, unknown>) => void) | undefined;
 }
 
 export type HijackAction = "acquire" | "heartbeat" | "release" | "step";
@@ -50,13 +55,17 @@ export type StreamFrame = StreamDataFrame | StreamControlFrame;
 
 /** Minimal interface for xterm.js Terminal (loaded via CDN). */
 export interface XTerminal {
+  readonly cols: number;
+  readonly rows: number;
   write(data: string): void;
   reset(): void;
   dispose(): void;
   open(el: HTMLElement): void;
   focus(): void;
   onData(callback: (data: string) => void): { dispose(): void };
+  onScroll(callback: (viewportY: number) => void): { dispose(): void };
   loadAddon(addon: FitAddonInstance): void;
+  readonly buffer: { readonly active: { readonly length: number } };
 }
 
 export interface FitAddonInstance {
@@ -93,7 +102,7 @@ export function encodeWsFrame(payload: Record<string, unknown>): string {
 
 // ── Control stream decoder ────────────────────────────────────────────────────
 
-export class ControlStreamDecoder {
+export class ControlChannelDecoder {
   private _buffer = "";
   private readonly _maxControlBytes: number;
 
@@ -128,7 +137,7 @@ export class ControlStreamDecoder {
         continue;
       }
       if (marker !== _STX) {
-        throw new Error("invalid control stream prefix");
+        throw new Error("invalid control channel prefix");
       }
       if (text) {
         frames.push({ type: "data", data: text });
@@ -139,10 +148,10 @@ export class ControlStreamDecoder {
       }
       const header = this._buffer.slice(cursor + 2, cursor + 10);
       if (!_CONTROL_LEN_RE.test(header)) {
-        throw new Error("invalid control stream length");
+        throw new Error("invalid control channel length");
       }
       if (this._buffer[cursor + 10] !== ":") {
-        throw new Error("invalid control stream separator");
+        throw new Error("invalid control channel separator");
       }
       const payloadLength = Number.parseInt(header, 16);
       if (!Number.isFinite(payloadLength) || payloadLength > this._maxControlBytes) {

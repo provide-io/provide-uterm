@@ -339,9 +339,7 @@ def _two_principal_jwt_app() -> tuple[TestClient, str, str]:
     bob = _tok("bob", ["operator"])
     worker = _tok("worker", ["admin"])
     config = default_server_config()
-    config.auth = AuthConfig(
-        mode="jwt", jwt_public_key_pem=key, jwt_algorithms=["HS256"], worker_bearer_token=worker
-    )
+    config.auth = AuthConfig(mode="jwt", jwt_public_key_pem=key, jwt_algorithms=["HS256"], worker_bearer_token=worker)
     app = create_server_app(config)
     return TestClient(app), alice, bob
 
@@ -394,14 +392,20 @@ def test_tunnel_owner_can_rotate_and_revoke() -> None:
             headers={"Authorization": f"Bearer {alice}"},
         )
         tunnel_id = r.json()["tunnel_id"]
-        assert client.post(
-            f"/api/tunnels/{tunnel_id}/tokens/rotate",
-            headers={"Authorization": f"Bearer {alice}"},
-        ).status_code == 200
-        assert client.delete(
-            f"/api/tunnels/{tunnel_id}/tokens",
-            headers={"Authorization": f"Bearer {alice}"},
-        ).status_code == 200
+        assert (
+            client.post(
+                f"/api/tunnels/{tunnel_id}/tokens/rotate",
+                headers={"Authorization": f"Bearer {alice}"},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.delete(
+                f"/api/tunnels/{tunnel_id}/tokens",
+                headers={"Authorization": f"Bearer {alice}"},
+            ).status_code
+            == 200
+        )
 
 
 def test_tunnel_rotate_on_missing_session_404() -> None:
@@ -491,9 +495,7 @@ def test_session_delete_revokes_tunnel_tokens() -> None:
         algorithm="HS256",
     )
     config = default_server_config()
-    config.auth = AuthConfig(
-        mode="jwt", jwt_public_key_pem=key, jwt_algorithms=["HS256"], worker_bearer_token=worker
-    )
+    config.auth = AuthConfig(mode="jwt", jwt_public_key_pem=key, jwt_algorithms=["HS256"], worker_bearer_token=worker)
     app = create_server_app(config)
     with TestClient(app) as client:
         r = client.post(

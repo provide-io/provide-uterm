@@ -213,6 +213,7 @@ class TestCmdInspectEdge:
             _cmd_inspect(args)
         # asyncio.run should have been called with the coroutine from _run_inspect
         mock_asyncio_run.assert_called_once()
+        mock_asyncio_run.call_args[0][0].close()
 
     def test_absolute_ws_endpoint_not_modified(self):
         args = self._make_args(server="https://example.com")
@@ -227,6 +228,7 @@ class TestCmdInspectEdge:
             }
             _cmd_inspect(args)
         mock_run.assert_called_once()
+        mock_run.call_args[0][0].close()
 
     def test_missing_ws_endpoint_exits_with_code_1(self):
         args = self._make_args()

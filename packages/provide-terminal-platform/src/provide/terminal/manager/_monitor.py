@@ -15,7 +15,9 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger
+from provide.telemetry import get_logger, logger
+
+from provide.terminal.manager.ext import EVENT_AGENT_EXITED
 
 if TYPE_CHECKING:
     import subprocess
@@ -114,7 +116,7 @@ async def _handle_exited_processes(pm: AgentProcessManager) -> None:
         exited = [(bid, p) for bid, p in list(pm.manager.processes.items()) if p.poll() is not None]
     for agent_id, process in exited:
         exit_code = process.returncode
-        logger.warning("agent_exited", agent_id=agent_id, exit_code=exit_code)
+        logger.warning(EVENT_AGENT_EXITED, agent_id=agent_id, exit_code=exit_code)
         async with pm.manager._state_lock:
             agent = pm.manager.agents.get(agent_id)
             if agent is None:

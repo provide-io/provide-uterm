@@ -15,7 +15,6 @@ import hypothesis.strategies as st_h
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, initialize, rule
-
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.client import connect_test_ws
 

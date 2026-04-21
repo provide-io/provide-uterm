@@ -69,9 +69,7 @@ class LinkPattern:
 
     def __post_init__(self) -> None:
         if self.action not in _VALID_ACTIONS:
-            raise ValueError(
-                f"invalid action {self.action!r}; must be one of {sorted(_VALID_ACTIONS)}"
-            )
+            raise ValueError(f"invalid action {self.action!r}; must be one of {sorted(_VALID_ACTIONS)}")
 
     def to_frame_entry(self) -> dict[str, Any]:
         """Serialise to the wire-format dict expected by ``xterm-server-links.js``.

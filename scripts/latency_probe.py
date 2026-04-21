@@ -79,7 +79,7 @@ async def run(base_url: str, worker_id: str, rounds: int, timeout_s: float) -> i
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure command and snapshot latency via REST hijack APIs.")
     parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8400")
-    parser.add_argument("--worker-id", default="demo-session", help="Worker/session ID")
+    parser.add_argument("--worker-id", default="provide-shell", help="Worker/session ID")
     parser.add_argument("--rounds", type=int, default=40, help="Probe rounds")
     parser.add_argument("--timeout-s", type=float, default=10.0, help="HTTP timeout")
     args = parser.parse_args()

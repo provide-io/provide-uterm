@@ -9,6 +9,7 @@ Usage:
     uv run python scripts/record_all_demos.py
     uv run python scripts/record_all_demos.py --features fanout,annotation
 """
+
 from __future__ import annotations
 
 import importlib
@@ -27,20 +28,68 @@ BASE_OUT = Path("demo/recordings")
 
 # (module_name, feature_key, description)
 FEATURES: list[tuple[str, str, str]] = [
-    ("scripts.demos.record_fanout",        "fanout",        "Broadcast a command to 3 sessions simultaneously, show per-node output and divergence detection"),
-    ("scripts.demos.record_annotation",    "annotation",    "Agent self-annotation and automatic detection of 20 security/lifecycle patterns"),
-    ("scripts.demos.record_recording",     "recording",     "Enable session recording, produce terminal activity, download JSONL recording file"),
-    ("scripts.demos.record_pty",           "pty",           "Spawn a local PTY session, run commands, show resize and snapshot"),
-    ("scripts.demos.record_ssh",           "ssh",           "Connect a session to an SSH host, run commands, show live output"),
-    ("scripts.demos.record_hijack",        "hijack",        "Viewer connects read-only, operator takes exclusive control, admin force-reclaims"),
-    ("scripts.demos.record_deckmux",       "deckmux",       "Multiple operator cursors join the same session, presence state is broadcast"),
-    ("scripts.demos.record_shell_render",  "shell_render",  "Send an image URL to the shell render command, get ANSI truecolor art back"),
-    ("scripts.demos.record_replay",        "replay",        "Record 10 seconds of terminal activity then scrub through replay in the browser"),
-    ("scripts.demos.record_mcp",           "mcp",           "21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation"),
-    ("scripts.demos.record_telnet",        "telnet",        "Connect a session to a local telnet server, show negotiation and live output"),
-    ("scripts.demos.record_http_inspect",  "http_inspect",  "Proxy HTTP traffic through uterm inspect tunnel, inspect requests/responses in browser"),
-    ("scripts.demos.record_tunnel",        "tunnel",        "Session served through local CF Worker (wrangler dev --local), showing the CF path"),
-    ("scripts.demos.record_fleet",         "fleet",         "Spawn 3 fleet shell workers, register with the fleet manager, broadcast a deploy command"),
+    (
+        "scripts.demos.record_fanout",
+        "fanout",
+        "Broadcast a command to 3 sessions simultaneously, show per-node output and divergence detection",
+    ),
+    (
+        "scripts.demos.record_annotation",
+        "annotation",
+        "Agent self-annotation and automatic detection of 20 security/lifecycle patterns",
+    ),
+    (
+        "scripts.demos.record_recording",
+        "recording",
+        "Enable session recording, produce terminal activity, download JSONL recording file",
+    ),
+    ("scripts.demos.record_pty", "pty", "Spawn a local PTY session, run commands, show resize and snapshot"),
+    ("scripts.demos.record_ssh", "ssh", "Connect a session to an SSH host, run commands, show live output"),
+    (
+        "scripts.demos.record_hijack",
+        "hijack",
+        "Viewer connects read-only, operator takes exclusive control, admin force-reclaims",
+    ),
+    (
+        "scripts.demos.record_deckmux",
+        "deckmux",
+        "Multiple operator cursors join the same session, presence state is broadcast",
+    ),
+    (
+        "scripts.demos.record_shell_render",
+        "shell_render",
+        "Send an image URL to the shell render command, get ANSI truecolor art back",
+    ),
+    (
+        "scripts.demos.record_replay",
+        "replay",
+        "Record 10 seconds of terminal activity then scrub through replay in the browser",
+    ),
+    (
+        "scripts.demos.record_mcp",
+        "mcp",
+        "21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation",
+    ),
+    (
+        "scripts.demos.record_telnet",
+        "telnet",
+        "Connect a session to a local telnet server, show negotiation and live output",
+    ),
+    (
+        "scripts.demos.record_http_inspect",
+        "http_inspect",
+        "Proxy HTTP traffic through uterm inspect tunnel, inspect requests/responses in browser",
+    ),
+    (
+        "scripts.demos.record_tunnel",
+        "tunnel",
+        "Session served through local CF Worker (wrangler dev --local), showing the CF path",
+    ),
+    (
+        "scripts.demos.record_fleet",
+        "fleet",
+        "Spawn 3 fleet shell workers, register with the fleet manager, broadcast a deploy command",
+    ),
 ]
 
 

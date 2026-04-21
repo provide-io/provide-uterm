@@ -19,44 +19,7 @@ from provide.terminal.gateway._gateway import (
     _skip_subneg_sequence,
     _strip_iac,
 )
-
-# ---------------------------------------------------------------------------
-# Token file helpers
-# ---------------------------------------------------------------------------
-
-
-class TestReadToken:
-    def test_reads_existing_file(self, tmp_path: Path) -> None:
-        f = tmp_path / "token"
-        f.write_text("  abc123  ")
-        assert _read_token(f) == "abc123"
-
-    def test_returns_none_for_missing(self, tmp_path: Path) -> None:
-        assert _read_token(tmp_path / "nonexistent") is None
-
-    def test_returns_none_for_empty(self, tmp_path: Path) -> None:
-        f = tmp_path / "token"
-        f.write_text("   ")
-        assert _read_token(f) is None
-
-
-class TestWriteToken:
-    def test_writes_and_creates_parents(self, tmp_path: Path) -> None:
-        f = tmp_path / "sub" / "dir" / "token"
-        _write_token(f, "mytoken")
-        assert f.read_text() == "mytoken"
-
-
-class TestDeleteToken:
-    def test_deletes_existing(self, tmp_path: Path) -> None:
-        f = tmp_path / "token"
-        f.write_text("x")
-        _delete_token(f)
-        assert not f.exists()
-
-    def test_noop_if_missing(self, tmp_path: Path) -> None:
-        _delete_token(tmp_path / "nope")  # should not raise
-
+from provide.terminal.gateway._ssh_handler import _make_no_auth_server_class
 
 # ---------------------------------------------------------------------------
 # CRLF normalization
@@ -167,9 +130,7 @@ class TestHandleWsControlFrame:
     async def test_session_token_updates_holder(self) -> None:
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        result = await _handle_ws_control_frame(
-            {"type": "session_token", "token": "tok123"}, holder, write_fn
-        )
+        result = await _handle_ws_control_frame({"type": "session_token", "token": "tok123"}, holder, write_fn)
         assert result is True
         assert holder[0] == {"token": "tok123"}
 

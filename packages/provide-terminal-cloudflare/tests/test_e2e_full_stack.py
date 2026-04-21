@@ -161,7 +161,7 @@ async def shell_runtime(wrangler_server: str):
         connector_config={},
         input_mode="open",
     )
-    recording = RecordingConfig(enabled_by_default=False, directory=Path("/tmp"), max_bytes=10_000_000)  # noqa: S108
+    recording = RecordingConfig(enabled_by_default=False, directory=Path("/tmp"), max_bytes=10_000_000)
     rt = HostedSessionRuntime(
         defn,
         public_base_url=wrangler_server,
@@ -212,7 +212,7 @@ async def test_hosted_runtime_snapshot_reaches_browser(wrangler_server: str) -> 
         connector_config={},
         input_mode="open",
     )
-    recording = RecordingConfig(enabled_by_default=False, directory=Path("/tmp"), max_bytes=10_000_000)  # noqa: S108
+    recording = RecordingConfig(enabled_by_default=False, directory=Path("/tmp"), max_bytes=10_000_000)
     rt = HostedSessionRuntime(
         defn,
         public_base_url=wrangler_server,

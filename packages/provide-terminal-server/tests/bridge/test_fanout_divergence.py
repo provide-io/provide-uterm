@@ -4,8 +4,6 @@
 #
 from __future__ import annotations
 
-import pytest
-
 from provide.terminal.bridge.fanout._divergence import compute_divergence
 
 

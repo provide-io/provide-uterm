@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import HijackSession, WorkerTermState
 

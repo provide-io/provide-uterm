@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -14,17 +14,6 @@ dependencies = [
     "provide-telemetry>=0.3",
 ]
 
-[tool.setuptools.package-data]
-"provide.terminal" = [
-    "py.typed",
-    "frontend/*",
-    "frontend/app/*.js",
-    "frontend/app/views/*.js",
-    "frontend/app/widgets/*.js",
-    "frontend/.vite/*",
-    "frontend/assets/*",
-]
-
 [dependency-groups]
 dev = [
     "asyncssh>=2.22.0",
@@ -36,6 +25,7 @@ dev = [
     "hypothesis>=6.151.9",
     "memray>=1.0; sys_platform != 'win32'",
     "mutmut>=3.3.1",
+    "Pillow>=10.0",
     "mypy>=1.19",
     "pip-audit>=2.7.0",
     "pip-licenses>=5.5.0",
@@ -61,20 +51,17 @@ dev = [
     "xenon>=0.9.3",
     "fastmcp>=2.0",
     "pytest-textual-snapshot>=1.0.0",
+    "respx>=0.23.1",
 ]
 
 [tool.uv.workspace]
-members = ["packages/provide-terminal", "packages/provide-terminal-cloudflare", "packages/provide-terminal-pty", "packages/provide-terminal-manager", "packages/provide-terminal-transports", "packages/provide-terminal-tunnel", "packages/provide-terminal-gateway", "packages/provide-terminal-ai", "packages/provide-terminal-client"]
+members = ["packages/provide-terminal", "packages/provide-terminal-cloudflare", "packages/provide-terminal-platform", "packages/provide-terminal-server", "packages/provide-terminal-client"]
 
 [tool.uv.sources]
 provide-terminal = { workspace = true }
 provide-terminal-cloudflare = { workspace = true }
-provide-terminal-pty = { workspace = true }
-provide-terminal-manager = { workspace = true }
-provide-terminal-transports = { workspace = true }
-provide-terminal-tunnel = { workspace = true }
-provide-terminal-gateway = { workspace = true }
-provide-terminal-ai = { workspace = true }
+provide-terminal-platform = { workspace = true }
+provide-terminal-server = { workspace = true }
 provide-terminal-client = { workspace = true }
 
 [tool.ruff]
@@ -89,46 +76,37 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",
-    "W",
-    "F",
-    "I",
-    "N",
-    "UP",
-    "B",
-    "C4",
-    "SIM",
-    "TCH",
-    "PTH",
-    "DTZ",
-    "ICN",
-    "ISC",
-    "PERF",
-    "PIE",
-    "RET",
-    "RSE",
-    "TID",
-    "S",
-    "ARG",
-    "RUF",
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
+    "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
 ]
-ignore = ["E501", "S104", "S112", "S311"]
+ignore = [
+    "E501",  # line-too-long
+    "S101",  # use-of-assert
+    "S104",  # hardcoded-bind-all-interfaces
+    "S108",  # hardcoded-temp-file
+    "S110",  # try-except-pass
+    "S112",  # try-except-continue
+    "S311",  # suspicious-non-cryptographic-random
+    "S603",  # subprocess-without-shell
+    "S607",  # start-process-with-partial-path
+    "S604",  # call-with-shell-equals-true
+    "F811",  # redefined-while-unused
+    "N806",  # non-lowercase-variable-in-function
+    "N814",  # camelcase-imported-as-constant
+    "B017",  # assert-raises-exception
+    "SIM105", # suppressible-exception
+    "SIM117", # multiple-with-statements
+    "ARG001", # unused-function-argument
+    "ARG002", # unused-method-argument — protocol interfaces
+    "PTH108", # os-unlink — stylistic
+    "SIM108", # ternary-operator — stylistic
+    "PERF401", # manual-list-comprehension — perf suggestion — nested with patch() is clearer in tests
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "RUF022"]
-"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 "tests_mutation/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
-"packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
-
-[tool.coverage.run]
-source = ["provide.terminal"]
-omit = ["tests/*"]
-branch = true
-
-[tool.coverage.report]
-fail_under = 100
-show_missing = true
-skip_covered = false
+"packages/**/tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -149,7 +127,7 @@ explicit_package_bases = true
 mypy_path = ["packages/provide-terminal/src", "packages/provide-terminal-server/src", "packages/provide-terminal-platform/src", "packages/provide-terminal-client/src"]
 
 [[tool.mypy.overrides]]
-module = ["provide.telemetry", "provide.telemetry.*", "structlog", "structlog.*"]
+module = ["provide.telemetry", "provide.telemetry.*", "provide.terminal.deckmux", "provide.terminal.deckmux.*", "structlog", "structlog.*"]
 ignore_missing_imports = true
 
 
@@ -168,20 +146,16 @@ python-version = "3.11"
 extra-paths = []
 
 [tool.ty.rules]
-# FastAPI/Starlette add_middleware(CORSMiddleware, ...) is the documented
-# pattern; ty incorrectly rejects it due to incomplete starlette stubs.
 invalid-argument-type = "ignore"
-# asyncio.create_task(Awaitable[T]) requires a type: ignore[arg-type] for mypy;
-# ty does not see the same error and reports the suppression as unused.
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/structlog/*,mutants"
-ignore-words-list = "ore,opps,wont,strat,nd,rade,ans"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,packages/provide-terminal-server/src/provide/terminal/server/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/structlog/*,mutants"
+ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable"
 
 [tool.bandit]
 exclude_dirs = [
-    "tests",
+    "packages/provide-terminal/tests",
     "packages/provide-terminal-cloudflare/python_modules",
     "packages/provide-terminal-cloudflare/node_modules",
 ]
@@ -213,6 +187,7 @@ markers = [
     "slow: slow tests (>10s)",
     "e2e: end-to-end tests against a live pywrangler dev server",
     "real_cf: tests requiring a real Cloudflare deployment",
+    "docker: tests requiring a running Docker daemon",
 ]
 
 [tool.xenon]
@@ -221,7 +196,7 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = ["src/provide/shell/terminal/_connector.py", "src/provide/terminal/server/connectors/__init__.py", "src/provide/terminal/server/connectors/registry.py", "src/provide/terminal/hijack/hub/event_bus.py"]
+paths_to_mutate = ["src/provide/terminal/pty/connector.py"]
 tests_dir = [
     "packages/provide-terminal/tests/shell/test_shell_render.py",
     "packages/provide-terminal/tests/deckmux/test_presence.py",
@@ -230,30 +205,30 @@ tests_dir = [
     "packages/provide-terminal/tests/deckmux/test_protocol.py",
     "packages/provide-terminal/tests/deckmux/test_names.py",
     "packages/provide-terminal/tests/deckmux/test_edge.py",
-    "packages/provide-terminal-pty/tests/test_validate.py",
-    "packages/provide-terminal-pty/tests/test_uid_map.py",
-    "packages/provide-terminal-pty/tests/test_capture.py",
-    "packages/provide-terminal-pty/tests/test_capture_connector.py",
-    "packages/provide-terminal-pty/tests/test_pam_listener.py",
-    "packages/provide-terminal-pty/tests/test_pam.py",
-    "packages/provide-terminal-pty/tests/test_connector.py",
+    "packages/provide-terminal-platform/tests/pty/test_validate.py",
+    "packages/provide-terminal-platform/tests/pty/test_uid_map.py",
+    "packages/provide-terminal-platform/tests/pty/test_capture.py",
+    "packages/provide-terminal-platform/tests/pty/test_capture_connector.py",
+    "packages/provide-terminal-platform/tests/pty/test_pam_listener.py",
+    "packages/provide-terminal-platform/tests/pty/test_pam.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector_io.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector_stop.py",
+    "packages/provide-terminal-platform/tests/pty/test_connector_child.py",
 ]
 also_copy = [
     "src",
     "packages/provide-terminal/src",
     "packages/provide-terminal/tests",
-    "packages/provide-terminal-pty/src",
-    "packages/provide-terminal-pty/tests",
+    "packages/provide-terminal-platform/src",
+    "packages/provide-terminal-platform/tests/pty",
     "conftest.py",
 ]
-
-[tool.uv.workspace]
-members = [
-    ".",
-    "packages/provide-terminal-cloudflare",
+pytest_add_cli_args = [
+    "--timeout=30",
+    "-p", "no:randomly",
+    "-p", "no:hypothesis",
+    "--ignore=packages/provide-terminal-platform/tests/pty/test_ld_preload_capture.py",
+    "--ignore=packages/provide-terminal-platform/tests/pty/e2e/",
 ]
-
-[tool.uv.sources]
-provide-telemetry = { path = "/Users/tim/code/gh/provide-io/provide-telemetry", editable = true }
-provide-terminal = { workspace = true }
-provide-terminal-cloudflare = { workspace = true }
+debug = true

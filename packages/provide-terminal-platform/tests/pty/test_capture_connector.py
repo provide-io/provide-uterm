@@ -3,9 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 import asyncio
+import contextlib
+import socket
 import struct
+import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -28,9 +32,7 @@ async def _send_frames(path: str, frames: list[bytes]) -> None:
 
 def _make_connector(td: str, **kwargs: object) -> CaptureConnector:
     path = str(Path(td) / "cap.sock")
-    return CaptureConnector(
-        "test-cap-1", "Test Capture", {"socket_path": path, **kwargs}
-    )
+    return CaptureConnector("test-cap-1", "Test Capture", {"socket_path": path, **kwargs})
 
 
 def test_unknown_config_key_rejected() -> None:

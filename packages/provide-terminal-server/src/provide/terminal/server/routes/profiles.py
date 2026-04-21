@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """REST API routes for connection profiles."""
@@ -57,7 +57,7 @@ def create_profiles_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         store = _store(request)
-        if authz.is_admin(principal):
+        if await authz.is_admin(principal):
             profiles = await store.list_profiles()
         else:
             profiles = await store.list_profiles(owner=principal.subject_id)
@@ -71,7 +71,7 @@ def create_profiles_router() -> APIRouter:
         profile = await store.get_profile(profile_id)
         if profile is None:
             raise _not_found(profile_id)
-        if not authz.can_read_profile(principal, profile):
+        if not await authz.can_read_profile(principal, profile):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         return profile.model_dump(mode="python")
 
@@ -79,7 +79,7 @@ def create_profiles_router() -> APIRouter:
     async def create_profile(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.can_create_session(principal):
+        if not await authz.can_create_session(principal):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         store = _store(request)
         now = time.time()
@@ -121,7 +121,7 @@ def create_profiles_router() -> APIRouter:
         profile = await store.get_profile(profile_id)
         if profile is None:
             raise _not_found(profile_id)
-        if not authz.can_mutate_profile(principal, profile):
+        if not await authz.can_mutate_profile(principal, profile):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         allowed = {"name", "host", "port", "username", "tags", "input_mode", "recording_enabled", "visibility"}
         updates = {k: v for k, v in payload.items() if k in allowed}
@@ -141,7 +141,7 @@ def create_profiles_router() -> APIRouter:
         profile = await store.get_profile(profile_id)
         if profile is None:
             raise _not_found(profile_id)
-        if not authz.can_mutate_profile(principal, profile):
+        if not await authz.can_mutate_profile(principal, profile):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         await store.delete_profile(profile_id)
         return {"ok": True}
@@ -159,9 +159,9 @@ def create_profiles_router() -> APIRouter:
         profile = await store.get_profile(profile_id)
         if profile is None:
             raise _not_found(profile_id)
-        if not authz.can_read_profile(principal, profile):
+        if not await authz.can_read_profile(principal, profile):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        if not authz.can_create_session(principal):
+        if not await authz.can_create_session(principal):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         connector_config: dict[str, Any] = {}
         if profile.host:

@@ -18,8 +18,15 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-import yaml
-from provide.telemetry import get_logger
+import yaml  # type: ignore[import-untyped]
+from provide.telemetry import get_logger, logger
+
+from provide.terminal.manager.ext import (
+    EVENT_AGENT_KILLED,
+    EVENT_AGENT_SPAWNED,
+    AgentSpawnPolicyGate,
+    NoOpAgentSpawnPolicyGate,
+)
 
 if TYPE_CHECKING:
     from provide.terminal.manager.core import AgentManager
@@ -86,7 +93,12 @@ class AgentProcessManager:
         self._spawn_name_style: str = "random"
         self._spawn_name_base: str = ""
         self._last_spawn_config: str | None = None
+        self._policy_gate: AgentSpawnPolicyGate = NoOpAgentSpawnPolicyGate()
         self._try_set_subreaper()
+
+    def set_policy_gate(self, gate: AgentSpawnPolicyGate) -> None:
+        """Set the external policy gate for agent spawning."""
+        self._policy_gate = gate
 
     @staticmethod
     def _try_set_subreaper() -> None:
@@ -107,7 +119,7 @@ class AgentProcessManager:
             rc = libc.prctl(pr_set_child_subreaper, 1, 0, 0, 0)
             if rc == 0:
                 logger.debug("subreaper_set")
-        except Exception:  # noqa: S110
+        except Exception:
             pass  # not available — fall back to killpg-only
 
     @staticmethod
@@ -228,6 +240,12 @@ class AgentProcessManager:
         logger.info("spawning_agent", agent_id=agent_id, config_path=config_path)
 
         worker_type, raw = await self._load_worker_type(config_path)
+
+        # Policy Check
+        if not await self._policy_gate.intercept_spawn(agent_id, config_path, raw):
+            logger.warning("agent_spawn_rejected_by_policy", agent_id=agent_id)
+            raise RuntimeError(f"Spawn rejected by policy for agent {agent_id}")
+
         registry_entry = self._get_registry_entry(worker_type, config_path)
         worker_module = registry_entry.worker_module
 
@@ -258,7 +276,7 @@ class AgentProcessManager:
                 self.manager.processes[agent_id] = process
 
             self._last_spawn_config = config_path
-            logger.info("agent_spawned", agent_id=agent_id, pid=process.pid)
+            logger.info(EVENT_AGENT_SPAWNED, agent_id=agent_id, pid=process.pid, worker_type=worker_type)
             await self.manager.broadcast_status()
             return agent_id
 
@@ -423,6 +441,7 @@ class AgentProcessManager:
         return agent_ids
 
     async def kill_agent(self, agent_id: str) -> None:
+        logger.info(EVENT_AGENT_KILLED, agent_id=agent_id)
         async with self.manager._state_lock:
             process = self.manager.processes.get(agent_id)
             agent = self.manager.agents.get(agent_id)

@@ -13,7 +13,6 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
-
 from provide.terminal.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:

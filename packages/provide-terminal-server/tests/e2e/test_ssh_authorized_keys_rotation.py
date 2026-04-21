@@ -100,9 +100,7 @@ async def _ssh_connect_pubkey(
 
 
 class TestAddedAfterStart:
-    async def test_key_added_to_empty_file_is_accepted_on_next_connection(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_key_added_to_empty_file_is_accepted_on_next_connection(self, tmp_path: Path) -> None:
         """Gateway starts with an EMPTY authorized_keys file.
 
         First SSH attempt is rejected (require_resolver=True, no key known).
@@ -164,9 +162,7 @@ class TestAddedAfterStart:
 
 
 class TestRemovedAfterStart:
-    async def test_key_removed_from_file_is_rejected_on_next_connection(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_key_removed_from_file_is_rejected_on_next_connection(self, tmp_path: Path) -> None:
         """Gateway starts with one key in authorized_keys.
 
         First SSH attempt succeeds and an identity frame is emitted.
@@ -225,9 +221,7 @@ class TestRemovedAfterStart:
 
 
 class TestModifiedSubject:
-    async def test_updated_subject_in_file_is_reflected_on_next_connection(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_updated_subject_in_file_is_reflected_on_next_connection(self, tmp_path: Path) -> None:
         """Gateway starts with subject="old-subject".
 
         First SSH connection → identity frame carries subject="old-subject".
@@ -272,9 +266,7 @@ class TestModifiedSubject:
         assert len(frames_after) >= 2, f"Expected at least 2 identity frames; got {frames_after!r}"
         # The last frame should carry the updated subject.
         last_subject = frames_after[-1]["subject"]
-        assert last_subject == "sre:new-subject", (
-            f"Subject not updated after file mutation; got {last_subject!r}"
-        )
+        assert last_subject == "sre:new-subject", f"Subject not updated after file mutation; got {last_subject!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -283,9 +275,7 @@ class TestModifiedSubject:
 
 
 class TestMidSessionRemoval:
-    async def test_live_session_survives_key_removal_from_file(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_live_session_survives_key_removal_from_file(self, tmp_path: Path) -> None:
         """Key is removed from authorized_keys WHILE a session is active.
 
         The in-flight SSH session must continue — removals only affect new

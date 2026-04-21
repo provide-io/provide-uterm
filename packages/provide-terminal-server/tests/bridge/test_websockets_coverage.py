@@ -71,9 +71,10 @@ def test_worker_auth_success_with_valid_token() -> None:
     provided, the connection proceeds normally (branch 85->92)."""
     app, hub = _make_app(worker_token="test-secret")
 
-    with TestClient(app) as client, connect_test_ws(
-        client, "/ws/worker/bot1/term", headers={"authorization": "Bearer test-secret"}
-    ) as worker:
+    with (
+        TestClient(app) as client,
+        connect_test_ws(client, "/ws/worker/bot1/term", headers={"authorization": "Bearer test-secret"}) as worker,
+    ):
         msg = _read_worker_snapshot_req(worker)
         assert msg["type"] == "snapshot_req"
 

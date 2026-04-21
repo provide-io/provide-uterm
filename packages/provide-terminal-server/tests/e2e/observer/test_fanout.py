@@ -102,6 +102,9 @@ async def test_five_concurrent_subscribers_all_receive(live_server: Any) -> None
     for idx, response in enumerate(responses):
         assert response.status_code == 200, f"subscriber {idx} got {response.status_code}"
         body = response.json()
+        import time
+
+        time.sleep(0.5)
         assert len(body["events"]) == _N_EVENTS, (
             f"subscriber {idx} expected {_N_EVENTS} events, got {len(body['events'])}"
         )

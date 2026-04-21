@@ -35,8 +35,7 @@ def validate_command(command: str) -> None:
         raise ValueError(f"command path too long (max {_MAX_PATH_LEN} chars)")
     if not command.startswith("/"):
         raise ValueError(
-            f"command must be an absolute path (got {command!r}); "
-            "relative paths and shell lookups are not allowed"
+            f"command must be an absolute path (got {command!r}); relative paths and shell lookups are not allowed"
         )
 
 
@@ -50,8 +49,7 @@ def validate_username(username: str) -> None:
         raise ValueError(f"username too long (max {_MAX_USERNAME_LEN} chars)")
     if not _USERNAME_RE.match(username):
         raise ValueError(
-            f"username {username!r} contains invalid character; "
-            "only A-Z, a-z, 0-9, '.', '_', '-' are allowed"
+            f"username {username!r} contains invalid character; only A-Z, a-z, 0-9, '.', '_', '-' are allowed"
         )
 
 
@@ -65,8 +63,7 @@ def validate_service_name(service: str) -> None:
         raise ValueError(f"PAM service name too long (max {_MAX_SERVICE_LEN} chars)")
     if not _SERVICE_RE.match(service):
         raise ValueError(
-            f"PAM service name {service!r} contains invalid character; "
-            "only A-Z, a-z, 0-9, '_', '-' are allowed"
+            f"PAM service name {service!r} contains invalid character; only A-Z, a-z, 0-9, '_', '-' are allowed"
         )
 
 
@@ -82,6 +79,4 @@ def validate_env(env: dict[str, str]) -> None:
         if "\x00" in value:
             raise ValueError(f"env value for {key!r} contains null byte")
         if len(value) > _MAX_ENV_VALUE_LEN:
-            raise ValueError(
-                f"env value for {key!r} too long (max {_MAX_ENV_VALUE_LEN} chars)"
-            )
+            raise ValueError(f"env value for {key!r} too long (max {_MAX_ENV_VALUE_LEN} chars)")

@@ -76,9 +76,7 @@ async def test_sre_wifi_drop_mid_hijack_resume(resume_hub: Any) -> None:
                     hijack_msgs = [m for m in a_new_msgs if m.get("type") == "hijack_state"]
                     if hijack_msgs:
                         last_hs = hijack_msgs[-1]
-                        assert not last_hs.get("hijacked_by_me", False), (
-                            "Resumed SRE A should NOT own hijack"
-                        )
+                        assert not last_hs.get("hijacked_by_me", False), "Resumed SRE A should NOT own hijack"
 
                     # B's hijack should still be active — B sends another command
                     await sre_b.send(json.dumps({"type": "input", "data": "kubectl get status\r"}))

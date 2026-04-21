@@ -2,6 +2,8 @@
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -20,7 +22,8 @@
 .terminal {
   flex: 1;
   background: var(--bg-terminal);
-  min-height: 320px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .statusBar {
@@ -31,7 +34,7 @@
   border-top: 0.5px solid var(--border-primary);
   background: var(--bg-secondary);
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .statusDot {

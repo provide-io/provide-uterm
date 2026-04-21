@@ -90,9 +90,7 @@ class PamNotifyListener:
         if self._server is not None:
             raise RuntimeError("PamNotifyListener already started")
         self._handler = handler
-        self._server = await asyncio.start_unix_server(
-            self._handle_connection, path=self._path
-        )
+        self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
         logger.info("pam_notify_listener started socket=%s", self._path)
 
     async def stop(self) -> None:
@@ -106,17 +104,13 @@ class PamNotifyListener:
             Path(self._path).unlink()
         logger.info("pam_notify_listener stopped socket=%s", self._path)
 
-    async def _handle_connection(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             while True:
                 try:
                     line = await asyncio.wait_for(reader.readline(), timeout=5.0)
                 except TimeoutError:
-                    logger.warning(
-                        "pam_notify_listener readline_timeout — dropping connection"
-                    )
+                    logger.warning("pam_notify_listener readline_timeout — dropping connection")
                     break
                 except Exception:
                     break
@@ -173,12 +167,8 @@ def _parse_event(line: bytes) -> PamEvent | None:
         return None
 
     raw_mode = str(data.get("mode") or "notify")
-    mode: Literal["notify", "capture"] = (
-        "capture" if raw_mode == "capture" else "notify"
-    )
-    capture_socket: str | None = (
-        str(data["capture_socket"]) if data.get("capture_socket") else None
-    )
+    mode: Literal["notify", "capture"] = "capture" if raw_mode == "capture" else "notify"
+    capture_socket: str | None = str(data["capture_socket"]) if data.get("capture_socket") else None
 
     return PamEvent(
         event=ev,

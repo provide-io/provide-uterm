@@ -343,24 +343,24 @@ class TestSafeIntModels:
         With mutation: result=1 <= min_val=1 is True → returns default=80.
         With original: result=1 < min_val=1 is False → returns 1.
         """
-        from provide.terminal.hijack.models import _safe_int
+        from provide.terminal.bridge.models import _safe_int
 
         assert _safe_int(1, 80, min_val=1) == 1, "_safe_int(1, 80, min_val=1) must return 1 (min_val is valid)"
 
     def test_safe_int_below_min_val_is_rejected(self) -> None:
         """_safe_int(0, 80, min_val=1) must return default=80."""
-        from provide.terminal.hijack.models import _safe_int
+        from provide.terminal.bridge.models import _safe_int
 
         assert _safe_int(0, 80, min_val=1) == 80
 
     def test_safe_int_above_min_val_is_accepted(self) -> None:
         """_safe_int(2, 80, min_val=1) must return 2."""
-        from provide.terminal.hijack.models import _safe_int
+        from provide.terminal.bridge.models import _safe_int
 
         assert _safe_int(2, 80, min_val=1) == 2
 
     def test_safe_int_no_min_val_accepts_any_int(self) -> None:
         """Without min_val, any valid int is accepted."""
-        from provide.terminal.hijack.models import _safe_int
+        from provide.terminal.bridge.models import _safe_int
 
         assert _safe_int(-100, 0) == -100

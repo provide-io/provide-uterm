@@ -17,8 +17,8 @@ import time
 from typing import Any
 
 import httpx
-
 from provide.terminal.client import connect_async_ws
+
 from tests.e2e._live_server import live_server_with_bus
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
@@ -462,7 +462,7 @@ async def test_max_group_size_enforcement() -> None:
     """Creating a group with 60 workers exceeds the 50-session max → 400."""
     sessions = _sessions(3, prefix="mx")
 
-    async with live_server_with_bus(sessions, label="fanout_max_size") as (_hub, base_url):  # noqa: SIM117
+    async with live_server_with_bus(sessions, label="fanout_max_size") as (_hub, base_url):
         async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             worker_ids = [f"fake-{i}" for i in range(60)]
             resp = await http.post(
@@ -909,7 +909,7 @@ async def test_send_to_nonexistent_group() -> None:
     """Sending to a non-existent group returns 404."""
     sessions = _sessions(1, prefix="ne")
 
-    async with live_server_with_bus(sessions, label="fanout_404") as (_hub, base_url):  # noqa: SIM117
+    async with live_server_with_bus(sessions, label="fanout_404") as (_hub, base_url):
         async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.post(
                 "/api/fanout/groups/nonexistent-id/send",
@@ -932,7 +932,7 @@ async def test_delete_nonexistent_group() -> None:
     """Deleting a non-existent group returns 404."""
     sessions = _sessions(1, prefix="dn")
 
-    async with live_server_with_bus(sessions, label="fanout_del_404") as (_hub, base_url):  # noqa: SIM117
+    async with live_server_with_bus(sessions, label="fanout_del_404") as (_hub, base_url):
         async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.delete("/api/fanout/groups/does-not-exist")
             assert resp.status_code == 404

@@ -331,9 +331,7 @@ class TestDisconnectWorkerCloseException:
             f"Log message must contain worker_id 'w1', got: {close_logs[0]!r} — "
             "mutmut_17-24 corrupt the worker_id argument in logger.debug"
         )
-        assert "close failed" in close_logs[0], (
-            f"Log message must contain the exception text, got: {close_logs[0]!r}"
-        )
+        assert "close failed" in close_logs[0], f"Log message must contain the exception text, got: {close_logs[0]!r}"
 
 
 # ---------------------------------------------------------------------------

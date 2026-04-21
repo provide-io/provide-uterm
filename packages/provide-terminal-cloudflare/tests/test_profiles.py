@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Tests for CF connection profiles CRUD (KV-backed)."""
@@ -275,10 +275,14 @@ async def test_connect_from_profile() -> None:
     assert body["display_name"] == "SSH Prod"
     assert body["connector_type"] == "ssh"
     assert "url" in body
-    # Password must NOT be stored in the session entry
+    # connector_config must be stored in the session entry so the DO can connect.
     session_raw = await kv.get(f"session:{body['session_id']}")
     assert session_raw is not None
     session = json.loads(session_raw)
+    assert session["connector_config"]["host"] == "prod.example.com"
+    assert session["connector_config"]["port"] == 22
+    assert session["connector_config"]["username"] == "deploy"
+    # Password must NOT be stored in the session entry.
     assert "password" not in json.dumps(session)
 
 
@@ -323,7 +327,7 @@ async def test_profiles_no_kv() -> None:
 
 @pytest.mark.asyncio
 async def test_connect_without_session_kv() -> None:
-    """_connect still returns OK even if SESSION_REGISTRY disappears mid-call."""
+    """_connect returns 500 when SESSION_REGISTRY is not available."""
     from provide.terminal.cloudflare.api._profiles import _connect
 
     kv = _FakeKV()
@@ -353,8 +357,7 @@ async def test_connect_without_session_kv() -> None:
 
     req = SimpleNamespace(json=_json)
     resp = await _connect(req, env_no_kv, kv, "p1", "alice")
-    status = getattr(resp, "status", 200)
-    assert status == 200  # session created but not written to KV
+    assert resp.status == 500
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
-from provide.telemetry import get_logger
+from provide.telemetry import get_logger, logger
 from provide.terminal.bridge.frames import (
     BrowserInputFrame,
     make_error_frame,
@@ -23,6 +23,7 @@ from provide.terminal.bridge.frames import (
     make_hello_frame,
     make_pong_frame,
 )
+from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED
 from provide.terminal.bridge.models import VALID_ROLES
 from provide.terminal.control_channel import encode_control
 
@@ -209,7 +210,15 @@ async def _handle_input(
     can_send = await hub.prepare_browser_input(worker_id, ws)
     if not can_send:
         return
+
     data = str(cast("BrowserInputFrame", msg_b).get("data", ""))
+    if data:
+        # Policy check before processing input
+        context = await hub.prepare_policy_context(ws, worker_id, action="input")
+        if not await hub._policy_gate.intercept_input(data, context):
+            logger.debug("input_blocked_by_policy worker_id=%s", worker_id)
+            return
+
     if data and len(data) > hub.max_input_chars:
         await ws.send_text(encode_control(make_error_frame("Input too long.")))
     elif data:
@@ -279,10 +288,12 @@ async def _handle_resume(
 
     session = store.get(old_token)
     if session is None or session.worker_id != worker_id:
+        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
         return owned_hijack
 
     # Optional application-level validation
     if hub._on_resume is not None and not await hub._on_resume(old_token, session):
+        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="callback_rejected")
         return owned_hijack
 
     store.revoke(old_token)

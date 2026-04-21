@@ -40,9 +40,8 @@ import pytest
 # Skip the entire module cleanly if playwright is not installed.
 playwright_mod = pytest.importorskip("playwright")
 
-import websockets  # noqa: E402  — after importorskip
-
-from playwright.sync_api import Page, sync_playwright  # noqa: E402
+import websockets
+from playwright.sync_api import Page, sync_playwright
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -51,14 +50,7 @@ from playwright.sync_api import Page, sync_playwright  # noqa: E402
 # packages/provide-terminal-server/tests/e2e/  → parents[4] = repo root
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _XTERM_SERVER_LINKS_JS = (
-    _REPO_ROOT
-    / "packages"
-    / "provide-terminal"
-    / "src"
-    / "provide"
-    / "terminal"
-    / "frontend"
-    / "xterm-server-links.js"
+    _REPO_ROOT / "packages" / "provide-terminal" / "src" / "provide" / "terminal" / "frontend" / "xterm-server-links.js"
 )
 
 _VIDEO_DIR = Path("/tmp/playwright-link-patterns")
@@ -113,7 +105,7 @@ def _build_page_html() -> str:
     The module's own doc comment contains a ``</script>`` example which
     would prematurely close an inlining-style ``<script>`` block.
     """
-    return f"""<!DOCTYPE html>
+    return """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -136,18 +128,18 @@ def _build_page_html() -> str:
     window.__linkActivated = null; // set to payload string when activate fires
 
     // ── xterm terminal ──────────────────────────────────────────────────────
-    var term = new Terminal({{ cols: 80, rows: 24, cursorBlink: false }});
+    var term = new Terminal({ cols: 80, rows: 24, cursorBlink: false });
     term.open(document.getElementById('terminal'));
 
     // ── Locate the on-screen pixel of matching text ────────────────────────
-    // Returns {{x, y, width, height}} of the centre of the first occurrence of
+    // Returns {x, y, width, height} of the centre of the first occurrence of
     // *text* in the xterm buffer, in page (viewport) coordinates. The driver
     // uses this to compute where to point the real mouse so xterm's own
     // pointer→link-provider pipeline is exercised end-to-end.
-    window.__findTextPx = function(text) {{
+    window.__findTextPx = function(text) {
       var buf = term.buffer && term.buffer.active;
       if (!buf) return null;
-      for (var row = 0; row < term.rows; row++) {{
+      for (var row = 0; row < term.rows; row++) {
         var line = buf.getLine(row);
         if (!line) continue;
         var lineText = line.translateToString(true);
@@ -161,61 +153,61 @@ def _build_page_html() -> str:
         var rect = screen.getBoundingClientRect();
         var cellW = rect.width / term.cols;
         var cellH = rect.height / term.rows;
-        return {{
+        return {
           x: rect.left + (col + text.length / 2) * cellW,
           y: rect.top + (row + 0.5) * cellH,
           width: cellW * text.length,
           height: cellH,
-        }};
-      }}
+        };
+      }
       return null;
-    }};
+    };
 
     // ── WebSocket connection (called by the test once the page is ready) ───
     var ws = null;
 
-    window.__connectWS = function(url) {{
+    window.__connectWS = function(url) {
       ws = new WebSocket(url);
-      ws.onopen = function() {{
+      ws.onopen = function() {
         document.getElementById('status').textContent = 'ws:open';
-      }};
-      ws.onclose = function() {{
+      };
+      ws.onclose = function() {
         var el = document.getElementById('status');
         if (el) el.textContent = 'ws:closed';
-      }};
-      ws.onmessage = function(e) {{
+      };
+      ws.onmessage = function(e) {
         var raw = e.data;
         // Detect ControlChannel frame: DLE(0x10) STX(0x02) 8hexdigits : json
-        if (raw.charCodeAt(0) === 0x10 && raw.charCodeAt(1) === 0x02) {{
+        if (raw.charCodeAt(0) === 0x10 && raw.charCodeAt(1) === 0x02) {
           var colon = raw.indexOf(':', 2);
           if (colon === -1) return;
           var jsonStr = raw.slice(colon + 1);
-          try {{
+          try {
             var msg = JSON.parse(jsonStr);
-            if (msg.type === 'link_patterns') {{
+            if (msg.type === 'link_patterns') {
               serverLinks.update(msg.patterns);
               document.getElementById('status').textContent = 'link_patterns:applied';
-            }}
-          }} catch(_e) {{}}
-        }} else {{
+            }
+          } catch(_e) {}
+        } else {
           // Plain terminal data — write to xterm.
           window.__receivedData.push(raw);
           term.write(raw);
-        }}
-      }};
-    }};
+        }
+      };
+    };
 
     // ── XtermServerLinks integration ────────────────────────────────────────
     // onActivate: send the substituted payload back over WS.
-    var serverLinks = window.XtermServerLinks.register(term, {{
-      onActivate: function(action, payload, match) {{
+    var serverLinks = window.XtermServerLinks.register(term, {
+      onActivate: function(action, payload, match) {
         window.__linkActivated = payload;
-        if (ws && ws.readyState === WebSocket.OPEN) {{
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(payload);
           window.__sentFrames.push(payload);
-        }}
-      }},
-    }});
+        }
+      },
+    });
   </script>
 </body>
 </html>"""
@@ -249,7 +241,7 @@ class _PageServer:
         js_bytes = self._js
 
         class _Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
+            def do_GET(self) -> None:
                 if self.path.rstrip("/") in ("", "/"):
                     body, ctype = html_bytes, "text/html; charset=utf-8"
                 elif self.path == "/xterm-server-links.js":
@@ -424,8 +416,7 @@ def test_link_patterns_browser_sends_payload_on_activation() -> None:
             # the server sends both on connect, so the status text races ahead
             # of the test if we pin on the intermediate 'ws:open' value.
             page.wait_for_function(
-                "() => ['ws:open','link_patterns:applied'].includes("
-                "document.getElementById('status').textContent)",
+                "() => ['ws:open','link_patterns:applied'].includes(document.getElementById('status').textContent)",
                 timeout=10_000,
             )
 
@@ -473,9 +464,7 @@ def test_link_patterns_browser_sends_payload_on_activation() -> None:
                 time.sleep(0.05)
 
             assert ws_server.received, "WS server received no messages from browser"
-            assert ws_server.received[0] == "4521\r", (
-                f"WS server expected '4521\\r'; got {ws_server.received[0]!r}"
-            )
+            assert ws_server.received[0] == "4521\r", f"WS server expected '4521\\r'; got {ws_server.received[0]!r}"
 
         finally:
             page_server.stop()

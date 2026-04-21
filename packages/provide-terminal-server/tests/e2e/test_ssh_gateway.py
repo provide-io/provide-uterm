@@ -26,7 +26,6 @@ import websockets
 import websockets.server
 
 from provide.terminal.gateway import _ssh_to_ws, _ws_to_ssh
-from tests.bridge.control_channel_helpers import decode_control_payload
 
 
 async def _start_ws_echo_server(banner: str = "") -> tuple[Any, int]:
@@ -215,7 +214,7 @@ class TestSshWsGatewayRealConnections:
         ws_srv, ws_port = await _start_ws_echo_server()
         ssh_srv, ssh_port = await _make_ssh_server(ws_port)
         try:
-            async with asyncssh.connect(**_ssh_client_opts(ssh_port)) as conn:  # noqa: SIM117
+            async with asyncssh.connect(**_ssh_client_opts(ssh_port)) as conn:
                 async with conn.create_process() as proc:
                     proc.stdin.write("ping from ssh")
                     # Close stdin so _ssh_to_ws terminates, which lets _ws_to_ssh finish.
@@ -232,7 +231,7 @@ class TestSshWsGatewayRealConnections:
         ws_srv, ws_port = await _start_ws_echo_server(banner="WELCOME BANNER\r\n")
         ssh_srv, ssh_port = await _make_ssh_server(ws_port)
         try:
-            async with asyncssh.connect(**_ssh_client_opts(ssh_port)) as conn:  # noqa: SIM117
+            async with asyncssh.connect(**_ssh_client_opts(ssh_port)) as conn:
                 async with conn.create_process() as proc:
                     proc.stdin.write_eof()
                     data = await asyncio.wait_for(proc.stdout.read(4096), timeout=5.0)
@@ -281,12 +280,12 @@ class TestSshWsGatewayRealConnections:
         ws_srv, ws_port = await _start_ws_echo_server()
         ssh_srv, ssh_port = await _make_ssh_server(ws_port)
         try:
-            async with asyncssh.connect(**_ssh_client_opts(ssh_port)) as conn:  # noqa: SIM117
+            async with asyncssh.connect(**_ssh_client_opts(ssh_port)) as conn:
                 async with conn.create_process() as proc:
                     proc.stdin.write_eof()
                     # Read until closed; ConnectionLost is expected when the server
                     # closes the channel after EOF — that's a clean disconnect.
-                    try:  # noqa: SIM105
+                    try:
                         await asyncio.wait_for(proc.stdout.read(4096), timeout=5.0)
                     except asyncssh.ConnectionLost:
                         pass
@@ -295,4 +294,3 @@ class TestSshWsGatewayRealConnections:
             ssh_srv.close()
             await ssh_srv.wait_closed()
             ws_srv.close()
-

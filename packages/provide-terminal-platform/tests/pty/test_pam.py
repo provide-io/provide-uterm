@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,9 +12,7 @@ from provide.terminal.pty.pam import PamError, PamSession
 _PAM_SVC = Path("/etc/pam.d/provide-terminal")
 _IN_DOCKER = Path("/.dockerenv").exists()
 
-_skip_needs_pam = pytest.mark.skipif(
-    not _PAM_SVC.exists(), reason="requires /etc/pam.d/provide-terminal"
-)
+_skip_needs_pam = pytest.mark.skipif(not _PAM_SVC.exists(), reason="requires /etc/pam.d/provide-terminal")
 _skip_needs_pam_auth = pytest.mark.skipif(
     not _PAM_SVC.exists() or _IN_DOCKER,
     reason="requires /etc/pam.d/provide-terminal with working unix_chkpwd (skipped in Docker)",

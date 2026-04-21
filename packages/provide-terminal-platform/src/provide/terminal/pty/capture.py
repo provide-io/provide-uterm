@@ -43,9 +43,7 @@ class CaptureSocket:
         self._queue: asyncio.Queue[CaptureFrame] = asyncio.Queue()
 
     async def start(self) -> None:
-        self._server = await asyncio.start_unix_server(
-            self._handle_connection, path=self._path
-        )
+        self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
 
     async def stop(self) -> None:
         if self._server is None:
@@ -61,9 +59,7 @@ class CaptureSocket:
     async def read_frame(self) -> CaptureFrame:
         return await self._queue.get()
 
-    async def _handle_connection(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             while True:
                 header_bytes = await reader.readexactly(_HEADER.size)
@@ -76,5 +72,5 @@ class CaptureSocket:
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:  # noqa: S110
+            except Exception:
                 pass

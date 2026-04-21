@@ -12,9 +12,7 @@ from unittest.mock import patch
 from provide.terminal.pty.connector import PTYConnector
 
 
-def make_connector(
-    command: str = "/bin/echo", args: list[str] | None = None, **kwargs: Any
-) -> PTYConnector:
+def make_connector(command: str = "/bin/echo", args: list[str] | None = None, **kwargs: Any) -> PTYConnector:
     return PTYConnector(
         session_id="test-pty-1",
         display_name="Test PTY",
@@ -29,6 +27,7 @@ def _child_fork_patches(captured_env: dict[str, str]) -> list[Any]:
     and without actually forking. The captured_env dict is populated by the
     fake os.execve before raising SystemExit(0).
     """
+
     def _fake_execve(cmd: str, argv: list[str], env: dict[str, str]) -> None:
         captured_env.update(env)
         raise SystemExit(0)

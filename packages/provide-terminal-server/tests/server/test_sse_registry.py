@@ -81,7 +81,7 @@ async def test_stream_sentinel_yields_worker_disconnected_and_stops() -> None:
 
     async def _collect() -> None:
         async for chunk in registry.stream_session_events("w1"):
-            results.append(chunk)  # noqa: PERF401
+            results.append(chunk)
 
     task = asyncio.create_task(_collect())
     await asyncio.sleep(0.05)

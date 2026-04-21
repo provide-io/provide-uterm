@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Colima PAM end-to-end smoke test.
@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 COLIMA_PYTHON = "/usr/bin/python3"  # system Python inside Colima VM (Linux)
-NOTIFY_SOCKET = Path("/tmp/uterm-notify.sock")  # noqa: S108 — inside Colima VM (/run is root-owned)
+NOTIFY_SOCKET = Path("/tmp/uterm-notify.sock")
 EVENT_LOG = Path.home() / ".colima" / "uterm-smoke-events.json"  # virtiofs shared
 
 # Listener script that runs inside Colima using run_pam_integration().
@@ -104,8 +104,8 @@ asyncio.run(main())
 
 
 def _colima(cmd: str, *, capture: bool = False, timeout: int = 30) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        ["colima", "ssh", "--", "sh", "-c", cmd],  # noqa: S607
+    return subprocess.run(
+        ["colima", "ssh", "--", "sh", "-c", cmd],
         capture_output=capture,
         text=True,
         timeout=timeout,
@@ -150,8 +150,8 @@ def main() -> None:
     listener_file.write_text(listener_src)
 
     print("Starting run_pam_integration() inside Colima...")
-    listener_proc = subprocess.Popen(  # noqa: S603
-        ["colima", "ssh", "--", "sh", "-c", f"{COLIMA_PYTHON} {listener_file}"],  # noqa: S607
+    listener_proc = subprocess.Popen(
+        ["colima", "ssh", "--", "sh", "-c", f"{COLIMA_PYTHON} {listener_file}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -173,8 +173,8 @@ def main() -> None:
     # Use direct SSH with ControlMaster=no so sshd creates a fresh PAM session.
     # colima ssh reuses an existing ControlMaster connection which bypasses PAM.
     ssh_cfg = Path.home() / ".colima" / "ssh_config"
-    ssh_result = subprocess.run(  # noqa: S603
-        [  # noqa: S607
+    ssh_result = subprocess.run(
+        [
             "ssh",
             "-F",
             str(ssh_cfg),

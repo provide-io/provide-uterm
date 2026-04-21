@@ -1,14 +1,15 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+import { deleteSession, restartSession } from "../api.js";
 import { clearRuntime, loadOperatorWorkspaceState, requestAnalysis, switchSessionMode } from "../state.js";
-import type { AppBootstrap, SessionMode } from "../types.js";
+import type { AppBootstrap, SessionSummary } from "../types.js";
 import { mountHijackWidget } from "../widgets/hijack-widget-host.js";
 import { renderAppHeader } from "./app-header.js";
 
-function escapeHtml(value: string): string {
+function esc(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -101,94 +102,95 @@ function sidebarHtml(s: SessionSummary | null, appPath: string, sessionId: strin
 export async function renderOperator(root: HTMLElement, bootstrap: AppBootstrap): Promise<void> {
   if (!bootstrap.session_id) throw new Error("operator bootstrap missing session_id");
   const sessionId = bootstrap.session_id;
-  const safeTitle = escapeHtml(bootstrap.title);
-  const safeAppPath = escapeHtml(bootstrap.app_path);
+  const appPath = esc(bootstrap.app_path);
+
   root.innerHTML = `
     <div class="page">
       ${renderAppHeader(bootstrap, "operator")}
       <div class="layout">
-        <section class="card stack">
-        <div class="small">Operator Console</div>
-        <h1>${safeTitle}</h1>
-        <div class="toolbar">
-          <button class="btn" id="btn-refresh">Refresh</button>
-          <button class="btn" id="btn-open">Shared Mode</button>
-          <button class="btn" id="btn-hijack">Exclusive Mode</button>
-          <button class="btn" id="btn-clear">Clear</button>
-          <button class="btn" id="btn-analyze">Analyze</button>
-          <a class="btn" id="btn-replay" href="${safeAppPath}/replay/${encodeURIComponent(sessionId)}">Replay</a>
-        </div>
-        <div id="operator-status" class="status-chip info">Loading operator workspace…</div>
-        <pre class="small" id="meta"></pre>
-        </section>
-        <section class="card">
-          <div id="widget"></div>
-        </section>
+        ${sidebarHtml(null, appPath, sessionId)}
+        <section class="card"><div id="widget"></div></section>
       </div>
-    </div>
-  `;
-  const status = root.querySelector<HTMLElement>("#operator-status");
-  const meta = root.querySelector<HTMLElement>("#meta");
+    </div>`;
+
   const widget = root.querySelector<HTMLElement>("#widget");
-  if (!status || !meta || !widget) throw new Error("operator shell is incomplete");
+  if (!widget) throw new Error("operator shell is incomplete");
+
+  // Wire all sidebar buttons — called after each sidebar re-render.
+  const wire = (): void => {
+    root.querySelector<HTMLButtonElement>("#btn-open")?.addEventListener("click", () => {
+      void switchSessionMode(sessionId, "open").then(() => void refresh());
+    });
+    root.querySelector<HTMLButtonElement>("#btn-hijack")?.addEventListener("click", () => {
+      void switchSessionMode(sessionId, "hijack").then(() => void refresh());
+    });
+    root.querySelector<HTMLButtonElement>("#btn-clear")?.addEventListener("click", () => {
+      if (!window.confirm("Clear the runtime state for this session?")) return;
+      void clearRuntime(sessionId)
+        .then(() => void refresh())
+        .catch((e) => setStatus("error", `Clear failed: ${String(e)}`));
+    });
+    root.querySelector<HTMLButtonElement>("#btn-analyze")?.addEventListener("click", () => {
+      void requestAnalysis(sessionId)
+        .then((a) => {
+          const el = root.querySelector<HTMLElement>("#analysis-result");
+          if (el) {
+            el.textContent = a;
+            el.style.display = "block";
+          }
+        })
+        .catch((e) => setStatus("error", `Analyze failed: ${String(e)}`));
+    });
+    root.querySelector<HTMLButtonElement>("#btn-restart")?.addEventListener("click", () => {
+      if (!window.confirm("Restart this session? The current connection will be dropped.")) return;
+      void restartSession(sessionId)
+        .then(() => void refresh())
+        .catch((e) => setStatus("error", `Restart failed: ${String(e)}`));
+    });
+    root.querySelector<HTMLButtonElement>("#btn-delete")?.addEventListener("click", () => {
+      if (!window.confirm(`Delete session "${sessionId}"? This cannot be undone.`)) return;
+      void deleteSession(sessionId)
+        .then(() => {
+          window.location.href = `${bootstrap.app_path}/`;
+        })
+        .catch((e) => setStatus("error", `Delete failed: ${String(e)}`));
+    });
+  };
+
+  const setStatus = (tone: string, text: string): void => {
+    const el = root.querySelector<HTMLElement>("#operator-status");
+    if (el) {
+      el.className = `status-chip ${tone}`;
+      el.textContent = text;
+    }
+  };
 
   const refresh = async (): Promise<void> => {
     const state = await loadOperatorWorkspaceState(sessionId);
-    status.className = `status-chip ${state.status.tone}`;
-    status.textContent = state.status.text;
-    meta.textContent = JSON.stringify(
-      {
-        session: state.session.summary,
-        snapshot: { prompt_id: state.session.snapshotPromptId },
-      },
-      null,
-      2,
-    );
+    setStatus(state.status.tone, state.status.text);
+    // Re-render sidebar with fresh data
+    const sidebar = root.querySelector(".layout > section:first-child");
+    if (sidebar) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = sidebarHtml(state.session.summary, appPath, sessionId);
+      const next = tmp.querySelector("section");
+      if (next) {
+        sidebar.replaceWith(next);
+        // Restore status text after re-render
+        setStatus(state.status.tone, state.status.text);
+        wire();
+      }
+    }
   };
 
   try {
     await refresh();
     const widgetState = mountHijackWidget(widget, sessionId, "operator");
     if (!widgetState.mounted) {
-      status.className = "status-chip error";
-      status.textContent = widgetState.error ?? "Widget mount failed";
+      setStatus("error", widgetState.error ?? "Widget mount failed");
     }
   } catch (error) {
-    status.className = "status-chip error";
-    status.textContent = `Operator workspace failed to load: ${String(error)}`;
+    setStatus("error", `Operator workspace failed to load: ${String(error)}`);
   }
-
-  root.querySelector<HTMLButtonElement>("#btn-refresh")?.addEventListener("click", () => void refresh());
-  root.querySelector<HTMLButtonElement>("#btn-open")?.addEventListener("click", () => {
-    void applyMode(sessionId, "open", status, meta);
-  });
-  root.querySelector<HTMLButtonElement>("#btn-hijack")?.addEventListener("click", () => {
-    void applyMode(sessionId, "hijack", status, meta);
-  });
-  root.querySelector<HTMLButtonElement>("#btn-clear")?.addEventListener("click", () => {
-    void clearRuntime(sessionId)
-      .then((state) => {
-        status.className = "status-chip ok";
-        status.textContent = "Session cleared.";
-        meta.textContent = JSON.stringify(
-          { session: state.summary, snapshot: { prompt_id: state.snapshotPromptId } },
-          null,
-          2,
-        );
-      })
-      .catch((error) => {
-        status.className = "status-chip error";
-        status.textContent = `Clear failed: ${String(error)}`;
-      });
-  });
-  root.querySelector<HTMLButtonElement>("#btn-analyze")?.addEventListener("click", () => {
-    void requestAnalysis(sessionId)
-      .then((analysis) => {
-        window.alert(analysis);
-      })
-      .catch((error) => {
-        status.className = "status-chip error";
-        status.textContent = `Analyze failed: ${String(error)}`;
-      });
-  });
+  wire();
 }

@@ -16,7 +16,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-
 from provide.terminal.bridge.coordinator import HijackSession
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.models import WorkerTermState
@@ -181,8 +180,7 @@ class TestBroadcastLeaseExpiresAtWallClock:
 
         # Wall-clock lease should be approximately now + 60 (±2s tolerance)
         assert abs(lease - (wall_now + 60)) < 2.0, (
-            f"lease_expires_at ({lease}) should be near wall-clock "
-            f"{wall_now + 60}, not monotonic {mono_now + 60}"
+            f"lease_expires_at ({lease}) should be near wall-clock {wall_now + 60}, not monotonic {mono_now + 60}"
         )
 
     async def test_broadcast_hijack_state_sends_wall_clock(self) -> None:
@@ -190,7 +188,6 @@ class TestBroadcastLeaseExpiresAtWallClock:
         hub = _make_hub()
         owner_ws = _make_ws()
         browser_ws = _make_ws()
-
 
         from provide.terminal.control_channel import ControlChannelDecoder
 
@@ -319,8 +316,7 @@ class TestRateLimitEvaluationOrder:
 
         assert result is False
         assert hub._rest_acquire_bucket._tokens == global_before, (
-            f"Global tokens should be unchanged ({global_before}), "
-            f"got {hub._rest_acquire_bucket._tokens}"
+            f"Global tokens should be unchanged ({global_before}), got {hub._rest_acquire_bucket._tokens}"
         )
 
     def test_exhausted_per_client_does_not_drain_global_send(self) -> None:

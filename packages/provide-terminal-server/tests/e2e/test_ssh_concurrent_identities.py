@@ -177,12 +177,8 @@ class TestConcurrentIdentitiesDistinct:
         )
 
         # Claims (role) must be per-key, not shared or swapped.
-        assert alice_frame.get("claims", {}).get("role") == "oncall", (
-            f"Alice role wrong: {alice_frame.get('claims')!r}"
-        )
-        assert bob_frame.get("claims", {}).get("role") == "viewer", (
-            f"Bob role wrong: {bob_frame.get('claims')!r}"
-        )
+        assert alice_frame.get("claims", {}).get("role") == "oncall", f"Alice role wrong: {alice_frame.get('claims')!r}"
+        assert bob_frame.get("claims", {}).get("role") == "viewer", f"Bob role wrong: {bob_frame.get('claims')!r}"
 
         # Transport and version sanity.
         for frame in frames:
@@ -219,9 +215,7 @@ class TestFiveConcurrentIdentities:
         ssh_port: int = ssh_srv.sockets[0].getsockname()[1]
 
         try:
-            await asyncio.gather(
-                *[_open_session_and_close(ssh_port, keys[i], names[i]) for i in range(n)]
-            )
+            await asyncio.gather(*[_open_session_and_close(ssh_port, keys[i], names[i]) for i in range(n)])
             await asyncio.sleep(0.3)
         finally:
             ssh_srv.close()
@@ -234,9 +228,7 @@ class TestFiveConcurrentIdentities:
 
         # All subjects must be unique (no duplication / cross-talk).
         received_subjects = [f["subject"] for f in frames]
-        assert len(set(received_subjects)) == n, (
-            f"duplicate subjects detected (cross-talk?): {received_subjects!r}"
-        )
+        assert len(set(received_subjects)) == n, f"duplicate subjects detected (cross-talk?): {received_subjects!r}"
         assert set(received_subjects) == set(subjects), (
             f"subject set mismatch: got {set(received_subjects)!r}, want {set(subjects)!r}"
         )
@@ -247,8 +239,7 @@ class TestFiveConcurrentIdentities:
         for i in range(n):
             frame = by_subject[subjects[i]]
             assert frame["fingerprint"] == fingerprints[i], (
-                f"{subjects[i]}: fingerprint mismatch "
-                f"frame={frame['fingerprint']!r} key={fingerprints[i]!r}"
+                f"{subjects[i]}: fingerprint mismatch frame={frame['fingerprint']!r} key={fingerprints[i]!r}"
             )
             assert frame.get("claims", {}).get("role") == roles[i], (
                 f"{subjects[i]}: role mismatch: {frame.get('claims')!r}"

@@ -94,6 +94,7 @@ class TestReferenceServerPages:
 
         # Wait for entries to load (count goes non-zero)
         import re as _re
+
         expect(page.get_by_text(_re.compile(r"Event [1-9]\d* of \d+"))).to_be_visible(timeout=10000)
 
         # Navigate to first event and verify counter shows 1

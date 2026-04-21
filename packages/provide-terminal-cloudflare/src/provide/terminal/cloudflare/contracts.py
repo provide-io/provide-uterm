@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
 try:
-    from provide.terminal.control_stream import (
+    from provide.terminal.control_channel import (
+        ControlChannelDecoder,
+        ControlChannelProtocolError,
         ControlChunk,
-        ControlStreamDecoder,
-        ControlStreamProtocolError,
         DataChunk,
         encode_control,
         encode_data,
@@ -16,11 +16,16 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover
     # Fallback for Cloudflare Durable Objects validation phase
     ControlChunk = Any  # type: ignore[assignment]
-    ControlStreamDecoder = Any  # type: ignore[assignment]
-    ControlStreamProtocolError = Exception  # type: ignore[assignment]
+    ControlChannelDecoder = Any  # type: ignore[assignment]
+    ControlChannelProtocolError = Exception  # type: ignore[assignment]
     DataChunk = Any  # type: ignore[assignment]
-    encode_control = lambda *a, **k: b""  # type: ignore[assignment]
-    encode_data = lambda *a, **k: b""  # type: ignore[assignment]
+
+    def encode_control(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
+        return b""
+
+    def encode_data(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
+        return b""
+
 
 if TYPE_CHECKING:
     from provide.terminal.cloudflare.cf_types import CFWebSocket
@@ -287,6 +292,22 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
         "hello",
     }:
         pass
+    elif frame_type in {
+        # DeckMux presence messages — relayed verbatim between browsers.
+        "presence_update",
+        "presence_sync",
+        "presence_leave",
+        "queued_input",
+        "control_request",
+        # HTTP intercept commands — relayed browser→worker.
+        "http_action",
+        "http_intercept_toggle",
+        "http_inspect_toggle",
+    }:
+        # Copy all non-type, non-ts fields through so the relay is lossless.
+        for k, v in value.items():
+            if k not in ("type", "ts"):
+                normalized[k] = v
     else:
         raise ProtocolError(f"unsupported frame type: {frame_type}")
 
@@ -302,11 +323,11 @@ def parse_stream(
     active_limits = limits or MessageLimits()
     if len(raw.encode("utf-8")) > active_limits.max_ws_message_bytes:
         raise ProtocolError("message too large")
-    decoder = ControlStreamDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
+    decoder = ControlChannelDecoder(max_control_payload_bytes=active_limits.max_ws_message_bytes)
     try:
         events = decoder.feed(raw)
         events.extend(decoder.finish())
-    except ControlStreamProtocolError as exc:
+    except ControlChannelProtocolError as exc:
         raise ProtocolError(str(exc)) from exc
     if not events:
         raise ProtocolError("empty frame")
@@ -360,7 +381,7 @@ def frame_json(frame_type: FrameType, **kwargs: Any) -> str:
 
 
 class RuntimeProtocol(Protocol):
-    worker_ws: Any
+    worker_ws: CFWebSocket | None
     worker_id: str
     input_mode: str
     lifecycle_state: str
@@ -371,15 +392,18 @@ class RuntimeProtocol(Protocol):
     last_snapshot: Any
     last_analysis: Any
     browser_hijack_owner: dict[str, str]
+    _ushell: Any  # UshellConnector | None
+    _ushell_started: bool
 
     async def browser_role_for_request(self, request: object) -> str: ...
+    async def browser_subject_for_request(self, request: object) -> str | None: ...
     async def request_json(self, request: object) -> dict[str, object]: ...
     def persist_lease(self, session: object) -> None: ...
     def clear_lease(self) -> None: ...
     async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool: ...
     async def broadcast_hijack_state(self) -> None: ...
     async def push_worker_input(self, data: str) -> bool: ...
-    async def send_ws(self, ws: object, frame: dict[str, object]) -> None: ...
+    async def send_ws(self, ws: CFWebSocket, frame: dict[str, object]) -> None: ...
     async def broadcast_worker_frame(self, frame: object) -> None: ...
-    def ws_key(self, ws: object) -> str: ...
-    def _socket_browser_role(self, ws: object) -> str: ...
+    def ws_key(self, ws: CFWebSocket) -> str: ...
+    def _socket_browser_role(self, ws: CFWebSocket) -> str: ...

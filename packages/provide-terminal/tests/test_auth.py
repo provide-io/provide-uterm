@@ -28,8 +28,7 @@ from provide.terminal.auth import (
 # ed25519 keypair generated once and stored inline so tests don't depend
 # on shelling out to ssh-keygen.
 _SAMPLE_ED25519_OPENSSH = (
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7nKaxTKmzX0z3V6tGqmmOvkSiG"
-    "Xh3yF2J5vqkQTOY+ alice@laptop"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7nKaxTKmzX0z3V6tGqmmOvkSiGXh3yF2J5vqkQTOY+ alice@laptop"
 )
 
 
@@ -188,12 +187,7 @@ class TestAuthorizedKeysFileResolver:
     async def test_blank_lines_and_comments_ignored(self, tmp_path: Path) -> None:
         path = tmp_path / "authorized_keys"
         path.write_text(
-            "# admins\n"
-            "\n"
-            "   \n"
-            "# trailing comment\n"
-            + _SAMPLE_ED25519_OPENSSH
-            + "\n",
+            "# admins\n\n   \n# trailing comment\n" + _SAMPLE_ED25519_OPENSSH + "\n",
             encoding="utf-8",
         )
         resolver = AuthorizedKeysFileResolver(path)
@@ -207,9 +201,7 @@ class TestAuthorizedKeysFileResolver:
         """A broken line shouldn't lock everybody out."""
         path = tmp_path / "authorized_keys"
         path.write_text(
-            "this is not a valid pubkey line\n"
-            + _SAMPLE_ED25519_OPENSSH
-            + "\n",
+            "this is not a valid pubkey line\n" + _SAMPLE_ED25519_OPENSSH + "\n",
             encoding="utf-8",
         )
         resolver = AuthorizedKeysFileResolver(path)

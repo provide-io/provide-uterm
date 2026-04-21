@@ -15,7 +15,6 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from playwright.sync_api import Page, expect
-
 from provide.terminal.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 from provide.terminal.transports.telnet_server import _build_telnet_handshake
 

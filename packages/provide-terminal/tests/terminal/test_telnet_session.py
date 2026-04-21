@@ -76,9 +76,7 @@ async def test_connect_starts_reader() -> None:
 
     await session.connect()
 
-    transport.connect.assert_awaited_once_with(
-        "localhost", 23, cols=80, rows=25, term="ANSI", timeout=30.0
-    )
+    transport.connect.assert_awaited_once_with("localhost", 23, cols=80, rows=25, term="ANSI", timeout=30.0)
     assert session.is_connected()
     assert session._read_task is not None
 
@@ -241,9 +239,7 @@ async def test_wait_for_screen_change_none_since() -> None:
 async def test_reader_loop_processes_data() -> None:
     session = TelnetSession("localhost", 23)
     transport = _mock_transport()
-    transport.receive = AsyncMock(
-        side_effect=[b"Hello", b"World", ConnectionResetError("reset")]
-    )
+    transport.receive = AsyncMock(side_effect=[b"Hello", b"World", ConnectionResetError("reset")])
     session._transport = transport
     emu = _mock_emulator()
     session._emulator = emu
@@ -306,9 +302,7 @@ async def test_reader_loop_connection_error_disconnects() -> None:
 async def test_reader_loop_increments_change_seq() -> None:
     session = TelnetSession("localhost", 23)
     transport = _mock_transport()
-    transport.receive = AsyncMock(
-        side_effect=[b"a", b"b", ConnectionResetError("done")]
-    )
+    transport.receive = AsyncMock(side_effect=[b"a", b"b", ConnectionResetError("done")])
     session._transport = transport
     session._emulator = _mock_emulator()
 

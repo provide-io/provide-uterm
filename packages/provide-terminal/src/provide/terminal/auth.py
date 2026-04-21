@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import binascii
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -122,10 +121,10 @@ class NullResolver:
 
     async def resolve(
         self,
-        fingerprint: str,  # noqa: ARG002
+        fingerprint: str,
         *,
-        pubkey_blob: bytes,  # noqa: ARG002
-        username: str,  # noqa: ARG002
+        pubkey_blob: bytes,
+        username: str,
     ) -> ResolvedIdentity | None:
         return None
 
@@ -163,7 +162,7 @@ def _coerce_to_binary_pubkey(blob: bytes) -> bytes:
             raise ValueError("malformed OpenSSH public key line")
         try:
             return base64.b64decode(parts[1], validate=True)
-        except (ValueError, binascii.Error) as exc:
+        except (ValueError, base64.binascii.Error) as exc:
             raise ValueError(f"invalid base64 in public key: {exc}") from exc
     # Assume it's already the binary wire format.
     return stripped
@@ -205,8 +204,8 @@ class AuthorizedKeysFileResolver:
         self,
         fingerprint: str,
         *,
-        pubkey_blob: bytes,  # noqa: ARG002 — file keyed by fingerprint only
-        username: str,  # noqa: ARG002 — one key per line, no per-user gating
+        pubkey_blob: bytes,
+        username: str,
     ) -> ResolvedIdentity | None:
         entries = await asyncio.to_thread(self._load_entries)
         for entry in entries:
@@ -276,8 +275,7 @@ def _parse_authorized_keys_line(line: str) -> _AuthorizedKeyEntry:
 
     opts = _parse_options(options_str) if options_str else {}
 
-    raw_subject = opts.pop("subject", None)
-    subject = (raw_subject if isinstance(raw_subject, str) else None) or comment.strip() or f"key:{fp}"
+    subject = opts.pop("subject", None) or comment.strip() or f"key:{fp}"
     claims: dict[str, Any] = {}
     leftover_options: dict[str, Any] = {}
     for key, value in opts.items():

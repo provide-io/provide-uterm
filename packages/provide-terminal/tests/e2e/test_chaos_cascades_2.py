@@ -21,8 +21,8 @@ import time
 from typing import Any
 
 import websockets
-
 from provide.terminal.client import connect_async_ws
+
 from provide.terminal.control_channel import DLE, STX, encode_control
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
@@ -167,8 +167,7 @@ async def test_malformed_control_frames_close_worker_cleanly(live_hub: Any) -> N
             # Browser should have received the valid snapshot
             browser_msgs = await _drain_all(browser, timeout=1.0)
             got_snapshot = any(
-                m.get("type") == "snapshot" and "valid-first" in m.get("screen", "")
-                for m in browser_msgs
+                m.get("type") == "snapshot" and "valid-first" in m.get("screen", "") for m in browser_msgs
             )
             assert got_snapshot, f"Browser should receive valid snapshot: {browser_msgs}"
 
@@ -191,8 +190,7 @@ async def test_malformed_control_frames_close_worker_cleanly(live_hub: Any) -> N
 
             browser_msgs2 = await _drain_all(browser, timeout=1.0)
             got_second = any(
-                m.get("type") == "snapshot" and "valid-second" in m.get("screen", "")
-                for m in browser_msgs2
+                m.get("type") == "snapshot" and "valid-second" in m.get("screen", "") for m in browser_msgs2
             )
             assert got_second, f"Browser should receive second valid snapshot: {browser_msgs2}"
 
@@ -219,11 +217,11 @@ async def test_binary_like_data_through_hijack_input(live_hub: Any) -> None:
 
             # Send exotic input strings
             test_inputs = [
-                "hello\x1b[31mred\x1b[0m",         # ANSI escape sequences
-                "\u2603\u2764\U0001F600",            # Snowman, heart, emoji
-                "\u4e16\u754c",                      # CJK characters (世界)
-                f"dle{DLE}embedded",                 # Embedded DLE character
-                "tabs\there\nnewlines",              # Whitespace chars
+                "hello\x1b[31mred\x1b[0m",  # ANSI escape sequences
+                "\u2603\u2764\U0001f600",  # Snowman, heart, emoji
+                "\u4e16\u754c",  # CJK characters (世界)
+                f"dle{DLE}embedded",  # Embedded DLE character
+                "tabs\there\nnewlines",  # Whitespace chars
             ]
 
             for inp in test_inputs:

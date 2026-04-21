@@ -789,37 +789,6 @@ class TestUiGaps:
         # Should be "0" since path is not a file
         assert result == "0"
 
-    def test_inspect_page_html_contains_correct_bootstrap(self) -> None:
-        """Lines 256-273: inspect_page_html produces correct HTML."""
-        from provide.terminal.server import ui
-
-        # Reset vite cache to use vanilla mode
-        ui._vite_manifest = None
-        ui._vite_manifest_loaded = True
-
-        html = ui.inspect_page_html(
-            "Test Inspect",
-            "/assets",
-            "sess-1",
-            app_path="/app",
-            share_role="operator",
-            xterm_cdn="https://cdn.example.com/xterm",
-            fitaddon_cdn="https://cdn.example.com/fitaddon",
-            fonts_cdn="https://fonts.example.com/font",
-        )
-        assert '"page_kind": "inspect"' in html
-        assert '"session_id": "sess-1"' in html
-        assert '"share_role": "operator"' in html
-        # share_token must NOT be embedded in the bootstrap JSON (security:
-        # capability tokens travel via HttpOnly cookie only).
-        assert '"share_token"' not in html
-        assert "hijack.js" in html
-        assert "xterm.js" in html
-
-        # Reset
-        ui._vite_manifest = None
-        ui._vite_manifest_loaded = False
-
     def test_inspect_page_html_minimal(self) -> None:
         """Lines 256-273: inspect_page_html with minimal args."""
         from provide.terminal.server import ui

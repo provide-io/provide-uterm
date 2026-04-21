@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import re
 
-from provide.terminal.bridge.annotation._models import DetectionRule
 from provide.terminal.bridge.annotation._detector import PatternDetector
+from provide.terminal.bridge.annotation._models import DetectionRule
 
 
 class TestDetectorDescriptionFallback:

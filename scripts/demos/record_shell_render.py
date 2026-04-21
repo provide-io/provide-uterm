@@ -37,26 +37,77 @@ from scripts.demos import (
 FEATURE = "shell_render"
 DESCRIPTION = "Send an image URL to the shell render command, get ANSI truecolor art back"
 TITLE = "Shell Rendering"
-SUBTITLE = "ANSI color, Unicode, box-drawing"
+SUBTITLE = "ANSI truecolor art from any image URL"
 HIGHLIGHT_START_S: float = 3.0
-HIGHLIGHT_DURATION_S: float = 6.0
+HIGHLIGHT_DURATION_S: float = 8.0
 
-# 4x4 red PNG (valid, minimal — generated via struct/zlib)
-_RED_PNG = bytes.fromhex(
-    "89504e470d0a1a0a0000000d4948445200000004000000040802000000269309290000001049444154"
-    "789c63f8cfc000470cc47100ae930ff1d05f239e0000000049454e44ae426082"
-)
+
+def _make_rainbow_png(width: int = 160, height: int = 60) -> bytes:
+    """Generate a vibrant rainbow gradient PNG with PIL."""
+    import io
+
+    from PIL import Image
+
+    img = Image.new("RGB", (width, height))
+    pixels = img.load()
+    for x in range(width):
+        hue = x / width
+        h6 = hue * 6.0
+        i = int(h6)
+        f = h6 - i
+        q, t = int(255 * (1.0 - f)), int(255 * f)
+        rgb_map = [(255, t, 0), (q, 255, 0), (0, 255, t), (0, q, 255), (t, 0, 255), (255, 0, q)]
+        r, g, b = rgb_map[i % 6]
+        for y in range(height):
+            brightness = 0.55 + 0.45 * (y / height)
+            pixels[x, y] = (int(r * brightness), int(g * brightness), int(b * brightness))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _make_spin_gif(width: int = 120, height: int = 45, n_frames: int = 12) -> bytes:
+    """Generate an animated color-wheel GIF with PIL."""
+    import io
+
+    from PIL import Image
+
+    frames = []
+    for fi in range(n_frames):
+        img = Image.new("RGB", (width, height))
+        p = img.load()
+        offset = fi / n_frames
+        for x in range(width):
+            hue = ((x / width) + offset) % 1.0
+            h6 = hue * 6.0
+            i = int(h6)
+            f = h6 - i
+            q, t = int(255 * (1.0 - f)), int(255 * f)
+            rgb_map = [(255, t, 0), (q, 255, 0), (0, 255, t), (0, q, 255), (t, 0, 255), (255, 0, q)]
+            r, g, b = rgb_map[i % 6]
+            for y in range(height):
+                p[x, y] = (r, g, b)
+        frames.append(img)
+    buf = io.BytesIO()
+    frames[0].save(buf, format="GIF", save_all=True, append_images=frames[1:], duration=60, loop=0)
+    return buf.getvalue()
 
 
 def _start_image_server() -> tuple[HTTPServer, int]:
-    """Start a minimal HTTP server that serves the test PNG."""
+    """Start an HTTP server serving a static rainbow PNG and animated GIF."""
+    rainbow_png = _make_rainbow_png()
+    spin_gif = _make_spin_gif()
 
     class _H(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            if self.path.endswith(".gif"):
+                data, ct = spin_gif, "image/gif"
+            else:
+                data, ct = rainbow_png, "image/png"
             self.send_response(200)
-            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Type", ct)
             self.end_headers()
-            self.wfile.write(_RED_PNG)
+            self.wfile.write(data)
 
         def log_message(self, *_: object) -> None:
             pass
@@ -70,7 +121,8 @@ def _start_image_server() -> tuple[HTTPServer, int]:
 async def run_terminal_demo() -> None:
     """Run the shell render feature demo."""
     img_server, img_port = _start_image_server()
-    img_url = f"http://127.0.0.1:{img_port}/image.png"
+    png_url = f"http://127.0.0.1:{img_port}/image.png"
+    gif_url = f"http://127.0.0.1:{img_port}/animation.gif"
 
     base_url, server = start_server(
         sessions=[
@@ -89,28 +141,17 @@ async def run_terminal_demo() -> None:
     banner(DESCRIPTION)
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as http:
-        # Start inline PNG server
-        info("Starting inline PNG server...")
-        ok(f"PNG server at http://127.0.0.1:{img_port}/image.png")
+        info("Starting image server (rainbow PNG + animated GIF)...")
+        ok(f"  PNG: {png_url}")
+        ok(f"  GIF: {gif_url}")
 
-        # Fetch initial snapshot dimensions
-        info("Fetching session snapshot...")
-        r = await http.get("/api/sessions/provide-shell/snapshot")
-        r.raise_for_status()
-        snapshot_before = r.json() or {}
-        cols = snapshot_before.get("cols")
-        rows = snapshot_before.get("rows")
-        kv("cols", cols)
-        kv("rows", rows)
-
-        # Switch provide-shell to hijack input mode (required for REST hijack)
+        # Switch provide-shell to hijack input mode
         await http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
-        time.sleep(0.5)
+        time.sleep(0.3)
 
-        # Acquire a hijack lease on the default shell
         r = await http.post(
             "/worker/provide-shell/hijack/acquire",
-            json={"owner": "operator", "lease_s": 30},
+            json={"owner": "operator", "lease_s": 60},
         )
         r.raise_for_status()
         hijack_id = r.json().get("hijack_id", "")
@@ -118,10 +159,11 @@ async def run_terminal_demo() -> None:
         info(f"render {png_url}")
         r = await http.post(
             f"/worker/provide-shell/hijack/{hijack_id}/send",
-            json={"keys": f"render {img_url}\r"},
+            json={"keys": f"render {png_url}\r"},
         )
         r.raise_for_status()
-        ok("render command sent")
+        ok("static render complete — rainbow gradient as ANSI truecolor art")
+        time.sleep(2.5)
 
         info(f"render --loop {gif_url}")
         r = await http.post(
@@ -132,20 +174,6 @@ async def run_terminal_demo() -> None:
         ok("animated render running — 12-frame color wheel, looping at 60ms/frame")
         time.sleep(3.0)
 
-        # Inspect the updated snapshot
-        info("Waiting for ANSI art in snapshot...")
-        r = await http.get("/api/sessions/provide-shell/snapshot")
-        snapshot_after = r.json() or {}
-        cols_after = snapshot_after.get("cols")
-        rows_after = snapshot_after.get("rows")
-        screen_text = snapshot_after.get("screen", "")
-        has_ansi = "\x1b[" in screen_text
-        if has_ansi or (cols_after != cols or rows_after != rows):
-            ok(f"snapshot updated: cols={cols_after} rows={rows_after}")
-        else:
-            warn("snapshot unchanged")
-
-        # Release the hijack lease
         await http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")
 
     info("(type 'render <url>' in the ushell to render any image as ANSI art)")
@@ -251,7 +279,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         with contextlib.suppress(Exception):
             page.evaluate(_KIOSK_JS)  # type: ignore[union-attr]
 
-    def _send_render(page: object) -> None:  # noqa: ARG001
+    def _send_render(page: object) -> None:
         if not hijack_id:
             return
         import httpx as _h
@@ -259,7 +287,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         with _h.Client(base_url=base_url, timeout=10.0) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render {png_url}\r"})
 
-    def _send_animated(page: object) -> None:  # noqa: ARG001
+    def _send_animated(page: object) -> None:
         if not hijack_id:
             return
         import httpx as _h

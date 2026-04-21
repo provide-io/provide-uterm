@@ -215,6 +215,7 @@ class TestPollEmptyBackoff:
 
         mock_ws = AsyncMock()
         mock_ws.send = AsyncMock()
+
         # recv blocks forever (simulates no client data)
         async def _recv_forever() -> str:
             await asyncio.sleep(999)
@@ -237,6 +238,4 @@ class TestPollEmptyBackoff:
 
         # The backoff sleep of 0.05s should have been called at least once
         backoff_sleeps = [d for d in sleep_calls if 0.04 <= d <= 0.06]
-        assert len(backoff_sleeps) >= 1, (
-            f"Expected backoff sleeps of ~0.05s but got: {sleep_calls}"
-        )
+        assert len(backoff_sleeps) >= 1, f"Expected backoff sleeps of ~0.05s but got: {sleep_calls}"

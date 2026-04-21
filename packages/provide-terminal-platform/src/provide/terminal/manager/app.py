@@ -66,6 +66,16 @@ def create_manager_app(
         worker_registry=worker_registry,
         log_dir=config.log_dir,
     )
+    if config.spawn_policy_webhook_url:
+        from provide.terminal.manager.ext import WebhookAgentSpawnPolicyGate
+
+        process_mgr.set_policy_gate(
+            WebhookAgentSpawnPolicyGate(
+                url=config.spawn_policy_webhook_url,
+                secret=config.spawn_policy_webhook_secret,
+                timeout_s=config.spawn_policy_webhook_timeout_s,
+            )
+        )
     manager.agent_process_manager = process_mgr
 
     app = FastAPI(title=config.title)

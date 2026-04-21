@@ -18,6 +18,7 @@ asserts that none has ``type == "identity"``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import tempfile
 from typing import Any
@@ -125,10 +126,8 @@ class TestTelnetNoIdentityFrame:
         try:
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
             # Read and discard any IAC negotiation bytes the gateway sends.
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(reader.read(256), timeout=0.5)
-            except TimeoutError:
-                pass
 
             writer.write(b"data after iac negotiation\r\n")
             await writer.drain()
@@ -154,9 +153,7 @@ class TestTelnetNoIdentityFrame:
         """
         # Write a syntactically valid authorized_keys entry to a temp file.
         with tempfile.NamedTemporaryFile(mode="w", suffix=".pub", delete=False) as f:
-            f.write(
-                "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForTestingPurposesOnly test@example.com\n"
-            )
+            f.write("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyForTestingPurposesOnly test@example.com\n")
             key_path = f.name
 
         old_env = os.environ.copy()

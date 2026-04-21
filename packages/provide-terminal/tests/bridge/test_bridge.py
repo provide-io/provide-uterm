@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from provide.terminal.bridge.worker_link import TermBridge, _to_ws_url
+
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 
@@ -366,9 +367,7 @@ class TestTermBridgeDroppedFrameLogging:
 
         mock_logger.debug.assert_called_once()
         call_args = mock_logger.debug.call_args
-        assert "term_bridge_drop" in call_args.args[0], (
-            "expected 'term_bridge_drop' in log format string"
-        )
+        assert "term_bridge_drop" in call_args.args[0], "expected 'term_bridge_drop' in log format string"
 
     def test_watch_does_not_log_when_queue_has_space(self, caplog) -> None:
         """Regression fix 6: no debug log when the queue is not full."""

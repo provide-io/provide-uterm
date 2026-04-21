@@ -146,9 +146,7 @@ def _validate_link_pattern_entry(entry: Mapping[str, Any], index: int) -> dict[s
     action = entry["action"]
     if action not in _LINK_PATTERN_ACTIONS:
         valid = ", ".join(sorted(_LINK_PATTERN_ACTIONS))
-        raise ValueError(
-            f"make_link_patterns: entry[{index}] has invalid action {action!r}; must be one of: {valid}"
-        )
+        raise ValueError(f"make_link_patterns: entry[{index}] has invalid action {action!r}; must be one of: {valid}")
     result: dict[str, Any] = {"pattern": entry["pattern"], "action": action}
     for key in _LINK_PATTERN_OPTIONAL_KEYS:
         if key in entry:

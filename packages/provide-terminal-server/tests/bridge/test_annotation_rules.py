@@ -10,7 +10,6 @@ import pytest
 
 from provide.terminal.bridge.annotation._rules import BUILTIN_RULES
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

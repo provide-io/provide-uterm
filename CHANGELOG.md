@@ -2,6 +2,16 @@
 
 All notable changes to provide-terminal are documented in this file.
 
+## [0.5.0-dev] — 2026-04-20
+
+### Architecture
+
+- **Pluggable Authorization Service:** Refactored `AuthorizationService` into an async, protocol-based gateway. Supports `LocalAuthorizationProvider` (AGPL default) and `WebhookAuthorizationProvider` (enterprise integration).
+- **Extensible Policy Gates:** Introduced `PolicyGate` (Terminal Hub) and `AgentSpawnPolicyGate` (Agent Manager) to intercept real-time input and process spawning.
+- **Standardized Telemetry (DAS):** Instrumented core components with the `provide-telemetry` Domain-Action-Status (DAS) schema for high-fidelity structured logging.
+- **Node Discovery:** Implemented background heartbeat for automated Node registration with external Fleet Managers.
+- **Legacy Cleanup:** Purged 3,000+ lines of legacy vanilla JavaScript frontend; Node now strictly serves the React/Vite dashboard. Simplified API key auth by removing role-marker scope shorthand.
+
 ## [0.4.0] — 2026-04-08
 
 ### Architecture

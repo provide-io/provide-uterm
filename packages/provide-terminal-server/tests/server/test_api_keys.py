@@ -227,7 +227,7 @@ class TestApiKeyPrincipalRoles:
         assert principal is not None
         assert "operator" in principal.roles
 
-    def test_capability_scope_gets_admin_role_narrowed_by_scope(self) -> None:
+    async def test_capability_scope_gets_admin_role_narrowed_by_scope(self) -> None:
         """Capability-only scopes give admin role; scopes narrow via AuthorizationService.
 
         This replaces the prior "other_scope_gets_viewer" behavior, which was a
@@ -248,10 +248,10 @@ class TestApiKeyPrincipalRoles:
         assert principal.roles == frozenset({"admin"})
         authz = AuthorizationService()
         # Scope list is the sole gate — only session.read is granted.
-        assert authz.has_capability(principal, "session.read") is True
-        assert authz.has_capability(principal, "session.control.delete") is False
+        assert await authz.has_capability(principal, "session.read") is True
+        assert await authz.has_capability(principal, "session.control.delete") is False
 
-    def test_capability_scope_create_grants_create_not_delete(self) -> None:
+    async def test_capability_scope_create_grants_create_not_delete(self) -> None:
         """Scope {session.control.create} → can create, cannot delete."""
         from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.authorization import AuthorizationService
@@ -263,11 +263,11 @@ class TestApiKeyPrincipalRoles:
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         authz = AuthorizationService()
-        assert authz.has_capability(principal, "session.control.create") is True
-        assert authz.has_capability(principal, "session.control.delete") is False
-        assert authz.has_capability(principal, "session.read") is False
+        assert await authz.has_capability(principal, "session.control.create") is True
+        assert await authz.has_capability(principal, "session.control.delete") is False
+        assert await authz.has_capability(principal, "session.read") is False
 
-    def test_viewer_role_marker_gets_viewer_role(self) -> None:
+    async def test_viewer_role_marker_gets_viewer_role(self) -> None:
         """Scope {viewer} is a role marker — gives viewer role with unrestricted scope."""
         from provide.terminal.server.auth import _principal_from_api_key
         from provide.terminal.server.authorization import AuthorizationService
@@ -281,8 +281,8 @@ class TestApiKeyPrincipalRoles:
         assert principal.roles == frozenset({"viewer"})
         authz = AuthorizationService()
         # Viewer role — read caps only, unrestricted scope
-        assert authz.has_capability(principal, "session.read") is True
-        assert authz.has_capability(principal, "session.control.create") is False
+        assert await authz.has_capability(principal, "session.read") is True
+        assert await authz.has_capability(principal, "session.control.create") is False
 
     def test_disabled_returns_none(self) -> None:
         from provide.terminal.server.auth import _principal_from_api_key

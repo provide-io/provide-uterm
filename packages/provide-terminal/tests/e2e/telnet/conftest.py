@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Shared fixtures for telnet e2e scenarios.
@@ -41,12 +41,12 @@ import httpx
 import pytest
 import uvicorn
 import websockets
-
-from provide.terminal.control_channel import ControlChannelDecoder as ControlStreamDecoder
-from provide.terminal.control_channel import ControlChunk, DataChunk
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.config import config_from_mapping
 from provide.terminal.transports.telnet_server import start_telnet_server
+
+from provide.terminal.control_channel import ControlChannelDecoder as ControlStreamDecoder
+from provide.terminal.control_channel import ControlChunk, DataChunk
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 

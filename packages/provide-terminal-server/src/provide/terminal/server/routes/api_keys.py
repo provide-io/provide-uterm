@@ -43,7 +43,7 @@ def create_api_keys_router() -> APIRouter:
     ) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.is_admin(principal):
+        if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin role required")
         cfg = request.app.state.uterm_config
         if not cfg.auth.api_keys_enabled:
@@ -87,7 +87,7 @@ def create_api_keys_router() -> APIRouter:
     async def list_api_keys(request: Request) -> list[dict[str, Any]]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.is_admin(principal):
+        if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin role required")
         cfg = request.app.state.uterm_config
         if not cfg.auth.api_keys_enabled:
@@ -110,7 +110,7 @@ def create_api_keys_router() -> APIRouter:
     async def revoke_api_key(request: Request, key_id: str = Path(...)) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.is_admin(principal):
+        if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin role required")
         cfg = request.app.state.uterm_config
         if not cfg.auth.api_keys_enabled:

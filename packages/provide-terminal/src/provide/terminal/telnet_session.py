@@ -21,14 +21,16 @@ Example::
     await session.send("Hello\\r")
     await session.close()
 """
+
 from __future__ import annotations
 
 import asyncio
 import contextlib
 from typing import Any
 
-from provide.terminal.emulator import TerminalEmulator
 from provide.terminal.transports.telnet_transport import TelnetTransport
+
+from provide.terminal.emulator import TerminalEmulator
 
 
 async def connect_telnet(
@@ -103,8 +105,11 @@ class TelnetSession:
     async def connect(self) -> None:
         """Open the TCP connection with IAC negotiation and start the background reader."""
         await self._transport.connect(
-            self._host, self._port,
-            cols=self._cols, rows=self._rows, term=self._term,
+            self._host,
+            self._port,
+            cols=self._cols,
+            rows=self._rows,
+            term=self._term,
             timeout=self._connect_timeout,
         )
         self._connected = True
@@ -137,7 +142,7 @@ class TelnetSession:
         """Send a string to the telnet server."""
         await self._transport.send(data.encode("cp437", errors="replace"))
 
-    async def wait_for_update(self, *, timeout_ms: int, since: int | None = None) -> bool:  # noqa: ARG002
+    async def wait_for_update(self, *, timeout_ms: int, since: int | None = None) -> bool:
         """Wait until new bytes arrive from the server, or timeout.
 
         Args:

@@ -88,7 +88,9 @@ class TestEventBusEdgeCases:
         from provide.terminal.bridge.hub.event_bus import EventBus, _Subscription
 
         bus = EventBus(max_subscribers_per_worker=10)
-        sub = _Subscription(sub_id="test", worker_id="w1", queue=asyncio.Queue(maxsize=2), event_types=None, pattern=None)
+        sub = _Subscription(
+            sub_id="test", worker_id="w1", queue=asyncio.Queue(maxsize=2), event_types=None, pattern=None
+        )
         # Fill queue completely (2 items in maxsize=2)
         sub.queue.put_nowait({"type": "a"})
         sub.queue.put_nowait({"type": "b"})
@@ -99,7 +101,9 @@ class TestEventBusEdgeCases:
         # Actually: maxsize=2, has 2. First put → QueueFull. get_nowait removes 1 → has 1.
         # Second put → succeeds (1 < 2). So we need maxsize=1 + 1 item.
 
-        sub2 = _Subscription(sub_id="test2", worker_id="w1", queue=asyncio.Queue(maxsize=1), event_types=None, pattern=None)
+        sub2 = _Subscription(
+            sub_id="test2", worker_id="w1", queue=asyncio.Queue(maxsize=1), event_types=None, pattern=None
+        )
         sub2.queue.put_nowait({"type": "fill"})  # queue full (1/1)
 
         # Now: first put_nowait(None) → QueueFull.
@@ -260,7 +264,11 @@ class TestRestHijackOpenMode:
         # Set input_mode to "open"
         await hub.set_worker_hello_mode("w1", "open")
         ok, err = await hub.try_acquire_rest_hijack(
-            "w1", owner="alice", lease_s=60, hijack_id="h1", now=time.monotonic(),
+            "w1",
+            owner="alice",
+            lease_s=60,
+            hijack_id="h1",
+            now=time.monotonic(),
         )
         assert ok is False
         assert err == "open_mode"

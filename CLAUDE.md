@@ -14,8 +14,16 @@ Key capabilities: session control (hijack leasing with viewer/operator/admin rol
 # Install dependencies
 uv sync --group dev
 
-# Run all tests (100% branch coverage enforced)
+# Run the core + Cloudflare test suites (what root `pytest` covers — see
+# [tool.pytest.ini_options].testpaths). 100% branch coverage enforced.
 uv run pytest
+
+# Run every workspace package's Python tests sequentially with its own
+# coverage config (core, cloudflare, server, platform/manager, platform/pty).
+# This covers the Python side of what CI runs. CI also runs npm vitest
+# (npm-quality job) + CF python_modules vendor check (.ci/check_cf_vendor_tree.sh)
+# — run those separately if you want full CI parity locally.
+uv run python scripts/run_all_tests.py
 
 # Run a single test
 uv run pytest packages/provide-terminal/tests/bridge/test_hub.py::test_name -vv
@@ -67,7 +75,7 @@ docker compose -f docker/docker-compose.yml up
 
 **Three-Layer Bridge System** (core architecture):
 1. **HijackableMixin** — Worker-side mixin for hijackability at checkpoints
-2. **TermHub** (`bridge/hub.py`) — Server-side registry managing leases, roles, presence, I/O routing
+2. **TermHub** (`bridge/hub/`) — Server-side registry managing leases, roles, presence, I/O routing
 3. **TermBridge** (`bridge/worker_link.py`) — Worker-side WebSocket client connecting to hub
 
 **Control Channel**: JSON control frames (snapshots, hijack state, presence, analysis) mixed inline with raw terminal bytes in the same WebSocket stream.
@@ -80,7 +88,7 @@ docker compose -f docker/docker-compose.yml up
 - **Mutation testing** enforced at 100% kill rate — see `MUTATION_PATTERNS.md` for patterns
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Test markers: `playwright`, `mutant`, `memray`, `slow`, `e2e`, `real_cf`
-- Default testpaths: `provide-terminal`, `provide-terminal-cloudflare`
+- Default testpaths: `packages/provide-terminal/tests`, `packages/provide-terminal-cloudflare/tests`
 - Root `conftest.py` handles mutmut source path manipulation — don't modify unless you understand mutation testing setup
 
 ## Pre-commit Hooks

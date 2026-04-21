@@ -81,9 +81,7 @@ class TestTunnelConnect:
         """Tunnel rejects connection when bearer token doesn't match."""
         hub = TermHub(worker_token="secret-token-123")
         app = FastAPI()
-        app.include_router(
-            hub.create_router(extra_route_registrars=[_tunnel_registrar])
-        )
+        app.include_router(hub.create_router(extra_route_registrars=[_tunnel_registrar]))
         tc = TestClient(app)
         with tc.websocket_connect(
             "/tunnel/test-auth",
@@ -96,9 +94,7 @@ class TestTunnelConnect:
         """Global worker_bearer_token accepted → line 70 covered."""
         hub = TermHub(worker_token="global-secret")
         app = FastAPI()
-        app.include_router(
-            hub.create_router(extra_route_registrars=[_tunnel_registrar])
-        )
+        app.include_router(hub.create_router(extra_route_registrars=[_tunnel_registrar]))
         app.state.uterm_registry = MagicMock(set_tunnel_connected=AsyncMock())
         tc = TestClient(app)
         with tc.websocket_connect(
@@ -110,9 +106,7 @@ class TestTunnelConnect:
     def test_tunnel_accepts_per_session_worker_token(self) -> None:
         hub = TermHub(worker_token="global-token")
         app = FastAPI()
-        app.include_router(
-            hub.create_router(extra_route_registrars=[_tunnel_registrar])
-        )
+        app.include_router(hub.create_router(extra_route_registrars=[_tunnel_registrar]))
         app.state.uterm_tunnel_tokens = {"test-auth": {"worker_token": "session-token"}}
         app.state.uterm_registry = MagicMock(set_tunnel_connected=AsyncMock())
         tc = TestClient(app)
@@ -162,9 +156,7 @@ class TestTunnelControl:
     def test_resize_message(self, client: TestClient) -> None:
         """Control resize message is handled without error."""
         with client.websocket_connect("/tunnel/test-resize") as ws:
-            ctrl = encode_control(
-                {"type": "resize", "channel": 1, "cols": 120, "rows": 40}
-            )
+            ctrl = encode_control({"type": "resize", "channel": 1, "cols": 120, "rows": 40})
             ws.send_bytes(ctrl)
 
     def test_close_message(self, client: TestClient) -> None:
@@ -209,9 +201,7 @@ class TestTunnelBranchCoverage:
             # Send a real frame after to prove the loop continued
             ws.send_bytes(encode_frame(CHANNEL_DATA, b"still alive"))
 
-    def test_should_broadcast_false_on_replaced_worker(
-        self, hub: TermHub, app: FastAPI
-    ) -> None:
+    def test_should_broadcast_false_on_replaced_worker(self, hub: TermHub, app: FastAPI) -> None:
         """Line 137->147: should_broadcast=False when worker was replaced."""
         tc = TestClient(app)
         # First tunnel connects

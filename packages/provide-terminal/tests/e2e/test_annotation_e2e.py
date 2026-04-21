@@ -18,7 +18,6 @@ from typing import Any
 
 import httpx
 import uvicorn
-
 from provide.terminal.bridge.hub import EventBus
 from provide.terminal.server.app import create_server_app
 from provide.terminal.server.config import config_from_mapping

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -47,7 +47,7 @@ def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionR
 
 
 def _decode_sent(raw: str, *, data_frame_type: str | None = None) -> dict:
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1
@@ -269,6 +269,61 @@ async def test_websocket_error_worker_broadcasts_disconnected() -> None:
     await rt.webSocketError(ws, "timeout")
     types = [_decode_sent(m).get("type") for m in browser.sent]
     assert "worker_disconnected" in types
+
+
+async def test_websocket_close_marks_resume_token_for_hijack_owner() -> None:
+    """Lines 518-521: browser close when hijack owner → resume token marked."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="browser:admin:test-worker")
+    rt._register_socket(ws, "browser")
+    ws_id = rt.ws_key(ws)
+    resume_token = "tok-abc"
+    rt.store.create_resume_token(resume_token, rt.worker_id, "admin", 300)
+    rt.browser_resume_tokens[ws_id] = resume_token
+    rt.browser_hijack_owner[ws_id] = "hijack-1"
+    await rt.webSocketClose(ws, 1000, "normal")
+    record = rt.store.get_resume_token(resume_token)
+    assert record is not None
+    assert record.get("was_hijack_owner") is True
+
+
+async def test_websocket_error_marks_resume_token_for_hijack_owner() -> None:
+    """Lines 536-539: browser error when hijack owner → resume token marked."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="browser:admin:test-worker")
+    rt._register_socket(ws, "browser")
+    ws_id = rt.ws_key(ws)
+    resume_token = "tok-xyz"
+    rt.store.create_resume_token(resume_token, rt.worker_id, "admin", 300)
+    rt.browser_resume_tokens[ws_id] = resume_token
+    rt.browser_hijack_owner[ws_id] = "hijack-1"
+    await rt.webSocketError(ws, "timeout")
+    record = rt.store.get_resume_token(resume_token)
+    assert record is not None
+    assert record.get("was_hijack_owner") is True
+
+
+async def test_websocket_close_hijack_owner_no_token_is_noop() -> None:
+    """Line 520->522: hijack owner in dict but no resume token recorded → no error."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="browser:admin:test-worker")
+    rt._register_socket(ws, "browser")
+    ws_id = rt.ws_key(ws)
+    # Mark as hijack owner but don't record a resume token
+    rt.browser_hijack_owner[ws_id] = "hijack-1"
+    await rt.webSocketClose(ws, 1000, "normal")
+    assert ws_id not in rt.browser_sockets
+
+
+async def test_websocket_error_hijack_owner_no_token_is_noop() -> None:
+    """Line 538->540: hijack owner in dict but no resume token recorded → no error."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="browser:admin:test-worker")
+    rt._register_socket(ws, "browser")
+    ws_id = rt.ws_key(ws)
+    rt.browser_hijack_owner[ws_id] = "hijack-1"
+    await rt.webSocketError(ws, "network error")
+    assert ws_id not in rt.browser_sockets
 
 
 # ---------------------------------------------------------------------------

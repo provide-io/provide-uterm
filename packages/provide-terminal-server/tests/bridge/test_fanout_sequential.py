@@ -14,7 +14,6 @@ from provide.terminal.bridge.fanout._controller import FanOutController
 from provide.terminal.bridge.fanout._models import FanOutGroup
 from provide.terminal.bridge.hub import EventBus, TermHub
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

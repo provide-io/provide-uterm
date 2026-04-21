@@ -1,5 +1,5 @@
 //
-// SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
@@ -79,6 +79,10 @@ export async function restartSession(sessionId: string): Promise<SessionSummary>
   return normalizeSessionStatus(
     await apiJson<SessionStatus>(`/api/sessions/${encodeURIComponent(sessionId)}/restart`, "POST"),
   );
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await apiJson<{ ok: boolean }>(`/api/sessions/${encodeURIComponent(sessionId)}`, "DELETE");
 }
 
 export async function analyzeSession(sessionId: string): Promise<string> {

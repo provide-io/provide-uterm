@@ -71,8 +71,8 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Agent endpoint | `WSS /tunnel/{worker_id}` | `WSS /tunnel/{tunnel_id}` (via DO) |
 | Browser endpoint | `WSS /ws/browser/{id}/term` | same |
 | `POST /api/tunnels` | supported | supported |
-| `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | not yet |
-| `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | not yet |
+| `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | supported (revocation) |
+| `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | supported (rotation) |
 | Share URL (`?token=...`) | `/s/{id}` → 302 redirect | `/s/{id}` → 302 redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
@@ -84,8 +84,8 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Share token | Query param or `uterm_tunnel_{id}` cookie | Query param or `uterm_tunnel_{id}` cookie |
 | Control token | Query param or cookie | Query param or cookie |
 | Token TTL | Default 1h, configurable via `TunnelConfig.token_ttl_s` | Default 1h, configurable via `TUNNEL_TOKEN_TTL_S` env var |
-| Token revocation | `DELETE /api/tunnels/{id}/tokens` | not yet implemented |
-| Token rotation | `POST /api/tunnels/{id}/tokens/rotate` | not yet implemented |
+| Token revocation | `DELETE /api/tunnels/{id}/tokens` | `DELETE /api/tunnels/{id}/tokens` |
+| Token rotation | `POST /api/tunnels/{id}/tokens/rotate` | `POST /api/tunnels/{id}/tokens/rotate` |
 | IP binding | Optional (`TunnelConfig.ip_binding`) | Optional (`TUNNEL_IP_BINDING` env var) |
 | Timing-safe compare | `secrets.compare_digest()` | same |
 | Enumeration prevention | 404 for both "not found" and "invalid token" | same |

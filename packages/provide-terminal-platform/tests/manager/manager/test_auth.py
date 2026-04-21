@@ -172,8 +172,7 @@ class TestSetupAuth:
             os.environ.pop("UTERM_MANAGER_API_TOKEN", None)
             setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN")
         assert any(
-            "api_token_auth_disabled" in r.message or "UTERM_MANAGER_API_TOKEN" in r.message
-            for r in caplog.records
+            "api_token_auth_disabled" in r.message or "UTERM_MANAGER_API_TOKEN" in r.message for r in caplog.records
         ), f"Expected a warning about missing token, got: {[r.message for r in caplog.records]}"
 
     def test_with_token_adds_middleware(self):

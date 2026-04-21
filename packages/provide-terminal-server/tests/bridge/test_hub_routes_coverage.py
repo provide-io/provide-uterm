@@ -346,7 +346,9 @@ class TestTryAcquireRestHijackNoWorker:
         hub, _ = _make_app()
         async with hub._lock:
             hub._workers["w1"] = WorkerTermState()  # worker_ws defaults to None
-        ok, err = await hub.try_acquire_rest_hijack("w1", owner="owner", lease_s=300, hijack_id="aabb", now=time.monotonic())
+        ok, err = await hub.try_acquire_rest_hijack(
+            "w1", owner="owner", lease_s=300, hijack_id="aabb", now=time.monotonic()
+        )
         assert ok is False
         assert err == "no_worker"
 

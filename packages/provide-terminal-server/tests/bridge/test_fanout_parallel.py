@@ -14,7 +14,6 @@ from provide.terminal.bridge.fanout._controller import FanOutController
 from provide.terminal.bridge.fanout._models import FanOutGroup
 from provide.terminal.bridge.hub import EventBus, TermHub
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -101,7 +100,7 @@ async def test_create_group_enforces_max_size() -> None:
 
     try:
         await ctrl.create_group(group, principal="admin")
-        raise AssertionError("Expected ValueError")  # noqa: TRY301
+        raise AssertionError("Expected ValueError")
     except ValueError as exc:
         assert "exceeds max" in str(exc)
 

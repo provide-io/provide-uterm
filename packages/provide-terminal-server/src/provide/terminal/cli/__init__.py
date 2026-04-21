@@ -205,9 +205,7 @@ async def _run_listen(
     servers = []
 
     if telnet_port:
-        gw = TelnetWsGateway(
-            ws_url, color_mode=color_mode, iac_negotiate=iac_negotiate
-        )
+        gw = TelnetWsGateway(ws_url, color_mode=color_mode, iac_negotiate=iac_negotiate)
         srv = await gw.start(bind, telnet_port)
         servers.append(srv)
         print(f"uterm listen  telnet://{bind}:{telnet_port}  →  {ws_url}")
@@ -361,7 +359,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "listener calls the resolver during pubkey auth; matching keys "
             "inject a ResolvedIdentity forwarded to the upstream as an "
             "``identity`` control frame (first WS message). Lines support "
-            "``subject=\"...\"`` + ``claim-<name>=\"...\"`` options to populate "
+            '``subject="..."`` + ``claim-<name>="..."`` options to populate '
             "the identity's subject and claims. Unknown keys fall through "
             "to password auth unless --require-authorized-keys is set."
         ),

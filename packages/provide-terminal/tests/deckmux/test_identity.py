@@ -279,9 +279,7 @@ class TestHubMixinIntegration:
         )
         principal = identity_as_principal(identity)
 
-        result = await hub.deckmux_on_browser_connect(
-            "worker-1", ws, "admin", principal=principal
-        )
+        result = await hub.deckmux_on_browser_connect("worker-1", ws, "admin", principal=principal)
         assert result is not None
         user = result["users"][0]
         assert user["user_id"] == "sre:alice"
@@ -313,9 +311,7 @@ class TestHubMixinIntegration:
 
         identity = ResolvedIdentity(subject="svc-bot", claims={})
         principal = identity_as_principal(identity)
-        result = await hub.deckmux_on_browser_connect(
-            "worker-2", ws, "operator", principal=principal
-        )
+        result = await hub.deckmux_on_browser_connect("worker-2", ws, "operator", principal=principal)
         assert result is not None
         user = result["users"][0]
         assert user["user_id"] == "svc-bot"

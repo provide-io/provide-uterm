@@ -174,9 +174,7 @@ class TestInspectBranchCoverage:
             await task
 
     @pytest.mark.timeout(15)
-    async def test_multi_chunk_request_body(
-        self, target_server: int, tunnel_ws: _TunnelWS, proxy_port: int
-    ) -> None:
+    async def test_multi_chunk_request_body(self, target_server: int, tunnel_ws: _TunnelWS, proxy_port: int) -> None:
         """Branch 210->207: more_body=True causes loop to continue."""
         task = await _start_inspect(target_server, tunnel_ws.port, proxy_port)
         await tunnel_ws.wait_ready()
@@ -192,9 +190,7 @@ class TestInspectBranchCoverage:
             await task
 
     @pytest.mark.timeout(15)
-    async def test_modify_body_only_no_headers(
-        self, target_server: int, tunnel_ws: _TunnelWS, proxy_port: int
-    ) -> None:
+    async def test_modify_body_only_no_headers(self, target_server: int, tunnel_ws: _TunnelWS, proxy_port: int) -> None:
         """Branch 273->275: modify with body_b64 but no headers key."""
         task = await _start_inspect(target_server, tunnel_ws.port, proxy_port, intercept=True)
         await tunnel_ws.wait_ready()
@@ -207,12 +203,14 @@ class TestInspectBranchCoverage:
         req_task = asyncio.create_task(_do_request())
         req_frame = await tunnel_ws.wait_for_frame("http_req")
         # Modify with body but NO headers — exercises 273->275 false branch
-        await tunnel_ws.send_action({
-            "type": "http_action",
-            "id": req_frame["id"],
-            "action": "modify",
-            "body_b64": base64.b64encode(b"modified body").decode(),
-        })
+        await tunnel_ws.send_action(
+            {
+                "type": "http_action",
+                "id": req_frame["id"],
+                "action": "modify",
+                "body_b64": base64.b64encode(b"modified body").decode(),
+            }
+        )
         resp = await asyncio.wait_for(req_task, timeout=5.0)
         assert resp.status_code == 200
         task.cancel()
@@ -220,9 +218,7 @@ class TestInspectBranchCoverage:
             await task
 
     @pytest.mark.timeout(15)
-    async def test_inspect_toggle_loops_back(
-        self, target_server: int, tunnel_ws: _TunnelWS, proxy_port: int
-    ) -> None:
+    async def test_inspect_toggle_loops_back(self, target_server: int, tunnel_ws: _TunnelWS, proxy_port: int) -> None:
         """Branch 356->325: http_inspect_toggle loops back to WS receive."""
         task = await _start_inspect(target_server, tunnel_ws.port, proxy_port)
         await tunnel_ws.wait_ready()

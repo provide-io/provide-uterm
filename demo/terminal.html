@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+  SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
   SPDX-License-Identifier: AGPL-3.0-or-later
 
   Interactive terminal viewer — connects via WebSocket browser endpoint.
@@ -14,7 +14,7 @@
 <head>
 <meta charset="utf-8">
 <title id="title">Terminal</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0d1117; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -44,8 +44,8 @@
 </div>
 <div id="terminal-wrap"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js" integrity="sha384-/nfmYPUzWMS6v2atn8hbljz7NE0EI1iGx34lJaNzyVjWGDzMv+ciUZUeJpKA3Glc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js" integrity="sha384-AQLWHRKAgdTxkolJcLOELg4E9rE89CPE2xMy3tIRFn08NcGKPTsELdvKomqji+DL" crossorigin="anonymous"></script>
 <script>
 // ── Control channel codec ─────────────────────────────────────────────────────
 // Verbatim logic from packages/provide-terminal/src/provide/terminal/frontend/hijack-codec.js

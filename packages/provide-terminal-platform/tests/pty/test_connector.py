@@ -18,7 +18,10 @@ from provide.terminal.pty.connector import PTYConnector
 
 _skip_needs_root = pytest.mark.skipif(os.getuid() != 0, reason="requires root or CAP_SETUID")
 
+from ._connector_helpers import make_connector
+
 # ── Validation ────────────────────────────────────────────────────────────────
+
 
 def test_connector_requires_command() -> None:
     with pytest.raises(ValueError, match="command"):
@@ -65,6 +68,7 @@ def test_connector_requires_command_exact_message() -> None:
 
 
 # ── Init state ────────────────────────────────────────────────────────────────
+
 
 def test_connector_init_default_state() -> None:
     """__init__ stores all config values and sets correct initial state.
@@ -122,6 +126,7 @@ def test_connector_init_run_as_fields() -> None:
 
 # ── is_connected ──────────────────────────────────────────────────────────────
 
+
 def test_is_connected_before_start() -> None:
     assert make_connector().is_connected() is False
 
@@ -137,6 +142,7 @@ def test_is_connected_requires_both_flag_and_fd() -> None:
 
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
+
 
 async def test_start_and_stop_echo() -> None:
     conn = make_connector("/bin/echo", ["hello from pty"])
@@ -234,6 +240,7 @@ async def test_start_username_without_password_skips_pam() -> None:
 
 # ── _register ─────────────────────────────────────────────────────────────────
 
+
 def test_register_import_error_silently_returns() -> None:
     from provide.terminal.pty.connector import _register
 
@@ -250,10 +257,13 @@ def test_register_no_refresh_when_connectors_module_absent() -> None:
     fake_registry.register_connector = lambda n, c: calls.append((n, c))  # type: ignore[attr-defined]
     fake_registry.registered_types = lambda: frozenset({"pty"})  # type: ignore[attr-defined]
 
-    with patch.dict(sys.modules, {
-        "provide.terminal.server.connectors.registry": fake_registry,
-        "provide.terminal.server.connectors": None,
-    }):
+    with patch.dict(
+        sys.modules,
+        {
+            "provide.terminal.server.connectors.registry": fake_registry,
+            "provide.terminal.server.connectors": None,
+        },
+    ):
         _register()
     assert calls == [("pty", PTYConnector)]
 
@@ -270,10 +280,13 @@ def test_register_refreshes_known_connector_types() -> None:
     fake_connectors = ModuleType("provide.terminal.server.connectors")
     fake_connectors.KNOWN_CONNECTOR_TYPES = frozenset()  # type: ignore[attr-defined]
 
-    with patch.dict(sys.modules, {
-        "provide.terminal.server.connectors.registry": fake_registry,
-        "provide.terminal.server.connectors": fake_connectors,
-    }):
+    with patch.dict(
+        sys.modules,
+        {
+            "provide.terminal.server.connectors.registry": fake_registry,
+            "provide.terminal.server.connectors": fake_connectors,
+        },
+    ):
         _register()
     assert calls == [("pty", PTYConnector)]
     assert "pty" in fake_connectors.KNOWN_CONNECTOR_TYPES
@@ -291,15 +304,19 @@ def test_register_no_refresh_when_known_connector_types_absent() -> None:
 
     fake_connectors = ModuleType("provide.terminal.server.connectors")
 
-    with patch.dict(sys.modules, {
-        "provide.terminal.server.connectors.registry": fake_registry,
-        "provide.terminal.server.connectors": fake_connectors,
-    }):
+    with patch.dict(
+        sys.modules,
+        {
+            "provide.terminal.server.connectors.registry": fake_registry,
+            "provide.terminal.server.connectors": fake_connectors,
+        },
+    ):
         _register()
     assert refresh_calls == []
 
 
 # ── Root-only ─────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.requires_root
 @_skip_needs_root

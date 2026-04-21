@@ -147,11 +147,14 @@ class _IdentityPrincipal:
 def identity_as_principal(identity: ResolvedIdentity) -> _IdentityPrincipal:
     """Adapt a :class:`ResolvedIdentity` to the DeckMux principal shape."""
     claims = identity.claims or {}
-    display = _first_nonempty(
-        _str_or_none(claims.get("display_name")),
-        _str_or_none(claims.get("display")),
-        _name_from_subject(identity.subject),
-    ) or identity.subject
+    display = (
+        _first_nonempty(
+            _str_or_none(claims.get("display_name")),
+            _str_or_none(claims.get("display")),
+            _name_from_subject(identity.subject),
+        )
+        or identity.subject
+    )
     return _IdentityPrincipal(
         subject_id=identity.subject,
         display_name=display,

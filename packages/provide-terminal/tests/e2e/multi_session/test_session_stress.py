@@ -20,6 +20,7 @@ import json
 from typing import Any
 
 from provide.terminal.client import connect_async_ws
+
 from tests.e2e._live_server import live_server_with_bus
 from tests.e2e.conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
@@ -83,26 +84,18 @@ async def test_cross_session_routing_strict_isolation() -> None:
                 snapshots = [m for m in msgs if m.get("type") == "snapshot"]
                 for s in snapshots:
                     screen = s.get("screen", "")
-                    assert "SESSION-B" not in screen, (
-                        f"Session A browser received Session B snapshot: {screen}"
-                    )
+                    assert "SESSION-B" not in screen, f"Session A browser received Session B snapshot: {screen}"
                 a_snaps = [s for s in snapshots if "SESSION-A" in s.get("screen", "")]
-                assert len(a_snaps) >= 10, (
-                    f"Session A browser got only {len(a_snaps)} A-snapshots, expected >=10"
-                )
+                assert len(a_snaps) >= 10, f"Session A browser got only {len(a_snaps)} A-snapshots, expected >=10"
 
             for bb in browsers_b:
                 msgs = await _drain_all(bb, timeout=2.0)
                 snapshots = [m for m in msgs if m.get("type") == "snapshot"]
                 for s in snapshots:
                     screen = s.get("screen", "")
-                    assert "SESSION-A" not in screen, (
-                        f"Session B browser received Session A snapshot: {screen}"
-                    )
+                    assert "SESSION-A" not in screen, f"Session B browser received Session A snapshot: {screen}"
                 b_snaps = [s for s in snapshots if "SESSION-B" in s.get("screen", "")]
-                assert len(b_snaps) >= 10, (
-                    f"Session B browser got only {len(b_snaps)} B-snapshots, expected >=10"
-                )
+                assert len(b_snaps) >= 10, f"Session B browser got only {len(b_snaps)} B-snapshots, expected >=10"
 
         finally:
             for ctx in contexts:

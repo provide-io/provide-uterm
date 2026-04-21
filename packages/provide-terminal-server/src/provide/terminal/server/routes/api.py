@@ -125,7 +125,9 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         pairs = await _registry(request).list_sessions_with_definitions()
-        results = [model_dump(status) for status, definition in pairs if authz.can_read_session(principal, definition)]
+        results = [
+            model_dump(status) for status, definition in pairs if await authz.can_read_session(principal, definition)
+        ]
         if tag:
             results = [s for s in results if set(tag) & set(s.get("tags", []))]
         if connector_type:
@@ -155,7 +157,7 @@ def create_api_router() -> APIRouter:
     ) -> dict[str, int]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.is_admin(principal):
+        if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="admin privileges required for bulk delete")
         filt = payload.get("filter", {})
         filter_state = str(filt.get("state", "")).strip() or None
@@ -167,7 +169,9 @@ def create_api_router() -> APIRouter:
         now = _time.time()
         to_delete: list[str] = []
         for status, definition in pairs:
-            if not authz.can_mutate_session(principal, definition, "session.control.delete"):  # pragma: no cover — admin always passes
+            if not await authz.can_mutate_session(
+                principal, definition, "session.control.delete"
+            ):  # pragma: no cover — admin always passes
                 continue
             dumped = model_dump(status)
             if filter_state and dumped.get("lifecycle_state") != filter_state:
@@ -193,11 +197,11 @@ def create_api_router() -> APIRouter:
     async def create_session(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.can_create_session(principal):
+        if not await authz.can_create_session(principal):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         mutable_payload = dict(payload)
         requested_owner = mutable_payload.get("owner")
-        if not authz.is_admin(principal):
+        if not await authz.is_admin(principal):
             if requested_owner not in {None, principal.subject_id}:
                 raise HTTPException(status_code=403, detail="owner must match authenticated subject")
             mutable_payload["owner"] = principal.subject_id
@@ -232,7 +236,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_session(principal, definition):
+        if not await authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             session = await _registry(request).get_session(session_id)
@@ -251,7 +255,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_mutate_session(principal, definition, "session.control.update"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.update"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             session = await _registry(request).update_session(session_id, payload)
@@ -266,7 +270,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_mutate_session(principal, definition, "session.control.delete"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.delete"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         with get_tracer(__name__).start_as_current_span("uterm.session.delete") as span:
             _set_span_attrs(
@@ -296,7 +300,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_mutate_session(principal, definition, "session.control.connect"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             session = await _registry(request).start_session(session_id)
@@ -311,7 +315,7 @@ def create_api_router() -> APIRouter:
         definition = await _session_definition(request, session_id)
         # Disconnect is intentionally gated on "connect" so operators who can
         # start sessions can also stop them (symmetric lifecycle control).
-        if not authz.can_mutate_session(principal, definition, "session.control.connect"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             session = await _registry(request).stop_session(session_id)
@@ -325,7 +329,7 @@ def create_api_router() -> APIRouter:
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
         # Same lifecycle symmetry as disconnect above.
-        if not authz.can_mutate_session(principal, definition, "session.control.connect"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.connect"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             session = await _registry(request).restart_session(session_id)
@@ -342,7 +346,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_mutate_session(principal, definition, "session.control.mode"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.mode"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         mode = str(payload.get("input_mode", "")).strip()
         if mode not in {"open", "hijack"}:
@@ -358,7 +362,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_mutate_session(principal, definition, "session.control.clear"):
+        if not await authz.can_mutate_session(principal, definition, "session.control.clear"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             session = await _registry(request).clear_session(session_id)
@@ -375,7 +379,9 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_mutate_session(principal, definition, "session.control.update"):  # pragma: no cover — admin always passes in dev mode
+        if not await authz.can_mutate_session(
+            principal, definition, "session.control.update"
+        ):  # pragma: no cover — admin always passes in dev mode
             raise HTTPException(status_code=403, detail="insufficient privileges")
         label = str(payload.get("label", "")).strip()
         if not label:
@@ -415,7 +421,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_session(principal, definition):
+        if not await authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             analysis = await _registry(request).analyze_session(session_id)
@@ -428,7 +434,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_session(principal, definition):
+        if not await authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         return await _registry(request).last_snapshot(session_id)
 
@@ -441,7 +447,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_session(principal, definition):
+        if not await authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         return await _registry(request).events(session_id, limit=limit)
 
@@ -457,7 +463,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_session(principal, definition):
+        if not await authz.can_read_session(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         return await _registry(request).watch_session_events(  # type: ignore[attr-defined]
             session_id,
@@ -472,7 +478,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_recording(principal, definition):
+        if not await authz.can_read_recording(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             return await _registry(request).recording_meta(session_id)
@@ -490,7 +496,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_recording(principal, definition):
+        if not await authz.can_read_recording(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             return await _registry(request).recording_entries(session_id, limit=limit, offset=offset, event=event)
@@ -502,7 +508,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         definition = await _session_definition(request, session_id)
-        if not authz.can_read_recording(principal, definition):
+        if not await authz.can_read_recording(principal, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         try:
             path = await _registry(request).recording_path(session_id)
@@ -519,7 +525,7 @@ def create_api_router() -> APIRouter:
     async def quick_connect(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.can_create_session(principal):
+        if not await authz.can_create_session(principal):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         connector_type = str(payload.get("connector_type", "ssh")).strip()
         display_name = str(payload.get("display_name") or connector_type).strip() or connector_type
@@ -589,11 +595,10 @@ def create_api_router() -> APIRouter:
         Accepts optional ``ttl_s`` in payload to override server default.
         """
         import secrets
-        import time
 
         principal = _principal(request)
         authz = _authz(request)
-        if not authz.can_create_session(principal):
+        if not await authz.can_create_session(principal):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         cfg = request.app.state.uterm_config
         tunnel_cfg = cfg.tunnel
@@ -702,7 +707,7 @@ def create_api_router() -> APIRouter:
         principal = _principal(request)
         authz = _authz(request)
         session = await _registry(request).get_definition(tunnel_id)
-        if session is not None and not (authz.is_admin(principal) or authz.is_owner(principal, session)):
+        if session is not None and not (await authz.is_admin(principal) or await authz.is_owner(principal, session)):
             raise HTTPException(status_code=403, detail="insufficient privileges")
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
         removed = tunnel_tokens.pop(tunnel_id, None)
@@ -721,14 +726,13 @@ def create_api_router() -> APIRouter:
     async def rotate_tunnel_tokens(request: Request, tunnel_id: _SessionId) -> dict[str, Any]:
         """Rotate all tokens for a tunnel session. Owner or admin only."""
         import secrets
-        import time
 
         principal = _principal(request)
         authz = _authz(request)
         session = await _registry(request).get_definition(tunnel_id)
         if session is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {tunnel_id}")
-        if not (authz.is_admin(principal) or authz.is_owner(principal, session)):
+        if not (await authz.is_admin(principal) or await authz.is_owner(principal, session)):
             raise HTTPException(status_code=403, detail="insufficient privileges")
 
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)

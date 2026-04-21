@@ -17,8 +17,8 @@ from pathlib import Path
 def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
     """Record a terminal demo via asciinema. Returns output path or None."""
     try:
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 "asciinema",
                 "rec",
                 str(out_path),
@@ -39,8 +39,8 @@ def ffmpeg_to_mp4(webm_path: Path) -> Path | None:
     """Convert a WebM to MP4 via ffmpeg. Returns mp4 path or None."""
     mp4_path = webm_path.with_suffix(".mp4")
     try:
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 "ffmpeg",
                 "-y",
                 "-i",
@@ -67,8 +67,8 @@ def trim_clip(src: Path | None, start_s: float, duration_s: float) -> Path | Non
         return None
     out = src.with_name(src.stem + "_trim.mp4")
     try:
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 "ffmpeg",
                 "-y",
                 "-ss",
@@ -98,8 +98,8 @@ def trim_clip(src: Path | None, start_s: float, duration_s: float) -> Path | Non
 def _video_dimensions(src: Path) -> tuple[int, int]:
     """Return (width, height) of a video file via ffprobe, or (1280, 720) on failure."""
     try:
-        result = subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        result = subprocess.run(
+            [
                 "ffprobe",
                 "-v",
                 "quiet",
@@ -186,8 +186,8 @@ body {{
             browser.close()
 
         # PNG → fixed-duration mp4
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 "ffmpeg",
                 "-y",
                 "-loop",
@@ -211,8 +211,8 @@ body {{
 
         # Concat card + src
         list_file.write_text(f"file '{card_mp4.resolve()}'\nfile '{src.resolve()}'\n")
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 "ffmpeg",
                 "-y",
                 "-f",
@@ -241,6 +241,106 @@ body {{
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def hstack_clips(
+    clips: list[Path | None],
+    out: Path,
+    target_width: int = 1920,
+    target_height: int = 1080,
+    *,
+    layout: str = "auto",
+) -> Path | None:
+    """Combine 2-3 mp4s into a single frame.
+
+    *layout*:
+
+    - ``"row"`` — side-by-side (equal columns)
+    - ``"column"`` — vertical stack (equal rows)
+    - ``"hero"`` — first clip fills left half at full height; remaining clips
+      stack on the right half (best for 3 clips at 1920x1080)
+    - ``"auto"`` (default) — ``"hero"`` for 3 clips, ``"row"`` for 2
+
+    Target dimensions default to 1920x1080 for clean 1080p output.
+    """
+    valid = [c for c in clips if c is not None and c.exists()]
+    n = len(valid)
+    if n < 2:
+        return None
+    if layout == "auto":
+        layout = "grid" if n > 3 else "row"
+
+    inputs: list[str] = []
+    filters: list[str] = []
+    if layout == "grid":
+        import math
+
+        cols = math.ceil(math.sqrt(n))
+        rows = math.ceil(n / cols)
+        cell_w = target_width // cols
+        cell_h = target_height // rows
+        for i, clip in enumerate(valid):
+            inputs.extend(["-i", str(clip)])
+            filters.append(
+                f"[{i}:v]scale={cell_w}:{cell_h}:force_original_aspect_ratio=decrease,"
+                f"pad={cell_w}:{cell_h}:(ow-iw)/2:(oh-ih)/2[v{i}]"
+            )
+        # Pad with black if n < cols*rows
+        filters.extend(f"color=c=black:s={cell_w}x{cell_h}:d=1[v{i}]" for i in range(n, cols * rows))
+        # Build rows, then vstack
+        row_labels = []
+        for r in range(rows):
+            row_cells = "".join(f"[v{r * cols + c}]" for c in range(cols))
+            filters.append(f"{row_cells}hstack=inputs={cols}[row{r}]")
+            row_labels.append(f"[row{r}]")
+        filters.append(f"{''.join(row_labels)}vstack=inputs={rows}[out]")
+    elif layout == "column":
+        row_h = target_height // n
+        for i, clip in enumerate(valid):
+            inputs.extend(["-i", str(clip)])
+            filters.append(
+                f"[{i}:v]scale={target_width}:{row_h}:force_original_aspect_ratio=decrease,"
+                f"pad={target_width}:{row_h}:(ow-iw)/2:(oh-ih)/2[v{i}]"
+            )
+        stack_inputs = "".join(f"[v{i}]" for i in range(n))
+        filters.append(f"{stack_inputs}vstack=inputs={n}[out]")
+    else:
+        col_w = target_width // n
+        for i, clip in enumerate(valid):
+            inputs.extend(["-i", str(clip)])
+            filters.append(
+                f"[{i}:v]scale={col_w}:{target_height}:force_original_aspect_ratio=decrease,"
+                f"pad={col_w}:{target_height}:(ow-iw)/2:(oh-ih)/2[v{i}]"
+            )
+        stack_inputs = "".join(f"[v{i}]" for i in range(n))
+        filters.append(f"{stack_inputs}hstack=inputs={n}[out]")
+    filter_complex = ";".join(filters)
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                *inputs,
+                "-filter_complex",
+                filter_complex,
+                "-map",
+                "[out]",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-pix_fmt",
+                "yuv420p",
+                str(out),
+            ],
+            capture_output=True,
+            check=True,
+            timeout=600,
+        )
+        return out
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        print(f"  [WARN] hstack_clips failed: {exc}", flush=True)
+        return None
+
+
 def concat_clips(clips: list[Path | None], out: Path) -> Path | None:
     """Concatenate mp4 clips in order using ffmpeg concat demuxer."""
     valid = [c for c in clips if c is not None and c.exists()]
@@ -249,8 +349,8 @@ def concat_clips(clips: list[Path | None], out: Path) -> Path | None:
     list_file = out.with_suffix(".concat_list.txt")
     list_file.write_text("\n".join(f"file '{c.resolve()}'" for c in valid) + "\n")
     try:
-        subprocess.run(  # noqa: S603
-            [  # noqa: S607
+        subprocess.run(
+            [
                 "ffmpeg",
                 "-y",
                 "-f",

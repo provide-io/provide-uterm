@@ -21,7 +21,7 @@ def wait_connected(base_url: str, session_id: str, timeout: float = 15.0) -> boo
             r = httpx.get(f"{base_url}/api/sessions/{session_id}", timeout=5.0)
             if r.status_code == 200 and r.json().get("connected"):
                 return True
-        except Exception:  # noqa: S110
+        except Exception:
             pass
         time.sleep(0.3)
     return False

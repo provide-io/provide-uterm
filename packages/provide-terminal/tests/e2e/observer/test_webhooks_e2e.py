@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """E2E: Webhook delivery via live uvicorn server.
@@ -25,8 +25,8 @@ import httpx
 import pytest
 import uvicorn
 from fastapi import FastAPI, Request
-
 from provide.terminal.client import connect_async_ws
+
 from tests.e2e._live_server import live_server_with_bus
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}

@@ -27,7 +27,6 @@ from provide.terminal.bridge.fanout._models import FanOutGroup
 from provide.terminal.bridge.hub import EventBus, TermHub
 from provide.terminal.client import connect_test_ws
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -43,7 +42,9 @@ async def _make_hub_with_workers(*worker_ids: str) -> TermHub:
     return hub
 
 
-def _make_group(worker_ids: list[str], mode: str = "parallel", created_by: str = "admin", **kwargs: object) -> FanOutGroup:
+def _make_group(
+    worker_ids: list[str], mode: str = "parallel", created_by: str = "admin", **kwargs: object
+) -> FanOutGroup:
     """Build a minimal FanOutGroup for testing."""
     return FanOutGroup(
         group_id="g1",
@@ -305,7 +306,10 @@ class TestFanoutSendWsGroupNotFound:
         """When a browser sends fanout_send with a group the caller doesn't own,
         get_group returns None and the handler does a bare 'continue' — no response
         frame is sent and the WebSocket stays alive."""
-        resolver = lambda _ws, _worker_id: "operator"
+
+        def resolver(_ws, _worker_id):
+            return "operator"
+
         hub = TermHub(resolve_browser_role=resolver)
 
         ctrl = FanOutController(hub)

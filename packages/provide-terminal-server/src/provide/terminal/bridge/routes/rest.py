@@ -87,6 +87,7 @@ def _mono_to_wall(mono_ts: float) -> float:
     """Convert a monotonic timestamp to wall-clock for external API responses."""
     return time.time() + (mono_ts - time.monotonic())
 
+
 if TYPE_CHECKING:
     from provide.terminal.bridge.hub import TermHub
 
@@ -262,7 +263,12 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         await hub.append_event(worker_id, "hijack_heartbeat", {"hijack_id": hijack_id, "lease_s": lease_s})
         await hub.broadcast_hijack_state(worker_id)
-        return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id, "lease_expires_at": _mono_to_wall(new_expires)}
+        return {
+            "ok": True,
+            "worker_id": worker_id,
+            "hijack_id": hijack_id,
+            "lease_expires_at": _mono_to_wall(new_expires),
+        }
 
     @router.get("/worker/{worker_id}/hijack/{hijack_id}/snapshot")
     async def hijack_snapshot(
@@ -419,7 +425,12 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         await hub.append_event(worker_id, "hijack_step", {"hijack_id": hijack_id})
         hub.metric("hijack_steps_total")
         fresh_expires = await hub.get_fresh_hijack_expiry(worker_id, hijack_id, hs.lease_expires_at)
-        return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id, "lease_expires_at": _mono_to_wall(fresh_expires)}
+        return {
+            "ok": True,
+            "worker_id": worker_id,
+            "hijack_id": hijack_id,
+            "lease_expires_at": _mono_to_wall(fresh_expires),
+        }
 
     @router.post("/worker/{worker_id}/hijack/{hijack_id}/release")
     async def hijack_release(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Live interactive demo: pty_capture session visible in browser.
@@ -37,7 +37,6 @@ sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
 sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
 
 import uvicorn  # noqa: E402
-
 from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
 from provide.terminal.server.models import ServerBindConfig  # noqa: E402
 
@@ -59,7 +58,7 @@ def _wait_http(url: str, timeout: float = 20.0, token: str | None = None) -> Non
             with urllib.request.urlopen(req, timeout=2) as resp:  # noqa: S310
                 if resp.status < 500:
                     return
-        except Exception:  # noqa: S110
+        except Exception:
             pass
         time.sleep(0.2)
     raise RuntimeError(f"server not ready at {url} within {timeout}s")
@@ -85,6 +84,7 @@ def _start_server() -> tuple[uvicorn.Server, str]:
     base_url = f"http://127.0.0.1:{_SERVER_PORT}"
     config = default_server_config()
     config.auth.mode = "dev"  # type: ignore[assignment]
+    config.session_idle_timeout_s = 1800  # auto-sweep idle sessions after 30 min
     config.server = ServerBindConfig(
         host="127.0.0.1",
         port=_SERVER_PORT,
@@ -108,7 +108,7 @@ def _make_frame(channel: int, data: bytes) -> bytes:
 
 def _pty_to_capture(master_fd: int, capture_sock_path: str, stop: threading.Event) -> None:
     """Read PTY master output and write CHANNEL_STDOUT frames to the capture socket."""
-    CHANNEL_STDOUT = 0x01  # noqa: N806
+    CHANNEL_STDOUT = 0x01
     # Wait for socket to appear
     deadline = time.monotonic() + 10.0
     while not Path(capture_sock_path).exists():
@@ -178,8 +178,8 @@ def main() -> None:
     cf_dir = _REPO_ROOT / "packages" / "provide-terminal-cloudflare"
     print(f"\nStarting CF DO (pywrangler dev) on port {_PYWRANGLER_PORT}...")
     sys.stdout.flush()
-    pywrangler_proc = subprocess.Popen(  # noqa: S603
-        [  # noqa: S607
+    pywrangler_proc = subprocess.Popen(
+        [
             "uv",
             "run",
             "pywrangler",
@@ -294,6 +294,7 @@ def main() -> None:
     try:
         while True:
             if shell_proc.poll() is not None:
+                last_activity = time.monotonic()
                 print("\n  Shell exited — restarting...")
                 sys.stdout.flush()
                 master_fd2, slave_fd2 = pty.openpty()

@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-
 from provide.terminal.bridge.hub import TermHub
 
 

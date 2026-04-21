@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
@@ -16,7 +16,7 @@ from provide.terminal.cloudflare.bridge.hijack import HijackSession
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 from provide.terminal.cloudflare.state.store import LeaseRecord
 
-from provide.terminal.control_stream import ControlChunk, ControlStreamDecoder, DataChunk
+from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"
 
@@ -50,7 +50,7 @@ def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionR
 
 
 def _decode_sent(raw: str, *, data_frame_type: str | None = None) -> dict:
-    decoder = ControlStreamDecoder()
+    decoder = ControlChannelDecoder()
     events = decoder.feed(raw)
     events.extend(decoder.finish())
     assert len(events) == 1
@@ -338,7 +338,7 @@ async def test_alarm_releases_expired_lease() -> None:
     rt = _make_runtime()
     ws = _MockWs()
     rt.worker_ws = ws
-    session = HijackSession(hijack_id="h1", owner="alice", lease_expires_at=time.time() - 1)
+    session = HijackSession(hijack_id="h1", owner="alice", lease_expires_at=time.monotonic() - 1)
     rt.hijack._session = session
     with patch.object(rt.hijack, "_active_session", return_value=session):
         await rt.alarm()

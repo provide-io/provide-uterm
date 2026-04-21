@@ -25,7 +25,6 @@ def _decode_msg(raw: str) -> dict:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from provide.terminal.bridge.hub import InMemoryResumeStore, TermHub
 from provide.terminal.bridge.models import WorkerTermState
 from provide.terminal.bridge.routes.browser_handlers import (

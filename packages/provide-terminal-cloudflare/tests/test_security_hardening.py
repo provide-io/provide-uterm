@@ -87,6 +87,7 @@ class _Runtime:
         self.persisted: list[float] = []
         self.actions: list[tuple[str, str, int]] = []
         self._role = "admin"
+        self._subject: str | None = None
         self.last_snapshot: dict | None = None
         self.browser_hijack_owner: dict[str, str] = {}
         self.lifecycle_state = "stopped"
@@ -97,6 +98,9 @@ class _Runtime:
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role
+
+    async def browser_subject_for_request(self, request: object) -> str | None:
+        return self._subject
 
     def persist_lease(self, session: object) -> None:
         if session is not None:

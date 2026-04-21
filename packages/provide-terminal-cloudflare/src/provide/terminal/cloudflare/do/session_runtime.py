@@ -12,7 +12,7 @@ try:
     from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
     from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
     from provide.terminal.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
-    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator, HijackSession
+    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
     from provide.terminal.cloudflare.cf_types import CFWebSocket, DurableObject, Response
     from provide.terminal.cloudflare.config import CloudflareConfig
     from provide.terminal.cloudflare.do._session_runtime_io import _SessionRuntimeIoMixin
@@ -25,15 +25,16 @@ except Exception:
     from api.ws_routes import handle_socket_message  # type: ignore[import-not-found]
     from auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie  # type: ignore[import-not-found]
     from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[import-not-found]
-    from bridge.hijack import HijackCoordinator, HijackSession  # type: ignore[import-not-found]
-    from cf_types import DurableObject, Response  # type: ignore[import-not-found]
+    from bridge.hijack import HijackCoordinator  # type: ignore[import-not-found]
+    from cf_types import CFWebSocket, DurableObject, Response  # type: ignore[import-not-found]
     from config import CloudflareConfig  # type: ignore[import-not-found]
     from do._session_runtime_io import _SessionRuntimeIoMixin  # type: ignore[import-not-found]
+    from do.ushell import init_ushell, on_browser_connected  # type: ignore[import-not-found]
     from do.ws_helpers import _WsHelperMixin  # type: ignore[import-not-found]
     from state.registry import update_kv_session  # type: ignore[import-not-found]
     from state.store import SqliteStateStore  # type: ignore[import-not-found]
 
-from provide.terminal.control_stream import encode_control
+from provide.terminal.control_channel import encode_control
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +53,11 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
 
         self.worker_id = self._derive_worker_id()
         self.hijack = HijackCoordinator()
-        self.worker_ws: Any | None = None
-        self.browser_sockets: dict[str, Any] = {}
-        self.raw_sockets: dict[str, Any] = {}
+        self.worker_ws: CFWebSocket | None = None
+        self.browser_sockets: dict[str, CFWebSocket] = {}
+        self.raw_sockets: dict[str, CFWebSocket] = {}
         self.browser_hijack_owner: dict[str, str] = {}
+        self.browser_resume_tokens: dict[str, str] = {}
         self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
@@ -72,6 +74,11 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self._tunnel_worker_token: str | None = None
         self._share_token: str | None = None
         self._control_token: str | None = None
+        self._issued_ip: str | None = None
+
+        # ushell — set for sessions whose worker_id starts with "ushell-".
+        self._ushell: Any = None  # UshellConnector | None
+        self._ushell_started: bool = False
 
         self._restore_state()
 
@@ -83,35 +90,6 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             except Exception as exc:
                 logger.debug("failed to derive worker_id from durable object name: %s", exc)
         return "default"  # fallback: hex-ID addressed DO, not name-addressed
-
-    def _restore_state(self) -> None:
-        saved_meta = self.store.load_session_meta(self.worker_id)
-        if saved_meta is not None:
-            self.meta = saved_meta
-            self._meta_loaded = True
-        row = self.store.load_session(self.worker_id)
-        if row is None:
-            return
-        hijack_id = row.get("hijack_id")
-        owner = row.get("owner")
-        lease_expires_at = row.get("lease_expires_at")
-        if (
-            isinstance(hijack_id, str)
-            and isinstance(owner, str)
-            and isinstance(lease_expires_at, (float, int))
-            and float(lease_expires_at) > time.time()
-        ):
-            self.hijack._session = HijackSession(
-                hijack_id=hijack_id,
-                owner=owner,
-                lease_expires_at=float(lease_expires_at),
-            )
-        snapshot = row.get("last_snapshot")
-        if isinstance(snapshot, dict):
-            self.last_snapshot = snapshot
-        stored_mode = row.get("input_mode")
-        if stored_mode in {"hijack", "open"}:
-            self.input_mode = stored_mode
 
     async def _ensure_meta(self) -> None:
         """Lazy-load session metadata from KV on first contact, persist to SQLite."""
@@ -136,19 +114,24 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 self._tunnel_worker_token = str(data.get("worker_token") or "") or None
                 self._share_token = str(data.get("share_token") or "") or None
                 self._control_token = str(data.get("control_token") or "") or None
+                self._issued_ip = str(data.get("issued_ip") or "") or None
         except Exception:
             logger.debug("_ensure_meta kv read failed for %s", self.worker_id)
         self.store.save_session_meta(self.worker_id, self.meta)
 
     def _share_role_for_request(self, request: object) -> str | None:
+        transport = str(getattr(self.config, "tunnel_token_transport", "both"))
+        ip_binding = bool(getattr(self.config, "tunnel_ip_binding", False))
+
         token = None
-        try:
-            qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-            token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
-        except Exception as exc:
-            logger.debug("failed to parse share token: %s", exc)
+        if transport != "cookie":  # "query" or "both"
+            try:
+                qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
+                token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
+            except Exception as exc:
+                logger.debug("failed to parse share token: %s", exc)
         # Cookie fallback: uterm_tunnel_{worker_id}
-        if not token:
+        if not token and transport != "query":  # "cookie" or "both"
             try:
                 from http.cookies import SimpleCookie
 
@@ -157,15 +140,31 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 cookie_key = f"uterm_tunnel_{self.worker_id}"
                 if cookie_key in cookies:
                     token = cookies[cookie_key].value
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
         if not token:
             return None
+
+        role: str | None = None
         if self._control_token and secrets.compare_digest(token, self._control_token):
-            return "admin"
-        if self._share_token and secrets.compare_digest(token, self._share_token):
-            return "viewer"
-        return None
+            role = "admin"
+        elif self._share_token and secrets.compare_digest(token, self._share_token):
+            role = "viewer"
+
+        if role is None:
+            return None
+
+        if ip_binding:
+            issued_ip = self._issued_ip or ""
+            client_ip = ""
+            try:
+                client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[union-attr]
+            except Exception:
+                pass
+            if issued_ip and client_ip != issued_ip:
+                return None
+
+        return role
 
     # ------------------------------------------------------------------
     # Auth helpers
@@ -204,7 +203,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             cf_client_id = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[union-attr]
             if len(cf_client_id) > 0:
                 return None, None
-        except Exception:  # noqa: S110
+        except Exception:
             pass
         token = self._extract_token(request)
         if not token:
@@ -224,10 +223,15 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             )
 
     async def browser_role_for_request(self, request: object) -> str:
-        """Return the caller's role string based on JWT or auth mode.
+        """Return the caller's role string based on JWT, ownership, or auth mode.
 
         Returns ``"admin"`` in ``none``/``dev`` mode (open access). In ``jwt`` mode,
         decodes the token and returns ``"admin"``, ``"operator"``, or ``"viewer"``.
+        Owners of a private session are elevated to ``"operator"`` when their
+        JWT role is lower — matching the hosted FastAPI server's
+        ``resolve_browser_role``.  Without this elevation an owner with a
+        ``viewer``-role JWT could read their session via the visibility check
+        but would get 403 on every mutation route (mode/hijack/…).
         Falls back to ``"viewer"`` if the token is missing or invalid (the token
         was already validated in ``fetch()``; this is only for role extraction).
         """
@@ -241,11 +245,33 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             return "viewer"
         try:
             principal = await decode_jwt(token, self.config.jwt)
-            return _resolve_jwt_role(principal)
         except JwtValidationError:
             return "viewer"
         # Other exceptions (e.g. network errors fetching JWKS) propagate so the
         # caller returns a 5xx rather than silently downgrading the caller to viewer.
+        jwt_role = _resolve_jwt_role(principal)
+        if jwt_role == "admin":
+            return "admin"
+        owner = self.meta.get("owner")
+        if owner is not None and principal.subject_id == owner:
+            return "operator"
+        return jwt_role
+
+    async def browser_subject_for_request(self, request: object) -> str | None:
+        """Return the JWT subject_id for the caller, or ``None`` in open-access modes.
+
+        Used by session route handlers to check per-session ownership.
+        """
+        if self.config.jwt.mode in {"none", "dev"}:
+            return None
+        token = self._extract_token(request)
+        if not token:
+            return None
+        try:
+            principal = await decode_jwt(token, self.config.jwt)
+            return principal.subject_id
+        except JwtValidationError:
+            return None
 
     # ------------------------------------------------------------------
     # Fetch / WS lifecycle
@@ -284,7 +310,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # skipped entirely and the request falls through to _resolve_principal()
         # which permits all callers in those modes.  In JWT mode, from_env()
         # guarantees worker_bearer_token is set (ValueError otherwise).
-        _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/"))
+        _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/", "/ws/raw/"))
         if _is_worker_ws and self.config.worker_bearer_token:
             # CF Access service tokens bypass worker bearer token check.
             _cf_client = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[union-attr]
@@ -323,11 +349,27 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 socket_role = "raw"
 
             # Resolve browser role from JWT (defaults to "admin" in dev/none mode).
-            # Workers authenticate via bearer token, not JWT — default to "admin".
-            if socket_role == "worker":
+            # Workers and raw sockets authenticate via bearer token, not JWT —
+            # they are unconditionally admitted and assigned "admin" role.
+            if socket_role in ("worker", "raw"):
                 browser_role = "admin"
             else:
                 browser_role = await self.browser_role_for_request(request)
+                # Enforce session visibility before upgrading browser WebSockets.
+                # Only browser sockets carry a JWT and require visibility checks.
+                visibility = str(self.meta.get("visibility") or "public")
+                if visibility != "public" and browser_role != "admin":
+                    subject = await self.browser_subject_for_request(request)
+                    owner = self.meta.get("owner")
+                    permitted = subject is not None and subject == owner
+                    if not permitted and visibility == "operator":
+                        permitted = browser_role == "operator"
+                    if not permitted:
+                        return Response(
+                            json.dumps({"error": "forbidden"}),
+                            status=403,
+                            headers={"content-type": "application/json"},
+                        )
 
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)
@@ -362,21 +404,24 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                         meta=self.meta,
                     )
                 except Exception as exc:
-                    logger.debug("kv register worker in fetch() failed: %s", exc)
+                    logger.warning("kv register worker in fetch() failed: %s", exc)
 
             # Send hello in fetch() before 101 — webSocketOpen() may be dropped after hibernation.
             if socket_role == "browser":
+                # Initialize ushell connector if this is an ushell-* session.
+                init_ushell(self)
                 # Issue a resume token for this browser session
                 resume_token = secrets.token_urlsafe(32)
                 resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
                 self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
+                self.browser_resume_tokens[self.ws_key(server)] = resume_token
                 try:
                     server.send(
                         encode_control(
                             {
                                 "type": "hello",
                                 "worker_id": self.worker_id,
-                                "worker_online": self.worker_ws is not None,
+                                "worker_online": self.worker_ws is not None or self._ushell is not None,
                                 "can_hijack": browser_role == "admin",
                                 "input_mode": self.input_mode,
                                 "role": browser_role,
@@ -384,19 +429,28 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                                 "hijack_step_supported": True,
                                 "resume_supported": True,
                                 "resume_token": resume_token,
+                                "presence_enabled": bool(self.meta.get("presence")),
                                 "ts": time.time(),
                             }
                         )
                     )
                 except Exception as exc:
-                    logger.debug("failed to send hello from fetch(): %s", exc)
+                    logger.warning("failed to send hello from fetch(): %s", exc)
+                try:
+                    await self._maybe_send_presence_sync(server, exclude_self=False)
+                except Exception as exc:  # pragma: no cover — requires real WS upgrade + presence
+                    logger.warning("failed to send presence_sync from fetch(): %s", exc)
 
             return Response(None, status=101, web_socket=client)
         return await route_http(self, request)
 
-    async def webSocketOpen(self, ws: Any) -> None:  # noqa: N802
+    async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
         ws_id = self.ws_key(ws)
         role = self._socket_role(ws)
+        # Check before _register_socket so we can detect fetch()-initialized browser sockets.
+        # fetch() sends hello before the 101 response; webSocketOpen() fires after the upgrade.
+        # For the normal (non-hibernation) path the socket is already registered — skip hello.
+        already_initialized = ws_id in self.browser_sockets
         self._register_socket(ws, role)
         if role == "worker":
             self.worker_ws = ws
@@ -419,32 +473,39 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         else:
             self.browser_sockets[ws_id] = ws
             browser_role = self._socket_browser_role(ws)
-            # Issue a resume token for this browser session
-            _open_resume_token = secrets.token_urlsafe(32)
-            _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
-            self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
-            await self.send_ws(
-                ws,
-                {
-                    "type": "hello",
-                    "worker_id": self.worker_id,
-                    "worker_online": self.worker_ws is not None,
-                    # can_hijack and role reflect the JWT-resolved browser role.
-                    "can_hijack": browser_role == "admin",
-                    "input_mode": self.input_mode,
-                    "role": browser_role,
-                    "hijack_control": "rest",
-                    "hijack_step_supported": True,
-                    "resume_supported": True,
-                    "resume_token": _open_resume_token,
-                    "ts": time.time(),
-                },
-            )
+            if not already_initialized:
+                # Hibernation-restore path: fetch() did not run for this connection, so
+                # send hello here.  For normal upgrades fetch() already sent it.
+                _open_resume_token = secrets.token_urlsafe(32)
+                _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
+                self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
+                self.browser_resume_tokens[ws_id] = _open_resume_token
+                await self.send_ws(
+                    ws,
+                    {
+                        "type": "hello",
+                        "worker_id": self.worker_id,
+                        "worker_online": self.worker_ws is not None or self._ushell is not None,
+                        # can_hijack and role reflect the JWT-resolved browser role.
+                        "can_hijack": browser_role == "admin",
+                        "input_mode": self.input_mode,
+                        "role": browser_role,
+                        "hijack_control": "rest",
+                        "hijack_step_supported": True,
+                        "resume_supported": True,
+                        "resume_token": _open_resume_token,
+                        "presence_enabled": bool(self.meta.get("presence")),
+                        "ts": time.time(),
+                    },
+                )
+            await self._maybe_send_presence_sync(ws, exclude_self=True)
             await self.send_hijack_state(ws)
             if self.last_snapshot is not None:
                 await self.send_ws(ws, self.last_snapshot)
+            # For ushell sessions, broadcast worker_connected + welcome on first browser join.
+            await on_browser_connected(self)
 
-    async def webSocketMessage(self, ws: Any, message: Any) -> None:  # noqa: N802
+    async def webSocketMessage(self, ws: CFWebSocket, message: Any) -> None:  # noqa: N802
         role = self._socket_role(ws)
         self._register_socket(ws, role)
         if role == "raw":
@@ -458,14 +519,14 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         # In Pyodide, JS ArrayBuffer/Uint8Array arrives as a JsProxy, not Python bytes.
         # Convert via to_py() or to_bytes() before checking isinstance.
         _bin = message
-        if hasattr(_bin, "to_py"):
+        if hasattr(_bin, "to_py"):  # pragma: no cover — Pyodide JsProxy only
             _bin = _bin.to_py()
-        elif hasattr(_bin, "to_bytes"):
+        elif hasattr(_bin, "to_bytes"):  # pragma: no cover — Pyodide JsProxy only
             _bin = _bin.to_bytes()
         if isinstance(_bin, (bytes, bytearray, memoryview)) and role == "worker":
             try:
                 from provide.terminal.cloudflare.api.tunnel_routes import handle_tunnel_message
-            except ImportError:
+            except ImportError:  # pragma: no cover
                 from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found]
 
             await handle_tunnel_message(self, ws, bytes(_bin))
@@ -474,22 +535,40 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         raw = message if isinstance(message, str) else str(message)
         await handle_socket_message(self, ws, raw, is_worker=(role == "worker"))
 
-    async def webSocketClose(self, ws: Any, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
+    async def webSocketClose(self, ws: CFWebSocket, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
         # Use _socket_role() instead of `ws is self.worker_ws` — after hibernation,
         # self.worker_ws is None so the identity check would always be False.
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
+        if role == "browser":
+            ws_id = self.ws_key(ws)
+            if self.meta.get("presence"):
+                await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
+            # Mark the resume token as hijack owner before removing socket, so the
+            # browser can reclaim ownership on reconnect.
+            if ws_id in self.browser_hijack_owner:
+                token = self.browser_resume_tokens.get(ws_id)
+                if token:
+                    self.store.mark_resume_hijack_owner(token, True)
         self._remove_ws(ws)
         if role == "worker":
             self.lifecycle_state = "stopped"
             await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)
 
-    async def webSocketError(self, ws: Any, error: Any) -> None:  # noqa: N802
+    async def webSocketError(self, ws: CFWebSocket, error: Any) -> None:  # noqa: N802
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
+        if role == "browser":
+            ws_id = self.ws_key(ws)
+            if self.meta.get("presence"):
+                await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
+            if ws_id in self.browser_hijack_owner:
+                token = self.browser_resume_tokens.get(ws_id)
+                if token:
+                    self.store.mark_resume_hijack_owner(token, True)
         self._remove_ws(ws)
         if role == "worker":
             self.lifecycle_state = "error"

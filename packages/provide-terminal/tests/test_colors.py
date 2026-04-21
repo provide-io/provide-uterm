@@ -106,9 +106,7 @@ class TestRgbTo16Index:
     def test_exact_palette_matches(self):
         """Every palette entry should map to its own index."""
         for expected_idx, (r, g, b) in enumerate(_PALETTE_16):
-            assert rgb_to_16_index(r, g, b) == expected_idx, (
-                f"palette[{expected_idx}]={r, g, b} didn't round-trip"
-            )
+            assert rgb_to_16_index(r, g, b) == expected_idx, f"palette[{expected_idx}]={r, g, b} didn't round-trip"
 
     def test_bright_white_exact(self):
         assert rgb_to_16_index(255, 255, 255) == 15

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Unit tests for the IAC TTYPE + NEW-ENVIRON negotiator."""
+
 from __future__ import annotations
 
 import pytest
@@ -219,9 +220,7 @@ class TestCleanedApplicationData:
         IAC_NOP = 241
         IAC_AYT = 246
         n = IacNegotiator()
-        _, cleaned = n.feed(
-            bytes([ord("a"), IAC, IAC_NOP, ord("b"), IAC, IAC_AYT, ord("c")])
-        )
+        _, cleaned = n.feed(bytes([ord("a"), IAC, IAC_NOP, ord("b"), IAC, IAC_AYT, ord("c")]))
         assert cleaned == b"abc"
 
     def test_finish_sb_with_unknown_option_is_silent(self) -> None:

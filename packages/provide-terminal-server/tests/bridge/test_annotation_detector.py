@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import re
 
-import pytest
-
 from provide.terminal.bridge.annotation import (
+    BUILTIN_RULES,
     Annotation,
     AnnotationSpan,
-    BUILTIN_RULES,
     DetectionRule,
     PatternDetector,
 )

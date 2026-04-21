@@ -30,13 +30,13 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def test_role_for_dev_mode_no_roles_returns_admin() -> None:
+async def test_role_for_dev_mode_no_roles_returns_admin() -> None:
     cfg = default_server_config()
     assert cfg.auth.mode == "dev"
     policy = SessionPolicyResolver(cfg.auth)
     principal = Principal(subject_id="user1", roles=frozenset())
     session = SessionDefinition(session_id="s", display_name="s", connector_type="shell")
-    assert policy.role_for(principal, session) == "admin"
+    assert await policy.role_for(principal, session) == "admin"
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 MindTenet LLC. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 """Cross-compatibility tests proving CF DO and FastAPI return identical shapes.
@@ -111,10 +111,9 @@ async def _cf_call(runtime: _CfRuntime, method: str, path: str, body: dict | Non
 
 def _make_fastapi_client():
     """Create a FastAPI TestClient with one auto-start shell session."""
-    from starlette.testclient import TestClient
-
     from provide.terminal.server.app import create_server_app
     from provide.terminal.server.config import config_from_mapping
+    from starlette.testclient import TestClient
 
     cfg = config_from_mapping(
         {

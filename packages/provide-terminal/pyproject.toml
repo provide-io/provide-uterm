@@ -36,8 +36,7 @@ Repository = "https://github.com/provide-io/provide-terminal"
 
 [project.optional-dependencies]
 emulator  = ["pyte>=0.8"]
-server    = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "provide-terminal-tunnel>=0.1"]
-cli       = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0", "textual>=0.50", "httpx>=0.27"]
+ssh       = ["asyncssh>=2.14"]
 client    = ["httpx>=0.27"]
 all       = ["pyte>=0.8", "asyncssh>=2.14", "httpx>=0.27"]
 
