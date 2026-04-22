@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Orchestrator for memray stress tests across all hot-path components."""
 
-import subprocess
+import subprocess  # nosec
 import sys
 from pathlib import Path
 

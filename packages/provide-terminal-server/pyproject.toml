@@ -6,14 +6,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "provide-terminal-server"
+name = "provide-terminal>=0.4.0-server"
 dynamic = ["version"]
-description = "Server, bridge, tunnel, and gateway for provide-terminal"
+description = "Server, bridge, tunnel, and gateway for provide-terminal">=0.4.0
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = [
     "provide-terminal>=0.4.0",
-    "provide-terminal-client>=0.4.0",
+    "provide-terminal>=0.4.0-client>=0.4.0",
 ]
 
 [project.optional-dependencies]
@@ -116,7 +116,7 @@ partial_branches = [
 ]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "0.4.0"
 line-length = 120
 
 [tool.ruff.lint]
@@ -124,29 +124,7 @@ select = [
     "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
     "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
 ]
-ignore = [
-    "E501",  # line-too-long
-    "S101",  # use-of-assert
-    "S104",  # hardcoded-bind-all-interfaces
-    "S108",  # hardcoded-temp-file
-    "S110",  # try-except-pass
-    "S112",  # try-except-continue
-    "S311",  # suspicious-non-cryptographic-random
-    "S603",  # subprocess-without-shell
-    "S607",  # start-process-with-partial-path
-    "S604",  # call-with-shell-equals-true
-    "F811",  # redefined-while-unused
-    "N806",  # non-lowercase-variable-in-function
-    "N814",  # camelcase-imported-as-constant
-    "B017",  # assert-raises-exception
-    "SIM105", # suppressible-exception
-    "SIM117", # multiple-with-statements
-    "ARG001", # unused-function-argument
-    "ARG002", # unused-method-argument — protocol interfaces
-    "PTH108", # os-unlink — stylistic
-    "SIM108", # ternary-operator — stylistic
-    "PERF401", # manual-list-comprehension — perf suggestion — nested with patch() is clearer in tests
-]
+ignore = ["E501", "S104", "S112", "S311"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["provide"]
@@ -156,12 +134,9 @@ known-first-party = ["provide"]
 "tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "S603", "S607", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "0.4.0"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_any_generics = true
-
-[tool.uv.sources]
-provide-terminal = { workspace = true }

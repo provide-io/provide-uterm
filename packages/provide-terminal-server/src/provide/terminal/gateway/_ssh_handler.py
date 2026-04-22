@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import collections.abc
-    from pathlib import Path
 
     from provide.terminal.auth import SSHKeyResolver
 
@@ -87,7 +87,7 @@ def _make_no_auth_server_class(
             with contextlib.suppress(Exception):
                 conn._warp_gateway_server = self  # type: ignore[attr-defined]
 
-        def begin_auth(self, username: str) -> bool:
+        def begin_auth(self, username: str) -> bool:  # noqa: ARG002
             # Require auth so asyncssh actually exercises the pubkey
             # handler below. Callers still get no-gate behaviour because
             # we accept everything (unless require_resolver is set).
@@ -144,7 +144,7 @@ def _make_no_auth_server_class(
             )
             return True
 
-        def validate_password(self, username: str, password: str) -> bool:
+        def validate_password(self, username: str, password: str) -> bool:  # noqa: ARG002
             return True
 
         def kbdint_auth_supported(self) -> bool:
@@ -378,8 +378,10 @@ async def _make_process_handler(
                         attempt + 1,
                         max_reconnects,
                     )
-                    with contextlib.suppress(Exception):
+                    try:
                         stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
+                    except Exception:
+                        pass
                     await asyncio.sleep(reconnect_delay)
 
         except Exception as exc:

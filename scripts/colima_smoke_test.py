@@ -19,7 +19,7 @@ Usage (from repo root, Colima running with pam_uterm.so installed):
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec
 import sys
 import time
 from pathlib import Path

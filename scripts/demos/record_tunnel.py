@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
+import subprocess  # nosec
 import sys
 import time
 from pathlib import Path

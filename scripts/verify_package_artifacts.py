@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec
 import sys
 import tarfile
 import zipfile

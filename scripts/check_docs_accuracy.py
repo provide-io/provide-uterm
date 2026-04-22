@@ -98,7 +98,7 @@ def _link_violations(path: Path, content: str, anchor_map: dict[Path, set[str]])
     fence_start = 0
     for line in content.splitlines(keepends=True):
         stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
+        if stripped.startswith("```") or stripped.startswith("~~~"):
             if in_fence:
                 fenced_ranges.append((fence_start, content.index(line, fence_start) + len(line)))
                 in_fence = False

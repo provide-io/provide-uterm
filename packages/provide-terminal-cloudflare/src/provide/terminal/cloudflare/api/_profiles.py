@@ -194,9 +194,9 @@ async def _connect(
         return json_response({"detail": "insufficient privileges"}, status=403)
     try:
         raw = await request.json()  # type: ignore[union-attr]
-        raw.to_py() if hasattr(raw, "to_py") else raw
+        body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
-        pass
+        body = {}
     # Build session entry (same shape as /api/connect)
     import json as _json
 

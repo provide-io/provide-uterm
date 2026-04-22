@@ -152,13 +152,13 @@ class TerminalSSHServer(asyncssh.SSHServer):
     def password_auth_supported(self) -> bool:
         return True
 
-    def validate_password(self, username: str, password: str) -> bool:
+    def validate_password(self, username: str, password: str) -> bool:  # noqa: ARG002
         return True
 
     def public_key_auth_supported(self) -> bool:
         return True
 
-    def validate_public_key(self, username: str, key: asyncssh.SSHKey) -> bool:
+    def validate_public_key(self, username: str, key: asyncssh.SSHKey) -> bool:  # noqa: ARG002
         return True
 
 

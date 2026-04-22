@@ -33,6 +33,7 @@ from provide.terminal.server.auth import (
     resolve_http_principal,
     resolve_ws_principal,
 )
+from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
 from provide.terminal.server.profiles import FileProfileStore
 from provide.terminal.server.registry import SessionRegistry
@@ -49,7 +50,6 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
-    from provide.terminal.server.authorization import AuthorizationService
     from provide.terminal.server.models import ServerConfig
 
 logger = get_logger(__name__)

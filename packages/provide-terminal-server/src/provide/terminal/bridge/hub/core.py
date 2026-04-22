@@ -253,7 +253,10 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         principal = getattr(getattr(ws, "state", None), "uterm_principal", None)
         client_id = "anonymous"
         if principal:
-            client_id = str(principal.subject_id) if hasattr(principal, "subject_id") else str(principal)
+            if hasattr(principal, "subject_id"):
+                client_id = str(principal.subject_id)
+            else:
+                client_id = str(principal)
 
         metadata = {"principal": principal} if principal else {}
         return PolicyContext(

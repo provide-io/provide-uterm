@@ -50,7 +50,7 @@ class TestRestAcquireRateLimit:
 
     async def test_rapid_acquire_triggers_429(self) -> None:
         """Fire 10 acquire requests rapidly; at least one gets 429."""
-        async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):
+        async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):  # noqa: SIM117
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl1/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
@@ -73,7 +73,7 @@ class TestRestAcquireRateLimit:
 
     async def test_acquire_rate_limit_recovers(self) -> None:
         """Hit limit, sleep 1.1s, verify next acquire succeeds."""
-        async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):
+        async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):  # noqa: SIM117
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl2/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
@@ -116,7 +116,7 @@ class TestRestSendRateLimit:
 
     async def test_rapid_send_triggers_429(self) -> None:
         """Acquire once, fire 20 send requests; at least one gets 429."""
-        async with _tight_rate_hub(send_rate=2.0) as (_hub, base_url):
+        async with _tight_rate_hub(send_rate=2.0) as (_hub, base_url):  # noqa: SIM117
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl3/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
@@ -152,7 +152,7 @@ class TestRestSendRateLimit:
 
     async def test_step_respects_send_bucket(self) -> None:
         """Rapid POST /step calls also hit send rate limit."""
-        async with _tight_rate_hub(send_rate=1.0) as (_hub, base_url):
+        async with _tight_rate_hub(send_rate=1.0) as (_hub, base_url):  # noqa: SIM117
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl4/term")) as worker,
                 httpx.AsyncClient(base_url=base_url) as http,
@@ -187,7 +187,7 @@ class TestBrowserWsRateLimit:
 
     async def test_rapid_browser_input_silently_dropped(self) -> None:
         """Browser fires >30 input msgs/sec; worker receives fewer (hub silently drops)."""
-        async with _tight_rate_hub() as (_hub, base_url):
+        async with _tight_rate_hub() as (_hub, base_url):  # noqa: SIM117
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/browser/rrl5/term")) as browser,
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl5/term")) as worker,

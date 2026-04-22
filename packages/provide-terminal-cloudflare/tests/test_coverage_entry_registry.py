@@ -426,14 +426,12 @@ async def test_handle_session_delete_forbidden_for_non_owner() -> None:
     async def _fake_get_kv(env, sid):
         return session_data
 
-    with (
-        patch("provide.terminal.cloudflare.entry.get_kv_session", new=_fake_get_kv),
-        patch(
+    with patch("provide.terminal.cloudflare.entry.get_kv_session", new=_fake_get_kv):
+        with patch(
             "provide.terminal.cloudflare.entry._decode_jwt_principal",
             new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
-        ),
-    ):
-        resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", cfg)
+        ):
+            resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", cfg)
     assert resp.status == 403
 
 
@@ -689,15 +687,13 @@ async def test_handle_session_delete_session_not_in_kv_returns_404() -> None:
     from provide.terminal.cloudflare.entry import _handle_session_delete
 
     mock_del = AsyncMock()
-    with (
-        patch("provide.terminal.cloudflare.entry.delete_kv_session", new=mock_del),
-        patch(
+    with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=mock_del):
+        with patch(
             "provide.terminal.cloudflare.entry._decode_jwt_principal",
             new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
-        ),
-        patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)),
-    ):
-        resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig())
+        ):
+            with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
+                resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig())
     # KV is the auth source — missing row must deny (fail closed), not proceed.
     assert resp.status == 404
     mock_del.assert_not_awaited()
@@ -715,18 +711,16 @@ async def test_handle_session_delete_admin_allowed() -> None:
 
     session_data = {"owner": "alice", "visibility": "private"}
 
-    with (
-        patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()),
-        patch(
+    with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()):
+        with patch(
             "provide.terminal.cloudflare.entry._decode_jwt_principal",
             new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("admin",))),
-        ),
-        patch(
-            "provide.terminal.cloudflare.entry.get_kv_session",
-            new=AsyncMock(return_value=session_data),
-        ),
-    ):
-        resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig())
+        ):
+            with patch(
+                "provide.terminal.cloudflare.entry.get_kv_session",
+                new=AsyncMock(return_value=session_data),
+            ):
+                resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", CloudflareConfig())
     assert resp.status == 200
     assert json.loads(resp.body)["deleted"] is True
 

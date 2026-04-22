@@ -27,7 +27,7 @@ import pty
 import select
 import socket
 import struct
-import subprocess
+import subprocess  # nosec
 import sys
 import tempfile
 import threading

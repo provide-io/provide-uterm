@@ -17,7 +17,7 @@ import argparse
 import asyncio
 import contextlib
 import json
-import subprocess
+import subprocess  # nosec
 import sys
 import time
 import urllib.error

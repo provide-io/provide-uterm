@@ -61,7 +61,7 @@ class TestAnnotationWithSpan:
         span = AnnotationSpan(from_seq=1, to_seq=5)
         try:
             span.extra = "nope"  # type: ignore[attr-defined]
-            raise AssertionError("Should have raised AttributeError")  # pragma: no cover
+            assert False, "Should have raised AttributeError"  # pragma: no cover
         except AttributeError:
             pass
 
@@ -171,7 +171,7 @@ class TestDetectionRule:
         )
         try:
             rule.extra = "nope"  # type: ignore[attr-defined]
-            raise AssertionError("Should have raised AttributeError")  # pragma: no cover
+            assert False, "Should have raised AttributeError"  # pragma: no cover
         except AttributeError:
             pass
 

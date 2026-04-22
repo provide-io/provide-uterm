@@ -9,11 +9,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import collections.abc
-    from pathlib import Path
 
 from provide.telemetry import get_logger
 from provide.terminal.colors import apply_color_mode

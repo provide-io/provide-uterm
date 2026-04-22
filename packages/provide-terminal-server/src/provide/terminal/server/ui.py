@@ -28,7 +28,7 @@ def _hijack_js_version() -> str:
         path = importlib.resources.files("provide.terminal.server") / "frontend" / "hijack.js"
         if path.is_file():
             return format(int(path.stat().st_mtime_ns), "x")[-8:]  # type: ignore[attr-defined]
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     return "0"
 

@@ -20,8 +20,8 @@ class TestSshWsGatewayInit:
         assert gw._color_mode == "passthrough"
 
     def test_init_with_options(self) -> None:
-        gw = SshWsGateway("ws://test", server_key="/tmp/key", color_mode="16")
-        assert gw._server_key == "/tmp/key"
+        gw = SshWsGateway("ws://test", server_key="/tmp/key", color_mode="16")  # noqa: S108
+        assert gw._server_key == "/tmp/key"  # noqa: S108
         assert gw._color_mode == "16"
 
 

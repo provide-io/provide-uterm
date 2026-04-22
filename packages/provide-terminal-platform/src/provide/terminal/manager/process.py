@@ -119,7 +119,7 @@ class AgentProcessManager:
             rc = libc.prctl(pr_set_child_subreaper, 1, 0, 0, 0)
             if rc == 0:
                 logger.debug("subreaper_set")
-        except Exception:
+        except Exception:  # noqa: S110
             pass  # not available — fall back to killpg-only
 
     @staticmethod

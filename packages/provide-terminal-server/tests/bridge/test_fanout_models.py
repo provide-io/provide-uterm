@@ -113,7 +113,7 @@ class TestSessionFanOutResult:
         r = SessionFanOutResult(worker_id="w", ok=True, output_delta=None, elapsed_ms=1, divergent=False)
         try:
             r.extra = "nope"  # type: ignore[attr-defined]
-            raise AssertionError("Should have raised AttributeError")  # pragma: no cover
+            assert False, "Should have raised AttributeError"  # pragma: no cover
         except AttributeError:
             pass
 

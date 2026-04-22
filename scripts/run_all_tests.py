@@ -19,7 +19,7 @@ output for that package. Pass through any extra args to every pytest invocation
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec
 import sys
 from pathlib import Path
 
