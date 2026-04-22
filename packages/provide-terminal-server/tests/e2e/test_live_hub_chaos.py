@@ -148,7 +148,7 @@ class TestRapidConnectDisconnect:
             await asyncio.sleep(0.02)
 
         # Hub should not have leaked workers
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx.AsyncClient(base_url=base_url) as http:  # noqa: SIM117
             # POST acquire to a fresh worker to confirm hub is still functional
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/chaos5/term")) as worker:
                 await worker.recv()

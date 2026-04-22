@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "provide-terminal-cloudflare"
+name = "provide-terminal>=0.4.0-cloudflare"
 dynamic = ["version"]
-description = "Cloudflare Workers runtime for provide-terminal control plane"
+description = "Cloudflare Workers runtime for provide-terminal>=0.4.0 control plane"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
@@ -40,8 +40,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/provide-io/provide-terminal"
-Repository = "https://github.com/provide-io/provide-terminal"
+Homepage = "https://github.com/provide-io/provide-terminal">=0.4.0
+Repository = "https://github.com/provide-io/provide-terminal">=0.4.0
 
 [project.scripts]
 uterm-cf = "provide.terminal.cloudflare.cli:main"
@@ -77,10 +77,6 @@ branch = true
 fail_under = 100
 show_missing = true
 skip_covered = false
-
-[tool.uv.sources]
-provide-terminal = { workspace = true }
-
 [tool.mutmut]
 paths_to_mutate = ["src/"]
 tests_dir = ["tests/"]

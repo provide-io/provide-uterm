@@ -18,7 +18,6 @@ asserts that none has ``type == "identity"``.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import os
 import tempfile
 from typing import Any
@@ -126,8 +125,10 @@ class TestTelnetNoIdentityFrame:
         try:
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
             # Read and discard any IAC negotiation bytes the gateway sends.
-            with contextlib.suppress(TimeoutError):
+            try:
                 await asyncio.wait_for(reader.read(256), timeout=0.5)
+            except TimeoutError:
+                pass
 
             writer.write(b"data after iac negotiation\r\n")
             await writer.drain()

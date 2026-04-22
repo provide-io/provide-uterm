@@ -224,16 +224,14 @@ async def test_handle_sessions_get_filters_for_non_admin() -> None:
         {"session_id": "s3", "owner": "alice", "visibility": "private"},
     ]
 
-    with (
-        patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
-            new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("viewer",))),
-        ),
-        patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)),
+    with patch(
+        "provide.terminal.cloudflare.entry._decode_jwt_principal",
+        new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("viewer",))),
     ):
-        resp = await _handle_sessions(
-            SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
-        )
+        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+            resp = await _handle_sessions(
+                SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
+            )
     body = json.loads(resp.body)
     assert all(s["owner"] == "alice" for s in body)
     assert len(body) == 2
@@ -249,16 +247,14 @@ async def test_handle_sessions_get_admin_sees_all() -> None:
         {"session_id": "s2", "owner": "bob"},
     ]
 
-    with (
-        patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
-            new=AsyncMock(return_value=SimpleNamespace(subject_id="admin-user", roles=("admin",))),
-        ),
-        patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)),
+    with patch(
+        "provide.terminal.cloudflare.entry._decode_jwt_principal",
+        new=AsyncMock(return_value=SimpleNamespace(subject_id="admin-user", roles=("admin",))),
     ):
-        resp = await _handle_sessions(
-            SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
-        )
+        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+            resp = await _handle_sessions(
+                SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
+            )
     body = json.loads(resp.body)
     assert len(body) == 2
 
@@ -274,16 +270,14 @@ async def test_handle_sessions_get_viewer_sees_public_sessions() -> None:
         {"session_id": "s3", "owner": "alice", "visibility": "private"},
     ]
 
-    with (
-        patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
-            new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("viewer",))),
-        ),
-        patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)),
+    with patch(
+        "provide.terminal.cloudflare.entry._decode_jwt_principal",
+        new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("viewer",))),
     ):
-        resp = await _handle_sessions(
-            SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
-        )
+        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+            resp = await _handle_sessions(
+                SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
+            )
     body = json.loads(resp.body)
     session_ids = {s["session_id"] for s in body}
     assert "s2" in session_ids  # non-owner public session visible
@@ -299,16 +293,14 @@ async def test_handle_sessions_get_operator_sees_operator_sessions() -> None:
         {"session_id": "s2", "owner": "bob", "visibility": "private"},
     ]
 
-    with (
-        patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
-            new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("operator",))),
-        ),
-        patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)),
+    with patch(
+        "provide.terminal.cloudflare.entry._decode_jwt_principal",
+        new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("operator",))),
     ):
-        resp = await _handle_sessions(
-            SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
-        )
+        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+            resp = await _handle_sessions(
+                SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
+            )
     body = json.loads(resp.body)
     session_ids = {s["session_id"] for s in body}
     assert "s1" in session_ids

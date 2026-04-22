@@ -321,7 +321,9 @@ async def _handle_sessions(request: object, env: object, config: CloudflareConfi
             vis = s.get("visibility", "public")
             if vis == "public":
                 return True
-            return bool(vis == "operator" and is_operator)
+            if vis == "operator" and is_operator:
+                return True
+            return False
 
         sessions = [s for s in sessions if _can_read(s)]
     elif principal is None:

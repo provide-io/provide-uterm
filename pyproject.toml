@@ -8,10 +8,10 @@ name = "provide-terminal-workspace"
 version = "0.4.0"
 requires-python = ">=3.11"
 dependencies = [
-    "provide-terminal[emulator,ssh]",
-    "provide-terminal-server[all]",
-    "provide-terminal-platform[all]",
-    "provide-telemetry>=0.3",
+    "provide-terminal[emulator,ssh]>=0.4.0",
+    "provide-terminal-server[all]>=0.4.0",
+    "provide-terminal-platform[all]>=0.4.0",
+    "provide-telemetry>=0.4.0",
 ]
 
 [dependency-groups]
@@ -56,14 +56,6 @@ dev = [
 
 [tool.uv.workspace]
 members = ["packages/provide-terminal", "packages/provide-terminal-cloudflare", "packages/provide-terminal-platform", "packages/provide-terminal-server", "packages/provide-terminal-client"]
-
-[tool.uv.sources]
-provide-terminal = { workspace = true }
-provide-terminal-cloudflare = { workspace = true }
-provide-terminal-platform = { workspace = true }
-provide-terminal-server = { workspace = true }
-provide-terminal-client = { workspace = true }
-
 [tool.ruff]
 line-length = 120
 target-version = "py311"

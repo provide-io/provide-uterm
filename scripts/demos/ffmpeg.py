@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import html as _html
 import shutil
-import subprocess
+import subprocess  # nosec
 import sys
 import tempfile
 from pathlib import Path

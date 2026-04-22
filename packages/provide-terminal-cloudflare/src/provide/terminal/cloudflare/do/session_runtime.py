@@ -358,18 +358,19 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 # Enforce session visibility before upgrading browser WebSockets.
                 # Only browser sockets carry a JWT and require visibility checks.
                 visibility = str(self.meta.get("visibility") or "public")
-                if visibility != "public" and browser_role != "admin":
-                    subject = await self.browser_subject_for_request(request)
-                    owner = self.meta.get("owner")
-                    permitted = subject is not None and subject == owner
-                    if not permitted and visibility == "operator":
-                        permitted = browser_role == "operator"
-                    if not permitted:
-                        return Response(
-                            json.dumps({"error": "forbidden"}),
-                            status=403,
-                            headers={"content-type": "application/json"},
-                        )
+                if visibility != "public":
+                    if browser_role != "admin":
+                        subject = await self.browser_subject_for_request(request)
+                        owner = self.meta.get("owner")
+                        permitted = subject is not None and subject == owner
+                        if not permitted and visibility == "operator":
+                            permitted = browser_role == "operator"
+                        if not permitted:
+                            return Response(
+                                json.dumps({"error": "forbidden"}),
+                                status=403,
+                                headers={"content-type": "application/json"},
+                            )
 
             client, server = WebSocketPair.new().object_values()
             self.ctx.acceptWebSocket(server)

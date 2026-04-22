@@ -181,7 +181,7 @@ def record_browser(base_url: str) -> None:
             print(f"\n  🎬 Video saved to {target}")
 
             # Convert to mp4
-            import subprocess
+            import subprocess  # nosec
 
             mp4_path = DEMO_DIR / "browser-demo.mp4"
             subprocess.run(
@@ -205,7 +205,7 @@ def main() -> None:
     record_browser(base_url)
 
     # Create GIF from screenshots
-    import subprocess
+    import subprocess  # nosec
 
     gif_path = DEMO_DIR / "demo.gif"
     pngs = sorted(SCREENSHOTS_DIR.glob("*.png"))

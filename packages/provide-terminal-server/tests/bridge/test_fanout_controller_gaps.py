@@ -306,10 +306,7 @@ class TestFanoutSendWsGroupNotFound:
         """When a browser sends fanout_send with a group the caller doesn't own,
         get_group returns None and the handler does a bare 'continue' — no response
         frame is sent and the WebSocket stays alive."""
-
-        def resolver(_ws, _worker_id):
-            return "operator"
-
+        resolver = lambda _ws, _worker_id: "operator"
         hub = TermHub(resolve_browser_role=resolver)
 
         ctrl = FanOutController(hub)

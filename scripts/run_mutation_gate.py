@@ -11,7 +11,7 @@ import json
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec
 from pathlib import Path
 from typing import Final
 
