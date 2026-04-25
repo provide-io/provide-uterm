@@ -6,12 +6,16 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from provide.terminal.server.authorization import AuthorizationService
 
 
 class ApprovalStatus(Enum):
@@ -55,7 +59,7 @@ class InMemoryApprovalStore:
         # Prune entries that have been in a terminal state (APPROVED, REJECTED, TIMEOUT)
         # for more than 1 hour beyond their expiration time.
         PRUNE_TTL = 3600
-        
+
         for req_id, req in list(self._requests.items()):
             if req.status == ApprovalStatus.PENDING and req.expires_at < now:
                 req.status = ApprovalStatus.TIMEOUT
@@ -70,8 +74,8 @@ class InMemoryApprovalStore:
 
 def create_approvals_router() -> APIRouter:
     from typing import cast
+
     from provide.terminal.bridge.hub.ext import PolicyDecision
-    from provide.terminal.server.authorization import AuthorizationService
 
     router = APIRouter(prefix="/api/approvals", tags=["approvals"])
 
@@ -98,8 +102,8 @@ def create_approvals_router() -> APIRouter:
         principal = getattr(request.state, "uterm_principal", None)
         if not principal:
             raise HTTPException(status_code=401, detail="Authentication required")
-        
-        authz = cast(AuthorizationService, request.app.state.uterm_authz)
+
+        authz = cast("AuthorizationService", request.app.state.uterm_authz)
         if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="Admin role required")
 
@@ -110,15 +114,12 @@ def create_approvals_router() -> APIRouter:
         approval_req = hub._approval_store.get(request_id)
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
-        
+
         if approval_req.status != ApprovalStatus.PENDING:
             raise HTTPException(status_code=400, detail="Approval request is not pending")
 
         await hub.resolve_approval(
-            approval_req.worker_id, 
-            request_id, 
-            PolicyDecision(action="allow"), 
-            approval_req.command
+            approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
         )
         hub._approval_store.resolve(request_id, ApprovalStatus.APPROVED)
         return {"status": "approved"}
@@ -135,12 +136,9 @@ def create_approvals_router() -> APIRouter:
             raise HTTPException(status_code=400, detail="Approval request is not pending")
 
         await hub.resolve_approval(
-            approval_req.worker_id, 
-            request_id, 
-            PolicyDecision(action="deny", reason=reason), 
-            approval_req.command
+            approval_req.worker_id, request_id, PolicyDecision(action="deny", reason=reason), approval_req.command
         )
         hub._approval_store.resolve(request_id, ApprovalStatus.REJECTED)
         return {"status": "rejected"}
-    
+
     return router

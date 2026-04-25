@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qs
 
-import httpx
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
 from fastapi import Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,14 +38,13 @@ from provide.terminal.server.auth import (
     resolve_http_principal,
     resolve_ws_principal,
 )
-from provide.terminal.server.authorization import AuthorizationService
 from provide.terminal.server.policy import SessionPolicyResolver
 from provide.terminal.server.profiles import FileProfileStore
 from provide.terminal.server.registry import SessionRegistry
 from provide.terminal.server.routes.api import create_api_router
+from provide.terminal.server.routes.approvals import create_approvals_router
 from provide.terminal.server.routes.pages import create_page_router
 from provide.terminal.server.routes.profiles import create_profiles_router
-from provide.terminal.server.routes.approvals import create_approvals_router
 from provide.terminal.server.security import SecurityHeadersMiddleware
 from provide.terminal.server.webhooks import WebhookManager
 
@@ -57,6 +55,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
+    from provide.terminal.server.authorization import AuthorizationService
     from provide.terminal.server.models import ServerConfig
 
 logger = get_logger(__name__)
@@ -174,13 +173,14 @@ def _register_builtin_connectors(config: ServerConfig) -> None:
         register_connector("ushell", UshellConnector)
 
     with contextlib.suppress(ImportError):
-        import provide.terminal.pty.connector  # noqa: F401
+        import provide.terminal.pty.connector
 
     with contextlib.suppress(ImportError):
         import provide.terminal.pty.capture_connector  # noqa: F401
 
     # 2. External Plugin Connectors
     import importlib
+
     for module_path in config.governance.external_connectors:
         try:
             importlib.import_module(module_path)
@@ -518,10 +518,9 @@ def create_server_app(
     webhook_manager = WebhookManager()
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     from provide.terminal.bridge.annotation._detector import PatternDetector
-
     from provide.terminal.server.discovery import (
-        NoOpDiscoveryProvider,
         NodeStatus,
+        NoOpDiscoveryProvider,
         WebhookDiscoveryProvider,
     )
     from provide.terminal.server.recording import LocalFileRecordingStore, WebhookRecordingStore

@@ -141,6 +141,7 @@ def test_from_uid_unknown_uid_returns_synthetic_user() -> None:
     assert result.shell == "/bin/sh"
     assert result.name == "999999999"
 
+
 def test_resolve_rejects_root_spec_by_default() -> None:
     with pytest.raises(UidMapError, match="privileged"):
         UidMap().resolve("anything", run_as="0:0")

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 import time
+
+import pytest
 
 from provide.terminal.control.plane import ControlPlaneConfig, bootstrap_control_plane
 from provide.terminal.control.plane.session.types import SessionRecord
@@ -11,11 +12,11 @@ from provide.terminal.control.plane.session.types import SessionRecord
 async def test_memory_transaction_rollback_reverts_state() -> None:
     config = ControlPlaneConfig(backend="memory")
     plane = await bootstrap_control_plane(config)
-    
+
     # 1. Start a transaction
     tx = await plane.begin()
     store = plane.session_store(tx)
-    
+
     session_id = "test-session"
     record = SessionRecord(
         session_id=session_id,
@@ -27,14 +28,14 @@ async def test_memory_transaction_rollback_reverts_state() -> None:
         created_at=time.time(),
         updated_at=time.time(),
     )
-    
+
     # 2. Add a record
     await store.upsert_session(record)
     assert await store.get_session(session_id) == record
-    
+
     # 3. Rollback
     await tx.rollback()
-    
+
     # 4. Verify state reverted
     new_tx = await plane.begin()
     new_store = plane.session_store(new_tx)
