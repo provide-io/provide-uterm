@@ -6,14 +6,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "provide-terminal>=0.4.0-server"
+name = "provide-terminal-server"
 dynamic = ["version"]
 description = "Server, bridge, tunnel, and gateway for provide-terminal"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = [
     "provide-terminal>=0.4.0",
-    "provide-terminal>=0.4.0-client>=0.4.0",
+    "provide-terminal-client>=0.4.0",
 ]
 
 [project.optional-dependencies]
