@@ -88,7 +88,7 @@ FEATURES: list[tuple[str, str, str]] = [
     (
         "scripts.demos.record_fleet",
         "fleet",
-        "Spawn 3 fleet shell workers, register with the fleet manager, broadcast a deploy command",
+        "Spawn 3 fleet shell workers, register with the External Management Tier, broadcast a deploy command",
     ),
 ]
 

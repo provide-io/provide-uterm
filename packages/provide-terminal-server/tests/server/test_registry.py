@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from provide.terminal.recording import LocalFileRecordingStore
 from provide.terminal.server.models import RecordingConfig, SessionDefinition
 from provide.terminal.server.registry import SessionRegistry, SessionValidationError
 
@@ -33,13 +34,17 @@ def _make_registry(
     sessions: list[SessionDefinition] | None = None,
     *,
     recording: RecordingConfig | None = None,
+    tunnel_tokens: dict[str, dict[str, object]] | None = None,
 ) -> SessionRegistry:
     hub = _make_hub()
+    recording_cfg = recording or RecordingConfig()
     return SessionRegistry(
         sessions or [],
         hub=hub,
         public_base_url="http://localhost:9999",
-        recording=recording or RecordingConfig(),
+        recording=recording_cfg,
+        recording_store=LocalFileRecordingStore(recording_cfg.directory),
+        tunnel_tokens=tunnel_tokens,
     )
 
 
@@ -150,6 +155,21 @@ class TestOnWorkerEmpty:
         # Should not raise even if session doesn't exist
         await reg._on_worker_empty("no-such-session")
 
+    async def test_ephemeral_session_delete_revokes_tunnel_tokens(self) -> None:
+        tunnel_tokens = {
+            "ephem": {
+                "worker_token": "worker-token",
+                "share_token": "share-token",
+                "control_token": "control-token",
+            }
+        }
+        reg = _make_registry([_session("ephem", ephemeral=True)], tunnel_tokens=tunnel_tokens)
+
+        await reg._on_worker_empty("ephem")
+
+        assert await reg.get_definition("ephem") is None
+        assert "ephem" not in tunnel_tokens
+
 
 # ---------------------------------------------------------------------------
 # create_session — validation errors
@@ -170,7 +190,7 @@ class TestCreateSessionValidation:
     async def test_invalid_visibility_raises(self) -> None:
         reg = _make_registry()
         with pytest.raises(SessionValidationError, match="visibility must be"):
-            await reg.create_session({"session_id": "valid-id", "visibility": "secret"})
+            await reg.create_session({"session_id": "valid-id", "visibility": "uterm-test-secret-32-byte-minimum-key"})
 
     async def test_duplicate_session_raises_value_error(self) -> None:
         reg = _make_registry([_session("existing")])
@@ -226,7 +246,7 @@ class TestUpdateSession:
     async def test_update_invalid_visibility_raises(self) -> None:
         reg = _make_registry([_session("s1")])
         with pytest.raises(SessionValidationError, match="visibility"):
-            await reg.update_session("s1", {"visibility": "secret"})
+            await reg.update_session("s1", {"visibility": "uterm-test-secret-32-byte-minimum-key"})
 
     async def test_update_auto_start(self) -> None:
         reg = _make_registry([_session("s1")])

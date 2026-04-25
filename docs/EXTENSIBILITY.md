@@ -1,6 +1,6 @@
 # Node Extensibility: Gating & Telemetry API
 
-This document describes the hooks available in the `provide-terminal` Node (Hub) and Supervisor (Agent Manager) for integration with an external management tier (e.g., Fleet Manager).
+This document describes the hooks available in the `provide-terminal` Node (Hub) and Supervisor (Agent Manager) for integration with an external management tier (e.g., External Management Tier).
 
 ## 1. Node Discovery (Heartbeat)
 

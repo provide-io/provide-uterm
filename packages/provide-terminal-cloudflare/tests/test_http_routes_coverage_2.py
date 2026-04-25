@@ -48,6 +48,7 @@ class _Runtime:
         self.worker_ws = worker_ws
         self.hijack = HijackCoordinator()
         self._role = role
+        self._subject: str | None = None
         self._browser_role = browser_role
         self.last_snapshot: dict | None = None
         self.last_analysis: str | None = None
@@ -60,6 +61,9 @@ class _Runtime:
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role
+
+    async def browser_subject_for_request(self, request: object) -> str | None:
+        return self._subject
 
     def persist_lease(self, session: object) -> None:
         pass
@@ -208,14 +212,20 @@ async def test_session_clear_no_worker() -> None:
     assert runtime.last_snapshot is None
 
 
-async def test_session_clear_operator_allowed() -> None:
-    runtime = _Runtime(role="operator")
+async def test_session_clear_owner_allowed() -> None:
+    runtime = _Runtime(role="viewer")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "alice"
     resp = await route_http(runtime, _Req("https://x/api/sessions/w/clear", method="POST"))
     assert resp.status == 200
 
 
-async def test_session_clear_viewer_forbidden() -> None:
-    runtime = _Runtime(role="viewer")
+async def test_session_clear_operator_non_owner_forbidden() -> None:
+    runtime = _Runtime(role="operator")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "bob"
     resp = await route_http(runtime, _Req("https://x/api/sessions/w/clear", method="POST"))
     assert resp.status == 403
 
@@ -241,16 +251,22 @@ async def test_session_analyze_returns_cached() -> None:
     assert _body(resp)["analysis"] == "analysis result"
 
 
-async def test_session_analyze_operator_allowed() -> None:
+async def test_session_analyze_owner_allowed() -> None:
     _mock_ws = object()
-    runtime = _Runtime(role="operator", worker_ws=_mock_ws)
+    runtime = _Runtime(role="viewer", worker_ws=_mock_ws)
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "alice"
     runtime.last_analysis = "result"
     resp = await route_http(runtime, _Req("https://x/api/sessions/w/analyze", method="POST"))
     assert resp.status == 200
 
 
-async def test_session_analyze_viewer_forbidden() -> None:
-    runtime = _Runtime(role="viewer")
+async def test_session_analyze_operator_non_owner_forbidden() -> None:
+    runtime = _Runtime(role="operator")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "bob"
     resp = await route_http(runtime, _Req("https://x/api/sessions/w/analyze", method="POST"))
     assert resp.status == 403
 

@@ -21,6 +21,7 @@ export interface HijackConfig {
   onResize?: (cols: number, rows: number) => void;
   /** Called for presence messages (presence_sync, presence_update, presence_leave, control_transfer). */
   onPresenceMessage?: (msg: Record<string, unknown>) => void;
+  approvalUxMode?: "modal" | "statusbar" | "auto";
 }
 
 /** Resolved config after defaults are merged in. */
@@ -37,6 +38,7 @@ export interface ResolvedConfig {
   role: string | undefined;
   onResize: ((cols: number, rows: number) => void) | undefined;
   onPresenceMessage: ((msg: Record<string, unknown>) => void) | undefined;
+  approvalUxMode: "modal" | "statusbar" | "auto";
 }
 
 export type HijackAction = "acquire" | "heartbeat" | "release" | "step";

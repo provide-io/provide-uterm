@@ -71,11 +71,21 @@ class TestHandleResumeTokenLogic:
         app.include_router(hub.create_router())
         return TestClient(app), hub
 
+    def _drain_until(self, ws, type_, timeout_s=1.0):
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            msg = ws.receive_json()
+            if msg["type"] == type_:
+                return msg
+            # Discard snapshots
+            if msg["type"] == "snapshot":
+                continue
+            raise AssertionError(f"Expected {type_}, got {msg['type']}")
+        raise TimeoutError(f"Timed out waiting for {type_}")
+
     def _read_initial(self, ws):
-        hello = ws.receive_json()
-        assert hello["type"] == "hello"
-        hs = ws.receive_json()
-        assert hs["type"] == "hijack_state"
+        hello = self._drain_until(ws, "hello")
+        hs = self._drain_until(ws, "hijack_state")
         return hello, hs
 
     def test_resume_token_key_is_token(self) -> None:
@@ -217,7 +227,7 @@ class TestHandleResumeTokenLogic:
             assert resumed["role"] == "viewer"
 
     def test_resume_old_token_revoked_after_resume(self) -> None:
-        """mutmut_24: store.revoke(old_token) must be called."""
+        """mutmut_24: asyncio.run(store.revoke()old_token) must be called."""
         store = InMemoryResumeStore()
         client, _ = self._make_app_client("admin", store)
         with connect_test_ws(client, "/ws/browser/w1/term") as ws:
@@ -228,10 +238,10 @@ class TestHandleResumeTokenLogic:
             self._read_initial(ws)
             ws.send_json({"type": "resume", "token": token})
             ws.receive_json()
-            assert store.get(token) is None
+            assert asyncio.run(store.get(token)) is None
 
     def test_resume_new_token_different_from_old(self) -> None:
-        """mutmut_55-61: new_token = store.create(...) must create a new token."""
+        """mutmut_55-61: new_token = asyncio.run(store.create(...)) must create a new token."""
         store = InMemoryResumeStore()
         client, _ = self._make_app_client("admin", store)
         with connect_test_ws(client, "/ws/browser/w1/term") as ws:
@@ -254,7 +264,7 @@ class TestHandleResumeTokenLogic:
             hello, _ = self._read_initial(ws)
             token = hello["resume_token"]
 
-        store.mark_hijack_owner(token, True)
+        asyncio.run(store.mark_hijack_owner(token, True))
 
         with connect_test_ws(client, "/ws/worker/w1/term") as worker:
             msg = worker.receive_json()
@@ -263,12 +273,10 @@ class TestHandleResumeTokenLogic:
 
             with connect_test_ws(client, "/ws/browser/w1/term") as ws:
                 self._read_initial(ws)
-                ws.receive_json()  # snapshot
                 ws.send_json({"type": "resume", "token": token})
                 worker.receive_json()  # pause
-                resumed = ws.receive_json()
+                resumed = self._drain_until(ws, "hello")
                 assert resumed["hijacked_by_me"] is True
-
     def test_resume_store_none_returns_unchanged_owned_hijack(self) -> None:
         """mutmut_1-2: no store → return owned_hijack unchanged."""
         hub = TermHub()
@@ -290,7 +298,7 @@ class TestHandleResumeTokenLogic:
             hello, _ = self._read_initial(ws)
             token = hello["resume_token"]
 
-        store.mark_hijack_owner(token, True)
+        asyncio.run(store.mark_hijack_owner(token, True))
 
         with connect_test_ws(client, "/ws/worker/w1/term") as worker:
             msg = worker.receive_json()
@@ -299,13 +307,12 @@ class TestHandleResumeTokenLogic:
 
             with connect_test_ws(client, "/ws/browser/w1/term") as ws:
                 self._read_initial(ws)
-                ws.receive_json()  # snapshot
                 ws.send_json({"type": "resume", "token": token})
+
                 worker.receive_json()  # pause
-                resumed = ws.receive_json()
+                resumed = self._drain_until(ws, "hello")
                 assert resumed["hijacked_by_me"] is True
-                hs = ws.receive_json()
-                assert hs["type"] == "hijack_state"
+                hs = self._drain_until(ws, "hijack_state")
                 assert hs["owner"] == "me"
 
 
@@ -361,8 +368,8 @@ class TestHandleResumeBranchCoverage:
         hub = _make_hub(resume_store=store)
         ws = _make_ws()
         await _register(hub, "w1", ws, "admin")
-        token = store.create("w1", "admin", 300)
-        store.mark_hijack_owner(token, True)
+        token = await store.create("w1", "admin", 300)
+        await store.mark_hijack_owner(token, True)
 
         result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
         assert result is False
@@ -379,8 +386,8 @@ class TestHandleResumeBranchCoverage:
         async with hub._lock:
             st.hijack_owner = other_ws
             st.hijack_owner_expires_at = time.monotonic() + 60
-        token = store.create("w1", "admin", 300)
-        store.mark_hijack_owner(token, True)
+        token = await store.create("w1", "admin", 300)
+        await store.mark_hijack_owner(token, True)
 
         result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
         assert result is False

@@ -38,7 +38,18 @@ def _merged_config_mapping(data: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Extra inputs are not permitted: {sorted(unknown_sections)!r}")
     base = default_server_config().model_dump(mode="python")
     merged = dict(base)
-    for section in ("server", "auth", "ui", "recording", "profiles", "security", "tunnel", "pam", "governance"):
+    for section in (
+        "server",
+        "auth",
+        "control_plane",
+        "ui",
+        "recording",
+        "profiles",
+        "security",
+        "tunnel",
+        "pam",
+        "governance",
+    ):
         if section in data:
             if not isinstance(data[section], dict):
                 raise ValueError(f"[{section}] must be a table, got {type(data[section]).__name__!r}")

@@ -152,6 +152,7 @@ class TestRegistryRuntimeStop:
             hub=mock_hub,
             public_base_url="http://localhost:9999",
             recording=RecordingConfig(),
+            recording_store=MagicMock(),
         )
 
         # Install a mock runtime so we can verify stop() is called

@@ -194,6 +194,39 @@ async def test_default_fetch_spa_routes() -> None:
         assert expected_kind in str(resp.body), f"{path} missing {expected_kind}"
 
 
+async def test_default_fetch_share_page_keeps_token_out_of_bootstrap() -> None:
+    """Share page bootstrap must not expose the share token to JS."""
+    import json as _json
+
+    kv = SimpleNamespace(
+        get=AsyncMock(
+            return_value=_json.dumps(
+                {
+                    "share_token": "shared-tok",
+                    "control_token": "ctrl-tok",
+                    "expires_at": __import__("time").time() + 3600,
+                }
+            )
+        )
+    )
+    d = _make_default({"SESSION_REGISTRY": kv})
+    req = SimpleNamespace(
+        url="https://x/app/session/test-123?token=shared-tok",
+        headers=SimpleNamespace(get=lambda *_a, **_k: None),
+    )
+    resp = await d.fetch(req)
+    assert resp.status == 200
+    body = str(resp.body)
+    assert "shared-tok" not in body
+    bootstrap = _json.loads(body.split("id='app-bootstrap'>")[1].split("</script>")[0])  # type: ignore[union-attr]
+    assert bootstrap["page_kind"] == "session"
+    assert bootstrap["session_id"] == "test-123"
+    assert "shared-tok" not in _json.dumps(bootstrap)
+    cookie = str(resp.headers.get("set-cookie") or resp.headers.get("Set-Cookie") or "")
+    assert "uterm_tunnel_test-123=shared-tok" in cookie
+    assert "HttpOnly" in cookie
+
+
 async def test_default_fetch_share_route() -> None:
     """Shared tunnel links under /s/{id} redirect to /app/session/{id}."""
     kv = SimpleNamespace(get=AsyncMock(return_value=json.dumps({"share_token": "abc", "control_token": "def"})))
@@ -248,7 +281,7 @@ import jwt as _jwt
 
 def _make_token(sub: str = "user") -> str:
     now = int(time.time())
-    return _jwt.encode({"sub": sub, "exp": now + 600}, "test-secret", algorithm="HS256")
+    return _jwt.encode({"sub": sub, "exp": now + 600}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
 
 
 def _make_jwt_default() -> Default:
@@ -257,7 +290,7 @@ def _make_jwt_default() -> Default:
         SimpleNamespace(
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
-            JWT_PUBLIC_KEY_PEM="test-secret",
+            JWT_PUBLIC_KEY_PEM="uterm-test-secret-32-byte-minimum-key",
             WORKER_BEARER_TOKEN="test-worker-token",
         )
     )

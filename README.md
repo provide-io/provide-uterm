@@ -259,6 +259,8 @@ graph LR
 
 **FastAPI** — full control, named sessions, auth, recording, policy. Deploy anywhere Python runs.
 
+**Durability note** — the standalone FastAPI server keeps live control-plane state in process memory only. Tunnel tokens/share state, approvals, resume state, webhook registrations, and live session arbitration state are not HA or persistent across restart/failover. Run a single active instance if you use this backend, or choose the Cloudflare Workers/Durable Objects deployment when you need durable multi-node behavior.
+
 **Cloudflare Workers** — edge deployment on [Durable Objects](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-cloudflare) with CF Access JWT, KV session registry, WebSocket hibernation.
 
 **Docker** — both backends locally:
@@ -277,7 +279,7 @@ docker compose -f docker/docker-compose.yml up
 | `provide-terminal` | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
 | `provide-terminal-server` | Server: bridge hub, FastAPI, CLI, tunnel, gateway | ~2800 |
 | `provide-terminal-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
-| `provide-terminal-platform` | Platform: PTY, PAM, capture, fleet manager | ~780 |
+| `provide-terminal-platform` | Platform: PTY, PAM, capture, External Management Tier | ~780 |
 | `provide-terminal-cloudflare` | CF Worker + Durable Object | ~890 |
 | `provide-terminal-frontend` | Browser UI (TypeScript, xterm.js) | — |
 | `provide-terminal-app` | App shell | — |

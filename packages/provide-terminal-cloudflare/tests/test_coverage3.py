@@ -144,10 +144,10 @@ async def test_decode_jwt_unexpected_signing_key_error_wrapped() -> None:
     """Non-JwtValidationError from _resolve_signing_key is wrapped."""
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
     )
-    token = jwt.encode({"sub": "u1", "exp": int(time.time()) + 600}, "secret", algorithm="HS256")
+    token = jwt.encode({"sub": "u1", "exp": int(time.time()) + 600}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
 
     with (
         patch(
@@ -178,7 +178,7 @@ async def test_jwks_no_matching_key_raises() -> None:
     # Token with a kid that won't match
     token = jwt.encode(
         {"sub": "u1", "exp": int(time.time()) + 600},
-        "dummy-key",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
         headers={"kid": "missing-kid"},
     )

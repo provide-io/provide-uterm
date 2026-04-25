@@ -12,21 +12,21 @@ async def test_decode_jwt_hs256_ok() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "roles": ["operator"], "iat": now, "nbf": now, "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     principal = await decode_jwt(
         token,
-        JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",), issuer=None, audience=None),
+        JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",), issuer=None, audience=None),
     )
     assert principal.subject_id == "u1"
     assert resolve_role(principal) == "operator"
 
 
 async def test_decode_jwt_missing_sub() -> None:
-    token = jwt.encode({"roles": ["admin"]}, "secret", algorithm="HS256")
+    token = jwt.encode({"roles": ["admin"]}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
     with pytest.raises(JwtValidationError):
-        await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",)))
+        await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",)))
 
 
 async def test_cf_access_style_jwt_no_roles_defaults_to_viewer() -> None:
@@ -42,12 +42,12 @@ async def test_cf_access_style_jwt_no_roles_defaults_to_viewer() -> None:
             "exp": now + 600,
             "email": "user@example.com",
         },
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         issuer=None,
         audience=None,
@@ -68,12 +68,12 @@ async def test_cf_access_style_jwt_default_role_operator() -> None:
             "iat": now,
             "exp": now + 600,
         },
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         issuer=None,
         audience=None,
@@ -88,12 +88,12 @@ async def test_cf_access_default_role_not_applied_when_roles_present() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "roles": ["admin"], "iat": now, "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         jwt_default_role="viewer",
     )
@@ -120,12 +120,12 @@ async def test_role_map_translates_group_names() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "groups": ["engineering", "devs"], "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         jwt_roles_claim="groups",
         jwt_role_map={"engineering": "admin", "devs": "operator"},
@@ -139,12 +139,12 @@ async def test_role_map_unknown_groups_pass_through() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "groups": ["unknown-group"], "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         jwt_roles_claim="groups",
         jwt_role_map={"engineering": "admin"},
@@ -159,12 +159,12 @@ async def test_role_map_partial_match_picks_highest() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "groups": ["ops", "everyone"], "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     config = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         jwt_roles_claim="groups",
         jwt_role_map={"ops": "operator", "everyone": "viewer"},

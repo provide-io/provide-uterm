@@ -6,9 +6,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "provide-terminal>=0.4.0-platform"
+name = "provide-terminal-platform"
 dynamic = ["version"]
-description = "Platform-specific deployment targets (PTY, PAM, fleet manager) for provide-terminal">=0.4.0
+description = "Platform-specific deployment targets (PTY, PAM, External Management Tier) for provide-terminal"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = ["provide-terminal>=0.4.0"]
@@ -63,8 +63,8 @@ addopts = [
     "--cov-fail-under=100",
 ]
 markers = [
-    "requires_pam: requires /etc/pam.d/provide-terminal>=0.4.0 service config (skip in CI)",
-    "requires_pam_auth: requires /etc/pam.d/provide-terminal>=0.4.0 with working unix_chkpwd (skipped in Docker)",
+    "requires_pam: requires /etc/pam.d/provide-terminal service config (skip in CI)",
+    "requires_pam_auth: requires /etc/pam.d/provide-terminal with working unix_chkpwd (skipped in Docker)",
     "requires_root: requires root or CAP_SETUID to switch users",
 ]
 
@@ -76,7 +76,7 @@ partial_branches = [
 ]
 
 [tool.ruff]
-target-version = "0.4.0"
+target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
@@ -91,7 +91,10 @@ ignore = ["E501", "S104", "S112", "S311", "S603", "S604", "S108", "SIM105", "ARG
 "tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
-python_version = "0.4.0"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.uv.sources]
+provide-terminal = { workspace = true }

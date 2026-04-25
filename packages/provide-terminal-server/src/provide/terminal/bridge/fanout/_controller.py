@@ -16,6 +16,7 @@ from provide.terminal.bridge.fanout._collector import OutputCollector
 from provide.terminal.bridge.fanout._divergence import compute_divergence
 from provide.terminal.bridge.fanout._models import FanOutResult, SessionFanOutResult
 from provide.terminal.bridge.fanout._store import InMemoryFanOutStore
+from provide.terminal.bridge.hub.ext import FanOutPolicyGate, NoOpPolicyGate, PolicyDecision
 
 if TYPE_CHECKING:
     from provide.terminal.bridge.fanout._models import FanOutGroup
@@ -32,10 +33,32 @@ class FanOutController:
         *,
         store: FanOutStore | None = None,
         max_group_size: int = 50,
+        fanout_policy_gate: FanOutPolicyGate | None = None,
     ) -> None:
         self._hub = hub
         self._store: FanOutStore = store if store is not None else InMemoryFanOutStore()
         self._max_group_size = max_group_size
+        self._fanout_policy_gate = fanout_policy_gate
+        self._pending_approvals: dict[str, dict[str, Any]] = {}
+
+        # Subscribe to approval expiration to prune pending state
+        hub_approvals = getattr(self._hub, "_approval_store", None)
+        if hub_approvals:
+            hub_approvals.on_expired = self._on_approval_expired
+
+    def _on_approval_expired(self, request_id: str) -> None:
+        """Prune local state when a fan-out approval times out in the Hub."""
+        self._pending_approvals.pop(request_id, None)
+
+    def _get_fanout_policy_gate(self) -> FanOutPolicyGate:
+        if self._fanout_policy_gate is not None:
+            return self._fanout_policy_gate
+
+        class NoOpFanOutGate:
+            async def intercept_fanout(self, command: str, context: Any, group_id: str) -> PolicyDecision:
+                return PolicyDecision(action="allow")
+
+        return NoOpFanOutGate()
 
     # -- Group CRUD --------------------------------------------------------
 
@@ -104,12 +127,115 @@ class FanOutController:
                 failed_sessions=[],
             )
 
+        # 1. Check Policy for Fan-Out
+        from provide.terminal.bridge.hub.ext import PolicyContext
+        from provide.terminal.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+
+        # We don't have a WebSocket here necessarily (could be REST), 
+        # so we pass a dummy or use the principal for context.
+        context = PolicyContext(
+            worker_id=f"group:{group_id}",
+            client_id=principal,
+            role="admin",  # Defaulting to admin for fan-out senders for now
+            action="fanout_send",
+            metadata={"is_fanout": True, "group_id": group_id},
+        )
+        
+        gate = self._get_fanout_policy_gate()
+        decision = await gate.intercept_fanout(data, context, group_id)
+
+        if decision.action == "deny":
+            return FanOutResult(
+                group_id=group_id,
+                send_id=uuid.uuid4().hex,
+                command=data,
+                sent_at=time.time(),
+                results=[],
+                divergent_sessions=[],
+                failed_sessions=[],
+                error=decision.reason or "Command blocked by fan-out policy",
+            )
+
+        if decision.action == "hold":
+            request_id = uuid.uuid4().hex
+            # Track pending approval
+            self._pending_approvals[request_id] = {
+                "group_id": group_id,
+                "command": data,
+                "quiesce_ms": quiesce_ms,
+                "max_response_ms": max_response_ms,
+                "principal": principal,
+            }
+            
+            # Create Approval Request in Hub
+            approval = ApprovalRequest(
+                id=request_id,
+                worker_id=f"group:{group_id}",
+                submitter_id=principal,
+                command=data,
+                status=ApprovalStatus.PENDING,
+                created_at=time.time(),
+                expires_at=time.time() + 300,  # 5 min default
+                group_id=group_id,
+                is_fanout=True,
+            )
+            # Use getattr to avoid hard circular dependency if hub isn't fully typed here
+            hub_approvals = getattr(self._hub, "_approval_store", None)
+            if hub_approvals:
+                hub_approvals.add(approval)
+            
+            # 1.3 Audit the hold event
+            await self._hub.append_event(f"group:{group_id}", "terminal.fanout.hold", {
+                "group_id": group_id,
+                "command": data[:500],
+                "request_id": request_id,
+                "principal": principal,
+            })
+
+            return FanOutResult(
+                group_id=group_id,
+                send_id=request_id,
+                command=data,
+                sent_at=time.time(),
+                results=[],
+                divergent_sessions=[],
+                failed_sessions=[],
+                approval_required=True,
+                approval_id=request_id,
+            )
+
+        # 2. Standard execution
         q_ms = quiesce_ms if quiesce_ms is not None else group.quiesce_ms
         m_ms = max_response_ms if max_response_ms is not None else group.max_response_ms
 
         if group.mode == "sequential":
             return await self._send_sequential(group, data, q_ms, m_ms)
         return await self._send_parallel(group, data, q_ms, m_ms)
+
+    async def release_approved_command(self, request_id: str) -> FanOutResult | None:
+        """Execute a previously held fan-out command after approval."""
+        pending = self._pending_approvals.pop(request_id, None)
+        if pending is None:
+            return None
+
+        group_id = pending["group_id"]
+        command = pending["command"]
+        principal = pending["principal"]
+        q_ms = pending["quiesce_ms"]
+        m_ms = pending["max_response_ms"]
+
+        # Note: This executes the send *again* but now with approval bypass logic
+        # For simplicity, we just call the underlying send helpers directly.
+        group = await self._authorized_group(group_id, principal)
+        if group is None:
+            return None
+
+        q_ms = q_ms if q_ms is not None else group.quiesce_ms
+        m_ms = m_ms if m_ms is not None else group.max_response_ms
+
+        if group.mode == "sequential":
+            return await self._send_sequential(group, command, q_ms, m_ms)
+        return await self._send_parallel(group, command, q_ms, m_ms)
 
     # -- Parallel ----------------------------------------------------------
 

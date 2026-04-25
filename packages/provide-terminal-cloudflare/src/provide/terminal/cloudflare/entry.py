@@ -197,6 +197,46 @@ def _spa_response(page_kind: str, **extra_bootstrap: object) -> Response:
     return Response(html, status=200, headers={"content-type": "text/html; charset=utf-8"})
 
 
+def _share_token_cookie_header(request: object, tunnel_id: str) -> str | None:
+    """Return an HttpOnly cookie header for a valid share token, if present."""
+    token = None
+    try:
+        query = parse_qs(urlparse(str(getattr(request, "url", ""))).query)
+        token = (query.get("token", []) + query.get("access_token", []) or [None])[0]
+    except Exception:  # noqa: S110
+        token = None
+    if token is None:
+        try:
+            from http.cookies import SimpleCookie
+
+            cookie_header = str(
+                getattr(request, "headers", {}).get("cookie") or getattr(request, "headers", {}).get("Cookie") or ""
+            )
+            cookies = SimpleCookie(cookie_header)
+            cookie_key = f"uterm_tunnel_{tunnel_id}"
+            if cookie_key in cookies:
+                token = cookies[cookie_key].value
+        except Exception:  # noqa: S110
+            token = None
+    if token is None:
+        return None
+    secure = str(urlparse(str(getattr(request, "url", ""))).scheme).lower() == "https"
+    parts = [f"uterm_tunnel_{tunnel_id}={token}", "Path=/", "HttpOnly", "SameSite=Lax"]
+    if secure:
+        parts.append("Secure")
+    return "; ".join(parts)
+
+
+def _attach_share_token_cookie(response: Response, request: object, tunnel_id: str) -> Response:
+    """Stamp the share token as an HttpOnly cookie so it stays out of HTML."""
+    cookie = _share_token_cookie_header(request, tunnel_id)
+    if cookie is not None:
+        headers = dict(response.headers or {})
+        headers["Set-Cookie"] = cookie
+        response.headers = headers
+    return response
+
+
 def _has_cf_service_token(request: object) -> bool:
     """Check if request carries CF Access service token headers.
 
@@ -452,13 +492,13 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
             # Use the URL-requested page kind (inspect, replay, session, operator)
             # rather than the token-derived kind from resolve_share_context.
             page_kind = spa[0]
-            return _spa_response(
+            response = _spa_response(
                 page_kind,
                 session_id=str(spa[1]["session_id"]),
                 surface="operator" if share_role == "operator" else "user",
                 share_role=share_role,
-                share_token=(parse_qs(urlparse(str(request.url)).query).get("token", [None]) or [None])[0],
             )
+            return _attach_share_token_cookie(response, request, str(spa[1]["session_id"]))
 
     # Authenticated API routes.
     handler = _match_api_route(path, request)

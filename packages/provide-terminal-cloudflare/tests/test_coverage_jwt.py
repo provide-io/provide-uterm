@@ -348,10 +348,10 @@ async def test_decode_jwt_service_token_common_name_fallback() -> None:
     now = int(time.time())
     token = _jwt.encode(
         {"sub": "", "common_name": "my-service-client-id", "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    config = JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",))
+    config = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
     principal = await decode_jwt(token, config)
     assert principal.subject_id == "my-service-client-id"
     assert principal.roles == ("admin",)
@@ -364,10 +364,10 @@ async def test_decode_jwt_empty_sub_no_common_name_raises() -> None:
     now = int(time.time())
     token = _jwt.encode(
         {"sub": "", "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    config = JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",))
+    config = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
     with pytest.raises(JwtValidationError, match="missing sub"):
         await decode_jwt(token, config)
 

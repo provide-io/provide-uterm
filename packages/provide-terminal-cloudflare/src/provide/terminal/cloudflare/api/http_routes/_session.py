@@ -27,6 +27,21 @@ if TYPE_CHECKING:
     from provide.terminal.cloudflare.contracts import RuntimeProtocol
 
 
+async def _can_mutate_session(runtime: RuntimeProtocol, request: object) -> bool:
+    """Return True when the caller may mutate the current session.
+
+    Cloudflare browser roles are broader than the FastAPI mutation policy, so
+    we require either an admin caller or the session owner. This keeps
+    operator visibility useful for reads without turning it into a blanket
+    mutation grant.
+    """
+    if await runtime.browser_role_for_request(request) == "admin":
+        return True
+    subject = await runtime.browser_subject_for_request(request)
+    owner = runtime.meta.get("owner")
+    return subject is not None and subject == owner
+
+
 async def route_session(
     runtime: RuntimeProtocol,
     request: object,
@@ -36,6 +51,8 @@ async def route_session(
     session_match: re.Match[str],
 ) -> object:
     """Handle /api/sessions/{id}[/sub] routes."""
+    if getattr(runtime, "_deleted_at", None) is not None:
+        return json_response({"error": "not_found", "path": path}, status=404)
     session_id, sub = session_match.group(1), (session_match.group(2) or "")
     if session_id != runtime.worker_id:
         return json_response({"error": "not_found", "path": path}, status=404)
@@ -92,18 +109,16 @@ async def route_session(
         return json_response({"ok": True, "input_mode": mode, "worker_id": runtime.worker_id})
 
     if sub == "clear" and method == "POST":
-        role = await runtime.browser_role_for_request(request)
-        if role not in {"operator", "admin"}:
-            return json_response({"error": "operator or admin role required"}, status=403)
+        if not await _can_mutate_session(runtime, request):
+            return json_response({"error": "owner or admin role required"}, status=403)
         runtime.last_snapshot = None
         if runtime.worker_ws is not None:
             await runtime.send_ws(runtime.worker_ws, {"type": "snapshot_req", "ts": time.monotonic()})
         return json_response(_session_status_item(runtime))
 
     if sub == "analyze" and method == "POST":
-        role = await runtime.browser_role_for_request(request)
-        if role not in {"operator", "admin"}:
-            return json_response({"error": "operator or admin role required"}, status=403)
+        if not await _can_mutate_session(runtime, request):
+            return json_response({"error": "owner or admin role required"}, status=403)
         ok = await runtime.push_worker_control("analyze", owner="", lease_s=0)
         if not ok:
             return json_response({"error": "no_worker"}, status=409)
@@ -111,20 +126,29 @@ async def route_session(
         return json_response({"ok": True, "analysis": analysis, "worker_id": runtime.worker_id})
 
     if sub == "" and method == "DELETE":
-        role = await runtime.browser_role_for_request(request)
-        if role not in {"operator", "admin"}:
-            return json_response({"error": "operator or admin role required"}, status=403)
-        # Close any active worker connection.
+        if not await _can_mutate_session(runtime, request):
+            return json_response({"error": "owner or admin role required"}, status=403)
+        tombstone_at = time.time()
+        runtime.lifecycle_state = "deleted"
+        runtime._deleted_at = tombstone_at  # type: ignore[attr-defined]
+        with contextlib.suppress(Exception):
+            runtime.store.mark_deleted(runtime.worker_id)
+        # Close any active socket connection so the deleted session cannot keep
+        # serving reads or bidirectional traffic.
+        sockets: list[object] = []
         worker_ws = runtime.worker_ws
         if worker_ws is not None:
+            sockets.append(worker_ws)
+        sockets.extend(getattr(runtime, "browser_sockets", {}).values())
+        sockets.extend(getattr(runtime, "raw_sockets", {}).values())
+        for sock in sockets:
             with contextlib.suppress(Exception):
-                worker_ws.close(1001, "session deleted")
+                sock.close(1001, "session deleted")
         return json_response({"ok": True, "session_id": runtime.worker_id, "deleted": True})
 
     if sub == "restart" and method == "POST":
-        role = await runtime.browser_role_for_request(request)
-        if role not in {"operator", "admin"}:
-            return json_response({"error": "operator or admin role required"}, status=403)
+        if not await _can_mutate_session(runtime, request):
+            return json_response({"error": "owner or admin role required"}, status=403)
         # Clear in-memory terminal state so a fresh worker starts clean.
         runtime.last_snapshot = None
         # If a worker is connected, close its socket — the Python bridge will

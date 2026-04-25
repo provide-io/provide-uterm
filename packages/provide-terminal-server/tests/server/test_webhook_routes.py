@@ -114,6 +114,17 @@ def test_register_webhook_403_viewer_private_session() -> None:
     assert resp.status_code == 403
 
 
+def test_register_webhook_requires_mutation_capability() -> None:
+    client = _make_app()
+    with client:
+        resp = client.post(
+            "/api/sessions/s1/webhooks",
+            json={"url": "https://example.com/hook"},
+            headers=VIEWER_H,
+        )
+    assert resp.status_code == 403
+
+
 def test_register_webhook_422_missing_url() -> None:
     client = _make_app()
     with client:
@@ -199,6 +210,13 @@ def test_list_webhooks_403_insufficient_privileges() -> None:
     assert resp.status_code == 403
 
 
+def test_list_webhooks_requires_mutation_capability() -> None:
+    client = _make_app()
+    with client:
+        resp = client.get("/api/sessions/s1/webhooks", headers=VIEWER_H)
+    assert resp.status_code == 403
+
+
 # ---------------------------------------------------------------------------
 # DELETE /api/sessions/{session_id}/webhooks/{webhook_id}
 # ---------------------------------------------------------------------------
@@ -278,4 +296,17 @@ def test_unregister_webhook_403_insufficient_privileges() -> None:
     app = create_server_app(cfg)
     with TestClient(app) as client:
         resp = client.delete("/api/sessions/private/webhooks/abc", headers=VIEWER_H)
+    assert resp.status_code == 403
+
+
+def test_unregister_webhook_requires_mutation_capability() -> None:
+    client = _make_app()
+    with client:
+        reg = client.post(
+            "/api/sessions/s1/webhooks",
+            json={"url": "https://example.com/hook"},
+            headers=ADMIN_H,
+        )
+        webhook_id = reg.json()["webhook_id"]
+        resp = client.delete(f"/api/sessions/s1/webhooks/{webhook_id}", headers=VIEWER_H)
     assert resp.status_code == 403

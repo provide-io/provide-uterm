@@ -62,7 +62,7 @@ class TestExamplePageSingleBrowser:
         page.get_by_role("button", name="Hijack").click()
         expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
 
-        page.locator("[id$='-inputfield']").fill("hello from playwright")
+        page.locator("[id$='-inputfield']").fill("hello from playwright\n")
         page.get_by_role("button", name="Send").click()
 
         state = _wait_for_example_state(
@@ -98,13 +98,13 @@ class TestExamplePageSingleBrowser:
         expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
 
         for command in ("/help", "/mode open", "/mode hijack"):
-            page.locator("[id$='-inputfield']").fill(command)
+            page.locator("[id$='-inputfield']").fill(command + "\n")
             page.get_by_role("button", name="Send").click()
 
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
         expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
-        page.locator("[id$='-inputfield']").fill("/clear")
+        page.locator("[id$='-inputfield']").fill("/clear\n")
         page.get_by_role("button", name="Send").click()
 
         state = _wait_for_example_state(
@@ -157,9 +157,9 @@ class TestExamplePageTwoBrowsers:
             expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
             expect(page2.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
 
-            page.locator("[id$='-inputfield']").fill("from first browser")
+            page.locator("[id$='-inputfield']").fill("from first browser\n")
             page.get_by_role("button", name="Send").click()
-            page2.locator("[id$='-inputfield']").fill("from second browser")
+            page2.locator("[id$='-inputfield']").fill("from second browser\n")
             page2.get_by_role("button", name="Send").click()
 
             state = _wait_for_example_state(

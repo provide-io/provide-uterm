@@ -23,7 +23,10 @@ from provide.terminal.bridge.frames import (
     make_hello_frame,
     make_pong_frame,
 )
-from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED
+from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED, PolicyDecision
+from provide.terminal.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+from provide.terminal.bridge.hub.semantics import CommandSplitter
+import uuid
 from provide.terminal.bridge.models import VALID_ROLES
 from provide.terminal.control_channel import encode_control
 
@@ -207,26 +210,75 @@ async def _handle_input(
     msg_b: dict[str, Any],
 ) -> None:
     """Process an input message from the browser."""
+    if ws in hub._paused_browsers:
+        return
+
     can_send = await hub.prepare_browser_input(worker_id, ws)
     if not can_send:
         return
 
     data = str(cast("BrowserInputFrame", msg_b).get("data", ""))
-    if data:
-        # Policy check before processing input
-        context = await hub.prepare_policy_context(ws, worker_id, action="input")
-        if not await hub._policy_gate.intercept_input(data, context):
-            logger.debug("input_blocked_by_policy worker_id=%s", worker_id)
+    if not data:
+        return
+
+    if len(data) > hub.max_input_chars:
+        await ws.send_text(encode_control(make_error_frame("Input too long.")))
+        return
+
+    # Buffer and check for command
+    command = hub._buffer_and_get_command(ws, data)
+    if command is None:
+        # Still buffering
+        return
+
+    # Semantic splitting
+    splitter = CommandSplitter()
+    parts = splitter.split(command)
+
+    # Policy check on each part of the split command
+    context = await hub.prepare_policy_context(ws, worker_id, action="input")
+
+    for part in parts:
+        decision = await hub._policy_gate.intercept_input(part, context)
+
+        if decision.action == "hold":
+            # Create approval request for the FULL command
+            request_id = decision.request_id or str(uuid.uuid4())
+            request = ApprovalRequest(
+                id=request_id,
+                worker_id=worker_id,
+                submitter_id=str(context.client_id),
+                command=command,
+                status=ApprovalStatus.PENDING,
+                created_at=time.time(),
+                expires_at=time.time() + decision.timeout_s,
+            )
+            hub._approval_store.add(request)
+            hub._paused_browsers.add(ws)
+
+            # Broadcast to all browsers in this session
+            from provide.terminal.bridge.hub.core import _encode_browser_frame
+            st = await hub._get(worker_id)
+            for b_ws in list(st.browsers.keys()):
+                await b_ws.send_text(_encode_browser_frame({
+                    "type": "approval_pending",
+                    "command": command,
+                    "request_id": request_id,
+                    "expires_at": request.expires_at
+                }))
             return
 
-    if data and len(data) > hub.max_input_chars:
-        await ws.send_text(encode_control(make_error_frame("Input too long.")))
-    elif data:
-        ok = await hub.send_worker(worker_id, {"type": "input", "data": data, "ts": time.time()})
-        if not ok:
-            await ws.send_text(encode_control(make_error_frame("Worker connection lost.")))
-        else:
-            await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]})
+        if decision.action != "allow":
+            logger.debug("input_blocked_by_policy worker_id=%s action=%s reason=%s part=%s", worker_id, decision.action, decision.reason, part)
+            await ws.send_text(encode_control(make_error_frame(f"Command part blocked by policy: {part}")))
+            return
+
+    ok = await hub.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()}, source=ws)
+
+    if not ok:
+        await ws.send_text(encode_control(make_error_frame("Worker connection lost.")))
+    else:
+        await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": command[:120]})
 
 
 async def _resolve_resumed_role(
@@ -283,10 +335,11 @@ async def _handle_resume(
         return owned_hijack
 
     old_token = msg_b.get("token", "")
-    if not old_token:
+    if not isinstance(old_token, str) or not old_token:
+        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_malformed")
         return owned_hijack
 
-    session = store.get(old_token)
+    session = await store.get(old_token)
     if session is None or session.worker_id != worker_id:
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
         return owned_hijack
@@ -296,12 +349,12 @@ async def _handle_resume(
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="callback_rejected")
         return owned_hijack
 
-    store.revoke(old_token)
+    await store.revoke(old_token)
 
     new_role, can_hijack = await _resolve_resumed_role(hub, ws, worker_id, role, session.role)
     owned_hijack, reclaimed_hijack = await _try_reclaim_hijack(hub, ws, worker_id, session, can_hijack)
 
-    new_token = store.create(worker_id, new_role, hub._resume_ttl_s)
+    new_token = await store.create(worker_id, new_role, hub._resume_ttl_s)
     hub._ws_to_resume_token[ws] = new_token
 
     _resumed_state = await hub.register_browser_state_snapshot(worker_id, ws)

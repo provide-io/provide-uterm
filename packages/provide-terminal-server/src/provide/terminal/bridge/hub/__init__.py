@@ -17,9 +17,11 @@ from provide.terminal.bridge.hub.event_bus import EventBus
 from provide.terminal.bridge.hub.ext import (
     NoOpPolicyGate,
     PolicyContext,
+    PolicyDecision,
     PolicyGate,
 )
 from provide.terminal.bridge.hub.resume import (
+    ControlPlaneResumeStore,
     InMemoryResumeStore,
     ResumeSession,
     ResumeTokenStore,
@@ -72,7 +74,7 @@ class TermHubProtocol(Protocol):
     async def resolve_role_for_browser(self, ws: WebSocket, worker_id: str) -> str: ...
 
     # -- Messaging & broadcast -------------------------------------------------
-    async def send_worker(self, worker_id: str, msg: dict[str, Any]) -> bool: ...
+    async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool: ...
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None: ...
     async def broadcast_hijack_state(self, worker_id: str) -> None: ...
     async def hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> dict[str, Any]: ...
@@ -103,6 +105,7 @@ __all__ = [
     "BrowserRoleResolver",
     "EventBus",
     "HijackStateCallback",
+    "ControlPlaneResumeStore",
     "InMemoryResumeStore",
     "NoOpPolicyGate",
     "PolicyContext",

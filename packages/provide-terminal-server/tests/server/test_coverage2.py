@@ -256,7 +256,7 @@ class TestPatchValidationError:
             "/api/sessions",
             json={"session_id": "patch-vis", "connector_type": "shell", "owner": "local-dev"},
         )
-        r = app_client.patch("/api/sessions/patch-vis", json={"visibility": "secret"})
+        r = app_client.patch("/api/sessions/patch-vis", json={"visibility": "uterm-test-secret-32-byte-minimum-key"})
         assert r.status_code == 422
 
 

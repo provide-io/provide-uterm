@@ -432,3 +432,13 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         fspath = str(item.fspath)
         if any(pat in fspath for pat in _MUTANT_FILE_PATTERNS):
             item.add_marker(mutant_mark, append=False)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Initialize the server environment for tests."""
+    from provide.terminal.server import create_server_app, default_server_config
+
+    # Ensure default connectors are registered so registry-aware tests (e.g.
+    # test_connectors_websocket.py) can find them.
+    # Note: create_server_app calls _register_builtin_connectors(config).
+    _ = create_server_app(default_server_config(), api_only=True)

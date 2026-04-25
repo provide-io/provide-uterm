@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "provide-terminal>=0.4.0-server"
 dynamic = ["version"]
-description = "Server, bridge, tunnel, and gateway for provide-terminal">=0.4.0
+description = "Server, bridge, tunnel, and gateway for provide-terminal"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = [

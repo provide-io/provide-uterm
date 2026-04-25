@@ -69,7 +69,7 @@ def _read_worker_connected(browser: Any) -> dict[str, Any]:
 def test_worker_auth_success_with_valid_token() -> None:
     """When worker_token is configured and the correct Bearer token is
     provided, the connection proceeds normally (branch 85->92)."""
-    app, hub = _make_app(worker_token="test-secret")
+    app, hub = _make_app(worker_token="uterm-test-secret-32-byte-minimum-key")
 
     with (
         TestClient(app) as client,

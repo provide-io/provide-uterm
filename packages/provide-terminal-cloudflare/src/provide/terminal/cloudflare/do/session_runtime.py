@@ -62,6 +62,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
         self.lifecycle_state: str = "stopped"
+        self._deleted_at: float | None = None
         self.meta: dict[str, Any] = {
             "display_name": self.worker_id,
             "connector_type": "unknown",
@@ -299,6 +300,12 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
     async def fetch(self, request: object) -> Response:
         # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
         self._lazy_init_worker_id(request)
+        if self._deleted_at is not None:
+            return Response(
+                json.dumps({"error": "not_found", "path": urlparse(str(request.url)).path}, ensure_ascii=True),
+                status=404,
+                headers={"content-type": "application/json"},
+            )
         await self._ensure_meta()
 
         # Parse URL once — reused for worker WS check and socket role routing.
@@ -446,6 +453,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         return await route_http(self, request)
 
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
+        if self._deleted_at is not None:
+            with contextlib.suppress(Exception):
+                ws.close(1001, "session deleted")
+            return
         ws_id = self.ws_key(ws)
         role = self._socket_role(ws)
         # Check before _register_socket so we can detect fetch()-initialized browser sockets.
@@ -507,6 +518,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             await on_browser_connected(self)
 
     async def webSocketMessage(self, ws: CFWebSocket, message: Any) -> None:  # noqa: N802
+        if self._deleted_at is not None:
+            with contextlib.suppress(Exception):
+                ws.close(1001, "session deleted")
+            return
         role = self._socket_role(ws)
         self._register_socket(ws, role)
         if role == "raw":
@@ -538,11 +553,12 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
 
     async def webSocketClose(self, ws: CFWebSocket, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
+        deleted = self._deleted_at is not None
         # Use _socket_role() instead of `ws is self.worker_ws` — after hibernation,
         # self.worker_ws is None so the identity check would always be False.
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
-        if role == "browser":
+        if role == "browser" and not deleted:
             ws_id = self.ws_key(ws)
             if self.meta.get("presence"):
                 await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
@@ -554,15 +570,17 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                     self.store.mark_resume_hijack_owner(token, True)
         self._remove_ws(ws)
         if role == "worker":
-            self.lifecycle_state = "stopped"
-            await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
+            if not deleted:
+                self.lifecycle_state = "stopped"
+                await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)
 
     async def webSocketError(self, ws: CFWebSocket, error: Any) -> None:  # noqa: N802
         role = self._socket_role(ws)
         wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
-        if role == "browser":
+        deleted = self._deleted_at is not None
+        if role == "browser" and not deleted:
             ws_id = self.ws_key(ws)
             if self.meta.get("presence"):
                 await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
@@ -572,6 +590,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                     self.store.mark_resume_hijack_owner(token, True)
         self._remove_ws(ws)
         if role == "worker":
-            self.lifecycle_state = "error"
-            await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
+            if not deleted:
+                self.lifecycle_state = "error"
+                await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
             await update_kv_session(self.env, wid, connected=False)

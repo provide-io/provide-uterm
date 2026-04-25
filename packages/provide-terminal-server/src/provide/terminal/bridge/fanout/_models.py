@@ -49,3 +49,6 @@ class FanOutResult:
     results: list[SessionFanOutResult]
     divergent_sessions: list[str]
     failed_sessions: list[str]
+    error: str | None = None
+    approval_required: bool = False
+    approval_id: str | None = None

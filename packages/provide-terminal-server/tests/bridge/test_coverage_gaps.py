@@ -16,6 +16,7 @@ Targets:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -371,8 +372,8 @@ class TestBrowserHandlersResumeReclaimFail:
             st.hijack_owner_expires_at = None
 
         # Create a resume token that claims was_hijack_owner=True
-        token = store.create("w1", "admin", ttl_s=60.0)
-        session = store.get(token)
+        token = asyncio.run(store.create("w1", "admin", ttl_s=60.0))
+        session = asyncio.run(store.get(token))
         assert session is not None
         # Mark session as was_hijack_owner so the reclaim branch is entered
         session.was_hijack_owner = True

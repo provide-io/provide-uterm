@@ -1,4 +1,23 @@
+from __future__ import annotations
+import asyncio
 #
+
+def _run_async(coro):
+    import threading
+    import asyncio
+    res = []
+    err = []
+    def _run():
+        try:
+            res.append(asyncio.run(coro))
+        except Exception as e:
+            err.append(e)
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+    if err: raise err[0]
+    return res[0]
+
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -12,7 +31,6 @@ receives ``resume_token`` in its hello handshake.  Tests verify:
 3. The server responds with a ``resumed: true`` hello.
 """
 
-from __future__ import annotations
 
 import importlib.resources
 import json
@@ -54,7 +72,7 @@ def resume_server() -> Generator[tuple[str, TermHub, InMemoryResumeStore], None,
     app.mount("/ui", StaticFiles(directory=str(frontend_path), html=True), name="ui")
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
-    async def test_page(worker_id: str) -> str:
+    def test_page(worker_id: str) -> str:
         return (
             "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
             "<style>*{margin:0;padding:0;box-sizing:border-box}"
@@ -155,7 +173,7 @@ class TestResumeOnReconnect:
 
         token_before = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_before is not None
-        assert store.get(token_before) is not None  # token is live in store
+        assert _run_async(store.get(token_before)) is not None  # token is live in store
 
         # Reload the same page — sessionStorage persists (same origin, same tab),
         # so the widget reads the stored token and sends a resume message.
@@ -170,7 +188,7 @@ class TestResumeOnReconnect:
         token_after = page.evaluate(f"sessionStorage.getItem('uterm_resume_{worker_id}')")
         assert token_after is not None
         assert token_after != token_before  # server issued a new token → resume was processed
-        assert store.get(token_before) is None  # old token revoked — definitive proof of resume
+        assert _run_async(store.get(token_before)) is None  # old token revoked — definitive proof of resume
 
     def test_resume_token_persists_across_navigation(
         self, page: Page, resume_server: tuple[str, TermHub, InMemoryResumeStore]

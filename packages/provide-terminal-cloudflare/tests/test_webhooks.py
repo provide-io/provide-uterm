@@ -143,7 +143,7 @@ async def test_deliver_webhook_hmac_signature() -> None:
     async def mock_fetch(url: str, *, method: str, headers: dict, body: str) -> None:
         calls.append((url, json.loads(body), headers))
 
-    secret = "test-secret"
+    secret = "uterm-test-secret-32-byte-minimum-key"
     payload = {"event": {}, "session_id": "s1", "webhook_id": "wh1", "timestamp": 1234.0}
     await _deliver_webhook("https://example.com/hook", payload, secret, _fetch=mock_fetch)
 

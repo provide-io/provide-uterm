@@ -114,9 +114,9 @@ class TestSessionLoggerBranches:
             log_path = Path(tmpdir) / "test.jsonl"
             sl = SessionLogger(log_path)
 
-            # Mock _write_event_unlocked to raise
+            # Mock store.start_session to raise
             with (
-                patch.object(sl, "_write_event_unlocked", side_effect=OSError("boom")),
+                patch.object(sl._store, "start_session", side_effect=OSError("boom")),
                 pytest.raises(OSError, match="boom"),
             ):
                 await sl.start("sess1")

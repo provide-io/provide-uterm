@@ -45,6 +45,7 @@ class _Runtime:
         self.worker_ws = worker_ws
         self.hijack = HijackCoordinator()
         self._role = role
+        self._subject: str | None = None
         self.last_snapshot: dict | None = None
         self.last_analysis: str | None = None
         self.lifecycle_state = "stopped"
@@ -55,6 +56,9 @@ class _Runtime:
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role
+
+    async def browser_subject_for_request(self, request: object) -> str | None:
+        return self._subject
 
     def persist_lease(self, session: object) -> None:
         pass
@@ -82,6 +86,7 @@ class _Runtime:
             current_event_seq=lambda *_a, **_k: 0,
             min_event_seq=lambda *_a, **_k: 0,
             save_input_mode=lambda *_a, **_k: None,
+            mark_deleted=lambda *_a, **_k: None,
         )
 
 
@@ -119,11 +124,35 @@ async def test_session_delete_with_worker() -> None:
     assert ws.closed_with == (1001, "session deleted")
 
 
-async def test_session_delete_viewer_forbidden() -> None:
-    """DELETE /api/sessions/{id} requires operator or admin role."""
-    runtime = _Runtime(role="viewer")
+async def test_session_delete_operator_non_owner_forbidden() -> None:
+    """DELETE /api/sessions/{id} requires ownership or admin."""
+    runtime = _Runtime(role="operator")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "bob"
     resp = await route_http(runtime, _Req("https://x/api/sessions/w", method="DELETE"))
     assert resp.status == 403
+
+
+async def test_session_delete_owner_allowed() -> None:
+    runtime = _Runtime(role="viewer")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "alice"
+    resp = await route_http(runtime, _Req("https://x/api/sessions/w", method="DELETE"))
+    assert resp.status == 200
+
+
+async def test_session_delete_tombstones_followup_get() -> None:
+    """DELETE /api/sessions/{id} must revoke the session, not just close the worker."""
+    runtime = _Runtime(role="admin", worker_ws=object())
+
+    delete_resp = await route_http(runtime, _Req("https://x/api/sessions/w", method="DELETE"))
+    assert delete_resp.status == 200
+
+    get_resp = await route_http(runtime, _Req("https://x/api/sessions/w", method="GET"))
+    assert get_resp.status == 404
+    assert _body(get_resp)["error"] == "not_found"
 
 
 # ---------------------------------------------------------------------------
@@ -156,8 +185,20 @@ async def test_session_restart_with_worker() -> None:
     assert ws.closed_with == (1001, "restart requested")
 
 
-async def test_session_restart_viewer_forbidden() -> None:
-    """POST /api/sessions/{id}/restart requires operator or admin role."""
-    runtime = _Runtime(role="viewer")
+async def test_session_restart_operator_non_owner_forbidden() -> None:
+    """POST /api/sessions/{id}/restart requires ownership or admin."""
+    runtime = _Runtime(role="operator")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "bob"
     resp = await route_http(runtime, _Req("https://x/api/sessions/w/restart", method="POST"))
     assert resp.status == 403
+
+
+async def test_session_restart_owner_allowed() -> None:
+    runtime = _Runtime(role="viewer")
+    runtime.meta["visibility"] = "operator"
+    runtime.meta["owner"] = "alice"
+    runtime._subject = "alice"
+    resp = await route_http(runtime, _Req("https://x/api/sessions/w/restart", method="POST"))
+    assert resp.status == 200

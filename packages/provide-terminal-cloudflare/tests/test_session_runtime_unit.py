@@ -203,6 +203,17 @@ def test_restore_state_with_input_mode() -> None:
     assert rt.input_mode == "open"
 
 
+def test_restore_state_with_deleted_tombstone() -> None:
+    """A deleted session restores as deleted instead of reviving state."""
+    rt = _make_runtime("w1")
+    rt.store.mark_deleted("w1")
+    rt.lifecycle_state = "running"
+    rt._deleted_at = None
+    rt._restore_state()
+    assert rt.lifecycle_state == "deleted"
+    assert rt._deleted_at is not None
+
+
 def test_restore_state_loads_meta_from_sqlite() -> None:
     """_restore_state loads session metadata from SQLite when present."""
     rt = _make_runtime("w1")

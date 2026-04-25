@@ -37,3 +37,8 @@ visualization. Spec: `docs/superpowers/specs/2026-03-29-shell-render-design.md`.
 - **DeckMux Collaborative Presence** — ARD: `docs/ard-presence-collaboration-layer.md`
 - **HTTP Interception (Phase 4)** — Spec: `docs/superpowers/specs/2026-04-01-http-intercept-modify-design.md`
 - **Session Audit Recording** (partial) — ARD: `docs/ard-session-audit-compliance-recording.md`
+
+## Architecture Decisions
+
+- **FastAPI backend durability posture** — `docs/ard-fastapi-durability-posture.md`
+- **Backend authz conformance testing** — `docs/ard-cross-backend-conformance-testing.md`

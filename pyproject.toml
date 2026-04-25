@@ -11,7 +11,7 @@ dependencies = [
     "provide-terminal[emulator,ssh]>=0.4.0",
     "provide-terminal-server[all]>=0.4.0",
     "provide-terminal-platform[all]>=0.4.0",
-    "provide-telemetry>=0.4.0",
+    "provide-telemetry>=0.3",
 ]
 
 [dependency-groups]
@@ -56,6 +56,13 @@ dev = [
 
 [tool.uv.workspace]
 members = ["packages/provide-terminal", "packages/provide-terminal-cloudflare", "packages/provide-terminal-platform", "packages/provide-terminal-server", "packages/provide-terminal-client"]
+[tool.uv.sources]
+provide-terminal = { workspace = true }
+provide-terminal-cloudflare = { workspace = true }
+provide-terminal-platform = { workspace = true }
+provide-terminal-server = { workspace = true }
+provide-terminal-client = { workspace = true }
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
@@ -161,6 +168,11 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
 addopts = "--import-mode=importlib -m 'not docker'"
+filterwarnings = [
+    "ignore:remove second argument of ws_handler:DeprecationWarning",
+    "ignore:websockets.server.WebSocketServerProtocol is deprecated:DeprecationWarning",
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+]
 testpaths = [
     "packages/provide-terminal/tests",
     "packages/provide-terminal-cloudflare/tests",
@@ -170,16 +182,27 @@ norecursedirs = [
     ".venv",
     "node_modules",
     "mutants",
+    ".hypothesis",
     "packages/provide-terminal-cloudflare/python_modules",
 ]
 markers = [
+    "unit: fast unit tests",
+    "integration: tests requiring multiple components",
     "playwright: browser-based UI tests",
     "mutant: mutation-testing focused tests",
     "memray: memory profiling tests",
     "slow: slow tests (>10s)",
-    "e2e: end-to-end tests against a live pywrangler dev server",
+    "slowtest: legacy alias for slow tests",
+    "e2e: end-to-end tests against a live server",
     "real_cf: tests requiring a real Cloudflare deployment",
     "docker: tests requiring a running Docker daemon",
+    "requires_root: tests that must run as root/sudo",
+    "requires_pam: tests requiring PAM library availability",
+    "requires_pam_auth: tests performing actual PAM authentication",
+    "limit_memory: tests with memory usage constraints",
+    "dependency: tests with ordering dependencies",
+    "respx: tests using respx for HTTP mocking",
+    "timeout: tests with custom timeout constraints",
 ]
 
 [tool.xenon]

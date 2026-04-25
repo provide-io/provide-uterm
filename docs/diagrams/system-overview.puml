@@ -20,9 +20,9 @@ skinparam rectangle {
   FontColor #1e40af
 }
 
-' --- External Tier (Enterprise/Proprietary) ---
-rectangle "External Fleet Manager" as FLEET #fff7ed {
-  note bottom: (Proprietary / Managed Tier)
+' --- External Tier (managed/External) ---
+rectangle "External External Management Tier" as FLEET #fff7ed {
+  note bottom: (External Decision Engine)
 }
 
 ' --- Core package ---
@@ -76,7 +76,7 @@ FE_C --> SRV_C : WebSocket / REST
 FE_C --> CF_C : WebSocket / REST
 APP_C --> FE_C : embeds
 
-' --- Extensibility Hooks (Monetization Path) ---
+' --- Extensibility Hooks (extensibility layer) ---
 SRV_C --right--> FLEET : **Policy / Auth Hooks**\n(Webhooks)
 SRV_C --right--> FLEET : **Discovery**\n(Heartbeat)
 SRV_C ..> FLEET : **Telemetry**\n(DAS Events / OTLP)

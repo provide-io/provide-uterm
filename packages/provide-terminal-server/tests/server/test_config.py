@@ -23,6 +23,8 @@ def test_default_server_config_has_demo_session() -> None:
 
     assert config.server.public_base_url == "http://127.0.0.1:8780"
     assert config.auth.mode == "dev"
+    assert config.control_plane.backend == "memory"
+    assert config.control_plane.database_url is None
     assert len(config.sessions) == 1
     assert config.sessions[0].session_id == "provide-shell"
     assert config.sessions[0].connector_type == "shell"
@@ -54,6 +56,8 @@ def test_config_from_mapping_parses_sessions_and_paths() -> None:
     assert config.ui.assets_path == "/assets"
     assert config.recording.enabled_by_default is True
     assert config.recording.directory == Path("logs")
+    assert config.control_plane.backend == "memory"
+    assert config.control_plane.database_url is None
     assert len(config.sessions) == 1
     assert config.sessions[0].connector_config["host"] == "bbs.example.com"
     assert config.sessions[0].connector_config["port"] == 23
@@ -114,6 +118,42 @@ def test_load_server_config_parses_ephemeral_and_max_sessions(tmp_path: Path) ->
     assert len(config.sessions) == 1
     assert config.sessions[0].ephemeral is True
     assert "ephemeral" not in config.sessions[0].connector_config
+
+
+def test_load_server_config_parses_control_plane_section(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "server.toml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "[control_plane]",
+                'backend = "sqlite"',
+                'database_url = "sqlite+aiosqlite:///tmp/control-plane.db"',
+                "",
+                "[[sessions]]",
+                'session_id = "provide-shell"',
+                'display_name = "Demo"',
+                'connector_type = "shell"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_server_config(cfg_path)
+
+    assert config.control_plane.backend == "sqlite"
+    assert config.control_plane.database_url == "sqlite+aiosqlite:///tmp/control-plane.db"
+
+
+def test_partial_control_plane_override_preserves_sibling_defaults() -> None:
+    config = config_from_mapping({"control_plane": {"database_url": "sqlite+aiosqlite:///tmp/cp.db"}})
+
+    assert config.control_plane.backend == "memory"
+    assert config.control_plane.database_url == "sqlite+aiosqlite:///tmp/cp.db"
+
+
+def test_config_from_mapping_rejects_sqlite_control_plane_without_database_url() -> None:
+    with pytest.raises(ValueError, match="control_plane\\.database_url"):
+        config_from_mapping({"control_plane": {"backend": "sqlite"}})
 
 
 def test_jwt_mode_requires_worker_token() -> None:
@@ -196,7 +236,7 @@ def test_config_from_mapping_rejects_invalid_input_mode() -> None:
 
 def test_config_from_mapping_rejects_invalid_visibility() -> None:
     with pytest.raises(ValueError, match="invalid visibility"):
-        config_from_mapping({"sessions": [{"session_id": "s1", "connector_type": "shell", "visibility": "secret"}]})
+        config_from_mapping({"sessions": [{"session_id": "s1", "connector_type": "shell", "visibility": "test"}]})
 
 
 def test_partial_auth_override_preserves_default_server_config_auth_mode() -> None:
@@ -246,7 +286,10 @@ def test_config_from_mapping_rejects_invalid_control_channel_mode() -> None:
         config_from_mapping({"recording": {"control_channel_mode": "bogus"}})
 
 
-@pytest.mark.parametrize("section", ["server", "auth", "ui", "recording", "profiles", "security", "tunnel", "pam"])
+@pytest.mark.parametrize(
+    "section",
+    ["server", "auth", "ui", "recording", "profiles", "security", "tunnel", "pam", "control_plane"],
+)
 def test_config_from_mapping_rejects_non_dict_known_section(section: str) -> None:
     # Malformed TOML (e.g. `server = []`) must raise ValueError, not TypeError.
     with pytest.raises(ValueError, match=rf"\[{section}\] must be a table"):

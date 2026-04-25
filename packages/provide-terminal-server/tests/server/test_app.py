@@ -313,7 +313,7 @@ class TestReferenceServerApp:
                             "host": "127.0.0.1",
                             "port": free_port,
                             "username": "tester",
-                            "password": "secret",
+                            "password": "uterm-test-secret-32-byte-minimum-key",
                             "insecure_no_host_check": True,
                         },
                     },

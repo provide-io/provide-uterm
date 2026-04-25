@@ -44,16 +44,16 @@ def test_session_runtime_extract_token_respects_query_policy() -> None:
 
 async def test_decode_jwt_requires_sub_and_exp() -> None:
     # Token without exp must be rejected (matches FastAPI behaviour: require=[sub, exp]).
-    token = jwt.encode({"sub": "u1", "roles": ["viewer"]}, "secret", algorithm="HS256")
+    token = jwt.encode({"sub": "u1", "roles": ["viewer"]}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
     with pytest.raises(JwtValidationError):
-        await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",)))
+        await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",)))
 
 
 async def test_decode_jwt_accepts_token_without_iat_nbf() -> None:
     # iat/nbf no longer required — Auth0/Google/Azure AD tokens may omit them.
     now = int(time.time())
-    token = jwt.encode({"sub": "u1", "exp": now + 600, "roles": ["viewer"]}, "secret", algorithm="HS256")
-    principal = await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",)))
+    token = jwt.encode({"sub": "u1", "exp": now + 600, "roles": ["viewer"]}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
+    principal = await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",)))
     assert principal.subject_id == "u1"
 
 
@@ -61,13 +61,13 @@ async def test_decode_jwt_rejects_future_nbf_outside_skew() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "iat": now, "nbf": now + 120, "exp": now + 3600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     with pytest.raises(JwtValidationError):
         await decode_jwt(
             token,
-            JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",), clock_skew_seconds=10),
+            JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",), clock_skew_seconds=10),
         )
 
 

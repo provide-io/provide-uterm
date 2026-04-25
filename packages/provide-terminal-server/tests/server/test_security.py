@@ -307,7 +307,7 @@ def test_create_server_app_rejects_none_jwt_algorithm() -> None:
     config = default_server_config()
     config.auth.mode = "jwt"
     config.auth.jwt_algorithms = ["none"]
-    config.auth.jwt_public_key_pem = "dummy-key"
+    config.auth.jwt_public_key_pem = "uterm-test-secret-32-byte-minimum-key"
     config.auth.worker_bearer_token = "dummy-token"
     with pytest.raises(ValueError, match="'none' is not permitted"):
         create_server_app(config)

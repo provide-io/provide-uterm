@@ -45,7 +45,7 @@ class SqliteStateStore:
         for ddl in (
             """CREATE TABLE IF NOT EXISTS session_state (
                 worker_id TEXT PRIMARY KEY, hijack_id TEXT, owner TEXT,
-                lease_expires_at REAL, last_snapshot_json TEXT,
+                lease_expires_at REAL, last_snapshot_json TEXT, deleted_at REAL,
                 event_seq INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL)""",
             """CREATE TABLE IF NOT EXISTS session_events (
                 worker_id TEXT NOT NULL, seq INTEGER NOT NULL, ts REAL NOT NULL,
@@ -67,6 +67,8 @@ class SqliteStateStore:
             self._run(ddl)
         with contextlib.suppress(Exception):
             self._run("ALTER TABLE session_state ADD COLUMN input_mode TEXT NOT NULL DEFAULT 'hijack'")
+        with contextlib.suppress(Exception):
+            self._run("ALTER TABLE session_state ADD COLUMN deleted_at REAL")
 
     # ------------------------------------------------------------------
     # Session metadata (display_name, connector_type, created_at, etc.)
@@ -116,6 +118,7 @@ class SqliteStateStore:
             self._run(
                 """
                 SELECT worker_id, hijack_id, owner, lease_expires_at, last_snapshot_json, event_seq, input_mode
+                     , deleted_at
                 FROM session_state
                 WHERE worker_id = ?
                 """,
@@ -134,6 +137,7 @@ class SqliteStateStore:
             "last_snapshot": json.loads(snapshot_raw) if snapshot_raw else None,
             "event_seq": int(self._row_value(row, "event_seq", 5) or 0),
             "input_mode": str(self._row_value(row, "input_mode", 6) or "hijack"),
+            "deleted_at": self._row_value(row, "deleted_at", 7),
         }
 
     def save_lease(self, record: LeaseRecord) -> None:
@@ -164,6 +168,26 @@ class SqliteStateStore:
             """,
             time.time(),
             worker_id,
+        )
+
+    def mark_deleted(self, worker_id: str) -> None:
+        """Persist a tombstone for a deleted session."""
+        now = time.time()
+        self._run(
+            """
+            INSERT INTO session_state(worker_id, deleted_at, updated_at)
+            VALUES(?, ?, ?)
+            ON CONFLICT(worker_id) DO UPDATE SET
+                hijack_id = NULL,
+                owner = NULL,
+                lease_expires_at = NULL,
+                last_snapshot_json = NULL,
+                deleted_at = excluded.deleted_at,
+                updated_at = excluded.updated_at
+            """,
+            worker_id,
+            now,
+            now,
         )
 
     def save_input_mode(self, worker_id: str, mode: str) -> None:

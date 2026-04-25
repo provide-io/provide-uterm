@@ -1,0 +1,67 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+import pytest
+import respx
+import httpx
+from provide.terminal.server.auth import WebhookIdentityProvider
+from provide.terminal.bridge.identity import Principal
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_resolve_success():
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url, secret="uterm-test-secret-32-byte-minimum-key")
+    
+    respx.post(url).mock(return_value=httpx.Response(
+        200, 
+        json={
+            "subject_id": "user-123",
+            "roles": ["admin"],
+            "claims": {"email": "user@example.com"},
+            "display_name": "Test User"
+        }
+    ))
+    
+    class MockConnection:
+        headers = {"Authorization": "Bearer some-token"}
+        cookies = {"session": "abc"}
+        
+    principal = await idp.resolve_principal(MockConnection())
+    
+    assert principal.subject_id == "user-123"
+    assert "admin" in principal.roles
+    assert principal.claims["email"] == "user@example.com"
+    assert principal.display_name == "Test User"
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_resolve_error():
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url)
+    
+    respx.post(url).mock(return_value=httpx.Response(500))
+    
+    class MockConnection:
+        headers = {}
+        cookies = {}
+        
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal.subject_id == "anonymous"
+    assert "viewer" in principal.roles
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_resolve_timeout():
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url, timeout_s=0.1)
+    
+    respx.post(url).mock(side_effect=httpx.TimeoutException("Too slow"))
+    
+    class MockConnection:
+        headers = {}
+        cookies = {}
+        
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal.subject_id == "anonymous"

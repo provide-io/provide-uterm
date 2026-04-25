@@ -11,8 +11,11 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from fastapi import Request, WebSocket
 from provide.telemetry import get_logger
 from provide.terminal.server.audit import audit_event
+from provide.terminal.bridge.identity import Principal, IdentityProvider
+
 
 if TYPE_CHECKING:
     from provide.terminal.server.models import AuthConfig
@@ -28,27 +31,6 @@ _JWKS_CLIENT_CACHE_MAX = 16
 _JWKS_CLIENT_CACHE_LOCK = threading.Lock()
 
 
-@dataclass(slots=True)
-class Principal:
-    """Resolved browser or API principal."""
-
-    subject_id: str
-    roles: frozenset[str] = frozenset()
-    scopes: frozenset[str] = frozenset()
-    claims: dict[str, Any] = field(default_factory=dict)
-    display_name: str | None = None
-
-    @property
-    def name(self) -> str:
-        return self.display_name or self.subject_id
-
-
-def _cookie_value(cookies: dict[str, str], key: str) -> str | None:
-    value = cookies.get(key)
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def extract_bearer_token(headers: Any) -> str | None:
@@ -63,173 +45,205 @@ def extract_bearer_token(headers: Any) -> str | None:
         return None
     token = token.strip()
     return token or None
+class LocalIdentityProvider(IdentityProvider):
+    """Standard AGPL RBAC implementation of IdentityProvider."""
 
+    def __init__(self, auth: AuthConfig, api_key_store: Any = None):
+        self.auth = auth
+        self.api_key_store = api_key_store
 
-def _roles_from_claims(claims: dict[str, Any], auth: AuthConfig) -> frozenset[str]:
-    raw = claims.get(auth.jwt_roles_claim)
-    if isinstance(raw, str):
-        pieces = [part.strip().lower() for part in re.split(r"[,\s]+", raw) if part.strip()]
-    elif isinstance(raw, list):
-        pieces = [str(part).strip().lower() for part in raw if str(part).strip()]
-    else:
-        pieces = []
-    cleaned = [role for role in pieces if role in {"viewer", "operator", "admin"}]
-    if not cleaned:
-        cleaned = ["viewer"]
-    return frozenset(cleaned)
+    async def resolve_principal(self, connection: Request | WebSocket) -> Principal:
+        headers = getattr(connection, "headers", {})
+        cookies = getattr(connection, "cookies", {})
+        
+        # API key authentication takes precedence (when enabled).
+        api_key_principal = self._principal_from_api_key(headers)
+        if api_key_principal is not None:
+            return api_key_principal
+            
+        mode = str(self.auth.mode).strip().lower()
+        if mode in {"none", "dev"}:
+            return self._principal_from_local_mode(headers, cookies)
+        if mode == "header":
+            return self._principal_from_header_auth(headers, cookies)
+        if mode != "jwt":
+            raise ValueError(f"unknown auth mode: {mode!r}")
+            
+        token = extract_bearer_token(headers) or self._cookie_value(cookies, self.auth.token_cookie)
+        if not token:
+            return self._anonymous_principal()
+        try:
+            principal = self._principal_from_jwt_token(token)
+        except Exception as exc:
+            logger.warning("jwt_auth_failed error=%s", exc)
+            audit_event("auth.failure", detail={"error": str(exc)})
+            return self._anonymous_principal()
+            
+        audit_event("auth.success", principal=principal.subject_id)
+        return principal
 
+    def _cookie_value(self, cookies: dict[str, str], key: str) -> str | None:
+        value = cookies.get(key)
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
 
-def _scopes_from_claims(claims: dict[str, Any], auth: AuthConfig) -> frozenset[str]:
-    raw = claims.get(auth.jwt_scopes_claim)
-    if isinstance(raw, str):
-        return frozenset(part.strip() for part in raw.split() if part.strip())
-    if isinstance(raw, list):
-        return frozenset(str(part).strip() for part in raw if str(part).strip())
-    return frozenset()
+    def _roles_from_claims(self, claims: dict[str, Any]) -> frozenset[str]:
+        raw = claims.get(self.auth.jwt_roles_claim)
+        if isinstance(raw, str):
+            pieces = [part.strip().lower() for part in re.split(r"[,\s]+", raw) if part.strip()]
+        elif isinstance(raw, list):
+            pieces = [str(part).strip().lower() for part in raw if str(part).strip()]
+        else:
+            pieces = []
+        cleaned = [role for role in pieces if role in {"viewer", "operator", "admin"}]
+        if not cleaned:
+            cleaned = ["viewer"]
+        return frozenset(cleaned)
 
+    def _scopes_from_claims(self, claims: dict[str, Any]) -> frozenset[str]:
+        raw = claims.get(self.auth.jwt_scopes_claim)
+        if isinstance(raw, str):
+            return frozenset(part.strip() for part in raw.split() if part.strip())
+        if isinstance(raw, list):
+            return frozenset(str(part).strip() for part in raw if str(part).strip())
+        return frozenset()
 
-def _resolve_jwt_key(token: str, auth: AuthConfig) -> Any:
-    if auth.jwt_jwks_url:
+    def _resolve_jwt_key(self, token: str) -> Any:
+        if self.auth.jwt_jwks_url:
+            import jwt
+            url = self.auth.jwt_jwks_url
+            with _JWKS_CLIENT_CACHE_LOCK:
+                client = _JWKS_CLIENT_CACHE.get(url)
+                if client is None:
+                    if len(_JWKS_CLIENT_CACHE) >= _JWKS_CLIENT_CACHE_MAX:
+                        evict_n = _JWKS_CLIENT_CACHE_MAX // 2
+                        for _k in list(_JWKS_CLIENT_CACHE)[:evict_n]:
+                            del _JWKS_CLIENT_CACHE[_k]
+                    client = jwt.PyJWKClient(url, cache_keys=True, timeout=10)
+                    _JWKS_CLIENT_CACHE[url] = client
+            return client.get_signing_key_from_jwt(token).key
+        if self.auth.jwt_public_key_pem:
+            return self.auth.jwt_public_key_pem
+        raise ValueError("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode")
+
+    def _principal_from_jwt_token(self, token: str) -> Principal:
         import jwt
+        key = self._resolve_jwt_key(token)
+        claims = jwt.decode(
+            token,
+            key=key,
+            algorithms=list(self.auth.jwt_algorithms),
+            issuer=self.auth.jwt_issuer,
+            audience=self.auth.jwt_audience,
+            leeway=max(0, int(self.auth.clock_skew_seconds)),
+            options={"require": ["sub", "exp"]},
+        )
+        subject = str(claims.get("sub", "")).strip()
+        if not subject:
+            raise ValueError("sub claim is required")
+        return Principal(
+            subject_id=subject,
+            roles=self._roles_from_claims(claims),
+            scopes=self._scopes_from_claims(claims),
+            claims=claims,
+        )
 
-        url = auth.jwt_jwks_url
-        with _JWKS_CLIENT_CACHE_LOCK:
-            client = _JWKS_CLIENT_CACHE.get(url)
-            if client is None:
-                if len(_JWKS_CLIENT_CACHE) >= _JWKS_CLIENT_CACHE_MAX:
-                    # Evict oldest half, preserving recently-active issuers.
-                    evict_n = _JWKS_CLIENT_CACHE_MAX // 2
-                    for _k in list(_JWKS_CLIENT_CACHE)[:evict_n]:
-                        del _JWKS_CLIENT_CACHE[_k]
-                client = jwt.PyJWKClient(url, cache_keys=True, timeout=10)
-                _JWKS_CLIENT_CACHE[url] = client
-        return client.get_signing_key_from_jwt(token).key
-    if auth.jwt_public_key_pem:
-        return auth.jwt_public_key_pem
-    raise ValueError("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode")
+    def _anonymous_principal(self) -> Principal:
+        return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
 
+    def _principal_from_header_auth(self, headers: Any, cookies: Any) -> Principal:
+        principal = headers.get(self.auth.principal_header) or self._cookie_value(cookies, self.auth.principal_cookie) or "anonymous"
+        role = str(headers.get(self.auth.role_header, "")).strip().lower()
+        roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"viewer"})
+        return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
 
-def _principal_from_jwt_token(token: str, auth: AuthConfig) -> Principal:
-    import jwt
+    def _principal_from_local_mode(self, headers: Any, cookies: Any) -> Principal:
+        principal = headers.get(self.auth.principal_header) or self._cookie_value(cookies, self.auth.principal_cookie) or "local-dev"
+        role = str(headers.get(self.auth.role_header, "")).strip().lower()
+        roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"admin"})
+        display_name = str(headers.get("x-display-name", "")).strip() or None
+        return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}), display_name=display_name)
 
-    key = _resolve_jwt_key(token, auth)
-    claims = jwt.decode(
-        token,
-        key=key,
-        algorithms=list(auth.jwt_algorithms),
-        issuer=auth.jwt_issuer,
-        audience=auth.jwt_audience,
-        leeway=max(0, int(auth.clock_skew_seconds)),
-        options={"require": ["sub", "exp"]},
-    )
-    subject = str(claims.get("sub", "")).strip()
-    if not subject:
-        raise ValueError("sub claim is required")
-    return Principal(
-        subject_id=subject,
-        roles=_roles_from_claims(claims, auth),
-        scopes=_scopes_from_claims(claims, auth),
-        claims=claims,
-    )
-
-
-def _anonymous_principal() -> Principal:
-    return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
-
-
-def _principal_from_header_auth(headers: Any, cookies: Any, auth: AuthConfig) -> Principal:
-    principal = headers.get(auth.principal_header) or _cookie_value(cookies, auth.principal_cookie) or "anonymous"
-    role = str(headers.get(auth.role_header, "")).strip().lower()
-    roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"viewer"})
-    return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
-
-
-def _principal_from_local_mode(headers: Any, cookies: Any, auth: AuthConfig) -> Principal:
-    principal = headers.get(auth.principal_header) or _cookie_value(cookies, auth.principal_cookie) or "local-dev"
-    role = str(headers.get(auth.role_header, "")).strip().lower()
-    roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"admin"})
-    display_name = str(headers.get("x-display-name", "")).strip() or None
-    return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}), display_name=display_name)
-
-
-def _principal_from_api_key(headers: Any, auth: AuthConfig, api_key_store: Any) -> Principal | None:
-    """Check for X-API-Key header and validate against the store.
-
-    Returns a Principal on success or None if no API key header is present
-    or the key is invalid.  The store is passed in from the resolver so
-    each app instance uses its own store (no process-global state).
-    """
-    if not auth.api_keys_enabled:
-        return None
-    raw_key = str(headers.get("x-api-key", "")).strip()
-    if not raw_key:
-        return None
-    if api_key_store is None:
-        return None
-    record = api_key_store.validate(raw_key)
-    if record is None:
-        logger.warning("api_key_auth_failed key_id=unknown")
-        audit_event("auth.failure", detail={"method": "api_key"})
-        return None
-    roles: frozenset[str]
-    scopes: frozenset[str]
-    # Scope list carries two independent signals:
-    #   (a) role-marker scopes ({"admin"}, {"operator"}, {"viewer"}) — legacy
-    #       shorthand that assigns the named role with unrestricted scope
-    #   (b) capability-name scopes ({"session.read", "session.control.create"})
-    #       — the scope list is authoritative; the principal gets admin role
-    #       so scope narrowing in AuthorizationService.capabilities_for() is
-    #       the only authorization gate.
-    # Empty scopes = legacy full-access (admin, unrestricted).
-    if "admin" in record.scopes:
-        roles = frozenset({"admin"})
-        scopes = frozenset({"*"})
-    elif "operator" in record.scopes:
-        roles = frozenset({"operator"})
-        scopes = frozenset({"*"})
-    elif "viewer" in record.scopes:
-        roles = frozenset({"viewer"})
-        scopes = frozenset({"*"})
-    elif record.scopes:
-        # Capability-only scopes: role=admin, scope narrowing enforces caps
-        roles = frozenset({"admin"})
-        scopes = record.scopes
-    else:
-        # Empty scopes = full access
-        roles = frozenset({"admin"})
-        scopes = frozenset()
-    audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
-    return Principal(
-        subject_id=f"apikey:{record.key_id}",
-        roles=roles,
-        scopes=scopes,
-        claims={"key_id": record.key_id, "key_name": record.name},
-    )
+    def _principal_from_api_key(self, headers: Any) -> Principal | None:
+        if not self.auth.api_keys_enabled:
+            return None
+        raw_key = str(headers.get("x-api-key", "")).strip()
+        if not raw_key:
+            return None
+        if self.api_key_store is None:
+            return None
+        record = self.api_key_store.validate(raw_key)
+        if record is None:
+            logger.warning("api_key_auth_failed key_id=unknown")
+            audit_event("auth.failure", detail={"method": "api_key"})
+            return None
+        roles: frozenset[str]
+        scopes: frozenset[str]
+        if "admin" in record.scopes:
+            roles = frozenset({"admin"})
+            scopes = frozenset({"*"})
+        elif "operator" in record.scopes:
+            roles = frozenset({"operator"})
+            scopes = frozenset({"*"})
+        elif "viewer" in record.scopes:
+            roles = frozenset({"viewer"})
+            scopes = frozenset({"*"})
+        elif record.scopes:
+            roles = frozenset({"admin"})
+            scopes = record.scopes
+        else:
+            roles = frozenset({"admin"})
+            scopes = frozenset()
+        audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
+        return Principal(
+            subject_id=f"apikey:{record.key_id}",
+            roles=roles,
+            scopes=scopes,
+            claims={"key_id": record.key_id, "key_name": record.name},
+        )
 
 
-def _resolve_principal(headers: Any, cookies: Any, auth: AuthConfig, api_key_store: Any) -> Principal:
-    # API key authentication takes precedence (when enabled).
-    api_key_principal = _principal_from_api_key(headers, auth, api_key_store)
-    if api_key_principal is not None:
-        return api_key_principal
-    mode = str(auth.mode).strip().lower()
-    if mode in {"none", "dev"}:
-        return _principal_from_local_mode(headers, cookies, auth)
-    if mode == "header":
-        return _principal_from_header_auth(headers, cookies, auth)
-    if mode != "jwt":
-        raise ValueError(f"unknown auth mode: {mode!r}")
-    token = extract_bearer_token(headers) or _cookie_value(cookies, auth.token_cookie)
-    if not token:
-        return _anonymous_principal()
-    try:
-        principal = _principal_from_jwt_token(token, auth)
-    except Exception as exc:
-        logger.warning("jwt_auth_failed error=%s", exc)
-        audit_event("auth.failure", detail={"error": str(exc)})
-        return _anonymous_principal()
-    audit_event("auth.success", principal=principal.subject_id)
-    return principal
+class WebhookIdentityProvider(IdentityProvider):
+    """IdentityProvider that delegates resolution to an external webhook."""
+
+    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):
+        self.url = url
+        self.secret = secret
+        self.timeout_s = timeout_s
+
+    async def resolve_principal(self, connection: Request | WebSocket) -> Principal:
+        headers = dict(getattr(connection, "headers", {}))
+        cookies = dict(getattr(connection, "cookies", {}))
+
+        payload = {
+            "headers": headers,
+            "cookies": cookies,
+            "action": "resolve_principal",
+        }
+
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+                req_headers = {}
+                if self.secret:
+                    req_headers["X-Webhook-Secret"] = self.secret
+
+                resp = await client.post(self.url, json=payload, headers=req_headers)
+                resp.raise_for_status()
+                data = resp.json()
+
+                return Principal(
+                    subject_id=data["subject_id"],
+                    roles=frozenset(data.get("roles", ["viewer"])),
+                    scopes=frozenset(data.get("scopes", [])),
+                    claims=data.get("claims", {}),
+                    display_name=data.get("display_name"),
+                )
+        except Exception as exc:
+            logger.warning("webhook_auth_failed url=%s error=%s", self.url, exc)
+            return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
 
 
 def _api_key_store_from(connection: object) -> Any:
@@ -238,16 +252,12 @@ def _api_key_store_from(connection: object) -> Any:
     state = getattr(app, "state", None) if app is not None else None
     return getattr(state, "uterm_api_key_store", None) if state is not None else None
 
-
-def resolve_http_principal(request: object, auth: AuthConfig) -> Principal:
+async def resolve_http_principal(request: Request, auth: AuthConfig) -> Principal:
     """Resolve a principal from a FastAPI/Starlette Request-like object."""
-    headers = getattr(request, "headers", {})
-    cookies = getattr(request, "cookies", {})
-    return _resolve_principal(headers, cookies, auth, _api_key_store_from(request))
+    idp = LocalIdentityProvider(auth, _api_key_store_from(request))
+    return await idp.resolve_principal(request)
 
-
-def resolve_ws_principal(websocket: object, auth: AuthConfig) -> Principal:
+async def resolve_ws_principal(websocket: WebSocket, auth: AuthConfig) -> Principal:
     """Resolve a principal from a FastAPI/Starlette WebSocket-like object."""
-    headers = getattr(websocket, "headers", {})
-    cookies = getattr(websocket, "cookies", {})
-    return _resolve_principal(headers, cookies, auth, _api_key_store_from(websocket))
+    idp = LocalIdentityProvider(auth, _api_key_store_from(websocket))
+    return await idp.resolve_principal(websocket)
