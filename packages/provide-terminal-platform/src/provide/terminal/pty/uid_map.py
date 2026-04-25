@@ -34,8 +34,9 @@ class UidMap:
     4. pwd.getpwnam(username) — user runs as themselves
     """
 
-    def __init__(self, table: dict[str, str] | None = None) -> None:
+    def __init__(self, table: dict[str, str] | None = None, *, allow_root: bool = False) -> None:
         self._table: dict[str, str] = table or {}
+        self._allow_root = allow_root
 
     def resolve(
         self,
@@ -50,6 +51,7 @@ class UidMap:
             validate_username(username)
 
         if run_as_uid is not None:
+            self._check_privilege(run_as_uid, run_as_gid)
             return self._from_uid(run_as_uid, run_as_gid)
 
         if run_as is not None:
@@ -63,7 +65,10 @@ class UidMap:
             pw = pwd.getpwnam(username)
         except KeyError as err:
             raise UidMapError(f"no such OS user: {username!r}") from err
+
         gid = run_as_gid if run_as_gid is not None else pw.pw_gid
+        self._check_privilege(pw.pw_uid, gid)
+
         return ResolvedUser(  # nosec B604 — shell= is a dataclass field, not subprocess
             uid=pw.pw_uid,
             gid=gid,
@@ -72,7 +77,14 @@ class UidMap:
             name=pw.pw_name,
         )
 
+    def _check_privilege(self, uid: int, gid: int | None) -> None:
+        if self._allow_root:
+            return
+        if uid == 0 or (gid is not None and gid == 0):
+            raise UidMapError(f"resolving to privileged {uid}:{gid} is not allowed")
+
     def _from_uid(self, uid: int, gid: int | None) -> ResolvedUser:
+        self._check_privilege(uid, gid)
         try:
             pw = pwd.getpwuid(uid)
             resolved_gid = gid if gid is not None else pw.pw_gid
@@ -111,6 +123,7 @@ class UidMap:
         except KeyError as err:
             raise UidMapError(f"no such OS user: {spec!r}") from err
         gid = run_as_gid if run_as_gid is not None else pw.pw_gid
+        self._check_privilege(pw.pw_uid, gid)
         return ResolvedUser(  # nosec B604 — shell= is a dataclass field
             uid=pw.pw_uid,
             gid=gid,

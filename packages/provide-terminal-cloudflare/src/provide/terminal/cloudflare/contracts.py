@@ -4,6 +4,26 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
+from provide.terminal.bridge.contracts import (
+    CURRENT_PROTOCOL_VERSION,
+    Frame,
+    FrameType,
+    HijackAcquireResponse,
+    HijackEventsResponse,
+    HijackHeartbeatResponse,
+    HijackReleaseResponse,
+    HijackSendResponse,
+    HijackSnapshotResponse,
+    HijackStepResponse,
+    RecordingEntry,
+    RecordingMetaResponse,
+    SessionAnalyzeResponse,
+    SessionEventsResponse,
+    SessionModeResponse,
+    SessionSnapshotResponse,
+    SessionStatusResponse,
+)
+
 try:
     from provide.terminal.control_channel import (
         ControlChannelDecoder,
@@ -40,7 +60,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-class SessionStatusItem(TypedDict):
+class SessionStatusItem(SessionStatusResponse):
     """Shape of each item in GET /api/sessions.
 
     Mirrors ``provide-terminal`` ``SessionRuntimeStatus``/``SessionStatus`` (TS).
@@ -49,196 +69,9 @@ class SessionStatusItem(TypedDict):
     owner) are loaded from KV on first contact and persisted to DO SQLite.
     """
 
-    session_id: str
-    display_name: str
-    created_at: float
-    connector_type: str
-    lifecycle_state: str
-    input_mode: str
-    connected: bool
-    auto_start: bool
-    tags: list
-    recording_enabled: bool
-    recording_available: bool
-    owner: str | None
-    visibility: str
-    last_error: str | None
-    # CF-specific extras (not in FastAPI schema; clients must tolerate them)
-    hijacked: bool
-
-
-class HijackAcquireResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-    lease_expires_at: float
-    owner: str
-
-
-class HijackHeartbeatResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-    lease_expires_at: float
-
-
-class HijackStepResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-    lease_expires_at: float | None
-
-
-class HijackReleaseResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-
-
-class HijackSnapshotResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-    snapshot: dict[str, object] | None
-    prompt_id: str | None
-    lease_expires_at: float | None
-
-
-class HijackSendResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-    sent: str
-    matched_prompt_id: str | None
-    lease_expires_at: float | None
-
-
-class HijackEventsResponse(TypedDict):
-    ok: bool
-    worker_id: str
-    hijack_id: str
-    after_seq: int
-    latest_seq: int
-    min_event_seq: int
-    has_more: bool
-    events: list
-    lease_expires_at: float | None
-
-
-class SessionStatusResponse(TypedDict):
-    """Shape of GET /api/sessions/{id} response."""
-
-    session_id: str
-    display_name: str
-    connector_type: str
-    lifecycle_state: str
-    input_mode: str
-    connected: bool
-    auto_start: bool
-    tags: list
-    recording_enabled: bool
-    recording_available: bool
-    owner: str | None
-    visibility: str
-    last_error: str | None
-    hijacked: bool
-
-
-class SessionSnapshotResponse(TypedDict):
-    """Shape of GET /api/sessions/{id}/snapshot response."""
-
-    session_id: str
-    snapshot: dict | None
-    prompt_detected: dict | None
-    prompt_id: str | None
-
-
-class SessionEventsResponse(TypedDict):
-    """Shape of GET /api/sessions/{id}/events response."""
-
-    session_id: str
-    after_seq: int
-    latest_seq: int
-    min_event_seq: int
-    has_more: bool
-    events: list
-
-
-class SessionModeResponse(TypedDict):
-    """Shape of POST /api/sessions/{id}/mode response."""
-
-    ok: bool
-    input_mode: str
-    worker_id: str
-
-
-class SessionAnalyzeResponse(TypedDict):
-    """Shape of POST /api/sessions/{id}/analyze response."""
-
-    ok: bool
-    analysis: str | None
-    worker_id: str
-
-
-class RecordingMetaResponse(TypedDict):
-    """Shape of GET /api/sessions/{id}/recording response."""
-
-    session_id: str
-    enabled: bool
-    entry_count: int
-    exists: bool
-
-
-class RecordingEntry(TypedDict):
-    """Single entry from GET /api/sessions/{id}/recording/entries."""
-
-    ts: float
-    event: str
-    data: dict[str, Any]
-
-
-FrameType = Literal[
-    "snapshot_req",
-    "snapshot",
-    "term",
-    "input",
-    "control",
-    "hijack_state",
-    "analysis",
-    "error",
-    "worker_connected",
-    "worker_disconnected",
-    # Worker-originated lifecycle frame carrying input_mode.
-    "worker_hello",
-    # Browser-originated frames (heartbeat/ping keepalives, WS-level hijack requests).
-    # The CF backend routes hijack through REST; these arrive via WS from hijack.js.
-    "heartbeat",
-    "ping",
-    "hijack_request",
-    "hijack_release",
-    "hijack_step",
-    "hello",
-    "resume",
-]
-
 
 class ProtocolError(ValueError):
     pass
-
-
-class Frame(TypedDict, total=False):
-    type: FrameType
-    ts: float
-    data: str
-    screen: str
-    action: str
-    owner: str | None
-    hijacked: bool
-    lease_expires_at: float | None
-    formatted: str
-    message: str
-    mode: str  # worker_hello: input_mode value ("hijack" or "open")
-    token: str
 
 
 @dataclass(slots=True)
@@ -277,6 +110,11 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
         mode = value.get("input_mode")
         if mode in {"hijack", "open"}:
             normalized["mode"] = mode
+        if "protocol_version" in value:
+            try:
+                normalized["protocol_version"] = int(value["protocol_version"])
+            except (ValueError, TypeError):
+                pass
     elif frame_type == "resume":
         normalized["token"] = str(value.get("token", ""))
     elif frame_type in {

@@ -37,7 +37,7 @@ def test_run_as_uid_override() -> None:
 
 def test_run_as_uid_with_explicit_gid() -> None:
     pw = _current()
-    result = UidMap().resolve("anything", run_as_uid=pw.pw_uid, run_as_gid=0)
+    result = UidMap(allow_root=True).resolve("anything", run_as_uid=pw.pw_uid, run_as_gid=0)
     assert result.uid == pw.pw_uid
     assert result.gid == 0
 
@@ -140,3 +140,25 @@ def test_from_uid_unknown_uid_returns_synthetic_user() -> None:
     assert result.home == "/"
     assert result.shell == "/bin/sh"
     assert result.name == "999999999"
+
+def test_resolve_rejects_root_spec_by_default() -> None:
+    with pytest.raises(UidMapError, match="privileged"):
+        UidMap().resolve("anything", run_as="0:0")
+
+
+def test_resolve_rejects_root_name_by_default() -> None:
+    # "root" is almost always UID 0
+    with pytest.raises(UidMapError, match="privileged"):
+        UidMap().resolve("anything", run_as="root")
+
+
+def test_resolve_rejects_root_uid_by_default() -> None:
+    with pytest.raises(UidMapError, match="privileged"):
+        UidMap().resolve("anything", run_as_uid=0)
+
+
+def test_resolve_permits_root_if_explicitly_allowed() -> None:
+    # This test defines the "explicitly permitted" API we want to implement
+    result = UidMap(allow_root=True).resolve("anything", run_as="0:0")
+    assert result.uid == 0
+    assert result.gid == 0

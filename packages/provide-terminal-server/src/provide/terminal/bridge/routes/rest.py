@@ -70,6 +70,15 @@ except ImportError as _e:  # pragma: no cover
 
 
 from provide.telemetry import get_logger
+from provide.terminal.bridge.contracts import (
+    HijackAcquireResponse,
+    HijackEventsResponse,
+    HijackHeartbeatResponse,
+    HijackReleaseResponse,
+    HijackSnapshotResponse,
+    HijackStepResponse,
+    SessionModeResponse,
+)
 from provide.terminal.bridge.models import (
     HijackAcquireRequest,
     HijackHeartbeatRequest,

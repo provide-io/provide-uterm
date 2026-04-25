@@ -18,6 +18,8 @@ import logging
 import secrets
 import time
 
+from provide.terminal.bridge.contracts import CURRENT_PROTOCOL_VERSION
+
 logger = logging.getLogger(__name__)
 
 _ROLE_RANK = {"viewer": 0, "operator": 1, "admin": 2}
@@ -55,10 +57,12 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
                 runtime.store.save_snapshot(runtime.worker_id, runtime.last_snapshot)
             elif frame_type == "worker_hello":
                 mode = frame.get("mode")
+                protocol_v = frame.get("protocol_version")
                 if mode in {"hijack", "open"} and (mode != "open" or runtime.hijack.session is None):
                     # Block open mode while a hijack lease is active (mirrors FastAPI set_worker_hello_mode).
                     runtime.input_mode = mode
                     runtime.store.save_input_mode(runtime.worker_id, mode)
+                    logger.info("worker_hello worker_id=%s mode=%s protocol=%s", runtime.worker_id, mode, protocol_v)
             elif frame_type == "analysis":
                 formatted = str(frame.get("formatted", ""))
                 if formatted:
@@ -210,6 +214,7 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: object, frame: dict) -> N
             "resume_supported": True,
             "resume_token": new_token,
             "resumed": True,
+            "protocol_version": CURRENT_PROTOCOL_VERSION,
             "ts": time.time(),
         },
     )

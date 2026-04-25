@@ -21,37 +21,38 @@ from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from provide.terminal.bridge.hub.event_bus import EventBus
-    from provide.terminal.bridge.identity import Principal
+    from provide.terminal.bridge.identity import IdentityProvider, Principal
 
 from provide.telemetry import get_logger
 
 try:
-    from fastapi import APIRouter, WebSocket, WebSocketException
+    from fastapi import APIRouter, WebSocket, WebSocketException, status
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for TermHub: pip install 'provide-terminal[websocket]'") from _e
 
+import contextlib
+
 from provide.terminal.bridge.frames import HijackStateFrame, make_hijack_state_frame, make_worker_disconnected_frame
-from provide.terminal.bridge.hub.connections import _ConnectionMixin
-from provide.terminal.bridge.hub.ownership import _HijackOwnershipMixin
-from provide.terminal.bridge.hub.polling import _PollingMixin
 from provide.terminal.bridge.hub.approvals import InMemoryApprovalStore
-from provide.terminal.bridge.hub.resume import ResumeSession, ResumeTokenStore
-from provide.terminal.bridge.hub.redaction import StreamRedactor
+from provide.terminal.bridge.hub.connections import _ConnectionMixin
 from provide.terminal.bridge.hub.ext import (
     BehavioralAuditGate,
     BehavioralThresholds,
     ConnectionHeuristics,
     NoOpBehavioralAuditGate,
-    OutputPolicyGate,
     NoOpPolicyGate,
+    OutputPolicyGate,
     PolicyContext,
     PolicyDecision,
     PolicyGate,
 )
+from provide.terminal.bridge.hub.ownership import _HijackOwnershipMixin
+from provide.terminal.bridge.hub.polling import _PollingMixin
+from provide.terminal.bridge.hub.redaction import StreamRedactor
+from provide.terminal.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.terminal.bridge.models import WorkerTermState
 from provide.terminal.bridge.ratelimit import TokenBucket
 from provide.terminal.control_channel import encode_control, encode_data
-from provide.terminal.bridge.identity import IdentityProvider
 
 logger = get_logger(__name__)
 # Callback type aliases
@@ -306,17 +307,17 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             roles = self._map_roles(principal)
             # PolicyContext expects a single role string for now, we pick primary
             if roles:
-                 # Prefer highest privileged role for context
-                 if "admin" in roles: role = "admin"
-                 elif "operator" in roles: role = "operator"
-                 else: role = "viewer"
+                # Prefer highest privileged role for context
+                if "admin" in roles:
+                    role = "admin"
+                elif "operator" in roles:
+                    role = "operator"
+                else:
+                    role = "viewer"
 
         client_id = "anonymous"
         if principal:
-            if hasattr(principal, "subject_id"):
-                client_id = str(principal.subject_id)
-            else:
-                client_id = str(principal)
+            client_id = str(principal.subject_id) if hasattr(principal, "subject_id") else str(principal)
 
         metadata = {"principal": principal} if principal else {}
         return PolicyContext(
@@ -379,10 +380,10 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         is_term_data = msg.get("type") == "term"
         raw_data = str(msg.get("data", "")) if is_term_data else ""
 
-        for ws, role in browsers_with_roles:
+        for ws, _role in browsers_with_roles:
             try:
                 final_payload = _encode_browser_frame(msg)
-                
+
                 # Apply output redaction if enabled and this is terminal data
                 if is_term_data and self._output_policy_gate:
                     context = await self.prepare_policy_context(ws, worker_id, action="output")
@@ -548,7 +549,14 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
         """Clear heuristic state and call parent cleanup."""
         self._keystroke_timestamps.pop(ws, None)
+        self._input_buffers.pop(ws, None)
         return await super().cleanup_browser_disconnect(worker_id, ws, owned_hijack)
+
+    async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
+        """Clear input buffers for dead browsers and call parent cleanup."""
+        for ws in dead:
+            self._input_buffers.pop(ws, None)
+        return await super().remove_dead_browsers(worker_id, dead)
 
     async def _run_behavioral_audit_loop(self) -> None:
         """Periodically audit active connections for behavioral anomalies."""
@@ -563,10 +571,9 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Iterate all active browsers and evaluate behavioral heuristics."""
         async with self._lock:
             # Snapshot worker/browser mapping to avoid holding lock during HTTP calls
-            all_browsers: list[tuple[str, WebSocket]] = []
-            for worker_id, st in self._workers.items():
-                for ws in st.browsers:
-                    all_browsers.append((worker_id, ws))
+            all_browsers = [
+                (worker_id, ws) for worker_id, st in self._workers.items() for ws in st.browsers
+            ]
 
         for worker_id, ws in all_browsers:
             heuristics_data = self._get_heuristics(ws)
@@ -576,11 +583,11 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 timestamp=time.time(),
             )
             context = await self.prepare_policy_context(ws, worker_id, action="behavioral_audit")
-            
+
             decision = await self._behavioral_audit_gate.audit_connection(
                 heuristics, context, self._behavioral_thresholds
             )
-            
+
             if decision.action == "deny":
                 logger.warning(
                     "behavioral_audit_denied worker_id=%s reason=%s",
@@ -589,10 +596,8 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                 )
                 # For simplicity, we just close the socket if behavior is denied.
                 # A more advanced flow could trigger a Global Hold.
-                try:
+                with contextlib.suppress(Exception):
                     await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason=decision.reason or "Behavioral anomaly")
-                except Exception:
-                    pass
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
         """Deregister the worker WS and notify the EventBus on disconnect."""
@@ -799,7 +804,11 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
                     # Execute the broadcast across the group
                     await fo_ctrl.release_approved_command(request_id)
             elif decision.action == "deny":
-                logger.info("fanout_approval_rejected request_id=%s group_id=%s", request_id, getattr(req, "group_id", "unknown"))
+                logger.info(
+                    "fanout_approval_rejected request_id=%s group_id=%s",
+                    request_id,
+                    getattr(req, "group_id", "unknown"),
+                )
                 fo_ctrl = getattr(self, "fan_out_controller", None)
                 if fo_ctrl:
                     # Prune the pending command state
@@ -814,6 +823,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         elif decision.action == "deny":
             # Inject rejection message into the terminal stream
             from provide.terminal.control_channel import encode_data
+
             msg = f"\\r\\x1b[31m[REJECTED] Command '{command.strip()}' blocked by Admin.\\x1b[0m"
             if decision.reason:
                 msg += f" \\x1b[33mReason: {decision.reason}\\x1b[0m"
@@ -825,5 +835,12 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         for ws in list(st.browsers.keys()):
             if ws in self._paused_browsers:
                 self._paused_browsers.discard(ws)
-            await ws.send_text(_encode_browser_frame({"type": "approval_resolved", "outcome": "approved" if decision.action == "allow" else "rejected", "request_id": request_id}))
-
+            await ws.send_text(
+                _encode_browser_frame(
+                    {
+                        "type": "approval_resolved",
+                        "outcome": "approved" if decision.action == "allow" else "rejected",
+                        "request_id": request_id,
+                    }
+                )
+            )

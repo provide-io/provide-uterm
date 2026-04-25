@@ -13,12 +13,9 @@ from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from provide.terminal.bridge.contracts import InputMode, SessionLifecycle, Visibility
 from provide.terminal.defaults import TerminalDefaults
 from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
-
-SessionLifecycle = Literal["stopped", "starting", "running", "error"]
-InputMode = Literal["hijack", "open"]
-Visibility = Literal["public", "operator", "private"]
 
 # CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
 # These are fetched from third-party CDNs without Subresource Integrity (SRI)

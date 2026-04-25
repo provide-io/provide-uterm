@@ -25,6 +25,7 @@ except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for hijack routes: pip install 'provide-terminal[websocket]'") from _e
 
 
+from provide.terminal.bridge.contracts import CURRENT_PROTOCOL_VERSION
 from provide.terminal.bridge.frames import (
     coerce_worker_status_frame,
     make_analysis_frame,
@@ -151,14 +152,16 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         continue
                     if mtype == "worker_hello":
                         _hello_mode = msg.get("input_mode")
+                        _protocol_v = _safe_int(msg.get("protocol_version"), 0) if "protocol_version" in msg else None
                         if _hello_mode in ("hijack", "open"):
-                            mode_applied = await hub.set_worker_hello_mode(worker_id, _hello_mode)
+                            mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, protocol_version=_protocol_v)
                             if mode_applied:
                                 await hub.broadcast_hijack_state(worker_id)
                             logger.info(
-                                "worker_hello worker_id=%s input_mode=%s applied=%s",
+                                "worker_hello worker_id=%s input_mode=%s protocol=%s applied=%s",
                                 worker_id,
                                 _hello_mode,
+                                _protocol_v,
                                 mode_applied,
                             )
                         elif _hello_mode is not None:
@@ -304,6 +307,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             },
             "resume_supported": hub.resume_store is not None,
             "resume_token": _resume_token,
+            "protocol_version": CURRENT_PROTOCOL_VERSION,
         }
         if hasattr(hub, "deckmux_on_browser_connect"):
             _hello_kwargs["presence_enabled"] = True

@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import pytest
+import time
+
+from provide.terminal.control.plane import ControlPlaneConfig, bootstrap_control_plane
+from provide.terminal.control.plane.session.types import SessionRecord
+
+
+@pytest.mark.asyncio
+async def test_memory_transaction_rollback_reverts_state() -> None:
+    config = ControlPlaneConfig(backend="memory")
+    plane = await bootstrap_control_plane(config)
+    
+    # 1. Start a transaction
+    tx = await plane.begin()
+    store = plane.session_store(tx)
+    
+    session_id = "test-session"
+    record = SessionRecord(
+        session_id=session_id,
+        display_name="Test Session",
+        connector_type="pty",
+        owner="user",
+        visibility="private",
+        lifecycle_state="waiting",
+        created_at=time.time(),
+        updated_at=time.time(),
+    )
+    
+    # 2. Add a record
+    await store.upsert_session(record)
+    assert await store.get_session(session_id) == record
+    
+    # 3. Rollback
+    await tx.rollback()
+    
+    # 4. Verify state reverted
+    new_tx = await plane.begin()
+    new_store = plane.session_store(new_tx)
+    assert await new_store.get_session(session_id) is None
+
+
+@pytest.mark.asyncio
+async def test_memory_transaction_commit_persists_state() -> None:
+    config = ControlPlaneConfig(backend="memory")
+    plane = await bootstrap_control_plane(config)
+
+    # 1. Start a transaction
+    tx = await plane.begin()
+    store = plane.session_store(tx)
+
+    session_id = "test-session-commit"
+    record = SessionRecord(
+        session_id=session_id,
+        display_name="Test Session Commit",
+        connector_type="pty",
+        owner="user",
+        visibility="private",
+        lifecycle_state="waiting",
+        created_at=time.time(),
+        updated_at=time.time(),
+    )
+
+    # 2. Add a record
+    await store.upsert_session(record)
+
+    # 3. Commit
+    await tx.commit()
+
+    # 4. Verify state persisted
+    new_tx = await plane.begin()
+    new_store = plane.session_store(new_tx)
+    assert await new_store.get_session(session_id) == record

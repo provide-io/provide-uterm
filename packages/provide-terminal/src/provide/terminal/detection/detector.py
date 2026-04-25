@@ -176,13 +176,22 @@ class PromptDetector:
         h = hashlib.blake2s(norm.encode("utf-8", errors="replace")).hexdigest()
         cursor_at_end = int(bool(snapshot.get("cursor_at_end", True)))
         trailing = int(bool(snapshot.get("has_trailing_space", False)))
+
+        cursor = snapshot.get("cursor") or {}
+        try:
+            cx = int(cursor.get("x", 0) or 0)
+            cy = int(cursor.get("y", 0) or 0)
+        except (ValueError, TypeError):
+            cx = 0
+            cy = 0
+
         # cursor_at_end and trailing are included in the fingerprint so that a
         # screen whose cursor position oscillates (e.g. mid-burst telnet frames)
         # is re-evaluated rather than served stale from cache.  The trade-off is
         # that cache hits are missed on cursor-only changes between otherwise
         # identical screens.  A future optimisation could fingerprint content
         # only and use the flags purely as detection inputs, not cache keys.
-        return f"{h}:{cursor_at_end}:{trailing}"
+        return f"{h}:{cursor_at_end}:{trailing}:{cx}:{cy}"
 
     @staticmethod
     def _resolve_negative_regex(pattern: dict[str, Any]) -> str | None:
