@@ -12,65 +12,24 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from provide.terminal.server.models import AuthConfig, ServerConfig, SessionDefinition, validation_error_message
+from provide.terminal.server.config_schema import UtermServerConfig
+from provide.terminal.server.models import validation_error_message
 
 
-def default_server_config() -> ServerConfig:
-    """Return a runnable default config with one auto-start shell session."""
-    return ServerConfig(
-        auth=AuthConfig(mode="dev"),
-        sessions=[
-            SessionDefinition(
-                session_id="provide-shell",
-                display_name="Provide Shell",
-                connector_type="shell",
-                input_mode="open",
-                auto_start=True,
-                tags=["shell", "reference"],
-            )
-        ],
-    )
+def default_server_config() -> UtermServerConfig:
+    """Return a runnable default config."""
+    return UtermServerConfig()
 
 
-def _merged_config_mapping(data: dict[str, Any]) -> dict[str, Any]:
-    unknown_sections = set(data) - set(ServerConfig.model_fields)
-    if unknown_sections:
-        raise ValueError(f"Extra inputs are not permitted: {sorted(unknown_sections)!r}")
-    base = default_server_config().model_dump(mode="python")
-    merged = dict(base)
-    for section in (
-        "server",
-        "auth",
-        "control_plane",
-        "ui",
-        "recording",
-        "profiles",
-        "security",
-        "tunnel",
-        "pam",
-        "governance",
-    ):
-        if section in data:
-            if not isinstance(data[section], dict):
-                raise ValueError(f"[{section}] must be a table, got {type(data[section]).__name__!r}")
-            merged[section] = {**merged[section], **data[section]}
-    for field in ("session_idle_timeout_s", "session_retention_s", "browser_rate_limit_per_sec"):
-        if field in data:
-            merged[field] = data[field]
-    if "sessions" in data:
-        merged["sessions"] = [entry for entry in data["sessions"] if isinstance(entry, dict)]
-    return merged
-
-
-def config_from_mapping(data: dict[str, Any]) -> ServerConfig:
+def config_from_mapping(data: dict[str, Any]) -> UtermServerConfig:
     """Build a validated config object from a plain mapping."""
     try:
-        return ServerConfig.model_validate(_merged_config_mapping(data))
+        return UtermServerConfig.model_validate(data)
     except ValidationError as exc:
         raise ValueError(validation_error_message(exc)) from exc
 
 
-def load_server_config(path: str | Path | None = None) -> ServerConfig:
+def load_server_config(path: str | Path | None = None) -> UtermServerConfig:
     """Load server config from TOML, or return the default config if *path* is omitted."""
     if path is None:
         return default_server_config()

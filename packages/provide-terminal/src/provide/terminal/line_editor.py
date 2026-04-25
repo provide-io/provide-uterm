@@ -185,18 +185,21 @@ class LineEditor:
             return None
 
         # ── Regular character insertion ────────────────────────────────────
-        if len(self.buffer) < self.max_length:
-            tail = self.buffer[self.cursor_pos :]
-            self.buffer = self.buffer[: self.cursor_pos] + ch + tail
-            self.cursor_pos += 1
-            if not tail:
-                # Inserting at end: simple echo
-                await self._emit("*" if self.password_mode else ch)
-            else:
-                # Mid-line insert: echo new char + redraw tail, move cursor back
-                display = self._display(ch + tail)
-                seq = display + f"\x1b[{len(tail)}D"
-                await self._emit(seq)
+        if len(self.buffer) >= self.max_length:
+            await self._emit("\a")
+            return None
+
+        tail = self.buffer[self.cursor_pos :]
+        self.buffer = self.buffer[: self.cursor_pos] + ch + tail
+        self.cursor_pos += 1
+        if not tail:
+            # Inserting at end: simple echo
+            await self._emit("*" if self.password_mode else ch)
+        else:
+            # Mid-line insert: echo new char + redraw tail, move cursor back
+            display = self._display(ch + tail)
+            seq = display + f"\x1b[{len(tail)}D"
+            await self._emit(seq)
         return None
 
     def reset(self) -> None:

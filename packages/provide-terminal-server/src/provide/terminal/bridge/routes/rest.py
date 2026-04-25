@@ -141,28 +141,15 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         hijack_id = str(uuid.uuid4())
         wall_now = time.time()
         mono_now = time.monotonic()
-        ok = await hub.send_worker(
-            worker_id,
-            {
-                "type": "control",
-                "action": "pause",
-                "owner": request.owner,
-                "lease_s": lease_s,
-                "hijack_id": hijack_id,
-                "ts": wall_now,
-            },
-        )
-        if not ok:
-            return JSONResponse({"error": "No worker connected for this session."}, status_code=409)
 
-        # From here the worker is paused. Guard against CancelledError (client
-        # disconnect) or any other exception raised before the session is
-        # committed: the finally block sends a compensating resume so the worker
-        # is not permanently stuck in the paused state.
+        # From here the worker is paused (atomically in try_acquire_rest_hijack).
+        # Guard against CancelledError (client disconnect) or any other exception
+        # raised before the session is committed: the finally block sends a
+        # compensating resume so the worker exits the hold state.
         session_committed = False
         try:
-            # Atomically check for concurrent hijackers and write the session.
-            acquired, err = await hub.try_acquire_rest_hijack(
+            
+            ok, err = await hub.try_acquire_rest_hijack(
                 worker_id,
                 owner=request.owner,
                 lease_s=lease_s,
