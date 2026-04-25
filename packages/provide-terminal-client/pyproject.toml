@@ -6,7 +6,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "provide-terminal>=0.4.0-client"
+name = "provide-terminal-client"
 dynamic = ["version"]
 description = "Client libraries, transports, and AI/MCP integration for provide-terminal"
 requires-python = ">=3.11"
