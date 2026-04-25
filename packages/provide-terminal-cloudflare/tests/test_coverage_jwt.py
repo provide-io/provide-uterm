@@ -377,3 +377,26 @@ async def test_decode_jwt_missing_public_key_raises() -> None:
     config = JwtConfig(mode="jwt", public_key_pem=None, jwks_url=None)
     with pytest.raises(JwtValidationError, match="missing jwt public key"):
         await decode_jwt("some.token.here", config)
+
+# ---------------------------------------------------------------------------
+# _fetch_jwks (lines 72-97)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fetch_jwks_urllib_timeout() -> None:
+    """_fetch_jwks uses a 5s timeout for urllib.request.urlopen."""
+    import json
+    from unittest.mock import MagicMock, patch
+    from provide.terminal.cloudflare.auth.jwt import _fetch_jwks
+
+    url = "https://example.com/jwks-timeout-test-internal.json"
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({"keys": []}).encode()
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        await _fetch_jwks(url)
+        assert mock_urlopen.called
+        _, kwargs = mock_urlopen.call_args
+        assert kwargs.get("timeout") == 5

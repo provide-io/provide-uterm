@@ -158,13 +158,18 @@ class _ConnectionMixin:
             st = self._workers.get(worker_id)
             return st is not None and st.worker_ws is ws
 
-    async def set_worker_hello_mode(self, worker_id: str, mode: str) -> bool:
-        """Set input_mode from a ``worker_hello`` message.
+    async def set_worker_hello(self, worker_id: str, mode: str, protocol_version: int | None = None) -> bool:
+        """Process a ``worker_hello`` message: set input_mode and log protocol.
 
         Returns ``True`` if the mode was applied, ``False`` if the worker is no
         longer registered or if switching to ``"open"`` while a hijack lease is
         active (mode change is blocked in that case).
         """
+        if protocol_version is not None:
+            logger.info("worker_hello_protocol worker_id=%s version=%d", worker_id, protocol_version)
+            if protocol_version < 1:
+                logger.warning("worker_hello_legacy_protocol worker_id=%s version=%d", worker_id, protocol_version)
+
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:

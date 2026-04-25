@@ -7,6 +7,8 @@ import time
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from provide.terminal.bridge.contracts import CURRENT_PROTOCOL_VERSION
+
 try:
     from provide.terminal.cloudflare.api.http_routes import route_http
     from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
@@ -438,6 +440,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                                 "resume_supported": True,
                                 "resume_token": resume_token,
                                 "presence_enabled": bool(self.meta.get("presence")),
+                                "protocol_version": CURRENT_PROTOCOL_VERSION,
                                 "ts": time.time(),
                             }
                         )
@@ -507,6 +510,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                         "resume_supported": True,
                         "resume_token": _open_resume_token,
                         "presence_enabled": bool(self.meta.get("presence")),
+                        "protocol_version": CURRENT_PROTOCOL_VERSION,
                         "ts": time.time(),
                     },
                 )

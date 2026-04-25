@@ -10,6 +10,7 @@ import { DashboardPage } from "./components/dashboard/DashboardPage";
 import { OperatorPage } from "./components/operator/OperatorPage";
 import { ReplayPage } from "./components/replay/ReplayPage";
 import { SessionPage } from "./components/session/SessionPage";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 
 /** Wrapper that delegates to the vanilla TS inspect view. */
 function InspectPage({ bootstrap }: { bootstrap: AppBootstrap }) {
@@ -28,18 +29,24 @@ interface AppProps {
 }
 
 export function App({ bootstrap }: AppProps) {
-  switch (bootstrap.page_kind) {
-    case "dashboard":
-      return <DashboardPage bootstrap={bootstrap} />;
-    case "connect":
-      return <ConnectPage bootstrap={bootstrap} />;
-    case "operator":
-      return <OperatorPage bootstrap={bootstrap} />;
-    case "session":
-      return <SessionPage bootstrap={bootstrap} />;
-    case "replay":
-      return <ReplayPage bootstrap={bootstrap} />;
-    case "inspect":
-      return <InspectPage bootstrap={bootstrap} />;
-  }
+  return (
+    <ErrorBoundary>
+      {(() => {
+        switch (bootstrap.page_kind) {
+          case "dashboard":
+            return <DashboardPage bootstrap={bootstrap} />;
+          case "connect":
+            return <ConnectPage bootstrap={bootstrap} />;
+          case "operator":
+            return <OperatorPage bootstrap={bootstrap} />;
+          case "session":
+            return <SessionPage bootstrap={bootstrap} />;
+          case "replay":
+            return <ReplayPage bootstrap={bootstrap} />;
+          case "inspect":
+            return <InspectPage bootstrap={bootstrap} />;
+        }
+      })()}
+    </ErrorBoundary>
+  );
 }

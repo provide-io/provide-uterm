@@ -97,6 +97,7 @@ class HelloFrame(TypedDict, total=False):
     resume_supported: bool
     resume_token: str | None
     resumed: bool
+    protocol_version: int
 
 
 def make_error_frame(message: str) -> ErrorFrame:

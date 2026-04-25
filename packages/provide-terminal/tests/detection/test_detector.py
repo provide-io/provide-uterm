@@ -482,3 +482,19 @@ def test_cursor_miss_candidate_includes_kv_extract() -> None:
     result = d.detect_prompt(snapshot)
     assert result is not None
     assert result.kv_extract == kv_cfg
+
+def test_prompt_fingerprint_includes_cursor_coords(snap_factory) -> None:
+    d = PromptDetector([])
+    snap = snap_factory("some text")
+    snap["cursor"] = {"x": 10, "y": 20}
+    fp = d.prompt_fingerprint(snap)
+    assert fp.endswith(":10:20")
+
+
+def test_prompt_fingerprint_cursor_exception_handled(snap_factory) -> None:
+    d = PromptDetector([])
+    snap = snap_factory("some text")
+    snap["cursor"] = {"x": "bad", "y": None}
+    fp = d.prompt_fingerprint(snap)
+    # Should default to 0:0
+    assert fp.endswith(":0:0")

@@ -213,9 +213,9 @@ class TestTerminalSSHServer:
         server = TerminalSSHServer({}, max_connections_per_ip=5)
         assert server.begin_auth("user") is True
         assert server.password_auth_supported() is True
-        assert server.validate_password("user", "pass") is True
+        assert server.validate_password("user", "pass") is False
         assert server.public_key_auth_supported() is True
-        assert server.validate_public_key("user", MagicMock()) is True
+        assert server.validate_public_key("user", MagicMock()) is False
 
 
 class TestSSHPerInstanceIsolation:

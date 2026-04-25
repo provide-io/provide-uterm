@@ -23,7 +23,9 @@ try:
 
     _js_crypto = _js_mod.crypto  # pragma: no cover
     _js_object = _js_mod.Object  # pragma: no cover
-    from pyodide.ffi import to_js as _to_js  # type: ignore[import-not-found]  # pragma: no cover
+    from pyodide.ffi import to_js
+
+    _to_js = to_js  # pragma: no cover
 
     _IN_CF_RUNTIME = True  # pragma: no cover
 except ImportError:
@@ -89,7 +91,7 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
         import urllib.request
 
         _req = urllib.request.Request(url, headers={"User-Agent": "provide-terminal/1.0"})  # noqa: S310
-        with urllib.request.urlopen(_req) as resp:  # noqa: S310
+        with urllib.request.urlopen(_req, timeout=5) as resp:  # noqa: S310
             result = json.loads(resp.read())
 
     _JWKS_CACHE[url] = (time.monotonic(), result)

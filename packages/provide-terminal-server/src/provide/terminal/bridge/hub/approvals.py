@@ -52,7 +52,11 @@ class InMemoryApprovalStore:
 
     async def cleanup_expired(self) -> None:
         now = time.time()
-        for req in list(self._requests.values()):
+        # Prune entries that have been in a terminal state (APPROVED, REJECTED, TIMEOUT)
+        # for more than 1 hour beyond their expiration time.
+        PRUNE_TTL = 3600
+        
+        for req_id, req in list(self._requests.items()):
             if req.status == ApprovalStatus.PENDING and req.expires_at < now:
                 req.status = ApprovalStatus.TIMEOUT
                 if self.on_expired:
@@ -60,6 +64,8 @@ class InMemoryApprovalStore:
                     res = self.on_expired(req.id)
                     if asyncio.iscoroutine(res):
                         await res
+            elif req.status != ApprovalStatus.PENDING and (req.expires_at + PRUNE_TTL) < now:
+                del self._requests[req_id]
 
 
 def create_approvals_router() -> APIRouter:

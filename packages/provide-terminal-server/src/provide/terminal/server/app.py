@@ -104,6 +104,13 @@ def _validate_frontend_assets() -> None:
 def _validate_auth_config(config: ServerConfig) -> None:
     mode = str(config.auth.mode).strip().lower()
     if mode in {"none", "dev"}:
+        host = str(config.server.host).strip().lower()
+        if host not in {"127.0.0.1", "localhost", "::1"}:
+            raise RuntimeError(
+                f"auth.mode='{mode}' is only permitted when server.host is a loopback address "
+                f"(127.0.0.1, localhost, or ::1). Got: {host}"
+            )
+
         # Warn loudly — in dev/none mode any request can spoof any principal
         # via the X-Principal/X-Role headers.  Never expose this mode publicly.
         logger.warning(
