@@ -130,4 +130,10 @@ __all__ = [
     "ResolvedIdentity",
     "SSHKeyResolver",
     "fingerprint_from_openssh_blob",
+    # control-plane namespaces
+    "control_channel_namespace",
+    "control_plane_namespace",
 ]
+
+from provide.terminal.control import channel as control_channel_namespace
+from provide.terminal.control import plane as control_plane_namespace

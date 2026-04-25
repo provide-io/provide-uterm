@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Demo: Spawn 9 fleet shell workers, register with the fleet manager, broadcast a deploy command."""
+"""Demo: Spawn 9 fleet shell workers, register with the External Management Tier, broadcast a deploy command."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from scripts.demos import (
 )
 
 FEATURE = "fleet"
-DESCRIPTION = "Spawn 9 fleet shell workers, register with the fleet manager, broadcast a deploy command"
+DESCRIPTION = "Spawn 9 fleet shell workers, register with the External Management Tier, broadcast a deploy command"
 TITLE = "Fleet Management"
 SUBTITLE = "Broadcast deploy to 9 workers simultaneously"
 HIGHLIGHT_START_S: float = 13.0

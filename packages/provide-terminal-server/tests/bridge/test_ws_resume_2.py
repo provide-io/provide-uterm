@@ -9,6 +9,7 @@ Tests role restoration, open-mode guard, broadcast, and callback flows.
 
 from __future__ import annotations
 
+import asyncio
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -180,7 +181,7 @@ class TestResumeRoleRestoration:
             token = hello["resume_token"]
 
         # Mark the token as a former hijack owner
-        store.mark_hijack_owner(token, True)
+        asyncio.run(store.mark_hijack_owner(token, True))
 
         # Reconnect with viewer role — hijack must not be reclaimed
         hub2 = TermHub(
@@ -340,7 +341,7 @@ class TestResumeOpenModeGuard:
                 token = hello["resume_token"]
                 ws.receive_json()  # snapshot
 
-            store.mark_hijack_owner(token, True)
+            asyncio.run(store.mark_hijack_owner(token, True))
 
             # Switch to open mode via REST (synchronous — processed before resume attempt)
             resp = client.post(f"/worker/{WID}/input_mode", json={"input_mode": "open"})
@@ -382,7 +383,7 @@ class TestResumeHijackReclaimBroadcast:
                 token_a = hello_a["resume_token"]
                 ws_a.receive_json()  # snapshot
 
-            store.mark_hijack_owner(token_a, True)
+            asyncio.run(store.mark_hijack_owner(token_a, True))
 
             # Browser B is an observer that stays connected
             with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws_b:

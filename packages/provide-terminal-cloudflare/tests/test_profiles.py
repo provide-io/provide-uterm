@@ -269,7 +269,7 @@ async def test_connect_from_profile() -> None:
         },
     )
     pid = created["profile_id"]
-    status, body = await _call(kv, "POST", f"/api/profiles/{pid}/connect", {"password": "secret"})
+    status, body = await _call(kv, "POST", f"/api/profiles/{pid}/connect", {"password": "uterm-test-secret-32-byte-minimum-key"})
     assert status == 200
     assert body["session_id"].startswith("connect-")
     assert body["display_name"] == "SSH Prod"

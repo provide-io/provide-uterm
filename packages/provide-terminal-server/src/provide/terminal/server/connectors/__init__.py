@@ -7,41 +7,32 @@
 
 from __future__ import annotations
 
-import contextlib
+from typing import TYPE_CHECKING
 
 from provide.terminal.server.connectors.base import SessionConnector
-from provide.terminal.server.connectors.registry import build_connector, register_connector, registered_types
-from provide.terminal.server.connectors.telnet import TelnetSessionConnector  # registers "telnet"
+from provide.terminal.server.connectors.registry import (
+    build_connector,
+    register_connector,
+    registered_types,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 __all__ = [
     "KNOWN_CONNECTOR_TYPES",
     "SessionConnector",
-    "ShellSessionConnector",
-    "SshSessionConnector",
-    "TelnetSessionConnector",
-    "UshellConnector",
-    "WebSocketSessionConnector",
     "build_connector",
+    "register_connector",
+    "registered_types",
 ]
 
-with contextlib.suppress(ImportError):
-    from provide.terminal.server.connectors.shell import ShellSessionConnector  # registers "shell"
-with contextlib.suppress(ImportError):
-    from provide.terminal.server.connectors.ssh import SshSessionConnector  # registers "ssh"
-with contextlib.suppress(ImportError):
-    from provide.terminal.server.connectors.websocket import WebSocketSessionConnector  # registers "websocket"
-with contextlib.suppress(ImportError):
-    # register_connector is always available (from our own registry.py);
-    # only the UshellConnector import is optional — it requires provide-terminal installed.
-    from provide.terminal.shell.terminal._connector import UshellConnector
 
-    register_connector("ushell", UshellConnector)
+def __getattr__(name: str) -> object:
+    if name == "KNOWN_CONNECTOR_TYPES":
+        return registered_types()
+    if name == "TelnetSessionConnector":
+        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
 
-with contextlib.suppress(ImportError):
-    import provide.terminal.pty.connector  # registers "pty"
-
-with contextlib.suppress(ImportError):
-    import provide.terminal.pty.capture_connector  # registers "pty_capture"
-
-# Derived from the registry — reflects whatever connectors are available in this env.
-KNOWN_CONNECTOR_TYPES: frozenset[str] = registered_types()
+        return TelnetSessionConnector
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

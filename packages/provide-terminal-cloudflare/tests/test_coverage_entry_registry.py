@@ -551,7 +551,7 @@ async def test_route_request_cf_service_token_bypasses_jwt() -> None:
         SimpleNamespace(
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
-            JWT_PUBLIC_KEY_PEM="secret",
+            JWT_PUBLIC_KEY_PEM="uterm-test-secret-32-byte-minimum-key",
             WORKER_BEARER_TOKEN="tok",
         )
     )

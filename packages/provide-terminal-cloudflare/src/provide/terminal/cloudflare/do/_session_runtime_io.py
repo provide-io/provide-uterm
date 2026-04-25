@@ -63,6 +63,11 @@ class _SessionRuntimeIoMixin:
         row = self.store.load_session(self.worker_id)  # type: ignore[attr-defined]
         if row is None:
             return
+        deleted_at = row.get("deleted_at")
+        if deleted_at is not None:
+            self._deleted_at = float(deleted_at)  # type: ignore[attr-defined]
+            self.lifecycle_state = "deleted"  # type: ignore[attr-defined]
+            return
         hijack_id = row.get("hijack_id")
         owner = row.get("owner")
         lease_expires_at = row.get("lease_expires_at")

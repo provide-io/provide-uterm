@@ -68,7 +68,7 @@ docker compose -f docker/docker-compose.yml up
 | `provide-terminal` | Core library: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay |
 | `provide-terminal-server` | Server stack: bridge hub, FastAPI server, CLI (`uterm`, `uterm-server`), tunnel, gateway |
 | `provide-terminal-client` | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`) |
-| `provide-terminal-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, fleet manager (`uterm-manager`) |
+| `provide-terminal-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, External Management Tier (`uterm-manager`) |
 | `provide-terminal-cloudflare` | CF Worker + Durable Object adapter |
 | `provide-terminal-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
 | `provide-terminal-app` | App shell |

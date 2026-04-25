@@ -1,6 +1,6 @@
 # Fleet Management
 
-Spawn multiple workers, have them self-register with the fleet manager, and then coordinate
+Spawn multiple workers, have them self-register with the External Management Tier, and then coordinate
 them as a group. Workers check in automatically on startup, so you get a live inventory of
 what's running and where — no manual registration required.
 

@@ -879,7 +879,11 @@ export class ProvideHijack {
                 if (!this._ws || this._ws.readyState !== WebSocket.OPEN)
                     return;
                 // Unescape \\r → \r, \\n → \n, \\t → \t, \\e → ESC
-                const data = raw.replace(/\\r/g, "\r").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\e/g, "\x1b");
+                let data = raw.replace(/\\r/g, "\r").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\e/g, "\x1b");
+                // Ensure a command terminator is present if not already there
+                if (!data.endsWith("\r") && !data.endsWith("\n")) {
+                    data += "\r";
+                }
                 this._showActivityIndicator();
                 this._wsSend({ type: "input", data });
                 inputField.value = "";

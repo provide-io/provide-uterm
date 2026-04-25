@@ -113,7 +113,7 @@ def create_page_router() -> APIRouter:
                 fitaddon_cdn_integrity=cfg.ui.fitaddon_cdn_integrity,
             )
         )
-        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or await resolve_http_principal(request, cfg.auth)
         _set_page_cookies(response, request, cfg, principal.name, "operator", secure=secure)
         return response
 
@@ -124,7 +124,7 @@ def create_page_router() -> APIRouter:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or await resolve_http_principal(request, cfg.auth)
         authz = request.app.state.uterm_authz
         if not await authz.can_read_session(principal, session):
             raise HTTPException(status_code=403, detail="insufficient privileges")
@@ -152,7 +152,7 @@ def create_page_router() -> APIRouter:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or await resolve_http_principal(request, cfg.auth)
         authz = request.app.state.uterm_authz
         if not await authz.can_read_session(principal, session):
             raise HTTPException(status_code=403, detail="insufficient privileges")
@@ -180,7 +180,7 @@ def create_page_router() -> APIRouter:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or await resolve_http_principal(request, cfg.auth)
         authz = request.app.state.uterm_authz
         if not await authz.can_read_session(principal, session):
             raise HTTPException(status_code=403, detail="insufficient privileges")
@@ -207,7 +207,7 @@ def create_page_router() -> APIRouter:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or await resolve_http_principal(request, cfg.auth)
         authz = request.app.state.uterm_authz
         if not await authz.can_read_session(principal, session):
             raise HTTPException(status_code=403, detail="insufficient privileges")
@@ -231,7 +231,7 @@ def create_page_router() -> APIRouter:
     async def connect_view(request: Request) -> HTMLResponse:
         cfg = request.app.state.uterm_config
         secure = _is_secure_request(request)
-        principal = getattr(request.state, "uterm_principal", None) or resolve_http_principal(request, cfg.auth)
+        principal = getattr(request.state, "uterm_principal", None) or await resolve_http_principal(request, cfg.auth)
         response = HTMLResponse(
             connect_page_html(
                 cfg.server.title,

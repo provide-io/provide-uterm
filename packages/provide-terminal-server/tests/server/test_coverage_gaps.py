@@ -16,6 +16,7 @@ import jwt as _jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from provide.terminal.recording import LocalFileRecordingStore
 from provide.terminal.server import create_server_app, default_server_config
 from provide.terminal.server.models import (
     AuthConfig,
@@ -61,11 +62,13 @@ def _make_registry(
     recording: RecordingConfig | None = None,
 ) -> SessionRegistry:
     hub = _make_hub()
+    recording_cfg = recording or RecordingConfig()
     return SessionRegistry(
         sessions or [],
         hub=hub,
         public_base_url="http://localhost:9999",
-        recording=recording or RecordingConfig(),
+        recording=recording_cfg,
+        recording_store=LocalFileRecordingStore(recording_cfg.directory),
     )
 
 

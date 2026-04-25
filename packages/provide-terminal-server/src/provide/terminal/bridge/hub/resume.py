@@ -4,26 +4,27 @@
 #
 """Resume token store for WebSocket session resumption.
 
-When a browser WS drops, its role and hijack ownership are lost.  The resume
+When a browser WS drops, its role and hijack ownership are lost. The resume
 token store allows a reconnecting browser to prove it was the same session
 and reclaim its previous role / hijack ownership within a configurable TTL.
 
 Two implementations are provided:
 
-* :class:`InMemoryResumeStore` — lightweight, single-process, no dependencies.
-* ``SqliteResumeStore`` (CF package) — durable, backed by DO SQLite.
+* :class:`InMemoryResumeStore` - lightweight, single-process, no dependencies.
+* :class:`ControlPlaneResumeStore` - bridge adapter backed by the async
+  control-plane token store.
 """
 
 from __future__ import annotations
 
 import secrets
 import time
-from dataclasses import dataclass
+from contextlib import suppress
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, replace
 from typing import Any, Protocol, runtime_checkable
 
-from provide.telemetry import get_logger
-
-logger = get_logger(__name__)
+from provide.terminal.control.plane.token.types import ResumeTokenRecord
 
 
 @dataclass(slots=True)
@@ -41,39 +42,35 @@ class ResumeSession:
 
 @runtime_checkable
 class ResumeTokenStore(Protocol):
-    """Abstract interface for resume token persistence."""
+    """Abstract interface for async resume token persistence."""
 
-    def create(self, worker_id: str, role: str, ttl_s: float) -> str:
+    async def create(self, worker_id: str, role: str, ttl_s: float) -> str:
         """Create a new resume token and return it."""
-        ...
 
-    def get(self, token: str) -> ResumeSession | None:
+    async def get(self, token: str) -> ResumeSession | None:
         """Look up a token, returning ``None`` if expired or not found."""
-        ...
 
-    def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
+    async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
         """Flag that the session held (or lost) hijack ownership at disconnect."""
-        ...
 
-    def revoke(self, token: str) -> None:
+    async def revoke(self, token: str) -> None:
         """Invalidate a token immediately (e.g. after successful resume)."""
-        ...
 
 
 class InMemoryResumeStore:
     """In-memory resume token store with automatic expiry pruning.
 
-    Suitable for single-process deployments.  Tokens are pruned lazily on
+    Suitable for single-process deployments. Tokens are pruned lazily on
     :meth:`get` and eagerly via :meth:`cleanup_expired`.
     """
 
     def __init__(self) -> None:
         self._tokens: dict[str, ResumeSession] = {}
         # Reverse mapping: allows disconnect handler to find a token by WS identity
-        # without scanning all tokens.  Managed externally by TermHub via
+        # without scanning all tokens. Managed externally by TermHub via
         # _ws_to_resume_token.
 
-    def create(self, worker_id: str, role: str, ttl_s: float) -> str:
+    async def create(self, worker_id: str, role: str, ttl_s: float) -> str:
         # Opportunistically prune on create so expired entries cannot grow
         # without bound in long-lived processes with repeated browser churn.
         self.cleanup_expired()
@@ -89,7 +86,7 @@ class InMemoryResumeStore:
         )
         return token
 
-    def get(self, token: str) -> ResumeSession | None:
+    async def get(self, token: str) -> ResumeSession | None:
         session = self._tokens.get(token)
         if session is None:
             return None
@@ -98,12 +95,12 @@ class InMemoryResumeStore:
             return None
         return session
 
-    def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
+    async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
         session = self._tokens.get(token)
         if session is not None:
             session.was_hijack_owner = is_owner
 
-    def revoke(self, token: str) -> None:
+    async def revoke(self, token: str) -> None:
         self._tokens.pop(token, None)
 
     def cleanup_expired(self) -> int:
@@ -121,3 +118,128 @@ class InMemoryResumeStore:
         """Return a snapshot of all non-expired tokens (for diagnostics)."""
         now = time.monotonic()
         return {t: s for t, s in self._tokens.items() if now <= s.expires_at}
+
+
+@runtime_checkable
+class _ControlPlaneResumeTokenStore(Protocol):
+    async def create_resume_token(self, record: Any) -> None: ...
+
+    async def get_resume_token(self, token_value: str) -> Any | None: ...
+
+    async def revoke_resume_token(self, token_value: str, revoked_at: float) -> None: ...
+
+
+@runtime_checkable
+class _ControlPlaneResumeBackend(Protocol):
+    async def begin(self) -> Any: ...
+
+    def token_store(self, tx: Any) -> _ControlPlaneResumeTokenStore: ...
+
+
+class ControlPlaneResumeStore:
+    """Async resume token store backed by the control-plane token store."""
+
+    def __init__(self, control_plane: _ControlPlaneResumeBackend) -> None:
+        self._control_plane = control_plane
+        self._created_at_mono: dict[str, float] = {}
+
+    async def _run_tx(self, op: Callable[[Any], Awaitable[Any]]) -> Any:
+        tx = await self._control_plane.begin()
+        store = self._control_plane.token_store(tx)
+        try:
+            result = await op(store)
+        except Exception:
+            with suppress(Exception):
+                await tx.rollback()
+            raise
+        await tx.commit()
+        return result
+
+    async def create(self, worker_id: str, role: str, ttl_s: float) -> str:
+        token = secrets.token_urlsafe(32)
+        created_at_mono = time.monotonic()
+        created_at_wall = time.time()
+        record = _make_resume_record(
+            token_value=token,
+            session_id=worker_id,
+            role=role,
+            created_at=created_at_wall,
+            expires_at=created_at_wall + ttl_s,
+            was_hijack_owner=False,
+            revoked_at=None,
+        )
+
+        async def _op(store: _ControlPlaneResumeTokenStore) -> None:
+            await store.create_resume_token(record)
+
+        await self._run_tx(_op)
+        self._created_at_mono[token] = created_at_mono
+        return token
+
+    async def get(self, token: str) -> ResumeSession | None:
+        async def _op(store: _ControlPlaneResumeTokenStore) -> ResumeSession | None:
+            record = await store.get_resume_token(token)
+            if record is None:
+                self._created_at_mono.pop(token, None)
+                return None
+            now_wall = time.time()
+            now_mono = time.monotonic()
+            if now_wall > float(record.expires_at):
+                await store.revoke_resume_token(token, time.time())
+                self._created_at_mono.pop(token, None)
+                return None
+            age_s = max(0.0, now_wall - float(record.created_at))
+            created_at = self._created_at_mono.get(token, now_mono - age_s)
+            expires_at = now_mono + max(0.0, float(record.expires_at) - now_wall)
+            return ResumeSession(
+                token=str(record.token_value),
+                worker_id=str(record.session_id),
+                role=str(record.role),
+                created_at=created_at,
+                expires_at=expires_at,
+                was_hijack_owner=bool(record.was_hijack_owner),
+                wall_created_at=float(record.created_at),
+            )
+
+        return await self._run_tx(_op)
+
+    async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
+        async def _op(store: _ControlPlaneResumeTokenStore) -> None:
+            record = await store.get_resume_token(token)
+            if record is None:
+                return
+            await store.create_resume_token(replace(record, was_hijack_owner=is_owner))
+
+        await self._run_tx(_op)
+
+    async def revoke(self, token: str) -> None:
+        async def _op(store: _ControlPlaneResumeTokenStore) -> None:
+            record = await store.get_resume_token(token)
+            if record is None:
+                self._created_at_mono.pop(token, None)
+                return
+            await store.revoke_resume_token(token, time.time())
+            self._created_at_mono.pop(token, None)
+
+        await self._run_tx(_op)
+
+
+def _make_resume_record(
+    *,
+    token_value: str,
+    session_id: str,
+    role: str,
+    created_at: float,
+    expires_at: float,
+    was_hijack_owner: bool,
+    revoked_at: float | None,
+) -> ResumeTokenRecord:
+    return ResumeTokenRecord(
+        token_value=token_value,
+        session_id=session_id,
+        role=role,
+        created_at=created_at,
+        expires_at=expires_at,
+        was_hijack_owner=was_hijack_owner,
+        revoked_at=revoked_at,
+    )

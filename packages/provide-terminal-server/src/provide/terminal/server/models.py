@@ -64,6 +64,12 @@ class AuthConfig(ServerBaseModel):
     api_keys_enabled: bool = False  # Opt-in API key authentication
     header_mode_acknowledged: bool = False  # Must be set True to allow auth.mode='header'
 
+    identity_provider: Literal["local", "webhook"] = "local"
+    delegate_roles: bool = True
+    webhook_idp_url: str | None = None
+    webhook_idp_secret: str | None = None
+    webhook_idp_timeout_s: float = 2.0
+
 
 class UiConfig(ServerBaseModel):
     """UI mount paths for the server application."""
@@ -94,7 +100,7 @@ class UiConfig(ServerBaseModel):
 
 
 class RecordingConfig(ServerBaseModel):
-    """File-backed recording settings."""
+    """Session recording settings."""
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
@@ -102,6 +108,13 @@ class RecordingConfig(ServerBaseModel):
     directory: Path = Path(".uterm-recordings")
     max_bytes: int = 0  # 0 = unlimited
     control_channel_mode: Literal["exclude", "wire"] = "exclude"
+    
+    store_type: Literal["local", "webhook"] = "local"
+    webhook_url: str | None = None
+    webhook_secret: str | None = None
+    webhook_timeout_s: float = 2.0
+    flush_interval_s: float = 5.0
+    flush_batch_size: int = 100
 
     @field_validator("max_bytes")
     @classmethod
@@ -109,6 +122,19 @@ class RecordingConfig(ServerBaseModel):
         if value < 0:
             raise ValueError(f"recording.max_bytes must be >= 0 (0 = unlimited), got: {value}")
         return value
+
+
+class ControlPlaneConfig(ServerBaseModel):
+    """Backend selection for the hosted server control plane."""
+
+    backend: Literal["memory", "sqlite"] = "memory"
+    database_url: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_database_url(self) -> ControlPlaneConfig:
+        if self.backend == "sqlite" and not str(self.database_url or "").strip():
+            raise ValueError("control_plane.database_url is required when control_plane.backend='sqlite'")
+        return self
 
 
 class SecurityConfig(ServerBaseModel):
@@ -226,11 +252,16 @@ class SessionDefinition(ServerBaseModel):
         session_id = ""
         if isinstance(info.data, dict):
             session_id = str(info.data.get("session_id", "")).strip()
-        if connector_type not in KNOWN_CONNECTOR_TYPES:
+
+        # Only validate against the registry if it's already populated.
+        # This prevents circular dependency issues during startup.
+        from provide.terminal.server.connectors import registered_types
+        known = registered_types()
+        if known and connector_type not in known:
             label = session_id or "<unknown>"
             raise ValueError(
                 f"invalid connector_type for {label!r}: {connector_type!r} — "
-                f"must be one of {sorted(KNOWN_CONNECTOR_TYPES)}"
+                f"must be one of {sorted(known)}"
             )
         return connector_type
 
@@ -301,11 +332,25 @@ class GovernanceConfig(ServerBaseModel):
     policy_webhook_url: str | None = None
     policy_webhook_secret: str | None = None
     policy_webhook_timeout_s: float = 2.0
+
+    discovery_provider: str = "webhook"
     registry_webhook_url: str | None = None
+    registry_webhook_secret: str | None = None
     registry_webhook_interval_s: float = 60.0
+
     authz_webhook_url: str | None = None
     authz_webhook_secret: str | None = None
     authz_webhook_timeout_s: float = 2.0
+
+    # Behavioral Auditing
+    behavioral_audit_url: str | None = None
+    behavioral_audit_secret: str | None = None
+    behavioral_audit_interval_s: float = 30.0
+    behavioral_max_cps: float | None = None
+    behavioral_min_jitter: float | None = None
+
+    # Extensibility
+    external_connectors: list[str] = Field(default_factory=list)
 
 
 class ServerConfig(ServerBaseModel):
@@ -313,6 +358,7 @@ class ServerConfig(ServerBaseModel):
 
     server: ServerBindConfig = Field(default_factory=ServerBindConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    control_plane: ControlPlaneConfig = Field(default_factory=ControlPlaneConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     recording: RecordingConfig = Field(default_factory=RecordingConfig)
     profiles: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
@@ -328,6 +374,7 @@ class ServerConfig(ServerBaseModel):
 
 ServerModel: TypeAlias = (
     AuthConfig
+    | ControlPlaneConfig
     | UiConfig
     | RecordingConfig
     | ProfileStoreConfig

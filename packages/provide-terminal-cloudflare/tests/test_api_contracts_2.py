@@ -23,10 +23,10 @@ async def test_jwt_roles_claim_custom_key() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "my_roles": ["admin"], "iat": now, "nbf": now, "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    cfg = JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",), jwt_roles_claim="my_roles")
+    cfg = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",), jwt_roles_claim="my_roles")
     principal = await decode_jwt(token, cfg)
     assert "admin" in principal.roles
 
@@ -36,10 +36,10 @@ async def test_jwt_roles_claim_default_is_roles() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "roles": ["operator"], "iat": now, "nbf": now, "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    cfg = JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",))
+    cfg = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
     principal = await decode_jwt(token, cfg)
     assert "operator" in principal.roles
 
@@ -49,10 +49,10 @@ async def test_jwt_scopes_claim_fallback() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "scope": "read:sessions role:admin", "iat": now, "nbf": now, "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    cfg = JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",))
+    cfg = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
     principal = await decode_jwt(token, cfg)
     assert "role:admin" in principal.roles or "read:sessions" in principal.roles
 
@@ -62,12 +62,12 @@ async def test_jwt_scopes_claim_custom_key() -> None:
     now = int(time.time())
     token = jwt.encode(
         {"sub": "u1", "permissions": "admin write", "iat": now, "nbf": now, "exp": now + 600},
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
     cfg = JwtConfig(
         mode="jwt",
-        public_key_pem="secret",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
         jwt_scopes_claim="permissions",
     )
@@ -87,10 +87,10 @@ async def test_jwt_roles_claim_takes_priority_over_scopes() -> None:
             "nbf": now,
             "exp": now + 600,
         },
-        "secret",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    cfg = JwtConfig(mode="jwt", public_key_pem="secret", algorithms=("HS256",))
+    cfg = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
     principal = await decode_jwt(token, cfg)
     assert principal.roles == ("viewer",)
 

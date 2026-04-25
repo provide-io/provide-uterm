@@ -169,7 +169,7 @@ async def test_resolve_signing_key_no_config_raises() -> None:
     from provide.terminal.cloudflare.auth.jwt import _resolve_signing_key
 
     config = JwtConfig(mode="jwt", public_key_pem=None, jwks_url=None)
-    token = jwt.encode({"sub": "u", "exp": int(time.time()) + 600}, "k", algorithm="HS256")
+    token = jwt.encode({"sub": "u", "exp": int(time.time()) + 600}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
     with pytest.raises(JwtValidationError, match="must be configured"):
         await _resolve_signing_key(token, config)
 
@@ -195,7 +195,7 @@ async def test_resolve_signing_key_kid_matches() -> None:
     )
     token = jwt.encode(
         {"sub": "u", "exp": int(time.time()) + 600},
-        "dummy",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
         headers={"kid": "my-kid"},
     )

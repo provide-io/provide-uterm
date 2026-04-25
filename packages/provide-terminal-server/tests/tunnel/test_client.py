@@ -93,7 +93,7 @@ class TestConnect:
         assert client._ws is mock_ws
 
     async def test_connect_passes_auth_header(self) -> None:
-        client = TunnelClient("ws://localhost:9999", "secret")
+        client = TunnelClient("ws://localhost:9999", "uterm-test-secret-32-byte-minimum-key")
 
         async def fake_connect(*a: object, **kw: object) -> object:
             return _mock_ws()

@@ -14,6 +14,7 @@ import pytest
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
+from provide.terminal.recording import LocalFileRecordingStore
 from provide.terminal.server import create_server_app, default_server_config
 from provide.terminal.server.auth import Principal
 from provide.terminal.server.connectors import TelnetSessionConnector, build_connector
@@ -197,11 +198,13 @@ async def test_on_worker_empty_skips_delete_when_browsers_remain() -> None:
     hub = MagicMock()
     hub.browser_count = AsyncMock(return_value=1)  # still has a browser
     hub.on_worker_empty = None
+    recording = RecordingConfig()
     reg = SessionRegistry(
         [],
         hub=hub,
         public_base_url="http://localhost:9999",
-        recording=RecordingConfig(),
+        recording=recording,
+        recording_store=LocalFileRecordingStore(recording.directory),
     )
     await reg.create_session(
         {
@@ -232,11 +235,13 @@ async def test_on_worker_empty_skips_delete_when_session_replaced() -> None:
     hub = MagicMock()
     hub.browser_count = AsyncMock(return_value=0)
     hub.on_worker_empty = None
+    recording = RecordingConfig()
     reg = SessionRegistry(
         [],
         hub=hub,
         public_base_url="http://localhost:9999",
-        recording=RecordingConfig(),
+        recording=recording,
+        recording_store=LocalFileRecordingStore(recording.directory),
     )
     await reg.create_session({"session_id": "eph", "connector_type": "shell", "ephemeral": True})
 

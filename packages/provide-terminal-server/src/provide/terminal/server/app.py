@@ -25,10 +25,16 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 from starlette.staticfiles import StaticFiles
 
 from provide.telemetry import TelemetryMiddleware, get_logger
-from provide.terminal.bridge.hub import EventBus, InMemoryResumeStore, ResumeSession, TermHub
+from provide.terminal.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
+from provide.terminal.control.plane import ControlPlane as SharedControlPlane
+from provide.terminal.control.plane import ControlPlaneConfig as SharedControlPlaneConfig
+from provide.terminal.control.plane.memory import MemoryControlPlane
+from provide.terminal.control.plane.sqlite import SqliteControlPlane
 from provide.terminal.server.api_keys import ApiKeyStore
 from provide.terminal.server.auth import (
+    LocalIdentityProvider,
     Principal,
+    WebhookIdentityProvider,
     extract_bearer_token,
     resolve_http_principal,
     resolve_ws_principal,
@@ -40,6 +46,7 @@ from provide.terminal.server.registry import SessionRegistry
 from provide.terminal.server.routes.api import create_api_router
 from provide.terminal.server.routes.pages import create_page_router
 from provide.terminal.server.routes.profiles import create_profiles_router
+from provide.terminal.server.routes.approvals import create_approvals_router
 from provide.terminal.server.security import SecurityHeadersMiddleware
 from provide.terminal.server.webhooks import WebhookManager
 
@@ -66,6 +73,16 @@ _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/ws/browser/(?P<session_id>[\w\-]+)/term$"),
     re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack(?:/.*)?$"),
 )
+
+
+def _build_control_plane(config: ServerConfig) -> SharedControlPlane:
+    shared_config = SharedControlPlaneConfig(
+        backend=config.control_plane.backend,
+        database_url=config.control_plane.database_url or ":memory:",
+    )
+    if shared_config.backend == "sqlite":
+        return SqliteControlPlane(shared_config)
+    return MemoryControlPlane(shared_config)
 
 
 def _validate_frontend_assets() -> None:
@@ -119,6 +136,52 @@ def _validate_auth_config(config: ServerConfig) -> None:
         raise ValueError("configure auth.jwt_public_key_pem or auth.jwt_jwks_url when auth.mode='jwt'")
 
 
+def _register_builtin_connectors(config: ServerConfig) -> None:
+    """Register standard terminal connectors and any external plugins."""
+    from provide.terminal.server.connectors import register_connector
+
+    # 1. Built-in AGPL Connectors
+    with contextlib.suppress(ImportError):
+        from provide.terminal.server.connectors.shell import ShellSessionConnector
+
+        register_connector("shell", ShellSessionConnector)
+
+    with contextlib.suppress(ImportError):
+        from provide.terminal.server.connectors.ssh import SshSessionConnector
+
+        register_connector("ssh", SshSessionConnector)
+
+    with contextlib.suppress(ImportError):
+        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+
+        register_connector("telnet", TelnetSessionConnector)
+
+    with contextlib.suppress(ImportError):
+        from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
+
+        register_connector("websocket", WebSocketSessionConnector)
+
+    with contextlib.suppress(ImportError):
+        from provide.terminal.shell.terminal import UshellConnector
+
+        register_connector("ushell", UshellConnector)
+
+    with contextlib.suppress(ImportError):
+        import provide.terminal.pty.connector  # noqa: F401
+
+    with contextlib.suppress(ImportError):
+        import provide.terminal.pty.capture_connector  # noqa: F401
+
+    # 2. External Plugin Connectors
+    import importlib
+    for module_path in config.governance.external_connectors:
+        try:
+            importlib.import_module(module_path)
+            logger.info("connector_plugin_loaded module=%s", module_path)
+        except ImportError:
+            logger.error("connector_plugin_load_failed module=%s", module_path)
+
+
 def create_server_app(
     config: ServerConfig,
     hub_class: type[TermHub] | None = None,
@@ -137,10 +200,18 @@ def create_server_app(
     """
     import os
 
+    _register_builtin_connectors(config)
     _validate_auth_config(config)
     _api_only_env = os.environ.get("UTERM_API_ONLY", "").strip().lower() in {"1", "true", "yes"}
     if not api_only and not _api_only_env:
         _validate_frontend_assets()
+
+    logger.warning(
+        "standalone_server_durability=process-local: the FastAPI reference server keeps live control-plane state "
+        "in memory only (tunnel tokens/share state, approvals, resume state, webhook registrations, and live "
+        "session arbitration state). It is not HA or persistent across restart/failover; run it as a single active "
+        "instance or use a durable backend for multi-node deployment."
+    )
 
     from provide.terminal.server.authorization import (
         AuthorizationService,
@@ -280,20 +351,14 @@ def create_server_app(
         if connection.scope.get("type") == "websocket":
             # JWT mode: JWKS key fetch may make a blocking HTTP call; offload to
             # a thread pool to avoid stalling the event loop.
-            if config.auth.mode == "jwt":
-                principal = await asyncio.to_thread(resolve_ws_principal, connection, config.auth)
-            else:
-                principal = resolve_ws_principal(connection, config.auth)
+            principal = await resolve_ws_principal(connection, config.auth)
             connection.state.uterm_principal = principal
             if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
                 _inc_metric("auth_failures_ws_total")
                 logger.info("authn_denied surface=websocket")
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="authentication required")
             return
-        if config.auth.mode == "jwt":
-            principal = await asyncio.to_thread(resolve_http_principal, connection, config.auth)
-        else:
-            principal = resolve_http_principal(connection, config.auth)
+        principal = await resolve_http_principal(connection, config.auth)
         connection.state.uterm_principal = principal
         if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
             _inc_metric("auth_failures_http_total")
@@ -377,7 +442,7 @@ def create_server_app(
     async def _resolve_browser_role(ws: WebSocket, worker_id: str) -> str:
         principal = getattr(ws.state, "uterm_principal", None)
         if principal is None:
-            principal = resolve_ws_principal(ws, config.auth)
+            principal = await resolve_ws_principal(ws, config.auth)
         session = await registry.get_definition(worker_id) if registry is not None else None
         if session is None:
             return "admin" if config.auth.mode in {"none", "dev"} else "viewer"
@@ -385,7 +450,11 @@ def create_server_app(
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return await policy.role_for(principal, session)
 
-    from provide.terminal.bridge.hub.ext import WebhookPolicyGate
+    from provide.terminal.bridge.hub.ext import (
+        BehavioralThresholds,
+        WebhookBehavioralAuditGate,
+        WebhookPolicyGate,
+    )
 
     policy_gate = None
     if config.governance.policy_webhook_url:
@@ -395,16 +464,45 @@ def create_server_app(
             timeout_s=config.governance.policy_webhook_timeout_s,
         )
 
+    # Choose Identity Provider based on config
+    if config.auth.identity_provider == "webhook" and config.auth.webhook_idp_url:
+        idp = WebhookIdentityProvider(
+            url=config.auth.webhook_idp_url,
+            secret=config.auth.webhook_idp_secret,
+            timeout_s=config.auth.webhook_idp_timeout_s,
+        )
+    else:
+        idp = LocalIdentityProvider(config.auth)
+
+    behavioral_audit_gate = None
+    if config.governance.behavioral_audit_url:
+        behavioral_audit_gate = WebhookBehavioralAuditGate(
+            url=config.governance.behavioral_audit_url,
+            secret=config.governance.behavioral_audit_secret,
+        )
+    behavioral_thresholds = BehavioralThresholds(
+        max_cps=config.governance.behavioral_max_cps,
+        min_jitter=config.governance.behavioral_min_jitter,
+    )
+
+    control_plane = _build_control_plane(config)
+    resume_store = ControlPlaneResumeStore(control_plane)
+
     _hub_class = hub_class if hub_class is not None else TermHub
     hub = _hub_class(
         resolve_browser_role=_resolve_browser_role,
         on_metric=_inc_metric,
         worker_token=config.auth.worker_bearer_token,
-        resume_store=InMemoryResumeStore(),
+        resume_store=resume_store,
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
         event_bus=EventBus(),
         policy_gate=policy_gate,
+        identity_provider=idp,
+        delegate_roles=getattr(config.auth, "delegate_roles", True),
+        behavioral_audit_gate=behavioral_audit_gate,
+        behavioral_thresholds=behavioral_thresholds,
+        behavioral_audit_interval_s=config.governance.behavioral_audit_interval_s,
     )
     # Attach the fan-out controller so routes and WS dispatch can find it.
     from provide.terminal.bridge.fanout import FanOutController, InMemoryFanOutStore
@@ -414,15 +512,34 @@ def create_server_app(
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     from provide.terminal.bridge.annotation._detector import PatternDetector
 
+    from provide.terminal.server.discovery import (
+        NoOpDiscoveryProvider,
+        NodeStatus,
+        WebhookDiscoveryProvider,
+    )
+    from provide.terminal.server.recording import LocalFileRecordingStore, WebhookRecordingStore
+
+    # Choose Recording Store
+    if config.recording.store_type == "webhook" and config.recording.webhook_url:
+        recording_store = WebhookRecordingStore(
+            url=config.recording.webhook_url,
+            secret=config.recording.webhook_secret,
+            timeout_s=config.recording.webhook_timeout_s,
+        )
+    else:
+        recording_store = LocalFileRecordingStore(config.recording.directory)
+
     detector = PatternDetector()
     registry = SessionRegistry(
         config.sessions,
         hub=hub,
         public_base_url=config.server.public_base_url,
         recording=config.recording,
+        recording_store=recording_store,
         worker_bearer_token=config.auth.worker_bearer_token,
         max_sessions=config.server.max_sessions,
         detector=detector,
+        tunnel_tokens=tunnel_tokens,
     )
     profile_store = FileProfileStore(config.profiles.directory)
 
@@ -486,9 +603,16 @@ def create_server_app(
                 logger.info("tunnel_token_expired session_id=%s swept=true", sid)
 
     async def _node_registry_heartbeat() -> None:
-        """Periodically announce Node status to the Fleet Manager."""
-        url = config.governance.registry_webhook_url
-        if not url:
+        """Periodically announce Node status to the External Management Tier."""
+        if config.governance.discovery_provider == "webhook" and config.governance.registry_webhook_url:
+            discovery_provider = WebhookDiscoveryProvider(
+                url=config.governance.registry_webhook_url,
+                secret=config.governance.registry_webhook_secret,
+            )
+        else:
+            discovery_provider = NoOpDiscoveryProvider()
+
+        if isinstance(discovery_provider, NoOpDiscoveryProvider):
             return
 
         interval = config.governance.registry_webhook_interval_s
@@ -496,14 +620,13 @@ def create_server_app(
 
         while True:
             try:
-                status = {
-                    "node_id": node_id,
-                    "active_sessions": await hub.browser_count_total(),
-                    "worker_count": len(hub._workers),
-                    "timestamp": time.time(),
-                }
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    await client.post(url, json=status)
+                status = NodeStatus(
+                    node_id=node_id,
+                    active_sessions=await hub.browser_count_total(),
+                    worker_count=len(hub._workers),
+                    timestamp=time.time(),
+                )
+                await discovery_provider.announce(status)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -518,6 +641,7 @@ def create_server_app(
             await asyncio.sleep(_AUTO_START_DELAY_S)
             await registry.start_auto_start_sessions()
 
+        await control_plane.migrate()
         boot_task = asyncio.create_task(_delayed_boot())
         boot_task.add_done_callback(
             lambda t: (
@@ -560,6 +684,7 @@ def create_server_app(
             await hub.shutdown()
             await webhook_manager.shutdown()
             await registry.shutdown()
+            await control_plane.close()
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
     app.state.uterm_config = config
@@ -570,6 +695,7 @@ def create_server_app(
     app.state.uterm_metrics = metrics
     app.state.uterm_webhooks = webhook_manager
     app.state.uterm_profile_store = profile_store
+    app.state.uterm_control_plane = control_plane
     app.state.uterm_tunnel_tokens = tunnel_tokens
     api_key_store = ApiKeyStore()
     app.state.uterm_api_key_store = api_key_store
@@ -618,6 +744,7 @@ def create_server_app(
     )
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
+    app.include_router(create_approvals_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_page_router(), prefix=config.ui.app_path, dependencies=[Depends(_require_authenticated)])
 
     @app.get("/s/{session_id}")

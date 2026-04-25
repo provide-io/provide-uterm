@@ -11,6 +11,7 @@ wrong worker_id, two-tab race, no resume_store configured).
 
 from __future__ import annotations
 
+import asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -134,8 +135,8 @@ class TestResumeFlow:
             token = hello["resume_token"]
 
         # Manually expire the token by revoking it (simulates TTL expiry)
-        store.revoke(token)
-        assert store.get(token) is None
+        asyncio.run(store.revoke(token))
+        assert asyncio.run(store.get(token)) is None
 
         with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             hello2, _ = _read_initial(ws)
@@ -183,7 +184,7 @@ class TestResumeFlow:
             assert resumed["resumed"] is True
 
         # Token is now revoked
-        assert store.get(token) is None
+        assert asyncio.run(store.get(token)) is None
 
     def test_two_tab_race(self) -> None:
         """Tab A resumes with token → tab B tries same token → silently ignored."""
@@ -203,7 +204,7 @@ class TestResumeFlow:
             assert resumed["resumed"] is True
 
             # Token is now revoked — tab B cannot use it
-            assert store.get(token) is None
+            assert asyncio.run(store.get(token)) is None
 
     def test_first_message_not_resume(self) -> None:
         """First message is NOT resume → processed as normal."""
@@ -227,6 +228,19 @@ class TestResumeFlow:
         with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
             _read_initial(ws)
             ws.send_json({"type": "resume", "token": ""})
+            ws.send_json({"type": "ping"})
+            pong = ws.receive_json()
+            assert pong["type"] == "pong"
+
+    def test_non_string_resume_token_is_ignored(self) -> None:
+        """Malformed resume payloads must not crash the websocket handler."""
+        store = InMemoryResumeStore()
+        app, hub = make_app(role="admin", resume_store=store)
+        client = TestClient(app)
+
+        with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws:
+            _read_initial(ws)
+            ws.send_json({"type": "resume", "token": {"unexpected": "object"}})
             ws.send_json({"type": "ping"})
             pong = ws.receive_json()
             assert pong["type"] == "pong"
@@ -260,7 +274,7 @@ class TestResumeHijackReclaim:
                 assert snapshot["type"] == "snapshot"
 
             # Simulate that this session was a hijack owner at disconnect
-            store.mark_hijack_owner(token, True)
+            asyncio.run(store.mark_hijack_owner(token, True))
 
             # Reconnect and resume — should reclaim hijack (no active hijack exists)
             with connect_test_ws(client, f"/ws/browser/{WID}/term") as ws2:

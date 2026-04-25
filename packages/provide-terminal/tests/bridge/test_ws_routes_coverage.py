@@ -193,11 +193,11 @@ class TestInputSendFailureOpenMode:
                 _read_initial_browser(browser)
 
                 # Patch _send_worker to fail for input
-                async def _fail_input(wid, msg):
+                async def _fail_input(wid, msg, **kwargs):
                     return msg.get("type") != "input"
 
                 with patch.object(hub, "send_worker", side_effect=_fail_input):
-                    browser.send_json({"type": "input", "data": "test-data"})
+                    browser.send_json({"type": "input", "data": "test-data\n"})
                     error = browser.receive_json()
                     assert error["type"] == "error"
                     assert "worker" in error["message"].lower()

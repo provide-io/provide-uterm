@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -126,3 +127,107 @@ class TestOnResumeCallback:
                 ws.send_json({"type": "ping"})
                 pong = ws.receive_json()
                 assert pong["type"] == "pong"  # no "resumed" hello — token rejected
+
+    def test_create_server_app_uses_memory_control_plane_by_default(self) -> None:
+        app = self._make_app()
+
+        assert app.state.uterm_control_plane.__class__.__name__ == "MemoryControlPlane"
+        assert app.state.uterm_hub.resume_store.__class__.__name__ == "ControlPlaneResumeStore"
+
+    def test_create_server_app_bootstraps_sqlite_control_plane(self, tmp_path) -> None:
+        db_path = tmp_path / "control-plane.db"
+        config = default_server_config()
+        config.auth.mode = "dev"
+        config.sessions = []
+        config.control_plane.backend = "sqlite"
+        config.control_plane.database_url = str(db_path)
+        app = create_server_app(config)
+
+        with TestClient(app):
+            pass
+
+        conn = sqlite3.connect(db_path)
+        try:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        finally:
+            conn.close()
+
+        assert app.state.uterm_control_plane.__class__.__name__ == "SqliteControlPlane"
+        assert "cp_resume_tokens" in tables
+
+    def test_on_resume_allows_resume_with_sqlite_control_plane(self, tmp_path) -> None:
+        db_path = tmp_path / "resume.db"
+        config = default_server_config()
+        config.auth.mode = "dev"
+        config.sessions = []
+        config.control_plane.backend = "sqlite"
+        config.control_plane.database_url = str(db_path)
+        app = create_server_app(config)
+
+        with TestClient(app) as client:
+            client.post(
+                "/api/sessions",
+                json={"session_id": "sqlite-sess", "display_name": "Sqlite", "connector_type": "shell"},
+            )
+
+            with connect_test_ws(client, "/ws/browser/sqlite-sess/term") as ws:
+                hello = self._read_hello_and_state(ws)
+                token = hello["resume_token"]
+
+            with connect_test_ws(client, "/ws/browser/sqlite-sess/term") as ws:
+                self._read_hello_and_state(ws)
+                ws.send_json({"type": "resume", "token": token})
+                resumed = ws.receive_json()
+                assert resumed["type"] == "hello"
+                assert resumed["resumed"] is True
+
+    def test_sqlite_resume_persists_and_revokes_tokens_in_database(self, tmp_path) -> None:
+        db_path = tmp_path / "resume-proof.db"
+        config = default_server_config()
+        config.auth.mode = "dev"
+        config.sessions = []
+        config.control_plane.backend = "sqlite"
+        config.control_plane.database_url = str(db_path)
+        app = create_server_app(config)
+
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/sessions",
+                json={"session_id": "sqlite-proof", "display_name": "Sqlite Proof", "connector_type": "shell"},
+            )
+            assert created.status_code == 200
+
+            with connect_test_ws(client, "/ws/browser/sqlite-proof/term") as ws:
+                hello = self._read_hello_and_state(ws)
+                first_token = hello["resume_token"]
+                assert hello["resume_supported"] is True
+
+            with connect_test_ws(client, "/ws/browser/sqlite-proof/term") as ws:
+                self._read_hello_and_state(ws)
+                ws.send_json({"type": "resume", "token": first_token})
+                resumed = ws.receive_json()
+                assert resumed["type"] == "hello"
+                assert resumed["resumed"] is True
+                second_token = resumed["resume_token"]
+
+        conn = sqlite3.connect(db_path)
+        try:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            rows = list(
+                conn.execute(
+                    """
+                    SELECT token_value, session_id, role, revoked_at
+                    FROM cp_resume_tokens
+                    WHERE session_id = ?
+                    ORDER BY rowid
+                    """,
+                    ("sqlite-proof",),
+                )
+            )
+        finally:
+            conn.close()
+
+        assert "cp_resume_tokens" in tables
+        assert first_token != second_token
+        assert any(row[0] == first_token and row[3] is not None for row in rows)
+        assert any(row[0] == second_token and row[3] is None for row in rows)

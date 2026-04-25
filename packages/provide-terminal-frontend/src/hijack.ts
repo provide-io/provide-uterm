@@ -74,6 +74,9 @@ export class ProvideHijack {
   private _activityFlashTimer: ReturnType<typeof setTimeout> | null = null;
   private _statusDotElement: HTMLElement | null = null;
   private _root: HTMLElement | null = null;
+  private _pendingApproval: { id: string; command: string; expiresAt: number } | null = null;
+  private _approvalElement: HTMLElement | null = null;
+  private _approvalTimer: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Create an embeddable hijack control widget.
@@ -96,6 +99,7 @@ export class ProvideHijack {
       role: config.role,
       onResize: config.onResize,
       onPresenceMessage: config.onPresenceMessage,
+      approvalUxMode: config.approvalUxMode ?? "auto",
     };
     this._uid = ++_hijackInstanceCount;
     this._workerId = config.workerId ?? "default";
@@ -740,6 +744,20 @@ export class ProvideHijack {
       case "heartbeat_ack":
         break; // lease refreshed — no visible change needed
 
+      case "approval_pending":
+        this._pendingApproval = {
+          id: msg.request_id as string,
+          command: msg.command as string,
+          expiresAt: msg.expires_at as number,
+        };
+        this._showApprovalUI();
+        break;
+
+      case "approval_resolved":
+        this._pendingApproval = null;
+        this._hideApprovalUI();
+        break;
+
       case "error":
         this._setStatus("bad", `Error: ${(msg.message as string | undefined) ?? "unknown"}`);
         break;
@@ -754,6 +772,109 @@ export class ProvideHijack {
   }
 
   // ── UI State ──────────────────────────────────────────────────────────────
+
+  private _getEffectiveUxMode(): "modal" | "statusbar" {
+    const mode = this._config.approvalUxMode;
+    if (mode === "auto") {
+      return this._config.role === "admin" ? "modal" : "statusbar";
+    }
+    return mode;
+  }
+
+  private _showApprovalUI(): void {
+    if (!this._pendingApproval || !this._root) return;
+    this._hideApprovalUI();
+
+    const mode = this._getEffectiveUxMode();
+    const el = document.createElement("div");
+    this._approvalElement = el;
+
+    if (mode === "modal") {
+      el.className = "hijack-approval-modal";
+      el.innerHTML = `
+        <div class="hijack-approval-card">
+          <div class="hijack-approval-title">⚠️ APPROVAL REQUIRED</div>
+          <div class="hijack-approval-body">
+            Your command is being held for administrative review.
+            <div class="hijack-approval-command">${this._escHtml(this._pendingApproval.command)}</div>
+            <div class="hijack-approval-timer">Expires in <span id="h-${this._uid}-approval-timer">--</span>s...</div>
+          </div>
+          ${
+            this._config.role === "admin"
+              ? `
+          <div class="hijack-approval-actions">
+            <button class="hijack-btn hijack-btn-approve" id="h-${this._uid}-approve">Approve</button>
+            <button class="hijack-btn hijack-btn-reject" id="h-${this._uid}-reject">Reject</button>
+          </div>`
+              : ""
+          }
+        </div>
+      `;
+    } else {
+      el.className = "hijack-approval-statusbar";
+      el.innerHTML = `
+        <div class="hijack-approval-status">
+          <span class="hijack-approval-spinner">⏳</span>
+          PAUSED: Command pending approval (<span id="h-${this._uid}-approval-timer">--</span>s)
+        </div>
+      `;
+    }
+
+    this._root.appendChild(el);
+    this._startApprovalTimer();
+
+    if (this._config.role === "admin") {
+      this._q("approve")?.addEventListener("click", () => this._resolveApproval("approve"));
+      this._q("reject")?.addEventListener("click", () => this._resolveApproval("reject"));
+    }
+  }
+
+  private _hideApprovalUI(): void {
+    if (this._approvalTimer) {
+      clearInterval(this._approvalTimer);
+      this._approvalTimer = null;
+    }
+    if (this._approvalElement) {
+      this._approvalElement.parentNode?.removeChild(this._approvalElement);
+      this._approvalElement = null;
+    }
+  }
+
+  private _startApprovalTimer(): void {
+    const update = () => {
+      if (!this._pendingApproval) return;
+      const remaining = Math.max(0, Math.round(this._pendingApproval.expiresAt - Date.now() / 1000));
+      const el = this._q("approval-timer");
+      if (el) el.textContent = String(remaining);
+      if (remaining <= 0) this._hideApprovalUI();
+    };
+    update();
+    this._approvalTimer = setInterval(update, 1000);
+  }
+
+  private async _resolveApproval(action: "approve" | "reject"): Promise<void> {
+    if (!this._pendingApproval) return;
+    const btn = this._q(action) as HTMLButtonElement | null;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Sending...";
+    }
+
+    try {
+      const url = `${location.origin}/api/approvals/${this._pendingApproval.id}/${action}`;
+      const resp = await fetch(url, { method: "POST" });
+      if (!resp.ok) {
+        throw new Error(`Failed to ${action}: ${resp.statusText}`);
+      }
+    } catch (err) {
+      console.error(err);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+      }
+      this._setStatus("bad", `Failed to ${action} command`);
+    }
+  }
 
   private _setStatus(level: string, text: string): void {
     const dot = this._q("dot");

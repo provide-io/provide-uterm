@@ -7,8 +7,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from provide.terminal.bridge.hub import PolicyContext, TermHub
+from provide.terminal.bridge.hub import TermHub, PolicyContext, PolicyDecision
 from provide.terminal.bridge.routes.browser_handlers import _handle_input
 from provide.terminal.control_channel import ControlChannelDecoder, DataChunk
 
@@ -33,7 +32,7 @@ async def test_policy_gate_allow_all() -> None:
     # Should be sent to worker
     worker_ws.send_text.assert_called()
     payload = worker_ws.send_text.call_args[0][0]
-
+    
     decoder = ControlChannelDecoder()
     events = decoder.feed(payload)
     chunks = [e.data for e in events if isinstance(e, DataChunk)]
@@ -43,10 +42,9 @@ async def test_policy_gate_allow_all() -> None:
 @pytest.mark.asyncio
 async def test_policy_gate_deny_all() -> None:
     """Custom DenyPolicyGate blocks specific input."""
-
     class DenyPolicyGate:
-        async def intercept_input(self, _data: str, _context: PolicyContext) -> bool:
-            return False
+        async def intercept_input(self, _data: str, _context: PolicyContext) -> PolicyDecision:
+            return PolicyDecision(action="deny")
 
     hub = TermHub(policy_gate=DenyPolicyGate())
     ws = AsyncMock()
@@ -71,10 +69,10 @@ async def test_policy_context_fields() -> None:
     captured_data = []
 
     class CapturePolicyGate:
-        async def intercept_input(self, data: str, context: PolicyContext) -> bool:
+        async def intercept_input(self, data: str, context: PolicyContext) -> PolicyDecision:
             captured_context.append(context)
             captured_data.append(data)
-            return True
+            return PolicyDecision(action="allow")
 
     hub = TermHub(policy_gate=CapturePolicyGate())
     ws = AsyncMock()
@@ -109,11 +107,10 @@ async def test_policy_context_fields() -> None:
 async def test_policy_context_principal_string() -> None:
     """PolicyContext correctly handles string-based principals (no subject_id)."""
     captured_context = []
-
     class CapturePolicyGate:
-        async def intercept_input(self, _data: str, context: PolicyContext) -> bool:
+        async def intercept_input(self, _data: str, context: PolicyContext) -> PolicyDecision:
             captured_context.append(context)
-            return True
+            return PolicyDecision(action="allow")
 
     hub = TermHub(policy_gate=CapturePolicyGate())
     ws = AsyncMock()

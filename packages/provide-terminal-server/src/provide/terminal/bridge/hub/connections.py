@@ -214,7 +214,7 @@ class _ConnectionMixin:
         """
         resume_token: str | None = None
         if self._resume_store is not None:
-            resume_token = self._resume_store.create(worker_id, role, self._resume_ttl_s)
+            resume_token = await self._resume_store.create(worker_id, role, self._resume_ttl_s)
             self._ws_to_resume_token[ws] = resume_token
         async with self._lock:
             st = self._workers.setdefault(worker_id, WorkerTermState())
@@ -289,7 +289,7 @@ class _ConnectionMixin:
         if self._resume_store is not None:
             token = self._ws_to_resume_token.pop(ws, None)
             if token and (was_owner or owned_hijack):
-                self._resume_store.mark_hijack_owner(token, True)
+                await self._resume_store.mark_hijack_owner(token, True)
 
         # Fire empty-browser callback outside the lock when the last browser left.
         on_empty = getattr(self, "on_worker_empty", None)

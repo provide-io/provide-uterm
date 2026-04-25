@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
     from provide.terminal.bridge.annotation._detector import PatternDetector
     from provide.terminal.bridge.hub import TermHub
+    from provide.terminal.recording import RecordingStore
 
 
 class SessionValidationError(ValueError):
@@ -55,20 +56,34 @@ class SessionRegistry:
         hub: TermHub,
         public_base_url: str,
         recording: RecordingConfig,
+        recording_store: RecordingStore | None = None,
         worker_bearer_token: str | None = None,
         max_sessions: int | None = None,
         detector: PatternDetector | None = None,
+        tunnel_tokens: dict[str, dict[str, object]] | None = None,
     ) -> None:
         self._hub = hub
         self._recording = recording
+        
+        if recording_store is None:
+            from provide.terminal.server.recording import LocalFileRecordingStore
+            self._recording_store: RecordingStore = LocalFileRecordingStore(recording.directory)
+        else:
+            self._recording_store = recording_store
+
         self._public_base_url = public_base_url
         self._worker_bearer_token = worker_bearer_token
         self._max_sessions = max_sessions
         self._detector = detector
+        self._tunnel_tokens = tunnel_tokens
         self._lock = asyncio.Lock()
         self._sessions: dict[str, SessionDefinition] = {session.session_id: session for session in sessions}
         self._runtimes: dict[str, HostedSessionRuntime] = {}
         hub.on_worker_empty = self._on_worker_empty
+
+    def _revoke_tunnel_tokens(self, session_id: str) -> None:
+        if self._tunnel_tokens is not None:
+            self._tunnel_tokens.pop(session_id, None)
 
     async def _on_worker_empty(self, session_id: str) -> None:
         """Auto-delete an ephemeral session when the last browser disconnects.
@@ -93,6 +108,7 @@ class SessionRegistry:
                 return
             self._sessions.pop(session_id, None)
             runtime = self._runtimes.pop(session_id, None)
+            self._revoke_tunnel_tokens(session_id)
         if runtime is not None:
             await runtime.stop()
 
@@ -114,6 +130,7 @@ class SessionRegistry:
                 session,
                 public_base_url=self._public_base_url,
                 recording=self._recording,
+                recording_store=self._recording_store,
                 worker_bearer_token=self._worker_bearer_token,
                 detector=self._detector,
             )
@@ -164,9 +181,12 @@ class SessionRegistry:
         if not re.match(r"^[\w\-]+$", session_id):
             raise SessionValidationError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
         connector_type_raw = str(payload.get("connector_type", "shell"))
-        if connector_type_raw not in KNOWN_CONNECTOR_TYPES:
+        from provide.terminal.server.connectors import registered_types
+
+        known = registered_types()
+        if connector_type_raw not in known:
             raise SessionValidationError(
-                f"connector_type must be one of {sorted(KNOWN_CONNECTOR_TYPES)}, got: {connector_type_raw!r}"
+                f"connector_type must be one of {sorted(known)}, got: {connector_type_raw!r}"
             )
         input_mode_raw = str(payload.get("input_mode", "open"))
         if input_mode_raw not in {"open", "hijack"}:
@@ -231,6 +251,7 @@ class SessionRegistry:
         async with self._lock:
             self._sessions.pop(session_id, None)
             runtime = self._runtimes.pop(session_id, None)
+            self._revoke_tunnel_tokens(session_id)
         if runtime is not None:
             await runtime.stop()
 
@@ -391,19 +412,13 @@ class SessionRegistry:
         async with self._lock:
             session = self._require_session(session_id)
             runtime = self._runtime_for(session)
-        path = runtime.recording_path
-        return {
-            "session_id": session_id,
-            "enabled": runtime.status().recording_enabled,
-            "path": (str(path) if path is not None else None),
-            "exists": bool(path and path.exists()),
-        }
+            enabled = runtime.status().recording_enabled
+            
+        meta = await self._recording_store.recording_meta(session_id)
+        return {**meta, "enabled": enabled}
 
     async def recording_path(self, session_id: str) -> Path | None:
-        async with self._lock:
-            session = self._require_session(session_id)
-            runtime = self._runtime_for(session)
-        return runtime.recording_path
+        return await self._recording_store.get_path(session_id)
 
     async def recording_entries(
         self,
@@ -413,59 +428,4 @@ class SessionRegistry:
         offset: int | None = None,
         event: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return recording entries for *session_id*.
-
-        Offset semantics:
-        - ``offset=None`` (default): return the **last** *limit* entries (tail).
-        - ``offset=0`` or positive integer: skip that many accepted entries from
-          the beginning of the file, then return up to *limit* (head + skip).
-        """
-        path = await self.recording_path(session_id)
-        if path is None or not path.exists():
-            return []
-        normalized_limit = max(1, min(limit, 500))
-        normalized_event = None if event is None else str(event).strip()
-        normalized_offset = max(0, offset) if offset is not None else None
-
-        # Stream line-by-line to avoid loading the entire file into memory.
-        # When offset is given, skip accepted entries until the offset is reached,
-        # then collect up to limit — avoiding O(N) in-memory accumulation.
-        def _read_with_offset(offset: int) -> list[dict[str, Any]]:
-            entries: list[dict[str, Any]] = []
-            skipped = 0
-            with path.open(encoding="utf-8") as fh:
-                for line in fh:
-                    if not line.strip():
-                        continue
-                    try:
-                        entry = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if normalized_event and str(entry.get("event", "")) != normalized_event:
-                        continue
-                    if skipped < offset:
-                        skipped += 1
-                        continue
-                    entries.append(entry)
-                    if len(entries) >= normalized_limit:
-                        break
-            return entries
-
-        def _read_tail() -> list[dict[str, Any]]:
-            tail: deque[dict[str, Any]] = deque(maxlen=normalized_limit)
-            with path.open(encoding="utf-8") as fh:
-                for line in fh:
-                    if not line.strip():
-                        continue
-                    try:
-                        entry = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if normalized_event and str(entry.get("event", "")) != normalized_event:
-                        continue
-                    tail.append(entry)
-            return list(tail)
-
-        if normalized_offset is not None:
-            return await asyncio.to_thread(_read_with_offset, normalized_offset)
-        return await asyncio.to_thread(_read_tail)
+        return await self._recording_store.get_entries(session_id, limit=limit, offset=offset, event=event)

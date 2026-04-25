@@ -70,7 +70,12 @@ async def _wait_for_snapshot_text(ws: Any, needle: str, timeout: float = 3.0) ->
 
 
 async def _wait_for_hijack_state(
-    ws: Any, *, hijacked: bool | None = None, input_mode: str | None = None, timeout: float = 3.0
+    ws: Any,
+    *,
+    hijacked: bool | None = None,
+    input_mode: str | None = None,
+    owner: str | None = None,
+    timeout: float = 3.0,
 ) -> dict[str, Any] | None:
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
@@ -80,6 +85,8 @@ async def _wait_for_hijack_state(
         if hijacked is not None and msg.get("hijacked") is not hijacked:
             continue
         if input_mode is not None and msg.get("input_mode") != input_mode:
+            continue
+        if owner is not None and msg.get("owner") != owner:
             continue
         return msg
     return None
@@ -103,7 +110,7 @@ class TestDemoServerWs:
 
             await _send_frame(browser, {"type": "hijack_request"})
             await _drain_until(browser, "hijack_state")
-            await _send_frame(browser, {"type": "input", "data": "hello from owner"})
+            await _send_frame(browser, {"type": "input", "data": "hello from owner\r"})
 
             snapshot = await _wait_for_snapshot_text(browser, "hello from owner")
             assert snapshot is not None
@@ -140,8 +147,8 @@ class TestDemoServerWs:
                 await _drain_until(browser, "snapshot")
 
             await _send_frame(b1, {"type": "hijack_request"})
-            owner_state = await _drain_until(b1, "hijack_state")
-            other_state = await _drain_until(b2, "hijack_state")
+            owner_state = await _wait_for_hijack_state(b1, owner="me")
+            other_state = await _wait_for_hijack_state(b2, owner="other")
             assert owner_state is not None and owner_state["owner"] == "me"
             assert other_state is not None and other_state["owner"] == "other"
 
@@ -170,12 +177,12 @@ class TestDemoServerWs:
                 await _drain_until(browser, "hijack_state")
                 await _drain_until(browser, "snapshot")
 
-            await _send_frame(b1, {"type": "input", "data": "from-one"})
+            await _send_frame(b1, {"type": "input", "data": "from-one\r"})
             snap1 = await _wait_for_snapshot_text(b1, "from-one")
             assert snap1 is not None
             assert "from-one" in snap1["screen"]
 
-            await _send_frame(b2, {"type": "input", "data": "from-two"})
+            await _send_frame(b2, {"type": "input", "data": "from-two\r"})
             snap2 = await _wait_for_snapshot_text(b2, "from-two")
             assert snap2 is not None
             assert "from-two" in snap2["screen"]

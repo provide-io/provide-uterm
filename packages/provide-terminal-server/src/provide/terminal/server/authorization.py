@@ -159,6 +159,12 @@ class WebhookAuthorizationProvider:
         self.secret = secret
         self.timeout = timeout_s
 
+    def _headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self.secret:
+            headers["X-Webhook-Secret"] = self.secret
+        return headers
+
     async def _check(self, principal: Principal, action: str, **context: Any) -> bool:
         payload = {
             "principal": {
@@ -172,7 +178,7 @@ class WebhookAuthorizationProvider:
         }
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, json=payload, headers=self._headers())
                 if resp.status_code == 200:
                     return bool(resp.json().get("allow", False))
                 return False
@@ -185,7 +191,7 @@ class WebhookAuthorizationProvider:
         payload = {"subject_id": principal.subject_id, "action": "capabilities"}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, json=payload, headers=self._headers())
                 if resp.status_code == 200:
                     return frozenset(resp.json().get("capabilities", []))
         except Exception:
@@ -211,7 +217,7 @@ class WebhookAuthorizationProvider:
         return await self._check(principal, "profile.mutate", profile_id=profile.profile_id)
 
     async def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
-        # Complex resolution might be handled by the Fleet Manager directly
+        # Complex resolution might be handled by the External Management Tier directly
         payload = {
             "principal": {
                 "subject_id": principal.subject_id,
@@ -222,7 +228,7 @@ class WebhookAuthorizationProvider:
         }
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, json=payload, headers=self._headers())
                 if resp.status_code == 200:
                     return str(resp.json().get("role", "viewer"))
         except Exception:

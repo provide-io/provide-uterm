@@ -266,9 +266,7 @@ async def resolve_share_context(
     role: str | None = None
     if control_tok and provided and secrets.compare_digest(str(provided), str(control_tok)):
         role = "operator"
-    elif (share_tok and provided and secrets.compare_digest(str(provided), str(share_tok))) or (
-        not share_tok and not control_tok
-    ):
+    elif share_tok and provided and secrets.compare_digest(str(provided), str(share_tok)):
         role = "viewer"
 
     if role is None:

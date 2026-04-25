@@ -224,7 +224,7 @@ async def test_webhook_hmac_signature_header(shell_server: Any) -> None:
     import hmac as stdlib_hmac
 
     hub, base_url = shell_server
-    secret = "e2e-secret"
+    secret = "uterm-test-secret-32-byte-minimum-key"
 
     # We'll capture the raw request to check headers.
     captured: list[tuple[bytes, dict[str, str]]] = []

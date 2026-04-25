@@ -229,7 +229,7 @@ class TestHandleResumeTokenLogic:
             self._read_initial(ws)
             ws.send_json({"type": "resume", "token": token})
             ws.receive_json()
-            assert store.get(token) is None
+            assert asyncio.run(store.get(token)) is None
 
     def test_resume_new_token_different_from_old(self) -> None:
         """mutmut_55-61: new_token = store.create(...) must create a new token."""
@@ -255,7 +255,7 @@ class TestHandleResumeTokenLogic:
             hello, _ = self._read_initial(ws)
             token = hello["resume_token"]
 
-        store.mark_hijack_owner(token, True)
+        asyncio.run(store.mark_hijack_owner(token, True))
 
         with connect_test_ws(client, "/ws/worker/w1/term") as worker:
             msg = worker.receive_json()
@@ -291,7 +291,7 @@ class TestHandleResumeTokenLogic:
             hello, _ = self._read_initial(ws)
             token = hello["resume_token"]
 
-        store.mark_hijack_owner(token, True)
+        asyncio.run(store.mark_hijack_owner(token, True))
 
         with connect_test_ws(client, "/ws/worker/w1/term") as worker:
             msg = worker.receive_json()
@@ -362,8 +362,8 @@ class TestHandleResumeBranchCoverage:
         hub = _make_hub(resume_store=store)
         ws = _make_ws()
         await _register(hub, "w1", ws, "admin")
-        token = store.create("w1", "admin", 300)
-        store.mark_hijack_owner(token, True)
+        token = await store.create("w1", "admin", 300)
+        await store.mark_hijack_owner(token, True)
 
         result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
         assert result is False
@@ -380,8 +380,8 @@ class TestHandleResumeBranchCoverage:
         async with hub._lock:
             st.hijack_owner = other_ws
             st.hijack_owner_expires_at = time.time() + 60
-        token = store.create("w1", "admin", 300)
-        store.mark_hijack_owner(token, True)
+        token = await store.create("w1", "admin", 300)
+        await store.mark_hijack_owner(token, True)
 
         result = await _handle_resume(hub, ws, "w1", "admin", {"token": token}, False)
         assert result is False

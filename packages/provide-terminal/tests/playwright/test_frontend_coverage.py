@@ -109,7 +109,7 @@ class TestFrontendV8Coverage:
         page.locator("button[title='Toggle mobile key toolbar']").click()
         expect(page.locator(".mobile-keys")).to_be_visible(timeout=5000)
         page.locator("[id$='-inputfield']").fill("/status")
-        page.get_by_role("button", name="Send").click()
+        page.keyboard.press("Enter")
         page.get_by_role("button", name="Analyze").click()
         expect(page.locator("[id$='-analysistext']")).not_to_be_empty(timeout=5000)
         page.get_by_role("button", name="⟳ Resync").click()

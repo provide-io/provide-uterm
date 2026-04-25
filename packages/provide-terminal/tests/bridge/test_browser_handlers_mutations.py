@@ -380,7 +380,7 @@ class TestHandleInputWorkerMessage:
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
-        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
+        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello\n"}, False)
         wws.send_text.assert_called()
         # Input uses raw data encoding — NOT a control frame
         raw = wws.send_text.call_args[0][0]
@@ -394,9 +394,9 @@ class TestHandleInputWorkerMessage:
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
-        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
+        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello\n"}, False)
         raw = wws.send_text.call_args[0][0]
-        assert raw == "hello"
+        assert raw == "hello\n"
 
     async def test_input_message_sent_to_worker(self) -> None:
         """send_worker is called once with the correct data."""
@@ -406,7 +406,7 @@ class TestHandleInputWorkerMessage:
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
-        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
+        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello\n"}, False)
         wws.send_text.assert_called_once()
 
     async def test_input_too_long_error_exact_message(self) -> None:
@@ -447,7 +447,7 @@ class TestHandleInputWorkerMessage:
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
-        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hi"}, False)
+        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hi\n"}, False)
         ws.send_text.assert_called()
         payload = _decode_msg(ws.send_text.call_args[0][0])
         assert payload["type"] == "error"
@@ -473,6 +473,6 @@ class TestHandleInputWorkerMessage:
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
             hub._workers["w1"].input_mode = "open"
-        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
+        await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello\n"}, False)
         raw = wws.send_text.call_args[0][0]
-        assert raw == "hello"
+        assert raw == "hello\n"

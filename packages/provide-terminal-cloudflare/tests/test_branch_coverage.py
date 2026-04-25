@@ -208,7 +208,7 @@ async def test_resolve_signing_key_no_kid_alg_mismatch_skips_key() -> None:
     # Token without kid header — triggers no-kid algorithm-matching path
     token = pyjwt.encode(
         {"sub": "u", "exp": int(time.time()) + 600},
-        "dummy",
+        "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
         # Deliberately no kid
     )

@@ -73,7 +73,7 @@ def create_webhook_router() -> APIRouter:
         definition = await registry.get_definition(session_id)
         if definition is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
-        if not await authz.can_read_session(principal, definition):
+        if not await authz.can_mutate_session(principal, definition, "session.control.update"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
 
         url = payload.get("url")
@@ -118,7 +118,7 @@ def create_webhook_router() -> APIRouter:
         definition = await registry.get_definition(session_id)
         if definition is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
-        if not await authz.can_read_session(principal, definition):
+        if not await authz.can_mutate_session(principal, definition, "session.control.update"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
 
         manager = _webhook_manager(request)
@@ -150,7 +150,7 @@ def create_webhook_router() -> APIRouter:
         definition = await registry.get_definition(session_id)
         if definition is None:
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
-        if not await authz.can_read_session(principal, definition):
+        if not await authz.can_mutate_session(principal, definition, "session.control.update"):
             raise HTTPException(status_code=403, detail="insufficient privileges")
 
         manager = _webhook_manager(request)

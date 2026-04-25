@@ -40,8 +40,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/provide-io/provide-terminal">=0.4.0
-Repository = "https://github.com/provide-io/provide-terminal">=0.4.0
+Homepage = "https://github.com/provide-io/provide-terminal"
+Repository = "https://github.com/provide-io/provide-terminal"
 
 [project.scripts]
 uterm-cf = "provide.terminal.cloudflare.cli:main"

@@ -227,6 +227,20 @@ class TestTunnelApi:
         context = await resolve_share_context(request, env, "tunnel-abc")
         assert context is None
 
+    @pytest.mark.asyncio
+    async def test_resolve_share_context_missing_tokens_does_not_fail_open(self) -> None:
+        from provide.terminal.cloudflare.api._tunnel_api import resolve_share_context
+
+        kv = MagicMock()
+        kv.get = AsyncMock(return_value=json.dumps({"session_id": "tunnel-abc"}))
+        env = MagicMock()
+        env.SESSION_REGISTRY = kv
+        request = MagicMock()
+        request.url = "https://example.com/app/session/tunnel-abc"
+
+        context = await resolve_share_context(request, env, "tunnel-abc")
+        assert context is None
+
 
 class TestTunnelRevokeTokens:
     @pytest.mark.asyncio

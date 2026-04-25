@@ -59,7 +59,7 @@ async def test_register_with_all_options() -> None:
         "https://example.com/hook",
         event_types=["snapshot", "hijack_acquired"],
         pattern=r"\$\s",
-        secret="mysecret",
+        secret="uterm-test-secret-32-byte-minimum-key",
     )
     assert cfg.event_types == frozenset({"snapshot", "hijack_acquired"})
     assert cfg.pattern == r"\$\s"
@@ -187,7 +187,7 @@ async def test_deliver_adds_hmac_signature() -> None:
         resp.is_success = True
         return resp
 
-    secret = "supersecret"
+    secret = "uterm-test-secret-32-byte-minimum-key"
     with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", secret=secret, event_bus=bus)
         await asyncio.sleep(0.05)
@@ -239,7 +239,7 @@ async def test_hmac_signature_is_correct() -> None:
         resp.is_success = True
         return resp
 
-    secret = "verify-me"
+    secret = "uterm-test-secret-32-byte-minimum-key"
     with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", secret=secret, event_bus=bus)
         await asyncio.sleep(0.05)

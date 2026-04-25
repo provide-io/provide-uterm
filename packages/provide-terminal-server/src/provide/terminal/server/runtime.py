@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from provide.terminal.bridge.annotation._detector import PatternDetector
+    from provide.terminal.recording import RecordingStore
 
 logger = get_logger(__name__)
 
@@ -58,12 +59,14 @@ class HostedSessionRuntime:
         *,
         public_base_url: str,
         recording: RecordingConfig,
+        recording_store: RecordingStore,
         worker_bearer_token: str | None = None,
         detector: PatternDetector | None = None,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
         self._recording_cfg = recording
+        self._recording_store = recording_store
         self._worker_bearer_token = worker_bearer_token
         self._connector: SessionConnector | None = None
         self._task: asyncio.Task[None] | None = None
@@ -74,7 +77,6 @@ class HostedSessionRuntime:
         self._stopped_at: float | None = None
         self._last_error: str | None = None
         self._logger: SessionLogger | None = None
-        self._recording_path: Path | None = None
         self._detector = detector
         self._event_seq: int = 0
 
@@ -98,14 +100,15 @@ class HostedSessionRuntime:
             input_mode=self.definition.input_mode,
             connected=self._connected,
             auto_start=self.definition.auto_start,
-            tags=list(self.definition.tags),
+            tags=self.definition.tags,
             recording_enabled=self._recording_enabled(),
-            recording_available=(self._recording_path is not None and self._recording_path.exists()),
+            recording_available=self._recording_enabled(),
             owner=self.definition.owner,
             visibility=self.definition.visibility,
             stopped_at=self._stopped_at,
             last_error=self._last_error,
         )
+
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -164,9 +167,8 @@ class HostedSessionRuntime:
             return "connector offline"
         return await self._connector.get_analysis()
 
-    @property
-    def recording_path(self) -> Path | None:
-        return self._recording_path
+    async def get_recording_path(self) -> Path | None:
+        return await self._recording_store.get_path(self.definition.session_id)
 
     async def _enqueue_messages(self, messages: list[dict[str, Any]]) -> None:
         if self._queue is None:
@@ -185,9 +187,8 @@ class HostedSessionRuntime:
         if connector.is_connected():
             self._connected = True
         if self._recording_enabled():
-            self._recording_path = self._recording_cfg.directory / f"{self.definition.session_id}.jsonl"
             self._logger = SessionLogger(
-                self._recording_path,
+                self._recording_store,
                 max_bytes=self._recording_cfg.max_bytes,
                 control_channel_mode=self._recording_cfg.control_channel_mode,
             )
