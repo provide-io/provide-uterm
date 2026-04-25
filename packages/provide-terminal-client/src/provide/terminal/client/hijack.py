@@ -30,6 +30,26 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
+def _sanitize(data: Any) -> Any:
+    """Deeply strip sensitive keys and truncate long strings/lists."""
+    if isinstance(data, dict):
+        return {
+            k: (
+                "***"
+                if k.lower() in ("token", "secret", "password", "key", "auth", "session_id")
+                else _sanitize(v)
+            )
+            for k, v in data.items()
+        }
+    if isinstance(data, list):
+        if len(data) > 10:
+            return [_sanitize(x) for x in data[:10]] + ["..."]
+        return [_sanitize(x) for x in data]
+    if isinstance(data, str) and len(data) > 500:
+        return f"{data[:500]}..."
+    return data
+
+
 class HijackClient:
     """Async REST client for the provide-terminal hijack + session API.
 
@@ -121,14 +141,31 @@ class HijackClient:
         try:
             r = await client.request(method, path, **kw)
         except httpx.HTTPError as exc:
-            log.warning("HijackClient %s %s failed: %s", method, path, exc)
+            msg = str(exc)
+            if isinstance(exc, httpx.HTTPStatusError):
+                try:
+                    body = exc.response.json()
+                    msg += f" - body: {_sanitize(body)}"
+                except Exception:
+                    msg += f" - body: {_sanitize(exc.response.text)}"
+            log.warning("HijackClient %s %s failed: %s", method, path, msg)
             return False, {"error": str(exc)}
+
         try:
             body = r.json()
         except Exception:
             body = {"raw": r.text}
+
         if r.is_success:
             return True, body
+
+        log.warning(
+            "HijackClient %s %s failed (status %d): %s",
+            method,
+            path,
+            r.status_code,
+            _sanitize(body),
+        )
         return False, body
 
     # -- worker path helpers --------------------------------------------------

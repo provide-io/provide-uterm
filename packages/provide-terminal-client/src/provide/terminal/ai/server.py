@@ -18,6 +18,7 @@ Usage::
 
 from __future__ import annotations
 
+import codecs
 import contextlib
 from typing import TYPE_CHECKING, Any
 
@@ -32,39 +33,15 @@ from provide.terminal.client.mcp_tools import _ok
 
 TOOL_COUNT = 21
 
-# C-style escape sequences that LLMs commonly emit in ``keys`` strings.
-_ESCAPE_MAP: dict[str, str] = {
-    r"\r": "\r",
-    r"\n": "\n",
-    r"\t": "\t",
-    r"\x1b": "\x1b",
-    r"\e": "\x1b",
-    r"\\": "\\",
-}
-
 
 def _unescape_keys(raw: str) -> str:
-    """Translate common C-style escape sequences in *raw* to real characters.
-
-    Only sequences in :data:`_ESCAPE_MAP` are processed; everything else is
-    left as-is so that arbitrary user text passes through safely.
-    """
-    out: list[str] = []
-    i = 0
-    while i < len(raw):
-        if raw[i] == "\\":
-            for esc, char in _ESCAPE_MAP.items():
-                if raw[i:].startswith(esc):
-                    out.append(char)
-                    i += len(esc)
-                    break
-            else:
-                out.append(raw[i])
-                i += 1
-        else:
-            out.append(raw[i])
-            i += 1
-    return "".join(out)
+    """Translate C-style and Unicode escape sequences in *raw* to real characters."""
+    try:
+        # encode to bytes then decode with unicode_escape to handle \n, \r, \xNN, \uNNNN, etc.
+        return codecs.decode(raw.encode("utf-8"), "unicode_escape")
+    except Exception:
+        # Fallback to no-op if decoding fails (e.g. malformed escape at end of string)
+        return raw
 
 
 def _trim_tail(screen: str, tail_lines: int | None) -> str:

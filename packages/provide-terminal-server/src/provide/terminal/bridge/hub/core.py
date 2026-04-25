@@ -20,6 +20,7 @@ from collections.abc import Awaitable, Callable, Coroutine
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
+    from provide.terminal.bridge.contracts import InputMode
     from provide.terminal.bridge.hub.event_bus import EventBus
     from provide.terminal.bridge.identity import IdentityProvider, Principal
 
@@ -161,8 +162,12 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         self._keystroke_timestamps: dict[Any, deque[float]] = {}
         self._policy_gate = policy_gate or NoOpPolicyGate()
         self._input_buffers: dict[WebSocket, str] = {}
+        self._hold_buffers: dict[WebSocket, str] = {}
         self._approval_store = InMemoryApprovalStore()
         self._paused_browsers: set[WebSocket] = set()
+        self._on_browser_message: (
+            Callable[[TermHub, WebSocket, str, str, dict[str, Any], bool], Awaitable[bool]] | None
+        ) = None
         self._identity_provider = identity_provider
         self._delegate_roles = delegate_roles
         self._output_policy_gate = output_policy_gate
@@ -550,12 +555,14 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Clear heuristic state and call parent cleanup."""
         self._keystroke_timestamps.pop(ws, None)
         self._input_buffers.pop(ws, None)
+        self._hold_buffers.pop(ws, None)
         return await super().cleanup_browser_disconnect(worker_id, ws, owned_hijack)
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
         """Clear input buffers for dead browsers and call parent cleanup."""
         for ws in dead:
             self._input_buffers.pop(ws, None)
+            self._hold_buffers.pop(ws, None)
         return await super().remove_dead_browsers(worker_id, dead)
 
     async def _run_behavioral_audit_loop(self) -> None:
@@ -571,9 +578,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         """Iterate all active browsers and evaluate behavioral heuristics."""
         async with self._lock:
             # Snapshot worker/browser mapping to avoid holding lock during HTTP calls
-            all_browsers = [
-                (worker_id, ws) for worker_id, st in self._workers.items() for ws in st.browsers
-            ]
+            all_browsers = [(worker_id, ws) for worker_id, st in self._workers.items() for ws in st.browsers]
 
         for worker_id, ws in all_browsers:
             heuristics_data = self._get_heuristics(ws)
@@ -649,7 +654,7 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
             input_mode=input_mode,
         )
 
-    async def set_input_mode(self, worker_id: str, mode: str) -> tuple[bool, str | None]:
+    async def set_input_mode(self, worker_id: str, mode: InputMode) -> tuple[bool, str | None]:
         """Set input_mode under lock. Rejects if active hijack when switching to "open".
 
         Returns:
@@ -835,6 +840,35 @@ class TermHub(_PollingMixin, _HijackOwnershipMixin, _ConnectionMixin):
         for ws in list(st.browsers.keys()):
             if ws in self._paused_browsers:
                 self._paused_browsers.discard(ws)
+                # Playback buffered input if approved
+                if decision.action == "allow" and ws in self._hold_buffers:
+                    buffered_data = self._hold_buffers.pop(ws)
+                    if self._on_browser_message:
+
+                        async def _playback(
+                            hub: TermHub,
+                            ws: WebSocket,
+                            worker_id: str,
+                            role: str,
+                            msg: dict[str, Any],
+                            owned_hijack: bool,
+                        ) -> None:
+                            if hub._on_browser_message:
+                                await hub._on_browser_message(hub, ws, worker_id, role, msg, owned_hijack)
+
+                        task = asyncio.create_task(
+                            _playback(
+                                self,
+                                ws,
+                                worker_id,
+                                st.browsers.get(ws, "viewer"),
+                                {"type": "input", "data": buffered_data},
+                                False,
+                            )
+                        )
+                        self._background_tasks.add(task)
+                        task.add_done_callback(self._background_tasks.discard)
+
             await ws.send_text(
                 _encode_browser_frame(
                     {

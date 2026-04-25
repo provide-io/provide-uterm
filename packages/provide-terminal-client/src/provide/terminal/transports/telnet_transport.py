@@ -86,11 +86,12 @@ class TelnetTransport:
         return None
 
     @staticmethod
-    def _parse_telnet_buffer(data: bytes | bytearray) -> tuple[bytes, list[tuple[str, int, int | bytes]], int]:
+    def _parse_telnet_buffer(data: bytes | bytearray, final: bool = False) -> tuple[bytes, list[tuple[str, int, int | bytes]], int]:
         """Parse complete telnet sequences from a buffer.
 
         Returns application payload bytes, control events, and bytes consumed.
-        Trailing incomplete sequences are left unconsumed by the caller.
+        Trailing incomplete sequences are left unconsumed by the caller
+        unless final=True.
         """
         result = bytearray()
         events: list[tuple[str, int, int | bytes]] = []
@@ -106,11 +107,20 @@ class TelnetTransport:
                 continue
 
             if i + 1 >= len(buf):
+                if final:
+                    result.append(IAC)
+                    i += 1
+                    consumed = i
                 break
 
             cmd = buf[i + 1]
             if cmd in (DO, DONT, WILL, WONT):
                 if i + 2 >= len(buf):
+                    if final:
+                        # Truncated negotiation: emit as literal data
+                        result.extend(buf[i:])
+                        i = len(buf)
+                        consumed = i
                     break
                 events.append(("negotiate", cmd, buf[i + 2]))
                 i += 3
@@ -120,6 +130,11 @@ class TelnetTransport:
             if cmd == SB:
                 end = TelnetTransport._find_subneg_end(buf, i + 2)
                 if end is None:
+                    if final:
+                        # Truncated subnegotiation: emit as literal data
+                        result.extend(buf[i:])
+                        i = len(buf)
+                        consumed = i
                     break
                 payload = buf[i + 2 : end - 2]
                 events.append(("subnegotiation", 0, payload))
@@ -138,8 +153,8 @@ class TelnetTransport:
 
         return bytes(result), events, consumed
 
-    def _consume_rx_buffer(self) -> tuple[bytes, list[tuple[str, int, int | bytes]]]:
-        payload, events, consumed = self._parse_telnet_buffer(self._rx_buf)
+    def _consume_rx_buffer(self, final: bool = False) -> tuple[bytes, list[tuple[str, int, int | bytes]]]:
+        payload, events, consumed = self._parse_telnet_buffer(self._rx_buf, final=final)
         if consumed:
             del self._rx_buf[:consumed]
         return payload, events
@@ -245,7 +260,10 @@ class TelnetTransport:
             raise ConnectionError("Connection lost") from exc
 
         if not chunk:  # pragma: no cover
+            payload, events = self._consume_rx_buffer(final=True)
             await self.disconnect()
+            if payload:
+                return payload
             raise ConnectionError("Connection closed by remote")
 
         self._rx_buf.extend(chunk)

@@ -75,8 +75,9 @@ class PresenceStore:
         if p is None:
             return None
         for k, v in fields.items():
-            if hasattr(p, k):
-                setattr(p, k, v)
+            if not hasattr(p, k):
+                raise ValueError(f"Unknown presence field: {k}")
+            setattr(p, k, v)
         p.last_activity_at = time.time()
         return p
 

@@ -85,7 +85,12 @@ class ControlChannelDecoder:
             self._buffer = ""
             raise ControlChannelProtocolError(f"control channel buffer overflow: {total} > {self._max_buffer_bytes}")
         self._buffer = "".join(self._buffer_parts)
-        events = self._drain(final=False)
+        try:
+            events = self._drain(final=False)
+        except ControlChannelProtocolError:
+            self._buffer_parts.clear()
+            self._buffer = ""
+            raise
         # After _drain, self._buffer contains only unconsumed data.
         # Rebuild _buffer_parts with the unconsumed portion.
         self._buffer_parts = [self._buffer] if self._buffer else []
@@ -93,8 +98,15 @@ class ControlChannelDecoder:
 
     def finish(self) -> list[ControlChannelChunk]:
         """Decode any remaining buffered data and reject truncated control frames."""
-        events = self._drain(final=True)
+        try:
+            events = self._drain(final=True)
+        except ControlChannelProtocolError:
+            self._buffer_parts.clear()
+            self._buffer = ""
+            raise
         if self._buffer:
+            self._buffer_parts.clear()
+            self._buffer = ""
             raise ControlChannelProtocolError("truncated control frame")
         return events
 
@@ -124,7 +136,8 @@ class ControlChannelDecoder:
         if separator != ":" or any(char not in _HEX_DIGITS for char in length_hex):
             raise ControlChannelProtocolError("invalid control header")
         payload_bytes = int(length_hex, 16)
-        if payload_bytes > self._max_control_payload_bytes:
+        # Bounding check: frames > 1MB are rejected immediately before allocation
+        if payload_bytes > 1_048_576 or payload_bytes > self._max_control_payload_bytes:
             raise ControlChannelProtocolError("control payload too large")
         frame_end = idx + _HEADER_BYTES + payload_bytes
         if buf_len < frame_end:

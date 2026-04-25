@@ -12,10 +12,11 @@ lease, False = it does not).
 from __future__ import annotations
 
 import time
+import uuid
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
-from provide.telemetry import get_logger, logger
+from provide.telemetry import get_logger
 from provide.terminal.bridge.frames import (
     BrowserInputFrame,
     make_error_frame,
@@ -23,10 +24,9 @@ from provide.terminal.bridge.frames import (
     make_hello_frame,
     make_pong_frame,
 )
-from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED, PolicyDecision
 from provide.terminal.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED
 from provide.terminal.bridge.hub.semantics import CommandSplitter
-import uuid
 from provide.terminal.bridge.models import VALID_ROLES
 from provide.terminal.control_channel import encode_control
 
@@ -210,15 +210,16 @@ async def _handle_input(
     msg_b: dict[str, Any],
 ) -> None:
     """Process an input message from the browser."""
+    data = str(cast("BrowserInputFrame", msg_b).get("data", ""))
+    if not data:
+        return
+
     if ws in hub._paused_browsers:
+        hub._hold_buffers[ws] = hub._hold_buffers.get(ws, "") + data
         return
 
     can_send = await hub.prepare_browser_input(worker_id, ws)
     if not can_send:
-        return
-
-    data = str(cast("BrowserInputFrame", msg_b).get("data", ""))
-    if not data:
         return
 
     if len(data) > hub.max_input_chars:

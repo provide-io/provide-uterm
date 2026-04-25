@@ -147,12 +147,29 @@ class _HijackOwnershipMixin:
                 return False, "open_mode"
             if self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st):  # type: ignore[attr-defined]
                 return False, "already_hijacked"
+
+            # Send pause while holding the lock to ensure the worker is notified
+            # atomically with the session creation.
+            try:
+                await st.worker_ws.send_text(
+                    _encode_worker_frame(
+                        {
+                            "type": "control",
+                            "action": "pause",
+                            "owner": owner,
+                            "ts": time.time(),
+                        }
+                    )
+                )
+            except Exception as exc:
+                logger.debug("pause_worker_failed worker_id=%s: %s", worker_id, exc)
+                st.worker_ws = None
+                return False, "no_worker"
+
             st.hijack_session = HijackSession(
                 hijack_id=hijack_id,
                 owner=owner,
-                acquired_at=now,
                 lease_expires_at=now + lease_s,
-                last_heartbeat=now,
             )
         logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
         return True, None
