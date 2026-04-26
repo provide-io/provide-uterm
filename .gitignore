@@ -63,3 +63,4 @@ demo/recordings/**/*.cast
 demo/recordings/**/*.mp4
 demo/recordings/**/*.webm
 demo/recordings/**/screenshots/
+.worktrees/
