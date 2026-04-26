@@ -13,10 +13,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from provide.terminal.bridge.contracts import InputMode, Visibility
 from provide.terminal.defaults import TerminalDefaults
 
 if TYPE_CHECKING:
-    from provide.terminal.bridge.contracts import InputMode, Visibility
+    pass
 
 # CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
 XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
@@ -344,3 +345,6 @@ class UtermServerConfig(ServerBaseModel):
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300
+
+SessionDefinition.model_rebuild()
+UtermServerConfig.model_rebuild()
