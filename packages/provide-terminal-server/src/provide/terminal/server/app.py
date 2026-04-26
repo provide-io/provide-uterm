@@ -25,6 +25,7 @@ from starlette.staticfiles import StaticFiles
 
 from provide.telemetry import TelemetryMiddleware, get_logger
 from provide.terminal.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
+from provide.terminal.bridge.identity import IdentityProvider
 from provide.terminal.control.plane import ControlPlane as SharedControlPlane
 from provide.terminal.control.plane import ControlPlaneConfig as SharedControlPlaneConfig
 from provide.terminal.control.plane.memory import MemoryControlPlane
@@ -472,14 +473,16 @@ def create_server_app(
         )
 
     # Choose Identity Provider based on config
+    api_key_store = ApiKeyStore()
+
     if config.auth.identity_provider == "webhook" and config.auth.webhook_idp_url:
-        idp = WebhookIdentityProvider(
+        idp: IdentityProvider = WebhookIdentityProvider(
             url=config.auth.webhook_idp_url,
             secret=config.auth.webhook_idp_secret,
             timeout_s=config.auth.webhook_idp_timeout_s,
         )
     else:
-        idp = LocalIdentityProvider(config.auth)
+        idp = LocalIdentityProvider(config.auth, api_key_store=api_key_store)
 
     behavioral_audit_gate = None
     if config.governance.behavioral_audit_url:
@@ -518,12 +521,13 @@ def create_server_app(
     webhook_manager = WebhookManager()
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     from provide.terminal.bridge.annotation._detector import PatternDetector
+    from provide.terminal.recording import LocalFileRecordingStore
     from provide.terminal.server.discovery import (
         NodeStatus,
         NoOpDiscoveryProvider,
         WebhookDiscoveryProvider,
     )
-    from provide.terminal.recording import LocalFileRecordingStore; from provide.terminal.server.recording import WebhookRecordingStore
+    from provide.terminal.server.recording import WebhookRecordingStore
 
     # Choose Recording Store
     if config.recording.store_type == "webhook" and config.recording.webhook_url:
@@ -703,8 +707,8 @@ def create_server_app(
     app.state.uterm_profile_store = profile_store
     app.state.uterm_control_plane = control_plane
     app.state.uterm_tunnel_tokens = tunnel_tokens
-    api_key_store = ApiKeyStore()
     app.state.uterm_api_key_store = api_key_store
+    app.state.uterm_idp = idp
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
