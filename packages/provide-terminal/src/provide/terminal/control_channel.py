@@ -11,6 +11,27 @@ from dataclasses import dataclass
 from string import hexdigits
 from typing import TYPE_CHECKING, Any
 
+try:
+    import orjson
+
+    def _json_dumps(obj: Any) -> str:
+        return orjson.dumps(obj).decode("utf-8")
+
+    _json_loads = orjson.loads
+except ImportError:
+    try:
+        import ujson
+
+        _json_dumps = ujson.dumps
+        _json_loads = ujson.loads
+    except ImportError:
+        def _json_dumps(obj: Any) -> str:
+            return json.dumps(obj, ensure_ascii=True, separators=(",", ":"))
+
+        _json_loads = json.loads
+from string import hexdigits
+from typing import TYPE_CHECKING, Any
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -114,8 +135,8 @@ class ControlChannelDecoder:
     def _parse_frame_payload(payload_raw: str) -> dict[str, Any]:
         """Parse and validate a control frame JSON payload."""
         try:
-            payload = json.loads(payload_raw)
-        except json.JSONDecodeError as exc:
+            payload = _json_loads(payload_raw)
+        except Exception as exc:
             raise ControlChannelProtocolError("invalid control json") from exc
         if not isinstance(payload, dict):
             raise ControlChannelProtocolError("control payload must be an object")

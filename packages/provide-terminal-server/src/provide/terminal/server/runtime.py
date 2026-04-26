@@ -62,6 +62,7 @@ class HostedSessionRuntime:
         recording_store: RecordingStore | None = None,
         worker_bearer_token: str | None = None,
         detector: PatternDetector | None = None,
+        max_buffer_bytes: int = 1_048_576,  # 1MB default
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
@@ -76,6 +77,8 @@ class HostedSessionRuntime:
         self._connector: SessionConnector | None = None
         self._task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] | None = None
+        self._queue_bytes = 0
+        self._max_buffer_bytes = max_buffer_bytes
         self._stop = asyncio.Event()
         self._connected = False
         self._state: SessionLifecycle = "stopped"
@@ -179,6 +182,18 @@ class HostedSessionRuntime:
         if self._queue is None:
             return
         for msg in messages:
+            encoded = _encode_runtime_frame(msg)
+            msg_len = len(encoded)
+            if self._queue_bytes + msg_len > self._max_buffer_bytes:
+                logger.warning(
+                    "hosted_session_runtime_buffer_full session_id=%s queue_bytes=%d msg_len=%d max=%d — dropping frame",
+                    self.definition.session_id,
+                    self._queue_bytes,
+                    msg_len,
+                    self._max_buffer_bytes,
+                )
+                continue
+            self._queue_bytes += msg_len
             await self._queue.put(msg)
 
     async def _start_connector(self) -> SessionConnector:
@@ -318,6 +333,8 @@ class HostedSessionRuntime:
             while not self._stop.is_set():
                 if self._queue is not None and not self._queue.empty():
                     outbound = await self._queue.get()
+                    encoded = _encode_runtime_frame(outbound)
+                    self._queue_bytes = max(0, self._queue_bytes - len(encoded))
                     await self._send_outbound_frame(ws, outbound)
                     continue
                 # If recv_task completed while we were processing poll output, handle it
