@@ -33,6 +33,7 @@ class LimitsConfig:
     max_ws_message_bytes: int = 1_048_576
     max_input_chars: int = 10_000
     max_events_per_worker: int = 2_000
+    max_buffer_bytes: int = 1_048_576
 
 
 @dataclass(slots=True)
@@ -105,6 +106,7 @@ class CloudflareConfig:
             max_ws_message_bytes=max(1024, int(_get("MAX_WS_MESSAGE_BYTES", "1048576"))),
             max_input_chars=max(100, int(_get("MAX_INPUT_CHARS", "10000"))),
             max_events_per_worker=max(100, int(_get("MAX_EVENTS_PER_WORKER", "2000"))),
+            max_buffer_bytes=max(1024, int(_get("MAX_BUFFER_BYTES", "1048576"))),
         )
         upstream = UpstreamConfig(
             base_ws_url=_get("UPSTREAM_BASE_WS_URL", ""),

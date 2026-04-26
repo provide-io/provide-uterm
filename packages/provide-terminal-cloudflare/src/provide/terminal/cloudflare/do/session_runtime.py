@@ -36,6 +36,8 @@ except Exception:
     from state.registry import update_kv_session  # type: ignore[import-not-found]
     from state.store import SqliteStateStore  # type: ignore[import-not-found]
 
+from provide.telemetry import get_tracer
+tracer = get_tracer(__name__)
 from provide.terminal.control_channel import encode_control
 
 logger = logging.getLogger(__name__)
@@ -60,6 +62,8 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
         self.raw_sockets: dict[str, CFWebSocket] = {}
         self.browser_hijack_owner: dict[str, str] = {}
         self.browser_resume_tokens: dict[str, str] = {}
+        self._queue_bytes = 0
+        self.max_buffer_bytes = self.config.limits.max_buffer_bytes
         self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
@@ -189,7 +193,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
             logger.debug("failed to parse query token: %s", exc)
         return None
 
-    async def _resolve_principal(self, request: object) -> tuple[Any, Response | None]:
+    async def resolve_principal(self, request: object) -> tuple[Any, Response | None]:
         """Validate JWT auth.
 
         Returns ``(principal, None)`` when auth succeeds or is not required
@@ -300,6 +304,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                     return
 
     async def fetch(self, request: object) -> Response:
+        with tracer.start_as_current_span("uterm.cloudflare.fetch"):
+            return await self._fetch_impl(request)
+
+    async def _fetch_impl(self, request: object) -> Response:
         # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
         self._lazy_init_worker_id(request)
         if self._deleted_at is not None:
@@ -345,7 +353,7 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 logger.info("tunnel_token_validated worker_id=%s auth_type=%s", self.worker_id, auth_type)
                 _principal, auth_error = None, None
         else:
-            _principal, auth_error = await self._resolve_principal(request)
+            _principal, auth_error = await self.resolve_principal(request)
             if auth_error is not None:
                 return auth_error
         if upgrade_header == "websocket":

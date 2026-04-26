@@ -4,7 +4,7 @@
 #
 """Hijack ownership and lease management mixin for TermHub.
 
-Extracted from ``hub.py`` to keep file sizes under 500 LOC.
+Extracted from \`\`hub.py\`\` to keep file sizes under 500 LOC.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger
+from provide.telemetry import get_logger, get_tracer
 from provide.terminal.bridge.hub.ext import (
     EVENT_HIJACK_ACQUIRED,
     EVENT_HIJACK_EXPIRED,
@@ -28,15 +28,16 @@ if TYPE_CHECKING:
     from provide.terminal.bridge.models import WorkerTermState
 
 logger = get_logger(__name__)
+tracer = get_tracer(__name__)
 
 
 class _OwnershipMixin:
     """Mixin providing hijack ownership/lease methods for TermHub.
 
-    Requires the host class to provide: ``_lock``, ``_workers``,
-    ``_dashboard_hijack_lease_s``, ``is_hijacked``, ``is_dashboard_hijack_active``,
-    ``has_valid_rest_lease``, ``send_worker``, ``broadcast_hijack_state``,
-    ``append_event``, ``prune_if_idle``, ``notify_hijack_changed``.
+    Requires the host class to provide: \`\`_lock\`\`, \`\`_workers\`\`,
+    \`\`_dashboard_hijack_lease_s\`\`, \`\`is_hijacked\`\`, \`\`is_dashboard_hijack_active\`\`,
+    \`\`has_valid_rest_lease\`\`, \`\`send_worker\`\`, \`\`broadcast_hijack_state\`\`,
+    \`\`append_event\`\`, \`\`prune_if_idle\`\`, \`\`notify_hijack_changed\`\`.
     """
 
     # -- Typed self helpers (avoid repeating the cast everywhere) ---------------
@@ -46,7 +47,7 @@ class _OwnershipMixin:
 
     @staticmethod
     def _compute_lease_expirations(st: Any, now: float) -> tuple[bool, bool]:
-        """Return ``(browser_expired, rest_expired)`` without mutating state.
+        """Return \`\`(browser_expired, rest_expired)\`\` without mutating state.
 
         *browser_expired* is True when the dashboard WS owner lease has lapsed.
         *rest_expired* is True when the REST hijack session lease has lapsed.
@@ -135,69 +136,71 @@ class _OwnershipMixin:
         """Atomically check availability and create a REST hijack session.
 
         Returns:
-            ``(True, None)`` on success.
-            ``(False, "no_worker")`` if the worker disconnected before the lock.
-            ``(False, "already_hijacked")`` if another session is active.
+            \`\`(True, None)\`\` on success.
+            \`\`(False, "no_worker")\`\` if the worker disconnected before the lock.
+            \`\`(False, "already_hijacked")\`\` if another session is active.
         """
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False, "no_worker"
-            if st.input_mode == "open":
-                return False, "open_mode"
-            if self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st):  # type: ignore[attr-defined]
-                return False, "already_hijacked"
+        with tracer.start_as_current_span("uterm.hijack.acquire.rest", attributes={"worker_id": worker_id, "owner": owner}):
+            async with self._lock:
+                st = self._workers.get(worker_id)
+                if st is None or st.worker_ws is None:
+                    return False, "no_worker"
+                if st.input_mode == "open":
+                    return False, "open_mode"
+                if self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st):  # type: ignore[attr-defined]
+                    return False, "already_hijacked"
 
-            # Send pause while holding the lock to ensure the worker is notified
-            # atomically with the session creation.
-            try:
-                from provide.terminal.bridge.hub.core import _encode_worker_frame
+                # Send pause while holding the lock to ensure the worker is notified
+                # atomically with the session creation.
+                try:
+                    from provide.terminal.bridge.hub.core import _encode_worker_frame
 
-                await st.worker_ws.send_text(
-                    _encode_worker_frame(
-                        {
-                            "type": "control",
-                            "action": "pause",
-                            "owner": owner,
-                            "hijack_id": hijack_id,
-                            "ts": time.time(),
-                        }
+                    await st.worker_ws.send_text(
+                        _encode_worker_frame(
+                            {
+                                "type": "control",
+                                "action": "pause",
+                                "owner": owner,
+                                "hijack_id": hijack_id,
+                                "ts": time.time(),
+                            }
+                        )
                     )
-                )
-            except Exception as exc:
-                logger.debug("pause_worker_failed worker_id=%s: %s", worker_id, exc)
-                st.worker_ws = None
-                return False, "no_worker"
+                except Exception as exc:
+                    logger.debug("pause_worker_failed worker_id=%s: %s", worker_id, exc)
+                    st.worker_ws = None
+                    return False, "no_worker"
 
-            st.hijack_session = HijackSession(
-                hijack_id=hijack_id,
-                owner=owner,
-                acquired_at=now,
-                lease_expires_at=now + lease_s,
-                last_heartbeat=now,
-            )
-        logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
-        return True, None
+                st.hijack_session = HijackSession(
+                    hijack_id=hijack_id,
+                    owner=owner,
+                    acquired_at=now,
+                    lease_expires_at=now + lease_s,
+                    last_heartbeat=now,
+                )
+            logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
+            return True, None
 
     async def try_acquire_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
         """Atomically check availability and set the dashboard WS hijack owner.
 
         Returns:
-            ``(True, None)`` on success.
-            ``(False, "no_worker")`` if no worker is connected.
-            ``(False, "already_hijacked")`` if another hijack is active.
+            \`\`(True, None)\`\` on success.
+            \`\`(False, "no_worker")\`\` if no worker is connected.
+            \`\`(False, "already_hijacked")\`\` if another hijack is active.
         """
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False, "no_worker"
-            if self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st):  # type: ignore[attr-defined]
-                return False, "already_hijacked"
-            ttl = self._dashboard_hijack_lease_s
-            st.hijack_owner = ws
-            st.hijack_owner_expires_at = time.monotonic() + ttl
-        logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="dashboard", lease_s=ttl)
-        return True, None
+        with tracer.start_as_current_span("uterm.hijack.acquire.ws", attributes={"worker_id": worker_id}):
+            async with self._lock:
+                st = self._workers.get(worker_id)
+                if st is None or st.worker_ws is None:
+                    return False, "no_worker"
+                if self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st):  # type: ignore[attr-defined]
+                    return False, "already_hijacked"
+                ttl = self._dashboard_hijack_lease_s
+                st.hijack_owner = ws
+                st.hijack_owner_expires_at = time.monotonic() + ttl
+            logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="dashboard", lease_s=ttl)
+            return True, None
 
     async def touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
         """Extend the dashboard WS hijack lease; returns new expiry timestamp or None if no owner."""
@@ -222,7 +225,7 @@ class _OwnershipMixin:
         """Atomically verify ownership and clear it in a single lock block.
 
         Returns:
-            ``(released, rest_active)`` where *released* is ``True`` if *ws*
+            \`\`(released, rest_active)\`\` where *released* is \`\`True\`\` if *ws*
             was the active dashboard hijack owner and was cleared.
         """
         async with self._lock:
@@ -243,7 +246,7 @@ class _OwnershipMixin:
         lease and sends a resume control frame (unless a REST session is still
         active).
 
-        Returns ``True`` if the hijack state changed (owner cleared and resumed).
+        Returns \`\`True\`\` if the hijack state changed (owner cleared and resumed).
         """
         notify_hijack_off = False
         async with self._lock:
@@ -272,25 +275,24 @@ class _OwnershipMixin:
 
     async def extend_hijack_lease(self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float) -> float | None:
         """Extend the REST hijack lease. Returns the new expiry or None if the session is not found or owner mismatch."""
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
-                return None
-            if st.hijack_session.owner != owner:
-                logger.warning(
-                    "hijack_heartbeat_denied_owner_mismatch worker_id=%s hijack_id=%s current=%s attempted=%s",
-                    worker_id,
-                    hijack_id,
-                    st.hijack_session.owner,
-                    owner,
-                )
-                return None
-            st = self._workers.get(worker_id)
-            if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
-                return None
-            st.hijack_session.last_heartbeat = now
-            st.hijack_session.lease_expires_at = now + lease_s
-            return st.hijack_session.lease_expires_at
+        with tracer.start_as_current_span("uterm.hijack.heartbeat", attributes={"worker_id": worker_id, "owner": owner}):
+            async with self._lock:
+                st = self._workers.get(worker_id)
+                if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
+                    return None
+                if st.hijack_session.owner != owner:
+                    logger.warning(
+                        "hijack_heartbeat_denied_owner_mismatch worker_id=%s hijack_id=%s current=%s attempted=%s",
+                        worker_id,
+                        hijack_id,
+                        st.hijack_session.owner,
+                        owner,
+                    )
+                    self.metric("hijack_heartbeat_denied_owner_mismatch")  # type: ignore[attr-defined]
+                    return None
+                st.hijack_session.last_heartbeat = now
+                st.hijack_session.lease_expires_at = now + lease_s
+                return st.hijack_session.lease_expires_at
 
     async def get_fresh_hijack_expiry(self, worker_id: str, hijack_id: str, fallback: float) -> float:
         """Re-read the current lease expiry under lock (a concurrent heartbeat may have extended it)."""
@@ -348,15 +350,16 @@ class _OwnershipMixin:
         """Atomically clear the REST hijack session.
 
         Returns:
-            ``(was_released, should_resume)`` — *should_resume* is True if no other hijack is active.
+            \`\`(was_released, should_resume)\`\` — *should_resume* is True if no other hijack is active.
         """
-        async with self._lock:
-            st = self._workers.get(worker_id)
-            if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
-                return False, False
-            st.hijack_session = None
-            should_resume = not self.is_dashboard_hijack_active(st)  # type: ignore[attr-defined]
-        return True, should_resume
+        with tracer.start_as_current_span("uterm.hijack.release", attributes={"worker_id": worker_id}):
+            async with self._lock:
+                st = self._workers.get(worker_id)
+                if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
+                    return False, False
+                st.hijack_session = None
+                should_resume = not self.is_dashboard_hijack_active(st)  # type: ignore[attr-defined]
+            return True, should_resume
 
     async def check_still_hijacked(self, worker_id: str) -> bool:
         """Return True if any hijack (REST or dashboard WS) is currently active."""

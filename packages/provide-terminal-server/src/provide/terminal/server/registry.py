@@ -131,6 +131,7 @@ class SessionRegistry:
                 recording=self._recording,
                 recording_store=self._recording_store,
                 worker_bearer_token=self._worker_bearer_token,
+                hub=self._hub,
                 detector=self._detector,
             )
             self._runtimes[session.session_id] = runtime

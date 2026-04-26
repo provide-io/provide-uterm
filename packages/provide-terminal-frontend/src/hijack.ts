@@ -758,9 +758,18 @@ export class ProvideHijack {
         this._hideApprovalUI();
         break;
 
-      case "error":
-        this._setStatus("bad", `Error: ${(msg.message as string | undefined) ?? "unknown"}`);
+      case "error": {
+        const message = (msg.message as string | undefined) ?? "unknown";
+        if (message === "Buffer overflow — input dropped") {
+          this._setStatus("bad", message);
+        } else {
+          this._setStatus("bad", `Error: ${message}`);
+        }
+        if (message.toLowerCase().includes("ownership mismatch")) {
+          this._wsSend({ type: "snapshot_req" });
+        }
         break;
+      }
 
       case "presence_sync":
       case "presence_update":

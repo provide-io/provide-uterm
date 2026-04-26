@@ -185,7 +185,17 @@ class _SessionRuntimeIoMixin:
                 continue
             ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
             try:
-                await self.send_ws(ws, payload)  # type: ignore[attr-defined]
+                # Backpressure logic
+                frame_type = str(payload.get("type") or "")
+                encoded = encode_data(str(payload.get("data", ""))) if frame_type in {"input", "term"} else encode_control(payload)
+                msg_len = len(encoded)
+                if self._queue_bytes + msg_len > self.max_buffer_bytes:
+                    logger.warning("cloudflare_runtime_buffer_full id=%s queue=%d msg=%d", self.worker_id, self._queue_bytes, msg_len)
+                    with tracer.start_as_current_span("uterm.buffer.full", attributes={"worker_id": self.worker_id, "queue_bytes": self._queue_bytes, "msg_len": msg_len}): pass
+                    continue
+                self._queue_bytes += msg_len
+                await self.send_ws(ws, payload)
+                self._queue_bytes = max(0, self._queue_bytes - msg_len)  # type: ignore[attr-defined]
             except Exception:
                 self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
                 self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]

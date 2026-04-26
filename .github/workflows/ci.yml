@@ -61,6 +61,8 @@ jobs:
       - run: uv run python -m pip_audit --path .
       - run: uv run python scripts/check_licenses.py
       - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-terminal/tests/playwright/test_example.py --ignore=packages/provide-terminal/tests/playwright/test_frontend_coverage.py
+      - name: Run Hub Performance Benchmark
+        run: uv run pytest benchmarks/test_hub_performance.py -v -s
       - name: Check CF vendor tree
         run: bash .ci/check_cf_vendor_tree.sh
       - run: uv run pytest -q packages/provide-terminal-cloudflare/tests

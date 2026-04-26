@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from string import hexdigits
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 try:
     import orjson
@@ -25,12 +25,11 @@ except ImportError:
         _json_dumps = ujson.dumps
         _json_loads = ujson.loads
     except ImportError:
+
         def _json_dumps(obj: Any) -> str:
             return json.dumps(obj, ensure_ascii=True, separators=(",", ":"))
 
         _json_loads = json.loads
-from string import hexdigits
-from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -77,7 +76,7 @@ def encode_data(data: str) -> str:
 
 def encode_control(payload: Mapping[str, Any]) -> str:
     """Encode a control payload for the inline stream."""
-    serialized = json.dumps(dict(payload), ensure_ascii=True, separators=(",", ":"))
+    serialized = _json_dumps(dict(payload))
     return f"{DLE}{STX}{len(serialized):08x}:{serialized}"
 
 
@@ -89,11 +88,18 @@ class ControlChannelDecoder:
         *,
         max_control_payload_bytes: int = 1_048_576,
         max_buffer_bytes: int = 10_485_760,
+        on_error: Callable[[str], None] | None = None,
     ) -> None:
         self._max_control_payload_bytes = max(1, int(max_control_payload_bytes))
         self._max_buffer_bytes = max(1, int(max_buffer_bytes))
         self._buffer = ""
         self._buffer_parts: list[str] = []
+        self._on_error = on_error
+
+    def _report_error(self, message: str) -> ControlChannelProtocolError:
+        if self._on_error:
+            self._on_error("control_channel_protocol_error")
+        return ControlChannelProtocolError(message)
 
     def feed(self, chunk: str) -> list[ControlChannelChunk]:
         """Decode all complete events from *chunk* and buffer the rest."""
@@ -104,7 +110,7 @@ class ControlChannelDecoder:
         if total > self._max_buffer_bytes:
             self._buffer_parts.clear()
             self._buffer = ""
-            raise ControlChannelProtocolError(f"control channel buffer overflow: {total} > {self._max_buffer_bytes}")
+            raise self._report_error(f"control channel buffer overflow: {total} > {self._max_buffer_bytes}")
         self._buffer = "".join(self._buffer_parts)
         try:
             events = self._drain(final=False)
@@ -128,18 +134,17 @@ class ControlChannelDecoder:
         if self._buffer:
             self._buffer_parts.clear()
             self._buffer = ""
-            raise ControlChannelProtocolError("truncated control frame")
+            raise self._report_error("truncated control frame")
         return events
 
-    @staticmethod
-    def _parse_frame_payload(payload_raw: str) -> dict[str, Any]:
+    def _parse_frame_payload(self, payload_raw: str) -> dict[str, Any]:
         """Parse and validate a control frame JSON payload."""
         try:
             payload = _json_loads(payload_raw)
         except Exception as exc:
-            raise ControlChannelProtocolError("invalid control json") from exc
+            raise self._report_error("invalid control json") from exc
         if not isinstance(payload, dict):
-            raise ControlChannelProtocolError("control payload must be an object")
+            raise self._report_error("control payload must be an object")
         return payload
 
     def _try_parse_frame(self, buf: str, idx: int, buf_len: int, *, final: bool) -> tuple[ControlChunk, int] | None:
@@ -150,20 +155,20 @@ class ControlChannelDecoder:
         """
         if buf_len - idx < _HEADER_BYTES:
             if final:
-                raise ControlChannelProtocolError("truncated control frame")
+                raise self._report_error("truncated control frame")
             return None
         length_hex = buf[idx + 2 : idx + 10]
         separator = buf[idx + 10]
         if separator != ":" or any(char not in _HEX_DIGITS for char in length_hex):
-            raise ControlChannelProtocolError("invalid control header")
+            raise self._report_error("invalid control header")
         payload_bytes = int(length_hex, 16)
         # Bounding check: frames > 1MB are rejected immediately before allocation
         if payload_bytes > 1_048_576 or payload_bytes > self._max_control_payload_bytes:
-            raise ControlChannelProtocolError("control payload too large")
+            raise self._report_error("control payload too large")
         frame_end = idx + _HEADER_BYTES + payload_bytes
         if buf_len < frame_end:
             if final:
-                raise ControlChannelProtocolError("truncated control frame")
+                raise self._report_error("truncated control frame")
             return None
         payload_raw = buf[idx + _HEADER_BYTES : frame_end]
         return ControlChunk(self._parse_frame_payload(payload_raw)), frame_end
@@ -216,7 +221,7 @@ class ControlChannelDecoder:
 
             if idx + 1 >= buf_len:
                 if final:
-                    raise ControlChannelProtocolError("truncated control frame")
+                    raise self._report_error("truncated control frame")
                 break
 
             next_char = buf[idx + 1]
@@ -229,7 +234,7 @@ class ControlChannelDecoder:
                 data_start = idx
                 continue
             if next_char != STX:
-                raise ControlChannelProtocolError("invalid control prefix")
+                raise self._report_error("invalid control prefix")
 
             data_start = self._emit_data_chunk(events, data_parts, buf, data_start, idx)
 
