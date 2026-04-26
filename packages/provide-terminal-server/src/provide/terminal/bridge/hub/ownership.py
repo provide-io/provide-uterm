@@ -270,9 +270,21 @@ class _OwnershipMixin:
             self.notify_hijack_changed(worker_id, enabled=False, owner=None)  # type: ignore[attr-defined]
         return notify_hijack_off
 
-    async def extend_hijack_lease(self, worker_id: str, hijack_id: str, lease_s: int, now: float) -> float | None:
-        """Extend the REST hijack lease. Returns the new expiry or None if the session is not found."""
+    async def extend_hijack_lease(self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float) -> float | None:
+        """Extend the REST hijack lease. Returns the new expiry or None if the session is not found or owner mismatch."""
         async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
+                return None
+            if st.hijack_session.owner != owner:
+                logger.warning(
+                    "hijack_heartbeat_denied_owner_mismatch worker_id=%s hijack_id=%s current=%s attempted=%s",
+                    worker_id,
+                    hijack_id,
+                    st.hijack_session.owner,
+                    owner,
+                )
+                return None
             st = self._workers.get(worker_id)
             if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:
                 return None

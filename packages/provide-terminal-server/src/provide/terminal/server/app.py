@@ -523,7 +523,7 @@ def create_server_app(
         NoOpDiscoveryProvider,
         WebhookDiscoveryProvider,
     )
-    from provide.terminal.server.recording import LocalFileRecordingStore, WebhookRecordingStore
+    from provide.terminal.recording import LocalFileRecordingStore; from provide.terminal.server.recording import WebhookRecordingStore
 
     # Choose Recording Store
     if config.recording.store_type == "webhook" and config.recording.webhook_url:

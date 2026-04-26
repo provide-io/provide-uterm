@@ -64,7 +64,7 @@ class SessionRegistry:
         self._recording = recording
 
         if recording_store is None:
-            from provide.terminal.server.recording import LocalFileRecordingStore
+            from provide.terminal.recording import LocalFileRecordingStore
 
             self._recording_store: RecordingStore = LocalFileRecordingStore(recording.directory)
         else:
