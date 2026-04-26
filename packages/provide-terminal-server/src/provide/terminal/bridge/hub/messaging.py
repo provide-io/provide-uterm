@@ -55,9 +55,12 @@ class HubMessagingMixin:
         is_term_data = msg.get("type") == "term"
         raw_data = str(msg.get("data", "")) if is_term_data else ""
 
+        # Pre-encode for all browsers (except when redaction is needed)
+        encoded_default = _encode_browser_frame(msg)
+
         for ws, _role in browsers_with_roles:
             try:
-                final_payload = _encode_browser_frame(msg)
+                final_payload = encoded_default
                 if is_term_data and self._output_policy_gate:
                     context = await self.prepare_policy_context(ws, worker_id, action="output")
                     rules = await self._output_policy_gate.get_redaction_rules(context)
