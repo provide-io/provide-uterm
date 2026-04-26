@@ -10,12 +10,10 @@ import asyncio
 import json
 import re
 import time
-from collections import deque
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
-from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES
 from provide.terminal.server.models import (
     InputMode,
     RecordingConfig,
@@ -64,9 +62,10 @@ class SessionRegistry:
     ) -> None:
         self._hub = hub
         self._recording = recording
-        
+
         if recording_store is None:
             from provide.terminal.server.recording import LocalFileRecordingStore
+
             self._recording_store: RecordingStore = LocalFileRecordingStore(recording.directory)
         else:
             self._recording_store = recording_store
@@ -185,9 +184,7 @@ class SessionRegistry:
 
         known = registered_types()
         if connector_type_raw not in known:
-            raise SessionValidationError(
-                f"connector_type must be one of {sorted(known)}, got: {connector_type_raw!r}"
-            )
+            raise SessionValidationError(f"connector_type must be one of {sorted(known)}, got: {connector_type_raw!r}")
         input_mode_raw = str(payload.get("input_mode", "open"))
         if input_mode_raw not in {"open", "hijack"}:
             raise SessionValidationError(f"input_mode must be 'open' or 'hijack', got: {input_mode_raw!r}")
@@ -408,12 +405,19 @@ class SessionRegistry:
                     return
                 yield f"data: {json.dumps(item)}\n\n"
 
+    async def _flush_runtime_recording(self, session_id: str) -> None:
+        async with self._lock:
+            runtime = self._runtimes.get(session_id)
+        if runtime is not None and runtime._logger is not None:
+            await runtime._logger.flush()
+
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
         async with self._lock:
             session = self._require_session(session_id)
             runtime = self._runtime_for(session)
             enabled = runtime.status().recording_enabled
-            
+
+        await self._flush_runtime_recording(session_id)
         meta = await self._recording_store.recording_meta(session_id)
         return {**meta, "enabled": enabled}
 
@@ -428,4 +432,5 @@ class SessionRegistry:
         offset: int | None = None,
         event: str | None = None,
     ) -> list[dict[str, Any]]:
+        await self._flush_runtime_recording(session_id)
         return await self._recording_store.get_entries(session_id, limit=limit, offset=offset, event=event)

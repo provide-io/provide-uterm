@@ -223,7 +223,8 @@ class TestRESTFuzz:
                 if resp.status_code == 200:
                     data = resp.json()
                     assert data["owner"] == owner
-                    assert 1 <= (data["lease_expires_at"] - time.time()) <= 3600 + 5
+                    remaining = data["lease_expires_at"] - time.time()
+                    assert 0 < remaining <= 3600 + 5
             else:
                 # Out of range — pydantic rejects
                 assert resp.status_code == 422

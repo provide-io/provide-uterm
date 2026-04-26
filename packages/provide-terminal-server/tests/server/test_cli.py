@@ -23,7 +23,10 @@ def test_cli_runs_with_defaults() -> None:
 def test_cli_host_override() -> None:
     from provide.terminal.server.cli import main
 
-    with patch("uvicorn.run") as mock_run:
+    with (
+        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+        patch("uvicorn.run") as mock_run,
+    ):
         main(["--host", "0.0.0.0"])
         _, kwargs = mock_run.call_args
         assert kwargs["host"] == "0.0.0.0"
@@ -46,7 +49,10 @@ def test_cli_host_and_port_updates_public_base_url() -> None:
     def _capture(app: object, **kwargs: object) -> None:
         captured.update(kwargs)
 
-    with patch("uvicorn.run", side_effect=_capture):
+    with (
+        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+        patch("uvicorn.run", side_effect=_capture),
+    ):
         main(["--host", "10.0.0.1", "--port", "7777"])
 
     assert captured["host"] == "10.0.0.1"
@@ -73,7 +79,11 @@ def test_cli_https_public_base_url_preserved_on_host_override() -> None:
     cfg = default_server_config()
     cfg.server.public_base_url = "https://myserver.example.com:443"
 
-    with patch("provide.terminal.server.cli.load_server_config", return_value=cfg), patch("uvicorn.run") as mock_run:
+    with (
+        patch("provide.terminal.server.cli.load_server_config", return_value=cfg),
+        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+        patch("uvicorn.run") as mock_run,
+    ):
         main(["--host", "0.0.0.0"])
         _, kwargs = mock_run.call_args
         assert kwargs["host"] == "0.0.0.0"

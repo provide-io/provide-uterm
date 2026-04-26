@@ -321,7 +321,7 @@ class TestDisconnectWorkerCloseException:
             st.browsers[browser_ws] = "operator"
 
         mock_logger = MagicMock()
-        with patch("provide.terminal.bridge.hub.core.logger", mock_logger):
+        with patch("provide.terminal.bridge.hub.messaging.logger", mock_logger):
             await hub.disconnect_worker("w1")
 
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]

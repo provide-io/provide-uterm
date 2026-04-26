@@ -15,6 +15,30 @@ from pydantic import ValidationError
 from provide.terminal.server.config_schema import UtermServerConfig
 from provide.terminal.server.models import validation_error_message
 
+_TABLE_SECTIONS = frozenset(
+    {
+        "server",
+        "auth",
+        "ui",
+        "recording",
+        "profiles",
+        "security",
+        "tunnel",
+        "pam",
+        "control_plane",
+    }
+)
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
 
 def default_server_config() -> UtermServerConfig:
     """Return a runnable default config."""
@@ -23,8 +47,17 @@ def default_server_config() -> UtermServerConfig:
 
 def config_from_mapping(data: dict[str, Any]) -> UtermServerConfig:
     """Build a validated config object from a plain mapping."""
+    normalized = dict(data)
+    for section in _TABLE_SECTIONS:
+        if section in normalized and not isinstance(normalized[section], dict):
+            actual_type = type(normalized[section]).__name__
+            raise ValueError(f"[{section}] must be a table (got {actual_type})")
+    sessions = normalized.get("sessions")
+    if isinstance(sessions, list):
+        normalized["sessions"] = [entry for entry in sessions if isinstance(entry, dict)]
     try:
-        return UtermServerConfig.model_validate(data)
+        merged = _deep_merge(default_server_config().model_dump(mode="python"), normalized)
+        return UtermServerConfig.model_validate(merged)
     except ValidationError as exc:
         raise ValueError(validation_error_message(exc)) from exc
 
