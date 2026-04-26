@@ -75,7 +75,10 @@ class TestServerCliParserSetup:
         """--host argument is wired (kills mutations to '--host')."""
         from provide.terminal.server.cli import main
 
-        with patch("uvicorn.run") as mock_run:
+        with (
+            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("uvicorn.run") as mock_run,
+        ):
             main(["--host", "0.0.0.0"])
             _, kwargs = mock_run.call_args
         assert kwargs["host"] == "0.0.0.0"
@@ -110,7 +113,10 @@ class TestServerCliOverrides:
         """config.server.host is overridden when --host is passed."""
         from provide.terminal.server.cli import main
 
-        with patch("uvicorn.run") as mock_run:
+        with (
+            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("uvicorn.run") as mock_run,
+        ):
             main(["--host", "10.0.0.1"])
             _, kwargs = mock_run.call_args
         assert kwargs["host"] == "10.0.0.1"
@@ -134,7 +140,10 @@ class TestServerCliOverrides:
         def capture_app(app: object, **kwargs: object) -> None:
             captured_config.update(kwargs)
 
-        with patch("uvicorn.run", side_effect=capture_app):
+        with (
+            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("uvicorn.run", side_effect=capture_app),
+        ):
             main(["--host", "192.168.1.1", "--port", "9000"])
 
         assert captured_config["host"] == "192.168.1.1"
@@ -149,7 +158,10 @@ class TestServerCliOverrides:
         def capture(app: object, **kwargs: object) -> None:
             captured.update(kwargs)
 
-        with patch("uvicorn.run", side_effect=capture):
+        with (
+            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("uvicorn.run", side_effect=capture),
+        ):
             main(["--host", "myhost.local"])
 
         assert captured["host"] == "myhost.local"
@@ -177,7 +189,10 @@ class TestServerCliOverrides:
         def capture(app: object, **kwargs: object) -> None:
             captured.update(kwargs)
 
-        with patch("uvicorn.run", side_effect=capture):
+        with (
+            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("uvicorn.run", side_effect=capture),
+        ):
             main(["--host", "testhost", "--port", "8080"])
 
         # Should complete without error using http scheme

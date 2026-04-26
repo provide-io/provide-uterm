@@ -184,7 +184,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                         },
                     )
                 error_msgs = {
-                    "no_worker": "No worker connected.",
+                    "no_worker": "No worker connected for this session.",
                     "already_hijacked": "Worker is already hijacked.",
                     "open_mode": "Hijack not available in open input mode.",
                 }

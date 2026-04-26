@@ -69,11 +69,12 @@ def _read_worker_connected(browser: Any) -> dict[str, Any]:
 def test_worker_auth_success_with_valid_token() -> None:
     """When worker_token is configured and the correct Bearer token is
     provided, the connection proceeds normally (branch 85->92)."""
-    app, hub = _make_app(worker_token="uterm-test-secret-32-byte-minimum-key")
+    token = "uterm-test-secret-32-byte-minimum-key"
+    app, hub = _make_app(worker_token=token)
 
     with (
         TestClient(app) as client,
-        connect_test_ws(client, "/ws/worker/bot1/term", headers={"authorization": "Bearer test-secret"}) as worker,
+        connect_test_ws(client, "/ws/worker/bot1/term", headers={"authorization": f"Bearer {token}"}) as worker,
     ):
         msg = _read_worker_snapshot_req(worker)
         assert msg["type"] == "snapshot_req"
