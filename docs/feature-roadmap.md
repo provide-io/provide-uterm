@@ -7,8 +7,8 @@ Prioritized by novelty and competitive differentiation.
 ### 1. Command Approval Workflows (AGPL-3.0-or-later)
 Pre-execution input gate that holds dangerous commands (`rm -rf /`, `DROP TABLE`)
 pending human approval via Slack/webhook/REST.
-*   **Status:** **Foundation Done** — Node-side `PolicyGate`, `WebhookPolicyGate`, and single-command "Hold & Resume" implemented.
-*   **Next:** State machine for "Hold & Resume" of buffered input (buffering keys sent *while* a command is pending).
+*   **Status:** **Buffered Hold & Resume Done** — dangerous commands can be held for approval, subsequent keystrokes are buffered while the browser is paused, and buffered input is replayed after approval resolution.
+*   **Next:** Harden full-package verification and expand approval workflow coverage across broader server/API paths.
 
 ### 2. Session Replay with AI Annotation (Proprietary / Enterprise)
 Automatic summarization of terminal sessions using LLMs. Generates searchable "Chapters" and "Key Actions" for long audit logs.

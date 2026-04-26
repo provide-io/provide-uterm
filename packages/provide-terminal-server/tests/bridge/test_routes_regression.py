@@ -142,7 +142,7 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
         raise RuntimeError("simulated error after pause")
 
     with (
-        patch.object(hub, "try_acquire_rest_hijack", side_effect=_raise),
+        patch.object(hub, "append_event", side_effect=_raise),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
@@ -173,7 +173,7 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
         raise _asyncio.CancelledError
 
     with (
-        patch.object(hub, "try_acquire_rest_hijack", side_effect=_cancel),
+        patch.object(hub, "append_event", side_effect=_cancel),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})

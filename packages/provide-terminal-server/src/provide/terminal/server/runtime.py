@@ -59,14 +59,19 @@ class HostedSessionRuntime:
         *,
         public_base_url: str,
         recording: RecordingConfig,
-        recording_store: RecordingStore,
+        recording_store: RecordingStore | None = None,
         worker_bearer_token: str | None = None,
         detector: PatternDetector | None = None,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
         self._recording_cfg = recording
-        self._recording_store = recording_store
+        if recording_store is None:
+            from provide.terminal.recording import LocalFileRecordingStore
+
+            self._recording_store: RecordingStore = LocalFileRecordingStore(recording.directory)
+        else:
+            self._recording_store = recording_store
         self._worker_bearer_token = worker_bearer_token
         self._connector: SessionConnector | None = None
         self._task: asyncio.Task[None] | None = None
@@ -76,6 +81,7 @@ class HostedSessionRuntime:
         self._state: SessionLifecycle = "stopped"
         self._stopped_at: float | None = None
         self._last_error: str | None = None
+        self._recording_path: Path | None = None
         self._logger: SessionLogger | None = None
         self._detector = detector
         self._event_seq: int = 0
@@ -108,7 +114,6 @@ class HostedSessionRuntime:
             stopped_at=self._stopped_at,
             last_error=self._last_error,
         )
-
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -193,12 +198,14 @@ class HostedSessionRuntime:
                 control_channel_mode=self._recording_cfg.control_channel_mode,
             )
             await self._logger.start(self.definition.session_id)
+            self._recording_path = await self._recording_store.get_path(self.definition.session_id)
         return connector
 
     async def _stop_connector(self) -> None:
         if self._logger is not None:
             await self._logger.stop()
             self._logger = None
+        self._recording_path = None
         connector = self._connector
         self._connector = None
         if connector is not None:

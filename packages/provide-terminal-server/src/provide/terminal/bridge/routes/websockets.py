@@ -76,6 +76,7 @@ async def _periodic_hijack_cleanup(hub: TermHub, worker_id: str, interval_s: flo
 
 def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
     """Attach WebSocket terminal routes to *router*."""
+    hub._on_browser_message = handle_browser_message
 
     @router.websocket("/ws/worker/{worker_id}/term")
     async def ws_worker_term(websocket: WebSocket, worker_id: Annotated[str, Path(pattern=r"^[\w\-]+$")]) -> None:
@@ -154,7 +155,13 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         _hello_mode = msg.get("input_mode")
                         _protocol_v = _safe_int(msg.get("protocol_version"), 0) if "protocol_version" in msg else None
                         if _hello_mode in ("hijack", "open"):
-                            mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, protocol_version=_protocol_v)
+                            if _protocol_v is not None:
+                                logger.info("worker_hello_protocol worker_id=%s version=%d", worker_id, _protocol_v)
+                                if _protocol_v < 1:
+                                    logger.warning(
+                                        "worker_hello_legacy_protocol worker_id=%s version=%d", worker_id, _protocol_v
+                                    )
+                            mode_applied = await hub.set_worker_hello_mode(worker_id, _hello_mode)
                             if mode_applied:
                                 await hub.broadcast_hijack_state(worker_id)
                             logger.info(

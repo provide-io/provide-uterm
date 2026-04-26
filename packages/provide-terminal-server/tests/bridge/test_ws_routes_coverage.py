@@ -194,7 +194,7 @@ class TestInputSendFailureOpenMode:
                 _read_initial_browser(browser)
 
                 # Patch _send_worker to fail for input
-                async def _fail_input(wid, msg):
+                async def _fail_input(wid, msg, **kwargs):
                     return msg.get("type") != "input"
 
                 with patch.object(hub, "send_worker", side_effect=_fail_input):

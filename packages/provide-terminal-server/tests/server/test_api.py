@@ -47,6 +47,7 @@ def app_client() -> TestClient:
     """TestClient with dev auth and the default shell session."""
     config = default_server_config()
     config.auth.mode = "dev"
+    config.recording.directory = Path(tempfile.mkdtemp())
     app = create_server_app(config)
     return TestClient(app)
 

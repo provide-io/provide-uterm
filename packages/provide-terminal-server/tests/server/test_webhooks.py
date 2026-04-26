@@ -59,7 +59,7 @@ async def test_register_with_all_options() -> None:
         "https://example.com/hook",
         event_types=["snapshot", "hijack_acquired"],
         pattern=r"\$\s",
-        secret="uterm-test-secret-32-byte-minimum-key",
+        secret="mysecret",
     )
     assert cfg.event_types == frozenset({"snapshot", "hijack_acquired"})
     assert cfg.pattern == r"\$\s"

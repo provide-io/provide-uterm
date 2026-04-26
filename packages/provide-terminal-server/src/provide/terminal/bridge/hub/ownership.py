@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger, logger
+from provide.telemetry import get_logger
 from provide.terminal.bridge.hub.ext import (
     EVENT_HIJACK_ACQUIRED,
     EVENT_HIJACK_EXPIRED,
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class _HijackOwnershipMixin:
+class _OwnershipMixin:
     """Mixin providing hijack ownership/lease methods for TermHub.
 
     Requires the host class to provide: ``_lock``, ``_workers``,
@@ -151,12 +151,15 @@ class _HijackOwnershipMixin:
             # Send pause while holding the lock to ensure the worker is notified
             # atomically with the session creation.
             try:
+                from provide.terminal.bridge.hub.core import _encode_worker_frame
+
                 await st.worker_ws.send_text(
                     _encode_worker_frame(
                         {
                             "type": "control",
                             "action": "pause",
                             "owner": owner,
+                            "hijack_id": hijack_id,
                             "ts": time.time(),
                         }
                     )
@@ -169,7 +172,9 @@ class _HijackOwnershipMixin:
             st.hijack_session = HijackSession(
                 hijack_id=hijack_id,
                 owner=owner,
+                acquired_at=now,
                 lease_expires_at=now + lease_s,
+                last_heartbeat=now,
             )
         logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
         return True, None
@@ -368,3 +373,6 @@ class _HijackOwnershipMixin:
             if self.is_dashboard_hijack_active(st) and st.hijack_owner is ws:  # type: ignore[attr-defined]
                 st.hijack_owner_expires_at = time.monotonic() + self._dashboard_hijack_lease_s
             return allowed
+
+
+_HijackOwnershipMixin = _OwnershipMixin
