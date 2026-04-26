@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from provide.terminal.bridge.annotation._detector import PatternDetector
+    from provide.terminal.bridge.hub import TermHub
     from provide.terminal.recording import RecordingStore
 
 logger = get_logger(__name__)
@@ -61,6 +62,7 @@ class HostedSessionRuntime:
         recording: RecordingConfig,
         recording_store: RecordingStore | None = None,
         worker_bearer_token: str | None = None,
+        hub: TermHub,
         detector: PatternDetector | None = None,
         max_buffer_bytes: int = 1_048_576,  # 1MB default
     ) -> None:
@@ -75,6 +77,7 @@ class HostedSessionRuntime:
             self._recording_store = recording_store
         self._worker_bearer_token = worker_bearer_token
         self._connector: SessionConnector | None = None
+        self._on_metric = hub.metric
         self._task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] | None = None
         self._queue_bytes = 0
@@ -192,6 +195,8 @@ class HostedSessionRuntime:
                     msg_len,
                     self._max_buffer_bytes,
                 )
+                self._on_metric("hosted_session_runtime_buffer_full")
+                await self._queue.put({"type": "error", "message": "Buffer overflow — input dropped"})
                 continue
             self._queue_bytes += msg_len
             await self._queue.put(msg)
@@ -321,7 +326,7 @@ class HostedSessionRuntime:
         connector = self._connector
         if connector is None:
             raise RuntimeError("connector unavailable")
-        decoder = ControlChannelDecoder(max_control_payload_bytes=1_048_576)
+        decoder = ControlChannelDecoder(max_control_payload_bytes=1_048_576, on_error=self._on_metric)
         self._state = "running"
         self._connected = True
         await self._enqueue_messages(await connector.set_mode(self.definition.input_mode))

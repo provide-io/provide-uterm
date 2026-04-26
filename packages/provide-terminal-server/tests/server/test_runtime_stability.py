@@ -16,6 +16,7 @@ async def test_runtime_enforces_max_buffer_size():
     # Use a tiny buffer of 50 bytes for testing
     runtime = HostedSessionRuntime(
         definition,
+        hub=Mock(),
         public_base_url="http://localhost",
         recording=recording,
         max_buffer_bytes=50
