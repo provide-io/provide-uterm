@@ -41,10 +41,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 __all__ = [
     "AuthorizedKeysFileResolver",

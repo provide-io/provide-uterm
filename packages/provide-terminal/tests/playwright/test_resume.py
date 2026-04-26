@@ -1,22 +1,28 @@
 from __future__ import annotations
-import asyncio
+
 #
 
+
 def _run_async(coro):
-    import threading
     import asyncio
+    import threading
+
     res = []
     err = []
+
     def _run():
         try:
             res.append(asyncio.run(coro))
         except Exception as e:
             err.append(e)
+
     t = threading.Thread(target=_run)
     t.start()
     t.join()
-    if err: raise err[0]
+    if err:
+        raise err[0]
     return res[0]
+
 
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later

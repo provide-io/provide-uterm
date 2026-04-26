@@ -4,15 +4,16 @@
 #
 from __future__ import annotations
 
+import asyncio
 import json
 import time
-import asyncio
 from collections import deque
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
+
 
 @runtime_checkable
 class RecordingStore(Protocol):
@@ -35,11 +36,7 @@ class RecordingStore(Protocol):
         ...
 
     async def get_entries(
-        self, 
-        session_id: str, 
-        limit: int = 200, 
-        offset: int | None = None, 
-        event: str | None = None
+        self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
     ) -> list[dict[str, Any]]:
         """Retrieve paginated events from the recording."""
         ...
@@ -82,7 +79,7 @@ class LocalFileRecordingStore(RecordingStore):
                 path = self._get_path(session_id)
                 f = path.open("a", encoding="utf-8")
                 self._files[session_id] = f
-            
+
             for event in events:
                 f.write(json.dumps(event) + "\n")
             f.flush()
@@ -105,18 +102,14 @@ class LocalFileRecordingStore(RecordingStore):
         }
 
     async def get_entries(
-        self, 
-        session_id: str, 
-        limit: int = 200, 
-        offset: int | None = None, 
-        event: str | None = None
+        self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
     ) -> list[dict[str, Any]]:
         path = self._get_path(session_id)
         if not path.exists():
             return []
-        
+
         normalized_limit = max(1, min(limit, 500))
-        
+
         def _read():
             if offset is not None:
                 entries = []
@@ -125,24 +118,28 @@ class LocalFileRecordingStore(RecordingStore):
                     for line in f:
                         try:
                             item = json.loads(line)
-                            if event and item.get("event") != event: continue
+                            if event and item.get("event") != event:
+                                continue
                             if skipped < offset:
                                 skipped += 1
                                 continue
                             entries.append(item)
-                            if len(entries) >= normalized_limit: break
-                        except json.JSONDecodeError: continue
+                            if len(entries) >= normalized_limit:
+                                break
+                        except json.JSONDecodeError:
+                            continue
                 return entries
-            else:
-                tail = deque(maxlen=normalized_limit)
-                with path.open(encoding="utf-8") as f:
-                    for line in f:
-                        try:
-                            item = json.loads(line)
-                            if event and item.get("event") != event: continue
-                            tail.append(item)
-                        except json.JSONDecodeError: continue
-                return list(tail)
+            tail = deque(maxlen=normalized_limit)
+            with path.open(encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        item = json.loads(line)
+                        if event and item.get("event") != event:
+                            continue
+                        tail.append(item)
+                    except json.JSONDecodeError:
+                        continue
+            return list(tail)
 
         return await asyncio.to_thread(_read)
 

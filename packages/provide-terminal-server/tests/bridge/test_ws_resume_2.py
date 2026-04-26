@@ -10,6 +10,7 @@ Tests role restoration, open-mode guard, broadcast, and callback flows.
 from __future__ import annotations
 
 import asyncio
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

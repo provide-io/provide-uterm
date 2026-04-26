@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 from __future__ import annotations
-import json
+
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from provide.terminal.bridge.hub import TermHub, PolicyContext, PolicyDecision
+
+from provide.terminal.bridge.hub import PolicyContext, PolicyDecision, TermHub
 from provide.terminal.bridge.routes.browser_handlers import _handle_input
 from provide.terminal.control_channel import ControlChannelDecoder, DataChunk
+
 
 @pytest.mark.asyncio
 async def test_approval_flow_buffering_and_hold() -> None:
@@ -22,11 +25,11 @@ async def test_approval_flow_buffering_and_hold() -> None:
     hub = TermHub(policy_gate=HoldPolicyGate())
     # Mocking approval store as it's not yet in TermHub.__init__
     hub._approval_store = MagicMock()
-    
+
     ws = AsyncMock()
     worker_ws = AsyncMock()
     worker_id = "w1"
-    
+
     await hub.register_worker(worker_id, worker_ws)
     await hub.register_browser(worker_id, ws, "admin")
     await hub.try_acquire_ws_hijack(worker_id, ws)
@@ -35,17 +38,17 @@ async def test_approval_flow_buffering_and_hold() -> None:
     msg = {"type": "input", "data": "rm"}
     await _handle_input(hub, ws, worker_id, msg)
     worker_ws.send_text.assert_not_called()
-    
+
     # 2. Send " -rf /\n" - should complete command, trigger hold policy
     msg = {"type": "input", "data": " -rf /\n"}
     await _handle_input(hub, ws, worker_id, msg)
-    
+
     # Still not sent to worker because of 'hold'
     worker_ws.send_text.assert_not_called()
-    
+
     # ApprovalRequest should be created (we'll implement this)
     hub._approval_store.add.assert_called()
-    
+
     # Check broadcast
     found_pending = False
     decoder = ControlChannelDecoder()
@@ -59,24 +62,25 @@ async def test_approval_flow_buffering_and_hold() -> None:
                 assert event.control.get("request_id") == "req-123"
     assert found_pending
 
+
 @pytest.mark.asyncio
 async def test_resolve_approval_approved() -> None:
     hub = TermHub()
     worker_ws = AsyncMock()
     worker_id = "w1"
     await hub.register_worker(worker_id, worker_ws)
-    
+
     ws = AsyncMock()
     await hub.register_browser(worker_id, ws, "admin")
 
     # Mock approval request
     request_id = "req-123"
     command = "ls -la\n"
-    
+
     # Call resolve_approval
     # We'll need to implement this in TermHub
     await hub.resolve_approval(worker_id, request_id, PolicyDecision(action="allow"), command)
-    
+
     # Should be sent to worker
     worker_ws.send_text.assert_called()
     payload = worker_ws.send_text.call_args[0][0]
@@ -84,7 +88,7 @@ async def test_resolve_approval_approved() -> None:
     events = decoder.feed(payload)
     chunks = [e.data for e in events if isinstance(e, DataChunk)]
     assert chunks == ["ls -la\n"]
-    
+
     # Should broadcast approval_resolved
     found_resolved = False
     decoder = ControlChannelDecoder()

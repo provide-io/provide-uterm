@@ -1,21 +1,23 @@
-from provide.terminal.server.models import AuthConfig
-from pydantic import ValidationError
-from typing import Literal
 import pytest
+from pydantic import ValidationError
+
+from provide.terminal.server.models import AuthConfig
+
 
 def test_auth_config_idp_validation():
     # Valid local
     config = AuthConfig(identity_provider="local")
     assert config.identity_provider == "local"
-    
+
     # Valid webhook
     config = AuthConfig(identity_provider="webhook")
     assert config.identity_provider == "webhook"
-    
+
     # Invalid
     with pytest.raises(ValidationError):
         # We need to use a dict or similar because Literal validation happens at instantiation
         AuthConfig(identity_provider="invalid")
+
 
 def test_auth_config_default_values():
     config = AuthConfig()

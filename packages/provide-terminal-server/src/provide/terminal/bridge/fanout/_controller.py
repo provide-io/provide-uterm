@@ -16,7 +16,7 @@ from provide.terminal.bridge.fanout._collector import OutputCollector
 from provide.terminal.bridge.fanout._divergence import compute_divergence
 from provide.terminal.bridge.fanout._models import FanOutResult, SessionFanOutResult
 from provide.terminal.bridge.fanout._store import InMemoryFanOutStore
-from provide.terminal.bridge.hub.ext import FanOutPolicyGate, NoOpPolicyGate, PolicyDecision
+from provide.terminal.bridge.hub.ext import FanOutPolicyGate, PolicyDecision
 
 if TYPE_CHECKING:
     from provide.terminal.bridge.fanout._models import FanOutGroup
@@ -128,10 +128,10 @@ class FanOutController:
             )
 
         # 1. Check Policy for Fan-Out
-        from provide.terminal.bridge.hub.ext import PolicyContext
         from provide.terminal.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+        from provide.terminal.bridge.hub.ext import PolicyContext
 
-        # We don't have a WebSocket here necessarily (could be REST), 
+        # We don't have a WebSocket here necessarily (could be REST),
         # so we pass a dummy or use the principal for context.
         context = PolicyContext(
             worker_id=f"group:{group_id}",
@@ -140,7 +140,7 @@ class FanOutController:
             action="fanout_send",
             metadata={"is_fanout": True, "group_id": group_id},
         )
-        
+
         gate = self._get_fanout_policy_gate()
         decision = await gate.intercept_fanout(data, context, group_id)
 
@@ -166,7 +166,7 @@ class FanOutController:
                 "max_response_ms": max_response_ms,
                 "principal": principal,
             }
-            
+
             # Create Approval Request in Hub
             approval = ApprovalRequest(
                 id=request_id,
@@ -183,14 +183,18 @@ class FanOutController:
             hub_approvals = getattr(self._hub, "_approval_store", None)
             if hub_approvals:
                 hub_approvals.add(approval)
-            
+
             # 1.3 Audit the hold event
-            await self._hub.append_event(f"group:{group_id}", "terminal.fanout.hold", {
-                "group_id": group_id,
-                "command": data[:500],
-                "request_id": request_id,
-                "principal": principal,
-            })
+            await self._hub.append_event(
+                f"group:{group_id}",
+                "terminal.fanout.hold",
+                {
+                    "group_id": group_id,
+                    "command": data[:500],
+                    "request_id": request_id,
+                    "principal": principal,
+                },
+            )
 
             return FanOutResult(
                 group_id=group_id,

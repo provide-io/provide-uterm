@@ -129,8 +129,10 @@ class WebhookFanOutPolicyGate:
 
 class RedactionRule(BaseModel):
     """A regex-based redaction rule."""
+
     pattern: str
     replacement: str = "[REDACTED]"
+
 
 @runtime_checkable
 class OutputPolicyGate(Protocol):
@@ -222,13 +224,17 @@ EVENT_HIJACK_EXPIRED = event("terminal", "hijack", "expired")
 EVENT_RATE_LIMIT_TRIGGERED = event("terminal", "ratelimit", "triggered")
 EVENT_RESUME_FAILED = event("terminal", "resume", "failed")
 
+
 class NoOpOutputPolicyGate:
     """Default output policy gate that performs no redaction."""
+
     async def get_redaction_rules(self, _context: PolicyContext) -> list[RedactionRule]:
         return []
 
+
 class WebhookOutputPolicyGate:
     """Output policy gate that fetches redaction patterns from an external webhook."""
+
     def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):
         self.url = url
         self.secret = secret

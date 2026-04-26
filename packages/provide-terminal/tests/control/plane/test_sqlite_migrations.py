@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import aiosqlite
 import sqlite3
 from pathlib import Path
 
+import aiosqlite
 import pytest
 
 from provide.terminal.control.plane import ControlPlaneConfig

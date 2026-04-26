@@ -20,11 +20,13 @@ from __future__ import annotations
 import secrets
 import time
 from contextlib import suppress
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from provide.terminal.control.plane.token.types import ResumeTokenRecord
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 @dataclass(slots=True)

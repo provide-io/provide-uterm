@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-import aiosqlite
-from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from provide.terminal.control.plane.transaction import Transaction
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    import aiosqlite
 
 
 class SqliteTransaction(Transaction):

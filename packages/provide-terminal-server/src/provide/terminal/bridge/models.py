@@ -9,11 +9,13 @@ from __future__ import annotations
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from provide.terminal.bridge.contracts import InputMode
 from provide.terminal.bridge.coordinator import HijackSession as HijackSession  # noqa: TC001 — runtime re-export
 from provide.terminal.bridge.rest_helpers import MAX_EXPECT_REGEX_LEN
+
+if TYPE_CHECKING:
+    from provide.terminal.bridge.contracts import InputMode
 
 
 def _safe_int(val: Any, default: int, *, min_val: int | None = None) -> int:

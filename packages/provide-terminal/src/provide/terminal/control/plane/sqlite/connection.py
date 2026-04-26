@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import aiosqlite
 import sqlite3
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+import aiosqlite
 
 
 class SqliteConnectionError(RuntimeError):

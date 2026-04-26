@@ -22,7 +22,7 @@ def test_policy_decision_model() -> None:
     d = PolicyDecision(action="allow")
     assert d.action == "allow"
     assert d.timeout_s == 60
-    
+
     # Valid hold
     d = PolicyDecision(action="hold", request_id="req123", timeout_s=30, reason="Approval needed")
     assert d.action == "hold"
@@ -40,7 +40,7 @@ async def test_noop_policy_gate_returns_decision() -> None:
     gate = NoOpPolicyGate()
     ctx = PolicyContext(worker_id="w1")
     result = await gate.intercept_input("hello", ctx)
-    
+
     assert isinstance(result, PolicyDecision)
     assert result.action == "allow"
 
@@ -50,7 +50,7 @@ async def test_noop_policy_gate_returns_decision() -> None:
 async def test_webhook_policy_gate_returns_decision() -> None:
     url = "https://fleet.example.com/policy"
     gate = WebhookPolicyGate(url=url)
-    
+
     # Mock allow response
     respx.post(url).mock(return_value=Response(200, json={"allow": True}))
     ctx = PolicyContext(worker_id="w1")
@@ -63,12 +63,11 @@ async def test_webhook_policy_gate_returns_decision() -> None:
     assert result.action == "deny"
 
     # Mock hold response
-    respx.post(url).mock(return_value=Response(200, json={
-        "action": "hold",
-        "request_id": "r1",
-        "timeout_s": 120,
-        "reason": "Wait for admin"
-    }))
+    respx.post(url).mock(
+        return_value=Response(
+            200, json={"action": "hold", "request_id": "r1", "timeout_s": 120, "reason": "Wait for admin"}
+        )
+    )
     result = await gate.intercept_input("sudo", ctx)
     assert result.action == "hold"
     assert result.request_id == "r1"

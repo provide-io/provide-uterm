@@ -4,12 +4,15 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
-from pathlib import Path
 
-from provide.terminal.recording import RecordingStore, LocalFileRecordingStore
+from provide.terminal.recording import RecordingStore
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 class WebhookRecordingStore(RecordingStore):
     """Managed implementation of RecordingStore that delegates to a External Management Tier webhook."""
@@ -33,15 +36,13 @@ class WebhookRecordingStore(RecordingStore):
         return resp or {"session_id": session_id, "exists": False, "size_bytes": 0}
 
     async def get_entries(
-        self, 
-        session_id: str, 
-        limit: int = 200, 
-        offset: int | None = None, 
-        event: str | None = None
+        self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
     ) -> list[dict[str, Any]]:
         params = {"limit": limit}
-        if offset is not None: params["offset"] = offset
-        if event is not None: params["event"] = event
+        if offset is not None:
+            params["offset"] = offset
+        if event is not None:
+            params["event"] = event
         resp = await self._get(session_id, "entries", params=params)
         return resp.get("entries", []) if isinstance(resp, dict) else []
 
@@ -49,17 +50,13 @@ class WebhookRecordingStore(RecordingStore):
         return None  # No local path for webhook store
 
     async def _post(self, session_id: str, action: str, payload: dict[str, Any]) -> None:
-        data = {
-            "session_id": session_id,
-            "action": action,
-            **payload
-        }
+        data = {"session_id": session_id, "action": action, **payload}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 headers = {"Authorization": f"Bearer {self.secret}"} if self.secret else {}
                 await client.post(self.url, json=data, headers=headers)
         except Exception:
-            pass # Best effort for recording
+            pass  # Best effort for recording
 
     async def _get(self, session_id: str, action: str, params: dict[str, Any] | None = None) -> Any:
         url = f"{self.url}/{session_id}/{action}"

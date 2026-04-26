@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from provide.terminal.control.plane.lease.types import LeaseRecord
-from provide.terminal.control.plane.memory.transaction import MemoryState, MemoryTransaction
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from provide.terminal.control.plane.lease.types import LeaseRecord
+    from provide.terminal.control.plane.memory.transaction import MemoryState, MemoryTransaction
 
 
 class MemoryLeaseStore:

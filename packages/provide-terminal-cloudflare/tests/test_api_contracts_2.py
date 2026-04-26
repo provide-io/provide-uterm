@@ -26,7 +26,12 @@ async def test_jwt_roles_claim_custom_key() -> None:
         "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    cfg = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",), jwt_roles_claim="my_roles")
+    cfg = JwtConfig(
+        mode="jwt",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
+        algorithms=("HS256",),
+        jwt_roles_claim="my_roles",
+    )
     principal = await decode_jwt(token, cfg)
     assert "admin" in principal.roles
 

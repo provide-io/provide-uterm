@@ -6,19 +6,18 @@
 
 from __future__ import annotations
 
-import asyncio
-import base64
-import json
 import time
-from unittest.mock import AsyncMock, MagicMock
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from provide.terminal.session_logger import SessionLogger
+
 from provide.terminal.recording import RecordingStore
+from provide.terminal.session_logger import SessionLogger
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    pass
+
 
 @pytest.fixture
 def mock_store():
@@ -28,6 +27,7 @@ def mock_store():
     store.end_session = AsyncMock()
     store.recording_meta = AsyncMock(return_value={"exists": False, "size_bytes": 0})
     return store
+
 
 class TestSessionLogger:
     @pytest.mark.asyncio
@@ -114,8 +114,8 @@ class TestSessionLogger:
         # Each event adds 100 to _bytes_written currently
         logger = SessionLogger(mock_store, max_bytes=50, flush_interval_s=0.1)
         await logger.start(session_id="q1")
-        await logger.log_event("e1", {}) # written (100)
-        await logger.log_event("e2", {}) # suppressed (100 >= 50)
+        await logger.log_event("e1", {})  # written (100)
+        await logger.log_event("e2", {})  # suppressed (100 >= 50)
         await logger.stop()
 
         total_events = 0

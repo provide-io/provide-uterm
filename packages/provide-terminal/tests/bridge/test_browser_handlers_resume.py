@@ -277,6 +277,7 @@ class TestHandleResumeTokenLogic:
                 worker.receive_json()  # pause
                 resumed = self._drain_until(ws, "hello")
                 assert resumed["hijacked_by_me"] is True
+
     def test_resume_store_none_returns_unchanged_owned_hijack(self) -> None:
         """mutmut_1-2: no store → return owned_hijack unchanged."""
         hub = TermHub()

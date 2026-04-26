@@ -12,7 +12,7 @@ import contextlib
 import json
 import time
 from pathlib import Path
-from typing import Any, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from provide.telemetry import get_logger
 
@@ -39,7 +39,6 @@ class SessionLogger:
         flush_interval_s: float = 5.0,
         batch_size: int = 100,
     ) -> None:
-        from provide.terminal.recording import LocalFileRecordingStore
 
         if isinstance(store, (str, Path)):
             p = Path(store)
@@ -47,31 +46,36 @@ class SessionLogger:
             # We must ensure that start(session_id) writes to THIS EXACT path,
             # regardless of session_id.
             from provide.terminal.recording import RecordingStore
-            
+
             class LegacyFileStore(RecordingStore):
                 def __init__(self, path: Path):
                     self._path = path
+
                 async def start_session(self, session_id: str, metadata: dict[str, Any]) -> None:
                     self._path.parent.mkdir(parents=True, exist_ok=True)
                     event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
                     # Always append to support 'test_file_opens_in_append_mode'
                     with self._path.open("a", encoding="utf-8") as f:
                         f.write(json.dumps(event) + "\n")
+
                 async def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
                     with self._path.open("a", encoding="utf-8") as f:
                         for e in events:
                             f.write(json.dumps(e) + "\n")
+
                 async def end_session(self, session_id: str) -> None:
                     event = {"ts": time.time(), "event": "log_stop", "data": {}, "session_id": session_id}
                     with self._path.open("a", encoding="utf-8") as f:
                         f.write(json.dumps(event) + "\n")
+
                 async def get_path(self, session_id: str) -> Path | None:
                     return self._path
+
                 async def recording_meta(self, session_id: str) -> dict[str, Any]:
                     return {
-                        "session_id": session_id, 
+                        "session_id": session_id,
                         "exists": self._path.exists(),
-                        "size_bytes": self._path.stat().st_size if self._path.exists() else 0
+                        "size_bytes": self._path.stat().st_size if self._path.exists() else 0,
                     }
 
             self._store: RecordingStore = LegacyFileStore(p)
@@ -79,7 +83,6 @@ class SessionLogger:
         else:
             self._store = store
             self._log_path = None
-
 
         self._lock = asyncio.Lock()
         self._session_id: str | None = None
@@ -96,7 +99,7 @@ class SessionLogger:
     @property
     def _file(self) -> Any:
         # Legacy compatibility for tests checking if file is closed
-        return None 
+        return None
 
     async def _write_event_unlocked(self, event: str, data: dict[str, Any]) -> None:
         # Legacy compatibility for tests mocking this
@@ -109,7 +112,7 @@ class SessionLogger:
         if self._log_path:
             metadata["path"] = str(self._log_path)
         await self._store.start_session(session_id, metadata)
-        
+
         # Initialize bytes_written from store metadata
         meta = await self._store.recording_meta(session_id)
         try:
@@ -125,7 +128,7 @@ class SessionLogger:
             self._flush_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._flush_task
-        
+
         await self._flush_buffer()
         if self._session_id:
             await self._store.end_session(self._session_id)
@@ -198,17 +201,17 @@ class SessionLogger:
                     self._quota_warned = True
                     logger.warning("session_logger_quota_reached — further writes suppressed")
                 return
-            
+
             record: dict[str, Any] = {"ts": time.time(), "event": event, "data": data}
             if self._session_id:
                 record["session_id"] = self._session_id
             if self._context:
                 record["ctx"] = dict(self._context)
-            
+
             self._buffer.append(record)
             # Better estimate: actual JSON size + newline
             self._bytes_written += len(json.dumps(record)) + 1
-            
+
             if len(self._buffer) >= self._batch_size:
                 await self._flush_buffer_unlocked()
 

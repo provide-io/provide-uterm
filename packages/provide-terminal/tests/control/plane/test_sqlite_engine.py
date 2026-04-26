@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import aiosqlite
 from pathlib import Path
 
+import aiosqlite
 import pytest
 
 from provide.terminal.control.plane import ControlPlaneConfig

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import aiosqlite
 import multiprocessing
 import sqlite3
 from pathlib import Path
 
+import aiosqlite
 import pytest
 
 from provide.terminal.control.plane import ControlPlaneConfig
@@ -193,10 +193,7 @@ def test_sqlite_control_plane_handles_multiprocess_writers(tmp_path: Path) -> No
 
     ctx = multiprocessing.get_context("fork" if "fork" in multiprocessing.get_all_start_methods() else None)
     queue = ctx.Queue()
-    procs = [
-        ctx.Process(target=_write_resume_token_worker, args=(db_path, index, queue))
-        for index in range(4)
-    ]
+    procs = [ctx.Process(target=_write_resume_token_worker, args=(db_path, index, queue)) for index in range(4)]
 
     for proc in procs:
         proc.start()
@@ -209,11 +206,7 @@ def test_sqlite_control_plane_handles_multiprocess_writers(tmp_path: Path) -> No
 
     conn = sqlite3.connect(db_path)
     try:
-        rows = list(
-            conn.execute(
-                "SELECT token_value, session_id FROM cp_resume_tokens ORDER BY token_value"
-            )
-        )
+        rows = list(conn.execute("SELECT token_value, session_id FROM cp_resume_tokens ORDER BY token_value"))
     finally:
         conn.close()
 

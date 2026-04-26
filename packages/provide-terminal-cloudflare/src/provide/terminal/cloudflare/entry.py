@@ -203,7 +203,7 @@ def _share_token_cookie_header(request: object, tunnel_id: str) -> str | None:
     try:
         query = parse_qs(urlparse(str(getattr(request, "url", ""))).query)
         token = (query.get("token", []) + query.get("access_token", []) or [None])[0]
-    except Exception:  # noqa: S110
+    except Exception:
         token = None
     if token is None:
         try:
@@ -216,7 +216,7 @@ def _share_token_cookie_header(request: object, tunnel_id: str) -> str | None:
             cookie_key = f"uterm_tunnel_{tunnel_id}"
             if cookie_key in cookies:
                 token = cookies[cookie_key].value
-        except Exception:  # noqa: S110
+        except Exception:
             token = None
     if token is None:
         return None
@@ -361,9 +361,7 @@ async def _handle_sessions(request: object, env: object, config: CloudflareConfi
             vis = s.get("visibility", "public")
             if vis == "public":
                 return True
-            if vis == "operator" and is_operator:
-                return True
-            return False
+            return bool(vis == "operator" and is_operator)
 
         sessions = [s for s in sessions if _can_read(s)]
     elif principal is None:

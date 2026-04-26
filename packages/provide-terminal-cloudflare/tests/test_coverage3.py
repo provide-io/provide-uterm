@@ -147,7 +147,9 @@ async def test_decode_jwt_unexpected_signing_key_error_wrapped() -> None:
         public_key_pem="uterm-test-secret-32-byte-minimum-key",
         algorithms=("HS256",),
     )
-    token = jwt.encode({"sub": "u1", "exp": int(time.time()) + 600}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
+    token = jwt.encode(
+        {"sub": "u1", "exp": int(time.time()) + 600}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256"
+    )
 
     with (
         patch(

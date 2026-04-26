@@ -34,11 +34,7 @@ def _sanitize(data: Any) -> Any:
     """Deeply strip sensitive keys and truncate long strings/lists."""
     if isinstance(data, dict):
         return {
-            k: (
-                "***"
-                if k.lower() in ("token", "secret", "password", "key", "auth", "session_id")
-                else _sanitize(v)
-            )
+            k: ("***" if k.lower() in ("token", "secret", "password", "key", "auth", "session_id") else _sanitize(v))
             for k, v in data.items()
         }
     if isinstance(data, list):

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from provide.terminal.control.plane.approval.types import ApprovalRecord
-from provide.terminal.control.plane.lease.types import LeaseRecord
-from provide.terminal.control.plane.session.types import SessionRecord
-from provide.terminal.control.plane.token.types import ResumeTokenRecord, SessionTokenRecord
+if TYPE_CHECKING:
+    from provide.terminal.control.plane.approval.types import ApprovalRecord
+    from provide.terminal.control.plane.lease.types import LeaseRecord
+    from provide.terminal.control.plane.session.types import SessionRecord
+    from provide.terminal.control.plane.token.types import ResumeTokenRecord, SessionTokenRecord
 
 
 @dataclass(slots=True)

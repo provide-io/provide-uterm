@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import aiosqlite
 import time
 from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 from provide.terminal.control.plane.lease import LeaseRecord
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 class SqliteLeaseStore:
