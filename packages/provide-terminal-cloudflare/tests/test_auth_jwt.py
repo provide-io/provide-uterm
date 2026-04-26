@@ -17,7 +17,13 @@ async def test_decode_jwt_hs256_ok() -> None:
     )
     principal = await decode_jwt(
         token,
-        JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",), issuer=None, audience=None),
+        JwtConfig(
+            mode="jwt",
+            public_key_pem="uterm-test-secret-32-byte-minimum-key",
+            algorithms=("HS256",),
+            issuer=None,
+            audience=None,
+        ),
     )
     assert principal.subject_id == "u1"
     assert resolve_role(principal) == "operator"
@@ -26,7 +32,9 @@ async def test_decode_jwt_hs256_ok() -> None:
 async def test_decode_jwt_missing_sub() -> None:
     token = jwt.encode({"roles": ["admin"]}, "uterm-test-secret-32-byte-minimum-key", algorithm="HS256")
     with pytest.raises(JwtValidationError):
-        await decode_jwt(token, JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",)))
+        await decode_jwt(
+            token, JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
+        )
 
 
 async def test_cf_access_style_jwt_no_roles_defaults_to_viewer() -> None:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import aiosqlite
 import time
+from typing import TYPE_CHECKING
 
 from provide.terminal.control.plane.sqlite.schema.v0001_initial import SQL as V0001_SQL
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 MIGRATIONS: tuple[tuple[int, str], ...] = ((1, V0001_SQL),)
 

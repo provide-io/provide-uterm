@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
-from provide.terminal.control.plane.memory.transaction import MemoryState, MemoryTransaction
-from provide.terminal.control.plane.session.types import SessionRecord
+if TYPE_CHECKING:
+    from provide.terminal.control.plane.memory.transaction import MemoryState, MemoryTransaction
+    from provide.terminal.control.plane.session.types import SessionRecord
 
 
 class MemorySessionStore:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from provide.terminal.control.plane.session.types import SessionRecord
+if TYPE_CHECKING:
+    from provide.terminal.control.plane.session.types import SessionRecord
 
 
 class SessionStore(Protocol):

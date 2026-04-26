@@ -4,12 +4,15 @@
 #
 from __future__ import annotations
 
-import re
 import bisect
-from typing import TYPE_CHECKING, Iterable
+import re
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from provide.terminal.bridge.hub.ext import RedactionRule
+
 
 class StreamRedactor:
     """High-performance regex-based stream redactor."""
@@ -36,7 +39,7 @@ class StreamRedactor:
                 except re.error:
                     # Ignore invalid regex patterns
                     continue
-            
+
             if patterns:
                 self._pattern = re.compile("|".join(patterns))
                 if len(set(self._replacements)) == 1:
@@ -46,12 +49,12 @@ class StreamRedactor:
         """Apply all redaction rules to the input string in a single pass."""
         if not self._pattern:
             return data
-        
+
         if self._single_replacement is not None:
             # Optimized path for when all rules use the same replacement string.
             # We use a lambda to avoid backreference interpretation in the replacement string.
             return self._pattern.sub(lambda _: self._single_replacement, data)
-            
+
         return self._pattern.sub(self._replace_match, data)
 
     def _replace_match(self, match: re.Match) -> str:

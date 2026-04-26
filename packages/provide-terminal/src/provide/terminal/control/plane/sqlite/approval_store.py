@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import aiosqlite
 from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 from provide.terminal.control.plane.approval import ApprovalRecord
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 class SqliteApprovalStore:

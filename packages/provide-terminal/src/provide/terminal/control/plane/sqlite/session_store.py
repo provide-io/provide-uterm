@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-import aiosqlite
 from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 from provide.terminal.control.plane.session import SessionRecord
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 class SqliteSessionStore:

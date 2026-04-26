@@ -12,6 +12,7 @@ wrong worker_id, two-tab race, no resume_store configured).
 from __future__ import annotations
 
 import asyncio
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

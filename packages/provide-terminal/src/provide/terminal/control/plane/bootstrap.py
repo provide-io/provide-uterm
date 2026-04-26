@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from provide.terminal.control.plane.capability import EngineCapabilities
-from provide.terminal.control.plane.transaction import Transaction
-from provide.terminal.control.plane.types import ControlPlaneConfig
+if TYPE_CHECKING:
+    from provide.terminal.control.plane.capability import EngineCapabilities
+    from provide.terminal.control.plane.transaction import Transaction
+    from provide.terminal.control.plane.types import ControlPlaneConfig
 
 
 class ControlPlane(Protocol):

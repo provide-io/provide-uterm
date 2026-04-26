@@ -86,7 +86,9 @@ class TelnetTransport:
         return None
 
     @staticmethod
-    def _parse_telnet_buffer(data: bytes | bytearray, final: bool = False) -> tuple[bytes, list[tuple[str, int, int | bytes]], int]:
+    def _parse_telnet_buffer(
+        data: bytes | bytearray, final: bool = False
+    ) -> tuple[bytes, list[tuple[str, int, int | bytes]], int]:
         """Parse complete telnet sequences from a buffer.
 
         Returns application payload bytes, control events, and bytes consumed.

@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import collections.abc
+    from pathlib import Path
 
     from provide.terminal.auth import SSHKeyResolver
 
@@ -378,10 +378,8 @@ async def _make_process_handler(
                         attempt + 1,
                         max_reconnects,
                     )
-                    try:
+                    with contextlib.suppress(Exception):
                         stdout.write("\x1b7\x1b[999;1H\x1b[2;36m* reconnecting...\x1b[0m\x1b8")
-                    except Exception:
-                        pass
                     await asyncio.sleep(reconnect_delay)
 
         except Exception as exc:

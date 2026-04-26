@@ -11,6 +11,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from provide.terminal.bridge.hub import TermHub
 from provide.terminal.bridge.hub.ext import PolicyDecision
 from provide.terminal.bridge.models import WorkerTermState
@@ -36,7 +37,9 @@ def _make_worker_ws() -> MagicMock:
     return wws
 
 
-async def _register(hub: TermHub, worker_id: str, browser_ws: MagicMock, role: str, worker_ws: MagicMock | None = None) -> None:
+async def _register(
+    hub: TermHub, worker_id: str, browser_ws: MagicMock, role: str, worker_ws: MagicMock | None = None
+) -> None:
     async with hub._lock:
         st = hub._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
@@ -50,17 +53,17 @@ async def test_input_buffering_when_paused() -> None:
     ws = _make_ws()
     worker_ws = _make_worker_ws()
     await _register(hub, "w1", ws, "operator", worker_ws)
-    
+
     # Simulate browser being paused (e.g. pending approval)
     hub._paused_browsers.add(ws)
-    
+
     # Send input
     await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "echo "}, False)
     await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello\r"}, False)
-    
+
     # Verify nothing was sent to worker
     worker_ws.send_text.assert_not_called()
-    
+
     # Verify data is in hold buffer
     assert hub._hold_buffers.get(ws) == "echo hello\r"
 
@@ -71,28 +74,28 @@ async def test_input_playback_on_approval_resolve() -> None:
     ws = _make_ws()
     worker_ws = _make_worker_ws()
     await _register(hub, "w1", ws, "operator", worker_ws)
-    
+
     # Set input mode to hijack (default)
     async with hub._lock:
         hub._workers["w1"].input_mode = "hijack"
         hub._workers["w1"].hijack_owner = ws
         hub._workers["w1"].hijack_owner_expires_at = time.monotonic() + 60
-    
+
     # Simulate browser being paused and having buffered data
     hub._paused_browsers.add(ws)
     hub._hold_buffers[ws] = "ls\r"
-    
+
     # Resolve approval
     decision = PolicyDecision(action="allow")
     await hub.resolve_approval("w1", "req1", decision, "sudo rm -rf /\r")
-    
+
     # Verify approved command sent to worker
     # We might need to wait for the background task
     for _ in range(10):
         if worker_ws.send_text.call_count >= 2:
             break
         await asyncio.sleep(0.01)
-        
+
     assert worker_ws.send_text.call_count >= 2
     # First call is the approved command "sudo rm -rf /\r"
     # Second call is the buffered command "ls\r"
@@ -106,9 +109,9 @@ async def test_hold_buffer_cleanup_on_disconnect() -> None:
     hub = _make_hub()
     ws = _make_ws()
     await _register(hub, "w1", ws, "operator")
-    
+
     hub._hold_buffers[ws] = "secret"
-    
+
     await hub.cleanup_browser_disconnect("w1", ws, False)
-    
+
     assert ws not in hub._hold_buffers

@@ -3,9 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 from __future__ import annotations
+
 import time
+
 import pytest
-from provide.terminal.bridge.hub.approvals import InMemoryApprovalStore, ApprovalRequest, ApprovalStatus
+
+from provide.terminal.bridge.hub.approvals import ApprovalRequest, ApprovalStatus, InMemoryApprovalStore
+
 
 def test_approval_request_creation():
     now = time.time()
@@ -16,10 +20,11 @@ def test_approval_request_creation():
         command="ls",
         status=ApprovalStatus.PENDING,
         created_at=now,
-        expires_at=now + 60
+        expires_at=now + 60,
     )
     assert request.id == "req-123"
     assert request.status == ApprovalStatus.PENDING
+
 
 def test_store_add_and_get():
     store = InMemoryApprovalStore()
@@ -29,6 +34,7 @@ def test_store_add_and_get():
     assert store.get("req-1") == request
     assert store.get("nonexistent") is None
 
+
 def test_store_resolve_success():
     store = InMemoryApprovalStore()
     now = time.time()
@@ -37,6 +43,7 @@ def test_store_resolve_success():
     store.resolve("req-1", ApprovalStatus.APPROVED)
     assert store.get("req-1").status == ApprovalStatus.APPROVED
 
+
 def test_store_resolve_only_pending():
     store = InMemoryApprovalStore()
     now = time.time()
@@ -44,6 +51,7 @@ def test_store_resolve_only_pending():
     store.add(request)
     store.resolve("req-1", ApprovalStatus.REJECTED)
     assert store.get("req-1").status == ApprovalStatus.APPROVED  # Unchanged
+
 
 @pytest.mark.asyncio
 async def test_cleanup_expired_requests():

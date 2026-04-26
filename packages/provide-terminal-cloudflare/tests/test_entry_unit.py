@@ -561,7 +561,6 @@ async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
     """F3: /app/inspect/{id}?token=... must render page_kind='inspect', not 'session'."""
     import json as _json
 
-
     session = {
         "share_token": "shared-tok",
         "control_token": "ctrl-tok",

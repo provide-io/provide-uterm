@@ -2,25 +2,11 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from provide.terminal.bridge.contracts import (
-    CURRENT_PROTOCOL_VERSION,
     Frame,
     FrameType,
-    HijackAcquireResponse,
-    HijackEventsResponse,
-    HijackHeartbeatResponse,
-    HijackReleaseResponse,
-    HijackSendResponse,
-    HijackSnapshotResponse,
-    HijackStepResponse,
-    RecordingEntry,
-    RecordingMetaResponse,
-    SessionAnalyzeResponse,
-    SessionEventsResponse,
-    SessionModeResponse,
-    SessionSnapshotResponse,
     SessionStatusResponse,
 )
 

@@ -70,10 +70,10 @@ async def _live_server_with_recording(
         base_url = f"http://127.0.0.1:{port}"
 
         registry = app.state.uterm_registry
-        # Explicitly update public_base_url to the dynamic port so 
+        # Explicitly update public_base_url to the dynamic port so
         # HostedSessionRuntime can connect its worker bridge properly.
         registry._public_base_url = base_url
-        
+
         hub = registry._hub
         hub._event_bus = EventBus()
 

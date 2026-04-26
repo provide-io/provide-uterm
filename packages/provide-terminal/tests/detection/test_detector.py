@@ -483,6 +483,7 @@ def test_cursor_miss_candidate_includes_kv_extract() -> None:
     assert result is not None
     assert result.kv_extract == kv_cfg
 
+
 def test_prompt_fingerprint_includes_cursor_coords(snap_factory) -> None:
     d = PromptDetector([])
     snap = snap_factory("some text")

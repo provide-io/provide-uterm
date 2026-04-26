@@ -111,13 +111,10 @@ class TestHandlerTokenResume:
 
         # Pre-populate the token_holder via the handler's closure.
         # We inject by patching the handler to set token_holder[0] before WS.
-        original_handler = handler
 
         # Capture the token_holder from the closure by running a quick pre-flight:
         # we use a side-effect on websockets.connect to set the token in place.
         token_injected = False
-
-        original_connect = mock_ws_mod.connect
 
         def _inject_token_on_connect(*args: Any, **kwargs: Any) -> MagicMock:
             nonlocal token_injected
@@ -195,10 +192,7 @@ class TestHandlerTokenResume:
         def _build_ws_context_for_attempt() -> MagicMock:
             attempt = ws_attempt[0]
             ws_attempt[0] += 1
-            if attempt == 0:
-                ws = _mock_ws([session_token_frame])
-            else:
-                ws = _mock_ws([])
+            ws = _mock_ws([session_token_frame]) if attempt == 0 else _mock_ws([])
             return _make_ws_context(ws)
 
         mock_ws_mod = MagicMock()

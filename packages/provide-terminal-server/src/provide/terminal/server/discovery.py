@@ -5,11 +5,14 @@
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
-from pydantic import BaseModel
+
 import httpx
+from pydantic import BaseModel
+
 from provide.telemetry import get_logger
 
 logger = get_logger(__name__)
+
 
 class NodeStatus(BaseModel):
     node_id: str
@@ -17,15 +20,18 @@ class NodeStatus(BaseModel):
     worker_count: int
     timestamp: float
 
+
 @runtime_checkable
 class DiscoveryProvider(Protocol):
     async def announce(self, status: NodeStatus) -> None:
         """Announce the node's status to the discovery service."""
         ...
 
+
 class NoOpDiscoveryProvider(DiscoveryProvider):
     async def announce(self, status: NodeStatus) -> None:
         pass
+
 
 class WebhookDiscoveryProvider(DiscoveryProvider):
     def __init__(self, url: str, secret: str | None = None, timeout_s: float = 5.0):

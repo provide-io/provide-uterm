@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import asyncio
-import aiosqlite
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from provide.terminal.control.plane import ControlPlaneConfig, EngineCapabilities
-from provide.terminal.control.plane.sqlite.connection import SqliteConnectionError, connect_sqlite
-from provide.terminal.control.plane.sqlite.migration import SqliteMigrationError, apply_migrations
 from provide.terminal.control.plane.sqlite.approval_store import SqliteApprovalStore
+from provide.terminal.control.plane.sqlite.connection import SqliteConnectionError, connect_sqlite
 from provide.terminal.control.plane.sqlite.lease_store import SqliteLeaseStore
+from provide.terminal.control.plane.sqlite.migration import SqliteMigrationError, apply_migrations
 from provide.terminal.control.plane.sqlite.session_store import SqliteSessionStore
-from provide.terminal.control.plane.sqlite.transaction import SqliteTransaction
 from provide.terminal.control.plane.sqlite.token_store import SqliteTokenStore
+from provide.terminal.control.plane.sqlite.transaction import SqliteTransaction
+
+if TYPE_CHECKING:
+    import aiosqlite
+
+    from provide.terminal.control.plane import ControlPlaneConfig, EngineCapabilities
 
 
 @dataclass(slots=True)

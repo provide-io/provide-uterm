@@ -3,11 +3,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 from __future__ import annotations
-from typing import Any, cast
+
+from typing import TYPE_CHECKING, Any, cast
+
 from fastapi import APIRouter, HTTPException, Request
+
 from provide.terminal.bridge.hub.approvals import ApprovalStatus
 from provide.terminal.bridge.hub.ext import PolicyDecision
-from provide.terminal.server.authorization import AuthorizationService
+
+if TYPE_CHECKING:
+    from provide.terminal.server.authorization import AuthorizationService
+
 
 def create_approvals_router() -> APIRouter:
     router = APIRouter(prefix="/api/approvals", tags=["approvals"])
@@ -36,8 +42,8 @@ def create_approvals_router() -> APIRouter:
         principal = getattr(request.state, "uterm_principal", None)
         if not principal:
             raise HTTPException(status_code=401, detail="Authentication required")
-        
-        authz = cast(AuthorizationService, request.app.state.uterm_authz)
+
+        authz = cast("AuthorizationService", request.app.state.uterm_authz)
         if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="Admin role required")
 
@@ -48,15 +54,12 @@ def create_approvals_router() -> APIRouter:
         approval_req = hub._approval_store.get(request_id)
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
-        
+
         if approval_req.status != ApprovalStatus.PENDING:
             raise HTTPException(status_code=400, detail="Approval request is not pending")
 
         await hub.resolve_approval(
-            approval_req.worker_id, 
-            request_id, 
-            PolicyDecision(action="allow"), 
-            approval_req.command
+            approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
         )
         hub._approval_store.resolve(request_id, ApprovalStatus.APPROVED)
         return {"status": "approved"}
@@ -73,12 +76,9 @@ def create_approvals_router() -> APIRouter:
             raise HTTPException(status_code=400, detail="Approval request is not pending")
 
         await hub.resolve_approval(
-            approval_req.worker_id, 
-            request_id, 
-            PolicyDecision(action="deny", reason=reason), 
-            approval_req.command
+            approval_req.worker_id, request_id, PolicyDecision(action="deny", reason=reason), approval_req.command
         )
         hub._approval_store.resolve(request_id, ApprovalStatus.REJECTED)
         return {"status": "rejected"}
-    
+
     return router

@@ -9,12 +9,14 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from provide.terminal.bridge.contracts import InputMode, Visibility
 from provide.terminal.defaults import TerminalDefaults
+
+if TYPE_CHECKING:
+    from provide.terminal.bridge.contracts import InputMode, Visibility
 
 # CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
 XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
@@ -236,12 +238,12 @@ class SessionDefinition(ServerBaseModel):
         # This prevents circular dependency issues during startup.
         try:
             from provide.terminal.server.connectors import registered_types
+
             known = registered_types()
             if known and connector_type not in known:
                 label = session_id or "<unknown>"
                 raise ValueError(
-                    f"invalid connector_type for {label!r}: {connector_type!r} — "
-                    f"must be one of {sorted(known)}"
+                    f"invalid connector_type for {label!r}: {connector_type!r} — must be one of {sorted(known)}"
                 )
         except ImportError:
             # Fallback for environments where server.connectors isn't available
@@ -327,16 +329,18 @@ class UtermServerConfig(ServerBaseModel):
     tunnel: TunnelConfig = Field(default_factory=TunnelConfig)
     pam: PamConfig = Field(default_factory=PamConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
-    sessions: list[SessionDefinition] = Field(default_factory=lambda: [
-        SessionDefinition(
-            session_id="provide-shell",
-            display_name="Provide Shell",
-            connector_type="shell",
-            input_mode="open",
-            auto_start=True,
-            tags=["shell", "reference"],
-        )
-    ])
+    sessions: list[SessionDefinition] = Field(
+        default_factory=lambda: [
+            SessionDefinition(
+                session_id="provide-shell",
+                display_name="Provide Shell",
+                connector_type="shell",
+                input_mode="open",
+                auto_start=True,
+                tags=["shell", "reference"],
+            )
+        ]
+    )
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300

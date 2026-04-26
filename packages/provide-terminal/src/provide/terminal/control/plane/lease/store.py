@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from provide.terminal.control.plane.lease.types import LeaseRecord
+if TYPE_CHECKING:
+    from provide.terminal.control.plane.lease.types import LeaseRecord
 
 
 class LeaseStore(Protocol):
