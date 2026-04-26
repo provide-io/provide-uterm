@@ -70,15 +70,6 @@ except ImportError as _e:  # pragma: no cover
 
 
 from provide.telemetry import get_logger
-from provide.terminal.bridge.contracts import (
-    HijackAcquireResponse,
-    HijackEventsResponse,
-    HijackHeartbeatResponse,
-    HijackReleaseResponse,
-    HijackSnapshotResponse,
-    HijackStepResponse,
-    SessionModeResponse,
-)
 from provide.terminal.bridge.models import (
     HijackAcquireRequest,
     HijackHeartbeatRequest,
@@ -148,7 +139,6 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         # compensating resume so the worker exits the hold state.
         session_committed = False
         try:
-            
             ok, err = await hub.try_acquire_rest_hijack(
                 worker_id,
                 owner=request.owner,
@@ -156,7 +146,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 hijack_id=hijack_id,
                 now=mono_now,
             )
-            if not acquired:
+            if not ok:
                 if err == "already_hijacked":
                     hub.metric("hijack_conflicts_total")
                     logger.warning(
@@ -199,7 +189,6 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                     "open_mode": "Hijack not available in open input mode.",
                 }
                 return JSONResponse({"error": error_msgs.get(err or "", str(err))}, status_code=409)
-            session_committed = True
             hub.metric("hijack_acquires_total")
             logger.info(
                 "rest_acquire_ok worker_id=%s hijack_id=%s owner=%s lease_s=%d client=%s",
@@ -214,6 +203,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
                 worker_id, "hijack_acquired", {"hijack_id": hijack_id, "owner": request.owner, "lease_s": lease_s}
             )
             await hub.broadcast_hijack_state(worker_id)
+            session_committed = True
             return {
                 "ok": True,
                 "worker_id": worker_id,

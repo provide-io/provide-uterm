@@ -11,13 +11,13 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from fastapi import Request, WebSocket
 from provide.telemetry import get_logger
+from provide.terminal.bridge.identity import IdentityProvider, Principal
 from provide.terminal.server.audit import audit_event
-from provide.terminal.bridge.identity import Principal, IdentityProvider
-
 
 if TYPE_CHECKING:
+    from fastapi import Request, WebSocket
+
     from provide.terminal.server.models import AuthConfig
 
 logger = get_logger(__name__)
@@ -31,6 +31,68 @@ _JWKS_CLIENT_CACHE_MAX = 16
 _JWKS_CLIENT_CACHE_LOCK = threading.Lock()
 
 
+def _provider(auth: AuthConfig, api_key_store: Any = None) -> LocalIdentityProvider:
+    return LocalIdentityProvider(auth, api_key_store)
+
+
+def _cookie_value(cookies: dict[str, str], key: str) -> str | None:
+    value = cookies.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _roles_from_claims(claims: dict[str, Any], auth: AuthConfig) -> frozenset[str]:
+    return _provider(auth)._roles_from_claims(claims)
+
+
+def _scopes_from_claims(claims: dict[str, Any], auth: AuthConfig) -> frozenset[str]:
+    return _provider(auth)._scopes_from_claims(claims)
+
+
+def _resolve_jwt_key(token: str, auth: AuthConfig) -> Any:
+    return _provider(auth)._resolve_jwt_key(token)
+
+
+def _principal_from_jwt_token(token: str, auth: AuthConfig) -> Principal:
+    return _provider(auth)._principal_from_jwt_token(token)
+
+
+def _principal_from_header_auth(
+    headers: Any,
+    cookies: dict[str, str],
+    auth: AuthConfig,
+) -> Principal:
+    return _provider(auth)._principal_from_header_auth(headers, cookies)
+
+
+def _principal_from_local_mode(
+    headers: Any,
+    cookies: dict[str, str],
+    auth: AuthConfig,
+) -> Principal:
+    return _provider(auth)._principal_from_local_mode(headers, cookies)
+
+
+def _anonymous_principal() -> Principal:
+    return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+
+
+def _resolve_principal(
+    headers: Any,
+    cookies: dict[str, str],
+    auth: AuthConfig,
+    api_key_store: Any,
+) -> Principal:
+    connection = _HeadersAndCookies(headers=headers, cookies=cookies)
+    return _provider(auth, api_key_store).resolve_principal_sync(connection)
+
+
+@dataclass(slots=True)
+class _HeadersAndCookies:
+    headers: Any = field(default_factory=dict)
+    cookies: dict[str, str] = field(default_factory=dict)
 
 
 def extract_bearer_token(headers: Any) -> str | None:
@@ -45,6 +107,8 @@ def extract_bearer_token(headers: Any) -> str | None:
         return None
     token = token.strip()
     return token or None
+
+
 class LocalIdentityProvider(IdentityProvider):
     """Standard AGPL RBAC implementation of IdentityProvider."""
 
@@ -53,14 +117,17 @@ class LocalIdentityProvider(IdentityProvider):
         self.api_key_store = api_key_store
 
     async def resolve_principal(self, connection: Request | WebSocket) -> Principal:
+        return self.resolve_principal_sync(connection)
+
+    def resolve_principal_sync(self, connection: Request | WebSocket) -> Principal:
         headers = getattr(connection, "headers", {})
         cookies = getattr(connection, "cookies", {})
-        
+
         # API key authentication takes precedence (when enabled).
         api_key_principal = self._principal_from_api_key(headers)
         if api_key_principal is not None:
             return api_key_principal
-            
+
         mode = str(self.auth.mode).strip().lower()
         if mode in {"none", "dev"}:
             return self._principal_from_local_mode(headers, cookies)
@@ -68,7 +135,7 @@ class LocalIdentityProvider(IdentityProvider):
             return self._principal_from_header_auth(headers, cookies)
         if mode != "jwt":
             raise ValueError(f"unknown auth mode: {mode!r}")
-            
+
         token = extract_bearer_token(headers) or self._cookie_value(cookies, self.auth.token_cookie)
         if not token:
             return self._anonymous_principal()
@@ -78,7 +145,7 @@ class LocalIdentityProvider(IdentityProvider):
             logger.warning("jwt_auth_failed error=%s", exc)
             audit_event("auth.failure", detail={"error": str(exc)})
             return self._anonymous_principal()
-            
+
         audit_event("auth.success", principal=principal.subject_id)
         return principal
 
@@ -113,6 +180,7 @@ class LocalIdentityProvider(IdentityProvider):
     def _resolve_jwt_key(self, token: str) -> Any:
         if self.auth.jwt_jwks_url:
             import jwt
+
             url = self.auth.jwt_jwks_url
             with _JWKS_CLIENT_CACHE_LOCK:
                 client = _JWKS_CLIENT_CACHE.get(url)
@@ -130,6 +198,7 @@ class LocalIdentityProvider(IdentityProvider):
 
     def _principal_from_jwt_token(self, token: str) -> Principal:
         import jwt
+
         key = self._resolve_jwt_key(token)
         claims = jwt.decode(
             token,
@@ -154,13 +223,21 @@ class LocalIdentityProvider(IdentityProvider):
         return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
 
     def _principal_from_header_auth(self, headers: Any, cookies: Any) -> Principal:
-        principal = headers.get(self.auth.principal_header) or self._cookie_value(cookies, self.auth.principal_cookie) or "anonymous"
+        principal = (
+            headers.get(self.auth.principal_header)
+            or self._cookie_value(cookies, self.auth.principal_cookie)
+            or "anonymous"
+        )
         role = str(headers.get(self.auth.role_header, "")).strip().lower()
         roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"viewer"})
         return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
 
     def _principal_from_local_mode(self, headers: Any, cookies: Any) -> Principal:
-        principal = headers.get(self.auth.principal_header) or self._cookie_value(cookies, self.auth.principal_cookie) or "local-dev"
+        principal = (
+            headers.get(self.auth.principal_header)
+            or self._cookie_value(cookies, self.auth.principal_cookie)
+            or "local-dev"
+        )
         role = str(headers.get(self.auth.role_header, "")).strip().lower()
         roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"admin"})
         display_name = str(headers.get("x-display-name", "")).strip() or None
@@ -205,6 +282,27 @@ class LocalIdentityProvider(IdentityProvider):
         )
 
 
+def _principal_from_api_key(headers: Any, auth: AuthConfig, api_key_store: Any) -> Principal | None:
+    """Backward-compatible module helper for API key principal resolution."""
+    return LocalIdentityProvider(auth, api_key_store)._principal_from_api_key(headers)
+
+
+class _AwaitablePrincipal:
+    """Compatibility wrapper that acts like a Principal and can also be awaited."""
+
+    def __init__(self, principal: Principal) -> None:
+        self._principal = principal
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._principal, name)
+
+    def __await__(self):
+        async def _resolve() -> Principal:
+            return self._principal
+
+        return _resolve().__await__()
+
+
 class WebhookIdentityProvider(IdentityProvider):
     """IdentityProvider that delegates resolution to an external webhook."""
 
@@ -225,6 +323,7 @@ class WebhookIdentityProvider(IdentityProvider):
 
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=self.timeout_s) as client:
                 req_headers = {}
                 if self.secret:
@@ -252,12 +351,14 @@ def _api_key_store_from(connection: object) -> Any:
     state = getattr(app, "state", None) if app is not None else None
     return getattr(state, "uterm_api_key_store", None) if state is not None else None
 
-async def resolve_http_principal(request: Request, auth: AuthConfig) -> Principal:
+
+def resolve_http_principal(request: Request, auth: AuthConfig) -> _AwaitablePrincipal:
     """Resolve a principal from a FastAPI/Starlette Request-like object."""
     idp = LocalIdentityProvider(auth, _api_key_store_from(request))
-    return await idp.resolve_principal(request)
+    return _AwaitablePrincipal(idp.resolve_principal_sync(request))
 
-async def resolve_ws_principal(websocket: WebSocket, auth: AuthConfig) -> Principal:
+
+def resolve_ws_principal(websocket: WebSocket, auth: AuthConfig) -> _AwaitablePrincipal:
     """Resolve a principal from a FastAPI/Starlette WebSocket-like object."""
     idp = LocalIdentityProvider(auth, _api_key_store_from(websocket))
-    return await idp.resolve_principal(websocket)
+    return _AwaitablePrincipal(idp.resolve_principal_sync(websocket))

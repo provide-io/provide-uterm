@@ -25,7 +25,7 @@ from provide.terminal.bridge.frames import (
     make_pong_frame,
 )
 from provide.terminal.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED
+from provide.terminal.bridge.hub.ext import EVENT_RESUME_FAILED, NoOpPolicyGate
 from provide.terminal.bridge.hub.semantics import CommandSplitter
 from provide.terminal.bridge.models import VALID_ROLES
 from provide.terminal.control_channel import encode_control
@@ -226,25 +226,72 @@ async def _handle_input(
         await ws.send_text(encode_control(make_error_frame("Input too long.")))
         return
 
-    # Buffer and check for command
-    command = hub._buffer_and_get_command(ws, data)
-    if command is None:
-        # Still buffering
+    context = await hub.prepare_policy_context(ws, worker_id, action="input")
+    gate = hub._policy_gate
+    is_complete_chunk = "\r" in data or "\n" in data
+
+    if isinstance(gate, NoOpPolicyGate):
+        ok = await hub.send_worker(worker_id, {"type": "input", "data": data, "ts": time.time()}, source=ws)
+        if not ok:
+            await ws.send_text(encode_control(make_error_frame("Worker connection lost.")))
+        else:
+            await hub.append_event(worker_id, "input_send", {"owner": "dashboard_ws", "keys": data[:120]})
         return
 
-    # Semantic splitting
+    if not is_complete_chunk and ws not in hub._input_buffers:
+        decision = await gate.intercept_input(data, context)
+        if decision.action == "hold":
+            request_id = decision.request_id or str(uuid.uuid4())
+            request = ApprovalRequest(
+                id=request_id,
+                worker_id=worker_id,
+                submitter_id=str(context.client_id),
+                command=data,
+                status=ApprovalStatus.PENDING,
+                created_at=time.time(),
+                expires_at=time.time() + decision.timeout_s,
+            )
+            hub._approval_store.add(request)
+            hub._paused_browsers.add(ws)
+            from provide.terminal.bridge.hub.core import _encode_browser_frame
+
+            st = await hub._get(worker_id)
+            for b_ws in list(st.browsers.keys()):
+                await b_ws.send_text(
+                    _encode_browser_frame(
+                        {
+                            "type": "approval_pending",
+                            "command": data,
+                            "request_id": request_id,
+                            "expires_at": request.expires_at,
+                        }
+                    )
+                )
+            return
+
+        if decision.action != "allow":
+            logger.debug(
+                "input_blocked_by_policy worker_id=%s action=%s reason=%s part=%s",
+                worker_id,
+                decision.action,
+                decision.reason,
+                data,
+            )
+            await ws.send_text(encode_control(make_error_frame(f"Command part blocked by policy: {data}")))
+            return
+
+    command = hub._buffer_and_get_command(ws, data)
+    if command is None:
+        return
+
     splitter = CommandSplitter()
     parts = splitter.split(command)
-
-    # Policy check on each part of the split command
-    context = await hub.prepare_policy_context(ws, worker_id, action="input")
-
+    if len(parts) <= 1:
+        parts = [command]
     for part in parts:
-        decision = await hub._policy_gate.intercept_input(part, context)
-
-        if decision.action == "hold":
-            # Create approval request for the FULL command
-            request_id = decision.request_id or str(uuid.uuid4())
+        part_decision = await gate.intercept_input(part, context)
+        if part_decision.action == "hold":
+            request_id = part_decision.request_id or str(uuid.uuid4())
             request = ApprovalRequest(
                 id=request_id,
                 worker_id=worker_id,
@@ -252,26 +299,24 @@ async def _handle_input(
                 command=command,
                 status=ApprovalStatus.PENDING,
                 created_at=time.time(),
-                expires_at=time.time() + decision.timeout_s,
+                expires_at=time.time() + part_decision.timeout_s,
             )
             hub._approval_store.add(request)
             hub._paused_browsers.add(ws)
-
-            # Broadcast to all browsers in this session
             from provide.terminal.bridge.hub.core import _encode_browser_frame
+
             st = await hub._get(worker_id)
             for b_ws in list(st.browsers.keys()):
-                await b_ws.send_text(_encode_browser_frame({
-                    "type": "approval_pending",
-                    "command": command,
-                    "request_id": request_id,
-                    "expires_at": request.expires_at
-                }))
-            return
-
-        if decision.action != "allow":
-            logger.debug("input_blocked_by_policy worker_id=%s action=%s reason=%s part=%s", worker_id, decision.action, decision.reason, part)
-            await ws.send_text(encode_control(make_error_frame(f"Command part blocked by policy: {part}")))
+                await b_ws.send_text(
+                    _encode_browser_frame(
+                        {
+                            "type": "approval_pending",
+                            "command": command,
+                            "request_id": request_id,
+                            "expires_at": request.expires_at,
+                        }
+                    )
+                )
             return
 
     ok = await hub.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()}, source=ws)
