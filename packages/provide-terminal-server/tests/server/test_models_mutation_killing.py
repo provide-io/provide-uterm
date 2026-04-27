@@ -11,9 +11,9 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
+from provide.terminal.server.config_schema import _clean_path
 from provide.terminal.server.models import (
     SessionDefinition,
-    _clean_path,
     model_dump,
     validation_error_message,
 )

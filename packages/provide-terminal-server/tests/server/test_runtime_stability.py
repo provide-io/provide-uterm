@@ -38,8 +38,10 @@ async def test_runtime_enforces_max_buffer_size():
     msg2 = {"type": "term", "data": "A" * 100}
     await runtime._enqueue_messages([msg2])
     
-    # Should still be 1 (msg2 dropped)
-    assert runtime._queue.qsize() == 1
-    assert runtime._queue_bytes < 50
+    # Should be 2 (msg2 dropped, but error message enqueued)
+    assert runtime._queue.qsize() == 2
+    last_msg = runtime._queue._queue[-1]
+    assert last_msg["type"] == "error"
+    assert "Buffer overflow" in last_msg["message"]
     
     await runtime.stop()
