@@ -230,7 +230,20 @@ class TermBridge:
         attempt = 0
         while self._running:
             try:
-                async with websockets.connect(url, max_size=self._max_ws_message_bytes) as ws:
+                # Explicit ping_interval/ping_timeout: passive bots (compare/
+                # supervised mode) emit ~no terminal activity, so the WS goes
+                # silent for minutes at a time. The websockets default
+                # ping_interval (20s) is correct, but we set explicitly so a
+                # future websockets default change doesn't silently regress.
+                # ping_timeout=20 is more forgiving than the 20s default for
+                # slow LAN/WAN paths.
+                async with websockets.connect(
+                    url,
+                    max_size=self._max_ws_message_bytes,
+                    ping_interval=20,
+                    ping_timeout=20,
+                    close_timeout=10,
+                ) as ws:
                     attempt = 0  # reset backoff on successful connect
                     await self._handle_connection(ws)
             except asyncio.CancelledError:

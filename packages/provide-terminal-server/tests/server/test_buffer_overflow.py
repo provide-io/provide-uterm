@@ -30,6 +30,11 @@ def _make_runtime(
     rt._max_buffer_bytes = 100  # Small buffer for testing
     return rt
 
+
+async def _get_next_message(rt: HostedSessionRuntime) -> dict[str, object]:
+    assert rt._queue is not None
+    return await rt._queue.get()
+
 @pytest.mark.asyncio
 async def test_enqueue_messages_buffer_overflow_emits_error():
     rt = _make_runtime()
@@ -39,14 +44,14 @@ async def test_enqueue_messages_buffer_overflow_emits_error():
     msg1 = {"type": "term", "data": "A" * 50}
     await rt._enqueue_messages([msg1])
     assert rt._queue.qsize() == 1
-    
+    assert await _get_next_message(rt) == msg1
+    assert rt._queue.qsize() == 0
+
     # Message that overflows
     msg2 = {"type": "term", "data": "B" * 60}
     await rt._enqueue_messages([msg2])
-    
-    # Queue should have msg1 AND the error message
-    assert rt._queue.qsize() == 2
-    
-    await rt._queue.get() # pop msg1
-    err_msg = await rt._queue.get()
+
+    # Queue should contain only the overflow error frame.
+    assert rt._queue.qsize() == 1
+    err_msg = await _get_next_message(rt)
     assert err_msg == {"type": "error", "message": "Buffer overflow — input dropped"}
