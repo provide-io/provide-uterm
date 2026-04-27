@@ -13,6 +13,9 @@ from pydantic import ValidationError  # noqa: TC002
 
 from provide.terminal.bridge.contracts import InputMode, SessionLifecycle, Visibility  # noqa: TC001
 from provide.terminal.server.config_schema import (
+    FITADDON_CDN_DEFAULT,  # noqa: F401  re-exported for cli/__init__.py
+    FONTS_CDN_DEFAULT,  # noqa: F401  re-exported for cli/__init__.py
+    XTERM_CDN_DEFAULT,  # noqa: F401  re-exported for cli/__init__.py
     AuthConfig,
     ControlPlaneConfig,
     GovernanceConfig,

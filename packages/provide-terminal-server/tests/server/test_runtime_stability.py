@@ -3,6 +3,11 @@ from unittest.mock import Mock, AsyncMock
 from provide.terminal.server.runtime import HostedSessionRuntime
 from provide.terminal.server.models import SessionDefinition, RecordingConfig
 
+
+async def _get_next_message(runtime: HostedSessionRuntime) -> dict[str, object]:
+    assert runtime._queue is not None
+    return await runtime._queue.get()
+
 @pytest.mark.asyncio
 async def test_runtime_enforces_max_buffer_size():
     definition = SessionDefinition(
@@ -33,15 +38,17 @@ async def test_runtime_enforces_max_buffer_size():
     await runtime._enqueue_messages([msg1])
     assert runtime._queue_bytes > 0
     assert runtime._queue.qsize() == 1
-    
+    assert await _get_next_message(runtime) == msg1
+    assert runtime._queue.qsize() == 0
+
     # 2. Enqueue large message that exceeds remaining 50 bytes
     msg2 = {"type": "term", "data": "A" * 100}
     await runtime._enqueue_messages([msg2])
     
-    # Should be 2 (msg2 dropped, but error message enqueued)
-    assert runtime._queue.qsize() == 2
-    last_msg = runtime._queue._queue[-1]
-    assert last_msg["type"] == "error"
-    assert "Buffer overflow" in last_msg["message"]
+    # Should enqueue only the overflow error frame.
+    assert runtime._queue.qsize() == 1
+    err_msg = await _get_next_message(runtime)
+    assert err_msg["type"] == "error"
+    assert "Buffer overflow" in err_msg["message"]
     
     await runtime.stop()
