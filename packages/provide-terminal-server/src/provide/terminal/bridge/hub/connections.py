@@ -145,9 +145,29 @@ class _ConnectionMixin:
             async with self._lock:
                 st = self._workers.setdefault(worker_id, WorkerTermState())
                 st.events = deque(st.events, maxlen=self._event_deque_maxlen)
-                prev_was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
-                if prev_was_hijacked:
+                # Only clear hijack state when the EXISTING lease is
+                # actually expired. Worker WS reconnects are routine for
+                # passive supervised bots (Cloudflare DO rotation, manager
+                # restart, network blip) and the framework's hijack lease
+                # should survive a transient reconnect — clearing it
+                # unconditionally meant a single CFDO "reconnecting..."
+                # blip mid-run silently invalidated the holder's
+                # hijack_id, every subsequent /send 404'd, and the
+                # whole compare run cratered. Time-bounded expiry
+                # (lease_expires_at) is already the security guarantee;
+                # WS register is not a security event.
+                _now_mono = time.monotonic()
+                _expired = (
+                    st.hijack_session is not None
+                    and st.hijack_session.lease_expires_at <= _now_mono
+                )
+                prev_was_hijacked = (
+                    _expired
+                    or (st.hijack_session is None and st.hijack_owner is not None)
+                )
+                if _expired:
                     st.hijack_session = None
+                if prev_was_hijacked:
                     st.hijack_owner = None
                     st.hijack_owner_expires_at = None
                 st.worker_ws = ws
