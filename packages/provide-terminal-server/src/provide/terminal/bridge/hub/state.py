@@ -69,8 +69,15 @@ class HubStateMixin:
 
     @staticmethod
     def clamp_lease(lease_s: int) -> int:
-        """Clamp a lease duration to [1, 3600] seconds."""
-        return max(1, min(int(lease_s), 3600))
+        """Clamp a lease duration to [1, 14400] seconds (4 hours).
+
+        Matched to the WS idle-reader timeout so a long-running
+        operator hold doesn't get killed by either the lease expiry
+        or the WS idle reaper. Earlier 3600s cap was too tight for
+        multi-hour compare runs that drive a primary target heavily
+        while idling extra targets between phases.
+        """
+        return max(1, min(int(lease_s), 14400))
 
     @staticmethod
     def has_valid_rest_lease(st: WorkerTermState) -> bool:
