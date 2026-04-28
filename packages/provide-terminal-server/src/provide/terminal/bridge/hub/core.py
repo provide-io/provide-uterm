@@ -103,7 +103,7 @@ class TermHub(
         resume_ttl_s: float = 300,
         on_resume: ResumeCallback | None = None,
         event_bus: EventBus | None = None,
-        ws_idle_timeout_s: float = 300.0,
+        ws_idle_timeout_s: float = 14400.0,
         policy_gate: PolicyGate | None = None,
         identity_provider: IdentityProvider | None = None,
         delegate_roles: bool = True,
