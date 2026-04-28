@@ -6,8 +6,10 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+
 from provide.terminal.server.models import RecordingConfig, SessionDefinition
 from provide.terminal.server.runtime import HostedSessionRuntime
+
 
 def _make_session(session_id: str = "test-session", connector_type: str = "shell") -> SessionDefinition:
     return SessionDefinition(
@@ -16,6 +18,7 @@ def _make_session(session_id: str = "test-session", connector_type: str = "shell
         connector_type=connector_type,
         auto_start=False,
     )
+
 
 def _make_runtime(
     session_id: str = "test-session",
@@ -35,11 +38,12 @@ async def _get_next_message(rt: HostedSessionRuntime) -> dict[str, object]:
     assert rt._queue is not None
     return await rt._queue.get()
 
+
 @pytest.mark.asyncio
 async def test_enqueue_messages_buffer_overflow_emits_error():
     rt = _make_runtime()
     rt._queue = asyncio.Queue()
-    
+
     # Message that fits
     msg1 = {"type": "term", "data": "A" * 50}
     await rt._enqueue_messages([msg1])
