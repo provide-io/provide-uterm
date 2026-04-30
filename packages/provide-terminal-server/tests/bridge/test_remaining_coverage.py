@@ -26,7 +26,7 @@ class TestCoordinatorMismatch:
     def test_heartbeat_no_active_session(self) -> None:
         """heartbeat() when not hijacked → error='not_hijacked' (line 90)."""
         coord = HijackCoordinator()
-        result = coord.heartbeat("fake-id", 60)
+        result = coord.heartbeat("fake-id", 60, "owner")
         assert not result.ok
         assert result.error == "not_hijacked"
 
@@ -35,7 +35,7 @@ class TestCoordinatorMismatch:
         coord = HijackCoordinator()
         acquire = coord.acquire("owner", 60)
         assert acquire.ok
-        result = coord.heartbeat("wrong-id", 60)
+        result = coord.heartbeat("wrong-id", 60, "owner")
         assert not result.ok
         assert result.error == "hijack_id_mismatch"
 

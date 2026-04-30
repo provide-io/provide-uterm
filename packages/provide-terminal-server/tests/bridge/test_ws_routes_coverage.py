@@ -59,7 +59,7 @@ class TestStaleHijackOnWorkerReconnect:
             # that left hijack state behind)
             import asyncio
 
-            now = time.time()
+            now = time.monotonic()
 
             async def _setup_stale():
                 async with hub._lock:
@@ -68,11 +68,11 @@ class TestStaleHijackOnWorkerReconnect:
                         hijack_id="stale-hid",
                         owner="stale",
                         acquired_at=now,
-                        lease_expires_at=now + 300,
+                        lease_expires_at=now - 1,
                         last_heartbeat=now,
                     )
                     st.hijack_owner = AsyncMock()
-                    st.hijack_owner_expires_at = now + 300
+                    st.hijack_owner_expires_at = now - 1
 
             asyncio.run(_setup_stale())
 

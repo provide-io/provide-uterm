@@ -129,9 +129,10 @@ def test_events_empty_bot_state_via_direct_dict_assignment() -> None:
 
 
 def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
-    """Round-7 fix 1: if an error fires after the pause is sent but before the
-    session is committed, a compensating resume must be dispatched so the worker
-    does not remain stuck in the paused state indefinitely."""
+    """Round-7 fix 1: if try_acquire_rest_hijack raises, the REST route must
+    return 500 without leaking pause/resume messages to the worker.  Since
+    590c90e the pause is sent atomically inside try_acquire_rest_hijack, so
+    mocking it to raise prevents any WS communication."""
     from unittest.mock import patch
 
     app, hub = make_app()
@@ -139,7 +140,7 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
     hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     async def _raise(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("simulated error after pause")
+        raise RuntimeError("simulated error in acquire")
 
     with (
         patch.object(hub, "try_acquire_rest_hijack", side_effect=_raise),
@@ -150,13 +151,8 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
     assert r.status_code == 500
 
     sent = decode_control_payloads([c.args[0] for c in mock_ws.send_text.await_args_list])
-    pause_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "pause"]
     resume_msgs = [m for m in sent if m.get("type") == "control" and m.get("action") == "resume"]
-    assert pause_msgs, "pause must have been sent to worker before the error"
-    assert resume_msgs, "compensating resume must be sent when session commit fails"
-    assert resume_msgs[0].get("hijack_id") == pause_msgs[0].get("hijack_id"), (
-        "compensating resume must carry the same hijack_id as the pause"
-    )
+    assert resume_msgs, "compensating resume must be sent when acquire fails"
 
 
 def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None:

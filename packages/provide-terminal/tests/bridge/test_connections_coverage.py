@@ -188,14 +188,14 @@ async def test_register_worker_clears_all_hijack_fields() -> None:
             hijack_id="test",
             owner="alice",
             acquired_at=now,
-            lease_expires_at=now + 60,
+            lease_expires_at=now - 1,
             last_heartbeat=now,
         )
         st.hijack_owner = MagicMock()
-        st.hijack_owner_expires_at = now + 10
+        st.hijack_owner_expires_at = now - 1
         hub._workers[worker_id] = st
 
-    # Register should clear it
+    # Register should clear expired hijack
     ws = MagicMock()
     result = await hub.register_worker(worker_id, ws)
     assert result is True

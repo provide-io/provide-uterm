@@ -9,6 +9,8 @@ from __future__ import annotations
 import time
 from unittest.mock import patch
 
+import pytest
+
 from provide.terminal.deckmux._presence import PresenceStore, UserPresence
 
 # --- UserPresence ---
@@ -97,12 +99,11 @@ def test_store_update_missing() -> None:
     assert store.update("nonexistent", typing=True) is None
 
 
-def test_store_update_ignores_nonexistent_attrs() -> None:
+def test_store_update_rejects_nonexistent_attrs() -> None:
     store = PresenceStore()
     store.add("u1", "Alice", "#fff", "admin")
-    p = store.update("u1", nonexistent_field="value")
-    assert p is not None
-    assert not hasattr(p, "nonexistent_field") or getattr(p, "nonexistent_field", None) is None
+    with pytest.raises(ValueError, match="nonexistent_field"):
+        store.update("u1", nonexistent_field="value")
 
 
 def test_store_remove() -> None:

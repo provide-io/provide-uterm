@@ -50,9 +50,9 @@ def _read_vite_manifest() -> dict[str, object] | None:
             _vite_manifest = json.loads(raw)
             logger.info("vite_manifest loaded entries=%d", len(_vite_manifest or {}))
         else:
-            logger.debug("vite_manifest not found — using legacy vanilla entry points")
+            logger.debug("vite_manifest not found — React app has not been built")
     except Exception:
-        logger.debug("vite_manifest read failed — using legacy vanilla entry points", exc_info=True)
+        logger.debug("vite_manifest read failed", exc_info=True)
     return _vite_manifest
 
 
@@ -127,20 +127,10 @@ def _shell(
         f"<script src='{escape(fitaddon_cdn)}/lib/addon-fit.js'{_fitaddon_sri}></script>" if fitaddon_cdn else ""
     )
     fonts_link = f"<link href='{escape(fonts_cdn)}' rel='stylesheet'>" if fonts_cdn else ""
-    # When React app is active, skip legacy vanilla CSS files
-    legacy_css = ""
-    if not vite_tags:
-        legacy_css = (
-            f"<link rel='stylesheet' href='{escape(assets_path)}/server-app-foundation.css'>"
-            f"<link rel='stylesheet' href='{escape(assets_path)}/server-app-layout.css'>"
-            f"<link rel='stylesheet' href='{escape(assets_path)}/server-app-components.css'>"
-            f"<link rel='stylesheet' href='{escape(assets_path)}/server-app-views.css'>"
-        )
     return (
         "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
         f"<title>{escape(title)}</title>"
-        f"{legacy_css}"
         f"{css_links}{xterm_css}{fonts_link}"
         f"{xterm_js}{fitaddon_js}"
         f"{pre_vite_tags}"

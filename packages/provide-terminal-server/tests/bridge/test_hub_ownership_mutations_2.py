@@ -299,7 +299,7 @@ class TestExtendHijackLease:
         async with hub._lock:
             st.hijack_session = hs
 
-        new_expiry = await hub.extend_hijack_lease("w1", hs.hijack_id, 30, now)
+        new_expiry = await hub.extend_hijack_lease("w1", hs.hijack_id, hs.owner, 30, now)
         assert new_expiry is not None
         async with hub._lock:
             updated_hs = hub._workers["w1"].hijack_session

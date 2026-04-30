@@ -42,7 +42,7 @@ class TestCoordinatorThroughput:
 
         start = time.monotonic()
         for _ in range(10_000):
-            hb = coord.heartbeat(hijack_id, 60)
+            hb = coord.heartbeat(hijack_id, 60, "owner")
             assert hb.ok
 
         elapsed = time.monotonic() - start

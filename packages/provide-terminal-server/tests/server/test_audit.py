@@ -115,7 +115,7 @@ def dev_client() -> TestClient:
 
 
 def test_session_create_emits_audit(dev_client: TestClient) -> None:
-    with patch("provide.terminal.server.routes.api.audit_event") as mock:
+    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
         r = dev_client.post("/api/connect", json={"connector_type": "shell"})
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "session.create"]
@@ -129,7 +129,7 @@ def test_session_delete_emits_audit(dev_client: TestClient) -> None:
     # Create a session first
     r = dev_client.post("/api/connect", json={"connector_type": "shell"})
     session_id = r.json()["session_id"]
-    with patch("provide.terminal.server.routes.api.audit_event") as mock:
+    with patch("provide.terminal.server.routes.sessions.audit_event") as mock:
         r = dev_client.delete(f"/api/sessions/{session_id}")
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "session.delete"]
@@ -138,7 +138,7 @@ def test_session_delete_emits_audit(dev_client: TestClient) -> None:
 
 
 def test_tunnel_create_emits_audit(dev_client: TestClient) -> None:
-    with patch("provide.terminal.server.routes.api.audit_event") as mock:
+    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
         r = dev_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "tunnel.create"]
@@ -151,7 +151,7 @@ def test_tunnel_create_emits_audit(dev_client: TestClient) -> None:
 def test_token_revoke_emits_audit(dev_client: TestClient) -> None:
     r = dev_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
     tunnel_id = r.json()["tunnel_id"]
-    with patch("provide.terminal.server.routes.api.audit_event") as mock:
+    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
         r = dev_client.delete(f"/api/tunnels/{tunnel_id}/tokens")
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "tunnel.tokens.revoke"]
@@ -162,7 +162,7 @@ def test_token_revoke_emits_audit(dev_client: TestClient) -> None:
 def test_token_rotate_emits_audit(dev_client: TestClient) -> None:
     r = dev_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
     tunnel_id = r.json()["tunnel_id"]
-    with patch("provide.terminal.server.routes.api.audit_event") as mock:
+    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
         r = dev_client.post(f"/api/tunnels/{tunnel_id}/tokens/rotate")
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "tunnel.tokens.rotate"]

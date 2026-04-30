@@ -217,14 +217,14 @@ class TestRESTFuzz:
         with TestClient(app) as client, connect_test_ws(client, "/ws/worker/fuzz1/term") as worker:
             worker.receive_json()  # snapshot_req
             resp = client.post("/worker/fuzz1/hijack/acquire", json={"owner": owner, "lease_s": lease})
-            if 1 <= lease <= 3600:
+            if 1 <= lease <= 14400:
                 # Valid lease — should succeed
                 assert resp.status_code in (200, 409), f"Unexpected {resp.status_code}"
                 if resp.status_code == 200:
                     data = resp.json()
                     assert data["owner"] == owner
                     remaining = data["lease_expires_at"] - time.time()
-                    assert 0 < remaining <= 3600 + 5
+                    assert 0 < remaining <= 14400 + 5
             else:
                 # Out of range — pydantic rejects
                 assert resp.status_code == 422
@@ -296,7 +296,7 @@ class TestRESTFuzz:
             hijack_id = acq.json()["hijack_id"]
 
             resp = client.post(f"/worker/fuzz1/hijack/{hijack_id}/heartbeat", json={"lease_s": lease})
-            if 1 <= lease <= 3600:
+            if 1 <= lease <= 14400:
                 assert resp.status_code == 200
             else:
                 assert resp.status_code == 422

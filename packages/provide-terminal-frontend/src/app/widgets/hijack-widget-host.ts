@@ -4,9 +4,19 @@
 //
 
 import { getShareToken } from "../../server-common.js";
-import { widgetSurface } from "../api.js";
 import { DeckMux } from "../deckmux/deckmux.js";
-import type { SessionSurface, WidgetMountState } from "../types.js";
+
+type SessionSurface = "user" | "operator";
+
+interface WidgetMountState {
+  mounted: boolean;
+  error: string | null;
+}
+
+function widgetSurface(surface: SessionSurface | undefined): { showAnalysis: boolean; mobileKeys: boolean } {
+  const isOperator = surface === "operator";
+  return { showAnalysis: isOperator, mobileKeys: isOperator };
+}
 
 export function mountHijackWidget(
   container: HTMLElement,
