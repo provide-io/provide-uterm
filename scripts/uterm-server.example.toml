@@ -19,6 +19,10 @@ assets_path = "/_terminal"
 enabled_by_default = false
 directory = ".uterm-recordings"
 
+# [control_plane]
+# backend = "memory"            # "memory" (default) or "sqlite"
+# database_url = "~/.uterm/control_plane.db"  # required when backend = "sqlite"
+
 [[sessions]]
 session_id = "provide-shell"
 display_name = "Provide Shell"

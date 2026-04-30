@@ -17,11 +17,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import warnings
 from pathlib import Path
 
 import pytest
 
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+_CF_VENDOR_MISSING = not (_PACKAGE_ROOT / "python_modules").exists()
 
 # Ensure the main provide-terminal src is on sys.path so `provide.terminal` is
 # importable in E2E tests that use HostedSessionRuntime.  The `provide` namespace
@@ -58,6 +60,14 @@ def pytest_configure(config: pytest.Config) -> None:
         "playwright: mark test as a Playwright browser UI test "
         "(requires: playwright install; run headed with --headed)",
     )
+    if _CF_VENDOR_MISSING:
+        warnings.warn(
+            "CF vendor tree (python_modules/) is absent -- "
+            "vendor-guard test will skip. Run 'pywrangler sync --force' "
+            "from packages/provide-terminal-cloudflare/ to populate it.",
+            pytest.PytestWarning,
+            stacklevel=1,
+        )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -79,6 +89,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.skip(reason="requires real CF deployment; set REAL_CF=1"))
         elif item.get_closest_marker("e2e") and not run_e2e:
             item.add_marker(pytest.mark.skip(reason="E2E tests skipped; use -m e2e or set E2E=1"))
+
+
+def pytest_terminal_summary(
+    terminalreporter: pytest.TerminalReporter,
+    exitstatus: int,
+    config: pytest.Config,
+) -> None:
+    """Print a visible banner when CF vendor tree is missing."""
+    if not _CF_VENDOR_MISSING:
+        return
+    tw = terminalreporter._tw
+    tw.sep("!", "CF VENDOR TREE MISSING")
+    tw.line("packages/provide-terminal-cloudflare/python_modules/ is absent.")
+    tw.line("The vendor-guard test (test_ushell_vendor_guard) was SKIPPED.")
+    tw.line("To populate: cd packages/provide-terminal-cloudflare && pywrangler sync --force")
+    tw.sep("!")
 
 
 def _wait_for_health(base: str, timeout_s: float) -> bool:

@@ -102,6 +102,21 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Binary content | `body_binary: true`, no `body_b64` | same |
 | Inspect view | `/app/inspect/{id}` — live request list + detail | same |
 
+## Health checks
+
+Unauthenticated endpoints for load balancers, orchestrators, and monitoring.
+
+| Capability | FastAPI backend | Cloudflare backend |
+|---|---|---|
+| `GET /api/health` | supported (no auth) | supported (no auth) |
+| Response: `status` | `"ok"` or `"unavailable"` | `"ok"` (via `ok: true`) |
+| Response: `version` | package version string | not included |
+| Response: `uptime_s` | seconds since server start | not included |
+| Response: `active_sessions` | count from session registry | not included |
+| Response: `control_plane_backend` | `"memory"` or `"sqlite"` | not included |
+| `GET /healthz` | supported (minimal, no deps) | not supported |
+| Auth required | no | no |
+
 ## Security headers
 
 | Capability | FastAPI backend | Cloudflare backend |

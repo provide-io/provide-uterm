@@ -25,7 +25,6 @@ from starlette.staticfiles import StaticFiles
 
 from provide.telemetry import TelemetryMiddleware, get_logger
 from provide.terminal.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
-from provide.terminal.bridge.identity import IdentityProvider
 from provide.terminal.control.plane import ControlPlane as SharedControlPlane
 from provide.terminal.control.plane import ControlPlaneConfig as SharedControlPlaneConfig
 from provide.terminal.control.plane.memory import MemoryControlPlane
@@ -44,6 +43,7 @@ from provide.terminal.server.profiles import FileProfileStore
 from provide.terminal.server.registry import SessionRegistry
 from provide.terminal.server.routes.api import create_api_router
 from provide.terminal.server.routes.approvals import create_approvals_router
+from provide.terminal.server.routes.health import create_health_router
 from provide.terminal.server.routes.pages import create_page_router
 from provide.terminal.server.routes.profiles import create_profiles_router
 from provide.terminal.server.security import SecurityHeadersMiddleware
@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from starlette.requests import Request
     from starlette.responses import Response
 
+    from provide.terminal.bridge.identity import IdentityProvider
     from provide.terminal.server.authorization import AuthorizationService
     from provide.terminal.server.models import ServerConfig
 
@@ -104,6 +105,12 @@ def _validate_frontend_assets() -> None:
 def _validate_auth_config(config: ServerConfig) -> None:
     mode = str(config.auth.mode).strip().lower()
     if mode in {"none", "dev"}:
+        if config.auth.require_jwt_in_production:
+            raise RuntimeError(
+                f"auth.mode='{mode}' is not allowed when auth.require_jwt_in_production=true. "
+                "Set auth.mode='jwt' or disable require_jwt_in_production."
+            )
+
         host = str(config.server.host).strip().lower()
         if host not in {"127.0.0.1", "localhost", "::1"}:
             raise RuntimeError(
@@ -214,12 +221,19 @@ def create_server_app(
     if not api_only and not _api_only_env:
         _validate_frontend_assets()
 
-    logger.warning(
-        "standalone_server_durability=process-local: the FastAPI reference server keeps live control-plane state "
-        "in memory only (tunnel tokens/share state, approvals, resume state, webhook registrations, and live "
-        "session arbitration state). It is not HA or persistent across restart/failover; run it as a single active "
-        "instance or use a durable backend for multi-node deployment."
-    )
+    if config.control_plane.backend == "memory":
+        logger.warning(
+            "standalone_server_durability=process-local: the FastAPI reference server keeps live control-plane state "
+            "in memory only (tunnel tokens/share state, approvals, resume state, webhook registrations, and live "
+            "session arbitration state). It is not HA or persistent across restart/failover; run it as a single active "
+            "instance or use a durable backend for multi-node deployment."
+        )
+    else:
+        logger.info(
+            "standalone_server_durability=sqlite: control-plane state (sessions, tokens, approvals, leases) is "
+            "persisted to %s. Tunnel tokens, share state, and webhook registrations remain in-process memory.",
+            config.control_plane.database_url,
+        )
 
     from provide.terminal.server.authorization import (
         AuthorizationService,
@@ -521,7 +535,7 @@ def create_server_app(
     webhook_manager = WebhookManager()
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     from provide.terminal.bridge.annotation._detector import PatternDetector
-    from provide.terminal.recording import LocalFileRecordingStore
+    from provide.terminal.recording import InMemoryRecordingStore, LocalFileRecordingStore, NullRecordingStore
     from provide.terminal.server.discovery import (
         NodeStatus,
         NoOpDiscoveryProvider,
@@ -530,12 +544,17 @@ def create_server_app(
     from provide.terminal.server.recording import WebhookRecordingStore
 
     # Choose Recording Store
+    recording_store: LocalFileRecordingStore | InMemoryRecordingStore | NullRecordingStore | WebhookRecordingStore
     if config.recording.store_type == "webhook" and config.recording.webhook_url:
         recording_store = WebhookRecordingStore(
             url=config.recording.webhook_url,
             secret=config.recording.webhook_secret,
             timeout_s=config.recording.webhook_timeout_s,
         )
+    elif config.recording.store_type == "memory":
+        recording_store = InMemoryRecordingStore()
+    elif config.recording.store_type == "null":
+        recording_store = NullRecordingStore()
     else:
         recording_store = LocalFileRecordingStore(config.recording.directory)
 
@@ -709,6 +728,7 @@ def create_server_app(
     app.state.uterm_tunnel_tokens = tunnel_tokens
     app.state.uterm_api_key_store = api_key_store
     app.state.uterm_idp = idp
+    app.state.uterm_startup_time = time.time()
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -752,6 +772,7 @@ def create_server_app(
         hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
         dependencies=[Depends(_require_authenticated), Depends(_require_hub_route_authz)],
     )
+    app.include_router(create_health_router())
     app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
     app.include_router(create_approvals_router(), dependencies=[Depends(_require_authenticated)])
@@ -780,7 +801,7 @@ def create_server_app(
             allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         )
 
-    app.add_middleware(SecurityHeadersMiddleware, config=config.security)
+    app.add_middleware(SecurityHeadersMiddleware, config=config.security, auth_mode=config.auth.mode)
     app.add_middleware(TelemetryMiddleware)
 
     frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
