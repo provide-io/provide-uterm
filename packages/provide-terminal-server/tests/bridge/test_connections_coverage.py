@@ -180,22 +180,22 @@ async def test_register_worker_clears_all_hijack_fields() -> None:
 
     from provide.terminal.bridge.models import HijackSession, WorkerTermState
 
-    # Pre-populate with hijack state
+    # Pre-populate with expired hijack state (use monotonic for lease comparison)
     async with hub._lock:
-        now = time.time()
+        now = time.monotonic()
         st = WorkerTermState()
         st.hijack_session = HijackSession(
             hijack_id="test",
             owner="alice",
             acquired_at=now,
-            lease_expires_at=now + 60,
+            lease_expires_at=now - 1,
             last_heartbeat=now,
         )
         st.hijack_owner = MagicMock()
-        st.hijack_owner_expires_at = now + 10
+        st.hijack_owner_expires_at = now - 1
         hub._workers[worker_id] = st
 
-    # Register should clear it
+    # Register should clear expired hijack
     ws = MagicMock()
     result = await hub.register_worker(worker_id, ws)
     assert result is True

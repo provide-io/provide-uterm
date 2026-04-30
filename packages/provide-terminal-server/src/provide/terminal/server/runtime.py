@@ -62,7 +62,7 @@ class HostedSessionRuntime:
         recording: RecordingConfig,
         recording_store: RecordingStore | None = None,
         worker_bearer_token: str | None = None,
-        hub: TermHub,
+        hub: TermHub | None = None,
         detector: PatternDetector | None = None,
         max_buffer_bytes: int = 1_048_576,  # 1MB default
     ) -> None:
@@ -77,7 +77,7 @@ class HostedSessionRuntime:
             self._recording_store = recording_store
         self._worker_bearer_token = worker_bearer_token
         self._connector: SessionConnector | None = None
-        self._on_metric = hub.metric
+        self._on_metric = hub.metric if hub is not None else (lambda *_a, **_kw: None)
         self._task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] | None = None
         self._queue_bytes = 0

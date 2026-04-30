@@ -22,6 +22,7 @@ from provide.terminal.server.auth import Principal
 from provide.terminal.server.models import AuthConfig, SessionDefinition
 from provide.terminal.server.policy import SessionPolicyResolver
 from provide.terminal.server.routes.api import create_api_router
+from provide.terminal.server.routes.health import create_health_router
 from provide.terminal.server.runtime import _cancel_and_wait
 
 _TEST_SIGNING_KEY = "uterm-test-secret-32-byte-minimum-key"
@@ -85,8 +86,9 @@ def test_jwt_mode_requires_auth_for_api_and_ws_routes() -> None:
     app = create_server_app(config)
 
     with TestClient(app) as client:
-        health = client.get("/api/health")
-        assert health.status_code == 401
+        # /api/health is intentionally auth-free; use /api/sessions to test auth
+        sessions = client.get("/api/sessions")
+        assert sessions.status_code == 401
 
         with pytest.raises(WebSocketDisconnect), connect_test_ws(client, "/ws/browser/provide-shell/term"):
             pass
@@ -98,8 +100,8 @@ def test_jwt_mode_rejects_invalid_issuer() -> None:
     app = create_server_app(config)
 
     with TestClient(app) as client:
-        health = client.get("/api/health", headers=_jwt_headers(sub="alice", roles=["admin"], issuer="wrong-issuer"))
-        assert health.status_code == 401
+        sessions = client.get("/api/sessions", headers=_jwt_headers(sub="alice", roles=["admin"], issuer="wrong-issuer"))
+        assert sessions.status_code == 401
 
 
 def test_jwt_mode_ignores_cookie_and_role_header_escalation_for_ws() -> None:
@@ -272,7 +274,7 @@ def test_events_limit_query_rejects_out_of_range() -> None:
 def test_health_returns_503_when_registry_not_initialized() -> None:
     """GET /api/health must return 503 when the registry is absent from app state."""
     bare = FastAPI()
-    bare.include_router(create_api_router())
+    bare.include_router(create_health_router())
     with TestClient(bare) as client:
         r = client.get("/api/health")
         assert r.status_code == 503

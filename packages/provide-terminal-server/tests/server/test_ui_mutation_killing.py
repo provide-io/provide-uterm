@@ -210,19 +210,11 @@ class TestShellMutationKilling:
         assert "<script>alert(1)</script>" not in html
         assert "&lt;script&gt;" in html
 
-    def test_legacy_css_included_when_no_vite(self):
-        """Legacy CSS files included when no vite manifest (mutmut_8)."""
-        html = _shell("T", "/assets", "<body></body>")
-        assert "server-app-foundation.css" in html
-        assert "server-app-layout.css" in html
-        assert "server-app-components.css" in html
-        assert "server-app-views.css" in html
-
-    def test_legacy_css_not_included_when_vite(self):
-        """Legacy CSS NOT included when vite manifest present."""
-        ui._vite_manifest = {"src/main.tsx": {"file": "main.js", "css": []}}
+    def test_no_legacy_css_in_output(self):
+        """Legacy CSS files are never included (vanilla app layer removed)."""
         html = _shell("T", "/assets", "<body></body>")
         assert "server-app-foundation.css" not in html
+        assert "server-app-layout.css" not in html
 
     def test_xterm_cdn_css_included(self):
         """xterm CDN CSS tag included when xterm_cdn provided (mutmut_20)."""

@@ -88,15 +88,11 @@ def _build_control_plane(config: ServerConfig) -> SharedControlPlane:
 
 def _validate_frontend_assets() -> None:
     frontend_root = importlib.resources.files("provide.terminal.server") / "frontend"
-    # Require only the critical entry points — the full file set is validated
-    # at build time by scripts/verify_package_artifacts.py.
-    # Accept either Vite manifest (React app built) or legacy app/boot.js.
+    # Require the Vite manifest (React app) and standalone HTML pages.
     required = ("hijack.html", "terminal.html")
     missing = [name for name in required if not (frontend_root / name).is_file()]
-    has_vite = (frontend_root / ".vite" / "manifest.json").is_file()
-    has_legacy = (frontend_root / "app" / "boot.js").is_file()
-    if not has_vite and not has_legacy:
-        missing.append("app/boot.js or .vite/manifest.json")
+    if not (frontend_root / ".vite" / "manifest.json").is_file():
+        missing.append(".vite/manifest.json")
     if missing:
         joined = ", ".join(missing)
         raise RuntimeError(f"missing required frontend assets: {joined}")

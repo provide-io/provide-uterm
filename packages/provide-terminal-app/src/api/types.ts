@@ -59,3 +59,52 @@ export interface QuickConnectResult {
   session_id: string;
   url: string;
 }
+
+// ── HTTP Inspect types ──────────────────────────────────────────────────────
+
+export interface HttpRequestEntry {
+  type: "http_req";
+  id: string;
+  ts: number;
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body_size: number;
+  body_b64?: string;
+  body_truncated?: boolean;
+  body_binary?: boolean;
+  intercepted?: boolean;
+}
+
+export interface HttpResponseEntry {
+  type: "http_res";
+  id: string;
+  ts: number;
+  status: number;
+  status_text: string;
+  headers: Record<string, string>;
+  body_size: number;
+  body_b64?: string;
+  body_truncated?: boolean;
+  body_binary?: boolean;
+  duration_ms: number;
+}
+
+export interface HttpExchangeEntry {
+  id: string;
+  request: HttpRequestEntry;
+  response: HttpResponseEntry | null;
+  intercepted: boolean;
+  interceptResolved: boolean;
+  interceptAction: string | null;
+}
+
+export interface HttpInspectToggle {
+  type: "http_inspect_toggle";
+  enabled: boolean;
+}
+
+export interface HttpInterceptToggle {
+  type: "http_intercept_toggle";
+  enabled: boolean;
+}

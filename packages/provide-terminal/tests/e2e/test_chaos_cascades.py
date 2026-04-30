@@ -67,8 +67,8 @@ class TestHijackLeaseExpiryDuringConcurrentAcquireRace:
 
 
 class TestWorkerReconnectClearsStaleHijack:
-    async def test_worker_reconnect_clears_stale_hijack(self, live_hub: Any) -> None:
-        """Second worker connection replaces the first; old hijack becomes invalid."""
+    async def test_worker_reconnect_preserves_valid_hijack(self, live_hub: Any) -> None:
+        """Since 590c90e, non-expired hijacks survive worker WS reconnect."""
         hub, base_url = live_hub
 
         async with (
@@ -86,20 +86,13 @@ class TestWorkerReconnectClearsStaleHijack:
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/reconn1/term")) as w2:
                 await w2.recv()  # snapshot_req
 
-                # Old hijack_id should fail heartbeat
+                # Non-expired hijack should survive reconnect (preserved since 590c90e)
                 hb = await http.post(
                     f"/worker/reconn1/hijack/{hijack_id}/heartbeat",
                     json={"lease_s": 60},
                 )
-                # Should be 404 (session cleared when worker was replaced)
-                assert hb.status_code == 404, (
-                    f"Old hijack heartbeat should fail after worker replacement, got {hb.status_code}: {hb.text}"
-                )
-
-                # New acquire against W2 succeeds
-                r2 = await http.post("/worker/reconn1/hijack/acquire", json={"owner": "new-owner", "lease_s": 60})
-                assert r2.status_code == 200, (
-                    f"New acquire after worker replacement should succeed, got {r2.status_code}: {r2.text}"
+                assert hb.status_code == 200, (
+                    f"Valid hijack should survive worker reconnect, got {hb.status_code}: {hb.text}"
                 )
 
 

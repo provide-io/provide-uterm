@@ -204,7 +204,7 @@ async def test_clamp_lease_normal() -> None:
 
 
 async def test_clamp_lease_maximum() -> None:
-    assert TermHub.clamp_lease(9999) == 3600
+    assert TermHub.clamp_lease(99999) == 14400
 
 
 # ---------------------------------------------------------------------------

@@ -59,12 +59,13 @@ class _CapturingTracer:
 def _capturing_tracer():  # type: ignore[no-untyped-def]
     """Context manager that installs a _CapturingTracer for the duration."""
     import provide.terminal.bridge.routes.websockets as _ws_mod
-    import provide.terminal.server.routes.api as _api_mod
+    import provide.terminal.server.routes.sessions as _sessions_mod
+    import provide.terminal.server.routes.tunnels as _tunnels_mod
 
     ct = _CapturingTracer()
-    # Patch get_tracer in both locations where it is called.
     with (
-        patch.object(_api_mod, "get_tracer", return_value=ct),
+        patch.object(_sessions_mod, "get_tracer", return_value=ct),
+        patch.object(_tunnels_mod, "get_tracer", return_value=ct),
         patch.object(_ws_mod, "get_tracer", return_value=ct),
     ):
         yield ct

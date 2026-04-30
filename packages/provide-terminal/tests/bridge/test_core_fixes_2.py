@@ -321,7 +321,7 @@ class TestDisconnectWorkerCloseException:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
-        with patch("provide.terminal.bridge.hub.core.logger") as mock_logger:
+        with patch("provide.terminal.bridge.hub.messaging.logger") as mock_logger:
             await hub.disconnect_worker("w1")
 
         mock_logger.debug.assert_called_once()

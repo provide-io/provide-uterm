@@ -143,7 +143,7 @@ class TestExtendHijackLeaseNotFound:
     async def test_extend_lease_unknown_worker_returns_none(self) -> None:
         """Line 240: worker not found → return None."""
         hub = _make_hub()
-        result = await hub.extend_hijack_lease("nonexistent", "hid1", 60, time.monotonic())
+        result = await hub.extend_hijack_lease("nonexistent", "hid1", "owner", 60, time.monotonic())
         assert result is None
 
     async def test_extend_lease_wrong_hijack_id_returns_none(self) -> None:
@@ -161,7 +161,7 @@ class TestExtendHijackLeaseNotFound:
                 last_heartbeat=now,
             )
 
-        result = await hub.extend_hijack_lease("w1", "wrong-hid", 60, now)
+        result = await hub.extend_hijack_lease("w1", "wrong-hid", "tester", 60, now)
         assert result is None
 
 
