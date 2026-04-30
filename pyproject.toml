@@ -211,7 +211,17 @@ max_modules = "B"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = ["src/provide/terminal/pty/connector.py"]
+paths_to_mutate = [
+    "src/provide/terminal/pty/connector.py",
+    "src/provide/terminal/control_channel.py",
+    "src/provide/terminal/control_channel_builders.py",
+    "src/provide/terminal/control_channel_patterns.py",
+    "src/provide/terminal/auth.py",
+    "src/provide/terminal/detection/detector.py",
+    "src/provide/terminal/detection/engine.py",
+    "src/provide/terminal/io.py",
+    "src/provide/terminal/recording.py",
+]
 tests_dir = [
     "packages/provide-terminal/tests/shell/test_shell_render.py",
     "packages/provide-terminal/tests/deckmux/test_presence.py",
@@ -230,6 +240,26 @@ tests_dir = [
     "packages/provide-terminal-platform/tests/pty/test_connector_io.py",
     "packages/provide-terminal-platform/tests/pty/test_connector_stop.py",
     "packages/provide-terminal-platform/tests/pty/test_connector_child.py",
+    "packages/provide-terminal/tests/terminal/test_control_channel_codec.py",
+    "packages/provide-terminal/tests/terminal/test_control_channel_coverage.py",
+    "packages/provide-terminal/tests/test_control_channel_builders.py",
+    "packages/provide-terminal/tests/test_control_channel_ordering.py",
+    "packages/provide-terminal/tests/test_control_channel_patterns.py",
+    "packages/provide-terminal/tests/test_auth.py",
+    "packages/provide-terminal/tests/detection/test_detector.py",
+    "packages/provide-terminal/tests/detection/test_engine.py",
+    "packages/provide-terminal/tests/detection/test_extractor.py",
+    "packages/provide-terminal/tests/detection/test_extractor_validate.py",
+    "packages/provide-terminal/tests/detection/test_integration.py",
+    "packages/provide-terminal/tests/detection/test_loader.py",
+    "packages/provide-terminal/tests/detection/test_models.py",
+    "packages/provide-terminal/tests/detection/test_rules.py",
+    "packages/provide-terminal/tests/detection/test_saver.py",
+    "packages/provide-terminal/tests/detection/test_buffer.py",
+    "packages/provide-terminal/tests/test_io.py",
+    "packages/provide-terminal/tests/test_io_mutations.py",
+    "packages/provide-terminal/tests/test_io_mutations_2.py",
+    "packages/provide-terminal/tests/terminal/test_io.py",
 ]
 also_copy = [
     "src",

@@ -66,20 +66,84 @@ def sid(app_client: TestClient) -> str:
 def test_health_ready(app_client: TestClient) -> None:
     r = app_client.get("/api/health")
     assert r.status_code == 200
-    assert r.json()["ok"] is True
+    data = r.json()
+    assert data["ok"] is True
+    assert data["status"] == "ok"
+    assert data["service"] == "uterm-server"
+    assert isinstance(data["version"], str)
+    assert isinstance(data["uptime_s"], (int, float))
+    assert data["uptime_s"] >= 0
+    assert isinstance(data["active_sessions"], int)
+    assert data["active_sessions"] >= 0
+    assert data["control_plane_backend"] in {"memory", "sqlite"}
 
 
 def test_health_not_ready_without_registry() -> None:
     from fastapi import FastAPI
 
+    from provide.terminal.server.routes.health import create_health_router
+
     bare = FastAPI()
     with TestClient(bare) as client:
-        from provide.terminal.server.routes.api import create_api_router
-
-        bare.include_router(create_api_router())
+        bare.include_router(create_health_router())
         r = client.get("/api/health")
         assert r.status_code == 503
         assert r.json()["ok"] is False
+        assert r.json()["status"] == "unavailable"
+
+
+def test_healthz(app_client: TestClient) -> None:
+    r = app_client.get("/healthz")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+
+
+def test_healthz_no_auth_required() -> None:
+    """``/healthz`` must work even without any auth setup."""
+    from fastapi import FastAPI
+
+    from provide.terminal.server.routes.health import create_health_router
+
+    bare = FastAPI()
+    bare.include_router(create_health_router())
+    with TestClient(bare) as client:
+        r = client.get("/healthz")
+        assert r.status_code == 200
+        assert r.json() == {"status": "ok"}
+
+
+def test_health_no_auth_required() -> None:
+    """``/api/health`` must be reachable without authentication."""
+    config = default_server_config()
+    config.auth.mode = "dev"
+    app = create_server_app(config)
+    # Wipe auth state to prove health doesn't depend on it
+    with TestClient(app) as client:
+        r = client.get("/api/health")
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+
+def test_health_uptime_increases(app_client: TestClient) -> None:
+    """Uptime should be a positive number after the app has been running."""
+    r = app_client.get("/api/health")
+    assert r.status_code == 200
+    assert r.json()["uptime_s"] >= 0
+
+
+def test_health_shows_startup_time_zero_when_missing() -> None:
+    """When uterm_startup_time is not set, uptime_s defaults to 0."""
+    from fastapi import FastAPI
+
+    from provide.terminal.server.routes.health import create_health_router
+
+    bare = FastAPI()
+    bare.state.uterm_registry = object()  # type: ignore[assignment]
+    bare.include_router(create_health_router())
+    with TestClient(bare) as client:
+        r = client.get("/api/health")
+        assert r.status_code == 200
+        assert r.json()["uptime_s"] == 0.0
 
 
 def test_metrics_returns_dict(app_client: TestClient) -> None:

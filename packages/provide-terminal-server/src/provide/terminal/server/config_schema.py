@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from provide.terminal.bridge.contracts import InputMode, Visibility
+from provide.terminal.bridge.contracts import InputMode, Visibility  # noqa: TC001
 from provide.terminal.defaults import TerminalDefaults
 
 if TYPE_CHECKING:
@@ -58,6 +58,7 @@ class AuthConfig(ServerBaseModel):
     worker_bearer_token: str | None = None
     api_keys_enabled: bool = False
     header_mode_acknowledged: bool = False
+    require_jwt_in_production: bool = False
 
     identity_provider: Literal["local", "webhook"] = "local"
     delegate_roles: bool = True
@@ -98,7 +99,7 @@ class RecordingConfig(ServerBaseModel):
     max_bytes: int = 0  # 0 = unlimited
     control_channel_mode: Literal["exclude", "wire"] = "exclude"
 
-    store_type: Literal["local", "webhook"] = "local"
+    store_type: Literal["local", "memory", "null", "webhook"] = "local"
     webhook_url: str | None = None
     webhook_secret: str | None = None
     webhook_timeout_s: float = 2.0
@@ -345,6 +346,7 @@ class UtermServerConfig(ServerBaseModel):
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300
+
 
 SessionDefinition.model_rebuild()
 UtermServerConfig.model_rebuild()
