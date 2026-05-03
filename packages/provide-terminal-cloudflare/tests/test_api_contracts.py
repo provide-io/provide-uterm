@@ -26,7 +26,9 @@ from typing import get_type_hints
 
 from provide.terminal.cloudflare.api.http_routes import route_http
 from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.contracts import (
+from provide.terminal.cloudflare.contracts import SessionStatusItem
+
+from provide.terminal.bridge.contracts import (
     HijackAcquireResponse,
     HijackEventsResponse,
     HijackHeartbeatResponse,
@@ -34,7 +36,6 @@ from provide.terminal.cloudflare.contracts import (
     HijackSendResponse,
     HijackSnapshotResponse,
     HijackStepResponse,
-    SessionStatusItem,
 )
 
 # ---------------------------------------------------------------------------
@@ -80,6 +81,11 @@ class _Runtime:
 
     async def browser_role_for_request(self, request: object) -> str:
         return self._role
+
+    async def resolve_principal(self, request: object) -> tuple[object | None, object | None]:
+        owner = self.hijack.session.owner if self.hijack.session is not None else "test-admin"
+        principal = SimpleNamespace(subject_id=owner)
+        return principal, None
 
     def persist_lease(self, session: object) -> None:
         self._persisted.append(session)
