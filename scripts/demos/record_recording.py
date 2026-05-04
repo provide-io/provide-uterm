@@ -156,7 +156,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     # Run a sequence that tells a story — each command is a step in a deployment session.
     _cmd("clear\r", 0.5)
-    _cmd("echo '=== provide-terminal: session recording active ==='\r")
+    _cmd("echo '=== provide-uterm: session recording active ==='\r")
     _cmd("date\r")
     _cmd("echo 'Recording all terminal I/O to JSONL...'\r")
     _cmd("ls -la /tmp | head -6\r", 0.9)

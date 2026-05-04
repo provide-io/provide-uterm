@@ -36,8 +36,8 @@ import urllib.request
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm-platform/src"))
 
 import uvicorn  # noqa: E402
 from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
@@ -191,10 +191,10 @@ def main() -> None:
     import fcntl
     import termios
 
-    dylib = _REPO_ROOT / "packages/provide-terminal-platform/native/capture/libuterm_capture.dylib"
+    dylib = _REPO_ROOT / "packages/provide-uterm-platform/native/capture/libuterm_capture.dylib"
     if not dylib.exists():
         print(f"\n  ✗ dylib not found: {dylib}")
-        print("  Build it first: make -C packages/provide-terminal-platform/native/capture/")
+        print("  Build it first: make -C packages/provide-uterm-platform/native/capture/")
         sys.exit(1)
 
     binary, argv, display_name = _find_injectable_binary()

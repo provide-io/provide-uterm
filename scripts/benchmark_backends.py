@@ -36,7 +36,7 @@ from provide.terminal.control_channel import (
 # ── constants ────────────────────────────────────────────────────────────────
 
 _CF_PORT = 8990
-_CF_PACKAGE = Path(__file__).resolve().parent.parent / "packages" / "provide-terminal-cloudflare"
+_CF_PACKAGE = Path(__file__).resolve().parent.parent / "packages" / "provide-uterm-cloudflare"
 
 _N_HANDSHAKES = 100
 _N_HIJACK_CYCLES = 500

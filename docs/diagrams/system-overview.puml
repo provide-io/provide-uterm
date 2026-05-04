@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml system-overview
-title provide-terminal — System Overview & Extensibility Hooks
+title provide-uterm — System Overview & Extensibility Hooks
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333
@@ -26,35 +26,35 @@ rectangle "External External Management Tier" as FLEET #fff7ed {
 }
 
 ' --- Core package ---
-package "provide-terminal (core)" as CORE {
+package "provide-uterm (core)" as CORE {
   [ansi / screen / emulator\nprotocols / detection\ndeckmux / shell / render / replay] as CORE_C
 }
 
 ' --- Server package ---
-package "provide-terminal-server" as SRV {
+package "provide-uterm-server" as SRV {
   [bridge hub / FastAPI / CLI\ntunnel / gateway] as SRV_C
 }
 
 ' --- Client package ---
-package "provide-terminal-client" as CLIENT {
+package "provide-uterm-client" as CLIENT {
   [HTTP/WS client\ntransports / AI/MCP] as CLIENT_C
 }
 
 ' --- Platform package ---
-package "provide-terminal-platform" as PLAT {
+package "provide-uterm-platform" as PLAT {
   [PTY / PAM / capture\nmanager] as PLAT_C
 }
 
 ' --- Edge packages ---
-package "provide-terminal-cloudflare" as CF {
+package "provide-uterm-cloudflare" as CF {
   [CF Worker adapter\nDurable Objects / KV] as CF_C
 }
 
-package "provide-terminal-frontend" as FE {
+package "provide-uterm-frontend" as FE {
   [Browser UI\n(React / Vite)] as FE_C
 }
 
-package "provide-terminal-app" as APP {
+package "provide-uterm-app" as APP {
   [App shell] as APP_C
 }
 

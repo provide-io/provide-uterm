@@ -2,18 +2,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# provide-terminal — FastAPI reference server
+# provide-uterm — FastAPI reference server
 #
 # Build (from repo root):
-#   docker build -f docker/Dockerfile.server -t provide-terminal-server .
+#   docker build -f docker/Dockerfile.server -t provide-uterm-server .
 #
 # Run (dev mode, no pre-configured sessions):
-#   docker run --rm -p 27780:27780 provide-terminal-server
+#   docker run --rm -p 27780:27780 provide-uterm-server
 #
 # Run with a custom config:
 #   docker run --rm -p 27780:27780 \
 #     -v /path/to/my.toml:/config/server.toml:ro \
-#     provide-terminal-server
+#     provide-uterm-server
 #
 # The server binds on 0.0.0.0:27780 inside the container.
 # Dashboard: http://localhost:27780/app/
@@ -34,11 +34,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 
 # Copy core and server packages
-COPY packages/provide-terminal/ packages/provide-terminal/
-COPY packages/provide-terminal-server/ packages/provide-terminal-server/
+COPY packages/provide-uterm/ packages/provide-uterm/
+COPY packages/provide-uterm-server/ packages/provide-uterm-server/
 
 # Install the server with all extras
-RUN uv pip install --system "./packages/provide-terminal[emulator]" "./packages/provide-terminal-server[all]"
+RUN uv pip install --system "./packages/provide-uterm[emulator]" "./packages/provide-uterm-server[all]"
 
 # Default dev config: no sessions, no JWT, open access.
 # Override via: -v /path/to/config.toml:/config/server.toml:ro

@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: provide-terminal
-Source: https://github.com/provide-io/provide-terminal
+Upstream-Name: provide-uterm
+Source: https://github.com/provide-io/provide-uterm
 
 Files: *
 Copyright: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
@@ -10,6 +10,6 @@ Files: .tmp-*/* test-results/* .playwright-mcp/* .uterm-recordings*/**
 Copyright: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 License: AGPL-3.0-or-later
 
-Files: packages/provide-terminal-cloudflare/python_modules/**
+Files: packages/provide-uterm-cloudflare/python_modules/**
 Copyright: Their respective upstream authors
 License: Apache-2.0 OR MIT

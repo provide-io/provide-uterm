@@ -1,6 +1,6 @@
 # Annotations
 
-Label terminal sessions with structured metadata. provide-terminal automatically detects 20
+Label terminal sessions with structured metadata. provide-uterm automatically detects 20
 security and lifecycle patterns — privilege escalation, service restarts, config changes, and
 more — and annotates them without any manual tagging. You can also post your own labels via
 the API for custom audit markers.

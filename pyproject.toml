@@ -4,13 +4,13 @@
 #
 
 [project]
-name = "provide-terminal-workspace"
+name = "provide-uterm-workspace"
 version = "0.4.0"
 requires-python = ">=3.11"
 dependencies = [
-    "provide-terminal[emulator,ssh]>=0.4.0",
-    "provide-terminal-server[all]>=0.4.0",
-    "provide-terminal-platform[all]>=0.4.0",
+    "provide-uterm[emulator,ssh]>=0.4.0",
+    "provide-uterm-server[all]>=0.4.0",
+    "provide-uterm-platform[all]>=0.4.0",
     "provide-telemetry>=0.3",
 ]
 
@@ -55,13 +55,13 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/provide-terminal", "packages/provide-terminal-cloudflare", "packages/provide-terminal-platform", "packages/provide-terminal-server", "packages/provide-terminal-client"]
+members = ["packages/provide-uterm", "packages/provide-uterm-cloudflare", "packages/provide-uterm-platform", "packages/provide-uterm-server", "packages/provide-uterm-client"]
 [tool.uv.sources]
-provide-terminal = { workspace = true }
-provide-terminal-cloudflare = { workspace = true }
-provide-terminal-platform = { workspace = true }
-provide-terminal-server = { workspace = true }
-provide-terminal-client = { workspace = true }
+provide-uterm = { workspace = true }
+provide-uterm-cloudflare = { workspace = true }
+provide-uterm-platform = { workspace = true }
+provide-uterm-server = { workspace = true }
+provide-uterm-client = { workspace = true }
 
 [tool.ruff]
 line-length = 120
@@ -70,7 +70,7 @@ exclude = [
     ".git",
     ".venv",
     "__pycache__",
-    "packages/provide-terminal-cloudflare/python_modules",
+    "packages/provide-uterm-cloudflare/python_modules",
 ]
 
 [tool.ruff.lint]
@@ -123,7 +123,7 @@ follow_imports = "normal"
 ignore_missing_imports = false
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["packages/provide-terminal/src", "packages/provide-terminal-server/src", "packages/provide-terminal-platform/src", "packages/provide-terminal-client/src"]
+mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-server/src", "packages/provide-uterm-platform/src", "packages/provide-uterm-client/src"]
 
 [[tool.mypy.overrides]]
 module = ["provide.telemetry", "provide.telemetry.*", "provide.terminal.deckmux", "provide.terminal.deckmux.*", "structlog", "structlog.*"]
@@ -149,19 +149,19 @@ invalid-argument-type = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-terminal/src/provide/terminal/frontend/assets/*.js,packages/provide-terminal-server/src/provide/terminal/server/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-terminal-cloudflare/python_modules/structlog/*,mutants"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-uterm/src/provide/terminal/frontend/assets/*.js,packages/provide-uterm-server/src/provide/terminal/server/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,mutants"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable"
 
 [tool.bandit]
 exclude_dirs = [
-    "packages/provide-terminal/tests",
-    "packages/provide-terminal-cloudflare/python_modules",
-    "packages/provide-terminal-cloudflare/node_modules",
+    "packages/provide-uterm/tests",
+    "packages/provide-uterm-cloudflare/python_modules",
+    "packages/provide-uterm-cloudflare/node_modules",
 ]
 
 [tool.vulture]
 min_confidence = 80
-paths = ["packages/provide-terminal/src", "packages/provide-terminal/tests"]
+paths = ["packages/provide-uterm/src", "packages/provide-uterm/tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -174,8 +174,8 @@ filterwarnings = [
     "ignore:websockets.legacy is deprecated:DeprecationWarning",
 ]
 testpaths = [
-    "packages/provide-terminal/tests",
-    "packages/provide-terminal-cloudflare/tests",
+    "packages/provide-uterm/tests",
+    "packages/provide-uterm-cloudflare/tests",
 ]
 norecursedirs = [
     ".git",
@@ -183,7 +183,7 @@ norecursedirs = [
     "node_modules",
     "mutants",
     ".hypothesis",
-    "packages/provide-terminal-cloudflare/python_modules",
+    "packages/provide-uterm-cloudflare/python_modules",
 ]
 markers = [
     "unit: fast unit tests",
@@ -223,57 +223,57 @@ paths_to_mutate = [
     "src/provide/terminal/recording.py",
 ]
 tests_dir = [
-    "packages/provide-terminal/tests/shell/test_shell_render.py",
-    "packages/provide-terminal/tests/deckmux/test_presence.py",
-    "packages/provide-terminal/tests/deckmux/test_hub_mixin.py",
-    "packages/provide-terminal/tests/deckmux/test_transfer.py",
-    "packages/provide-terminal/tests/deckmux/test_protocol.py",
-    "packages/provide-terminal/tests/deckmux/test_names.py",
-    "packages/provide-terminal/tests/deckmux/test_edge.py",
-    "packages/provide-terminal-platform/tests/pty/test_validate.py",
-    "packages/provide-terminal-platform/tests/pty/test_uid_map.py",
-    "packages/provide-terminal-platform/tests/pty/test_capture.py",
-    "packages/provide-terminal-platform/tests/pty/test_capture_connector.py",
-    "packages/provide-terminal-platform/tests/pty/test_pam_listener.py",
-    "packages/provide-terminal-platform/tests/pty/test_pam.py",
-    "packages/provide-terminal-platform/tests/pty/test_connector.py",
-    "packages/provide-terminal-platform/tests/pty/test_connector_io.py",
-    "packages/provide-terminal-platform/tests/pty/test_connector_stop.py",
-    "packages/provide-terminal-platform/tests/pty/test_connector_child.py",
-    "packages/provide-terminal/tests/terminal/test_control_channel_codec.py",
-    "packages/provide-terminal/tests/terminal/test_control_channel_coverage.py",
-    "packages/provide-terminal/tests/test_control_channel_builders.py",
-    "packages/provide-terminal/tests/test_control_channel_ordering.py",
-    "packages/provide-terminal/tests/test_control_channel_patterns.py",
-    "packages/provide-terminal/tests/test_auth.py",
-    "packages/provide-terminal/tests/detection/test_detector.py",
-    "packages/provide-terminal/tests/detection/test_engine.py",
-    "packages/provide-terminal/tests/detection/test_extractor.py",
-    "packages/provide-terminal/tests/detection/test_extractor_validate.py",
-    "packages/provide-terminal/tests/detection/test_integration.py",
-    "packages/provide-terminal/tests/detection/test_loader.py",
-    "packages/provide-terminal/tests/detection/test_models.py",
-    "packages/provide-terminal/tests/detection/test_rules.py",
-    "packages/provide-terminal/tests/detection/test_saver.py",
-    "packages/provide-terminal/tests/detection/test_buffer.py",
-    "packages/provide-terminal/tests/test_io.py",
-    "packages/provide-terminal/tests/test_io_mutations.py",
-    "packages/provide-terminal/tests/test_io_mutations_2.py",
-    "packages/provide-terminal/tests/terminal/test_io.py",
+    "packages/provide-uterm/tests/shell/test_shell_render.py",
+    "packages/provide-uterm/tests/deckmux/test_presence.py",
+    "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",
+    "packages/provide-uterm/tests/deckmux/test_transfer.py",
+    "packages/provide-uterm/tests/deckmux/test_protocol.py",
+    "packages/provide-uterm/tests/deckmux/test_names.py",
+    "packages/provide-uterm/tests/deckmux/test_edge.py",
+    "packages/provide-uterm-platform/tests/pty/test_validate.py",
+    "packages/provide-uterm-platform/tests/pty/test_uid_map.py",
+    "packages/provide-uterm-platform/tests/pty/test_capture.py",
+    "packages/provide-uterm-platform/tests/pty/test_capture_connector.py",
+    "packages/provide-uterm-platform/tests/pty/test_pam_listener.py",
+    "packages/provide-uterm-platform/tests/pty/test_pam.py",
+    "packages/provide-uterm-platform/tests/pty/test_connector.py",
+    "packages/provide-uterm-platform/tests/pty/test_connector_io.py",
+    "packages/provide-uterm-platform/tests/pty/test_connector_stop.py",
+    "packages/provide-uterm-platform/tests/pty/test_connector_child.py",
+    "packages/provide-uterm/tests/terminal/test_control_channel_codec.py",
+    "packages/provide-uterm/tests/terminal/test_control_channel_coverage.py",
+    "packages/provide-uterm/tests/test_control_channel_builders.py",
+    "packages/provide-uterm/tests/test_control_channel_ordering.py",
+    "packages/provide-uterm/tests/test_control_channel_patterns.py",
+    "packages/provide-uterm/tests/test_auth.py",
+    "packages/provide-uterm/tests/detection/test_detector.py",
+    "packages/provide-uterm/tests/detection/test_engine.py",
+    "packages/provide-uterm/tests/detection/test_extractor.py",
+    "packages/provide-uterm/tests/detection/test_extractor_validate.py",
+    "packages/provide-uterm/tests/detection/test_integration.py",
+    "packages/provide-uterm/tests/detection/test_loader.py",
+    "packages/provide-uterm/tests/detection/test_models.py",
+    "packages/provide-uterm/tests/detection/test_rules.py",
+    "packages/provide-uterm/tests/detection/test_saver.py",
+    "packages/provide-uterm/tests/detection/test_buffer.py",
+    "packages/provide-uterm/tests/test_io.py",
+    "packages/provide-uterm/tests/test_io_mutations.py",
+    "packages/provide-uterm/tests/test_io_mutations_2.py",
+    "packages/provide-uterm/tests/terminal/test_io.py",
 ]
 also_copy = [
     "src",
-    "packages/provide-terminal/src",
-    "packages/provide-terminal/tests",
-    "packages/provide-terminal-platform/src",
-    "packages/provide-terminal-platform/tests/pty",
+    "packages/provide-uterm/src",
+    "packages/provide-uterm/tests",
+    "packages/provide-uterm-platform/src",
+    "packages/provide-uterm-platform/tests/pty",
     "conftest.py",
 ]
 pytest_add_cli_args = [
     "--timeout=30",
     "-p", "no:randomly",
     "-p", "no:hypothesis",
-    "--ignore=packages/provide-terminal-platform/tests/pty/test_ld_preload_capture.py",
-    "--ignore=packages/provide-terminal-platform/tests/pty/e2e/",
+    "--ignore=packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py",
+    "--ignore=packages/provide-uterm-platform/tests/pty/e2e/",
 ]
 debug = true

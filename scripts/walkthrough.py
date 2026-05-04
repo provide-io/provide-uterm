@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""End-to-end walkthrough of the provide-terminal hijack lifecycle.
+"""End-to-end walkthrough of the provide-uterm hijack lifecycle.
 
 Starts a real server with a shell session, then drives the full REST API
 through session discovery, open-mode input, hijack acquire/send/release,
@@ -365,7 +365,7 @@ async def run_walkthrough(*, port: int = 0, open_browser: bool = True) -> None:
         port = _find_free_port()
 
     print(f"{'=' * 60}")
-    print("  provide-terminal walkthrough")
+    print("  provide-uterm walkthrough")
     print(f"  Server: http://127.0.0.1:{port}")
     print(f"{'=' * 60}")
     print()
@@ -408,7 +408,7 @@ async def run_walkthrough(*, port: int = 0, open_browser: bool = True) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="walkthrough",
-        description="End-to-end walkthrough of the provide-terminal hijack lifecycle",
+        description="End-to-end walkthrough of the provide-uterm hijack lifecycle",
     )
     parser.add_argument("--port", type=int, default=0, help="Server port (0 = random free port)")
     parser.add_argument(

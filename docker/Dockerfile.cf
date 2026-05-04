@@ -2,18 +2,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# provide-terminal-cloudflare — pywrangler dev server
+# provide-uterm-cloudflare — pywrangler dev server
 #
 # Build (from repo root):
-#   docker build -f docker/Dockerfile.cf -t provide-terminal-cf .
+#   docker build -f docker/Dockerfile.cf -t provide-uterm-cf .
 #
 # Run (dev mode, AUTH_MODE=dev):
-#   docker run --rm -p 27788:27788 provide-terminal-cf
+#   docker run --rm -p 27788:27788 provide-uterm-cf
 #
 # Run with a .dev.vars override:
 #   docker run --rm -p 27788:27788 \
-#     -v /path/to/.dev.vars:/app/packages/provide-terminal-cloudflare/.dev.vars:ro \
-#     provide-terminal-cf
+#     -v /path/to/.dev.vars:/app/packages/provide-uterm-cloudflare/.dev.vars:ro \
+#     provide-uterm-cf
 #
 # The worker dev server binds on 0.0.0.0:27788 inside the container.
 # Health:   http://localhost:27788/api/health
@@ -41,18 +41,18 @@ WORKDIR /app
 
 # Copy full workspace so uv can resolve the lockfile
 COPY pyproject.toml uv.lock README.md ./
-COPY packages/provide-terminal/ packages/provide-terminal/
-COPY packages/provide-terminal-cloudflare/ packages/provide-terminal-cloudflare/
+COPY packages/provide-uterm/ packages/provide-uterm/
+COPY packages/provide-uterm-cloudflare/ packages/provide-uterm-cloudflare/
 
-WORKDIR /app/packages/provide-terminal-cloudflare
+WORKDIR /app/packages/provide-uterm-cloudflare
 
 # Install CF package dependencies including dev extras (workers-py provides pywrangler)
 RUN uv sync --extra dev
 
 # Populate the CF package's static dir with compiled frontend assets so the
-# worker can serve the UI without needing the provide-terminal package at runtime.
-RUN cp -r /app/packages/provide-terminal/src/provide/terminal/frontend/. \
-        src/provide_terminal_cloudflare/ui/static/
+# worker can serve the UI without needing the provide-uterm package at runtime.
+RUN cp -r /app/packages/provide-uterm/src/provide/terminal/frontend/. \
+        src/provide_uterm_cloudflare/ui/static/
 
 EXPOSE 27788
 

@@ -26,18 +26,18 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("provide-terminal + provide-terminal-cloudflare (root pytest)", ()),
-    ("provide-terminal-server", ("packages/provide-terminal-server/tests/",)),
-    ("provide-terminal-client", ("packages/provide-terminal-client/tests/",)),
+    ("provide-uterm + provide-uterm-cloudflare (root pytest)", ()),
+    ("provide-uterm-server", ("packages/provide-uterm-server/tests/",)),
+    ("provide-uterm-client", ("packages/provide-uterm-client/tests/",)),
     (
-        "provide-terminal-platform/manager",
-        ("packages/provide-terminal-platform/tests/manager/",),
+        "provide-uterm-platform/manager",
+        ("packages/provide-uterm-platform/tests/manager/",),
     ),
     (
-        "provide-terminal-platform/pty (no PAM/root)",
+        "provide-uterm-platform/pty (no PAM/root)",
         (
-            "packages/provide-terminal-platform/tests/pty/",
-            "--ignore=packages/provide-terminal-platform/tests/pty/e2e",
+            "packages/provide-uterm-platform/tests/pty/",
+            "--ignore=packages/provide-uterm-platform/tests/pty/e2e",
             "--no-cov",
             "--timeout=10",
             "-o",

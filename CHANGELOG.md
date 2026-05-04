@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to provide-terminal are documented in this file.
+All notable changes to provide-uterm are documented in this file.
 
 ## [0.5.0-dev] — 2026-04-20
 
@@ -16,9 +16,9 @@ All notable changes to provide-terminal are documented in this file.
 
 ### Architecture
 
-- **Monorepo split** into 7 focused packages: `provide-terminal` (core),
-  `provide-terminal-server`, `provide-terminal-client`, `provide-terminal-platform`,
-  `provide-terminal-cloudflare`, `provide-terminal-frontend`, `provide-terminal-app`.
+- **Monorepo split** into 7 focused packages: `provide-uterm` (core),
+  `provide-uterm-server`, `provide-uterm-client`, `provide-uterm-platform`,
+  `provide-uterm-cloudflare`, `provide-uterm-frontend`, `provide-uterm-app`.
 - Namespace packaging: all packages share `provide.terminal.*` with symlinked
   source directories for development and independent PyPI distribution.
 
@@ -72,8 +72,8 @@ All notable changes to provide-terminal are documented in this file.
 
 ### Testing
 
-- **100% branch + line coverage** enforced across `provide-terminal`,
-  `provide-terminal-server`, and `provide-terminal-cloudflare`.
+- **100% branch + line coverage** enforced across `provide-uterm`,
+  `provide-uterm-server`, and `provide-uterm-cloudflare`.
 - **100% mutation kill rate** via mutmut with `--changed-only` gate.
 - **7,500+ tests** across the monorepo (unit, integration, E2E, Playwright).
 - **Test ordering stability** — playwright tests always run last regardless

@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document describes the testing strategies and workflows used in provide-terminal.
+This document describes the testing strategies and workflows used in provide-uterm.
 
 ## Running Tests
 
@@ -13,11 +13,11 @@ uv run pytest
 ```
 
 > **Note:** The root suite includes Cloudflare Worker tests. The CF vendor tree
-> (`packages/provide-terminal-cloudflare/python_modules/`) is `.gitignore`d and
+> (`packages/provide-uterm-cloudflare/python_modules/`) is `.gitignore`d and
 > not present on a clean checkout — the vendor guard test skips automatically in
 > that case. To run the full CF suite including the vendor guard, initialise the
 > CF working directory first (`pywrangler sync` from
-> `packages/provide-terminal-cloudflare/`).
+> `packages/provide-uterm-cloudflare/`).
 
 Or use the pytest gate script (recommended for local development):
 
@@ -169,7 +169,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) includes:
 
 ### Example: Triggering Memory Regression Manually
 
-1. Navigate to: https://github.com/provide-io/provide-terminal/actions/workflows/ci.yml
+1. Navigate to: https://github.com/provide-io/provide-uterm/actions/workflows/ci.yml
 2. Click "Run workflow"
 3. Select branch
 4. Choose "memory-regression" from job selector (if available)

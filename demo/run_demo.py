@@ -6,7 +6,7 @@
 """
 Interactive terminal demo — multiple headed browsers, real telnet sessions.
 
-Starts a provide-terminal FastAPI server with three sessions backed by real
+Starts a provide-uterm FastAPI server with three sessions backed by real
 telnet echo servers.  Opens five headed Playwright browser windows:
   - three watching telnet-alpha → proves SSE fanout
   - one watching shell-beta     → proves isolation
@@ -42,9 +42,9 @@ from playwright.async_api import Page, async_playwright
 
 REPO = Path(__file__).resolve().parents[1]
 for _p in [
-    REPO / "packages/provide-terminal/src",
-    REPO / "packages/provide-terminal/tests",
-    REPO / "packages/provide-terminal/src",
+    REPO / "packages/provide-uterm/src",
+    REPO / "packages/provide-uterm/tests",
+    REPO / "packages/provide-uterm/src",
 ]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
@@ -169,7 +169,7 @@ async def drive_demo(
         print("\n[demo] Scenario 1 — interactive input in browser 1, all 3 alpha browsers echo")
         for text in [
             "hello from the terminal\r",
-            "provide-terminal SSE fanout works!\r",
+            "provide-uterm SSE fanout works!\r",
             "echo three browsers see this\r",
         ]:
             await _type(page_a1, text)

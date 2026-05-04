@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provide-uterm-client"
+dynamic = ["version"]
+description = "Client libraries, transports, and AI/MCP integration for provide-uterm"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+dependencies = ["provide-uterm>=0.4.0"]
+
+[project.optional-dependencies]
+http = ["httpx>=0.27"]
+websocket = ["websockets>=16.0"]
+ssh = ["asyncssh>=2.22.0"]
+mcp = ["fastmcp>=2.0"]
+all = ["httpx>=0.27", "websockets>=16.0", "asyncssh>=2.22.0", "fastmcp>=2.0"]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.3",
+    "pytest-cov>=7.0",
+    "pytest-timeout>=2.4.0",
+    "mypy>=1.19",
+    "ruff>=0.15",
+    "httpx>=0.27",
+    "websockets>=16.0",
+    "asyncssh>=2.22.0",
+    "fastmcp>=2.0",
+]
+
+[project.scripts]
+uterm-mcp = "provide.terminal.ai.cli:main"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"provide.terminal" = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "-ra",
+    "--cov=provide.terminal.client",
+    "--cov=provide.terminal.transports",
+    "--cov=provide.terminal.ai",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
+    "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
+]
+ignore = ["E501", "S104", "S112", "S311"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "RUF022"]
+"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+
+[tool.mypy]
+python_version = "0.4.0"
+strict = true

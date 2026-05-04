@@ -1,6 +1,6 @@
 # HTTP Inspection
 
-Route HTTP traffic through provide-terminal's inspect tunnel and watch every request and
+Route HTTP traffic through provide-uterm's inspect tunnel and watch every request and
 response appear in the browser in real time — headers, body, status codes, and timing. No
 changes needed on the client side; just point traffic at the proxy endpoint.
 

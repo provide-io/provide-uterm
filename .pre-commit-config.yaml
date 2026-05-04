@@ -1,7 +1,7 @@
-# Pre-commit config for provide-terminal.
+# Pre-commit config for provide-uterm.
 #
 # Environmental + strict type hooks are staged as `manual` because:
-#   - tsc/biome/vitest need a fresh `npm install` in packages/provide-terminal-frontend/
+#   - tsc/biome/vitest need a fresh `npm install` in packages/provide-uterm-frontend/
 #     before they can run. Developers running those should invoke
 #     `pre-commit run --hook-stage manual`.
 #   - mypy/ty/mypy-platform currently surface accumulated drift from the
@@ -16,7 +16,7 @@ repos:
     hooks:
       - id: tsc
         name: TypeScript typecheck
-        entry: node_modules/.bin/tsc -p packages/provide-terminal-frontend/tsconfig.json --noEmit
+        entry: node_modules/.bin/tsc -p packages/provide-uterm-frontend/tsconfig.json --noEmit
         language: system
         pass_filenames: false
         always_run: false
@@ -25,7 +25,7 @@ repos:
 
       - id: biome
         name: biome lint+format
-        entry: node_modules/.bin/biome ci packages/provide-terminal-frontend/src/
+        entry: node_modules/.bin/biome ci packages/provide-uterm-frontend/src/
         language: system
         pass_filenames: false
         always_run: false
@@ -34,7 +34,7 @@ repos:
 
       - id: vitest
         name: vitest frontend tests
-        entry: npm test --workspace=packages/provide-terminal-frontend
+        entry: npm test --workspace=packages/provide-uterm-frontend
         language: system
         pass_filenames: false
         always_run: false
@@ -64,7 +64,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy strict
-        entry: mypy packages/provide-terminal/src/ --exclude packages/provide-terminal/src/provide/terminal/mcp/
+        entry: mypy packages/provide-uterm/src/ --exclude packages/provide-uterm/src/provide/terminal/mcp/
         language: python
         language_version: python3.11
         additional_dependencies:
@@ -88,7 +88,7 @@ repos:
 
       - id: ty
         name: ty check
-        entry: ty check packages/provide-terminal/src/ packages/provide-terminal-platform/src/ --extra-search-path packages/provide-terminal-platform/src/
+        entry: ty check packages/provide-uterm/src/ packages/provide-uterm-platform/src/ --extra-search-path packages/provide-uterm-platform/src/
         language: python
         language_version: python3.11
         additional_dependencies:
@@ -112,8 +112,8 @@ repos:
         stages: [manual]
 
       - id: mypy-platform
-        name: mypy strict (provide-terminal-platform)
-        entry: bash -c 'MYPYPATH=packages/provide-terminal/src:packages/provide-terminal-platform/src mypy packages/provide-terminal-platform/src/provide/'
+        name: mypy strict (provide-uterm-platform)
+        entry: bash -c 'MYPYPATH=packages/provide-uterm/src:packages/provide-uterm-platform/src mypy packages/provide-uterm-platform/src/provide/'
         language: system
         pass_filenames: false
         always_run: false
@@ -122,7 +122,7 @@ repos:
 
       - id: bandit
         name: bandit
-        entry: bandit -r packages/provide-terminal/src/ packages/provide-terminal-platform/src/ -ll
+        entry: bandit -r packages/provide-uterm/src/ packages/provide-uterm-platform/src/ -ll
         language: python
         language_version: python3.11
         additional_dependencies:

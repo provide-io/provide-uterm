@@ -1,4 +1,4 @@
-# provide-terminal
+# provide-uterm
 
 A terminal access and control platform. Creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers.
 
@@ -68,7 +68,7 @@ mount_terminal_ui(app)  # serves at /terminal
 ### Run the reference server
 
 ```bash
-pip install 'provide-terminal-server[server]'
+pip install 'provide-uterm-server[server]'
 uterm-server --config server.toml
 # Dashboard: http://localhost:27780/app/
 ```
@@ -76,7 +76,7 @@ uterm-server --config server.toml
 ### Inspect HTTP traffic with interception
 
 ```bash
-pip install 'provide-terminal-server[cli]'
+pip install 'provide-uterm-server[cli]'
 uterm inspect 3000 --server https://your-server.example.com --intercept
 ```
 
@@ -120,7 +120,7 @@ Pluggable connectors behind a unified session model:
 | `telnet` | Remote telnet (RFC 854) |
 | `ssh` | Remote SSH (asyncssh) |
 | `websocket` | WebSocket upstream |
-| `ushell` | Built-in Python REPL (shell module in `provide-terminal`) |
+| `ushell` | Built-in Python REPL (shell module in `provide-uterm`) |
 | `pty` | Local PTY with PAM auth and LD_PRELOAD capture |
 
 The **gateway** converts between protocols: browser WebSocket ↔ telnet/SSH backends with ANSI color mode negotiation.
@@ -148,7 +148,7 @@ graph LR
 - **`uterm inspect`** — HTTP reverse proxy with live traffic inspection
 - **`uterm inspect --intercept`** — pause requests, forward/drop/modify from the browser
 
-See [HTTP Inspection & Interception](https://github.com/provide-io/provide-terminal/blob/main/docs/inspect.md) for the full protocol reference.
+See [HTTP Inspection & Interception](https://github.com/provide-io/provide-uterm/blob/main/docs/inspect.md) for the full protocol reference.
 
 ### Collaborative Presence (DeckMux)
 
@@ -169,7 +169,7 @@ Enable per-session with `presence: true`. Works on both FastAPI and CF backends 
 uterm-mcp  # starts MCP server for Claude, GPT, or any MCP-compatible agent
 ```
 
-Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-terminal-client](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-client).
+Tools include `session_create`, `session_read`, `session_subscribe`, `hijack_begin`, `hijack_send`, `hijack_step`, `hijack_release`, and more. See [provide-uterm-client](https://github.com/provide-io/provide-uterm/tree/main/packages/provide-uterm-client).
 
 ### Agent Management
 
@@ -179,7 +179,7 @@ Orchestrate fleets of terminal workers:
 uterm-manager --config swarm.yaml
 ```
 
-Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-terminal-platform](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-platform).
+Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, timeseries metrics, and WebSocket status broadcasting. See [provide-uterm-platform](https://github.com/provide-io/provide-uterm/tree/main/packages/provide-uterm-platform).
 
 ---
 
@@ -208,14 +208,14 @@ Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, times
 ## Installation
 
 ```bash
-pip install provide-terminal                  # core only
-pip install 'provide-terminal[emulator]'      # + pyte screen emulation
-pip install 'provide-terminal-server[cli]'    # CLI tools (uterm, uterm-server)
-pip install 'provide-terminal-server[server]' # hosted server
-pip install 'provide-terminal-client[all]'    # client + MCP tools
+pip install provide-uterm                  # core only
+pip install 'provide-uterm[emulator]'      # + pyte screen emulation
+pip install 'provide-uterm-server[cli]'    # CLI tools (uterm, uterm-server)
+pip install 'provide-uterm-server[server]' # hosted server
+pip install 'provide-uterm-client[all]'    # client + MCP tools
 ```
 
-**provide-terminal extras:**
+**provide-uterm extras:**
 
 | Extra | Installs | Required for |
 |-------|----------|-------------|
@@ -224,7 +224,7 @@ pip install 'provide-terminal-client[all]'    # client + MCP tools
 | `[client]` | httpx | HTTP client |
 | `[all]` | everything above | Full core feature set |
 
-**provide-terminal-server extras:**
+**provide-uterm-server extras:**
 
 | Extra | Installs | Required for |
 |-------|----------|-------------|
@@ -261,7 +261,7 @@ graph LR
 
 **Durability note** — the standalone FastAPI server keeps live control-plane state in process memory only. Tunnel tokens/share state, approvals, resume state, webhook registrations, and live session arbitration state are not HA or persistent across restart/failover. Run a single active instance if you use this backend, or choose the Cloudflare Workers/Durable Objects deployment when you need durable multi-node behavior.
 
-**Cloudflare Workers** — edge deployment on [Durable Objects](https://github.com/provide-io/provide-terminal/tree/main/packages/provide-terminal-cloudflare) with CF Access JWT, KV session registry, WebSocket hibernation.
+**Cloudflare Workers** — edge deployment on [Durable Objects](https://github.com/provide-io/provide-uterm/tree/main/packages/provide-uterm-cloudflare) with CF Access JWT, KV session registry, WebSocket hibernation.
 
 **Docker** — both backends locally:
 ```bash
@@ -276,13 +276,13 @@ docker compose -f docker/docker-compose.yml up
 
 | Package | Role | Tests |
 |---------|------|-------|
-| `provide-terminal` | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
-| `provide-terminal-server` | Server: bridge hub, FastAPI, CLI, tunnel, gateway | ~2800 |
-| `provide-terminal-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
-| `provide-terminal-platform` | Platform: PTY, PAM, capture, External Management Tier | ~780 |
-| `provide-terminal-cloudflare` | CF Worker + Durable Object | ~890 |
-| `provide-terminal-frontend` | Browser UI (TypeScript, xterm.js) | — |
-| `provide-terminal-app` | App shell | — |
+| `provide-uterm` | Core: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay | ~3600 |
+| `provide-uterm-server` | Server: bridge hub, FastAPI, CLI, tunnel, gateway | ~2800 |
+| `provide-uterm-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
+| `provide-uterm-platform` | Platform: PTY, PAM, capture, External Management Tier | ~780 |
+| `provide-uterm-cloudflare` | CF Worker + Durable Object | ~890 |
+| `provide-uterm-frontend` | Browser UI (TypeScript, xterm.js) | — |
+| `provide-uterm-app` | App shell | — |
 
 All packages at 100% branch+line coverage. 8760+ tests total.
 
@@ -300,15 +300,15 @@ All packages at 100% branch+line coverage. 8760+ tests total.
 
 ## Docs
 
-- [HTTP Inspection & Interception](https://github.com/provide-io/provide-terminal/blob/main/docs/inspect.md)
-- [Protocol Matrix](https://github.com/provide-io/provide-terminal/blob/main/docs/protocol-matrix.md) — backend capability contract
-- [Testing Guide](https://github.com/provide-io/provide-terminal/blob/main/docs/TESTING.md)
-- [Operations Runbook](https://github.com/provide-io/provide-terminal/blob/main/docs/operations/runbook.md)
-- [Service SLOs](https://github.com/provide-io/provide-terminal/blob/main/docs/operations/slo.md)
-- [Production Readiness Gates](https://github.com/provide-io/provide-terminal/blob/main/docs/production-readiness-pass2.md)
-- [Release Governance](https://github.com/provide-io/provide-terminal/blob/main/docs/release-governance.md)
-- [Architecture Diagrams](https://github.com/provide-io/provide-terminal/tree/main/docs/diagrams) (PlantUML)
-- [Cloudflare Workers](https://github.com/provide-io/provide-terminal/blob/main/packages/provide-terminal-cloudflare/README.md)
+- [HTTP Inspection & Interception](https://github.com/provide-io/provide-uterm/blob/main/docs/inspect.md)
+- [Protocol Matrix](https://github.com/provide-io/provide-uterm/blob/main/docs/protocol-matrix.md) — backend capability contract
+- [Testing Guide](https://github.com/provide-io/provide-uterm/blob/main/docs/TESTING.md)
+- [Operations Runbook](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/runbook.md)
+- [Service SLOs](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/slo.md)
+- [Production Readiness Gates](https://github.com/provide-io/provide-uterm/blob/main/docs/production-readiness-pass2.md)
+- [Release Governance](https://github.com/provide-io/provide-uterm/blob/main/docs/release-governance.md)
+- [Architecture Diagrams](https://github.com/provide-io/provide-uterm/tree/main/docs/diagrams) (PlantUML)
+- [Cloudflare Workers](https://github.com/provide-io/provide-uterm/blob/main/packages/provide-uterm-cloudflare/README.md)
 
 ---
 

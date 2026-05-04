@@ -33,8 +33,8 @@ import urllib.request
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm-platform/src"))
 
 import uvicorn  # noqa: E402
 from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
@@ -175,7 +175,7 @@ def main() -> None:
     sys.stdout.flush()
 
     # Start pywrangler dev (CF DO)
-    cf_dir = _REPO_ROOT / "packages" / "provide-terminal-cloudflare"
+    cf_dir = _REPO_ROOT / "packages" / "provide-uterm-cloudflare"
     print(f"\nStarting CF DO (pywrangler dev) on port {_PYWRANGLER_PORT}...")
     sys.stdout.flush()
     pywrangler_proc = subprocess.Popen(

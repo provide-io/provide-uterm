@@ -202,7 +202,7 @@ app.mount("/hijack", StaticFiles(directory=str(frontend_path), html=True), name=
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="provide-terminal interactive example server")
+    parser = argparse.ArgumentParser(description="provide-uterm interactive example server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
     args = parser.parse_args()

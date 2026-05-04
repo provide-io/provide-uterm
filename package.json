@@ -1,18 +1,18 @@
 {
-  "name": "provide-terminal-root",
+  "name": "provide-uterm-root",
   "private": true,
-  "workspaces": ["packages/provide-terminal-frontend", "packages/provide-terminal-app"],
+  "workspaces": ["packages/provide-uterm-frontend", "packages/provide-uterm-app"],
   "scripts": {
-    "build:frontend": "npm run build --workspace=packages/provide-terminal-frontend && npm run build --workspace=packages/provide-terminal-app",
-    "build:widgets": "npm run build --workspace=packages/provide-terminal-frontend",
-    "build:app": "npm run build --workspace=packages/provide-terminal-app",
-    "dev:app": "npm run dev --workspace=packages/provide-terminal-app",
-    "typecheck:frontend": "npm run typecheck --workspace=packages/provide-terminal-frontend",
-    "typecheck:app": "npm run typecheck --workspace=packages/provide-terminal-app",
-    "lint:frontend": "npm run lint --workspace=packages/provide-terminal-frontend",
-    "lint:app": "npm run lint --workspace=packages/provide-terminal-app",
-    "fix:frontend": "npm run fix --workspace=packages/provide-terminal-frontend",
-    "fix:app": "npm run fix --workspace=packages/provide-terminal-app"
+    "build:frontend": "npm run build --workspace=packages/provide-uterm-frontend && npm run build --workspace=packages/provide-uterm-app",
+    "build:widgets": "npm run build --workspace=packages/provide-uterm-frontend",
+    "build:app": "npm run build --workspace=packages/provide-uterm-app",
+    "dev:app": "npm run dev --workspace=packages/provide-uterm-app",
+    "typecheck:frontend": "npm run typecheck --workspace=packages/provide-uterm-frontend",
+    "typecheck:app": "npm run typecheck --workspace=packages/provide-uterm-app",
+    "lint:frontend": "npm run lint --workspace=packages/provide-uterm-frontend",
+    "lint:app": "npm run lint --workspace=packages/provide-uterm-app",
+    "fix:frontend": "npm run fix --workspace=packages/provide-uterm-frontend",
+    "fix:app": "npm run fix --workspace=packages/provide-uterm-app"
   },
   "overrides": {
     "vite": "8.0.8"

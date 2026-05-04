@@ -7,7 +7,7 @@ import sys
 import timeit
 
 # Add packages to sys.path
-sys.path.insert(0, os.path.abspath("packages/provide-terminal-server/src"))
+sys.path.insert(0, os.path.abspath("packages/provide-uterm-server/src"))
 
 from provide.terminal.bridge.hub.ext import RedactionRule
 from provide.terminal.bridge.hub.redaction import StreamRedactor

@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml shell-architecture
-title provide-terminal (shell module) — Architecture
+title provide-uterm (shell module) — Architecture
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333
@@ -14,7 +14,7 @@ skinparam arrowColor #2563eb
 skinparam noteBorderColor #d1d5db
 skinparam noteBackgroundColor #f9fafb
 
-package "provide-terminal / shell" {
+package "provide-uterm / shell" {
   [_repl.py\nREPL loop + input dispatch] as REPL
   [_commands.py\ncommand registry + handlers] as CMDS
   [_output.py\nOutputResult, AnimatedResult] as OUTPUT
@@ -36,7 +36,7 @@ package "provide-terminal / shell" {
   }
 }
 
-package "provide-terminal (integration)" {
+package "provide-uterm (integration)" {
   [UshellConnector\nconnector_type=ushell\nprefix: ushell-*] as CONN
   [HostedSessionRuntime] as RUNTIME
 }

@@ -159,7 +159,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     """Record a 3x3 grid of terminals all running simultaneous ANSI animations."""
     feat_dir = out_dir(FEATURE, base_out)
 
-    # Start image server and provide-terminal server with 9 ushell sessions.
+    # Start image server and provide-uterm server with 9 ushell sessions.
     img_server, img_port = _start_image_server()
     gif_url = f"http://127.0.0.1:{img_port}/animation.gif"
 

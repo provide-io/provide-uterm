@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
   "files": {
-    "includes": ["packages/provide-terminal-frontend/src/**", "packages/provide-terminal-app/src/**"]
+    "includes": ["packages/provide-uterm-frontend/src/**", "packages/provide-uterm-app/src/**"]
   },
   "formatter": {
     "enabled": true,
@@ -17,7 +17,7 @@
   },
   "overrides": [
     {
-      "includes": ["packages/provide-terminal-frontend/src/**/*.test.ts"],
+      "includes": ["packages/provide-uterm-frontend/src/**/*.test.ts"],
       "linter": {
         "rules": {
           "style": {

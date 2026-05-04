@@ -4,7 +4,7 @@
 
 Coordinated operations across a fleet of servers — rolling deployments, parallel configuration changes, synchronized maintenance windows — require the same commands to be executed on N terminal sessions simultaneously. Current tooling (cssh, tmux broadcast, Ansible) operates at the SSH/host layer with no visibility into the proxy, no role-based access control, and no per-session response aggregation.
 
-provide-terminal controls the input path for every managed session. A fan-out primitive at the hub layer can broadcast a single input stream to N sessions with full RBAC, audit trail, per-session output capture, and live divergence detection — without any host-side agent or SSH multiplexer.
+provide-uterm controls the input path for every managed session. A fan-out primitive at the hub layer can broadcast a single input stream to N sessions with full RBAC, audit trail, per-session output capture, and live divergence detection — without any host-side agent or SSH multiplexer.
 
 ---
 
@@ -23,7 +23,7 @@ provide-terminal controls the input path for every managed session. A fan-out pr
 ## Non-Goals
 
 - Replacing Ansible, Terraform, or configuration management tools. Fan-out is for *interactive* parallel terminal control, not automated orchestration.
-- Coordinating across multiple provide-terminal deployments (single-hub scope only for v1).
+- Coordinating across multiple provide-uterm deployments (single-hub scope only for v1).
 - Modifying output on a per-session basis before delivery to the controlling browser.
 
 ---

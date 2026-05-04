@@ -2,13 +2,13 @@
 host = "127.0.0.1"
 port = 8780
 public_base_url = "http://127.0.0.1:8780"
-title = "provide-terminal-server"
+title = "provide-uterm-server"
 
 [auth]
 mode = "jwt"
 # Required in jwt mode.
 jwt_issuer = "https://issuer.example.com"
-jwt_audience = "provide-terminal-server"
+jwt_audience = "provide-uterm-server"
 # Use exactly one of these in production:
 # jwt_jwks_url = "https://issuer.example.com/.well-known/jwks.json"
 jwt_public_key_pem = """

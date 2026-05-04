@@ -189,7 +189,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Record terminal demo with asciinema
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
 
-    # Start image server + provide-terminal server for browser recording.
+    # Start image server + provide-uterm server for browser recording.
     # Use the "ushell" connector so the real CommandDispatcher (with render/cast)
     # runs in-process — the default "shell" connector is only a simulated transcript.
     img_server, img_port = _start_image_server()

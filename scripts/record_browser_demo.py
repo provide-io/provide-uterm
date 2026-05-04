@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Record a browser-based demo of provide-terminal via Playwright.
+"""Record a browser-based demo of provide-uterm via Playwright.
 
 Produces:
   demo/recordings/browser-demo.webm  — browser video

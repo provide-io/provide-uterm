@@ -6,7 +6,7 @@ Accepted
 
 ## Problem
 
-The FastAPI backend is the reference self-hosted deployment for provide-terminal, but it currently keeps control-plane state in process memory. That includes tunnel/share tokens, approvals, resume state, webhook registrations, live session arbitration, and hijack ownership.
+The FastAPI backend is the reference self-hosted deployment for provide-uterm, but it currently keeps control-plane state in process memory. That includes tunnel/share tokens, approvals, resume state, webhook registrations, live session arbitration, and hijack ownership.
 
 That posture is acceptable for a single active instance. It is not safe to treat the FastAPI backend as a durable or active-active control plane behind a load balancer, because restart or failover can drop in-flight state and split ownership decisions across processes.
 
