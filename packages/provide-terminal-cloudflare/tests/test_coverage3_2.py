@@ -140,7 +140,7 @@ async def test_fetch_jwks_cache_hit() -> None:
     mock_resp.__enter__ = lambda s: s
     mock_resp.__exit__ = MagicMock(return_value=False)
 
-    def _counting_urlopen(req):
+    def _counting_urlopen(req, *args, **kwargs):
         nonlocal call_count
         call_count += 1
         return mock_resp

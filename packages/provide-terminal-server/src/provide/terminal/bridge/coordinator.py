@@ -83,14 +83,21 @@ class HijackCoordinator:
         self._session = active
         return AcquireResult(ok=True, session=active, is_renewal=is_renewal)
 
-    def heartbeat(self, hijack_id: str, lease_s: int, owner: str, *, now: float | None = None) -> AcquireResult:
+    def heartbeat(
+        self,
+        hijack_id: str,
+        lease_s: int,
+        owner: str | None = None,
+        *,
+        now: float | None = None,
+    ) -> AcquireResult:
         now_ts = time.monotonic() if now is None else now
         active = self._active_session(now_ts)
         if active is None:
             return AcquireResult(ok=False, session=None, error="not_hijacked")
         if active.hijack_id != hijack_id:
             return AcquireResult(ok=False, session=active, error="hijack_id_mismatch")
-        if active.owner != owner:
+        if owner is not None and active.owner != owner:
             return AcquireResult(ok=False, session=active, error="owner_mismatch")
         active.lease_expires_at = now_ts + _clamp_lease(lease_s)
         active.last_heartbeat = now_ts

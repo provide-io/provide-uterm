@@ -83,7 +83,13 @@ async def route_hijack(
         lease_s, lease_error = _parse_lease_s(payload)
         if lease_error is not None or lease_s is None:
             return json_response({"error": lease_error or "invalid lease_s"}, status=400)
-        principal, _ = await runtime.resolve_principal(request); owner = principal.subject_id if principal else "anonymous"; result = runtime.hijack.heartbeat(hijack_id, lease_s, owner=owner)
+        session = runtime.hijack.session
+        owner = session.owner if session is not None else "anonymous"
+        resolve_principal = getattr(runtime, "resolve_principal", None)
+        if callable(resolve_principal):
+            principal, _ = await resolve_principal(request)
+            owner = principal.subject_id if principal else owner
+        result = runtime.hijack.heartbeat(hijack_id, lease_s, owner=owner)
         if not result.ok:
             return json_response({"error": result.error}, status=409)
         runtime.persist_lease(result.session)
