@@ -93,14 +93,64 @@ def _make_spin_gif(width: int = 120, height: int = 45, n_frames: int = 12) -> by
     return buf.getvalue()
 
 
+def _make_cat_gif(width: int = 120, height: int = 45, n_frames: int = 10) -> bytes:
+    """Generate a simple animated cat-face GIF with PIL."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    frames = []
+    for fi in range(n_frames):
+        img = Image.new("RGB", (width, height), (18, 20, 26))
+        d = ImageDraw.Draw(img)
+        cx, cy = width // 2, height // 2
+
+        # Head
+        d.ellipse((cx - 32, cy - 18, cx + 32, cy + 24), fill=(240, 190, 130))
+        # Ears
+        d.polygon([(cx - 24, cy - 10), (cx - 36, cy - 30), (cx - 8, cy - 16)], fill=(240, 190, 130))
+        d.polygon([(cx + 24, cy - 10), (cx + 36, cy - 30), (cx + 8, cy - 16)], fill=(240, 190, 130))
+        # Inner ears
+        d.polygon([(cx - 24, cy - 12), (cx - 30, cy - 24), (cx - 14, cy - 16)], fill=(220, 140, 140))
+        d.polygon([(cx + 24, cy - 12), (cx + 30, cy - 24), (cx + 14, cy - 16)], fill=(220, 140, 140))
+
+        blink = fi in {3, 4}
+        if blink:
+            d.line((cx - 14, cy - 2, cx - 6, cy - 2), fill=(25, 25, 25), width=2)
+            d.line((cx + 6, cy - 2, cx + 14, cy - 2), fill=(25, 25, 25), width=2)
+        else:
+            d.ellipse((cx - 15, cy - 5, cx - 6, cy + 4), fill=(25, 25, 25))
+            d.ellipse((cx + 6, cy - 5, cx + 15, cy + 4), fill=(25, 25, 25))
+
+        # Nose + mouth
+        d.polygon([(cx, cy + 5), (cx - 4, cy + 10), (cx + 4, cy + 10)], fill=(210, 90, 110))
+        d.arc((cx - 10, cy + 10, cx, cy + 18), start=200, end=355, fill=(35, 35, 35), width=1)
+        d.arc((cx, cy + 10, cx + 10, cy + 18), start=185, end=340, fill=(35, 35, 35), width=1)
+
+        # Whiskers
+        d.line((cx - 34, cy + 10, cx - 10, cy + 11), fill=(35, 35, 35), width=1)
+        d.line((cx - 34, cy + 14, cx - 10, cy + 14), fill=(35, 35, 35), width=1)
+        d.line((cx + 10, cy + 11, cx + 34, cy + 10), fill=(35, 35, 35), width=1)
+        d.line((cx + 10, cy + 14, cx + 34, cy + 14), fill=(35, 35, 35), width=1)
+
+        frames.append(img)
+
+    buf = io.BytesIO()
+    frames[0].save(buf, format="GIF", save_all=True, append_images=frames[1:], duration=80, loop=0)
+    return buf.getvalue()
+
+
 def _start_image_server() -> tuple[HTTPServer, int]:
-    """Start an HTTP server serving a static rainbow PNG and animated GIF."""
+    """Start an HTTP server serving static PNG and multiple animated GIFs."""
     rainbow_png = _make_rainbow_png()
     spin_gif = _make_spin_gif()
+    cat_gif = _make_cat_gif()
 
     class _H(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
-            if self.path.endswith(".gif"):
+            if self.path.endswith("cat.gif"):
+                data, ct = cat_gif, "image/gif"
+            elif self.path.endswith(".gif"):
                 data, ct = spin_gif, "image/gif"
             else:
                 data, ct = rainbow_png, "image/png"
@@ -123,6 +173,8 @@ async def run_terminal_demo() -> None:
     img_server, img_port = _start_image_server()
     png_url = f"http://127.0.0.1:{img_port}/image.png"
     gif_url = f"http://127.0.0.1:{img_port}/animation.gif"
+    cat_gif_url = f"http://127.0.0.1:{img_port}/cat.gif"
+    remote_gif_url = "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif"
 
     base_url, server = start_server(
         sessions=[
@@ -141,9 +193,11 @@ async def run_terminal_demo() -> None:
     banner(DESCRIPTION)
 
     async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as http:
-        info("Starting image server (rainbow PNG + animated GIF)...")
+        info("Starting image server (rainbow PNG + animated GIFs)...")
         ok(f"  PNG: {png_url}")
         ok(f"  GIF: {gif_url}")
+        ok(f"  CAT: {cat_gif_url}")
+        ok(f"  REMOTE: {remote_gif_url}")
 
         # Switch provide-shell to hijack input mode
         await http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
@@ -174,6 +228,24 @@ async def run_terminal_demo() -> None:
         ok("animated render running — 12-frame color wheel, looping at 60ms/frame")
         time.sleep(3.0)
 
+        info(f"render --loop {cat_gif_url}")
+        r = await http.post(
+            f"/worker/provide-shell/hijack/{hijack_id}/send",
+            json={"keys": f"render --loop {cat_gif_url}\r"},
+        )
+        r.raise_for_status()
+        ok("animated render running — cat GIF loop")
+        time.sleep(3.0)
+
+        info(f"render --loop {remote_gif_url}")
+        r = await http.post(
+            f"/worker/provide-shell/hijack/{hijack_id}/send",
+            json={"keys": f"render --loop {remote_gif_url}\r"},
+        )
+        r.raise_for_status()
+        ok("animated render running — remote Giphy loop")
+        time.sleep(3.0)
+
         await http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")
 
     info("(type 'render <url>' in the ushell to render any image as ANSI art)")
@@ -195,6 +267,8 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     img_server, img_port = _start_image_server()
     png_url = f"http://127.0.0.1:{img_port}/image.png"
     gif_url = f"http://127.0.0.1:{img_port}/animation.gif"
+    cat_gif_url = f"http://127.0.0.1:{img_port}/cat.gif"
+    remote_gif_url = "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif"
     base_url, server = start_server(
         sessions=[
             {
@@ -295,6 +369,22 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         with _h.Client(base_url=base_url, timeout=10.0) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {gif_url}\r"})
 
+    def _send_cat(page: object) -> None:
+        if not hijack_id:
+            return
+        import httpx as _h
+
+        with _h.Client(base_url=base_url, timeout=10.0) as http:
+            http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {cat_gif_url}\r"})
+
+    def _send_remote_gif(page: object) -> None:
+        if not hijack_id:
+            return
+        import httpx as _h
+
+        with _h.Client(base_url=base_url, timeout=10.0) as http:
+            http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {remote_gif_url}\r"})
+
     steps: list[BrowserStep] = [
         # Navigate to operator view (WebSocket connects here)
         ("/app/operator/provide-shell", 1.0, None),
@@ -305,6 +395,10 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         (_send_render, 4.5, "01-rainbow-render.png"),
         # Send animated GIF render (loops)
         (_send_animated, 5.0, "02-animated-render.png"),
+        # Local cat GIF loop
+        (_send_cat, 5.0, "03-cat-render.png"),
+        # Remote Giphy loop
+        (_send_remote_gif, 5.0, "04-giphy-render.png"),
     ]
     mp4_path = browser_record(base_url, steps, feat_dir)
 

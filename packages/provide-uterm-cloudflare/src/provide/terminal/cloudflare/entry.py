@@ -25,16 +25,18 @@ except ImportError:
 # for Cloudflare runtime.  Pyodide loads modules from /session/metadata/ and
 # needs explicit path configuration.
 _current_file = Path(__file__).resolve()
-_current_dir = str(_current_file.parent)  # .../provide.terminal.cloudflare/
-_parent_dir = str(_current_file.parent.parent)  # contains provide.terminal.cloudflare/ as package
-_python_modules_dir = str(_current_file.parent.parent.parent / "python_modules")
+_current_dir = str(_current_file.parent)  # .../provide/terminal/cloudflare/
+_parent_dir = str(_current_file.parent.parent)  # .../provide/terminal/
+_python_module_candidates: list[Path] = []
+for _p in _current_file.parents:
+    _python_module_candidates.append(_p / "python_modules")
 
 # In CF runtime, wrangler may flatten src/ so that entry.py is at /session/
 # and the package is at /session/provide.terminal.cloudflare/.  Add /session/
 # (the grandparent) as well as the typical /session/metadata/ parent.
 _import_error: str | None = None
 
-for _path in [_parent_dir, _current_dir, _python_modules_dir]:
+for _path in [_parent_dir, _current_dir, *[str(p) for p in _python_module_candidates]]:
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
@@ -84,16 +86,24 @@ except ImportError:
         def extract_bearer_or_cookie(*_a: object, **_k: object) -> None:  # type: ignore[assignment]
             return None
 
-        def json_response(*_a: object, **_k: object) -> None:  # type: ignore[assignment]
-            return None
+        def json_response(payload: object, status: int = 200, headers: object | None = None):  # type: ignore[assignment]
+            if Response is None:
+                return None
+            return Response.json(payload, status=status, headers=headers)  # type: ignore[union-attr]
 
-        CloudflareConfig = object  # type: ignore[assignment]
+        try:
+            from config import CloudflareConfig  # type: ignore[import-not-found,no-redef]
+        except Exception:
+            CloudflareConfig = object  # type: ignore[assignment]
 
-        class SessionRuntime(_DurableObject):  # type: ignore[assignment]
-            """Stub DO for validation phase — real impl loaded at runtime."""
+        try:
+            from do.session_runtime import SessionRuntime  # type: ignore[import-not-found,no-redef]
+        except Exception:
+            class SessionRuntime(_DurableObject):  # type: ignore[assignment]
+                """Stub DO for validation phase — real impl loaded at runtime."""
 
-            async def fetch(self, _request):  # type: ignore[override]
-                return Response.json({"error": "not initialized"}, status=503)  # type: ignore[union-attr]
+                async def fetch(self, _request):  # type: ignore[override]
+                    return Response.json({"error": "not initialized"}, status=503)  # type: ignore[union-attr]
 
         def delete_kv_session(*_a: object, **_k: object) -> None:  # type: ignore[assignment]
             return None

@@ -6,8 +6,8 @@ at the original frame rate. No external dependencies — the renderer runs entir
 shell process.
 
 **What you'll see:** First, a static rainbow PNG gradient is rendered as 24-bit ANSI color
-art filling the terminal. Then an animated 12-frame color-wheel GIF is loaded and plays back
-as a looping animation, each frame drawn in character art with full truecolor.
+art filling the terminal. Then a sequence of animated GIF loops is rendered in-terminal:
+the color-wheel loop, a local cat-face loop, and a remote Giphy loop.
 
 ## Files
 

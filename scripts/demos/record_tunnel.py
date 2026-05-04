@@ -50,7 +50,8 @@ def _sync_local_packages_into_python_modules() -> None:
     """
     import shutil
 
-    pm = CF_DIR / "python_modules" / "provide" / "terminal"
+    provide_root = CF_DIR / "python_modules" / "provide"
+    pm = provide_root / "terminal"
     pm.mkdir(parents=True, exist_ok=True)
 
     # provide.terminal.cloudflare — the CF package itself
@@ -66,6 +67,19 @@ def _sync_local_packages_into_python_modules() -> None:
     if bridge_dst.exists():
         shutil.rmtree(bridge_dst)
     shutil.copytree(bridge_src, bridge_dst)
+
+    # provide.telemetry — runtime logger dependency used by bridge modules
+    telemetry_dst = provide_root / "telemetry"
+    if telemetry_dst.exists():
+        shutil.rmtree(telemetry_dst)
+    telemetry_src = None
+    for sp in sys.path:
+        cand = Path(sp) / "provide" / "telemetry"
+        if cand.exists():
+            telemetry_src = cand
+            break
+    if telemetry_src is not None:
+        shutil.copytree(telemetry_src, telemetry_dst)
 
 
 def _start_wrangler() -> subprocess.Popen:  # type: ignore[type-arg]
@@ -93,11 +107,16 @@ def _start_wrangler() -> subprocess.Popen:  # type: ignore[type-arg]
         try:
             r = httpx.get(f"{CF_URL}/api/health", timeout=2.0)
             if r.status_code < 500:
-                break
+                return proc
         except Exception:
             pass
         time.sleep(0.5)
-    return proc
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    raise RuntimeError(f"wrangler did not become ready on {CF_URL} within 60s")
 
 
 async def run_terminal_demo() -> None:

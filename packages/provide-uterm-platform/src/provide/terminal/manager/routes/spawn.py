@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -272,6 +274,18 @@ async def restart_agent(agent_id: str, request: Request, manager: AgentManager =
             )
     queued = _queue_manager_command(agent_status, "restart", {})
     agent_status.paused = False
+    # The worker_queue path queues the restart command; the agent reads it
+    # on its next status poll, sets stop_reason, and exits cleanly. Without
+    # a respawn step here the endpoint's contract ("Restart a bot by
+    # killing it and respawning with same config") is half-honored — the
+    # bot dies but never comes back. Schedule a watcher to spawn a fresh
+    # process from the same config_path once the existing one exits.
+    if agent_status.config:
+        task = asyncio.create_task(
+            _respawn_after_restart_exit(manager, agent_id, agent_status.config)
+        )
+        manager._background_tasks.add(task)
+        task.add_done_callback(manager._background_tasks.discard)
     await manager.broadcast_status()
     return _build_action_response(
         agent_id,
@@ -283,3 +297,57 @@ async def restart_agent(agent_id: str, request: Request, manager: AgentManager =
         state=str(agent_status.state or "unknown"),
         plugin=plugin if plugin else None,
     )
+
+
+async def _respawn_after_restart_exit(
+    manager: AgentManager,
+    agent_id: str,
+    config_path: str,
+    *,
+    exit_timeout_s: float = 60.0,
+    poll_interval_s: float = 0.5,
+) -> None:
+    """Wait for *agent_id* to exit (state→completed/error/stopped), then
+    re-spawn it from *config_path*.
+
+    Paired with the worker_queue branch of ``/agent/{id}/restart``: that
+    branch queues a restart command which the agent reads + obeys by
+    exiting cleanly. This watcher closes the loop so the bot actually
+    comes back, matching the local-managed plugin path's behavior.
+    """
+    deadline = time.monotonic() + exit_timeout_s
+    while time.monotonic() < deadline:
+        await asyncio.sleep(poll_interval_s)
+        agent = manager.agents.get(agent_id)
+        if agent is None:
+            return
+        if agent.state in ("completed", "error", "stopped"):
+            break
+    else:
+        logger.warning(
+            "respawn_after_restart_exit_timeout",
+            agent_id=agent_id,
+            timeout_s=exit_timeout_s,
+        )
+        return
+    # Clear the pending command fields so the freshly-respawned process
+    # doesn't read the same "restart" command on its first status poll
+    # and immediately exit again — the manager's spawn_agent reuses the
+    # existing agent record (only resets pid/state/timestamps), so any
+    # leftover pending_command_* fields would be served back to the new
+    # bot.
+    fresh_agent = manager.agents.get(agent_id)
+    if fresh_agent is not None:
+        fresh_agent.pending_command_seq = 0
+        fresh_agent.pending_command_type = None
+        fresh_agent.pending_command_payload = {}
+    try:
+        await manager.spawn_agent(config_path, agent_id)
+        logger.info("respawn_after_restart_complete", agent_id=agent_id)
+    except Exception as exc:
+        logger.warning(
+            "respawn_after_restart_failed",
+            agent_id=agent_id,
+            config_path=config_path,
+            error=str(exc),
+        )
