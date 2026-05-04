@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import html as _html
+import os
+import shlex
 import shutil
 import subprocess  # nosec
 import sys
@@ -17,6 +19,14 @@ from pathlib import Path
 def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
     """Record a terminal demo via asciinema. Returns output path or None."""
     try:
+        script_path = Path(script_path).resolve()
+        repo_root = script_path.parents[2]
+        env = dict(os.environ)
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            str(repo_root) if not existing_pythonpath else f"{repo_root}:{existing_pythonpath}"
+        )
+        cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))} --run-demo"
         subprocess.run(
             [
                 "asciinema",
@@ -24,10 +34,12 @@ def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
                 str(out_path),
                 "--overwrite",
                 "-c",
-                f"{sys.executable} {script_path} --run-demo",
+                cmd,
             ],
             check=True,
             timeout=120,
+            env=env,
+            cwd=repo_root,
         )
         return out_path
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
