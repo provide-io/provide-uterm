@@ -18,6 +18,10 @@ import logging
 import time
 from typing import Any
 
+from provide.telemetry import get_tracer
+
+from provide.terminal.control_channel import encode_control, encode_data
+
 try:
     from provide.terminal.cloudflare.bridge.hijack import HijackSession
     from provide.terminal.cloudflare.cf_types import CFWebSocket
@@ -37,6 +41,7 @@ except Exception:  # pragma: no cover
 
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 _MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sandbox
 
@@ -191,7 +196,11 @@ class _SessionRuntimeIoMixin:
                 msg_len = len(encoded)
                 if self._queue_bytes + msg_len > self.max_buffer_bytes:
                     logger.warning("cloudflare_runtime_buffer_full id=%s queue=%d msg=%d", self.worker_id, self._queue_bytes, msg_len)
-                    with tracer.start_as_current_span("uterm.buffer.full", attributes={"worker_id": self.worker_id, "queue_bytes": self._queue_bytes, "msg_len": msg_len}): pass
+                    with tracer.start_as_current_span(
+                        "uterm.buffer.full",
+                        attributes={"worker_id": self.worker_id, "queue_bytes": self._queue_bytes, "msg_len": msg_len},
+                    ):
+                        pass
                     continue
                 self._queue_bytes += msg_len
                 await self.send_ws(ws, payload)

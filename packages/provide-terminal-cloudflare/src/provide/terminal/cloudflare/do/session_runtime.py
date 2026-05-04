@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import secrets
@@ -37,10 +38,11 @@ except Exception:
     from state.store import SqliteStateStore  # type: ignore[import-not-found]
 
 from provide.telemetry import get_tracer
-tracer = get_tracer(__name__)
+
 from provide.terminal.control_channel import encode_control
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
 class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
@@ -228,6 +230,10 @@ class SessionRuntime(_SessionRuntimeIoMixin, _WsHelperMixin, DurableObject):
                 status=401,
                 headers={"content-type": "application/json"},
             )
+
+    async def _resolve_principal(self, request: object) -> tuple[Any, Response | None]:
+        """Backward-compatible alias for older tests/callers."""
+        return await self.resolve_principal(request)
 
     async def browser_role_for_request(self, request: object) -> str:
         """Return the caller's role string based on JWT, ownership, or auth mode.
