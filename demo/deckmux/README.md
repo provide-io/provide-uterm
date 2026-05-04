@@ -27,7 +27,7 @@ Sentinel (monitoring bot, viewer).
 |------|-------------|
 | [composite.mp4](composite.mp4) | 3-column split: Tim \| Brandon \| Heidi |
 | [composite_trim.mp4](composite_trim.mp4) | Highlight clip (handoff moment) |
-| [tim.mp4](tim.mp4) | Tim's perspective (operator, hero) |
+| [operator.mp4](operator.mp4) | Operator perspective (operator, hero) |
 | [brandon.mp4](brandon.mp4) | Brandon's perspective (DBA, receives handoff) |
 | [heidi.mp4](heidi.mp4) | Heidi's perspective (eng manager, viewer) |
 | [kal.mp4](kal.mp4) | Kal's perspective (SRE, verifies fix) |

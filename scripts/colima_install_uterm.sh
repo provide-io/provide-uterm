@@ -18,12 +18,14 @@
 #   5. Adds a session line to /etc/pam.d/sshd (idempotent)
 #   6. Prints verification instructions
 #
-# After running, start the provide-terminal server on the host and SSH in
+# After running, start the provide-uterm server on the host and SSH in
 # to see PamNotifyListener receive the open/close events.
 
 set -euo pipefail
 
-PTY_PKG="/Users/tim/code/gh/provide-io/provide-terminal/packages/provide-terminal-platform"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PTY_PKG="${REPO_ROOT}/packages/provide-uterm-platform"
 CAPTURE_SRC="$PTY_PKG/native/capture"
 PAM_SRC="$PTY_PKG/native/pam_uterm"
 # Socket inside the Colima VM (/run is root-owned; /tmp is world-writable)
@@ -64,16 +66,16 @@ _run "PAM_ARCH_DIR=\$(ls -d /lib/aarch64-linux-gnu/security /lib/x86_64-linux-gn
 echo "==> Verifying .so files are valid ELF..."
 _run "readelf -h $CAP_LIB | grep 'Type:' && readelf -h $PAM_MODULE | grep 'Type:'"
 
-UTERM_PKG="/Users/tim/code/gh/provide-io/provide-terminal/packages/provide-terminal"
+UTERM_PKG="${REPO_ROOT}/packages/provide-uterm"
 
-echo "==> Installing provide-terminal-platform Python package into Colima system Python..."
+echo "==> Installing provide-uterm-platform Python package into Colima system Python..."
 _run "python3 -m pip install -q --break-system-packages -e $PTY_PKG"
 
-echo "==> Installing provide-terminal (server + pam_integration) into Colima system Python..."
+echo "==> Installing provide-uterm (server + pam_integration) into Colima system Python..."
 _run "python3 -m pip install -q --break-system-packages pydantic httpx && python3 -m pip install -q --break-system-packages -e $UTERM_PKG"
 
 echo "==> Wiring up /etc/pam.d/sshd (replaces any existing pam_uterm line)..."
-_run "sudo sed -i '/pam_uterm/d' /etc/pam.d/sshd && printf '\n# provide-terminal session capture\n${PAM_LINE}\n' | sudo tee -a /etc/pam.d/sshd > /dev/null"
+_run "sudo sed -i '/pam_uterm/d' /etc/pam.d/sshd && printf '\n# provide-uterm session capture\n${PAM_LINE}\n' | sudo tee -a /etc/pam.d/sshd > /dev/null"
 
 echo "==> Current pam_uterm lines in /etc/pam.d/sshd:"
 _run "grep pam_uterm /etc/pam.d/sshd || echo '  (none found — check above step)'"

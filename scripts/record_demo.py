@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Record a demo of provide-terminal features: fan-out, annotation, shell.
+"""Record a demo of provide-uterm features: fan-out, annotation, shell.
 
 Produces:
   demo/recordings/demo.cast    — asciinema recording
@@ -122,7 +122,7 @@ async def demo_annotation(http: httpx.AsyncClient) -> None:
         "/api/sessions/provide-shell/annotate",
         json={
             "label": "demo_started",
-            "description": "Provide-terminal demo recording in progress",
+            "description": "Provide-uterm demo recording in progress",
             "severity": "info",
         },
     )
@@ -162,7 +162,7 @@ async def demo_session_api(http: httpx.AsyncClient) -> None:
 async def run_demo() -> None:
     """Run the full demo."""
     print("\033[1;35m╔══════════════════════════════════════════╗\033[0m")
-    print("\033[1;35m║   provide-terminal v0.4.0 Feature Demo   ║\033[0m")
+    print("\033[1;35m║   provide-uterm v0.4.0 Feature Demo   ║\033[0m")
     print("\033[1;35m╚══════════════════════════════════════════╝\033[0m")
 
     base_url, server = _start_server()

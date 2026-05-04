@@ -5,23 +5,15 @@ OUT_DIR="${1:-artifacts/release-governance}"
 mkdir -p "${OUT_DIR}"
 
 echo "[1/4] dependency vulnerability scan"
-if uv run pip-audit --help >/dev/null 2>&1; then
-  uv run pip-audit --strict --desc > "${OUT_DIR}/pip-audit.txt"
-else
-  echo "pip-audit is not installed in this environment" >&2
-  exit 2
-fi
+# Use an ephemeral tool env so local preinstalls are not required.
+uv run --with pip-audit pip-audit --desc --local --skip-editable > "${OUT_DIR}/pip-audit.txt"
 
 echo "[2/4] build artifacts"
 uv build
 
 echo "[3/4] SBOM generation"
-if uv run cyclonedx-py --help >/dev/null 2>&1; then
-  uv run cyclonedx-py environment --output-format json --output-file "${OUT_DIR}/sbom.json"
-else
-  echo "cyclonedx-py is not installed in this environment" >&2
-  exit 2
-fi
+# Use an ephemeral tool env so local preinstalls are not required.
+uv run --with cyclonedx-bom cyclonedx-py environment --output-format json --output-file "${OUT_DIR}/sbom.json"
 
 # Post-deploy manual steps (require a live server URL):
 #   uv run python scripts/rollback_drill.py --base-url <URL> --session-id <ID>
@@ -30,7 +22,7 @@ fi
 
 echo "[4/4] artifact signing (cosign keyless)"
 if ! command -v cosign >/dev/null 2>&1; then
-  echo "cosign is not installed; signing gate cannot be completed" >&2
+  echo "cosign binary is not installed; signing gate cannot be completed" >&2
   exit 2
 fi
 

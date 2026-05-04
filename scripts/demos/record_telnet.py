@@ -135,7 +135,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Record terminal demo with asciinema
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
 
-    # Start telnet + provide-terminal server in a background thread
+    # Start telnet + provide-uterm server in a background thread
     # (async setup needs its own event loop so it doesn't conflict with main thread)
     telnet_port = free_port()
     holders: dict[str, Any] = {}

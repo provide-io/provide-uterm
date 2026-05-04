@@ -1,0 +1,372 @@
+.provide-hijack, .provide-hijack * { box-sizing: border-box; }
+
+.provide-hijack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #0b0f14;
+  color: #e2e8f0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+/* ── Toolbar ── */
+.provide-hijack .hijack-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #141920;
+  border-bottom: 1px solid #1e2530;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  height: 30px;
+}
+
+.provide-hijack .hijack-title {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: #7a9ab8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.provide-hijack .hijack-status {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.provide-hijack .hijack-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #444;
+  flex-shrink: 0;
+}
+.provide-hijack .hijack-status-dot.live { background: #22c55e; box-shadow: 0 0 4px #22c55e; animation: live-pulse 2s ease-in-out infinite; }
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 2px #22c55e; }
+  50%       { box-shadow: 0 0 7px #22c55e; }
+}
+.provide-hijack .hijack-status-dot.warn { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
+.provide-hijack .hijack-status-dot.bad  { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
+
+/* ── Activity indicator animations ── */
+.provide-hijack .hijack-status-dot.activity-flash {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: activity-flash 200ms ease-out;
+}
+
+@keyframes activity-flash {
+  0% {
+    box-shadow: 0 0 12px #22c55e;
+  }
+  100% {
+    box-shadow: 0 0 2px #22c55e;
+  }
+}
+
+.provide-hijack .hijack-controls {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  flex-wrap: nowrap;
+  border-left: 1px solid #1e2530;
+  margin-left: 4px;
+  padding-left: 6px;
+}
+
+.provide-hijack .hbtn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #2a3040;
+  background: #1e2530;
+  color: #ccc;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.provide-hijack .hbtn:hover:not(:disabled) { border-color: #3a4555; background: #253040; color: #fff; }
+.provide-hijack .hbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+.provide-hijack .hbtn.primary { border-color: #22c55e55; color: #22c55e; }
+.provide-hijack .hbtn.primary:hover:not(:disabled) { background: #22c55e22; border-color: #22c55e; }
+.provide-hijack .hbtn.danger { border-color: #ef444455; color: #ef4444; }
+.provide-hijack .hbtn.danger:hover:not(:disabled) { background: #ef444422; border-color: #ef4444; }
+
+.provide-hijack .hijack-prompt {
+  margin-left: auto;
+  font-size: 11px;
+  color: #4a6080;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* ── Terminal area ── */
+.provide-hijack .hijack-terminal {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Text input row (visible when hijacked by me) ── */
+.provide-hijack .hijack-input-row {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: #141920;
+  border-top: 1px solid #1e2530;
+  flex-shrink: 0;
+}
+.provide-hijack .hijack-input-row.visible { display: flex; }
+.provide-hijack .hijack-input-row::before {
+  content: '$';
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  color: #22c55e;
+  padding: 0 4px 0 8px;
+  flex-shrink: 0;
+}
+.provide-hijack .hijack-input-field {
+  flex: 1;
+  background: #0d1117;
+  border: 1px solid #2a3040;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  padding: 3px 8px;
+  outline: none;
+}
+.provide-hijack .hijack-input-field:focus { border-left: 2px solid #22c55e; border-color: #22c55e66; }
+.provide-hijack .hijack-input-send {
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid #22c55e55;
+  background: #22c55e22;
+  color: #22c55e;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.provide-hijack .hijack-input-send:hover { background: #22c55e33; border-color: #22c55e; }
+
+/* ── Analysis panel ── */
+.provide-hijack .hijack-analysis {
+  border-top: 1px solid #1e2530;
+  flex-shrink: 0;
+  max-height: 130px;
+  overflow-y: auto;
+  background: #0d1117;
+}
+.provide-hijack .hijack-analysis summary {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #4a6080;
+  cursor: pointer;
+  user-select: none;
+  background: #141920;
+  border-bottom: 1px solid #1e2530;
+  list-style: none;
+}
+.provide-hijack .hijack-analysis summary::-webkit-details-marker { display: none; }
+.provide-hijack .hijack-analysis summary::before { content: '▶ '; font-size: 9px; }
+.provide-hijack .hijack-analysis[open] summary::before { content: '▼ '; font-size: 9px; }
+.provide-hijack .hijack-analysis summary:hover { color: #8899aa; }
+.provide-hijack .hijack-analysis pre {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #99aabb;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* ── Scrollbar ── */
+.provide-hijack .hijack-analysis::-webkit-scrollbar { width: 5px; }
+.provide-hijack .hijack-analysis::-webkit-scrollbar-track { background: transparent; }
+.provide-hijack .hijack-analysis::-webkit-scrollbar-thumb { background: #2a3040; border-radius: 3px; }
+
+.provide-hijack .hijack-terminal::-webkit-scrollbar { width: 4px; }
+.provide-hijack .hijack-terminal::-webkit-scrollbar-track { background: transparent; }
+.provide-hijack .hijack-terminal::-webkit-scrollbar-thumb { background: rgba(100,120,150,0.3); border-radius: 2px; }
+
+/* ── Mobile key toolbar ── */
+.provide-hijack .mobile-keys {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 5px 8px;
+  background: #141920;
+  border-top: 1px solid #1e2530;
+  flex-shrink: 0;
+}
+.provide-hijack .mobile-keys.visible { display: flex; }
+.provide-hijack .mkey {
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid #2a3040;
+  background: #1e2530;
+  color: #ccd6e8;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+  transition: background 0.1s, border-color 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.provide-hijack .mkey:hover { background: #253040; border-color: #3a4555; color: #fff; }
+.provide-hijack .mkey:active { background: #22c55e22; border-color: #22c55e66; }
+
+/* ── Command Approval UI ── */
+.provide-hijack .hijack-approval-modal {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.provide-hijack .hijack-approval-card {
+  background: #1a1f26;
+  border: 1px solid #ffab40;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 450px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(255, 171, 64, 0.15);
+  animation: hijack-fade-in 0.2s ease-out;
+}
+
+@keyframes hijack-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.provide-hijack .hijack-approval-title {
+  color: #ffab40;
+  font-weight: bold;
+  font-size: 15px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provide-hijack .hijack-approval-body {
+  font-size: 13px;
+  color: #ccd6e8;
+  line-height: 1.5;
+}
+
+.provide-hijack .hijack-approval-command {
+  background: #0d1117;
+  border: 1px solid #2d333b;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 15px 0;
+  font-family: "Fira Code", monospace;
+  font-size: 12px;
+  color: #fff;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.provide-hijack .hijack-approval-timer {
+  font-size: 12px;
+  color: #8b949e;
+  margin-top: 10px;
+}
+
+.provide-hijack .hijack-approval-timer span {
+  color: #ffab40;
+  font-weight: bold;
+}
+
+.provide-hijack .hijack-approval-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.provide-hijack .hijack-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.1s;
+}
+
+.provide-hijack .hijack-btn-approve {
+  background: #238636;
+  color: #fff;
+}
+.provide-hijack .hijack-btn-approve:hover:not(:disabled) { background: #2ea043; }
+.provide-hijack .hijack-btn-reject {
+  background: #da3633;
+  color: #fff;
+}
+.provide-hijack .hijack-btn-reject:hover:not(:disabled) { background: #f85149; }
+.provide-hijack .hijack-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.provide-hijack .hijack-approval-statusbar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: #ffab40;
+  color: #000;
+  padding: 6px 15px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+  animation: hijack-slide-up 0.2s ease-out;
+}
+
+@keyframes hijack-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.provide-hijack .hijack-approval-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.provide-hijack .hijack-approval-spinner {
+  animation: hijack-spin 2s linear infinite;
+  display: inline-block;
+}
+
+@keyframes hijack-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -4,7 +4,7 @@
 
 In high-stakes environments — production infrastructure, regulated systems, disaster recovery — certain commands are too dangerous to execute without a second pair of eyes. Existing solutions require operators to context-switch to a separate approval system (Jira, ServiceNow, Slack) *after* they have already typed the command, creating a race between intent and execution.
 
-provide-terminal holds the hijack input stream: it is the only place in the stack that can intercept a command *before* it reaches the remote host. A policy-driven approval gate at this layer can hold a command for async human approval without any changes to the remote host, the operator's terminal client, or the worker.
+provide-uterm holds the hijack input stream: it is the only place in the stack that can intercept a command *before* it reaches the remote host. A policy-driven approval gate at this layer can hold a command for async human approval without any changes to the remote host, the operator's terminal client, or the worker.
 
 ---
 

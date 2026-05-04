@@ -106,7 +106,7 @@ def _parse_feature_filter() -> set[str] | None:
 def _write_index(results: dict[str, dict[str, Path | None]], descriptions: dict[str, str]) -> Path:
     index_path = BASE_OUT / "INDEX.md"
     lines = [
-        "# provide-terminal Feature Demos",
+        "# provide-uterm Feature Demos",
         "",
         "One recording set per feature — terminal cast (asciinema) + browser video (MP4).",
         "",
@@ -138,7 +138,7 @@ def main() -> None:
     BASE_OUT.mkdir(parents=True, exist_ok=True)
 
     print("\n\033[1;35m╔══════════════════════════════════════════════════╗\033[0m")
-    print("\033[1;35m║   provide-terminal Per-Feature Demo Recording    ║\033[0m")
+    print("\033[1;35m║   provide-uterm Per-Feature Demo Recording    ║\033[0m")
     print("\033[1;35m╚══════════════════════════════════════════════════╝\033[0m\n")
 
     results: dict[str, dict[str, Path | None]] = {}

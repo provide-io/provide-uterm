@@ -10,7 +10,7 @@
 host = "0.0.0.0"
 port = 27780
 public_base_url = "http://localhost:27780"
-title = "provide-terminal (Docker)"
+title = "provide-uterm (Docker)"
 
 [auth]
 # Dev mode: no JWT required. Accepts X-Uterm-Principal header or anonymous.

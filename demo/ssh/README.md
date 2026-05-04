@@ -2,7 +2,7 @@
 
 Connect a session to a remote host over SSH and stream the output live to the browser. The
 full SSH handshake happens server-side — the browser just sees a live terminal. Supports
-interactive commands, resize, and all the features of the provide-terminal hub.
+interactive commands, resize, and all the features of the provide-uterm hub.
 
 **What you'll see:** A session connects to an SSH host, negotiates the connection, and opens
 a remote shell. Commands run on the remote host and their output appears in the browser in

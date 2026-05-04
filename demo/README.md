@@ -1,4 +1,4 @@
-# provide-terminal Demo Recordings
+# provide-uterm Demo Recordings
 
 Each subdirectory contains the recordings for one feature demo. Every demo produces a full
 browser recording (`browser.mp4`), a short highlight clip (`*_trim.mp4`), and where

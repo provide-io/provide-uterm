@@ -35,10 +35,10 @@ def main() -> int:
         default=[
             "**/__init__.py",
             "**/.venv-workers/**",
-            "packages/provide-terminal-cloudflare/**",
+            "packages/provide-uterm-cloudflare/**",
             "scripts/*.py",
             "*/.venv-workers/*",
-            "*/packages/provide-terminal-cloudflare/*",
+            "*/packages/provide-uterm-cloudflare/*",
             "*/scripts/*.py",
         ],
         help="Glob for files to skip (repeatable).",

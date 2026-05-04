@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml frontend-components
-title provide-terminal-frontend — Component Map
+title provide-uterm-frontend — Component Map
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333

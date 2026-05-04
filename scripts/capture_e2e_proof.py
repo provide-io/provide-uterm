@@ -7,7 +7,7 @@ End-to-end proof: LD_PRELOAD capture → FastAPI session → CF DO relay.
 Proves the full pipeline in one run:
 
   1. [CF DO]     pywrangler dev starts → accepts PAM events at /api/pam-events
-  2. [FastAPI]   provide-terminal server starts with PAM notify socket + relay config
+  2. [FastAPI]   provide-uterm server starts with PAM notify socket + relay config
   3. [PAM event] Simulated pam_uterm.so open → pam_integration creates a
                  pty_capture session AND forwards to CF DO
   4. [Capture]   On Linux: real LD_PRELOAD subprocess writes to capture socket.
@@ -19,13 +19,13 @@ Usage (from repo root):
     uv run python scripts/capture_e2e_proof.py
 
 Requires:
-    - provide-terminal-platform installed (pip install -e packages/provide-terminal-platform)
+    - provide-uterm-platform installed (pip install -e packages/provide-uterm-platform)
     - pywrangler available (pip install pywrangler)
     - websockets (pip install websockets)
     - httpx (pip install httpx)
 
 On Linux only: libuterm_capture.so must be built:
-    make -C packages/provide-terminal-platform/native/capture/
+    make -C packages/provide-uterm-platform/native/capture/
 """
 
 from __future__ import annotations
@@ -45,8 +45,8 @@ import urllib.request
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal/src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages/provide-terminal-platform/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm/src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm-platform/src"))
 
 import uvicorn  # noqa: E402
 from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
@@ -123,7 +123,7 @@ def _http_get(base: str, path: str, token: str) -> tuple[int, dict]:
 
 
 def _start_server(config: object) -> tuple[uvicorn.Server, str]:
-    """Start provide-terminal server in a daemon thread. Returns (server, base_url)."""
+    """Start provide-uterm server in a daemon thread. Returns (server, base_url)."""
     app = create_server_app(config)  # type: ignore[arg-type]
     srv = uvicorn.Server(
         uvicorn.Config(
@@ -138,7 +138,7 @@ def _start_server(config: object) -> tuple[uvicorn.Server, str]:
     deadline = time.monotonic() + 10.0
     while not srv.started:
         if time.monotonic() > deadline:
-            _fail("provide-terminal server did not start within 10s")
+            _fail("provide-uterm server did not start within 10s")
         time.sleep(0.05)
     port: int = srv.servers[0].sockets[0].getsockname()[1]
     return srv, f"http://127.0.0.1:{port}"
@@ -212,14 +212,14 @@ def main() -> None:
     print(f"platform: {sys.platform}")
     print()
 
-    # ── 0. Check for provide-terminal-platform ────────────────────────────────
+    # ── 0. Check for provide-uterm-platform ────────────────────────────────
     try:
         from provide.terminal.pty._build import get_capture_lib_path
         from provide.terminal.pty.pam_listener import PamNotifyListener  # noqa: F401
 
-        _ok("provide-terminal-platform importable")
+        _ok("provide-uterm-platform importable")
     except ImportError as exc:
-        _fail(f"provide-terminal-platform not installed: {exc}")
+        _fail(f"provide-uterm-platform not installed: {exc}")
         return
 
     lib_path = get_capture_lib_path()
@@ -241,7 +241,7 @@ def main() -> None:
         # ── 1. Start pywrangler dev (CF DO) ───────────────────────────────────
         print()
         print("Step 1: Start CF DO (pywrangler dev)...")
-        cf_dir = _REPO_ROOT / "packages" / "provide-terminal-cloudflare"
+        cf_dir = _REPO_ROOT / "packages" / "provide-uterm-cloudflare"
         pywrangler_proc = subprocess.Popen(
             [
                 "uv",
@@ -263,9 +263,9 @@ def main() -> None:
         _ok(f"pywrangler dev ready on port {_PYWRANGLER_PORT}")
 
         try:
-            # ── 2. Start provide-terminal server ────────────────────────────────
+            # ── 2. Start provide-uterm server ────────────────────────────────
             print()
-            print("Step 2: Start provide-terminal FastAPI server with PAM config...")
+            print("Step 2: Start provide-uterm FastAPI server with PAM config...")
             from provide.terminal.server.models import PamConfig
 
             config = default_server_config()

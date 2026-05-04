@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml render-architecture
-title provide-terminal (render module) — Module Architecture
+title provide-uterm (render module) — Module Architecture
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333
@@ -14,7 +14,7 @@ skinparam arrowColor #2563eb
 skinparam noteBorderColor #d1d5db
 skinparam noteBackgroundColor #f9fafb
 
-package "provide-terminal / render (zero runtime deps)" {
+package "provide-uterm / render (zero runtime deps)" {
   [palette.py\nANSI16, XTERM256 tables\ncolor quantizers] as PAL
   [sgr.py\nSGR escape emitters\nfg/bg/reset sequences] as SGR
   [image.py\nPillow -> ANSI conversion\nhalf-block rendering] as IMG
@@ -27,8 +27,8 @@ package "Optional Extras" #fefce8 {
 }
 
 package "Consumers" {
-  [provide-terminal\nrender leaf modules] as SHIM
-  [provide-terminal\nshell render command] as SHREND
+  [provide-uterm\nrender leaf modules] as SHIM
+  [provide-uterm\nshell render command] as SHREND
 }
 
 ' Internal relationships

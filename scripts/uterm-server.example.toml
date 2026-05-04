@@ -2,7 +2,7 @@
 host = "127.0.0.1"
 port = 8780
 public_base_url = "http://127.0.0.1:8780"
-title = "provide-terminal-server"
+title = "provide-uterm-server"
 
 [auth]
 # Local/dev profile (header-compatible and no JWT requirements).

@@ -29,8 +29,8 @@ CONFIG_FILES: Final[tuple[str, ...]] = (
 )
 MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = ("--randomly-dont-reorganize",)
 DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
-    "packages/provide-terminal/src/provide/terminal/",
-    "packages/provide-terminal-platform/src/provide/terminal/pty/",
+    "packages/provide-uterm/src/provide/terminal/",
+    "packages/provide-uterm-platform/src/provide/terminal/pty/",
 )
 
 
@@ -75,7 +75,7 @@ def _sanitize_mutants_pyproject(
     if strip_workspace:
         # Strip uv workspace config — mutants/ doesn't contain workspace members.
         # Do NOT strip from the root pyproject.toml: uv needs workspace/sources
-        # to resolve packages like provide-terminal that aren't on PyPI.
+        # to resolve packages like provide-uterm that aren't on PyPI.
         updated = re.sub(
             r"^\[tool\.uv\.workspace\]\n(?:.*\n)*?\n",
             "\n",
@@ -115,7 +115,7 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
     `src/` at the root is a symlink tree that mirrors every package's source,
     so mutmut uses paths like `src/provide/terminal/pty/connector.py`.  Git
     diff returns the real file path, e.g.
-    `packages/provide-terminal-platform/src/provide/terminal/pty/connector.py`.
+    `packages/provide-uterm-platform/src/provide/terminal/pty/connector.py`.
 
     Strategy: walk paths_to_mutate from the root pyproject.toml and return the
     first entry whose resolved inode matches the changed file's inode, so we

@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml tunnel-inspect
-title provide-terminal-server (tunnel module) — HTTP Inspect / Intercept Flow
+title provide-uterm-server (tunnel module) — HTTP Inspect / Intercept Flow
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333

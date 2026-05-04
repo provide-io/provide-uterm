@@ -4,7 +4,7 @@
 
 Terminal sessions in privileged environments (production infrastructure, PCI-scoped systems, regulated industries) generate no structured audit trail. Raw byte dumps exist in some systems, but they are unsearchable, unverifiable, and useless for compliance workflows. There is no standard mechanism to prove *who* typed *what* at *when*, in a court-admissible or audit-ready form.
 
-provide-terminal sits at the exact proxy layer where all terminal I/O passes. It is the right place to capture this data — without requiring changes to the remote host, the worker, or the terminal client.
+provide-uterm sits at the exact proxy layer where all terminal I/O passes. It is the right place to capture this data — without requiring changes to the remote host, the worker, or the terminal client.
 
 ---
 

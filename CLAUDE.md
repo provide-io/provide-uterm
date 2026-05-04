@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**provide-terminal** is a terminal session platform that creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers. It's built around xterm.js as the screen, with provide-terminal managing the entire ecosystem.
+**provide-uterm** is a terminal session platform that creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers. It's built around xterm.js as the screen, with provide-uterm managing the entire ecosystem.
 
 Key capabilities: session control (hijack leasing with viewer/operator/admin roles), pluggable connectors, tunnel sharing, HTTP inspection/interception, collaborative presence (DeckMux), AI/MCP integration (21 tools), and agent fleet management.
 
@@ -26,10 +26,10 @@ uv run pytest
 uv run python scripts/run_all_tests.py
 
 # Run a single test
-uv run pytest packages/provide-terminal/tests/bridge/test_hub.py::test_name -vv
+uv run pytest packages/provide-uterm/tests/bridge/test_hub.py::test_name -vv
 
 # Run tests for a single package
-uv run pytest packages/provide-terminal-client/tests/ai/ -v
+uv run pytest packages/provide-uterm-client/tests/ai/ -v
 
 # Full quality gate (ruff, mypy, pytest, xenon, vulture)
 uv run python scripts/run_pytest_gate.py -q
@@ -42,8 +42,8 @@ uv run ruff check --fix
 uv run ruff format
 
 # Type checking
-uv run mypy packages/provide-terminal/src/
-uv run ty check packages/provide-terminal/src/
+uv run mypy packages/provide-uterm/src/
+uv run ty check packages/provide-uterm/src/
 
 # Frontend (TypeScript)
 npm ci
@@ -65,13 +65,13 @@ docker compose -f docker/docker-compose.yml up
 
 | Package | Role |
 |---------|------|
-| `provide-terminal` | Core library: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay |
-| `provide-terminal-server` | Server stack: bridge hub, FastAPI server, CLI (`uterm`, `uterm-server`), tunnel, gateway |
-| `provide-terminal-client` | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`) |
-| `provide-terminal-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, External Management Tier (`uterm-manager`) |
-| `provide-terminal-cloudflare` | CF Worker + Durable Object adapter |
-| `provide-terminal-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
-| `provide-terminal-app` | App shell |
+| `provide-uterm` | Core library: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay |
+| `provide-uterm-server` | Server stack: bridge hub, FastAPI server, CLI (`uterm`, `uterm-server`), tunnel, gateway |
+| `provide-uterm-client` | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`) |
+| `provide-uterm-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, External Management Tier (`uterm-manager`) |
+| `provide-uterm-cloudflare` | CF Worker + Durable Object adapter |
+| `provide-uterm-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
+| `provide-uterm-app` | App shell |
 
 **Three-Layer Bridge System** (core architecture):
 1. **HijackableMixin** — Worker-side mixin for hijackability at checkpoints
@@ -88,7 +88,7 @@ docker compose -f docker/docker-compose.yml up
 - **Mutation testing** enforced at 100% kill rate — see `MUTATION_PATTERNS.md` for patterns
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Test markers: `playwright`, `mutant`, `memray`, `slow`, `e2e`, `real_cf`
-- Default testpaths: `packages/provide-terminal/tests`, `packages/provide-terminal-cloudflare/tests`
+- Default testpaths: `packages/provide-uterm/tests`, `packages/provide-uterm-cloudflare/tests`
 - Root `conftest.py` handles mutmut source path manipulation — don't modify unless you understand mutation testing setup
 
 ## Pre-commit Hooks

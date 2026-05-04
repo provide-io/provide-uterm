@@ -2,7 +2,7 @@
 ' SPDX-License-Identifier: AGPL-3.0-or-later
 
 @startuml pty-architecture
-title provide-terminal-platform (pty module) — Architecture
+title provide-uterm-platform (pty module) — Architecture
 
 skinparam backgroundColor #ffffff
 skinparam defaultFontColor #333333
@@ -26,7 +26,7 @@ package "Browser / CF DO" {
   end note
 }
 
-package "provide-terminal server (Python)" {
+package "provide-uterm server (Python)" {
   [HostedSessionRuntime\n(session lifecycle)] as RUNTIME
 
   package "PTYConnector  (connector_type=pty)" #eff6ff {
@@ -44,7 +44,7 @@ package "provide-terminal server (Python)" {
   }
 }
 
-package "provide-terminal-platform / pty  (native C — _native/)" #fefce8 {
+package "provide-uterm-platform / pty  (native C — _native/)" #fefce8 {
   [libuterm_capture.so\n(.so / .dylib)\nLD_PRELOAD / DYLD_INSERT_LIBRARIES\nintercepts read/write/connect] as CAPLIB
   [pam_uterm.so\n(.so)\nPAM session module\nnotifies server via Unix socket] as PAMU
 }
@@ -89,7 +89,7 @@ note bottom of PAMU
   Daemon bridge mode:
   drop pam_uterm.so into /etc/pam.d/sshd
   → every sshd session appears in
-  provide-terminal automatically.
+  provide-uterm automatically.
 end note
 
 @enduml

@@ -122,17 +122,17 @@ def main() -> None:
         sys.exit(1)
     print(f"PAM line: {pam_line}")
 
-    # Pre-flight: verify provide-terminal is importable inside Colima
+    # Pre-flight: verify provide-uterm is importable inside Colima
     r2 = _colima(
         "python3 -c 'from provide.terminal.server.pam_integration import run_pam_integration; print(\"ok\")' 2>&1",
         capture=True,
     )
     if "ok" not in r2.stdout:
-        print("ERROR: provide-terminal not importable inside Colima")
+        print("ERROR: provide-uterm not importable inside Colima")
         print(f"  {r2.stdout.strip()}")
         print("Run: bash scripts/colima_install_uterm.sh")
         sys.exit(1)
-    print("provide-terminal importable inside Colima: ok")
+    print("provide-uterm importable inside Colima: ok")
 
     # Clean up any stale files
     EVENT_LOG.parent.mkdir(parents=True, exist_ok=True)

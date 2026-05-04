@@ -125,7 +125,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Record terminal demo with asciinema
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
 
-    # Start target API and provide-terminal server
+    # Start target API and provide-uterm server
     target_port, target_srv = _start_target_api()
     base_url, server = start_server()
     time.sleep(1.0)

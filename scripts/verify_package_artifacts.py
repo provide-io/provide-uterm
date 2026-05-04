@@ -14,9 +14,9 @@ DIST = ROOT / "dist"
 
 def _expected_frontend_files() -> tuple[str, ...]:
     """Discover all frontend files from the source tree at build time."""
-    frontend = ROOT / "packages" / "provide-terminal-server" / "src" / "provide" / "terminal" / "server" / "frontend"
+    frontend = ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "terminal" / "server" / "frontend"
     return tuple(
-        str(p.relative_to(ROOT / "packages" / "provide-terminal-server" / "src")).replace("\\", "/")
+        str(p.relative_to(ROOT / "packages" / "provide-uterm-server" / "src")).replace("\\", "/")
         for p in frontend.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts and not p.name.startswith(".")
     )
@@ -27,7 +27,7 @@ def _build() -> None:
     if uv is None:
         raise RuntimeError("uv executable not found in PATH")
     # Build the server package (which owns the frontend assets)
-    subprocess.run([uv, "build", "--package", "provide-terminal-server"], cwd=ROOT, check=True)
+    subprocess.run([uv, "build", "--package", "provide-uterm-server"], cwd=ROOT, check=True)
 
 
 def _wheel_members(path: Path) -> set[str]:
@@ -49,16 +49,16 @@ def _assert_contains(members: set[str], required: tuple[str, ...], label: str) -
 
 def main() -> int:
     _build()
-    # Filter to provide-terminal-server artifacts only (not workspace meta-package)
-    wheels = sorted(DIST.glob("provide_terminal_server-*.whl"))
-    sdists = sorted(DIST.glob("provide_terminal_server-*.tar.gz"))
+    # Filter to provide-uterm-server artifacts only (not workspace meta-package)
+    wheels = sorted(DIST.glob("provide_uterm_server-*.whl"))
+    sdists = sorted(DIST.glob("provide_uterm_server-*.tar.gz"))
     if not wheels or not sdists:
-        raise RuntimeError("expected provide-terminal-server wheel and sdist in dist/")
+        raise RuntimeError("expected provide-uterm-server wheel and sdist in dist/")
 
     required = _expected_frontend_files()
     if not required:
         raise RuntimeError(
-            "no frontend files found in packages/provide-terminal-server/src/provide/terminal/server/frontend/"
+            "no frontend files found in packages/provide-uterm-server/src/provide/terminal/server/frontend/"
         )
 
     wheel_members = _wheel_members(wheels[-1])

@@ -153,7 +153,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Record terminal demo with asciinema
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
 
-    # Start SSH server + provide-terminal server in a background thread
+    # Start SSH server + provide-uterm server in a background thread
     loop_holder: list[asyncio.AbstractEventLoop] = []
     ssh_srv_holder: list[Any] = []
     base_url_holder: list[str] = []

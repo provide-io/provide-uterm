@@ -55,7 +55,7 @@ HIGHLIGHT_DURATION_S: float = 12.0
 # ---------------------------------------------------------------------------
 
 _CAST: list[dict[str, str]] = [
-    {"name": "tim", "display": "Tim", "role": "operator"},
+    {"name": "operator", "display": "Tim", "role": "operator"},
     {"name": "kal", "display": "Kal", "role": "operator"},
     {"name": "chris", "display": "Chris", "role": "operator"},
     {"name": "brandon", "display": "Brandon", "role": "operator"},
@@ -66,7 +66,7 @@ _CAST: list[dict[str, str]] = [
     {"name": "sentinel", "display": "Sentinel", "role": "viewer"},
 ]
 
-_HERO_NAMES = ["tim", "brandon", "heidi"]
+_HERO_NAMES = ["operator", "brandon", "heidi"]
 
 # ---------------------------------------------------------------------------
 # Fake incident data
@@ -355,7 +355,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         act1_tim.append((_send_cmd(keys, wait_s), 0.3, None))
 
     # Screenshot after Act 1 commands
-    act1_tim.append((None, 0.5, "act1-tim-investigating.png"))  # step ~8
+    act1_tim.append((None, 0.5, "act1-operator-investigating.png"))  # step ~8
 
     # Padding for other users during Act 1 (they haven't joined yet)
     act1_pad_len = len(act1_tim)
@@ -531,7 +531,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     all_steps: dict[str, list[BrowserStep]] = {}
 
     # Tim's full sequence
-    all_steps["tim"] = act1_tim + act2_tim + act3_tim + act4_tim + act5_tim
+    all_steps["operator"] = act1_tim + act2_tim + act3_tim + act4_tim + act5_tim
 
     # Other users: padding during Act 1, join during Act 2, act during 3-5
     for uname in join_order:

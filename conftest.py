@@ -18,11 +18,11 @@ from pathlib import Path
 if not os.environ.get("MUTANT_UNDER_TEST"):
     _ROOT = Path(__file__).resolve().parent
     _PACKAGE_SRCS = [
-        _ROOT / "packages" / "provide-terminal" / "src",
-        _ROOT / "packages" / "provide-terminal-server" / "src",
-        _ROOT / "packages" / "provide-terminal-cloudflare" / "src",
-        _ROOT / "packages" / "provide-terminal-platform" / "src",
-        _ROOT / "packages" / "provide-terminal-client" / "src",
+        _ROOT / "packages" / "provide-uterm" / "src",
+        _ROOT / "packages" / "provide-uterm-server" / "src",
+        _ROOT / "packages" / "provide-uterm-cloudflare" / "src",
+        _ROOT / "packages" / "provide-uterm-platform" / "src",
+        _ROOT / "packages" / "provide-uterm-client" / "src",
     ]
     for _src in reversed(_PACKAGE_SRCS):
         _src_str = str(_src)

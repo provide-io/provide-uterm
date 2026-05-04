@@ -36,7 +36,7 @@ def start_server(
     port: int | None = None,
     hub_class: type | None = None,
 ) -> tuple[str, Any]:
-    """Start a provide-terminal server in a background thread.
+    """Start a provide-uterm server in a background thread.
 
     Returns (base_url, uvicorn.Server).
     Pass hub_class to enable optional hub mixins (e.g. DeckMuxTermHub).

@@ -35,7 +35,7 @@ SUBTITLE = "Share sessions via secure URL"
 HIGHLIGHT_START_S: float = 3.0
 HIGHLIGHT_DURATION_S: float = 6.0
 
-CF_DIR = Path("packages/provide-terminal-cloudflare")
+CF_DIR = Path("packages/provide-uterm-cloudflare")
 CF_PORT = 8788
 CF_URL = f"http://localhost:{CF_PORT}"
 
@@ -43,7 +43,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _sync_local_packages_into_python_modules() -> None:
-    """Copy local provide-terminal packages into CF python_modules so wrangler can import them.
+    """Copy local provide-uterm packages into CF python_modules so wrangler can import them.
 
     pywrangler cannot install local editable packages from the monorepo. We copy the source
     trees directly so the pyodide runtime can import them. Gitignored — regenerated each run.
@@ -54,14 +54,14 @@ def _sync_local_packages_into_python_modules() -> None:
     pm.mkdir(parents=True, exist_ok=True)
 
     # provide.terminal.cloudflare — the CF package itself
-    cf_src = _REPO_ROOT / "packages" / "provide-terminal-cloudflare" / "src" / "provide" / "terminal" / "cloudflare"
+    cf_src = _REPO_ROOT / "packages" / "provide-uterm-cloudflare" / "src" / "provide" / "terminal" / "cloudflare"
     cf_dst = pm / "cloudflare"
     if cf_dst.exists():
         shutil.rmtree(cf_dst)
     shutil.copytree(cf_src, cf_dst)
 
     # provide.terminal.bridge — server-side hijack/hub coordinator
-    bridge_src = _REPO_ROOT / "packages" / "provide-terminal-server" / "src" / "provide" / "terminal" / "bridge"
+    bridge_src = _REPO_ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "terminal" / "bridge"
     bridge_dst = pm / "bridge"
     if bridge_dst.exists():
         shutil.rmtree(bridge_dst)

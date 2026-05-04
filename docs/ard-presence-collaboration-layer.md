@@ -4,7 +4,7 @@
 
 Multiple browsers can observe the same terminal session simultaneously, but they are invisible to each other. There is no awareness of who else is watching, no way to communicate without leaving the terminal, and no mechanism to annotate what is happening on screen — crucial for incident response, pair programming on production, and training scenarios where a senior operator needs to guide a junior one.
 
-provide-terminal already broadcasts terminal output to all connected browsers and tracks per-browser roles. The infrastructure for a real-time collaboration layer is already in place. What is missing is the presence model, the annotation data model, and the broadcast mechanism for non-terminal events.
+provide-uterm already broadcasts terminal output to all connected browsers and tracks per-browser roles. The infrastructure for a real-time collaboration layer is already in place. What is missing is the presence model, the annotation data model, and the broadcast mechanism for non-terminal events.
 
 ---
 

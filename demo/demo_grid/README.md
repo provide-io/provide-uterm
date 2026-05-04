@@ -2,7 +2,7 @@
 
 Nine live terminal sessions running simultaneously in a single browser window, arranged in a
 3x3 grid. Each session streams its own animated ANSI color-wheel render independently —
-demonstrating that provide-terminal can host and multiplex many concurrent sessions without
+demonstrating that provide-uterm can host and multiplex many concurrent sessions without
 them interfering with each other.
 
 **What you'll see:** A full-screen 3x3 grid of terminal panes, each playing a spinning

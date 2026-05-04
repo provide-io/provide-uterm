@@ -69,11 +69,11 @@ def main() -> int:
         "--roots",
         nargs="+",
         default=[
-            "packages/provide-terminal/src",
-            "packages/provide-terminal/tests",
+            "packages/provide-uterm/src",
+            "packages/provide-uterm/tests",
             "scripts",
-            "packages/provide-terminal-cloudflare/src",
-            "packages/provide-terminal-cloudflare/tests",
+            "packages/provide-uterm-cloudflare/src",
+            "packages/provide-uterm-cloudflare/tests",
         ],
         help="Directories to scan for Python files.",
     )

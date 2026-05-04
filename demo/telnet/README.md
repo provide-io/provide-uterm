@@ -1,6 +1,6 @@
 # Telnet Connector
 
-Legacy telnet connections are first-class citizens in provide-terminal. The session handles
+Legacy telnet connections are first-class citizens in provide-uterm. The session handles
 the telnet option negotiation and presents a live interactive terminal in the browser — useful
 for managing network devices, embedded systems, retro software, or any service that still
 speaks telnet.

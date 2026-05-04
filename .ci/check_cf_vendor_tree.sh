@@ -4,7 +4,7 @@
 # submodule vendored. A missing tree indicates `pywrangler sync` wasn't run.
 set -euo pipefail
 
-VENDOR=packages/provide-terminal-cloudflare/python_modules
+VENDOR=packages/provide-uterm-cloudflare/python_modules
 
 for sub in "provide/shell" "provide/terminal/shell"; do
     path="$VENDOR/$sub"

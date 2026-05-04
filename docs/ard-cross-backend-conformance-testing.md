@@ -6,7 +6,7 @@ Accepted
 
 ## Problem
 
-FastAPI and Cloudflare both expose provide-terminal session APIs, browser flows, and hijack controls, but parity drifts over time.
+FastAPI and Cloudflare both expose provide-uterm session APIs, browser flows, and hijack controls, but parity drifts over time.
 
 The drift happens for predictable reasons:
 

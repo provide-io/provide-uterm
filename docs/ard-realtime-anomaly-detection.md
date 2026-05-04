@@ -4,7 +4,7 @@
 
 Terminal sessions in privileged environments can expose credentials, trigger privilege escalation, or execute destructive commands — and no one finds out until after the fact. SIEM and log-aggregation tools operate on finalized logs with minutes-to-hours of lag. EDR tools live on the host, not the proxy.
 
-provide-terminal receives every byte of terminal output *before* it reaches the browser. This is the earliest possible interception point — before the operator sees the output, before screenshots are taken, before any downstream system processes it. A rule engine at this layer can emit alerts in real time, with session context that host-level tools cannot see (who is connected, what role they hold, whether a hijack is active).
+provide-uterm receives every byte of terminal output *before* it reaches the browser. This is the earliest possible interception point — before the operator sees the output, before screenshots are taken, before any downstream system processes it. A rule engine at this layer can emit alerts in real time, with session context that host-level tools cannot see (who is connected, what role they hold, whether a hijack is active).
 
 ---
 
