@@ -172,7 +172,7 @@ async def test_fetch_websocket_worker_upgrade() -> None:
 
     with (
         patch.dict(sys.modules, {"js": js_mock}),
-        patch("provide.terminal.cloudflare.do.session_runtime.update_kv_session", mock_kv),
+        patch("provide.terminal.cloudflare.do.session_runtime.fetch.update_kv_session", mock_kv),
     ):
         resp = await rt.fetch(
             _MockRequest(
@@ -232,7 +232,7 @@ async def test_fetch_websocket_worker_kv_raises_still_returns_101() -> None:
 
     with (
         patch.dict(sys.modules, {"js": js_mock}),
-        patch("provide.terminal.cloudflare.do.session_runtime.update_kv_session", mock_kv),
+        patch("provide.terminal.cloudflare.do.session_runtime.fetch.update_kv_session", mock_kv),
     ):
         resp = await rt.fetch(
             _MockRequest(

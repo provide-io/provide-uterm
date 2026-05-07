@@ -59,8 +59,19 @@ def _fresh_import(
     block: list[str],
     inject: dict[str, object],
 ) -> ModuleType:
-    """Remove *target* from sys.modules, block primary imports, inject mocks, re-import."""
+    """Remove *target* from sys.modules, block primary imports, inject mocks, re-import.
+
+    Also restores the parent package's attribute referencing the original
+    submodule so that ``from <parent> import <child>`` style accesses (used by
+    callers like ``handlers._entry_attr``) keep resolving to the original
+    module, not the fresh re-imported one.
+    """
     original = sys.modules.pop(target, _MISSING)
+    parent_name, _, child_name = target.rpartition(".")
+    parent_mod = sys.modules.get(parent_name) if parent_name else None
+    original_attr: object = _MISSING
+    if parent_mod is not None and child_name:
+        original_attr = getattr(parent_mod, child_name, _MISSING)
     try:
         with _patched_sys_modules(block, inject):
             return importlib.import_module(target)
@@ -68,6 +79,16 @@ def _fresh_import(
         sys.modules.pop(target, None)
         if original is not _MISSING:
             sys.modules[target] = original  # type: ignore[assignment]
+        # Restore parent package's attribute so the parent and sys.modules
+        # agree on which module is the "real" one.  importlib.import_module
+        # rebinds ``parent.<child>`` to the fresh module as a side effect.
+        if parent_mod is not None and child_name:
+            if original_attr is _MISSING:
+                # The attribute wasn't set before; remove the fresh-import binding.
+                if hasattr(parent_mod, child_name):
+                    delattr(parent_mod, child_name)
+            else:
+                setattr(parent_mod, child_name, original_attr)
 
 
 # ---------------------------------------------------------------------------

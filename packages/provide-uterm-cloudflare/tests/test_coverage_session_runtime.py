@@ -132,7 +132,7 @@ async def test_worker_ws_cf_access_bypasses_bearer_token() -> None:
 
     # fetch() will try to create WebSocketPair — mock extract_bearer_or_cookie
     # so we can verify auth is bypassed (doesn't return 403)
-    with patch("provide.terminal.cloudflare.do.session_runtime.extract_bearer_or_cookie", return_value=None):
+    with patch("provide.terminal.cloudflare.do.session_runtime.fetch.extract_bearer_or_cookie", return_value=None):
         try:
             resp = await rt.fetch(req)
             assert resp.status != 403
