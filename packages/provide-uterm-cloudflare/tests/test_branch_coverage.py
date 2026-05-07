@@ -367,7 +367,7 @@ async def test_websocket_error_browser_no_kv_update() -> None:
     rt.browser_sockets[rt.ws_key(ws)] = ws
 
     mock_kv = AsyncMock()
-    with patch("provide.terminal.cloudflare.do.session_runtime.update_kv_session", mock_kv):
+    with patch("provide.terminal.cloudflare.do.session_runtime.lifecycle.update_kv_session", mock_kv):
         await rt.webSocketError(ws, RuntimeError("test error"))
 
     # KV update should NOT be called for browser sockets
