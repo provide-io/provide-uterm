@@ -104,6 +104,18 @@ def test_parse_worker_hello_invalid_mode_no_mode_field() -> None:
     assert "mode" not in frame
 
 
+def test_parse_worker_hello_with_protocol_version_int() -> None:
+    """Lines 99-101: worker_hello with numeric protocol_version is captured as int."""
+    frame = parse_frame(frame_json("worker_hello", input_mode="open", protocol_version=3))
+    assert frame.get("protocol_version") == 3
+
+
+def test_parse_worker_hello_with_invalid_protocol_version_silently_ignored() -> None:
+    """Lines 102-103: worker_hello with non-numeric protocol_version is dropped silently."""
+    frame = parse_frame(frame_json("worker_hello", input_mode="open", protocol_version="not-a-number"))
+    assert "protocol_version" not in frame
+
+
 def test_parse_passthrough_frames() -> None:
     """Lines 192-204: snapshot_req/error/heartbeat/ping/hijack_request etc. pass through."""
     for frame_type in (
