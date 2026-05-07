@@ -88,7 +88,11 @@ class TestConcurrentBrowsers:
             async with connect_async_ws(_ws_url(base_url, "/ws/browser/stress3/term")) as browser:
                 await _drain_all(browser)
                 await browser.send(json.dumps({"type": "hijack_request"}))
-                state = await _drain_until(browser, "hijack_state", timeout=3.0)
+                # Bumped from 3.0s to 6.0s: with 10 concurrent WS connections,
+                # the per-browser deadline can be tight on slow CI runners and
+                # a None result here used to be silently filtered, masking the
+                # failure as `me_count != 1` rather than a timeout.
+                state = await _drain_until(browser, "hijack_state", timeout=6.0)
                 async with result_lock:
                     results.append(state)
 
@@ -97,12 +101,17 @@ class TestConcurrentBrowsers:
 
             await asyncio.gather(*[_try_hijack(i) for i in range(10)])
 
+        # Surface timeouts directly instead of letting them poison the
+        # me/other counts below.
+        missing = sum(1 for r in results if r is None)
+        assert missing == 0, f"{missing} browser(s) timed out waiting for hijack_state (out of 10)"
+
         owners = [r.get("owner") for r in results if r is not None]
         me_count = owners.count("me")
         other_count = owners.count("other")
 
-        assert me_count == 1, f"Exactly 1 browser should own hijack, got {me_count}"
-        assert other_count == 9, f"9 browsers should see owner=other, got {other_count}"
+        assert me_count == 1, f"Exactly 1 browser should own hijack, got {me_count} (owners={owners})"
+        assert other_count == 9, f"9 browsers should see owner=other, got {other_count} (owners={owners})"
 
 
 # ---------------------------------------------------------------------------
