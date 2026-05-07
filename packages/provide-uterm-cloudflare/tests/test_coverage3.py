@@ -18,7 +18,6 @@ import pytest
 from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
 from provide.terminal.cloudflare.config import JwtConfig
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
-
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
 
 

@@ -9,18 +9,13 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
+from provide.terminal.pty.socket_utils import validate_socket_path
+
 CHANNEL_STDOUT = 0x01
 CHANNEL_STDIN = 0x02
 CHANNEL_CONNECT = 0x03
 
 _HEADER = struct.Struct(">BI")  # channel (1B) + length (4B big-endian)
-
-
-def _validate_socket_path(path: str) -> None:
-    if "\x00" in path:
-        raise ValueError("socket path contains null byte")
-    if not path.startswith("/"):
-        raise ValueError("socket path must be an absolute path")
 
 
 @dataclass
@@ -37,7 +32,7 @@ class CaptureSocket:
     """
 
     def __init__(self, socket_path: str) -> None:
-        _validate_socket_path(socket_path)
+        validate_socket_path(socket_path)
         self._path = socket_path
         self._server: asyncio.Server | None = None
         self._queue: asyncio.Queue[CaptureFrame] = asyncio.Queue()

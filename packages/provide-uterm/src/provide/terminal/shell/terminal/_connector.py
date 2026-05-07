@@ -36,7 +36,7 @@ try:
 except ImportError:  # pragma: no cover
     _SessionConnector = object  # type: ignore[assignment,misc]
 
-from provide.terminal.shell._commands import AnimatedResult, CommandDispatcher
+from provide.terminal.shell.commands import AnimatedResult, CommandDispatcher
 from provide.terminal.shell._output import BANNER, CLEAR_SCREEN, PROMPT
 from provide.terminal.shell._repl import LineBuffer
 from provide.terminal.shell._sandbox import Sandbox

@@ -10,7 +10,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from provide.terminal.shell._commands import AnimatedResult, CommandDispatcher
+from provide.terminal.shell.commands import AnimatedResult, CommandDispatcher
 
 # ---------------------------------------------------------------------------
 # Helpers

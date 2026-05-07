@@ -45,37 +45,37 @@ def _req(path: str, method: str = "GET", headers: dict | None = None) -> SimpleN
 
 
 def test_resolve_spa_route_root() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     assert _resolve_spa_route("/") == ("dashboard", {})
 
 
 def test_resolve_spa_route_app() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     assert _resolve_spa_route("/app") == ("dashboard", {})
 
 
 def test_resolve_spa_route_app_slash() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     assert _resolve_spa_route("/app/") == ("dashboard", {})
 
 
 def test_resolve_spa_route_connect() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     assert _resolve_spa_route("/app/connect") == ("connect", {})
 
 
 def test_resolve_spa_route_connect_slash() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     assert _resolve_spa_route("/app/connect/") == ("connect", {})
 
 
 def test_resolve_spa_route_session() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     kind, extra = _resolve_spa_route("/app/session/abc-123")  # type: ignore[misc]
     assert kind == "session"
@@ -84,7 +84,7 @@ def test_resolve_spa_route_session() -> None:
 
 
 def test_resolve_spa_route_operator() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     kind, extra = _resolve_spa_route("/app/operator/abc-123")  # type: ignore[misc]
     assert kind == "operator"
@@ -92,7 +92,7 @@ def test_resolve_spa_route_operator() -> None:
 
 
 def test_resolve_spa_route_replay() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     kind, extra = _resolve_spa_route("/app/replay/abc-123")  # type: ignore[misc]
     assert kind == "replay"
@@ -100,7 +100,7 @@ def test_resolve_spa_route_replay() -> None:
 
 
 def test_resolve_spa_route_unknown() -> None:
-    from provide.terminal.cloudflare.entry import _resolve_spa_route
+    from provide.terminal.cloudflare.entry.spa import _resolve_spa_route
 
     assert _resolve_spa_route("/app/unknown") is None
     assert _resolve_spa_route("/random") is None
@@ -112,7 +112,7 @@ def test_resolve_spa_route_unknown() -> None:
 
 
 def test_spa_response_dashboard() -> None:
-    from provide.terminal.cloudflare.entry import _spa_response
+    from provide.terminal.cloudflare.entry.spa import _spa_response
 
     resp = _spa_response("dashboard")
     assert resp.status == 200
@@ -123,7 +123,7 @@ def test_spa_response_dashboard() -> None:
 
 
 def test_spa_response_session_includes_hijack_js() -> None:
-    from provide.terminal.cloudflare.entry import _spa_response
+    from provide.terminal.cloudflare.entry.spa import _spa_response
 
     resp = _spa_response("session", session_id="s1")
     body = resp.body
@@ -133,14 +133,14 @@ def test_spa_response_session_includes_hijack_js() -> None:
 
 
 def test_spa_response_operator_includes_hijack_js() -> None:
-    from provide.terminal.cloudflare.entry import _spa_response
+    from provide.terminal.cloudflare.entry.spa import _spa_response
 
     resp = _spa_response("operator", session_id="s1")
     assert "hijack.js" in resp.body
 
 
 def test_spa_response_replay_uses_replay_script() -> None:
-    from provide.terminal.cloudflare.entry import _spa_response
+    from provide.terminal.cloudflare.entry.spa import _spa_response
 
     resp = _spa_response("replay", session_id="r1")
     assert "server-replay-page.js" in resp.body
@@ -148,7 +148,7 @@ def test_spa_response_replay_uses_replay_script() -> None:
 
 
 def test_spa_response_connect() -> None:
-    from provide.terminal.cloudflare.entry import _spa_response
+    from provide.terminal.cloudflare.entry.spa import _spa_response
 
     resp = _spa_response("connect")
     assert "connect" in resp.body
@@ -161,31 +161,31 @@ def test_spa_response_connect() -> None:
 
 
 def test_has_cf_service_token_with_access_suffix() -> None:
-    from provide.terminal.cloudflare.entry import _has_cf_service_token
+    from provide.terminal.cloudflare.entry.auth import _has_cf_service_token
 
     assert _has_cf_service_token(SimpleNamespace(headers={"cf-access-client-id": "abc.access"})) is True
 
 
 def test_has_cf_service_token_uppercase_header() -> None:
-    from provide.terminal.cloudflare.entry import _has_cf_service_token
+    from provide.terminal.cloudflare.entry.auth import _has_cf_service_token
 
     assert _has_cf_service_token(SimpleNamespace(headers={"CF-Access-Client-Id": "abc.access"})) is True
 
 
 def test_has_cf_service_token_without_access_suffix() -> None:
-    from provide.terminal.cloudflare.entry import _has_cf_service_token
+    from provide.terminal.cloudflare.entry.auth import _has_cf_service_token
 
     assert _has_cf_service_token(SimpleNamespace(headers={"cf-access-client-id": "abc123"})) is False
 
 
 def test_has_cf_service_token_no_header() -> None:
-    from provide.terminal.cloudflare.entry import _has_cf_service_token
+    from provide.terminal.cloudflare.entry.auth import _has_cf_service_token
 
     assert _has_cf_service_token(SimpleNamespace(headers={})) is False
 
 
 def test_has_cf_service_token_exception_handling() -> None:
-    from provide.terminal.cloudflare.entry import _has_cf_service_token
+    from provide.terminal.cloudflare.entry.auth import _has_cf_service_token
 
     class _Bad:
         @property
@@ -202,7 +202,7 @@ def test_has_cf_service_token_exception_handling() -> None:
 
 async def test_handle_connect_post_creates_session() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_connect
+    from provide.terminal.cloudflare.entry.handlers import _handle_connect
 
     async def _json():
         return {"connector_type": "telnet", "display_name": "My Session", "input_mode": "open"}
@@ -222,7 +222,7 @@ async def test_handle_connect_post_creates_session() -> None:
 
 async def test_handle_connect_non_post_returns_405() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_connect
+    from provide.terminal.cloudflare.entry.handlers import _handle_connect
 
     resp = await _handle_connect(SimpleNamespace(method="GET"), SimpleNamespace(), CloudflareConfig())
     assert resp.status == 405
@@ -230,7 +230,7 @@ async def test_handle_connect_non_post_returns_405() -> None:
 
 async def test_handle_connect_ushell_prefix() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_connect
+    from provide.terminal.cloudflare.entry.handlers import _handle_connect
 
     async def _json():
         return {"connector_type": "ushell"}
@@ -244,7 +244,7 @@ async def test_handle_connect_ushell_prefix() -> None:
 
 async def test_handle_connect_no_kv_returns_500() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_connect
+    from provide.terminal.cloudflare.entry.handlers import _handle_connect
 
     async def _json():
         return {}
@@ -257,7 +257,7 @@ async def test_handle_connect_no_kv_returns_500() -> None:
 
 async def test_handle_connect_bad_json_uses_defaults() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_connect
+    from provide.terminal.cloudflare.entry.handlers import _handle_connect
 
     async def _json():
         raise ValueError("bad json")
@@ -272,7 +272,7 @@ async def test_handle_connect_bad_json_uses_defaults() -> None:
 async def test_handle_connect_dev_mode_sets_public_no_owner() -> None:
     """In dev/none mode, quick-connect sessions must be public with no owner."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_connect
+    from provide.terminal.cloudflare.entry.handlers import _handle_connect
 
     async def _json():
         return {}
@@ -296,7 +296,7 @@ async def test_handle_connect_dev_mode_sets_public_no_owner() -> None:
 
 async def test_handle_sessions_delete_purges_kv() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_sessions
+    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
 
     kv = AsyncMock()
     kv.list.return_value = SimpleNamespace(keys=[SimpleNamespace(name="session:abc")])
@@ -312,7 +312,7 @@ async def test_handle_sessions_delete_purges_kv() -> None:
 async def test_handle_sessions_delete_preserves_profile_keys() -> None:
     """Bulk delete must only remove session:* keys, not profile:* keys."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_sessions
+    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
 
     deleted: list[str] = []
 
@@ -335,7 +335,7 @@ async def test_handle_sessions_delete_preserves_profile_keys() -> None:
 
 async def test_handle_sessions_delete_no_kv_returns_500() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_sessions
+    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
 
     resp = await _handle_sessions(SimpleNamespace(method="DELETE"), SimpleNamespace(), CloudflareConfig())
     assert resp.status == 500
@@ -344,10 +344,10 @@ async def test_handle_sessions_delete_no_kv_returns_500() -> None:
 async def test_handle_sessions_delete_non_admin_returns_403() -> None:
     """Bulk DELETE requires admin role; non-admin principals receive 403."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_sessions
+    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
 
     with patch(
-        "provide.terminal.cloudflare.entry._decode_jwt_principal",
+        "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
         new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
     ):
         resp = await _handle_sessions(SimpleNamespace(method="DELETE"), SimpleNamespace(), CloudflareConfig())
@@ -363,7 +363,7 @@ async def test_handle_sessions_delete_non_admin_returns_403() -> None:
 async def test_handle_session_delete_forwards_to_do() -> None:
     from provide.terminal.cloudflare.cf_types import Response
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_session_delete
+    from provide.terminal.cloudflare.entry.handlers import _handle_session_delete
 
     stub = SimpleNamespace(fetch=AsyncMock(return_value=Response(body='{"ok":true}', status=200)))
     ns = SimpleNamespace(idFromName=lambda wid: "sid", get=lambda sid: stub)
@@ -377,7 +377,7 @@ async def test_handle_session_delete_forwards_to_do() -> None:
 
 async def test_handle_session_delete_no_do_binding() -> None:
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_session_delete
+    from provide.terminal.cloudflare.entry.handlers import _handle_session_delete
 
     with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()):
         with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
@@ -393,7 +393,7 @@ async def test_handle_session_delete_no_do_binding() -> None:
 async def test_handle_session_delete_do_exception_returns_500() -> None:
     """DO cleanup failure returns 500 and does NOT delete the KV entry."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_session_delete
+    from provide.terminal.cloudflare.entry.handlers import _handle_session_delete
 
     async def _bad_fetch(req):
         raise RuntimeError("DO down")
@@ -418,7 +418,7 @@ async def test_handle_session_delete_forbidden_for_non_owner() -> None:
     """In JWT mode, non-owner non-admin callers must receive 403."""
 
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_session_delete
+    from provide.terminal.cloudflare.entry.handlers import _handle_session_delete
 
     session_data = {"owner": "alice", "visibility": "private"}
     cfg = CloudflareConfig()
@@ -428,7 +428,7 @@ async def test_handle_session_delete_forbidden_for_non_owner() -> None:
 
     with patch("provide.terminal.cloudflare.entry.get_kv_session", new=_fake_get_kv):
         with patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
+            "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
             new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
         ):
             resp = await _handle_session_delete(SimpleNamespace(), SimpleNamespace(), "s1", cfg)
@@ -441,44 +441,44 @@ async def test_handle_session_delete_forbidden_for_non_owner() -> None:
 
 
 def test_match_api_route_sessions() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert _match_api_route("/api/sessions", _req("/api/sessions")) is not None
 
 
 def test_match_api_route_connect() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert _match_api_route("/api/connect", _req("/api/connect")) is not None
 
 
 def test_match_api_route_session_delete() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert _match_api_route("/api/sessions/abc-123", _req("/api/sessions/abc-123", method="DELETE")) is not None
 
 
 def test_match_api_route_session_get_no_match() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert _match_api_route("/api/sessions/abc-123", _req("/api/sessions/abc-123", method="GET")) is None
 
 
 def test_match_api_route_spa_routes() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert _match_api_route("/", _req("/")) is not None
     assert _match_api_route("/app/connect", _req("/app/connect")) is not None
 
 
 def test_match_api_route_unknown() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert _match_api_route("/api/unknown", _req("/api/unknown")) is None
 
 
 def test_match_api_route_tunnel_revoke() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert (
         _match_api_route("/api/tunnels/tunnel-abc/tokens", _req("/api/tunnels/tunnel-abc/tokens", method="DELETE"))
@@ -487,7 +487,7 @@ def test_match_api_route_tunnel_revoke() -> None:
 
 
 def test_match_api_route_tunnel_revoke_wrong_method() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert (
         _match_api_route("/api/tunnels/tunnel-abc/tokens", _req("/api/tunnels/tunnel-abc/tokens", method="GET")) is None
@@ -495,7 +495,7 @@ def test_match_api_route_tunnel_revoke_wrong_method() -> None:
 
 
 def test_match_api_route_tunnel_rotate() -> None:
-    from provide.terminal.cloudflare.entry import _match_api_route
+    from provide.terminal.cloudflare.entry.handlers import _match_api_route
 
     assert (
         _match_api_route(
@@ -606,7 +606,7 @@ async def test_decode_jwt_principal_bad_token_returns_none() -> None:
 
     import jwt as pyjwt
     from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
-    from provide.terminal.cloudflare.entry import _decode_jwt_principal
+    from provide.terminal.cloudflare.entry.auth import _decode_jwt_principal
 
     good_key = "test-secret-key-32-bytes-minimum!"
     wrong_key = "wrong-secret-key-32-bytes-minimum"
@@ -636,7 +636,7 @@ async def test_decode_jwt_principal_cf_access_email_returns_viewer_principal() -
     anonymous open-access.
     """
     from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
-    from provide.terminal.cloudflare.entry import _decode_jwt_principal
+    from provide.terminal.cloudflare.entry.auth import _decode_jwt_principal
 
     cfg = CloudflareConfig(jwt=JwtConfig(mode="jwt", public_key_pem="k", algorithms=("HS256",)))
     req = SimpleNamespace(
@@ -661,7 +661,7 @@ async def test_decode_jwt_principal_cf_access_service_token_returns_admin_princi
     integration typically needs.
     """
     from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
-    from provide.terminal.cloudflare.entry import _decode_jwt_principal
+    from provide.terminal.cloudflare.entry.auth import _decode_jwt_principal
 
     cfg = CloudflareConfig(jwt=JwtConfig(mode="jwt", public_key_pem="k", algorithms=("HS256",)))
     client_id = "svc123.access"
@@ -684,12 +684,12 @@ async def test_decode_jwt_principal_cf_access_service_token_returns_admin_princi
 async def test_handle_session_delete_session_not_in_kv_returns_404() -> None:
     """When session is absent from KV and principal is present, delete fails closed with 404."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_session_delete
+    from provide.terminal.cloudflare.entry.handlers import _handle_session_delete
 
     mock_del = AsyncMock()
     with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=mock_del):
         with patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
+            "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
             new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("viewer",))),
         ):
             with patch("provide.terminal.cloudflare.entry.get_kv_session", new=AsyncMock(return_value=None)):
@@ -707,13 +707,13 @@ async def test_handle_session_delete_session_not_in_kv_returns_404() -> None:
 async def test_handle_session_delete_admin_allowed() -> None:
     """Admin callers can delete any session."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _handle_session_delete
+    from provide.terminal.cloudflare.entry.handlers import _handle_session_delete
 
     session_data = {"owner": "alice", "visibility": "private"}
 
     with patch("provide.terminal.cloudflare.entry.delete_kv_session", new=AsyncMock()):
         with patch(
-            "provide.terminal.cloudflare.entry._decode_jwt_principal",
+            "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
             new=AsyncMock(return_value=SimpleNamespace(subject_id="bob", roles=("admin",))),
         ):
             with patch(

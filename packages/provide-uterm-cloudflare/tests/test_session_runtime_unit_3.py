@@ -15,7 +15,6 @@ from unittest.mock import patch
 from provide.terminal.cloudflare.bridge.hijack import HijackSession
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
 from provide.terminal.cloudflare.state.store import LeaseRecord
-
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"

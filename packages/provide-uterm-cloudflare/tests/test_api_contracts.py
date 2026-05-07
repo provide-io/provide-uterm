@@ -24,10 +24,6 @@ import json
 from types import SimpleNamespace
 from typing import get_type_hints
 
-from provide.terminal.cloudflare.api.http_routes import route_http
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.contracts import SessionStatusItem
-
 from provide.terminal.bridge.contracts import (
     HijackAcquireResponse,
     HijackEventsResponse,
@@ -37,6 +33,9 @@ from provide.terminal.bridge.contracts import (
     HijackSnapshotResponse,
     HijackStepResponse,
 )
+from provide.terminal.cloudflare.api.http_routes import route_http
+from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+from provide.terminal.cloudflare.contracts import SessionStatusItem
 
 # ---------------------------------------------------------------------------
 # Shared runtime mock

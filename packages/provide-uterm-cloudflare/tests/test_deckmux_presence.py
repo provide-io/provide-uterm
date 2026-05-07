@@ -18,7 +18,6 @@ import sqlite3
 from types import SimpleNamespace
 
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
-
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, encode_control
 
 # ---------------------------------------------------------------------------

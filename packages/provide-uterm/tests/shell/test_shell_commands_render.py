@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
-from provide.terminal.shell._commands import AnimatedResult, CommandDispatcher
+from provide.terminal.shell.commands import AnimatedResult, CommandDispatcher
 
 # ---------------------------------------------------------------------------
 # Helpers

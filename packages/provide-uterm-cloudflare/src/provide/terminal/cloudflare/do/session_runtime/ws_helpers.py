@@ -5,7 +5,6 @@
 
 """WebSocket helper mixin for SessionRuntime.
 
-Extracted from ``session_runtime.py`` to keep file sizes under 500 LOC.
 Provides socket keying, role resolution, registration, and send helpers.
 """
 

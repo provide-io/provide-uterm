@@ -54,6 +54,9 @@ version = {file = "VERSION"}
 where = ["src"]
 namespaces = true
 
+[tool.setuptools.package-data]
+"provide.terminal.cloudflare" = ["py.typed"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["src"]

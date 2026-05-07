@@ -12,7 +12,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
-
 from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
 
 _KEY = "test-secret-key-32-bytes-minimum!"

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.shell._commands import CommandDispatcher
+from provide.terminal.shell.commands import CommandDispatcher
 
 
 def make_dispatcher(ctx: dict[str, Any] | None = None) -> CommandDispatcher:

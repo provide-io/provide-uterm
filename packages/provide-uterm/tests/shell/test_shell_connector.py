@@ -373,7 +373,7 @@ def test_welcomed_starts_as_exactly_false():
 
 async def test_handle_input_animated_result():
     """AnimatedResult dispatch starts animation task + returns no frames."""
-    from provide.terminal.shell._commands import AnimatedResult
+    from provide.terminal.shell.commands import AnimatedResult
 
     conn = UshellConnector("s1")
     await conn.start()
@@ -409,7 +409,7 @@ async def test_handle_input_animated_result():
 
 async def test_stop_cancels_animation_task():
     """stop() cancels a running animation task."""
-    from provide.terminal.shell._commands import AnimatedResult
+    from provide.terminal.shell.commands import AnimatedResult
 
     conn = UshellConnector("s1")
     await conn.start()
@@ -439,7 +439,7 @@ async def test_stop_cancels_animation_task():
 
 async def test_handle_input_replaces_running_animation():
     """Second AnimatedResult cancels the first animation task."""
-    from provide.terminal.shell._commands import AnimatedResult
+    from provide.terminal.shell.commands import AnimatedResult
 
     conn = UshellConnector("s1")
     await conn.start()
