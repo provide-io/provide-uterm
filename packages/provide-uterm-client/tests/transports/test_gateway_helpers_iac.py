@@ -48,7 +48,9 @@ class TestTokenFileHelpers:
     def test_write_then_read(self, tmp_path) -> None:
         p = tmp_path / "token"
         _write_token(p, "mytoken")
-        assert _read_token(p) == "mytoken"
+        record = _read_token(p)
+        assert record is not None
+        assert record["token"] == "mytoken"
 
     def test_write_empty_returns_none(self, tmp_path) -> None:
         p = tmp_path / "token"
@@ -56,9 +58,11 @@ class TestTokenFileHelpers:
         assert _read_token(p) is None
 
     def test_write_creates_parent_dirs(self, tmp_path) -> None:
+        import json
+
         p = tmp_path / "nested" / "dir" / "token"
         _write_token(p, "abc")
-        assert p.read_text() == "abc"
+        assert json.loads(p.read_text())["token"] == "abc"
 
     def test_delete_existing(self, tmp_path) -> None:
         p = tmp_path / "token"
@@ -211,7 +215,10 @@ class TestIacStripping:
         """
         ws_srv, ws_port = await _start_ws_echo_server()
         try:
-            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
+            # Disable client-side IAC negotiation — its DO TTYPE / NEW-ENVIRON
+            # bytes get echoed back by the upstream WS server (it has no real
+            # telnet stack to absorb them) and would dwarf the test payload.
+            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
 
@@ -222,7 +229,14 @@ class TestIacStripping:
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
             writer.write(bytes([255, 251, 1]) + b"ping")  # IAC WILL ECHO + "ping"
             await writer.drain()
-            data = await asyncio.wait_for(reader.read(256), timeout=2.0)
+            # Drain until we see the echoed payload or the read window ends.
+            data = b""
+            deadline = asyncio.get_event_loop().time() + 2.0
+            while b"ping" not in data and asyncio.get_event_loop().time() < deadline:
+                chunk = await asyncio.wait_for(reader.read(256), timeout=1.0)
+                if not chunk:
+                    break
+                data += chunk
             writer.close()
             tcp_srv.close()
         finally:

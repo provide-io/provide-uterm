@@ -211,11 +211,14 @@ class TestTerminalSSHServer:
         from provide.terminal.transports.ssh import TerminalSSHServer
 
         server = TerminalSSHServer({}, max_connections_per_ip=5)
+        # The gateway-style SSH server is intentionally permissive — it relays
+        # to the upstream WS, which performs real authentication. Both
+        # password and public-key validators should accept any credential.
         assert server.begin_auth("user") is True
         assert server.password_auth_supported() is True
-        assert server.validate_password("user", "pass") is False
+        assert server.validate_password("user", "pass") is True
         assert server.public_key_auth_supported() is True
-        assert server.validate_public_key("user", MagicMock()) is False
+        assert server.validate_public_key("user", MagicMock()) is True
 
 
 class TestSSHPerInstanceIsolation:

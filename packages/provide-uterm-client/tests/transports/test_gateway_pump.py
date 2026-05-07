@@ -150,7 +150,10 @@ class TestTelnetWsGateway:
         banner = b"Welcome to warp!\r\n"
         ws_srv, ws_port = await _start_ws_echo_server(banner=banner)
         try:
-            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
+            # Disable IAC negotiation — the bare echo server has no telnet
+            # stack to absorb DO TTYPE / NEW-ENVIRON, which would arrive
+            # before the banner and crowd the read window.
+            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
 
@@ -159,7 +162,13 @@ class TestTelnetWsGateway:
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
-            data = await asyncio.wait_for(reader.read(256), timeout=2.0)
+            data = b""
+            deadline = asyncio.get_event_loop().time() + 2.0
+            while banner not in data and asyncio.get_event_loop().time() < deadline:
+                chunk = await asyncio.wait_for(reader.read(256), timeout=1.0)
+                if not chunk:
+                    break
+                data += chunk
             writer.close()
             tcp_srv.close()
         finally:
@@ -171,7 +180,7 @@ class TestTelnetWsGateway:
         """Data sent by the telnet client is echoed back via the WS server."""
         ws_srv, ws_port = await _start_ws_echo_server()
         try:
-            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
+            gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
             from asyncio import Server
 
@@ -182,7 +191,13 @@ class TestTelnetWsGateway:
             reader, writer = await asyncio.open_connection("127.0.0.1", tcp_port)
             writer.write(b"ping")
             await writer.drain()
-            data = await asyncio.wait_for(reader.read(256), timeout=2.0)
+            data = b""
+            deadline = asyncio.get_event_loop().time() + 2.0
+            while b"ping" not in data and asyncio.get_event_loop().time() < deadline:
+                chunk = await asyncio.wait_for(reader.read(256), timeout=1.0)
+                if not chunk:
+                    break
+                data += chunk
             writer.close()
             tcp_srv.close()
         finally:
@@ -268,7 +283,7 @@ class TestPipeWs:
             ws_srv.close()
 
 
-_PIPE_WS_PATH = "provide.terminal.gateway._gateway._pipe_ws"
+_PIPE_WS_PATH = "provide.terminal.gateway._telnet_gateway._pipe_ws"
 
 
 class TestTelnetWsGatewayHandleException:
@@ -307,7 +322,7 @@ class TestTelnetWsGatewayHandleException:
 
         with (
             patch(_PIPE_WS_PATH, side_effect=_fake_pipe),
-            patch("provide.terminal.gateway._gateway.asyncio.sleep", new_callable=AsyncMock),
+            patch("provide.terminal.gateway._telnet_gateway.asyncio.sleep", new_callable=AsyncMock),
         ):
             await gw._handle(reader, writer)
 
@@ -486,9 +501,15 @@ class TestPipeWsResume:
     async def test_token_holder_present_sends_resume(self, tmp_path) -> None:
         """When a token_holder contains a token dict, the first WS message should be an encoded resume control frame."""
         received: list[str] = []
+        first_message = asyncio.Event()
 
         async def handler(ws: websockets.ServerConnection) -> None:
-            received.extend([msg if isinstance(msg, str) else msg.decode() async for msg in ws])
+            try:
+                async for msg in ws:
+                    received.append(msg if isinstance(msg, str) else msg.decode())
+                    first_message.set()
+            except websockets.exceptions.ConnectionClosed:
+                pass
 
         srv = await websockets.serve(handler, "127.0.0.1", 0)
         port = srv.sockets[0].getsockname()[1]
@@ -523,8 +544,13 @@ class TestPipeWsResume:
                 ),
                 timeout=3.0,
             )
+            # Wait for the server to actually process the first frame — the
+            # client closes its side as soon as the EOF reader task wins, so
+            # the server-side handler may still be draining.
+            await asyncio.wait_for(first_message.wait(), timeout=2.0)
         finally:
             srv.close()
+            await srv.wait_closed()
 
         assert len(received) >= 1
         first = _decode_control(received[0])

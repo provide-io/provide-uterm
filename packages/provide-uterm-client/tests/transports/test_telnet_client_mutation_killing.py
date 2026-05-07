@@ -11,7 +11,6 @@ write, and drain methods.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 
 import pytest
 
@@ -149,13 +148,20 @@ class TestTelnetClientClose:
 
     async def test_close_suppresses_oserror(self) -> None:
         """OSError from wait_closed is suppressed."""
+        # We can't drop the connection by exiting the MockTelnetServer
+        # context — its __aexit__ calls server.wait_closed() which blocks
+        # until the client disconnects, deadlocking this scenario. Instead,
+        # patch the writer's wait_closed to raise OSError directly so we
+        # exercise the suppress(OSError) branch in TelnetClient.close().
+        from unittest.mock import AsyncMock
+
         async with MockTelnetServer() as srv:
             c = TelnetClient("127.0.0.1", srv.port)
             await c.connect()
-            # Force the writer to raise on wait_closed by closing server first
-        # Server already closed; now close should handle the OSError
-        with contextlib.suppress(Exception):
+            assert c._writer is not None
+            c._writer.wait_closed = AsyncMock(side_effect=OSError("forced"))  # type: ignore[method-assign]
             await c.close()
+            assert c._writer is None
 
 
 # ---------------------------------------------------------------------------
