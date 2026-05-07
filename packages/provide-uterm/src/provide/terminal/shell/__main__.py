@@ -10,7 +10,7 @@ import asyncio
 import sys
 from typing import Any
 
-from provide.terminal.shell._commands import AnimatedResult, CommandDispatcher
+from provide.terminal.shell.commands import AnimatedResult, CommandDispatcher
 from provide.terminal.shell._output import BANNER, PROMPT
 
 

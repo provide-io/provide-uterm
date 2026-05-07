@@ -434,7 +434,7 @@ async def test_alarm_worker_connected_no_set_alarm() -> None:
     rt.worker_ws = ws_stub
 
     mock_kv = AsyncMock()
-    with patch("provide.terminal.cloudflare.do._session_runtime_io.update_kv_session", mock_kv):
+    with patch("provide.terminal.cloudflare.do.session_runtime.io.update_kv_session", mock_kv):
         await rt.alarm()
 
     mock_kv.assert_awaited_once()
@@ -497,15 +497,15 @@ def test_mono_to_wall_value_shared() -> None:
 
 
 def test_mono_to_wall_none_io() -> None:
-    """_session_runtime_io._mono_to_wall(None) → None  (line 47)."""
-    from provide.terminal.cloudflare.do._session_runtime_io import _mono_to_wall
+    """session_runtime.io._mono_to_wall(None) → None  (line 47)."""
+    from provide.terminal.cloudflare.do.session_runtime.io import _mono_to_wall
 
     assert _mono_to_wall(None) is None
 
 
 def test_mono_to_wall_value_io() -> None:
-    """_session_runtime_io._mono_to_wall(float) → wall-clock float."""
-    from provide.terminal.cloudflare.do._session_runtime_io import _mono_to_wall
+    """session_runtime.io._mono_to_wall(float) → wall-clock float."""
+    from provide.terminal.cloudflare.do.session_runtime.io import _mono_to_wall
 
     result = _mono_to_wall(1000.0)
     assert isinstance(result, float)

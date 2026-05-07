@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 def test_socket_role_colon_format_invalid_first_part_falls_back() -> None:
     """Line 50->52: attachment is colon-split string but parts[0] not in known roles."""
-    from provide.terminal.cloudflare.do.ws_helpers import _WsHelperMixin
+    from provide.terminal.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
 
     class _Host(_WsHelperMixin):
         worker_id = "w"
@@ -46,7 +46,7 @@ def test_socket_role_colon_format_invalid_first_part_falls_back() -> None:
 
 def test_socket_role_to_py_returns_other_type_falls_back() -> None:
     """Line 62->66: to_py() returns an int (not str or dict) → role stays None → browser."""
-    from provide.terminal.cloudflare.do.ws_helpers import _WsHelperMixin
+    from provide.terminal.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
 
     class _Host(_WsHelperMixin):
         worker_id = "w"

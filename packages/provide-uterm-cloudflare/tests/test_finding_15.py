@@ -1,5 +1,4 @@
 import pytest
-
 from provide.terminal.deckmux._presence import PresenceStore
 
 

@@ -12,7 +12,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from provide.terminal.cloudflare.cf_types import Response
-from provide.terminal.cloudflare.entry import Default, _extract_worker_id
+from provide.terminal.cloudflare.entry import Default
+from provide.terminal.cloudflare.entry.registry import _extract_worker_id
 
 # ---------------------------------------------------------------------------
 # _extract_worker_id
@@ -450,7 +451,7 @@ async def test_default_fetch_profiles_jwt_mode_no_token() -> None:
 async def test_resolve_principal_id_no_token() -> None:
     """_resolve_principal_id with no token returns 'anonymous'."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
+    from provide.terminal.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
         SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
@@ -462,7 +463,7 @@ async def test_resolve_principal_id_no_token() -> None:
 async def test_resolve_principal_id_invalid_token() -> None:
     """_resolve_principal_id with invalid JWT returns 'anonymous'."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
+    from provide.terminal.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
         SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
@@ -478,7 +479,7 @@ async def test_resolve_principal_id_valid_token() -> None:
     """_resolve_principal_id with valid JWT returns subject."""
     import jwt as pyjwt
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
+    from provide.terminal.cloudflare.entry.auth import _resolve_principal_id
 
     secret = "a-sufficiently-long-secret-key-for-hs256"
     token = pyjwt.encode({"sub": "alice", "exp": 9999999999}, secret, algorithm="HS256")
@@ -501,7 +502,7 @@ async def test_resolve_principal_id_cf_access_email_header() -> None:
     across callers and effectively disabling ownership.
     """
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
+    from provide.terminal.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
         SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
@@ -523,7 +524,7 @@ def test_read_header_skips_individually_raising_names() -> None:
     that.  Without this test the ``except Exception: continue`` branch
     is uncovered.
     """
-    from provide.terminal.cloudflare.entry import _read_header
+    from provide.terminal.cloudflare.entry.auth import _read_header
 
     class _FlakyHeaders:
         def get(self, k: str, default: object = None) -> object:
@@ -539,7 +540,7 @@ def test_read_header_skips_individually_raising_names() -> None:
 async def test_resolve_principal_id_cf_access_service_token() -> None:
     """CF Access service token maps to a ``service:<client_id>`` principal."""
     from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.entry import _resolve_principal_id
+    from provide.terminal.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
         SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")

@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from provide.terminal.pty.socket_utils import validate_socket_path
+
 logger = logging.getLogger(__name__)
 
 _MAX_LINE = 4096  # bytes — guard against runaway senders
@@ -56,13 +58,6 @@ class PamEvent:
 PamEventHandler = Callable[[PamEvent], Awaitable[None]]
 
 
-def _validate_socket_path(path: str) -> None:
-    if "\x00" in path:
-        raise ValueError("socket path contains null byte")
-    if not path.startswith("/"):
-        raise ValueError("socket path must be an absolute path")
-
-
 class PamNotifyListener:
     """
     Async Unix-domain socket server for pam_uterm.so notifications.
@@ -76,7 +71,7 @@ class PamNotifyListener:
     """
 
     def __init__(self, socket_path: str = "/run/uterm-notify.sock") -> None:
-        _validate_socket_path(socket_path)
+        validate_socket_path(socket_path)
         self._path = socket_path
         self._handler: PamEventHandler | None = None
         self._server: asyncio.Server | None = None
