@@ -246,21 +246,27 @@ class TestTcpToWsMutationKilling:
 class TestWriteTokenMutationKilling:
     def test_creates_nested_directory(self, tmp_path):
         """parents=True must create nested dirs (mutmut_3 removes parents arg)."""
+        import json
+
         p = tmp_path / "a" / "b" / "c" / "token"
         _write_token(p, "val")
-        assert p.read_text() == "val"
+        assert json.loads(p.read_text())["token"] == "val"
 
     def test_existing_dir_does_not_raise(self, tmp_path):
         """exist_ok=True prevents FileExistsError (mutmut_4 removes exist_ok)."""
+        import json
+
         p = tmp_path / "token"
         # Write twice — second call should not raise even though dir exists
         _write_token(p, "first")
         _write_token(p, "second")
-        assert p.read_text() == "second"
+        assert json.loads(p.read_text())["token"] == "second"
 
     def test_overwrites_existing_token(self, tmp_path):
         """Writing to same path overwrites correctly."""
         p = tmp_path / "tok"
         _write_token(p, "original")
         _write_token(p, "updated")
-        assert _read_token(p) == "updated"
+        record = _read_token(p)
+        assert record is not None
+        assert record["token"] == "updated"
