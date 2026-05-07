@@ -282,6 +282,21 @@ async def test_broadcast_to_browsers_fallback_on_ctx_error() -> None:
     assert ws.sent
 
 
+async def test_broadcast_to_browsers_drops_payload_when_buffer_full() -> None:
+    """io.py:199-211: queue + msg > max_buffer_bytes → warning logged, send skipped."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="browser:admin:test-worker")
+    rt._register_socket(ws, "browser")
+    rt.ctx.getWebSockets = lambda: [ws]
+    # Force the backpressure branch: any non-empty payload exceeds a 1-byte budget.
+    rt.max_buffer_bytes = 1
+    await rt.broadcast_to_browsers({"type": "term", "data": "anything-non-trivial"})
+    # Payload was dropped (continue), so send did not run.
+    assert not ws.sent
+    # Queue accounting was not mutated since we short-circuited.
+    assert rt._queue_bytes == 0
+
+
 async def test_broadcast_worker_frame_term_to_raw() -> None:
     """Lines 564-565: term frame -> raw sockets get data text."""
     rt = _make_runtime()

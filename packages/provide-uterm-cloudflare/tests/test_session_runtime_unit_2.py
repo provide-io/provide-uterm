@@ -130,6 +130,14 @@ async def test_fetch_routes_to_http_handler() -> None:
     assert resp.status == 200
 
 
+async def test_fetch_returns_404_when_session_deleted() -> None:
+    """fetch.py:71-76: tombstoned session (_deleted_at set) → 404 not_found."""
+    rt = _make_runtime(mode="dev")
+    rt._deleted_at = 12345.0
+    resp = await rt.fetch(_MockRequest(url="https://x/worker/test-worker/api/health"))
+    assert resp.status == 404
+
+
 # ---------------------------------------------------------------------------
 # webSocketOpen
 # ---------------------------------------------------------------------------
@@ -323,6 +331,66 @@ async def test_websocket_error_hijack_owner_no_token_is_noop() -> None:
     rt.browser_hijack_owner[ws_id] = "hijack-1"
     await rt.webSocketError(ws, "network error")
     assert ws_id not in rt.browser_sockets
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle hooks: deleted-session early-return paths
+# ---------------------------------------------------------------------------
+
+
+class _ClosableWs(_MockWs):
+    """WS stub that records close() invocations; used for deleted-session tests."""
+
+    def __init__(self, attachment: object = None) -> None:
+        super().__init__(attachment=attachment)
+        self.closed_with: tuple[int, str] | None = None
+
+    def close(self, code: int, reason: str) -> None:
+        self.closed_with = (code, reason)
+
+
+async def test_websocket_open_short_circuits_when_deleted() -> None:
+    """lifecycle.py:41-44: webSocketOpen on a tombstoned session closes the socket."""
+    rt = _make_runtime()
+    rt._deleted_at = 999.0
+    ws = _ClosableWs(attachment="browser:admin:test-worker")
+    await rt.webSocketOpen(ws)
+    assert ws.closed_with == (1001, "session deleted")
+    # No registration when deleted.
+    assert rt.ws_key(ws) not in rt.browser_sockets
+
+
+async def test_websocket_message_short_circuits_when_deleted() -> None:
+    """lifecycle.py:107-110: webSocketMessage on a tombstoned session closes the socket."""
+    rt = _make_runtime()
+    rt._deleted_at = 999.0
+    ws = _ClosableWs(attachment="browser:admin:test-worker")
+    await rt.webSocketMessage(ws, '{"type":"hello"}')
+    assert ws.closed_with == (1001, "session deleted")
+
+
+async def test_websocket_close_worker_when_deleted_skips_broadcast() -> None:
+    """lifecycle.py:161->166: tombstoned worker close skips state mutation, still updates KV."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="worker:admin:test-worker")
+    rt.worker_ws = ws
+    rt.lifecycle_state = "running"
+    rt._deleted_at = 999.0
+    await rt.webSocketClose(ws, 1000, "normal", True)
+    # Lifecycle state should NOT be mutated to "stopped" when already deleted.
+    assert rt.lifecycle_state == "running"
+
+
+async def test_websocket_error_worker_when_deleted_skips_broadcast() -> None:
+    """lifecycle.py:185->190: tombstoned worker error skips state mutation."""
+    rt = _make_runtime()
+    ws = _MockWs(attachment="worker:admin:test-worker")
+    rt.worker_ws = ws
+    rt.lifecycle_state = "running"
+    rt._deleted_at = 999.0
+    await rt.webSocketError(ws, "boom")
+    # Lifecycle state should NOT be mutated to "error" when already deleted.
+    assert rt.lifecycle_state == "running"
 
 
 # ---------------------------------------------------------------------------
