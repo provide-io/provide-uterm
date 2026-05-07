@@ -25,7 +25,8 @@ def _require_pywrangler() -> None:
 
 def cmd_build(_args: argparse.Namespace) -> int:
     pkg_root = _package_root()
-    required = [pkg_root / "wrangler.toml", pkg_root / "src" / "provide" / "terminal" / "cloudflare" / "entry.py"]
+    entry_dir = pkg_root / "src" / "provide" / "terminal" / "cloudflare" / "entry"
+    required = [pkg_root / "wrangler.toml", entry_dir / "__init__.py"]
     missing = [path for path in required if not path.exists()]
     if missing:
         for path in missing:
