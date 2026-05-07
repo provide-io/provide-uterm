@@ -12,14 +12,15 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qs
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketException, status
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
 from starlette.requests import HTTPConnection  # noqa: TC002
 
 from provide.telemetry import get_logger
 from provide.terminal.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
+from provide.terminal.bridge.identity import Principal
 from provide.terminal.server.api_keys import ApiKeyStore
 from provide.terminal.server.app.auth import _validate_auth_config
 from provide.terminal.server.app.connectors import _register_builtin_connectors
@@ -32,7 +33,6 @@ from provide.terminal.server.app.middleware import (
 from provide.terminal.server.app.routes_wiring import install_routers, mount_frontend_assets
 from provide.terminal.server.auth import (
     LocalIdentityProvider,
-    Principal,
     WebhookIdentityProvider,
     extract_bearer_token,
     resolve_http_principal,
@@ -46,6 +46,7 @@ from provide.terminal.server.webhooks import WebhookManager
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from provide.terminal.bridge.hub.resume import _ControlPlaneResumeBackend
     from provide.terminal.bridge.identity import IdentityProvider
     from provide.terminal.server.models import ServerConfig
 
@@ -109,12 +110,13 @@ def create_server_app(
         )
 
     from provide.terminal.server.authorization import (
+        AuthorizationProvider,
         AuthorizationService,
         LocalAuthorizationProvider,
         WebhookAuthorizationProvider,
     )
 
-    authz_provider = LocalAuthorizationProvider()
+    authz_provider: AuthorizationProvider = LocalAuthorizationProvider()
     if config.governance.authz_webhook_url:
         authz_provider = WebhookAuthorizationProvider(
             url=config.governance.authz_webhook_url,
@@ -140,7 +142,9 @@ def create_server_app(
         "hijack_releases_total": 0,
         "hijack_steps_total": 0,
     }
-    tunnel_tokens: dict[str, dict[str, str]] = {}
+    # Token state values are heterogeneous (str token values, float expiries,
+    # int counters); the registry expects ``dict[str, object]`` per-session.
+    tunnel_tokens: dict[str, dict[str, object]] = {}
 
     def _inc_metric(name: str, value: int = 1) -> None:
         metrics[name] = metrics.get(name, 0) + value
@@ -245,15 +249,18 @@ def create_server_app(
                 return
         if connection.scope.get("type") == "websocket":
             # JWT mode: JWKS key fetch may make a blocking HTTP call; offload to
-            # a thread pool to avoid stalling the event loop.
-            principal = await resolve_ws_principal(connection, config.auth)
+            # a thread pool to avoid stalling the event loop.  ``connection`` is
+            # an HTTPConnection at the FastAPI dependency layer; cast to the
+            # concrete WebSocket the resolver expects (the runtime object is the
+            # same ``Request``/``WebSocket`` Starlette built).
+            principal = await resolve_ws_principal(cast("WebSocket", connection), config.auth)
             connection.state.uterm_principal = principal
             if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
                 _inc_metric("auth_failures_ws_total")
                 logger.info("authn_denied surface=websocket")
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="authentication required")
             return
-        principal = await resolve_http_principal(connection, config.auth)
+        principal = await resolve_http_principal(cast("Request", connection), config.auth)
         connection.state.uterm_principal = principal
         if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
             _inc_metric("auth_failures_http_total")
@@ -322,7 +329,11 @@ def create_server_app(
     )
 
     control_plane = _build_control_plane(config)
-    resume_store = ControlPlaneResumeStore(control_plane)
+    # The shared ``ControlPlane`` Protocol intentionally omits the resume-only
+    # ``token_store`` method (kept out of the public Protocol so embedders can
+    # ship plane backends without resume support).  Concrete plane engines we
+    # build here (memory + sqlite) implement it; cast for the resume backend.
+    resume_store = ControlPlaneResumeStore(cast("_ControlPlaneResumeBackend", control_plane))
 
     _hub_class = hub_class if hub_class is not None else TermHub
     hub = _hub_class(
@@ -349,6 +360,7 @@ def create_server_app(
     from provide.terminal.bridge.annotation._detector import PatternDetector
     from provide.terminal.recording import InMemoryRecordingStore, LocalFileRecordingStore, NullRecordingStore
     from provide.terminal.server.discovery import (
+        DiscoveryProvider,
         NodeStatus,
         NoOpDiscoveryProvider,
         WebhookDiscoveryProvider,
@@ -434,17 +446,18 @@ def create_server_app(
         while True:
             await asyncio.sleep(60)
             now = time.time()
-            expired = [
-                sid
-                for sid, state in tunnel_tokens.items()
-                if isinstance(state.get("expires_at"), (int, float)) and now > float(state["expires_at"])
-            ]
+            expired: list[str] = []
+            for sid, state in tunnel_tokens.items():
+                expires_at = state.get("expires_at")
+                if isinstance(expires_at, (int, float)) and now > float(expires_at):
+                    expired.append(sid)
             for sid in expired:
                 tunnel_tokens.pop(sid, None)
                 logger.info("tunnel_token_expired session_id=%s swept=true", sid)
 
     async def _node_registry_heartbeat() -> None:
         """Periodically announce Node status to the External Management Tier."""
+        discovery_provider: DiscoveryProvider
         if config.governance.discovery_provider == "webhook" and config.governance.registry_webhook_url:
             discovery_provider = WebhookDiscoveryProvider(
                 url=config.governance.registry_webhook_url,
