@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 from provide.terminal.cloudflare.cf_types import Response
 from provide.terminal.cloudflare.config import CloudflareConfig
-from provide.terminal.cloudflare.entry import (
-    Default,
+from provide.terminal.cloudflare.entry import Default
+from provide.terminal.cloudflare.entry.security import (
     _apply_security_headers,
     _resolve_security_headers,
 )

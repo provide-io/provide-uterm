@@ -52,7 +52,7 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
     """Import and instantiate UshellConnector, wiring CF env bindings."""
     global _IMPORT_ERROR
     try:
-        from provide.terminal.shell._commands import CommandDispatcher  # type: ignore[import-not-found] # noqa: F401
+        from provide.terminal.shell.commands import CommandDispatcher  # type: ignore[import-not-found] # noqa: F401
         from provide.terminal.shell.terminal._connector import UshellConnector  # type: ignore[import-not-found]
     except ImportError as exc:
         _IMPORT_ERROR = str(exc)

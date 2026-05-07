@@ -8,28 +8,28 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib.resources
 import re
 import secrets
 import time
-import uuid
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketException, status
-from fastapi import Request as FastAPIRequest
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketException, status
 from starlette.requests import HTTPConnection  # noqa: TC002
-from starlette.staticfiles import StaticFiles
 
-from provide.telemetry import TelemetryMiddleware, get_logger
+from provide.telemetry import get_logger
 from provide.terminal.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
-from provide.terminal.control.plane import ControlPlane as SharedControlPlane
-from provide.terminal.control.plane import ControlPlaneConfig as SharedControlPlaneConfig
-from provide.terminal.control.plane.memory import MemoryControlPlane
-from provide.terminal.control.plane.sqlite import SqliteControlPlane
 from provide.terminal.server.api_keys import ApiKeyStore
+from provide.terminal.server.app.auth import _validate_auth_config
+from provide.terminal.server.app.connectors import _register_builtin_connectors
+from provide.terminal.server.app.control_plane import _build_control_plane
+from provide.terminal.server.app.hub_authz import build_require_hub_route_authz
+from provide.terminal.server.app.middleware import (
+    install_cors_security_telemetry,
+    install_request_logging_middleware,
+)
+from provide.terminal.server.app.routes_wiring import install_routers, mount_frontend_assets
 from provide.terminal.server.auth import (
     LocalIdentityProvider,
     Principal,
@@ -41,23 +41,12 @@ from provide.terminal.server.auth import (
 from provide.terminal.server.policy import SessionPolicyResolver
 from provide.terminal.server.profiles import FileProfileStore
 from provide.terminal.server.registry import SessionRegistry
-from provide.terminal.server.routes.api import create_api_router
-from provide.terminal.server.routes.approvals import create_approvals_router
-from provide.terminal.server.routes.health import create_health_router
-from provide.terminal.server.routes.pages import create_page_router
-from provide.terminal.server.routes.profiles import create_profiles_router
-from provide.terminal.server.security import SecurityHeadersMiddleware
 from provide.terminal.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from starlette.middleware.base import RequestResponseEndpoint
-    from starlette.requests import Request
-    from starlette.responses import Response
-
     from provide.terminal.bridge.identity import IdentityProvider
-    from provide.terminal.server.authorization import AuthorizationService
     from provide.terminal.server.models import ServerConfig
 
 logger = get_logger(__name__)
@@ -74,123 +63,6 @@ _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/ws/browser/(?P<session_id>[\w\-]+)/term$"),
     re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack(?:/.*)?$"),
 )
-
-
-def _build_control_plane(config: ServerConfig) -> SharedControlPlane:
-    shared_config = SharedControlPlaneConfig(
-        backend=config.control_plane.backend,
-        database_url=config.control_plane.database_url or ":memory:",
-    )
-    if shared_config.backend == "sqlite":
-        return SqliteControlPlane(shared_config)
-    return MemoryControlPlane(shared_config)
-
-
-def _validate_frontend_assets() -> None:
-    frontend_root = importlib.resources.files("provide.terminal.server") / "frontend"
-    # Require the Vite manifest (React app) and standalone HTML pages.
-    required = ("hijack.html", "terminal.html")
-    missing = [name for name in required if not (frontend_root / name).is_file()]
-    if not (frontend_root / ".vite" / "manifest.json").is_file():
-        missing.append(".vite/manifest.json")
-    if missing:
-        joined = ", ".join(missing)
-        raise RuntimeError(f"missing required frontend assets: {joined}")
-
-
-def _validate_auth_config(config: ServerConfig) -> None:
-    mode = str(config.auth.mode).strip().lower()
-    if mode in {"none", "dev"}:
-        if config.auth.require_jwt_in_production:
-            raise RuntimeError(
-                f"auth.mode='{mode}' is not allowed when auth.require_jwt_in_production=true. "
-                "Set auth.mode='jwt' or disable require_jwt_in_production."
-            )
-
-        host = str(config.server.host).strip().lower()
-        if host not in {"127.0.0.1", "localhost", "::1"}:
-            raise RuntimeError(
-                f"auth.mode='{mode}' is only permitted when server.host is a loopback address "
-                f"(127.0.0.1, localhost, or ::1). Got: {host}"
-            )
-
-        # Warn loudly — in dev/none mode any request can spoof any principal
-        # via the X-Principal/X-Role headers.  Never expose this mode publicly.
-        logger.warning(
-            "auth_mode=%s: authentication is disabled — any caller can claim any identity. "
-            "Do NOT expose this server on a public network in this mode.",
-            mode,
-        )
-        return
-    if mode == "header":
-        if not config.auth.header_mode_acknowledged:
-            raise ValueError(
-                "auth.mode='header' requires auth.header_mode_acknowledged=true. "
-                "This mode trusts X-Principal/X-Role from all callers — only safe behind a reverse proxy."
-            )
-        logger.warning(
-            "auth_mode=header: trusting X-Principal/X-Role headers from all callers. "
-            "This mode MUST run behind a reverse proxy that sets these headers. "
-            "Direct exposure allows any client to claim any identity.",
-        )
-    # All authenticated modes (jwt, header, …) require a worker bearer token.
-    if not config.auth.worker_bearer_token:
-        raise ValueError(f"auth.worker_bearer_token is required when auth.mode='{mode}'")
-    if mode != "jwt":
-        return
-    if not config.auth.jwt_algorithms:
-        raise ValueError("auth.jwt_algorithms must not be empty when auth.mode='jwt'")
-    if any(a.strip().lower() == "none" for a in config.auth.jwt_algorithms):
-        raise ValueError("'none' is not permitted in auth.jwt_algorithms")
-    if not config.auth.jwt_public_key_pem and not config.auth.jwt_jwks_url:
-        raise ValueError("configure auth.jwt_public_key_pem or auth.jwt_jwks_url when auth.mode='jwt'")
-
-
-def _register_builtin_connectors(config: ServerConfig) -> None:
-    """Register standard terminal connectors and any external plugins."""
-    from provide.terminal.server.connectors import register_connector
-
-    # 1. Built-in AGPL Connectors
-    with contextlib.suppress(ImportError):
-        from provide.terminal.server.connectors.shell import ShellSessionConnector
-
-        register_connector("shell", ShellSessionConnector)
-
-    with contextlib.suppress(ImportError):
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
-
-        register_connector("ssh", SshSessionConnector)
-
-    with contextlib.suppress(ImportError):
-        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
-
-        register_connector("telnet", TelnetSessionConnector)
-
-    with contextlib.suppress(ImportError):
-        from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
-
-        register_connector("websocket", WebSocketSessionConnector)
-
-    with contextlib.suppress(ImportError):
-        from provide.terminal.shell.terminal import UshellConnector
-
-        register_connector("ushell", UshellConnector)
-
-    with contextlib.suppress(ImportError):
-        import provide.terminal.pty.connector
-
-    with contextlib.suppress(ImportError):
-        import provide.terminal.pty.capture_connector  # noqa: F401
-
-    # 2. External Plugin Connectors
-    import importlib
-
-    for module_path in config.governance.external_connectors:
-        try:
-            importlib.import_module(module_path)
-            logger.info("connector_plugin_loaded module=%s", module_path)
-        except ImportError:
-            logger.error("connector_plugin_load_failed module=%s", module_path)
 
 
 def create_server_app(
@@ -211,11 +83,16 @@ def create_server_app(
     """
     import os
 
+    # Look up _validate_frontend_assets via the package namespace so that
+    # tests patching ``provide.terminal.server.app._validate_frontend_assets``
+    # intercept the call here.
+    from provide.terminal.server import app as _app_pkg
+
     _register_builtin_connectors(config)
     _validate_auth_config(config)
     _api_only_env = os.environ.get("UTERM_API_ONLY", "").strip().lower() in {"1", "true", "yes"}
     if not api_only and not _api_only_env:
-        _validate_frontend_assets()
+        _app_pkg._validate_frontend_assets()
 
     if config.control_plane.backend == "memory":
         logger.warning(
@@ -383,68 +260,7 @@ def create_server_app(
             logger.info("authn_denied surface=http")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
 
-    # Per-path capability matcher for the hub's /worker/{id}/... REST routes.
-    # rest.py intentionally carries no built-in authz (see its module docstring);
-    # the protecting layer is us.  Without this, any authenticated principal —
-    # including a viewer-role share token — could POST /worker/{id}/hijack/acquire
-    # and seize control of a session.
-    _HUB_WRITE_PATH = re.compile(
-        r"^/worker/(?P<session_id>[\w\-]+)/"
-        r"(?:hijack/(?:acquire|[\w\-]+/(?:send|step|heartbeat|release)))$"
-    )
-    _HUB_MODE_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/input_mode$")
-    _HUB_ADMIN_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/disconnect_worker$")
-    _HUB_READ_PATH = re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack/[\w\-]+/(?:snapshot|events)$")
-
-    async def _require_hub_route_authz(connection: HTTPConnection) -> None:
-        """Gate /worker/{id}/... REST routes on session-level capabilities.
-
-        Runs after _require_authenticated, so connection.state.uterm_principal
-        is populated.  Applies only to REST paths served by the hub router;
-        WebSocket routes handle their own per-session role resolution via
-        _resolve_browser_role, so this dependency is a no-op for them.
-        Uses HTTPConnection so the same dependency works for both the REST
-        Request and WebSocket code paths FastAPI invokes.
-        """
-        path = str(connection.scope.get("path", ""))
-        session_id: str | None = None
-        required: str | None = None
-        require_admin = False
-        for pattern, cap in (
-            (_HUB_WRITE_PATH, "session.control.hijack"),
-            (_HUB_MODE_PATH, "session.control.mode"),
-            (_HUB_READ_PATH, "session.read"),
-        ):
-            m = pattern.match(path)
-            if m is not None:
-                session_id = m.group("session_id")
-                required = cap
-                break
-        if session_id is None:
-            m = _HUB_ADMIN_PATH.match(path)
-            if m is not None:
-                session_id = m.group("session_id")
-                require_admin = True
-        if session_id is None:
-            return  # Not a capability-gated hub route.
-        principal = getattr(connection.state, "uterm_principal", None)
-        if principal is None:  # pragma: no cover — _require_authenticated always sets this first
-            raise HTTPException(status_code=401, detail="authentication required")
-        authz_service = cast("AuthorizationService", connection.app.state.uterm_authz)
-        if require_admin:
-            if not await authz_service.is_admin(principal):
-                raise HTTPException(status_code=403, detail="admin role required")
-            return
-        assert required is not None
-        session = await registry.get_definition(session_id) if registry is not None else None
-        if session is None:
-            raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
-        if required == "session.read":
-            if not await authz_service.can_read_session(principal, session):
-                raise HTTPException(status_code=403, detail="insufficient privileges")
-        else:
-            if not await authz_service.can_mutate_session(principal, session, required):
-                raise HTTPException(status_code=403, detail="insufficient privileges")
+    _require_hub_route_authz = build_require_hub_route_authz(registry_getter=lambda: registry)
 
     async def _on_resume(_token: str, session: ResumeSession) -> bool:
         """Reject resume if the backing session no longer exists or has been recreated."""
@@ -726,80 +542,14 @@ def create_server_app(
     app.state.uterm_idp = idp
     app.state.uterm_startup_time = time.time()
 
-    @app.middleware("http")
-    async def _request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
-        request.state.uterm_request_id = request_id
-        start = time.perf_counter()
-        _inc_metric("http_requests_total")
-        try:
-            response = await call_next(request)
-        except Exception:
-            _inc_metric("http_requests_error_total")
-            logger.exception(
-                "http_request_failed request_id=%s method=%s path=%s",
-                request_id,
-                request.method,
-                request.url.path,
-            )
-            raise
-        duration_ms = (time.perf_counter() - start) * 1000.0
-        if response.status_code >= 500:
-            _inc_metric("http_requests_5xx_total")
-        elif response.status_code >= 400:
-            _inc_metric("http_requests_4xx_total")
-        response.headers["x-request-id"] = request_id
-        logger.info(
-            "http_request request_id=%s method=%s path=%s status=%d duration_ms=%.2f",
-            request_id,
-            request.method,
-            request.url.path,
-            response.status_code,
-            duration_ms,
-        )
-        return response
-
-    # Tunnel routes are passed as extra registrars to avoid a hard import
-    # dependency from bridge → tunnel (enables future package extraction).
-    from provide.terminal.bridge.fanout._routes import register_fanout_routes
-    from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
-
-    app.include_router(
-        hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
-        dependencies=[Depends(_require_authenticated), Depends(_require_hub_route_authz)],
+    install_request_logging_middleware(app, inc_metric=_inc_metric)
+    install_routers(
+        app,
+        config=config,
+        hub=hub,
+        require_authenticated=_require_authenticated,
+        require_hub_route_authz=_require_hub_route_authz,
     )
-    app.include_router(create_health_router())
-    app.include_router(create_api_router(), dependencies=[Depends(_require_authenticated)])
-    app.include_router(create_profiles_router(), dependencies=[Depends(_require_authenticated)])
-    app.include_router(create_approvals_router(), dependencies=[Depends(_require_authenticated)])
-    app.include_router(create_page_router(), prefix=config.ui.app_path, dependencies=[Depends(_require_authenticated)])
-
-    @app.get("/s/{session_id}")
-    async def short_share_url(request: FastAPIRequest, session_id: str) -> object:
-        """Short share URL: /s/{id}?token=... → redirect to /app/{inspect|session}/{id}?token=..."""
-        from starlette.responses import RedirectResponse
-
-        tunnel_tokens: dict[str, dict[str, object]] = request.app.state.uterm_tunnel_tokens
-        entry = tunnel_tokens.get(session_id, {})
-        page = str(entry.get("share_page", "session"))
-        qs = str(request.url.query)
-        target = f"{config.ui.app_path}/{page}/{session_id}"
-        if qs:
-            target += f"?{qs}"
-        return RedirectResponse(url=target, status_code=302)
-
-    if config.server.allowed_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=config.server.allowed_origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        )
-
-    app.add_middleware(SecurityHeadersMiddleware, config=config.security, auth_mode=config.auth.mode)
-    app.add_middleware(TelemetryMiddleware)
-
-    frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
-    app.mount(config.ui.assets_path, StaticFiles(directory=str(frontend_path), html=False), name="uterm-assets")
+    install_cors_security_telemetry(app, config=config)
+    mount_frontend_assets(app, config=config)
     return app
