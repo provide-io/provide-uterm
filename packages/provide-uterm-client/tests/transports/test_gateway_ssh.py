@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from provide.terminal.control_channel import encode_control
 from provide.terminal.gateway import SshWsGateway, _ssh_to_ws, _ws_to_ssh
-from provide.terminal.gateway._gateway import _make_no_auth_server_class
+from provide.terminal.gateway._ssh_handler import _make_no_auth_server_class
 
 # ---------------------------------------------------------------------------
 # SshWsGateway — init
@@ -232,8 +232,20 @@ class TestWsToSshControl:
 
 
 class TestNoAuthServerClass:
-    def test_begin_auth_returns_false(self) -> None:
-        """_NoAuthServer.begin_auth always returns False (allow all users)."""
+    def test_begin_auth_returns_true(self) -> None:
+        """_NoAuthServer.begin_auth returns True so asyncssh exercises pubkey/password handlers."""
         no_auth_cls = _make_no_auth_server_class()
         srv = no_auth_cls.__new__(no_auth_cls)
-        assert srv.begin_auth("any_user") is False
+        assert srv.begin_auth("any_user") is True
+
+    def test_password_auth_supported_default(self) -> None:
+        """Password auth is supported by default (no resolver requirement)."""
+        no_auth_cls = _make_no_auth_server_class()
+        srv = no_auth_cls.__new__(no_auth_cls)
+        assert srv.password_auth_supported() is True
+
+    def test_password_auth_disabled_when_resolver_required(self) -> None:
+        """Password fallback disabled when require_resolver=True."""
+        no_auth_cls = _make_no_auth_server_class(None, require_resolver=True)
+        srv = no_auth_cls.__new__(no_auth_cls)
+        assert srv.password_auth_supported() is False
