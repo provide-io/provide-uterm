@@ -297,7 +297,7 @@ async def test_browser_role_for_request_jwt_validation_error_returns_viewer() ->
         url = "http://localhost/"
 
     with patch(
-        "provide.terminal.cloudflare.do.session_runtime.decode_jwt",
+        "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
         new=AsyncMock(side_effect=JwtValidationError("bad token")),
     ):
         role = await rt.browser_role_for_request(_Req())
@@ -318,7 +318,7 @@ async def test_browser_role_for_request_network_error_propagates() -> None:
 
     with (
         patch(
-            "provide.terminal.cloudflare.do.session_runtime.decode_jwt",
+            "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
             new=AsyncMock(side_effect=RuntimeError("JWKS network error")),
         ),
         pytest.raises(RuntimeError, match="JWKS network error"),
@@ -355,7 +355,7 @@ async def test_browser_subject_for_request_returns_subject_in_jwt_mode() -> None
         url = "http://localhost/"
 
     with patch(
-        "provide.terminal.cloudflare.do.session_runtime.decode_jwt",
+        "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
         new=AsyncMock(return_value=Principal(subject_id="alice", roles=("viewer",))),
     ):
         result = await rt.browser_subject_for_request(_Req())
@@ -387,7 +387,7 @@ async def test_browser_subject_for_request_returns_none_on_jwt_error() -> None:
         url = "http://localhost/"
 
     with patch(
-        "provide.terminal.cloudflare.do.session_runtime.decode_jwt",
+        "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
         new=AsyncMock(side_effect=JwtValidationError("bad")),
     ):
         result = await rt.browser_subject_for_request(_Req())
