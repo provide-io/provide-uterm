@@ -26,7 +26,6 @@ import uuid
 
 import pytest
 import websockets
-
 from provide.terminal.control_channel import encode_control
 
 _WS_TIMEOUT_S = 15.0

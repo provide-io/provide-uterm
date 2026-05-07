@@ -474,7 +474,7 @@ class TestWsHelpersGaps:
 
     async def test_get_presence_ids_ctx_failure_fallback(self) -> None:
         """Lines 196-197: getWebSockets() failure falls back."""
-        from provide.terminal.cloudflare.do.ws_helpers import (
+        from provide.terminal.cloudflare.do.session_runtime.ws_helpers import (
             _WsHelperMixin,
         )
 
@@ -492,7 +492,7 @@ class TestWsHelpersGaps:
         self,
     ) -> None:
         """Lines 198-200: empty getWebSockets falls back to browser_sockets."""
-        from provide.terminal.cloudflare.do.ws_helpers import (
+        from provide.terminal.cloudflare.do.session_runtime.ws_helpers import (
             _WsHelperMixin,
         )
 
@@ -509,7 +509,7 @@ class TestWsHelpersGaps:
 
     async def test_get_presence_ids_skips_non_browser(self) -> None:
         """Line 203: non-browser sockets skipped."""
-        from provide.terminal.cloudflare.do.ws_helpers import (
+        from provide.terminal.cloudflare.do.session_runtime.ws_helpers import (
             _WsHelperMixin,
         )
 
@@ -544,7 +544,7 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnels_dispatch(self) -> None:
         """Lines 413-418: _api_tunnels calls handle_tunnels."""
-        from provide.terminal.cloudflare.entry import _api_tunnels
+        from provide.terminal.cloudflare.entry.handlers import _api_tunnels
 
         req = _req("/api/tunnels", method="GET")
         env = SimpleNamespace(SESSION_REGISTRY=None)
@@ -555,7 +555,7 @@ class TestEntryDispatchGaps:
     async def test_api_tunnel_revoke_dispatch(self) -> None:
         """Lines 422-427: _api_tunnel_revoke calls handler."""
         from provide.terminal.cloudflare.config import CloudflareConfig
-        from provide.terminal.cloudflare.entry import _api_tunnel_revoke
+        from provide.terminal.cloudflare.entry.handlers import _api_tunnel_revoke
 
         cfg = CloudflareConfig.from_env(
             SimpleNamespace(AUTH_MODE="dev", JWT_ALGORITHMS="HS256", WORKER_BEARER_TOKEN="t")
@@ -567,7 +567,7 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnel_rotate_dispatch(self) -> None:
         """Lines 431-436: _api_tunnel_rotate calls handler."""
-        from provide.terminal.cloudflare.entry import _api_tunnel_rotate
+        from provide.terminal.cloudflare.entry.handlers import _api_tunnel_rotate
 
         cfg = MagicMock()
         cfg.tunnel_token_ttl_s = 3600

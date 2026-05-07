@@ -5,7 +5,6 @@
 
 """I/O, broadcast, and alarm mixin for SessionRuntime.
 
-Extracted from ``session_runtime.py`` to keep file sizes under 500 LOC.
 Provides ``_SessionRuntimeIoMixin`` with request helpers, hijack state
 broadcast, worker I/O, and the alarm handler.
 """
@@ -19,7 +18,6 @@ import time
 from typing import Any
 
 from provide.telemetry import get_tracer
-
 from provide.terminal.control_channel import encode_control, encode_data
 
 try:
@@ -192,10 +190,19 @@ class _SessionRuntimeIoMixin:
             try:
                 # Backpressure logic
                 frame_type = str(payload.get("type") or "")
-                encoded = encode_data(str(payload.get("data", ""))) if frame_type in {"input", "term"} else encode_control(payload)
+                encoded = (
+                    encode_data(str(payload.get("data", "")))
+                    if frame_type in {"input", "term"}
+                    else encode_control(payload)
+                )
                 msg_len = len(encoded)
                 if self._queue_bytes + msg_len > self.max_buffer_bytes:
-                    logger.warning("cloudflare_runtime_buffer_full id=%s queue=%d msg=%d", self.worker_id, self._queue_bytes, msg_len)
+                    logger.warning(
+                        "cloudflare_runtime_buffer_full id=%s queue=%d msg=%d",
+                        self.worker_id,
+                        self._queue_bytes,
+                        msg_len,
+                    )
                     with tracer.start_as_current_span(
                         "uterm.buffer.full",
                         attributes={"worker_id": self.worker_id, "queue_bytes": self._queue_bytes, "msg_len": msg_len},
