@@ -8,6 +8,11 @@ Factory function ``create_mcp_app()`` returns a ready-to-run :class:`FastMCP`
 instance with 21 tools covering session management, hijack lifecycle, and
 worker control.
 
+Every tool handler is wrapped by the authorization chokepoint
+(:mod:`provide.terminal.ai.auth`); roles are declared once in
+:mod:`provide.terminal.ai.policy` and an unguarded tool will be refused by
+the dispatcher rather than silently exposed.
+
 Usage::
 
     from provide.terminal.ai import create_mcp_app
@@ -28,6 +33,13 @@ if TYPE_CHECKING:
 from fastmcp import FastMCP
 from provide.terminal.screen import strip_ansi
 
+from provide.terminal.ai.auth import (
+    AuthorizationContext,
+    McpPrincipal,
+    authorized,
+    principal_from_headers,
+)
+from provide.terminal.ai.policy import is_allowed_connector
 from provide.terminal.client.hijack import HijackClient
 from provide.terminal.client.mcp_tools import _ok
 
@@ -91,18 +103,79 @@ def _clean_snapshot(
     return result
 
 
-def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
+def _validate_session_create_config(
+    *,
+    connector_type: str,
+    url: str | None,
+    port: int | None,
+) -> dict[str, Any] | None:
+    """Vet a ``session_create`` request against the connector allowlist.
+
+    Returns ``None`` when the config is acceptable, or a structured error
+    dict (matching the rest of the MCP tool surface) when the request must
+    be refused.  Validation rules:
+
+    * ``connector_type`` must be on
+      :data:`~provide.terminal.ai.policy.ALLOWED_CONNECTOR_TYPES`.
+    * When supplied, ``port`` must be a TCP port in the legal range
+      (1..65535).
+    * When supplied, ``url`` must use a vetted scheme; arbitrary
+      ``file://`` / ``javascript:`` / etc. are rejected so an MCP client
+      cannot ask the worker to open a malicious resource.
+    """
+    if not is_allowed_connector(connector_type):
+        return {
+            "success": False,
+            "error": "invalid_connector_type",
+            "connector_type": connector_type,
+        }
+    if port is not None and not (1 <= port <= 65535):
+        return {
+            "success": False,
+            "error": "invalid_port",
+            "port": port,
+        }
+    if url is not None:
+        scheme = url.split("://", 1)[0].lower() if "://" in url else ""
+        if scheme not in {"ws", "wss", "http", "https", "telnet", "ssh"}:
+            return {
+                "success": False,
+                "error": "invalid_url_scheme",
+                "scheme": scheme or "<missing>",
+            }
+    return None
+
+
+def create_mcp_app(
+    base_url: str,
+    *,
+    default_principal: McpPrincipal | None = None,
+    **client_kwargs: Any,
+) -> FastMCP:
     """Create a FastMCP app with all provide-uterm tools.
 
     Parameters
     ----------
     base_url:
         Root URL of the provide-uterm server.
+    default_principal:
+        Principal applied when no per-request authentication is available.
+        When ``None``, the principal is inferred from the ``X-Uterm-Principal``
+        / ``X-Uterm-Role`` headers in ``client_kwargs["headers"]`` (so legacy
+        callers that supplied auth headers continue to work), falling back to
+        an admin principal for stdio/local development.
     **client_kwargs:
         Forwarded to :class:`HijackClient` (``entity_prefix``,
         ``headers``, ``timeout``, ``transport``).
     """
     client = HijackClient(base_url, **client_kwargs)
+
+    if default_principal is None:
+        default_principal = principal_from_headers(client_kwargs.get("headers")) or McpPrincipal(
+            subject_id="local",
+            roles=frozenset({"admin"}),
+        )
+    auth_ctx = AuthorizationContext(default_principal=default_principal)
 
     @contextlib.asynccontextmanager
     async def _lifespan(_app: FastMCP) -> AsyncIterator[None]:
@@ -114,6 +187,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     # -- Hijack lifecycle tools -----------------------------------------------
 
     @mcp.tool()
+    @authorized("hijack_begin", auth_ctx)
     async def hijack_begin(
         worker_id: str,
         lease_s: int = 90,
@@ -124,6 +198,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("hijack_heartbeat", auth_ctx)
     async def hijack_heartbeat(
         worker_id: str,
         hijack_id: str,
@@ -134,6 +209,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("hijack_read", auth_ctx)
     async def hijack_read(
         worker_id: str,
         hijack_id: str,
@@ -184,6 +260,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return result
 
     @mcp.tool()
+    @authorized("hijack_send", auth_ctx)
     async def hijack_send(
         worker_id: str,
         hijack_id: str,
@@ -206,6 +283,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("hijack_step", auth_ctx)
     async def hijack_step(
         worker_id: str,
         hijack_id: str,
@@ -215,6 +293,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("hijack_release", auth_ctx)
     async def hijack_release(
         worker_id: str,
         hijack_id: str,
@@ -226,18 +305,21 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     # -- Session management tools ---------------------------------------------
 
     @mcp.tool()
+    @authorized("session_list", auth_ctx)
     async def session_list() -> dict[str, Any]:
         """List all sessions with status."""
         ok, data = await client.list_sessions()
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("session_status", auth_ctx)
     async def session_status(session_id: str) -> dict[str, Any]:
         """Get a single session's details."""
         ok, data = await client.get_session(session_id)
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("session_read", auth_ctx)
     async def session_read(
         session_id: str,
         output: str = "text",
@@ -261,18 +343,21 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return result
 
     @mcp.tool()
+    @authorized("session_connect", auth_ctx)
     async def session_connect(session_id: str) -> dict[str, Any]:
         """Start/connect a session."""
         ok, data = await client.connect_session(session_id)
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("session_disconnect", auth_ctx)
     async def session_disconnect(session_id: str) -> dict[str, Any]:
         """Stop/disconnect a session."""
         ok, data = await client.disconnect_session(session_id)
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("session_create", auth_ctx)
     async def session_create(
         connector_type: str,
         display_name: str | None = None,
@@ -284,6 +369,17 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         input_mode: str | None = None,
     ) -> dict[str, Any]:
         """Create an ephemeral session via quick-connect."""
+        # Vet the connector config before any RPC.  ``session_create`` is
+        # the broadest-blast-radius tool — it can spawn arbitrary connectors
+        # — so we enforce an allowlist + field validation here.
+        rejection = _validate_session_create_config(
+            connector_type=connector_type,
+            url=url,
+            port=port,
+        )
+        if rejection is not None:
+            return rejection
+
         kwargs: dict[str, Any] = {}
         if display_name is not None:
             kwargs["display_name"] = display_name
@@ -305,12 +401,14 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     # -- Server / worker control tools ----------------------------------------
 
     @mcp.tool()
+    @authorized("server_health", auth_ctx)
     async def server_health() -> dict[str, Any]:
         """Health check the provide-uterm server."""
         ok, data = await client.health()
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("session_set_mode", auth_ctx)
     async def session_set_mode(
         session_id: str,
         mode: str,
@@ -320,6 +418,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("worker_input_mode", auth_ctx)
     async def worker_input_mode(
         worker_id: str,
         mode: str,
@@ -329,6 +428,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("worker_disconnect", auth_ctx)
     async def worker_disconnect(worker_id: str) -> dict[str, Any]:
         """Disconnect a worker WebSocket."""
         ok, data = await client.disconnect_worker(worker_id)
@@ -337,6 +437,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     # -- Real-time event subscription -----------------------------------------
 
     @mcp.tool()
+    @authorized("session_watch", auth_ctx)
     async def session_watch(
         session_id: str,
         event_types: str | None = None,
@@ -373,6 +474,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("session_subscribe", auth_ctx)
     async def session_subscribe(
         session_id: str,
         event_types: str | None = None,
@@ -423,6 +525,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     # -- Fan-out tools --------------------------------------------------------
 
     @mcp.tool()
+    @authorized("fanout_group_create", auth_ctx)
     async def fanout_group_create(
         session_ids: list[str],
         name: str = "fleet",
@@ -436,6 +539,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
         return _ok(ok, data)
 
     @mcp.tool()
+    @authorized("fanout_send", auth_ctx)
     async def fanout_send(
         group_id: str,
         data: str,
@@ -452,6 +556,7 @@ def create_mcp_app(base_url: str, **client_kwargs: Any) -> FastMCP:
     # -- Session annotation tool ----------------------------------------------
 
     @mcp.tool()
+    @authorized("session_annotate", auth_ctx)
     async def session_annotate(
         session_id: str,
         label: str,
