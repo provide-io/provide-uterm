@@ -61,7 +61,9 @@ for _p in _current_file.parents:
 _import_error: str | None = None
 
 for _path in [_parent_dir, _current_dir, *[str(p) for p in _python_module_candidates]]:
-    if _path not in sys.path:
+    if (
+        _path not in sys.path
+    ):  # pragma: no branch — module-level bootstrap; "already in sys.path" branch only fires in Pyodide flat-layout reloads
         sys.path.insert(0, _path)
 
 # ---------------------------------------------------------------------------
