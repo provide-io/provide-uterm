@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Callable
 from typing import Any
 
 from provide.terminal.transports.telnet_transport import TelnetTransport
@@ -101,6 +102,11 @@ class TelnetSession:
         self._update_event = asyncio.Event()
         self._connected = False
         self._change_seq: int = 0
+        # Raw-byte watchers — called from ``_reader_loop`` after every
+        # successful read with the IAC-stripped CP437+ANSI byte chunk.
+        # Used by worker_term_bridge to fan terminal output (with colors
+        # intact) to the swarm manager's hijack hub.
+        self._watchers: list[Callable[[dict[str, Any], bytes], None]] = []
 
     async def connect(self) -> None:
         """Open the TCP connection with IAC negotiation and start the background reader."""
@@ -200,12 +206,46 @@ class TelnetSession:
 
     # ── Internal ──────────────────────────────────────────────────────────
 
+    def add_watch(
+        self,
+        callback: Callable[[dict[str, Any], bytes], None],
+        *,
+        interval_s: float = 0.0,
+    ) -> None:
+        """Register a callback fired with each raw byte chunk read from the wire.
+
+        Called from ``_reader_loop`` immediately after IAC stripping and
+        *before* the emulator processes the bytes — so the chunk still
+        contains every ANSI SGR escape, cursor-positioning sequence and
+        CP437 high byte that arrived from the server. Useful for fanning
+        terminal output (with colors intact) to a hijack hub or
+        recording tee, since :meth:`snapshot` returns pyte's plain-text
+        decoded display which has already absorbed the escape sequences.
+
+        Args:
+            callback: ``(state_dict, raw_bytes) -> None``. ``state_dict``
+                is currently always empty; the second positional carries
+                the byte chunk. Callbacks must NOT block — schedule any
+                async work onto a queue / task.
+            interval_s: Reserved for future throttled-fan-out modes;
+                currently ignored.
+        """
+        del interval_s  # reserved for compatibility with TermBridge variants
+        self._watchers.append(callback)
+
     async def _reader_loop(self) -> None:
         """Background task: read from transport (IAC-stripped), feed into emulator."""
         try:
             while self._connected:
                 data = await self._transport.receive(4096, timeout_ms=500)
                 if data:
+                    # Fan out to any registered watchers BEFORE the emulator
+                    # consumes the bytes, so they see the raw wire content
+                    # (ANSI SGR codes etc.) and not pyte's decoded display.
+                    if self._watchers:
+                        for cb in self._watchers:
+                            with contextlib.suppress(Exception):
+                                cb({}, data)
                     self._emulator.process(data)
                     self._change_seq += 1
                     self._update_event.set()
