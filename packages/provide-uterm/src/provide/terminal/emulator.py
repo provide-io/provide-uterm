@@ -99,6 +99,51 @@ class TerminalEmulator:
         snap["captured_at"] = time.time()
         return snap
 
+    def ansi_screen(self) -> str:
+        """Return the current screen as a single string with ANSI SGR codes.
+
+        Walks pyte's per-cell style buffer and emits SGR escape sequences
+        whenever the style changes between adjacent cells. Use this when
+        a downstream consumer (xterm.js dashboard, AnsiBuffer in a spy)
+        needs the *visual* state including colors — :meth:`get_snapshot`'s
+        plain ``screen`` field discards pyte's style attributes.
+
+        Rows are joined with ``\\n``; each row ends with ``\\x1b[0m`` so a
+        consumer's subsequent writes start from a clean attribute state.
+        """
+        # Local import keeps the render module out of the import-time
+        # graph for callers that only need plain-text snapshots.
+        from provide.terminal.render.buffer import ANSI_RESET, style_to_sgr
+
+        rows_out: list[str] = []
+        buffer = self._screen.buffer
+        for y in range(self.rows):
+            row: dict[int, Any] = buffer.get(y, {})
+            parts: list[str] = []
+            last_style: tuple[str, str, bool, bool, bool, bool] | None = None
+            for x in range(self.cols):
+                cell = row.get(x)
+                if cell is None:
+                    char = " "
+                    style = ("default", "default", False, False, False, False)
+                else:
+                    style = (
+                        cell.fg or "default",
+                        cell.bg or "default",
+                        bool(cell.bold),
+                        bool(getattr(cell, "underscore", False)),
+                        bool(getattr(cell, "reverse", False)),
+                        bool(getattr(cell, "blink", False)),
+                    )
+                    char = cell.data or " "
+                if style != last_style:
+                    parts.append(style_to_sgr(*style))
+                    last_style = style
+                parts.append(char)
+            parts.append(ANSI_RESET)
+            rows_out.append("".join(parts))
+        return "\n".join(rows_out)
+
     def reset(self) -> None:
         """Reset terminal to its initial state."""
         self._screen.reset()
