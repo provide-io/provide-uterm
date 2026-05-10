@@ -75,6 +75,10 @@ from provide.terminal.screen import (
     normalize_terminal_text,
     strip_ansi,
 )
+from provide.terminal.ws_bytes import (
+    channel_str_to_bytes,
+    ws_frame_to_channel_str,
+)
 
 __all__ = [
     "__version__",
@@ -113,6 +117,9 @@ __all__ = [
     "extract_menu_options",
     "extract_numbered_list",
     "extract_key_value_pairs",
+    # ws_bytes — lossless byte ↔ str shim for the inline control channel
+    "channel_str_to_bytes",
+    "ws_frame_to_channel_str",
     # control_channel_builders — typed builders for ControlChannel protocol messages
     "make_identity",
     "make_session_token",
