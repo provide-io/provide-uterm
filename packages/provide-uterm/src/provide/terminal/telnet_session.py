@@ -144,6 +144,16 @@ class TelnetSession:
         """Return the current emulated screen state."""
         return self._emulator.get_snapshot()
 
+    def ansi_screen(self) -> str:
+        """Return the current screen as ANSI-styled text (with SGR colors).
+
+        Delegates to :meth:`TerminalEmulator.ansi_screen`. Use this when
+        shipping a snapshot to a live renderer (xterm.js dashboard,
+        AnsiBuffer spy) so colors survive — :meth:`snapshot` returns
+        plain text only.
+        """
+        return self._emulator.ansi_screen()
+
     async def send(self, data: str) -> None:
         """Send a string to the telnet server."""
         await self._transport.send(data.encode("cp437", errors="replace"))
