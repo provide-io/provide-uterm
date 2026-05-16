@@ -62,6 +62,9 @@ def pm(manager, tmp_path):
     return pm
 
 
+SAFE_FAKE_PID = 999_999_999
+
+
 def make_mock_proc(pid=42, returncode=0):
     m = MagicMock()
     m.pid = pid
@@ -156,8 +159,7 @@ class TestKillAgentExtra:
     @pytest.mark.asyncio
     async def test_kill_agent_timeout_is_5(self, pm, manager):
         """mutmut_4: timeout=None."""
-        proc = MagicMock()
-        proc.wait.return_value = 0
+        proc = make_mock_proc(pid=SAFE_FAKE_PID)
         manager.processes["agent_000"] = proc
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
@@ -177,8 +179,7 @@ class TestKillAgentExtra:
     @pytest.mark.asyncio
     async def test_kill_sets_state_stopped(self, pm, manager):
         """mutmut_10: state='XXstoppedXX'."""
-        proc = MagicMock()
-        proc.wait.return_value = 0
+        proc = make_mock_proc(pid=SAFE_FAKE_PID)
         manager.processes["agent_000"] = proc
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
@@ -190,8 +191,7 @@ class TestKillAgentExtra:
     @pytest.mark.asyncio
     async def test_kill_sets_stopped_at_to_time(self, pm, manager):
         """mutmut_11: stopped_at = None."""
-        proc = MagicMock()
-        proc.wait.return_value = 0
+        proc = make_mock_proc(pid=SAFE_FAKE_PID)
         manager.processes["agent_000"] = proc
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
@@ -206,8 +206,7 @@ class TestKillAgentExtra:
     @pytest.mark.asyncio
     async def test_kill_removes_from_processes(self, pm, manager):
         """mutmut_12: processes.pop(agent_id) missing."""
-        proc = MagicMock()
-        proc.wait.return_value = 0
+        proc = make_mock_proc(pid=SAFE_FAKE_PID)
         manager.processes["agent_000"] = proc
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
@@ -219,8 +218,7 @@ class TestKillAgentExtra:
     @pytest.mark.asyncio
     async def test_kill_calls_release_with_agent_id(self, pm, manager):
         """mutmut_14: release_agent_account(None)."""
-        proc = MagicMock()
-        proc.wait.return_value = 0
+        proc = make_mock_proc(pid=SAFE_FAKE_PID)
         manager.processes["agent_000"] = proc
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
@@ -234,8 +232,7 @@ class TestKillAgentExtra:
     @pytest.mark.asyncio
     async def test_kill_broadcasts_after(self, pm, manager):
         """mutmut_15/16: broadcast_status calls."""
-        proc = MagicMock()
-        proc.wait.return_value = 0
+        proc = make_mock_proc(pid=SAFE_FAKE_PID)
         manager.processes["agent_000"] = proc
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         manager.broadcast_status = AsyncMock()
