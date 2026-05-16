@@ -14,7 +14,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.gateway._telnet_gateway import TelnetWsGateway
+from provide.uterm.gateway._telnet_gateway import TelnetWsGateway
 
 # ---------------------------------------------------------------------------
 # TelnetWsGateway
@@ -67,7 +67,7 @@ class TestTelnetWsGateway:
         reader.at_eof = MagicMock(side_effect=[False, False, False, True])
 
         with (
-            patch("provide.terminal.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe_ws),
+            patch("provide.uterm.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe_ws),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             await gw._handle(reader, writer)
@@ -84,7 +84,7 @@ class TestTelnetWsGateway:
         writer.close = MagicMock()
         writer.wait_closed = AsyncMock()
 
-        with patch("provide.terminal.gateway._telnet_gateway._pipe_ws", new_callable=AsyncMock) as mock_pipe:
+        with patch("provide.uterm.gateway._telnet_gateway._pipe_ws", new_callable=AsyncMock) as mock_pipe:
             await gw._handle(reader, writer)
             mock_pipe.assert_not_called()
 
@@ -99,7 +99,7 @@ class TestTelnetWsGateway:
         # First at_eof: False (enter loop), pipe runs, second at_eof: True
         reader.at_eof = MagicMock(side_effect=[False, True])
 
-        with patch("provide.terminal.gateway._telnet_gateway._pipe_ws", new_callable=AsyncMock):
+        with patch("provide.uterm.gateway._telnet_gateway._pipe_ws", new_callable=AsyncMock):
             await gw._handle(reader, writer)
 
         writer.close.assert_called_once()
@@ -115,7 +115,7 @@ class TestTelnetWsGateway:
 
         with (
             patch(
-                "provide.terminal.gateway._telnet_gateway._pipe_ws",
+                "provide.uterm.gateway._telnet_gateway._pipe_ws",
                 new_callable=AsyncMock,
                 side_effect=ConnectionError("fail"),
             ),
@@ -148,7 +148,7 @@ class TestTelnetWsGateway:
         # Enter loop, pipe succeeds, check eof → True
         reader.at_eof = MagicMock(side_effect=[False, True])
 
-        with patch("provide.terminal.gateway._telnet_gateway._pipe_ws", new_callable=AsyncMock):
+        with patch("provide.uterm.gateway._telnet_gateway._pipe_ws", new_callable=AsyncMock):
             await gw._handle(reader, writer)
 
     async def test_handle_reconnect_indicator_write_error_suppressed(self) -> None:
@@ -174,7 +174,7 @@ class TestTelnetWsGateway:
                 raise ConnectionError("ws dropped")
 
         with (
-            patch("provide.terminal.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe),
+            patch("provide.uterm.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             await gw._handle(reader, writer)  # should not raise despite write error
@@ -203,7 +203,7 @@ class TestTelnetWsGateway:
                 raise ConnectionError("ws dropped")
 
         with (
-            patch("provide.terminal.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe),
+            patch("provide.uterm.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             await gw._handle(reader, writer)

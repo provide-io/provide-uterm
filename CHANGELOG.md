@@ -19,7 +19,7 @@ All notable changes to provide-uterm are documented in this file.
 - **Monorepo split** into 7 focused packages: `provide-uterm` (core),
   `provide-uterm-server`, `provide-uterm-client`, `provide-uterm-platform`,
   `provide-uterm-cloudflare`, `provide-uterm-frontend`, `provide-uterm-app`.
-- Namespace packaging: all packages share `provide.terminal.*` with symlinked
+- Namespace packaging: all packages share `provide.uterm.*` with symlinked
   source directories for development and independent PyPI distribution.
 
 ### Features

@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.render.buffer — AnsiBuffer and SGR helpers."""
+"""Tests for provide.uterm.render.buffer — AnsiBuffer and SGR helpers."""
 
 from __future__ import annotations
 
-from provide.terminal.render.buffer import (
+from provide.uterm.render.buffer import (
     ANSI_ALT_SCREEN,
     ANSI_EXIT_ALT,
     ANSI_HIDE_CURSOR,

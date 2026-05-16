@@ -25,7 +25,7 @@ import asyncssh
 import websockets
 import websockets.server
 
-from provide.terminal.gateway import _ssh_to_ws, _ws_to_ssh
+from provide.uterm.gateway import _ssh_to_ws, _ws_to_ssh
 
 
 async def _start_ws_echo_server(banner: str = "") -> tuple[Any, int]:
@@ -49,7 +49,7 @@ async def _make_ssh_server(
 
     Uses a permissive ``SSHServer`` subclass that accepts any password — safe for
     localhost-only test use.  The process factory calls ``_ssh_to_ws`` /
-    ``_ws_to_ssh`` from ``provide.terminal.gateway`` directly.
+    ``_ws_to_ssh`` from ``provide.uterm.gateway`` directly.
     """
 
     class _TestSSHServer(asyncssh.SSHServer):

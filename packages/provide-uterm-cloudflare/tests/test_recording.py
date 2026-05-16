@@ -12,10 +12,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from provide.terminal.cloudflare.api.http_routes._dispatch import route_http
-from provide.terminal.cloudflare.api.http_routes._recording import route_recording
-from provide.terminal.cloudflare.api.http_routes._shared import _session_status_item
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.api.http_routes._dispatch import route_http
+from provide.uterm.cloudflare.api.http_routes._recording import route_recording
+from provide.uterm.cloudflare.api.http_routes._shared import _session_status_item
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 # ---------------------------------------------------------------------------
 # Helpers

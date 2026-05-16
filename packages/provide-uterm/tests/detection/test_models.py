@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-from provide.terminal.detection.models import (
+from provide.uterm.detection.models import (
     PromptDetection,
     PromptDetectionDiagnostics,
     PromptMatch,

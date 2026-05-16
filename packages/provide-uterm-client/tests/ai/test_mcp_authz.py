@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastmcp import FastMCP
 
-from provide.terminal.ai.auth import (
+from provide.uterm.ai.auth import (
     AuthorizationContext,
     AuthorizationDenied,
     McpPrincipal,
@@ -34,7 +34,7 @@ from provide.terminal.ai.auth import (
     principal_from_headers,
     resolve_principal,
 )
-from provide.terminal.ai.policy import (
+from provide.uterm.ai.policy import (
     ALLOWED_CONNECTOR_TYPES,
     TOOL_REQUIRED_ROLES,
     is_allowed_connector,
@@ -42,7 +42,7 @@ from provide.terminal.ai.policy import (
     role_at_least,
     role_rank,
 )
-from provide.terminal.ai.server import _validate_session_create_config, create_mcp_app
+from provide.uterm.ai.server import _validate_session_create_config, create_mcp_app
 
 # ---------------------------------------------------------------------------
 # Helpers

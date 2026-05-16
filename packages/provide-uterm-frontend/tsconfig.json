@@ -15,7 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "rootDir": "src",
-    "outDir": "../../packages/provide-uterm-server/src/provide/terminal/server/frontend"
+    "outDir": "../../packages/provide-uterm-server/src/provide/uterm/server/frontend"
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]

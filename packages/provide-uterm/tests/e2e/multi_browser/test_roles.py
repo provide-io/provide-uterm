@@ -22,7 +22,7 @@ import time
 from typing import Any
 
 import httpx
-from provide.terminal.client import connect_async_ws
+from provide.uterm.client import connect_async_ws
 
 from .conftest import (
     ADMIN_H,

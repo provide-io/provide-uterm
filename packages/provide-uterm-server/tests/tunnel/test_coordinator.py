@@ -1,4 +1,4 @@
-from provide.terminal.bridge.coordinator import HijackCoordinator
+from provide.uterm.bridge.coordinator import HijackCoordinator
 
 
 def test_coordinator_heartbeat_rejects_wrong_owner():

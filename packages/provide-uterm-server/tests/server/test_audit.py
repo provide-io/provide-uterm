@@ -13,8 +13,8 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.audit import audit_event
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.audit import audit_event
 
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -25,7 +25,7 @@ _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
 
 def test_audit_event_emits_structured_log() -> None:
-    with patch("provide.terminal.server.audit._audit_log") as mock_log:
+    with patch("provide.uterm.server.audit._audit_log") as mock_log:
         audit_event(
             "session.create",
             principal="user1",
@@ -51,7 +51,7 @@ def test_audit_event_emits_structured_log() -> None:
 
 
 def test_audit_event_default_empty_fields() -> None:
-    with patch("provide.terminal.server.audit._audit_log") as mock_log:
+    with patch("provide.uterm.server.audit._audit_log") as mock_log:
         audit_event("auth.failure")
     extra = mock_log.info.call_args[1]["extra"]
     assert extra["principal"] == ""
@@ -62,7 +62,7 @@ def test_audit_event_default_empty_fields() -> None:
 
 def test_audit_event_with_detail() -> None:
     detail = {"error": "token expired", "code": 401}
-    with patch("provide.terminal.server.audit._audit_log") as mock_log:
+    with patch("provide.uterm.server.audit._audit_log") as mock_log:
         audit_event("auth.failure", detail=detail)
     extra = mock_log.info.call_args[1]["extra"]
     assert extra["detail"] == detail
@@ -115,7 +115,7 @@ def dev_client() -> TestClient:
 
 
 def test_session_create_emits_audit(dev_client: TestClient) -> None:
-    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
+    with patch("provide.uterm.server.routes.tunnels.audit_event") as mock:
         r = dev_client.post("/api/connect", json={"connector_type": "shell"})
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "session.create"]
@@ -129,7 +129,7 @@ def test_session_delete_emits_audit(dev_client: TestClient) -> None:
     # Create a session first
     r = dev_client.post("/api/connect", json={"connector_type": "shell"})
     session_id = r.json()["session_id"]
-    with patch("provide.terminal.server.routes.sessions.audit_event") as mock:
+    with patch("provide.uterm.server.routes.sessions.audit_event") as mock:
         r = dev_client.delete(f"/api/sessions/{session_id}")
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "session.delete"]
@@ -138,7 +138,7 @@ def test_session_delete_emits_audit(dev_client: TestClient) -> None:
 
 
 def test_tunnel_create_emits_audit(dev_client: TestClient) -> None:
-    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
+    with patch("provide.uterm.server.routes.tunnels.audit_event") as mock:
         r = dev_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "tunnel.create"]
@@ -151,7 +151,7 @@ def test_tunnel_create_emits_audit(dev_client: TestClient) -> None:
 def test_token_revoke_emits_audit(dev_client: TestClient) -> None:
     r = dev_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
     tunnel_id = r.json()["tunnel_id"]
-    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
+    with patch("provide.uterm.server.routes.tunnels.audit_event") as mock:
         r = dev_client.delete(f"/api/tunnels/{tunnel_id}/tokens")
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "tunnel.tokens.revoke"]
@@ -162,7 +162,7 @@ def test_token_revoke_emits_audit(dev_client: TestClient) -> None:
 def test_token_rotate_emits_audit(dev_client: TestClient) -> None:
     r = dev_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
     tunnel_id = r.json()["tunnel_id"]
-    with patch("provide.terminal.server.routes.tunnels.audit_event") as mock:
+    with patch("provide.uterm.server.routes.tunnels.audit_event") as mock:
         r = dev_client.post(f"/api/tunnels/{tunnel_id}/tokens/rotate")
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "tunnel.tokens.rotate"]
@@ -172,7 +172,7 @@ def test_token_rotate_emits_audit(dev_client: TestClient) -> None:
 
 def test_auth_success_emits_audit(jwt_client: TestClient) -> None:
     token = _make_token()
-    with patch("provide.terminal.server.auth.audit_event") as mock:
+    with patch("provide.uterm.server.auth.audit_event") as mock:
         r = jwt_client.get("/api/sessions", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
         calls = [c for c in mock.call_args_list if c[0][0] == "auth.success"]
@@ -181,7 +181,7 @@ def test_auth_success_emits_audit(jwt_client: TestClient) -> None:
 
 
 def test_auth_failure_emits_audit(jwt_client: TestClient) -> None:
-    with patch("provide.terminal.server.auth.audit_event") as mock:
+    with patch("provide.uterm.server.auth.audit_event") as mock:
         jwt_client.get("/api/sessions", headers={"Authorization": "Bearer invalid-token"})
         calls = [c for c in mock.call_args_list if c[0][0] == "auth.failure"]
         assert len(calls) >= 1

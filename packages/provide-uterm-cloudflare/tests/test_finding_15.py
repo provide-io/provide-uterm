@@ -1,5 +1,5 @@
 import pytest
-from provide.terminal.deckmux._presence import PresenceStore
+from provide.uterm.deckmux._presence import PresenceStore
 
 
 def test_presence_store_update_unknown_field():

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from provide.terminal import control_channel_namespace, control_plane_namespace
-from provide.terminal.control import channel, plane
-from provide.terminal.control.channel import BrowserControlMessage, WorkerControlMessage
-from provide.terminal.control.plane import ControlPlane, ControlPlaneConfig, EngineCapabilities
+from provide.uterm import control_channel_namespace, control_plane_namespace
+from provide.uterm.control import channel, plane
+from provide.uterm.control.channel import BrowserControlMessage, WorkerControlMessage
+from provide.uterm.control.plane import ControlPlane, ControlPlaneConfig, EngineCapabilities
 
 
 def test_control_import_surface_exposes_channel_and_plane() -> None:

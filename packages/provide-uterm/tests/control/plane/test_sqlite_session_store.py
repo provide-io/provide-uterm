@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.control.plane import ControlPlaneConfig
-from provide.terminal.control.plane.session import SessionRecord
-from provide.terminal.control.plane.sqlite import SqliteControlPlane
+from provide.uterm.control.plane import ControlPlaneConfig
+from provide.uterm.control.plane.session import SessionRecord
+from provide.uterm.control.plane.sqlite import SqliteControlPlane
 
 
 @pytest.mark.asyncio

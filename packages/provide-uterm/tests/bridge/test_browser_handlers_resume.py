@@ -25,13 +25,13 @@ def _decode_msg(raw: str) -> dict:
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from provide.terminal.bridge.hub import InMemoryResumeStore, TermHub
-from provide.terminal.bridge.models import WorkerTermState
-from provide.terminal.bridge.routes.browser_handlers import (
+from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
+from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.bridge.routes.browser_handlers import (
     _handle_resume,
     handle_browser_message,
 )
-from provide.terminal.client import connect_test_ws
+from provide.uterm.client import connect_test_ws
 
 
 def _make_hub(resume_store: InMemoryResumeStore | None = None) -> TermHub:

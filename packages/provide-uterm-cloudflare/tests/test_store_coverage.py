@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 # ---------------------------------------------------------------------------
 # Helpers

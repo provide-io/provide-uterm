@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.deckmux._protocol — message types and serialization."""
+"""Tests for provide.uterm.deckmux._protocol — message types and serialization."""
 
 from __future__ import annotations
 
-from provide.terminal.deckmux._protocol import (
+from provide.uterm.deckmux._protocol import (
     KEY_SYMBOLS,
     MSG_AUTO_TRANSFER_WARNING,
     MSG_CONTROL_REQUEST,

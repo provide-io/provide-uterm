@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for provide.terminal.manager.process — supplemental batch (part 1).
+"""Mutation-killing tests for provide.uterm.manager.process — supplemental batch (part 1).
 
 Classes: TestInitDefaultsExtra, TestSyncNextAgentIndexExtra, TestAllocateAgentIdExtra,
          TestStartSpawnSwarmExtra, TestSpawnAgentGameTypeFallbacks, TestSpawnAgentProcessArgs.
@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.process import AgentProcessManager
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:

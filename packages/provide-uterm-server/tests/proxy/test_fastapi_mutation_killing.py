@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for provide.terminal.fastapi_utils.
+"""Mutation-killing tests for provide.uterm.fastapi_utils.
 
 Kills surviving mutations in mount_terminal_ui (path default, frontend dir
 path, error message content, StaticFiles args) and WsTerminalProxy._handle
@@ -27,7 +27,7 @@ import pytest
 class TestMountTerminalUiPathDefault:
     def test_default_path_is_slash_terminal(self) -> None:
         """mount_terminal_ui default path is '/terminal' (kills mutmut_1, _2)."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         sig = inspect.signature(mount_terminal_ui)
         default = sig.parameters["path"].default
@@ -35,7 +35,7 @@ class TestMountTerminalUiPathDefault:
 
     def test_default_path_lowercase(self) -> None:
         """Default path is exactly '/terminal' — not '/TERMINAL'."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         sig = inspect.signature(mount_terminal_ui)
         default = sig.parameters["path"].default
@@ -44,11 +44,11 @@ class TestMountTerminalUiPathDefault:
 
     def test_mount_called_with_slash_terminal_by_default(self) -> None:
         """When path not given, app.mount is called with '/terminal'."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=True),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=True),
             patch("starlette.staticfiles.StaticFiles.__init__", return_value=None),
         ):
             mount_terminal_ui(mock_app)
@@ -65,7 +65,7 @@ class TestMountTerminalUiPathDefault:
 class TestMountTerminalUiFrontendDir:
     def test_frontend_path_uses_lowercase_frontend(self) -> None:
         """frontend_path uses 'frontend' not 'FRONTEND' (kills mutmut_7)."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         captured_paths: list[Any] = []
 
@@ -77,7 +77,7 @@ class TestMountTerminalUiFrontendDir:
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=True),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=True),
             patch("starlette.staticfiles.StaticFiles", CapturingStaticFiles),
         ):
             mount_terminal_ui(mock_app)
@@ -90,7 +90,7 @@ class TestMountTerminalUiFrontendDir:
 
     def test_frontend_path_parent_is_fastapi_module_parent(self) -> None:
         """frontend_path parent is same as fastapi.py's parent dir."""
-        from provide.terminal import fastapi_utils as fastapi_module
+        from provide.uterm import fastapi_utils as fastapi_module
 
         expected_parent = Path(fastapi_module.__file__).parent
         expected_frontend = expected_parent / "frontend"
@@ -108,11 +108,11 @@ class TestMountTerminalUiFrontendDir:
 class TestMountTerminalUiErrorMessage:
     def test_error_message_contains_assets_not_found(self) -> None:
         """RuntimeError message mentions 'assets not found' (kills mutmut_10, _11)."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=False),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=False),
             pytest.raises(RuntimeError) as exc_info,
         ):
             mount_terminal_ui(mock_app)
@@ -122,11 +122,11 @@ class TestMountTerminalUiErrorMessage:
 
     def test_error_message_mentions_pip_install(self) -> None:
         """Error mentions pip install hint (kills mutmut_10, _11)."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=False),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=False),
             pytest.raises(RuntimeError) as exc_info,
         ):
             mount_terminal_ui(mock_app)
@@ -137,11 +137,11 @@ class TestMountTerminalUiErrorMessage:
 
     def test_error_message_starts_lowercase_is(self) -> None:
         """Second part of error message uses lowercase 'is the package...' (kills mutmut_11)."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=False),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=False),
             pytest.raises(RuntimeError) as exc_info,
         ):
             mount_terminal_ui(mock_app)
@@ -159,7 +159,7 @@ class TestMountTerminalUiErrorMessage:
 class TestMountTerminalUiStaticFilesArgs:
     def _mount_with_capture(self) -> tuple[MagicMock, list[dict]]:
         """Helper: run mount_terminal_ui with StaticFiles constructor captured."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         captured: list[dict] = []
 
@@ -169,7 +169,7 @@ class TestMountTerminalUiStaticFilesArgs:
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=True),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=True),
             patch("starlette.staticfiles.StaticFiles", CapturingStaticFiles),
         ):
             mount_terminal_ui(mock_app)
@@ -198,11 +198,11 @@ class TestMountTerminalUiStaticFilesArgs:
 
     def test_mount_name_is_terminal_ui(self) -> None:
         """app.mount name is 'terminal-ui' (not None, not missing)."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         mock_app = MagicMock()
         with (
-            patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=True),
+            patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=True),
             patch("starlette.staticfiles.StaticFiles", MagicMock()),
         ):
             mount_terminal_ui(mock_app)
@@ -245,7 +245,7 @@ class _SimpleMockTransport:
 class TestWsTerminalProxyHandleArgs:
     def test_browser_to_remote_receives_actual_reader(self) -> None:
         """_handle passes the real reader to _browser_to_remote (kills mutmut_17)."""
-        from provide.terminal.fastapi_utils import WsTerminalProxy
+        from provide.uterm.fastapi_utils import WsTerminalProxy
 
         readers_seen: list[Any] = []
         transports_seen: list[Any] = []
@@ -272,7 +272,7 @@ class TestWsTerminalProxyHandleArgs:
 
     def test_browser_to_remote_receives_actual_transport(self) -> None:
         """_handle passes real transport to _browser_to_remote (kills mutmut_18)."""
-        from provide.terminal.fastapi_utils import WsTerminalProxy
+        from provide.uterm.fastapi_utils import WsTerminalProxy
 
         transports_seen: list[Any] = []
 
@@ -309,7 +309,7 @@ class TestWsTerminalProxyHandleFirstCompleted:
         ALL_COMPLETED (the default). With ALL_COMPLETED the proxy would block
         until the browser side finishes too.
         """
-        from provide.terminal.fastapi_utils import WsTerminalProxy
+        from provide.uterm.fastapi_utils import WsTerminalProxy
 
         # Transport that immediately disconnects (remote done after first receive)
         class ImmediateTransport:
@@ -377,7 +377,7 @@ class TestWsTerminalProxyHandleGather:
         which means pending tasks are never cancelled/awaited.
         The test verifies the proxy completes without leaking warnings.
         """
-        from provide.terminal.fastapi_utils import WsTerminalProxy
+        from provide.uterm.fastapi_utils import WsTerminalProxy
 
         class FastRemoteTransport:
             def __init__(self) -> None:

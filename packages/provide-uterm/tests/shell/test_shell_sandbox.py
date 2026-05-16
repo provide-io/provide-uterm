@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.shell._sandbox — Sandbox eval/exec."""
+"""Tests for provide.uterm.shell._sandbox — Sandbox eval/exec."""
 
-from provide.terminal.shell._sandbox import Sandbox
+from provide.uterm.shell._sandbox import Sandbox
 
 
 def test_eval_returns_result():

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import time
 
-from provide.terminal.detection.buffer import BufferManager, ScreenBuffer
+from provide.uterm.detection.buffer import BufferManager, ScreenBuffer
 
 
 def test_screen_buffer_creation() -> None:

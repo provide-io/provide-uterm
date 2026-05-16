@@ -10,7 +10,7 @@ import asyncio
 import contextlib
 import time
 
-from provide.terminal.bridge.base import HijackableMixin
+from provide.uterm.bridge.base import HijackableMixin
 
 
 class Bot(HijackableMixin):

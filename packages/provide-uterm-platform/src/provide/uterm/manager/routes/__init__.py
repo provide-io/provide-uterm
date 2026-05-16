@@ -1,0 +1,14 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+
+"""Swarm manager API route package."""
+
+from __future__ import annotations
+
+# Import submodules to trigger route registration on the shared router.
+from provide.uterm.manager.routes import agent_ops, agent_update, spawn, status
+from provide.uterm.manager.routes.models import router
+
+__all__ = ["router"]

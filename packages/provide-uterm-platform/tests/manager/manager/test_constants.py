@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.constants."""
+"""Tests for provide.uterm.manager.constants."""
 
-from provide.terminal.manager.constants import (
+from provide.uterm.manager.constants import (
     EPOCH_TURN_DROP_MIN,
     EPOCH_TURN_DROP_RATIO,
     HEALTH_CHECK_INTERVAL_S,

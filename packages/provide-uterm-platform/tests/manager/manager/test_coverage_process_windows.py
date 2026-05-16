@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.process import AgentProcessManager
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -67,7 +67,7 @@ class TestStopProcessTreeWindowsPaths:
     async def test_no_process_windows_calls_taskkill(self, pm):
         """Lines 298-299: process=None on Windows → _taskkill_process_tree called."""
         with (
-            patch("provide.terminal.manager.process.os.name", "nt"),
+            patch("provide.uterm.manager.process.os.name", "nt"),
             patch.object(
                 AgentProcessManager,
                 "_taskkill_process_tree",
@@ -82,7 +82,7 @@ class TestStopProcessTreeWindowsPaths:
     async def test_no_process_windows_suppresses_oserror(self, pm):
         """Lines 298-299: OSError from _taskkill_process_tree is suppressed (process=None)."""
         with (
-            patch("provide.terminal.manager.process.os.name", "nt"),
+            patch("provide.uterm.manager.process.os.name", "nt"),
             patch.object(
                 AgentProcessManager,
                 "_taskkill_process_tree",
@@ -108,7 +108,7 @@ class TestStopProcessTreeWindowsPaths:
             # second call succeeds
 
         with (
-            patch("provide.terminal.manager.process.os.name", "nt"),
+            patch("provide.uterm.manager.process.os.name", "nt"),
             patch.object(AgentProcessManager, "_wait_for_process_exit", side_effect=fake_wait),
             patch.object(AgentProcessManager, "_taskkill_process_tree", new_callable=AsyncMock) as mock_taskkill,
         ):

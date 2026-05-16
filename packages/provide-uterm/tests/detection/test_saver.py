@@ -14,7 +14,7 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
-from provide.terminal.detection.saver import ScreenSaver
+from provide.uterm.detection.saver import ScreenSaver
 
 
 @pytest.fixture

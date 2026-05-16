@@ -22,11 +22,11 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.bridge.fanout._collector import OutputCollector
-from provide.terminal.bridge.fanout._controller import FanOutController
-from provide.terminal.bridge.fanout._models import FanOutGroup
-from provide.terminal.bridge.hub import EventBus, TermHub
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.fanout._collector import OutputCollector
+from provide.uterm.bridge.fanout._controller import FanOutController
+from provide.uterm.bridge.fanout._models import FanOutGroup
+from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.client import connect_test_ws
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -88,7 +88,7 @@ class TestCollectorHardCapBreak:
         Strategy: wrap asyncio.wait_for to return an event on the first call, then
         mock time.monotonic so the second loop iteration finds remaining <= 0.
         """
-        import provide.terminal.bridge.fanout._collector as _col_mod
+        import provide.uterm.bridge.fanout._collector as _col_mod
 
         hub = await _make_hub_with_workers("w1")
         collector = OutputCollector()
@@ -325,7 +325,7 @@ class TestSequentialDivergence:
 
 
 def _make_rest_app() -> object:
-    from provide.terminal.server import create_server_app, default_server_config
+    from provide.uterm.server import create_server_app, default_server_config
 
     cfg = default_server_config()
     cfg.auth.mode = "dev"
@@ -338,7 +338,7 @@ class TestGetControllerNo501:
 
     def _make_app_with_fanout_routes_no_controller(self) -> object:
         """Hub with fanout routes registered but NO fan_out_controller attribute."""
-        from provide.terminal.bridge.fanout._routes import register_fanout_routes
+        from provide.uterm.bridge.fanout._routes import register_fanout_routes
 
         hub = TermHub()
         # Ensure no controller is attached.

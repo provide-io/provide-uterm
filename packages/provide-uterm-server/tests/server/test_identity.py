@@ -10,13 +10,13 @@ from starlette.requests import Request
 from starlette.websockets import WebSocket
 
 # We'll import these after they are moved/created
-# from provide.terminal.bridge.identity import Principal, IdentityProvider
+# from provide.uterm.bridge.identity import Principal, IdentityProvider
 
 
 def test_principal_instantiation():
     """Verify Principal can be instantiated (TDD placeholder)."""
     # This will fail until we create the file and import it
-    from provide.terminal.bridge.identity import Principal
+    from provide.uterm.bridge.identity import Principal
 
     p = Principal(subject_id="alice", roles=frozenset(["admin"]))
     assert p.subject_id == "alice"
@@ -26,7 +26,7 @@ def test_principal_instantiation():
 
 def test_identity_provider_protocol():
     """Verify IdentityProvider protocol structure."""
-    from provide.terminal.bridge.identity import IdentityProvider, Principal
+    from provide.uterm.bridge.identity import IdentityProvider, Principal
 
     class FakeProvider:
         async def resolve_principal(self, connection: Request | WebSocket) -> Principal:

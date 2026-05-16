@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.deckmux._identity.
+"""Tests for provide.uterm.deckmux._identity.
 
 Covers parse_identity_frame, presence_from_identity, and the
 identity_as_principal adapter — the DeckMux consumer of the
@@ -11,8 +11,8 @@ identity control frame emitted by the SSH gateway resolver.
 
 from __future__ import annotations
 
-from provide.terminal.auth import ResolvedIdentity
-from provide.terminal.deckmux import (
+from provide.uterm.auth import ResolvedIdentity
+from provide.uterm.deckmux import (
     PresenceStore,
     identity_as_principal,
     parse_identity_frame,
@@ -143,7 +143,7 @@ class TestPresenceFromIdentity:
 
     def test_color_generation_respects_taken_set(self) -> None:
         """If every color is taken except one, that one is picked."""
-        from provide.terminal.deckmux import generate_color
+        from provide.uterm.deckmux import generate_color
 
         # Seed a taken-colors set that excludes only a specific value.
         probe_color = generate_color("probe-conn", taken=frozenset())
@@ -259,7 +259,7 @@ class TestHubMixinIntegration:
     async def test_identity_principal_feeds_hub_mixin(self) -> None:
         from unittest.mock import AsyncMock
 
-        from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+        from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 
         class _FakeHub(DeckMuxMixin):
             def __init__(self) -> None:
@@ -296,7 +296,7 @@ class TestHubMixinIntegration:
         """
         from unittest.mock import AsyncMock
 
-        from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+        from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 
         class _FakeHub(DeckMuxMixin):
             def __init__(self) -> None:

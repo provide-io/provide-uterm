@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 
 def test_cli_runs_with_defaults() -> None:
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     with patch("uvicorn.run") as mock_run:
         main([])
@@ -21,10 +21,10 @@ def test_cli_runs_with_defaults() -> None:
 
 
 def test_cli_host_override() -> None:
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     with (
-        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
         patch("uvicorn.run") as mock_run,
     ):
         main(["--host", "0.0.0.0"])
@@ -33,7 +33,7 @@ def test_cli_host_override() -> None:
 
 
 def test_cli_port_override() -> None:
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     with patch("uvicorn.run") as mock_run:
         main(["--port", "9999"])
@@ -42,7 +42,7 @@ def test_cli_port_override() -> None:
 
 
 def test_cli_host_and_port_updates_public_base_url() -> None:
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     captured: dict = {}
 
@@ -50,7 +50,7 @@ def test_cli_host_and_port_updates_public_base_url() -> None:
         captured.update(kwargs)
 
     with (
-        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
         patch("uvicorn.run", side_effect=_capture),
     ):
         main(["--host", "10.0.0.1", "--port", "7777"])
@@ -60,7 +60,7 @@ def test_cli_host_and_port_updates_public_base_url() -> None:
 
 
 def test_cli_config_file(tmp_path: object) -> None:
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     assert isinstance(tmp_path, __import__("pathlib").Path)
     cfg = tmp_path / "server.toml"
@@ -73,15 +73,15 @@ def test_cli_config_file(tmp_path: object) -> None:
 
 
 def test_cli_https_public_base_url_preserved_on_host_override() -> None:
-    from provide.terminal.server import default_server_config
-    from provide.terminal.server.cli import main
+    from provide.uterm.server import default_server_config
+    from provide.uterm.server.cli import main
 
     cfg = default_server_config()
     cfg.server.public_base_url = "https://myserver.example.com:443"
 
     with (
-        patch("provide.terminal.server.cli.load_server_config", return_value=cfg),
-        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+        patch("provide.uterm.server.cli.load_server_config", return_value=cfg),
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
         patch("uvicorn.run") as mock_run,
     ):
         main(["--host", "0.0.0.0"])
@@ -95,10 +95,10 @@ def test_cli_https_public_base_url_preserved_on_host_override() -> None:
 def test_cli_app_passed_to_uvicorn() -> None:
     from fastapi import FastAPI
 
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     with (
-        patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock(spec=FastAPI)) as mock_create,
+        patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock(spec=FastAPI)) as mock_create,
         patch("uvicorn.run") as mock_run,
     ):
         main([])

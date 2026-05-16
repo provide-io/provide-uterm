@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for provide.terminal.io (part 1).
+"""Mutation-killing tests for provide.uterm.io (part 1).
 
 Classes: TestWaitForPromptDefaults, TestTimeoutComputation, TestLoopCondition,
          TestConnectionErrors, TestScreenFromSnapshot, TestDetectedFullFields,
@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.io import PromptWaiter
+from provide.uterm.io import PromptWaiter
 
 # ---------------------------------------------------------------------------
 # Helpers

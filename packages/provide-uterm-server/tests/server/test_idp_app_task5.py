@@ -1,6 +1,6 @@
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.auth import LocalIdentityProvider, WebhookIdentityProvider
-from provide.terminal.server.models import AuthConfig, ServerConfig
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.auth import LocalIdentityProvider, WebhookIdentityProvider
+from provide.uterm.server.models import AuthConfig, ServerConfig
 
 
 def test_create_server_app_instantiates_correct_idp():

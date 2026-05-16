@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.shell.terminal._connector — UshellConnector."""
+"""Tests for provide.uterm.shell.terminal._connector — UshellConnector."""
 
 from unittest.mock import AsyncMock, patch
 
-from provide.terminal.shell._output import BANNER, PROMPT
-from provide.terminal.shell.terminal._connector import UshellConnector
+from provide.uterm.shell._output import BANNER, PROMPT
+from provide.uterm.shell.terminal._connector import UshellConnector
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -373,7 +373,7 @@ def test_welcomed_starts_as_exactly_false():
 
 async def test_handle_input_animated_result():
     """AnimatedResult dispatch starts animation task + returns no frames."""
-    from provide.terminal.shell.commands import AnimatedResult
+    from provide.uterm.shell.commands import AnimatedResult
 
     conn = UshellConnector("s1")
     await conn.start()
@@ -409,7 +409,7 @@ async def test_handle_input_animated_result():
 
 async def test_stop_cancels_animation_task():
     """stop() cancels a running animation task."""
-    from provide.terminal.shell.commands import AnimatedResult
+    from provide.uterm.shell.commands import AnimatedResult
 
     conn = UshellConnector("s1")
     await conn.start()
@@ -439,7 +439,7 @@ async def test_stop_cancels_animation_task():
 
 async def test_handle_input_replaces_running_animation():
     """Second AnimatedResult cancels the first animation task."""
-    from provide.terminal.shell.commands import AnimatedResult
+    from provide.uterm.shell.commands import AnimatedResult
 
     conn = UshellConnector("s1")
     await conn.start()

@@ -15,10 +15,10 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.manager.app import create_manager_app
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.routes.agent_ops import (
+from provide.uterm.manager.app import create_manager_app
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.routes.agent_ops import (
     _build_action_response,
     _cancel_pending_manager_command,
     _command_history_rows,
@@ -325,7 +325,7 @@ class TestAgentOpsRouteMutationKilling:
         """
         from unittest.mock import MagicMock, patch
 
-        from provide.terminal.manager.process import AgentProcessManager
+        from provide.uterm.manager.process import AgentProcessManager
 
         manager.agents["agent_E"] = AgentStatusBase(agent_id="agent_E", state="running")
         proc = MagicMock()
@@ -349,7 +349,7 @@ class TestAgentOpsRouteMutationKilling:
         """
         from unittest.mock import MagicMock, patch
 
-        from provide.terminal.manager.process import AgentProcessManager
+        from provide.uterm.manager.process import AgentProcessManager
 
         manager.agents["agent_F"] = AgentStatusBase(agent_id="agent_F", state="running")
         proc = MagicMock()

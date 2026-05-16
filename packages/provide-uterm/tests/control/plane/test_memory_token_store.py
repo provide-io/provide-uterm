@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.control.plane import ControlPlaneConfig, bootstrap_control_plane
-from provide.terminal.control.plane.token import ResumeTokenRecord
+from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
+from provide.uterm.control.plane.token import ResumeTokenRecord
 
 
 @pytest.mark.asyncio

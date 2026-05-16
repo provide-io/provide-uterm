@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.manager.app import create_manager_app
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
+from provide.uterm.manager.app import create_manager_app
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
 
 
 def _make_status() -> SimpleNamespace:
@@ -137,7 +137,7 @@ class TestCleanupOldWorkerLogs:
         """_cleanup_old_worker_logs deletes old .prev and orphan .log files."""
         import os
 
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -166,7 +166,7 @@ class TestCleanupOldWorkerLogs:
         pm = MagicMock()
         pm._log_dir = str(tmp_path / "nonexistent")
         pm.manager.agents = {}
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         assert _cleanup_old_worker_logs(pm) == 0
 
@@ -174,7 +174,7 @@ class TestCleanupOldWorkerLogs:
         """Line 96: continue when path is not a file (subdirectory)."""
         import os
 
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -194,7 +194,7 @@ class TestCleanupOldWorkerLogs:
 
     def test_stat_oserror_continues(self, tmp_path: Path) -> None:
         """Lines 99-100: OSError from stat() → continue."""
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -223,7 +223,7 @@ class TestCleanupOldWorkerLogs:
 
     def test_recent_prev_not_deleted(self, tmp_path: Path) -> None:
         """Line 103->94: recent .prev file loops back without deletion."""
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -242,7 +242,7 @@ class TestCleanupOldWorkerLogs:
         """Line 103->94: old active agent .log not deleted."""
         import os
 
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -260,7 +260,7 @@ class TestCleanupOldWorkerLogs:
 
     def test_no_stale_files_returns_zero(self, tmp_path: Path) -> None:
         """Line 106->108: deleted==0 branch — no cleanup log emitted."""
-        from provide.terminal.manager._monitor import _cleanup_old_worker_logs
+        from provide.uterm.manager._monitor import _cleanup_old_worker_logs
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -280,8 +280,8 @@ class TestLogRotation:
         """process.py:277-281 — _spawn_process rotates oversized log to .prev."""
         import subprocess
 
-        from provide.terminal.manager.constants import WORKER_LOG_MAX_BYTES
-        from provide.terminal.manager.process import AgentProcessManager
+        from provide.uterm.manager.constants import WORKER_LOG_MAX_BYTES
+        from provide.uterm.manager.process import AgentProcessManager
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -308,7 +308,7 @@ class TestLogRotation:
         """process.py:278->282 — existing log that is NOT oversized is not rotated."""
         import subprocess
 
-        from provide.terminal.manager.process import AgentProcessManager
+        from provide.uterm.manager.process import AgentProcessManager
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
@@ -337,7 +337,7 @@ class TestTimeseriesCleanup:
         """timeseries/manager.py:168-175 — _cleanup_old deletes old files."""
         import os
 
-        from provide.terminal.manager.timeseries.manager import TimeseriesManager
+        from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
         mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
         # Create an old timeseries file
@@ -350,7 +350,7 @@ class TestTimeseriesCleanup:
 
     def test_rotate_oserror_returns_early(self, tmp_path: Path) -> None:
         """timeseries/manager.py:194-195 — OSError in stat returns early."""
-        from provide.terminal.manager.timeseries.manager import TimeseriesManager
+        from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
         mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
         # Point path to nonexistent file — stat() raises OSError
@@ -361,7 +361,7 @@ class TestTimeseriesCleanup:
         """Line 169: if f == self.path: continue — skip the active file."""
         import os
 
-        from provide.terminal.manager.timeseries.manager import TimeseriesManager
+        from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
         mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
         # Make the current path file old so it would be deleted if not skipped
@@ -373,7 +373,7 @@ class TestTimeseriesCleanup:
 
     def test_cleanup_skips_recent_file(self, tmp_path: Path) -> None:
         """Line 171->167: recent file (mtime >= cutoff) is not deleted."""
-        from provide.terminal.manager.timeseries.manager import TimeseriesManager
+        from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
         mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
         # Create a recent timeseries file — default mtime is now
@@ -386,7 +386,7 @@ class TestTimeseriesCleanup:
         """Lines 174-175: OSError during stat() → continue."""
         import os
 
-        from provide.terminal.manager.timeseries.manager import TimeseriesManager
+        from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
         mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
         bad_file = tmp_path / "swarm_timeseries_20200101_000000.jsonl"
@@ -409,7 +409,7 @@ class TestTimeseriesCleanup:
 class TestSubreaperBranchMiss:
     def test_subreaper_prctl_returns_nonzero(self) -> None:
         """process.py:108->exit — prctl returns nonzero (failure)."""
-        from provide.terminal.manager.process import AgentProcessManager
+        from provide.uterm.manager.process import AgentProcessManager
 
         mock_libc = MagicMock()
         mock_libc.prctl.return_value = -1  # failure

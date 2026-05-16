@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.manager.mcp_tools import create_manager_mcp_tools
+from provide.uterm.manager.mcp_tools import create_manager_mcp_tools
 
 
 async def _call(mcp_app, tool_name: str, args: dict | None = None) -> dict:
@@ -29,7 +29,7 @@ class TestHttpRequest:
 
     @pytest.mark.asyncio
     async def test_success_dict_response(self) -> None:
-        from provide.terminal.manager.mcp_tools import _http_request
+        from provide.uterm.manager.mcp_tools import _http_request
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -47,7 +47,7 @@ class TestHttpRequest:
 
     @pytest.mark.asyncio
     async def test_success_non_dict_response(self) -> None:
-        from provide.terminal.manager.mcp_tools import _http_request
+        from provide.uterm.manager.mcp_tools import _http_request
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -65,7 +65,7 @@ class TestHttpRequest:
 
     @pytest.mark.asyncio
     async def test_error_status_dict(self) -> None:
-        from provide.terminal.manager.mcp_tools import _http_request
+        from provide.uterm.manager.mcp_tools import _http_request
 
         mock_response = MagicMock()
         mock_response.status_code = 404
@@ -83,7 +83,7 @@ class TestHttpRequest:
 
     @pytest.mark.asyncio
     async def test_error_status_non_dict(self) -> None:
-        from provide.terminal.manager.mcp_tools import _http_request
+        from provide.uterm.manager.mcp_tools import _http_request
 
         mock_response = MagicMock()
         mock_response.status_code = 500
@@ -101,7 +101,7 @@ class TestHttpRequest:
 
     @pytest.mark.asyncio
     async def test_network_exception(self) -> None:
-        from provide.terminal.manager.mcp_tools import _http_request
+        from provide.uterm.manager.mcp_tools import _http_request
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -127,7 +127,7 @@ def http_app():
 def _mock_http(ok: bool, data: dict) -> AsyncMock:
     """Patch _http_request to return a fixed (ok, data) tuple."""
     return patch(
-        "provide.terminal.manager.mcp_tools._http_request",
+        "provide.uterm.manager.mcp_tools._http_request",
         new=AsyncMock(return_value=(ok, data)),
     )
 

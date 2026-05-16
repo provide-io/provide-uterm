@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.auth."""
+"""Tests for provide.uterm.manager.auth."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.manager.auth import TokenAuthMiddleware, setup_auth
+from provide.uterm.manager.auth import TokenAuthMiddleware, setup_auth
 
 
 class TestTokenAuthMiddleware:
@@ -167,7 +167,7 @@ class TestSetupAuth:
         app = MagicMock()
         with (
             patch.dict(os.environ, {}, clear=False),
-            caplog.at_level(logging.WARNING, logger="provide.terminal.manager.auth"),
+            caplog.at_level(logging.WARNING, logger="provide.uterm.manager.auth"),
         ):
             os.environ.pop("UTERM_MANAGER_API_TOKEN", None)
             setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN")

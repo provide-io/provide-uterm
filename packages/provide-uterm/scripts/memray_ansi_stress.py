@@ -9,7 +9,7 @@ Run via: python -m memray run -o ansi_stress.bin scripts/memray_ansi_stress.py
 
 from __future__ import annotations
 
-from provide.terminal.render.sgr import SGR_FUNCTIONS
+from provide.uterm.render.sgr import SGR_FUNCTIONS
 
 NUM_ITERATIONS = 50_000
 

@@ -16,8 +16,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from provide.terminal.auth import ResolvedIdentity, SSHKeyResolver
-from provide.terminal.gateway._ssh_handler import _make_no_auth_server_class
+from provide.uterm.auth import ResolvedIdentity, SSHKeyResolver
+from provide.uterm.gateway._ssh_handler import _make_no_auth_server_class
 
 pytestmark = pytest.mark.asyncio
 

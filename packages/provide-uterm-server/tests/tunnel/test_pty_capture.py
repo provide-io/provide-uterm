@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from provide.terminal.tunnel.pty_capture import (
+from provide.uterm.tunnel.pty_capture import (
     TtyProxy,
     _get_term_size,
     _set_term_size,

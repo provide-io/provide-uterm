@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.bridge.hub import BrowserRoleResolutionError, TermHub
-from provide.terminal.server.models import SessionDefinition
+from provide.uterm.bridge.hub import BrowserRoleResolutionError, TermHub
+from provide.uterm.server.models import SessionDefinition
 
 # ---------------------------------------------------------------------------
 # C4: event_deque_maxlen — deque bounded to configured maxlen

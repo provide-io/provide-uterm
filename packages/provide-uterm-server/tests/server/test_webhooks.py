@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 
-from provide.terminal.bridge.hub import EventBus, TermHub
-from provide.terminal.server.webhooks import WebhookConfig, WebhookManager
+from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.webhooks import WebhookConfig, WebhookManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -276,7 +276,7 @@ async def test_deliver_retries_on_5xx() -> None:
     # the test's own asyncio.sleep calls.
     with (
         patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
-        patch("provide.terminal.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
+        patch("provide.uterm.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
     ):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
@@ -303,7 +303,7 @@ async def test_deliver_gives_up_after_max_retries() -> None:
 
     with (
         patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
-        patch("provide.terminal.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
+        patch("provide.uterm.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
     ):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
@@ -332,7 +332,7 @@ async def test_deliver_retries_on_network_error() -> None:
 
     with (
         patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
-        patch("provide.terminal.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
+        patch("provide.uterm.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
     ):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)

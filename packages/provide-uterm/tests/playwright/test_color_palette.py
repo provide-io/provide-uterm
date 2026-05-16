@@ -245,7 +245,7 @@ class _ColorTelnetHandler(socketserver.BaseRequestHandler):
     """Telnet handler that sends ANSI color palette on connect."""
 
     def handle(self) -> None:
-        from provide.terminal.transports.telnet_server import _build_telnet_handshake
+        from provide.uterm.transports.telnet_server import _build_telnet_handshake
 
         self.request.sendall(_build_telnet_handshake())
         palette = build_16_color_palette() + build_256_color_palette() + build_truecolor_palette()
@@ -266,7 +266,7 @@ class TestTelnetColorPath:
 
     def test_colors_through_telnet_proxy(self, page: Page) -> None:
         """Send 16/256/truecolor palette via telnet, verify in browser."""
-        from provide.terminal.fastapi_utils import WsTerminalProxy, mount_terminal_ui
+        from provide.uterm.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 
         # Start color telnet server
         telnet_server = _ColorTelnetServer(("127.0.0.1", 0), _ColorTelnetHandler)

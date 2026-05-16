@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from provide.terminal.manager.models import SwarmStatus
-from provide.terminal.manager.timeseries.manager import TimeseriesManager
+from provide.uterm.manager.models import SwarmStatus
+from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
 
 def _make_ts_manager(tmp_path, **kwargs) -> TimeseriesManager:

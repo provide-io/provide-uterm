@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     DLE,
     STX,
     ControlChannelDecoder,

@@ -17,8 +17,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.client import connect_test_ws
-from provide.terminal.server import config_from_mapping, create_server_app, default_server_config
+from provide.uterm.client import connect_test_ws
+from provide.uterm.server import config_from_mapping, create_server_app, default_server_config
 
 _TEST_SIGNING_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -44,7 +44,7 @@ def _jwt_headers(
 
 
 def _jwt_config():
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     now = int(time.time())
     worker_token = jwt.encode(
@@ -76,7 +76,7 @@ async def test_ssh_connector_start_passes_connect_timeout() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
     pytest.importorskip("asyncssh", reason="asyncssh not installed")
-    from provide.terminal.server.connectors.ssh import SshSessionConnector
+    from provide.uterm.server.connectors.ssh import SshSessionConnector
 
     connector = SshSessionConnector("sess1", "Session 1", {"host": "localhost", "insecure_no_host_check": True})
     mock_process = MagicMock()
@@ -96,7 +96,7 @@ async def test_ssh_connector_handle_input_uses_utf8() -> None:
     from unittest.mock import AsyncMock, MagicMock
 
     pytest.importorskip("asyncssh", reason="asyncssh not installed")
-    from provide.terminal.server.connectors.ssh import SshSessionConnector
+    from provide.uterm.server.connectors.ssh import SshSessionConnector
 
     connector = SshSessionConnector("sess1", "Session 1", {"host": "localhost", "insecure_no_host_check": True})
     mock_stdin = MagicMock()
@@ -127,7 +127,7 @@ async def test_bridge_stops_on_permanent_http_error() -> None:
     """TermBridge._run must stop reconnecting on 401/403/404, not back off and retry."""
     from unittest.mock import MagicMock
 
-    from provide.terminal.bridge.worker_link import TermBridge
+    from provide.uterm.bridge.worker_link import TermBridge
 
     class FakeStatusError(Exception):
         status_code = 403
@@ -167,8 +167,8 @@ def test_hijack_acquire_error_message_says_session_not_worker() -> None:
     """hijack_acquire must return 'for this session', not the previous 'for this worker', in error text."""
     from fastapi import APIRouter
 
-    from provide.terminal.bridge.hub import TermHub
-    from provide.terminal.bridge.routes import register_rest_routes
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.routes import register_rest_routes
 
     hub = TermHub()
     router = APIRouter()
@@ -189,7 +189,7 @@ def test_hijack_acquire_error_message_says_session_not_worker() -> None:
 
 def test_browser_handlers_error_message_says_session_not_worker() -> None:
     """Browser WS hijack error messages must say 'for this session', not 'for this worker'."""
-    import provide.terminal.bridge.routes.browser_handlers as bh_module
+    import provide.uterm.bridge.routes.browser_handlers as bh_module
 
     source = bh_module.__file__
     assert source is not None
@@ -201,8 +201,8 @@ async def test_runtime_stops_on_permanent_http_error() -> None:
     """HostedSessionRuntime._run must stop retrying on permanent HTTP 401/403/404."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.models import RecordingConfig, SessionDefinition
-    from provide.terminal.server.runtime import HostedSessionRuntime
+    from provide.uterm.server.models import RecordingConfig, SessionDefinition
+    from provide.uterm.server.runtime import HostedSessionRuntime
 
     session = SessionDefinition(session_id="s1", display_name="S1", connector_type="shell", auto_start=False)
     runtime = HostedSessionRuntime(session, public_base_url="http://localhost:9999", recording=RecordingConfig())
@@ -229,7 +229,7 @@ async def test_runtime_stops_on_permanent_http_error() -> None:
     real_ws = sys.modules.pop("websockets", None)
     sys.modules["websockets"] = fake_ws_mod
     try:
-        with patch("provide.terminal.server.runtime.build_connector", return_value=mock_connector):
+        with patch("provide.uterm.server.runtime.build_connector", return_value=mock_connector):
             await runtime.start()
             for _ in range(50):
                 await asyncio.sleep(0.02)
@@ -250,7 +250,7 @@ async def test_runtime_stops_on_permanent_http_error() -> None:
 def test_pages_use_state_principal_not_double_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
     """Page routes must use request.state.uterm_principal set by _require_authenticated
     and must not call resolve_http_principal a second time."""
-    import provide.terminal.server.routes.pages as pages_module
+    import provide.uterm.server.routes.pages as pages_module
 
     call_count = {"n": 0}
     original = pages_module.resolve_http_principal
@@ -282,25 +282,25 @@ class TestConnectorConfigValidation:
     """Unknown connector_config keys raise ValueError at connector __init__ time."""
 
     def test_shell_rejects_unknown_keys(self) -> None:
-        from provide.terminal.server.connectors.shell import ShellSessionConnector
+        from provide.uterm.server.connectors.shell import ShellSessionConnector
 
         with pytest.raises(ValueError, match="unknown shell connector_config keys"):
             ShellSessionConnector("s1", "Shell", {"typo_key": "value"})
 
     def test_shell_accepts_input_mode(self) -> None:
-        from provide.terminal.server.connectors.shell import ShellSessionConnector
+        from provide.uterm.server.connectors.shell import ShellSessionConnector
 
         connector = ShellSessionConnector("s1", "Shell", {"input_mode": "hijack"})
         assert connector is not None
 
     def test_telnet_rejects_unknown_keys(self) -> None:
-        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+        from provide.uterm.server.connectors.telnet import TelnetSessionConnector
 
         with pytest.raises(ValueError, match="unknown telnet connector_config keys"):
             TelnetSessionConnector("s1", "Telnet", {"unknown_option": True})
 
     def test_ssh_rejects_unknown_keys(self) -> None:
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         with pytest.raises(ValueError, match="unknown ssh connector_config keys"):
             SshSessionConnector(
@@ -325,7 +325,7 @@ class TestWorkerBearerTokenScope:
     @staticmethod
     def _make_jwt_app():
         """Create a JWT-mode app with a raw (non-JWT) worker bearer token."""
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(
             mode="jwt",
@@ -368,8 +368,8 @@ class TestWorkerBearerTokenScope:
 
     def test_header_mode_logs_startup_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """Header auth mode must log a warning about trusting proxy headers."""
-        from provide.terminal.server.app import _validate_auth_config
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.app import _validate_auth_config
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(
             mode="header",
@@ -378,7 +378,7 @@ class TestWorkerBearerTokenScope:
         )
         cfg = default_server_config()
         cfg.auth = auth
-        with caplog.at_level(logging.WARNING, logger="provide.terminal.server.app"):
+        with caplog.at_level(logging.WARNING, logger="provide.uterm.server.app"):
             _validate_auth_config(cfg)
         assert any("auth_mode=header" in r.message and "reverse proxy" in r.message for r in caplog.records)
 

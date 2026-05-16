@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.control.plane import ControlPlaneBackend, ControlPlaneConfig, bootstrap_control_plane
+from provide.uterm.control.plane import ControlPlaneBackend, ControlPlaneConfig, bootstrap_control_plane
 
 
 @pytest.mark.asyncio

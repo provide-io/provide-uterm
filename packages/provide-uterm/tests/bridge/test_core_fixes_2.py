@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for src/provide/terminal/hijack/hub/core.py (part 2).
+"""Mutation-killing tests for src/provide/uterm/hijack/hub/core.py (part 2).
 
 Covers:
 - disconnect_worker: was_hijacked logic; broadcast payload correctness;
@@ -18,8 +18,8 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
 from tests.bridge.control_channel_helpers import decode_control_payloads
 
@@ -321,7 +321,7 @@ class TestDisconnectWorkerCloseException:
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
-        with patch("provide.terminal.bridge.hub.messaging.logger") as mock_logger:
+        with patch("provide.uterm.bridge.hub.messaging.logger") as mock_logger:
             await hub.disconnect_worker("w1")
 
         mock_logger.debug.assert_called_once()

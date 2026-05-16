@@ -13,7 +13,7 @@ from weakref import WeakKeyDictionary
 import httpx
 import websockets
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
 
 
 def _ws_url(base_url: str, path: str) -> str:

@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.config."""
+"""Tests for provide.uterm.manager.config."""
 
-from provide.terminal.manager.config import ManagerConfig
+from provide.uterm.manager.config import ManagerConfig
 
 
 class TestManagerConfig:

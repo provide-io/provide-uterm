@@ -80,7 +80,7 @@ docker compose -f docker/docker-compose.yml up
 
 **Control Channel**: JSON control frames (snapshots, hijack state, presence, analysis) mixed inline with raw terminal bytes in the same WebSocket stream.
 
-**Lazy-loading module interface**: `provide/terminal/__init__.py` uses `__getattr__` to defer imports, avoiding hard dependencies.
+**Lazy-loading module interface**: `provide/uterm/__init__.py` uses `__getattr__` to defer imports, avoiding hard dependencies.
 
 ## Testing
 

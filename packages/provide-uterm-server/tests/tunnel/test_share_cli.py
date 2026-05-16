@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.cli import _build_parser
-from provide.terminal.cli.share import (
+from provide.uterm.cli import _build_parser
+from provide.uterm.cli.share import (
     _cmd_share,
     _create_tunnel,
     _display_name,
@@ -158,7 +158,7 @@ class TestCreateTunnel:
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("provide.terminal.cli.share.urllib.request.urlopen", return_value=mock_resp) as mock_open:
+        with patch("provide.uterm.cli.share.urllib.request.urlopen", return_value=mock_resp) as mock_open:
             result = _create_tunnel("https://warp.example.com", "me@box", "tok-123")
 
         assert result == _TUNNEL_RESPONSE
@@ -174,7 +174,7 @@ class TestCreateTunnel:
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("provide.terminal.cli.share.urllib.request.urlopen", return_value=mock_resp) as mock_open:
+        with patch("provide.uterm.cli.share.urllib.request.urlopen", return_value=mock_resp) as mock_open:
             _create_tunnel("https://warp.example.com/", "me@box", None)
 
         call_req = mock_open.call_args[0][0]
@@ -190,7 +190,7 @@ class TestCreateTunnel:
             BytesIO(b"bad token"),
         )
         with (
-            patch("provide.terminal.cli.share.urllib.request.urlopen", side_effect=exc),
+            patch("provide.uterm.cli.share.urllib.request.urlopen", side_effect=exc),
             pytest.raises(SystemExit),
         ):
             _create_tunnel("https://x.com", "me@box", "bad")
@@ -198,7 +198,7 @@ class TestCreateTunnel:
     def test_url_error(self) -> None:
         exc = urllib.error.URLError("Connection refused")
         with (
-            patch("provide.terminal.cli.share.urllib.request.urlopen", side_effect=exc),
+            patch("provide.uterm.cli.share.urllib.request.urlopen", side_effect=exc),
             pytest.raises(SystemExit),
         ):
             _create_tunnel("https://x.com", "me@box", None)
@@ -210,7 +210,7 @@ class TestCreateTunnel:
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        with patch("provide.terminal.cli.share.urllib.request.urlopen", return_value=mock_resp) as mock_open:
+        with patch("provide.uterm.cli.share.urllib.request.urlopen", return_value=mock_resp) as mock_open:
             _create_tunnel("https://warp.example.com///", "me@box", None)
 
         call_req = mock_open.call_args[0][0]
@@ -225,7 +225,7 @@ class TestCreateTunnel:
 class TestCmdShare:
     def _mock_create_tunnel(self, resp: dict[str, Any] | None = None) -> MagicMock:
         return patch(
-            "provide.terminal.cli.share._create_tunnel",
+            "provide.uterm.cli.share._create_tunnel",
             return_value=resp or _TUNNEL_RESPONSE,
         )
 
@@ -236,9 +236,9 @@ class TestCmdShare:
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.terminal.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
-            patch("provide.terminal.cli.share.asyncio.run") as mock_run,
-            patch("provide.terminal.cli.share._read_token", return_value="tok"),
+            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
+            patch("provide.uterm.cli.share.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.share._read_token", return_value="tok"),
         ):
             args = _make_args(cmd=["bash"])
             _cmd_share(args)
@@ -261,9 +261,9 @@ class TestCmdShare:
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.terminal.cli.share.TtyProxy", return_value=mock_tty) as mock_cls,
-            patch("provide.terminal.cli.share.asyncio.run"),
-            patch("provide.terminal.cli.share._read_token", return_value=None),
+            patch("provide.uterm.cli.share.TtyProxy", return_value=mock_tty) as mock_cls,
+            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
             args = _make_args(attach=True)
             _cmd_share(args)
@@ -278,9 +278,9 @@ class TestCmdShare:
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.terminal.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
-            patch("provide.terminal.cli.share.asyncio.run"),
-            patch("provide.terminal.cli.share._read_token", return_value=None),
+            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
+            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
             args = _make_args(cmd=[])
             _cmd_share(args)
@@ -293,9 +293,9 @@ class TestCmdShare:
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.terminal.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.terminal.cli.share.asyncio.run", side_effect=KeyboardInterrupt),
-            patch("provide.terminal.cli.share._read_token", return_value=None),
+            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=KeyboardInterrupt),
+            patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
             args = _make_args()
             _cmd_share(args)  # should not raise
@@ -307,8 +307,8 @@ class TestCmdShare:
         bad_resp = {**_TUNNEL_RESPONSE, "ws_endpoint": ""}
 
         with (
-            patch("provide.terminal.cli.share._create_tunnel", return_value=bad_resp),
-            patch("provide.terminal.cli.share._read_token", return_value=None),
+            patch("provide.uterm.cli.share._create_tunnel", return_value=bad_resp),
+            patch("provide.uterm.cli.share._read_token", return_value=None),
             pytest.raises(SystemExit),
         ):
             args = _make_args()
@@ -319,10 +319,10 @@ class TestCmdShare:
         mock_pty = MagicMock()
 
         with (
-            patch("provide.terminal.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE) as mock_ct,
-            patch("provide.terminal.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.terminal.cli.share.asyncio.run"),
-            patch("provide.terminal.cli.share._read_token", return_value="t"),
+            patch("provide.uterm.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE) as mock_ct,
+            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share._read_token", return_value="t"),
         ):
             args = _make_args(display_name="custom@host")
             _cmd_share(args)
@@ -339,7 +339,7 @@ class TestRunShare:
     @pytest.mark.asyncio
     async def test_missing_websockets_dependency(self) -> None:
         """If websockets not installed, exit with error."""
-        from provide.terminal.cli.share import _run_share
+        from provide.uterm.cli.share import _run_share
 
         mock_pty = MagicMock()
 
@@ -360,7 +360,7 @@ class TestRunShare:
     @pytest.mark.asyncio
     async def test_bridge_loop_pty_to_ws(self) -> None:
         """Data flows from PTY read → ws_send."""
-        from provide.terminal.cli.share import _bridge_loop
+        from provide.uterm.cli.share import _bridge_loop
 
         mock_pty = AsyncMock()
         # read returns data once, then empty bytes to signal EOF
@@ -383,7 +383,7 @@ class TestRunShare:
     @pytest.mark.asyncio
     async def test_bridge_loop_ws_to_pty_write(self) -> None:
         """Data flows from ws_recv → PTY write (spawn mode)."""
-        from provide.terminal.cli.share import _bridge_loop
+        from provide.uterm.cli.share import _bridge_loop
 
         mock_pty = AsyncMock()
         mock_pty.read = AsyncMock(return_value=b"")
@@ -407,7 +407,7 @@ class TestRunShare:
     @pytest.mark.asyncio
     async def test_bridge_loop_attach_writes_local(self) -> None:
         """In attach mode, ws_recv data goes to write_local, not write."""
-        from provide.terminal.cli.share import _bridge_loop
+        from provide.uterm.cli.share import _bridge_loop
 
         mock_pty = AsyncMock()
         mock_pty.read = AsyncMock(return_value=b"")
@@ -435,9 +435,9 @@ class TestCmdShareRelativeEndpoint:
         resp = {**_TUNNEL_RESPONSE, "ws_endpoint": "/tunnel/tun-abc123"}
         mock_pty = MagicMock()
         with (
-            patch("provide.terminal.cli.share._create_tunnel", return_value=resp),
-            patch("provide.terminal.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.terminal.cli.share.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.share._create_tunnel", return_value=resp),
+            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.cli.share.asyncio.run") as mock_run,
         ):
             _cmd_share(_make_args())
         mock_pty.close.assert_called_once()
@@ -448,7 +448,7 @@ class TestCmdShareRelativeEndpoint:
 class TestDisplayNameEdgeCases:
     def test_getpass_exception_falls_back(self) -> None:
         """Line 110-111: getpass.getuser() raises → user='unknown'."""
-        with patch("provide.terminal.cli.share.getpass.getuser", side_effect=KeyError("no user")):
+        with patch("provide.uterm.cli.share.getpass.getuser", side_effect=KeyError("no user")):
             name = _display_name(_make_args())
         assert name.startswith("unknown@")
 
@@ -457,7 +457,7 @@ class TestBridgeLoopExceptions:
     @pytest.mark.asyncio
     async def test_pty_read_oserror(self) -> None:
         """Line 145-146: OSError in pty_to_ws is caught."""
-        from provide.terminal.cli.share import _bridge_loop
+        from provide.uterm.cli.share import _bridge_loop
 
         mock_pty = AsyncMock()
         mock_pty.read = AsyncMock(side_effect=OSError("fd closed"))
@@ -473,7 +473,7 @@ class TestBridgeLoopExceptions:
     @pytest.mark.asyncio
     async def test_ws_recv_oserror(self) -> None:
         """Line 158-159: OSError in ws_to_pty is caught."""
-        from provide.terminal.cli.share import _bridge_loop
+        from provide.uterm.cli.share import _bridge_loop
 
         mock_pty = AsyncMock()
         mock_pty.read = AsyncMock(return_value=b"")
@@ -493,9 +493,9 @@ class TestCmdShareCleanup:
         """Line 192-193: pty_source.close() called in finally."""
         mock_pty = MagicMock()
         with (
-            patch("provide.terminal.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE),
-            patch("provide.terminal.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.terminal.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE),
+            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.cli.share.asyncio.run"),
         ):
             _cmd_share(_make_args())
         mock_pty.close.assert_called_once()

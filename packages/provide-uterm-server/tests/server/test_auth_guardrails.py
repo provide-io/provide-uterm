@@ -17,9 +17,9 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from provide.terminal.server.app import _validate_auth_config, create_server_app
-from provide.terminal.server.models import AuthConfig, SecurityConfig, ServerBindConfig, ServerConfig
-from provide.terminal.server.security import SecurityHeadersMiddleware
+from provide.uterm.server.app import _validate_auth_config, create_server_app
+from provide.uterm.server.models import AuthConfig, SecurityConfig, ServerBindConfig, ServerConfig
+from provide.uterm.server.security import SecurityHeadersMiddleware
 
 # ---------------------------------------------------------------------------
 # require_jwt_in_production guardrail

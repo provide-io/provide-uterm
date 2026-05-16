@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.render.palette — color tables and quantizers."""
+"""Tests for provide.uterm.render.palette — color tables and quantizers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from collections.abc import Generator
 
 import pytest
 
-from provide.terminal.render.palette import (
+from provide.uterm.render.palette import (
     ANSI16_PALETTE,
     _color_dist_sq,
     nearest_16,
@@ -119,7 +119,7 @@ def test_nearest_256_loop_covers_index_1() -> None:
 
 def _fresh_build() -> None:
     """Clear _XTERM256 and rebuild."""
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     pal_mod._XTERM256.clear()
     pal_mod._build_xterm256()
@@ -127,7 +127,7 @@ def _fresh_build() -> None:
 
 @pytest.fixture(autouse=False)
 def fresh_xterm256() -> Generator[None, None, None]:
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     original = list(pal_mod._XTERM256)
     pal_mod._XTERM256.clear()
@@ -139,14 +139,14 @@ def fresh_xterm256() -> Generator[None, None, None]:
 
 def test_build_xterm256_length() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert len(pal_mod._XTERM256) == 256
 
 
 def test_build_xterm256_first_16_match_ansi16() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     for idx, (r, g, b, _fg, _bg) in enumerate(ANSI16_PALETTE):
         assert pal_mod._XTERM256[idx] == (r, g, b), f"index {idx} mismatch"
@@ -154,70 +154,70 @@ def test_build_xterm256_first_16_match_ansi16() -> None:
 
 def test_build_xterm256_index_16_is_000() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[16] == (0, 0, 0)
 
 
 def test_build_xterm256_index_17_is_00_95() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[17] == (0, 0, 95)
 
 
 def test_build_xterm256_index_231_is_255_255_255() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[231] == (255, 255, 255)
 
 
 def test_build_xterm256_cube_row_r_nonzero() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[52] == (95, 0, 0)
 
 
 def test_build_xterm256_cube_row_g_nonzero() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[22] == (0, 95, 0)
 
 
 def test_build_xterm256_cube_row_b_nonzero() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[17][2] == 95
 
 
 def test_build_xterm256_grayscale_first() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[232] == (8, 8, 8)
 
 
 def test_build_xterm256_grayscale_last() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[255] == (238, 238, 238)
 
 
 def test_build_xterm256_grayscale_mid() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     assert pal_mod._XTERM256[244] == (128, 128, 128)
 
 
 def test_build_xterm256_idempotent() -> None:
     _fresh_build()
-    import provide.terminal.render.palette as pal_mod
+    import provide.uterm.render.palette as pal_mod
 
     pal_mod._build_xterm256()
     assert len(pal_mod._XTERM256) == 256

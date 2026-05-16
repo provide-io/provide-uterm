@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.render.sgr — SGR escape sequence emitters."""
+"""Tests for provide.uterm.render.sgr — SGR escape sequence emitters."""
 
 from __future__ import annotations
 
-from provide.terminal.render.sgr import (
+from provide.uterm.render.sgr import (
     SGR_FUNCTIONS,
     ColorMode,
     sgr_16,

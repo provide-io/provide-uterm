@@ -30,9 +30,9 @@ def _decode_msg(raw: str) -> dict:
     return json.loads(raw)
 
 
-from provide.terminal.bridge.hub import InMemoryResumeStore, TermHub
-from provide.terminal.bridge.models import WorkerTermState
-from provide.terminal.bridge.routes.browser_handlers import (
+from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
+from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.bridge.routes.browser_handlers import (
     handle_browser_message,
 )
 

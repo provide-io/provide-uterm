@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import SessionDefinition
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import SessionDefinition
 
 
 def _make_client() -> TestClient:

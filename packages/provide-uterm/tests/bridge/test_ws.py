@@ -26,9 +26,9 @@ import time
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import HijackSession
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import HijackSession
+from provide.uterm.client import connect_test_ws
 
 # ---------------------------------------------------------------------------
 # Helpers

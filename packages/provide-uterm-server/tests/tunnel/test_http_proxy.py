@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 
-from provide.terminal.tunnel.http_proxy import BODY_MAX_BYTES, _human_size, _is_binary, encode_body, format_log_line
+from provide.uterm.tunnel.http_proxy import BODY_MAX_BYTES, _human_size, _is_binary, encode_body, format_log_line
 
 
 class TestEncodeBody:

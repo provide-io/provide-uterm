@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import pytest
-from provide.terminal.ws_bytes import channel_str_to_bytes, ws_frame_to_channel_str
+from provide.uterm.ws_bytes import channel_str_to_bytes, ws_frame_to_channel_str
 
 
 def test_ws_frame_str_passthrough() -> None:
@@ -61,9 +61,9 @@ def test_ws_frame_strict_decode_on_bytes() -> None:
 
 
 def test_imports_from_package_root() -> None:
-    """Helpers must be exposed at the ``provide.terminal`` root for callers."""
-    from provide.terminal import channel_str_to_bytes as a
-    from provide.terminal import ws_frame_to_channel_str as b
+    """Helpers must be exposed at the ``provide.uterm`` root for callers."""
+    from provide.uterm import channel_str_to_bytes as a
+    from provide.uterm import ws_frame_to_channel_str as b
 
     assert a is channel_str_to_bytes
     assert b is ws_frame_to_channel_str

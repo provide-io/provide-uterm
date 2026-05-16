@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from textual.widgets import DataTable
 
-from provide.terminal.cli._watch_app import WatchApp
+from provide.uterm.cli._watch_app import WatchApp
 
 
 @pytest.fixture

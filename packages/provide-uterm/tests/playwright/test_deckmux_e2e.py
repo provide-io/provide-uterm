@@ -25,10 +25,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
-from provide.terminal.bridge.hub import TermHub
+from provide.uterm.bridge.hub import TermHub
 from starlette.staticfiles import StaticFiles
 
-from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from tests.conftest import WorkerController
 
 SCREENSHOTS_DIR = Path("packages/provide-uterm/tests/playwright/screenshots")
@@ -137,7 +137,7 @@ def deckmux_server() -> Generator[tuple[str, DeckMuxTermHub], None, None]:
     app = FastAPI()
     app.include_router(hub.create_router())
 
-    frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
+    frontend_path = importlib.resources.files("provide.uterm.server") / "frontend"
     app.mount("/ui", StaticFiles(directory=str(frontend_path), html=True), name="ui")
 
     @app.get("/deckmux-test/{worker_id}", response_class=HTMLResponse)

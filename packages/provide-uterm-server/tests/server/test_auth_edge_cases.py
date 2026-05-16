@@ -41,13 +41,13 @@ class TestAuthEdgeCases:
 
     def test_cookie_value_empty_string_returns_none(self) -> None:
         """Empty string should return None, not empty string."""
-        from provide.terminal.server.auth import _cookie_value
+        from provide.uterm.server.auth import _cookie_value
 
         assert _cookie_value({"token": ""}, "token") is None
 
     def testextract_bearer_token_case_variations(self) -> None:
         """Bearer scheme detection is case-insensitive."""
-        from provide.terminal.server.auth import extract_bearer_token
+        from provide.uterm.server.auth import extract_bearer_token
 
         # lowercase
         assert extract_bearer_token({"authorization": "bearer token1"}) == "token1"
@@ -58,8 +58,8 @@ class TestAuthEdgeCases:
 
     def test_roles_from_claims_mixed_valid_invalid_string(self) -> None:
         """String with both valid and invalid roles extracts only valid."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _roles_from_claims({"roles": "superuser, operator, god, viewer"}, auth)
@@ -69,8 +69,8 @@ class TestAuthEdgeCases:
 
     def test_roles_from_claims_string_with_only_invalid(self) -> None:
         """String with only invalid roles falls back to viewer."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _roles_from_claims({"roles": "superuser, god, root"}, auth)
@@ -78,8 +78,8 @@ class TestAuthEdgeCases:
 
     def test_roles_from_claims_whitespace_handling(self) -> None:
         """Whitespace is properly handled in string split."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _roles_from_claims({"roles": "  operator  ,  admin  \n  viewer  "}, auth)
@@ -87,8 +87,8 @@ class TestAuthEdgeCases:
 
     def test_roles_from_claims_list_with_invalid_elements(self) -> None:
         """List with invalid roles is filtered."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _roles_from_claims({"roles": ["admin", "superuser", "operator"]}, auth)
@@ -96,8 +96,8 @@ class TestAuthEdgeCases:
 
     def test_roles_from_claims_empty_list_falls_back(self) -> None:
         """Empty list falls back to viewer."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _roles_from_claims({"roles": []}, auth)
@@ -105,8 +105,8 @@ class TestAuthEdgeCases:
 
     def test_roles_from_claims_case_normalization(self) -> None:
         """Roles are normalized to lowercase."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _roles_from_claims({"roles": ["OPERATOR", "ADMIN", "VIEWER"]}, auth)
@@ -114,8 +114,8 @@ class TestAuthEdgeCases:
 
     def test_scopes_from_claims_empty_string_elements(self) -> None:
         """Empty strings in scope list are filtered."""
-        from provide.terminal.server.auth import _scopes_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _scopes_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _scopes_from_claims({"scope": ["read", "", "write", "  "]}, auth)
@@ -123,8 +123,8 @@ class TestAuthEdgeCases:
 
     def test_scopes_from_claims_string_with_spaces(self) -> None:
         """Scopes string with multiple spaces handled correctly."""
-        from provide.terminal.server.auth import _scopes_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _scopes_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem=_TEST_KEY, worker_bearer_token=_make_token())
         result = _scopes_from_claims({"scope": "read  write   execute"}, auth)
@@ -132,8 +132,8 @@ class TestAuthEdgeCases:
 
     def test_principal_from_header_auth_empty_role_defaults_viewer(self) -> None:
         """Empty role string defaults to viewer."""
-        from provide.terminal.server.auth import _principal_from_header_auth
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_header_auth
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="header", worker_bearer_token=_make_token())
         p = _principal_from_header_auth({"x-uterm-role": ""}, {}, auth)
@@ -141,8 +141,8 @@ class TestAuthEdgeCases:
 
     def test_principal_from_header_auth_whitespace_role_defaults_viewer(self) -> None:
         """Whitespace-only role defaults to viewer."""
-        from provide.terminal.server.auth import _principal_from_header_auth
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_header_auth
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="header", worker_bearer_token=_make_token())
         p = _principal_from_header_auth({"x-uterm-role": "   "}, {}, auth)
@@ -150,8 +150,8 @@ class TestAuthEdgeCases:
 
     def test_principal_from_header_auth_principal_header_precedence(self) -> None:
         """Header takes precedence over cookie."""
-        from provide.terminal.server.auth import _principal_from_header_auth
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_header_auth
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="header", worker_bearer_token=_make_token())
         p = _principal_from_header_auth(
@@ -163,8 +163,8 @@ class TestAuthEdgeCases:
 
     def test_principal_from_local_mode_defaults_to_admin(self) -> None:
         """Local mode defaults to admin role, not viewer."""
-        from provide.terminal.server.auth import _principal_from_local_mode
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_local_mode
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
         p = _principal_from_local_mode({}, {}, auth)
@@ -173,8 +173,8 @@ class TestAuthEdgeCases:
 
     def test_principal_from_local_mode_invalid_role_defaults_admin(self) -> None:
         """Local mode with invalid role defaults to admin."""
-        from provide.terminal.server.auth import _principal_from_local_mode
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_local_mode
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
         p = _principal_from_local_mode({"x-uterm-role": "superuser"}, {}, auth)
@@ -182,8 +182,8 @@ class TestAuthEdgeCases:
 
     def test_principal_from_local_mode_valid_role_overrides_default(self) -> None:
         """Local mode with valid role uses that role."""
-        from provide.terminal.server.auth import _principal_from_local_mode
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_local_mode
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
         p = _principal_from_local_mode({"x-uterm-role": "viewer"}, {}, auth)
@@ -191,8 +191,8 @@ class TestAuthEdgeCases:
 
     def test_resolve_principal_mode_case_insensitive(self) -> None:
         """Mode matching is case-insensitive."""
-        from provide.terminal.server.auth import _resolve_principal
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _resolve_principal
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
         # This test verifies the mode is lowercased in the function
@@ -201,8 +201,8 @@ class TestAuthEdgeCases:
 
     def test_resolve_principal_jwt_token_from_bearer_preferred(self) -> None:
         """JWT mode prefers bearer token over cookie."""
-        from provide.terminal.server.auth import _resolve_principal
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _resolve_principal
+        from provide.uterm.server.models import AuthConfig
 
         token1 = _make_token(sub="bearer-user", roles=["admin"])
         token2 = _make_token(sub="cookie-user", roles=["viewer"])
@@ -224,14 +224,14 @@ class TestAuthEdgeCases:
 
     def test_principal_name_property(self) -> None:
         """Principal.name property returns subject_id."""
-        from provide.terminal.server.auth import Principal
+        from provide.uterm.server.auth import Principal
 
         p = Principal(subject_id="testuser")
         assert p.name == "testuser"
 
     def test_principal_claims_accessible(self) -> None:
         """Principal stores full JWT claims."""
-        from provide.terminal.server.auth import Principal
+        from provide.uterm.server.auth import Principal
 
         claims = {"sub": "user", "foo": "bar"}
         p = Principal(subject_id="user", claims=claims)
@@ -244,7 +244,7 @@ class TestAuthMutationKilling:
 
     def test_cookie_value_none_check_explicit(self) -> None:
         """Explicitly verify None comparison (catches is None → == None)."""
-        from provide.terminal.server.auth import _cookie_value
+        from provide.uterm.server.auth import _cookie_value
 
         result = _cookie_value({}, "missing")
         assert result is None  # Must be None, not empty string
@@ -252,7 +252,7 @@ class TestAuthMutationKilling:
 
     def test_bearer_token_split_count_exact(self) -> None:
         """Bearer token split must produce exactly 2 parts."""
-        from provide.terminal.server.auth import extract_bearer_token
+        from provide.uterm.server.auth import extract_bearer_token
 
         # 2 parts → valid
         assert extract_bearer_token({"authorization": "Bearer token"}) == "token"
@@ -263,8 +263,8 @@ class TestAuthMutationKilling:
 
     def test_roles_from_claims_empty_after_filter_defaults_viewer(self) -> None:
         """Empty list after filtering must default to viewer."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem="key", worker_bearer_token="token")
         # All invalid roles after filter
@@ -274,8 +274,8 @@ class TestAuthMutationKilling:
 
     def test_roles_from_claims_list_of_integers(self) -> None:
         """List of integers should be converted to strings."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem="key", worker_bearer_token="token")
         # Integer elements should cause conversion to string, then filtering
@@ -285,8 +285,8 @@ class TestAuthMutationKilling:
 
     def test_scopes_from_claims_string_vs_list_type_check(self) -> None:
         """Type check for string vs list is critical."""
-        from provide.terminal.server.auth import _scopes_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _scopes_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem="key", worker_bearer_token="token")
         # String type
@@ -301,8 +301,8 @@ class TestAuthMutationKilling:
 
     def test_principal_from_header_role_in_operator_not_equality(self) -> None:
         """Role check uses 'in' operator, not equality."""
-        from provide.terminal.server.auth import _principal_from_header_auth
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_header_auth
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="header", worker_bearer_token="token")
         # Test all 3 valid roles
@@ -313,8 +313,8 @@ class TestAuthMutationKilling:
 
     def test_principal_from_local_mode_scopes_always_has_asterisk(self) -> None:
         """Local mode ALWAYS includes * scope."""
-        from provide.terminal.server.auth import _principal_from_local_mode
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_local_mode
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="none", worker_bearer_token="token")
         p = _principal_from_local_mode({}, {}, auth)
@@ -323,8 +323,8 @@ class TestAuthMutationKilling:
 
     def test_resolve_principal_mode_not_just_checked_lowercase(self) -> None:
         """Mode is checked after lowercasing."""
-        from provide.terminal.server.auth import _resolve_principal
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _resolve_principal
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="JWT", worker_bearer_token="token")  # uppercase
         # With no token, should return anonymous (JWT mode recognized despite case)
@@ -333,8 +333,8 @@ class TestAuthMutationKilling:
 
     def test_resolve_principal_bearer_tried_before_cookie(self) -> None:
         """Bearer token checked BEFORE cookie fallback."""
-        from provide.terminal.server.auth import _resolve_principal
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _resolve_principal
+        from provide.uterm.server.models import AuthConfig
 
         token1 = _make_token(sub="bearer_user", roles=["admin"])
         token2 = _make_token(sub="cookie_user", roles=["viewer"])
@@ -359,8 +359,8 @@ class TestAuthMutationKilling:
 
     def test_resolve_principal_jwt_invalid_token_returns_anonymous(self) -> None:
         """Invalid JWT should return anonymous, not raise."""
-        from provide.terminal.server.auth import _resolve_principal
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _resolve_principal
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(
             mode="jwt",
@@ -376,7 +376,7 @@ class TestAuthMutationKilling:
 
     def test_cookie_value_must_strip_before_checking_empty(self) -> None:
         """Whitespace must be stripped before empty check."""
-        from provide.terminal.server.auth import _cookie_value
+        from provide.uterm.server.auth import _cookie_value
 
         # Must strip first, then check empty
         result = _cookie_value({"token": "   "}, "token")
@@ -385,7 +385,7 @@ class TestAuthMutationKilling:
 
     def testextract_bearer_token_scheme_case_lowercase_required(self) -> None:
         """Scheme comparison uses lower(), not just checking Bearer."""
-        from provide.terminal.server.auth import extract_bearer_token
+        from provide.uterm.server.auth import extract_bearer_token
 
         # All case variations should work
         for scheme in ["bearer", "Bearer", "BEARER", "BeArEr"]:
@@ -398,8 +398,8 @@ class TestAuthMutationKilling:
 
     def test_resolve_principal_mode_set_membership_exact(self) -> None:
         """Mode check uses set membership {none, dev}, not just substring."""
-        from provide.terminal.server.auth import _resolve_principal
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _resolve_principal
+        from provide.uterm.server.models import AuthConfig
 
         # "none" mode → admin, "dev" mode → admin
         for mode_val in ["none", "dev"]:
@@ -409,8 +409,8 @@ class TestAuthMutationKilling:
 
     def test_principal_from_jwt_token_subject_strip_required(self) -> None:
         """JWT subject extraction must strip whitespace."""
-        from provide.terminal.server.auth import _principal_from_jwt_token
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_jwt_token
+        from provide.uterm.server.models import AuthConfig
 
         token = _make_token(sub="  user-with-spaces  ")
         auth = AuthConfig(
@@ -427,8 +427,8 @@ class TestAuthMutationKilling:
 
     def test_principal_from_jwt_token_subject_empty_after_strip_raises(self) -> None:
         """JWT subject whitespace-only should raise."""
-        from provide.terminal.server.auth import _principal_from_jwt_token
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_jwt_token
+        from provide.uterm.server.models import AuthConfig
 
         token = _make_token(sub="   ")
         auth = AuthConfig(
@@ -444,8 +444,8 @@ class TestAuthMutationKilling:
 
     def test_roles_from_claims_string_and_list_both_strip_lower(self) -> None:
         """Both string and list branches must call strip().lower()."""
-        from provide.terminal.server.auth import _roles_from_claims
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _roles_from_claims
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(mode="jwt", jwt_public_key_pem="key", worker_bearer_token="token")
         # Both branches with whitespace/mixed case

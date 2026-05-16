@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-from provide.terminal.bridge.frames import (
+from provide.uterm.bridge.frames import (
     coerce_worker_status_frame,
     make_analysis_frame,
     make_error_frame,

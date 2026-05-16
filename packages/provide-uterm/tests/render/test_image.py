@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.render.image — image-to-ANSI conversion."""
+"""Tests for provide.uterm.render.image — image-to-ANSI conversion."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import sys
 import pytest
 from PIL import Image
 
-from provide.terminal.render.image import image_to_ansi_frames, render_frame
-from provide.terminal.render.sgr import sgr_truecolor
+from provide.uterm.render.image import image_to_ansi_frames, render_frame
+from provide.uterm.render.sgr import sgr_truecolor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -192,7 +192,7 @@ def test_invalid_bytes_raises() -> None:
 
 
 def test_pillow_import_error_raises_helpful_message() -> None:
-    import provide.terminal.render.image as image_mod
+    import provide.uterm.render.image as image_mod
 
     pil_modules = {k: v for k, v in sys.modules.items() if k == "PIL" or k.startswith("PIL.")}
     for key in pil_modules:

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 import websockets
-from provide.terminal.control_channel import encode_control
+from provide.uterm.control_channel import encode_control
 
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-uterm-e2e-test/1.0"
@@ -149,8 +149,8 @@ async def shell_runtime(wrangler_server: str):
 
     Yields ``(runtime, worker_id)``.  The runtime is stopped on teardown.
     """
-    from provide.terminal.server.models import RecordingConfig, SessionDefinition
-    from provide.terminal.server.runtime import HostedSessionRuntime
+    from provide.uterm.server.models import RecordingConfig, SessionDefinition
+    from provide.uterm.server.runtime import HostedSessionRuntime
 
     worker_id = f"e2e-{uuid.uuid4().hex[:8]}"
     defn = SessionDefinition(
@@ -197,8 +197,8 @@ async def test_hosted_runtime_connects_and_appears_in_sessions(wrangler_server: 
 @pytest.mark.e2e
 async def test_hosted_runtime_snapshot_reaches_browser(wrangler_server: str) -> None:
     """Browser connected before runtime receives the initial snapshot broadcast from the shell connector."""
-    from provide.terminal.server.models import RecordingConfig, SessionDefinition
-    from provide.terminal.server.runtime import HostedSessionRuntime
+    from provide.uterm.server.models import RecordingConfig, SessionDefinition
+    from provide.uterm.server.runtime import HostedSessionRuntime
 
     worker_id = f"e2e-{uuid.uuid4().hex[:8]}"
     base_ws = _base_ws(wrangler_server)

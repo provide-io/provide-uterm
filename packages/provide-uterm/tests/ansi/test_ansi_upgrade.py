@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for the color-upgrade and normalize_colors additions to provide.terminal.ansi."""
+"""Tests for the color-upgrade and normalize_colors additions to provide.uterm.ansi."""
 
 from __future__ import annotations
 
-from provide.terminal import registered_dialects
-from provide.terminal.ansi import (
+from provide.uterm import registered_dialects
+from provide.uterm.ansi import (
     DEFAULT_PALETTE,
     DEFAULT_RGB,
     _color256_to_rgb,

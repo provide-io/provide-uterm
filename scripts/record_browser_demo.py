@@ -23,7 +23,7 @@ from pathlib import Path
 import httpx
 import uvicorn
 from playwright.sync_api import sync_playwright
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 DEMO_DIR = Path("demo/recordings")
 SCREENSHOTS_DIR = DEMO_DIR / "screenshots"

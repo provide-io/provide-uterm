@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from provide.terminal.cli import _build_parser, _cmd_listen
+from provide.uterm.cli import _build_parser, _cmd_listen
 
 
 class TestParserValidation:

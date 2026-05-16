@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.gateway — SshWsGateway and SSH pump helpers."""
+"""Tests for provide.uterm.gateway — SshWsGateway and SSH pump helpers."""
 
 from __future__ import annotations
 
 import pytest
-from provide.terminal.control_channel import encode_control
-from provide.terminal.gateway import SshWsGateway, _ssh_to_ws, _ws_to_ssh
-from provide.terminal.gateway._ssh_handler import _make_no_auth_server_class
+from provide.uterm.control_channel import encode_control
+from provide.uterm.gateway import SshWsGateway, _ssh_to_ws, _ws_to_ssh
+from provide.uterm.gateway._ssh_handler import _make_no_auth_server_class
 
 # ---------------------------------------------------------------------------
 # SshWsGateway — init

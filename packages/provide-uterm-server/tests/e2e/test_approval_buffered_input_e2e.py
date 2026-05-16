@@ -17,10 +17,10 @@ import httpx
 import uvicorn
 from playwright.sync_api import sync_playwright
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.hub.ext import PolicyDecision, PolicyGate
-from provide.terminal.control_channel import ControlChannelDecoder, DataChunk, encode_control
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.hub.ext import PolicyDecision, PolicyGate
+from provide.uterm.control_channel import ControlChannelDecoder, DataChunk, encode_control
+from provide.uterm.server import create_server_app, default_server_config
 
 
 class ProofGate(PolicyGate):
@@ -77,7 +77,7 @@ def run_proof():
     worker_stop = threading.Event()
 
     def _run_worker():
-        from provide.terminal.client import connect_async_ws
+        from provide.uterm.client import connect_async_ws
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

@@ -9,8 +9,8 @@ import timeit
 # Add packages to sys.path
 sys.path.insert(0, os.path.abspath("packages/provide-uterm-server/src"))
 
-from provide.terminal.bridge.hub.ext import RedactionRule
-from provide.terminal.bridge.hub.redaction import StreamRedactor
+from provide.uterm.bridge.hub.ext import RedactionRule
+from provide.uterm.bridge.hub.redaction import StreamRedactor
 
 
 def benchmark():

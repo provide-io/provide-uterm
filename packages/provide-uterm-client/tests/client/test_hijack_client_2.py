@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from httpx import ASGITransport
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
-from provide.terminal.client.hijack import HijackClient
+from provide.uterm.client.hijack import HijackClient
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -189,8 +189,8 @@ class TestSendGuards:
 class TestSessionAPI:
     @staticmethod
     def _make_server_app() -> FastAPI:
-        from provide.terminal.server.app import create_server_app
-        from provide.terminal.server.config import config_from_mapping
+        from provide.uterm.server.app import create_server_app
+        from provide.uterm.server.config import config_from_mapping
 
         cfg = config_from_mapping(
             {
@@ -350,7 +350,7 @@ class TestTransportErrors:
 class TestCustomTimeout:
     async def test_request_with_custom_timeout(self) -> None:
         """hijack.py:120 — timeout kwarg passed to httpx."""
-        from provide.terminal.client.hijack import HijackClient
+        from provide.uterm.client.hijack import HijackClient
 
         async with HijackClient("http://127.0.0.1:1") as c:
             # watch_session_events passes a custom timeout — covers line 120
@@ -361,7 +361,7 @@ class TestCustomTimeout:
 class TestWatchEventsParams:
     async def test_watch_session_events_with_event_types_and_pattern(self) -> None:
         """hijack.py:319-324 — event_types + pattern params."""
-        from provide.terminal.client.hijack import HijackClient
+        from provide.uterm.client.hijack import HijackClient
 
         async with HijackClient("http://127.0.0.1:1") as c:
             ok, data = await c.watch_session_events(

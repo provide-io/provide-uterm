@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from provide.terminal.server.recording import WebhookRecordingStore
+from provide.uterm.server.recording import WebhookRecordingStore
 
 
 @pytest.mark.asyncio

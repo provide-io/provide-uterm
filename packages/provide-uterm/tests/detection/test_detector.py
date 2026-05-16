@@ -4,8 +4,8 @@
 #
 from __future__ import annotations
 
-from provide.terminal.detection.detector import PromptDetector
-from provide.terminal.detection.input_type import auto_detect_input_type
+from provide.uterm.detection.detector import PromptDetector
+from provide.uterm.detection.input_type import auto_detect_input_type
 
 
 def _make_patterns() -> list[dict]:

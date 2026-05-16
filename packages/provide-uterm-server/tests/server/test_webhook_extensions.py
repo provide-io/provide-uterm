@@ -13,8 +13,8 @@ import respx
 from httpx import Response
 from starlette.testclient import TestClient
 
-from provide.terminal.bridge.hub.ext import PolicyContext, WebhookPolicyGate
-from provide.terminal.server.authorization import AuthorizationService, WebhookAuthorizationProvider
+from provide.uterm.bridge.hub.ext import PolicyContext, WebhookPolicyGate
+from provide.uterm.server.authorization import AuthorizationService, WebhookAuthorizationProvider
 
 
 @pytest.mark.asyncio
@@ -188,8 +188,8 @@ async def test_webhook_authz_provider_capabilities() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_node_registry_heartbeat_logic() -> None:
-    from provide.terminal.server.app import create_server_app
-    from provide.terminal.server.config import default_server_config
+    from provide.uterm.server.app import create_server_app
+    from provide.uterm.server.config import default_server_config
 
     url = "https://fleet.example.com/heartbeat"
     config = default_server_config()
@@ -213,8 +213,8 @@ async def test_node_registry_heartbeat_logic() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_node_registry_heartbeat_error_handling() -> None:
-    from provide.terminal.server.app import create_server_app
-    from provide.terminal.server.config import default_server_config
+    from provide.uterm.server.app import create_server_app
+    from provide.uterm.server.config import default_server_config
 
     url = "https://fleet.example.com/heartbeat"
     config = default_server_config()
@@ -234,10 +234,10 @@ async def test_node_registry_heartbeat_error_handling() -> None:
 @pytest.mark.asyncio
 async def test_authz_service_fallback_paths() -> None:
     """Test AuthorizationService proxy methods when provider lacks direct implementation."""
-    from provide.terminal.server.auth import Principal
-    from provide.terminal.server.authorization import Capability
-    from provide.terminal.server.models import SessionDefinition
-    from provide.terminal.server.profiles import ConnectionProfile
+    from provide.uterm.server.auth import Principal
+    from provide.uterm.server.authorization import Capability
+    from provide.uterm.server.models import SessionDefinition
+    from provide.uterm.server.profiles import ConnectionProfile
 
     class MinimalProvider:
         async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:

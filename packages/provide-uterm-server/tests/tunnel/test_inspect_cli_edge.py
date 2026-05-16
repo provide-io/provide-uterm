@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from provide.terminal.cli.inspect import _cmd_inspect, _create_tunnel, _read_token
-from provide.terminal.tunnel.protocol import CHANNEL_HTTP
+from provide.uterm.cli.inspect import _cmd_inspect, _create_tunnel, _read_token
+from provide.uterm.tunnel.protocol import CHANNEL_HTTP
 
 # ---------------------------------------------------------------------------
 # CHANNEL_HTTP constant
@@ -83,7 +83,7 @@ class TestCreateTunnelEdge:
         payload = json.dumps(
             {"tunnel_id": "t1", "ws_endpoint": "ws://x/t", "worker_token": "", "share_url": ""}
         ).encode()
-        with patch("provide.terminal.cli.inspect.urllib.request.urlopen") as mock_open:
+        with patch("provide.uterm.cli.inspect.urllib.request.urlopen") as mock_open:
             mock_open.return_value = self._make_urlopen(payload)
             result = _create_tunnel("https://example.com/", "my-tunnel", None, 4000)
         # URL must not double-slash: should be .../api/tunnels not ...//api/tunnels
@@ -97,7 +97,7 @@ class TestCreateTunnelEdge:
         payload = json.dumps(
             {"tunnel_id": "t2", "ws_endpoint": "ws://x/t", "worker_token": "", "share_url": ""}
         ).encode()
-        with patch("provide.terminal.cli.inspect.urllib.request.urlopen") as mock_open:
+        with patch("provide.uterm.cli.inspect.urllib.request.urlopen") as mock_open:
             mock_open.return_value = self._make_urlopen(payload)
             _create_tunnel("https://example.com", "test", None, 3000)
         req_obj = mock_open.call_args[0][0]
@@ -109,7 +109,7 @@ class TestCreateTunnelEdge:
         err = urllib.error.HTTPError("http://x", 401, "Unauthorized", {}, None)
         err.read = lambda: b"invalid token"
         with (
-            patch("provide.terminal.cli.inspect.urllib.request.urlopen", side_effect=err),
+            patch("provide.uterm.cli.inspect.urllib.request.urlopen", side_effect=err),
             pytest.raises(SystemExit) as exc_info,
         ):
             _create_tunnel("https://example.com", "t", "bad-tok", 3000)
@@ -137,8 +137,8 @@ class TestCmdInspectEdge:
     def test_custom_display_name_passed_to_create_tunnel(self):
         args = self._make_args(display_name="my-api")
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run"),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/t", "worker_token": "", "share_url": ""}
             _cmd_inspect(args)
@@ -147,8 +147,8 @@ class TestCmdInspectEdge:
     def test_share_url_in_response_prints(self, capsys):
         args = self._make_args()
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run"),
         ):
             mock_create.return_value = {
                 "ws_endpoint": "ws://x/tunnel/t",
@@ -162,8 +162,8 @@ class TestCmdInspectEdge:
     def test_no_share_url_in_response_no_share_line(self, capsys):
         args = self._make_args()
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run"),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             _cmd_inspect(args)
@@ -173,8 +173,8 @@ class TestCmdInspectEdge:
     def test_keyboard_interrupt_handled_gracefully(self):
         args = self._make_args()
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run", side_effect=KeyboardInterrupt),
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=KeyboardInterrupt),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             # Should NOT raise — KeyboardInterrupt is suppressed by `with suppress(KeyboardInterrupt):`
@@ -183,8 +183,8 @@ class TestCmdInspectEdge:
     def test_relative_ws_endpoint_resolved_with_https(self):
         args = self._make_args(server="https://example.com")
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run") as mock_run,
         ):
             mock_create.return_value = {"ws_endpoint": "/tunnel/abc", "worker_token": "w", "share_url": ""}
             _cmd_inspect(args)
@@ -203,9 +203,9 @@ class TestCmdInspectEdge:
             captured_endpoint.append(ws_endpoint)
 
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect._run_inspect", side_effect=fake_run_inspect),
-            patch("provide.terminal.cli.inspect.asyncio.run") as mock_asyncio_run,
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect._run_inspect", side_effect=fake_run_inspect),
+            patch("provide.uterm.cli.inspect.asyncio.run") as mock_asyncio_run,
         ):
             mock_create.return_value = {"ws_endpoint": "/tunnel/xyz", "worker_token": "", "share_url": ""}
             # asyncio.run gets a coroutine; extract the resolved endpoint from the _create_tunnel call
@@ -218,8 +218,8 @@ class TestCmdInspectEdge:
     def test_absolute_ws_endpoint_not_modified(self):
         args = self._make_args(server="https://example.com")
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run") as mock_run,
         ):
             mock_create.return_value = {
                 "ws_endpoint": "wss://already-absolute.example.com/tunnel/t",
@@ -234,7 +234,7 @@ class TestCmdInspectEdge:
         args = self._make_args()
         with (
             patch(
-                "provide.terminal.cli.inspect._create_tunnel",
+                "provide.uterm.cli.inspect._create_tunnel",
                 return_value={"ws_endpoint": "", "worker_token": "", "share_url": ""},
             ),
             pytest.raises(SystemExit) as exc_info,

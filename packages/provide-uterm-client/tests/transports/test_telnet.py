@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from provide.terminal.transports.telnet import (
+from provide.uterm.transports.telnet import (
     DO,
     ECHO,
     IAC,

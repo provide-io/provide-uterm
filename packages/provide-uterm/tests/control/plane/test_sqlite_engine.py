@@ -5,9 +5,9 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
-from provide.terminal.control.plane import ControlPlaneConfig
-from provide.terminal.control.plane.sqlite import SqliteControlPlane
-from provide.terminal.control.plane.sqlite.migration import SqliteMigrationError
+from provide.uterm.control.plane import ControlPlaneConfig
+from provide.uterm.control.plane.sqlite import SqliteControlPlane
+from provide.uterm.control.plane.sqlite.migration import SqliteMigrationError
 
 
 @pytest.mark.asyncio

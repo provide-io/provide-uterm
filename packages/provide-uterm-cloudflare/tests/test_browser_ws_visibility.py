@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import jwt
 import pytest
-from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
 _JWT_KEY = "test-secret-key-32-bytes-minimum!"
 

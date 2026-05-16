@@ -7,7 +7,7 @@ import pwd
 
 import pytest
 
-from provide.terminal.pty.uid_map import ResolvedUser, UidMap, UidMapError
+from provide.uterm.pty.uid_map import ResolvedUser, UidMap, UidMapError
 
 
 def _current() -> pwd.struct_passwd:

@@ -28,8 +28,8 @@ See the [main README](../../README.md) for extras and quick start guides.
 | Package | Owns |
 |---------|--------|
 | `provide-uterm` | Shared terminal primitives and root facade exports |
-| `provide-uterm-server` | `provide.terminal.bridge`, `provide.terminal.server`, `provide.terminal.gateway`, `provide.terminal.tunnel` |
-| `provide-uterm-platform` | `provide.terminal.manager`, `provide.terminal.pty` |
+| `provide-uterm-server` | `provide.uterm.bridge`, `provide.uterm.server`, `provide.uterm.gateway`, `provide.uterm.tunnel` |
+| `provide-uterm-platform` | `provide.uterm.manager`, `provide.uterm.pty` |
 | `provide-uterm-client` | Client-side session control and MCP tooling |
 
 ## Related Packages

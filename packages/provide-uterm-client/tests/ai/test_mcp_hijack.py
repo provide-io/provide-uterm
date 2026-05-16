@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import HijackSession, WorkerTermState
 
-from provide.terminal.ai.server import create_mcp_app
+from provide.uterm.ai.server import create_mcp_app
 
 WID = "mcp-worker"
 BAD_HID = "00000000-dead-beef-0000-000000000000"

@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime
 from tests.helpers import decode_chunk, encode_frame
 
 
@@ -340,7 +340,7 @@ class TestRun:
         real_ws = sys.modules.pop("websockets", None)
         sys.modules["websockets"] = fake_ws_mod
         try:
-            with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+            with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
                 await rt.start()
                 for _ in range(50):
                     await asyncio.sleep(0.02)
@@ -376,7 +376,7 @@ class TestRun:
         real_ws = sys.modules.pop("websockets", None)
         sys.modules["websockets"] = fake_ws_mod
         try:
-            with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+            with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
                 await rt.start()
                 for _ in range(50):
                     await asyncio.sleep(0.02)
@@ -412,7 +412,7 @@ class TestRun:
         real_ws = sys.modules.pop("websockets", None)
         sys.modules["websockets"] = fake_ws_mod
         try:
-            with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+            with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
                 await rt.start()
                 for _ in range(50):
                     await asyncio.sleep(0.02)
@@ -476,7 +476,7 @@ class TestRun:
         sys.modules["websockets"] = fake_ws_mod
         try:
             with (
-                patch("provide.terminal.server.runtime.build_connector", return_value=connector),
+                patch("provide.uterm.server.runtime.build_connector", return_value=connector),
                 patch.object(rt, "_bridge_session", _fake_bridge),
             ):
                 await rt.start()

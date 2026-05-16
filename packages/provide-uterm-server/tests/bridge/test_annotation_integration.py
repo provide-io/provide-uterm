@@ -10,10 +10,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from provide.terminal.bridge.annotation._detector import PatternDetector
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime
-from provide.terminal.session_logger import SessionLogger
+from provide.uterm.bridge.annotation._detector import PatternDetector
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime
+from provide.uterm.session_logger import SessionLogger
 
 
 def _make_session(session_id: str = "ann-test") -> SessionDefinition:

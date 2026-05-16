@@ -7,10 +7,10 @@ import sqlite3
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from provide.terminal.cloudflare.api.http_routes import route_http
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.entry import Default
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.api.http_routes import route_http
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.entry import Default
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 
 def _make_default(env_attrs: dict[str, object] | None = None) -> Default:

@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.colors import (
+from provide.uterm.colors import (
     apply_color_mode,
     downgrade_to_16,
     downgrade_to_256,
     rgb_to_16_index,
     rgb_to_256,
 )
-from provide.terminal.colors.rgb import _PALETTE_16, _clamp8
-from provide.terminal.colors.sgr import SGR_RE, rewrite_params
+from provide.uterm.colors.rgb import _PALETTE_16, _clamp8
+from provide.uterm.colors.sgr import SGR_RE, rewrite_params
 
 pytestmark = pytest.mark.unit
 

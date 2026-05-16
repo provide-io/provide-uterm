@@ -43,8 +43,8 @@ if not _os.environ.get("MUTANT_UNDER_TEST"):
                 if name == "provide" or name.startswith("provide."):
                     del sys.modules[name]
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
@@ -147,7 +147,7 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
     app = FastAPI()
     app.include_router(hub.create_router())
 
-    frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
+    frontend_path = importlib.resources.files("provide.uterm.server") / "frontend"
     app.mount("/ui", StaticFiles(directory=str(frontend_path), html=True), name="ui")
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
@@ -299,7 +299,7 @@ class WorkerController:
     async def _connect(self) -> None:
         import websockets
 
-        from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control
+        from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control
 
         ws_url = self._base_url.replace("http://", "ws://") + f"/ws/worker/{self._worker_id}/term"
         try:
@@ -361,7 +361,7 @@ class _ThreadedEchoServer(socketserver.ThreadingTCPServer):
 
 class _EchoTelnetHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
-        from provide.terminal.transports.telnet_server import _build_telnet_handshake
+        from provide.uterm.transports.telnet_server import _build_telnet_handshake
 
         server = self.server
         assert isinstance(server, _ThreadedEchoServer)
@@ -378,7 +378,7 @@ class _EchoTelnetHandler(socketserver.BaseRequestHandler):
 @pytest.fixture(scope="session")
 def terminal_proxy_server() -> Generator[tuple[str, list[bytes]], None, None]:
     """Session-scoped fixture: terminal UI + WS/telnet echo proxy for browser tests."""
-    from provide.terminal.fastapi_utils import WsTerminalProxy, mount_terminal_ui
+    from provide.uterm.fastapi_utils import WsTerminalProxy, mount_terminal_ui
 
     received_chunks: list[bytes] = []
     telnet_server = _ThreadedEchoServer(("127.0.0.1", 0), received_chunks)
@@ -436,7 +436,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Initialize the server environment for tests."""
-    from provide.terminal.server import create_server_app, default_server_config
+    from provide.uterm.server import create_server_app, default_server_config
 
     # Ensure default connectors are registered so registry-aware tests (e.g.
     # test_connectors_websocket.py) can find them.

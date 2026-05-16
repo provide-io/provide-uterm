@@ -63,7 +63,7 @@ async def _telnet_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWr
 
 async def _start_telnet(port: int) -> asyncio.Server:
     """Start a demo telnet server on the given port."""
-    from provide.terminal.transports.telnet_server import start_telnet_server
+    from provide.uterm.transports.telnet_server import start_telnet_server
 
     return await start_telnet_server(_telnet_handler, host="127.0.0.1", port=port)
 

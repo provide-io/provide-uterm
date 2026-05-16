@@ -17,7 +17,7 @@ import pytest
 
 def _run_main(args: list[str]) -> MagicMock:
     """Run main() with patched uvicorn.run, return the mock call."""
-    from provide.terminal.server.cli import main
+    from provide.uterm.server.cli import main
 
     with patch("uvicorn.run") as mock_run:
         main(args)
@@ -38,7 +38,7 @@ class TestServerCliParserSetup:
         import io
         from unittest.mock import patch
 
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         buf = io.StringIO()
         try:
@@ -56,15 +56,15 @@ class TestServerCliParserSetup:
 
     def test_config_argument_accepted(self) -> None:
         """--config argument is accepted (kills mutmut where --config is mutated)."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         # Patch load_server_config to avoid FileNotFoundError
-        with patch("provide.terminal.server.cli.load_server_config") as mock_cfg:
+        with patch("provide.uterm.server.cli.load_server_config") as mock_cfg:
             mock_cfg.return_value = MagicMock(
                 server=MagicMock(host="localhost", port=8780, public_base_url="http://localhost:8780")
             )
             with (
-                patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+                patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
                 patch("uvicorn.run"),
             ):
                 main(["--config", "nonexistent.toml"])
@@ -73,10 +73,10 @@ class TestServerCliParserSetup:
 
     def test_host_argument_accepted(self) -> None:
         """--host argument is wired (kills mutations to '--host')."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         with (
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run") as mock_run,
         ):
             main(["--host", "0.0.0.0"])
@@ -85,7 +85,7 @@ class TestServerCliParserSetup:
 
     def test_port_argument_accepted(self) -> None:
         """--port argument is wired (kills mutations to '--port')."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         with patch("uvicorn.run") as mock_run:
             main(["--port", "8888"])
@@ -101,7 +101,7 @@ class TestServerCliParserSetup:
 class TestServerCliOverrides:
     def test_no_override_uses_config_defaults(self) -> None:
         """When no --host or --port given, config defaults are used."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         with patch("uvicorn.run") as mock_run:
             main([])
@@ -111,10 +111,10 @@ class TestServerCliOverrides:
 
     def test_host_override_applied_to_config(self) -> None:
         """config.server.host is overridden when --host is passed."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         with (
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run") as mock_run,
         ):
             main(["--host", "10.0.0.1"])
@@ -123,7 +123,7 @@ class TestServerCliOverrides:
 
     def test_port_override_applied_as_int(self) -> None:
         """config.server.port is overridden with int(args.port)."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         with patch("uvicorn.run") as mock_run:
             main(["--port", "5678"])
@@ -133,7 +133,7 @@ class TestServerCliOverrides:
 
     def test_host_and_port_update_public_base_url_with_http(self) -> None:
         """When host+port both given, public_base_url is updated (http scheme)."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         captured_config: dict = {}
 
@@ -141,7 +141,7 @@ class TestServerCliOverrides:
             captured_config.update(kwargs)
 
         with (
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run", side_effect=capture_app),
         ):
             main(["--host", "192.168.1.1", "--port", "9000"])
@@ -151,7 +151,7 @@ class TestServerCliOverrides:
 
     def test_only_host_also_updates_public_base_url(self) -> None:
         """When only --host is given, public_base_url is updated."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         captured: dict = {}
 
@@ -159,7 +159,7 @@ class TestServerCliOverrides:
             captured.update(kwargs)
 
         with (
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run", side_effect=capture),
         ):
             main(["--host", "myhost.local"])
@@ -168,7 +168,7 @@ class TestServerCliOverrides:
 
     def test_only_port_also_updates_public_base_url(self) -> None:
         """When only --port is given, public_base_url is updated."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         captured: dict = {}
 
@@ -182,7 +182,7 @@ class TestServerCliOverrides:
 
     def test_public_base_url_uses_http_scheme_for_non_https(self) -> None:
         """When current URL is http, updated URL uses http scheme."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         captured: dict = {}
 
@@ -190,7 +190,7 @@ class TestServerCliOverrides:
             captured.update(kwargs)
 
         with (
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run", side_effect=capture),
         ):
             main(["--host", "testhost", "--port", "8080"])
@@ -200,7 +200,7 @@ class TestServerCliOverrides:
 
     def test_public_base_url_scheme_check_startswith_https(self) -> None:
         """URL starts with 'https://' triggers https scheme in update."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         # We need to patch the config to have an https URL
         mock_config = MagicMock()
@@ -209,8 +209,8 @@ class TestServerCliOverrides:
         mock_config.server.public_base_url = "https://mysite.com:8780"
 
         with (
-            patch("provide.terminal.server.cli.load_server_config", return_value=mock_config),
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.load_server_config", return_value=mock_config),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run"),
         ):
             main(["--host", "newhost", "--port", "443"])
@@ -220,7 +220,7 @@ class TestServerCliOverrides:
 
     def test_public_base_url_http_scheme_update(self) -> None:
         """Non-https URL → updated URL uses http scheme."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         mock_config = MagicMock()
         mock_config.server.host = "localhost"
@@ -228,8 +228,8 @@ class TestServerCliOverrides:
         mock_config.server.public_base_url = "http://localhost:8780"
 
         with (
-            patch("provide.terminal.server.cli.load_server_config", return_value=mock_config),
-            patch("provide.terminal.server.cli.create_server_app", return_value=MagicMock()),
+            patch("provide.uterm.server.cli.load_server_config", return_value=mock_config),
+            patch("provide.uterm.server.cli.create_server_app", return_value=MagicMock()),
             patch("uvicorn.run"),
         ):
             main(["--host", "newhost", "--port", "9999"])
@@ -238,7 +238,7 @@ class TestServerCliOverrides:
 
     def test_uvicorn_called_with_log_level_info(self) -> None:
         """uvicorn.run is called with log_level='info'."""
-        from provide.terminal.server.cli import main
+        from provide.uterm.server.cli import main
 
         with patch("uvicorn.run") as mock_run:
             main([])

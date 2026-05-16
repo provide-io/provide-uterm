@@ -556,7 +556,7 @@ uterm watch <id-or-url>        # TUI viewer for existing tunnel (read-only, Text
 | Issue | Fix |
 |-------|-----|
 | JS ArrayBuffer not `isinstance(bytes)` | `to_py()`/`to_bytes()` before check |
-| `provide.terminal.cloudflare.api.*` import fails | `try/except` with flat path fallback |
+| `provide.uterm.cloudflare.api.*` import fails | `try/except` with flat path fallback |
 | Worker WS triggers JWT decode | Skip `browser_role_for_request()` for `socket_role == "worker"` |
 
 ---

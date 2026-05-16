@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from provide.terminal.render.buffer import (
+from provide.uterm.render.buffer import (
     ANSI_RESET,
     BG_CODES,
     FG_CODES,
@@ -216,14 +216,14 @@ class TestHelperFunctions:
     """Test _is_hex_color, _hex_to_rgb, _color_sgr."""
 
     def test_is_hex_color_valid(self) -> None:
-        from provide.terminal.render.buffer import _is_hex_color
+        from provide.uterm.render.buffer import _is_hex_color
 
         assert _is_hex_color("ff8000") is True
         assert _is_hex_color("000000") is True
         assert _is_hex_color("FFFFFF") is True
 
     def test_is_hex_color_invalid(self) -> None:
-        from provide.terminal.render.buffer import _is_hex_color
+        from provide.uterm.render.buffer import _is_hex_color
 
         assert _is_hex_color("fff") is False
         assert _is_hex_color("gggggg") is False
@@ -231,32 +231,32 @@ class TestHelperFunctions:
         assert _is_hex_color("") is False
 
     def test_hex_to_rgb(self) -> None:
-        from provide.terminal.render.buffer import _hex_to_rgb
+        from provide.uterm.render.buffer import _hex_to_rgb
 
         assert _hex_to_rgb("ff8000") == (255, 128, 0)
         assert _hex_to_rgb("000000") == (0, 0, 0)
         assert _hex_to_rgb("ffffff") == (255, 255, 255)
 
     def test_color_sgr_default(self) -> None:
-        from provide.terminal.render.buffer import _color_sgr
+        from provide.uterm.render.buffer import _color_sgr
 
         assert _color_sgr("default", is_fg=True) == []
         assert _color_sgr("default", is_fg=False) == []
 
     def test_color_sgr_named(self) -> None:
-        from provide.terminal.render.buffer import _color_sgr
+        from provide.uterm.render.buffer import _color_sgr
 
         assert _color_sgr("red", is_fg=True) == [31]
         assert _color_sgr("blue", is_fg=False) == [44]
 
     def test_color_sgr_hex(self) -> None:
-        from provide.terminal.render.buffer import _color_sgr
+        from provide.uterm.render.buffer import _color_sgr
 
         assert _color_sgr("ff8000", is_fg=True) == [38, 2, 255, 128, 0]
         assert _color_sgr("0000ff", is_fg=False) == [48, 2, 0, 0, 255]
 
     def test_color_sgr_unknown(self) -> None:
-        from provide.terminal.render.buffer import _color_sgr
+        from provide.uterm.render.buffer import _color_sgr
 
         assert _color_sgr("notacolor", is_fg=True) == []
 

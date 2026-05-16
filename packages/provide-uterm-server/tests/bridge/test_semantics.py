@@ -1,4 +1,4 @@
-from provide.terminal.bridge.hub.semantics import CommandSplitter
+from provide.uterm.bridge.hub.semantics import CommandSplitter
 
 
 def test_split_simple_command():

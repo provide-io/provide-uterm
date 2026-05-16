@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.hub.ext import (
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.hub.ext import (
     EVENT_HIJACK_ACQUIRED,
     EVENT_HIJACK_RELEASED,
     EVENT_SESSION_REGISTERED,
@@ -21,7 +21,7 @@ async def test_session_registration_telemetry() -> None:
     hub = TermHub()
     ws = AsyncMock()
 
-    with patch("provide.terminal.bridge.hub.connections.logger") as mock_logger:
+    with patch("provide.uterm.bridge.hub.connections.logger") as mock_logger:
         await hub.register_browser("w1", ws, "operator")
 
         # Verify logger.info was called with DAS event
@@ -40,7 +40,7 @@ async def test_hijack_lifecycle_telemetry() -> None:
     await hub.register_worker(worker_id, worker_ws)
     await hub.register_browser(worker_id, ws, "admin")
 
-    with patch("provide.terminal.bridge.hub.ownership.logger") as mock_logger:
+    with patch("provide.uterm.bridge.hub.ownership.logger") as mock_logger:
         # Acquire hijack
         from unittest.mock import ANY
 

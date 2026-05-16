@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.server.pam_integration import (
+from provide.uterm.server.pam_integration import (
     _on_close,
     _on_open,
     _session_id,
@@ -47,7 +47,7 @@ def test_tty_slug_special_chars() -> None:
 
 async def test_run_pam_integration_no_notify_socket_exits_early() -> None:
     """Should exit immediately if pam.notify_socket is not set."""
-    from provide.terminal.server.models import ServerConfig
+    from provide.uterm.server.models import ServerConfig
 
     config = ServerConfig()
     assert config.pam.notify_socket is None
@@ -56,7 +56,7 @@ async def test_run_pam_integration_no_notify_socket_exits_early() -> None:
 
 async def test_run_pam_integration_missing_pty_package_exits_gracefully() -> None:
     """If provide-uterm-platform not installed, should warn and return cleanly."""
-    from provide.terminal.server.models import PamConfig, ServerConfig
+    from provide.uterm.server.models import PamConfig, ServerConfig
 
     ServerConfig(pam=PamConfig(notify_socket="/run/uterm-notify.sock"))
     # ImportError handling is covered by integration; import patching is too fragile here
@@ -68,11 +68,11 @@ async def test_run_pam_integration_missing_pty_package_exits_gracefully() -> Non
 async def test_on_open_capture_mode_with_socket_creates_capture_session() -> None:
     """Capture mode + capture_socket → create pty_capture session."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(
         event="open",
@@ -99,11 +99,11 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
 async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
     """Notify mode + auto_session=True → create pty shell session."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="bob", tty="/dev/pts/7", pid=999)
     cfg = PamConfig(notify_socket="/run/uterm-notify.sock", auto_session=True)
@@ -123,11 +123,11 @@ async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
 async def test_on_open_notify_mode_no_auto_session_skips_creation() -> None:
     """Notify mode + auto_session=False → do nothing."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="carol", tty="/dev/pts/0", pid=42)
     cfg = PamConfig(notify_socket="/run/uterm-notify.sock", auto_session=False)
@@ -142,11 +142,11 @@ async def test_on_open_notify_mode_no_auto_session_skips_creation() -> None:
 async def test_on_open_capture_mode_without_socket_falls_through_to_auto_session() -> None:
     """Capture mode but no capture_socket → fall through to auto_session if enabled."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(
         event="open",
@@ -170,11 +170,11 @@ async def test_on_open_capture_mode_without_socket_falls_through_to_auto_session
 async def test_on_open_custom_auto_session_command() -> None:
     """auto_session_command is forwarded to the session payload."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="eve", tty="/dev/pts/2", pid=7)
     cfg = PamConfig(
@@ -197,7 +197,7 @@ async def test_on_open_custom_auto_session_command() -> None:
 async def test_on_close_stops_existing_session() -> None:
     """Close event calls stop() on the runtime if found."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
@@ -208,7 +208,7 @@ async def test_on_close_stops_existing_session() -> None:
     registry = MagicMock()
     registry.get_runtime = MagicMock(return_value=runtime)
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     await _on_close(ev, PamConfig(), registry)
 
@@ -218,7 +218,7 @@ async def test_on_close_stops_existing_session() -> None:
 async def test_on_close_no_session_does_not_raise() -> None:
     """Close event for unknown session is silently ignored."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
@@ -226,7 +226,7 @@ async def test_on_close_no_session_does_not_raise() -> None:
     registry = MagicMock()
     registry.get_runtime = MagicMock(return_value=None)
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     await _on_close(ev, PamConfig(), registry)  # must not raise
 
@@ -234,7 +234,7 @@ async def test_on_close_no_session_does_not_raise() -> None:
 async def test_on_close_runtime_stop_exception_is_swallowed() -> None:
     """Errors from runtime.stop() should be caught and logged, not propagated."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
@@ -245,7 +245,7 @@ async def test_on_close_runtime_stop_exception_is_swallowed() -> None:
     registry = MagicMock()
     registry.get_runtime = MagicMock(return_value=runtime)
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     await _on_close(ev, PamConfig(), registry)  # must not raise
 
@@ -254,7 +254,7 @@ async def test_on_close_runtime_stop_exception_is_swallowed() -> None:
 
 
 def test_pam_config_defaults() -> None:
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     cfg = PamConfig()
     assert cfg.notify_socket is None
@@ -264,14 +264,14 @@ def test_pam_config_defaults() -> None:
 
 
 def test_pam_config_in_server_config() -> None:
-    from provide.terminal.server.models import ServerConfig
+    from provide.uterm.server.models import ServerConfig
 
     config = ServerConfig()
     assert config.pam.notify_socket is None
 
 
 def test_pam_config_mode_capture() -> None:
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     cfg = PamConfig(mode="capture", notify_socket="/run/uterm.sock")
     assert cfg.mode == "capture"
@@ -281,7 +281,7 @@ def test_pam_config_mode_capture() -> None:
 
 
 def test_pam_config_relay_fields_default_none() -> None:
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     cfg = PamConfig()
     assert cfg.relay_url is None
@@ -291,7 +291,7 @@ def test_pam_config_relay_fields_default_none() -> None:
 async def test_forward_to_relay_posts_event() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.pam_integration import _forward_to_relay
+    from provide.uterm.server.pam_integration import _forward_to_relay
 
     mock_response = MagicMock()
     mock_client = MagicMock()
@@ -316,7 +316,7 @@ async def test_forward_to_relay_posts_event() -> None:
 async def test_forward_to_relay_trailing_slash_stripped() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.pam_integration import _forward_to_relay
+    from provide.uterm.server.pam_integration import _forward_to_relay
 
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -335,7 +335,7 @@ async def test_forward_to_relay_swallows_network_error() -> None:
 
     import httpx
 
-    from provide.terminal.server.pam_integration import _forward_to_relay
+    from provide.uterm.server.pam_integration import _forward_to_relay
 
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -349,7 +349,7 @@ async def test_forward_to_relay_swallows_network_error() -> None:
 async def test_create_relay_tunnel_returns_token_and_endpoint() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.pam_integration import _create_relay_tunnel
+    from provide.uterm.server.pam_integration import _create_relay_tunnel
 
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
@@ -375,7 +375,7 @@ async def test_create_relay_tunnel_returns_none_on_error() -> None:
 
     import httpx
 
-    from provide.terminal.server.pam_integration import _create_relay_tunnel
+    from provide.uterm.server.pam_integration import _create_relay_tunnel
 
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -391,13 +391,13 @@ async def test_create_relay_tunnel_returns_none_on_error() -> None:
 async def test_on_open_forwards_to_cf_when_configured() -> None:
     """_on_open calls _forward_to_relay when relay_url + relay_token are set."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42)
     cfg = PamConfig(
@@ -427,13 +427,13 @@ async def test_on_open_forwards_to_cf_when_configured() -> None:
 async def test_on_close_forwards_to_cf_when_configured() -> None:
     """_on_close calls _forward_to_relay when relay_url + relay_token are set."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
     cfg = PamConfig(
@@ -463,7 +463,7 @@ async def test_on_close_forwards_to_cf_when_configured() -> None:
 
 def test_session_id_with_tty_uses_slug_only() -> None:
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
@@ -474,7 +474,7 @@ def test_session_id_with_tty_uses_slug_only() -> None:
 def test_session_id_empty_tty_includes_pid() -> None:
     """Empty TTY must include PID to prevent collision between concurrent sessions."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
@@ -488,7 +488,7 @@ def test_session_id_empty_tty_includes_pid() -> None:
 def test_session_id_open_and_close_match_with_same_pid() -> None:
     """Open and close events with same PID and empty TTY map to the same session_id."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
@@ -508,11 +508,11 @@ async def test_run_pam_integration_dispatches_event_via_real_socket() -> None:
     from pathlib import Path
 
     try:
-        import provide.terminal.pty.pam_listener  # noqa: F401
+        import provide.uterm.pty.pam_listener  # noqa: F401
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
-    from provide.terminal.server.models import PamConfig, ServerConfig
+    from provide.uterm.server.models import PamConfig, ServerConfig
 
     with tempfile.TemporaryDirectory() as td:
         sock_path = str(Path(td) / "pam-notify.sock")
@@ -567,7 +567,7 @@ async def test_run_pam_integration_cancelled_cleanly() -> None:
     import tempfile
     from pathlib import Path
 
-    from provide.terminal.server.models import PamConfig, ServerConfig
+    from provide.uterm.server.models import PamConfig, ServerConfig
 
     with tempfile.TemporaryDirectory() as td:
         sock_path = str(Path(td) / "pam-cancel.sock")
@@ -589,13 +589,13 @@ async def test_run_pam_integration_cancelled_cleanly() -> None:
 async def test_on_open_bridge_start_failure_cleans_up() -> None:
     """If PamTunnelBridge.start() raises, bridge.stop() is called for cleanup."""
     try:
-        from provide.terminal.pty.pam_listener import PamEvent
+        from provide.uterm.pty.pam_listener import PamEvent
     except ImportError:
         pytest.skip("provide-uterm-platform not installed")
 
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from provide.terminal.server.models import PamConfig
+    from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42)
     cfg = PamConfig(
@@ -627,7 +627,7 @@ async def test_on_open_bridge_start_failure_cleans_up() -> None:
     bridges: dict[str, object] = {}
     with (
         patch("httpx.AsyncClient", return_value=mock_client),
-        patch("provide.terminal.server.pam_tunnel.PamTunnelBridge", return_value=bridge_mock),
+        patch("provide.uterm.server.pam_tunnel.PamTunnelBridge", return_value=bridge_mock),
     ):
         await _on_open(ev, cfg, registry, bridges)
 

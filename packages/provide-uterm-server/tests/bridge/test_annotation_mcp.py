@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from provide.terminal.ai.server import create_mcp_app
+from provide.uterm.ai.server import create_mcp_app
 
 
 async def test_session_annotate_tool_exists() -> None:

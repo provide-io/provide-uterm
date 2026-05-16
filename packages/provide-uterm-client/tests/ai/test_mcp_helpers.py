@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from provide.terminal.ai.server import (
+from provide.uterm.ai.server import (
     TOOL_COUNT,
     _clean_snapshot,
     _unescape_keys,
@@ -228,7 +228,7 @@ class TestUnescapeKeys:
 
 class TestCLI:
     def test_parser_basic(self) -> None:
-        from provide.terminal.ai.cli import _build_parser
+        from provide.uterm.ai.cli import _build_parser
 
         parser = _build_parser()
         args = parser.parse_args(["--url", "http://localhost:8780"])
@@ -237,7 +237,7 @@ class TestCLI:
         assert args.headers == []
 
     def test_parser_all_options(self) -> None:
-        from provide.terminal.ai.cli import _build_parser
+        from provide.uterm.ai.cli import _build_parser
 
         parser = _build_parser()
         args = parser.parse_args(
@@ -257,11 +257,11 @@ class TestCLI:
         assert len(args.headers) == 2
 
     def test_main_creates_and_runs(self) -> None:
-        from provide.terminal.ai.cli import main
+        from provide.uterm.ai.cli import main
 
         mock_app = MagicMock()
         with patch(
-            "provide.terminal.ai.server.create_mcp_app",
+            "provide.uterm.ai.server.create_mcp_app",
             return_value=mock_app,
         ) as mock_create:
             main(["--url", "http://localhost:8780"])
@@ -274,11 +274,11 @@ class TestCLI:
         mock_app.run.assert_called_once_with(transport="stdio")
 
     def test_main_with_headers_and_prefix(self) -> None:
-        from provide.terminal.ai.cli import main
+        from provide.uterm.ai.cli import main
 
         mock_app = MagicMock()
         with patch(
-            "provide.terminal.ai.server.create_mcp_app",
+            "provide.uterm.ai.server.create_mcp_app",
             return_value=mock_app,
         ) as mock_create:
             main(
@@ -300,11 +300,11 @@ class TestCLI:
         mock_app.run.assert_called_once_with(transport="stdio")
 
     def test_main_multiple_headers(self) -> None:
-        from provide.terminal.ai.cli import main
+        from provide.uterm.ai.cli import main
 
         mock_app = MagicMock()
         with patch(
-            "provide.terminal.ai.server.create_mcp_app",
+            "provide.uterm.ai.server.create_mcp_app",
             return_value=mock_app,
         ) as mock_create:
             main(
@@ -333,7 +333,7 @@ class TestLifespan:
         from unittest.mock import AsyncMock
 
         with patch(
-            "provide.terminal.ai.server.HijackClient",
+            "provide.uterm.ai.server.HijackClient",
         ) as mock_client_cls:
             mock_instance = mock_client_cls.return_value
             mock_instance.__aexit__ = AsyncMock()

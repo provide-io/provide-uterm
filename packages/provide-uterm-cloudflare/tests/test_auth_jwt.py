@@ -4,8 +4,8 @@ import time
 
 import jwt
 import pytest
-from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
-from provide.terminal.cloudflare.config import JwtConfig
+from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
+from provide.uterm.cloudflare.config import JwtConfig
 
 
 async def test_decode_jwt_hs256_ok() -> None:
@@ -111,7 +111,7 @@ async def test_cf_access_default_role_not_applied_when_roles_present() -> None:
 
 def test_config_reads_jwt_default_role_from_env() -> None:
     """JWT_DEFAULT_ROLE env var is wired to JwtConfig.jwt_default_role."""
-    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.uterm.cloudflare.config import CloudflareConfig
 
     class _FakeEnv:
         AUTH_MODE = "jwt"
@@ -185,7 +185,7 @@ def test_config_reads_jwt_role_map_from_env() -> None:
     """JWT_ROLE_MAP env var is parsed as JSON and wired to JwtConfig.jwt_role_map."""
     import json
 
-    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.uterm.cloudflare.config import CloudflareConfig
 
     class _FakeEnv:
         AUTH_MODE = "jwt"
@@ -199,7 +199,7 @@ def test_config_reads_jwt_role_map_from_env() -> None:
 
 def test_config_jwt_role_map_invalid_json_ignored() -> None:
     """Invalid JWT_ROLE_MAP JSON is silently ignored (empty map)."""
-    from provide.terminal.cloudflare.config import CloudflareConfig
+    from provide.uterm.cloudflare.config import CloudflareConfig
 
     class _FakeEnv:
         AUTH_MODE = "jwt"

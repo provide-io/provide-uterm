@@ -30,8 +30,8 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.pty._build import get_capture_lib_path
-from provide.terminal.pty.capture import CHANNEL_STDIN, CHANNEL_STDOUT
+from provide.uterm.pty._build import get_capture_lib_path
+from provide.uterm.pty.capture import CHANNEL_STDIN, CHANNEL_STDOUT
 
 
 def _require_linux_and_lib() -> Path:

@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 # ---------------------------------------------------------------------------
 # Span capture helpers
@@ -58,9 +58,9 @@ class _CapturingTracer:
 @contextmanager
 def _capturing_tracer():  # type: ignore[no-untyped-def]
     """Context manager that installs a _CapturingTracer for the duration."""
-    import provide.terminal.bridge.routes.websockets as _ws_mod
-    import provide.terminal.server.routes.sessions as _sessions_mod
-    import provide.terminal.server.routes.tunnels as _tunnels_mod
+    import provide.uterm.bridge.routes.websockets as _ws_mod
+    import provide.uterm.server.routes.sessions as _sessions_mod
+    import provide.uterm.server.routes.tunnels as _tunnels_mod
 
     ct = _CapturingTracer()
     with (
@@ -225,31 +225,31 @@ class TestSpanHelper:
     """Unit tests for the tracing.span() context manager."""
 
     def test_span_creates_context(self) -> None:
-        from provide.terminal.server.tracing import span
+        from provide.uterm.server.tracing import span
 
         with span("test.operation", **{"uterm.session_id": "s1"}) as s:
             assert s is not None
 
     def test_span_sets_attributes(self) -> None:
-        from provide.terminal.server.tracing import span
+        from provide.uterm.server.tracing import span
 
         with span("test.attrs", **{"uterm.session_id": "s1", "uterm.op": "create"}) as s:
             assert s is not None
 
     def test_span_none_attributes_skipped(self) -> None:
-        from provide.terminal.server.tracing import span
+        from provide.uterm.server.tracing import span
 
         with span("test.none", **{"uterm.session_id": None, "uterm.real": "value"}) as s:
             assert s is not None
 
     def test_tracer_exists(self) -> None:
-        from provide.terminal.server.tracing import _tracer
+        from provide.uterm.server.tracing import _tracer
 
         assert _tracer is not None
 
     @pytest.mark.asyncio()
     async def test_async_span_context(self) -> None:
-        from provide.terminal.server.tracing import span
+        from provide.uterm.server.tracing import span
 
         async with span("test.async", **{"uterm.session_id": "a1"}) as s:
             assert s is not None

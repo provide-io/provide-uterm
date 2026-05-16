@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.recording import LocalFileRecordingStore
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.registry import SessionRegistry, SessionValidationError
+from provide.uterm.recording import LocalFileRecordingStore
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.registry import SessionRegistry, SessionValidationError
 
 
 def _make_hub() -> MagicMock:
@@ -209,7 +209,7 @@ class TestCreateSessionValidation:
 
         mock_runtime = _FakeRuntime()
 
-        with patch("provide.terminal.server.registry.HostedSessionRuntime", return_value=mock_runtime):
+        with patch("provide.uterm.server.registry.HostedSessionRuntime", return_value=mock_runtime):
             await reg.create_session({"session_id": "auto-s", "auto_start": True})
 
         mock_runtime.start.assert_called_once()

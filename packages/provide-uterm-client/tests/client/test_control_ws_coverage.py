@@ -10,9 +10,9 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from provide.terminal.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control, encode_data
 
-from provide.terminal.client.control_ws import (
+from provide.uterm.client.control_ws import (
     AsyncInlineWebSocketClient,
     LogicalFrameDecoder,
     SyncInlineWebSocketClient,
@@ -260,7 +260,7 @@ class TestSyncTestWsConnectionEnterExit:
 
     def test_enter_wraps_ws_in_client(self) -> None:
         """Covers lines 150-153: __enter__ calls websocket_connect and wraps ws."""
-        from provide.terminal.client.control_ws import SyncInlineWebSocketClient
+        from provide.uterm.client.control_ws import SyncInlineWebSocketClient
 
         raw_ws = MagicMock()
         ctx_manager = MagicMock()
@@ -339,7 +339,7 @@ class TestConnectAsyncWs:
         """Covers lines 179-183: connect_async_ws wraps websockets.connect."""
         from unittest.mock import patch
 
-        from provide.terminal.client.control_ws import (
+        from provide.uterm.client.control_ws import (
             AsyncInlineWebSocketClient,
             connect_async_ws,
         )
@@ -360,7 +360,7 @@ class TestConnectAsyncWs:
         """Covers role inference in connect_async_ws."""
         from unittest.mock import patch
 
-        from provide.terminal.client.control_ws import (
+        from provide.uterm.client.control_ws import (
             AsyncInlineWebSocketClient,
             connect_async_ws,
         )

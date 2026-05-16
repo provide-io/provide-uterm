@@ -26,7 +26,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI, Request
 
-from provide.terminal.client import connect_async_ws
+from provide.uterm.client import connect_async_ws
 from tests.e2e._live_server import live_server_with_bus
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}

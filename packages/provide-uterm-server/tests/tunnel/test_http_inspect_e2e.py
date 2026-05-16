@@ -11,9 +11,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.models import ServerConfig
-from provide.terminal.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_control, encode_frame
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.models import ServerConfig
+from provide.uterm.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_control, encode_frame
 
 
 @pytest.fixture

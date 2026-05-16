@@ -11,7 +11,7 @@ import re
 
 import pytest
 
-from provide.terminal.detection.rules import KVExtractRule, PromptRule, RegexRule, RuleSet
+from provide.uterm.detection.rules import KVExtractRule, PromptRule, RegexRule, RuleSet
 
 
 class TestRuleSetCreation:

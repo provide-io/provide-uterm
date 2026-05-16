@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for the color-upgrade and normalize_colors additions to provide.terminal.ansi (part 2)."""
+"""Tests for the color-upgrade and normalize_colors additions to provide.uterm.ansi (part 2)."""
 
 from __future__ import annotations
 
-from provide.terminal.ansi import (
+from provide.uterm.ansi import (
     upgrade_to_256,
     upgrade_to_truecolor,
 )
@@ -24,25 +24,25 @@ class TestMapIndexDirectBoundaries:
 
     def test_map_index_38_is_none(self) -> None:
         """_map_index(38) must return None — kills mutmut_4 (37 → 38 upper bound)."""
-        from provide.terminal.ansi import _map_index
+        from provide.uterm.ansi import _map_index
 
         assert _map_index(38) is None, "_map_index(38) must be None (38 is not a valid fg color code)"
 
     def test_map_index_48_is_none(self) -> None:
         """_map_index(48) must return None — kills mutmut_18 (47 → 48 upper bound)."""
-        from provide.terminal.ansi import _map_index
+        from provide.uterm.ansi import _map_index
 
         assert _map_index(48) is None, "_map_index(48) must be None (48 is not a valid bg color code)"
 
     def test_map_index_37_is_7(self) -> None:
         """_map_index(37) must return 7 — confirms the fg upper bound is exactly 37."""
-        from provide.terminal.ansi import _map_index
+        from provide.uterm.ansi import _map_index
 
         assert _map_index(37) == 7
 
     def test_map_index_47_is_7(self) -> None:
         """_map_index(47) must return 7 — confirms the bg upper bound is exactly 47."""
-        from provide.terminal.ansi import _map_index
+        from provide.uterm.ansi import _map_index
 
         assert _map_index(47) == 7
 

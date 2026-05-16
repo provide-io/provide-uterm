@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.cli import _build_parser
-from provide.terminal.cli.tunnel import (
+from provide.uterm.cli import _build_parser
+from provide.uterm.cli.tunnel import (
     _cmd_tunnel,
     _create_tunnel,
     _handle_tcp_client,
@@ -20,8 +20,8 @@ from provide.terminal.cli.tunnel import (
     _relay_tcp_to_ws,
     _relay_ws_to_tcp,
 )
-from provide.terminal.tunnel.protocol import CHANNEL_TCP, FLAG_EOF, TunnelFrame, decode_frame
-from provide.terminal.tunnel.types import TunnelCreateResponse, TunnelTokenState
+from provide.uterm.tunnel.protocol import CHANNEL_TCP, FLAG_EOF, TunnelFrame, decode_frame
+from provide.uterm.tunnel.types import TunnelCreateResponse, TunnelTokenState
 
 
 class TestTunnelArgParsing:
@@ -75,7 +75,7 @@ class TestCreateTunnel:
                 "share_url": "http://x/s/tunnel-abc?token=st",
             }
         ).encode()
-        with patch("provide.terminal.cli.tunnel.urllib.request.urlopen") as mock_open:
+        with patch("provide.uterm.cli.tunnel.urllib.request.urlopen") as mock_open:
             mock_open.return_value.__enter__ = lambda s: MagicMock(read=lambda: resp)
             mock_open.return_value.__exit__ = MagicMock(return_value=False)
             result = _create_tunnel("https://example.com", "test", None, 8080)
@@ -84,7 +84,7 @@ class TestCreateTunnel:
     def test_with_token(self) -> None:
         """Line 71: Authorization header set when token provided."""
         resp = json.dumps({"tunnel_id": "t", "ws_endpoint": "ws://x", "worker_token": "w", "share_url": ""}).encode()
-        with patch("provide.terminal.cli.tunnel.urllib.request.urlopen") as mock_open:
+        with patch("provide.uterm.cli.tunnel.urllib.request.urlopen") as mock_open:
             mock_open.return_value.__enter__ = lambda s: MagicMock(read=lambda: resp)
             mock_open.return_value.__exit__ = MagicMock(return_value=False)
             _create_tunnel("https://example.com", "test", "my-bearer-token", 8080)
@@ -95,7 +95,7 @@ class TestCreateTunnel:
         import urllib.error
 
         with (
-            patch("provide.terminal.cli.tunnel.urllib.request.urlopen") as mock_open,
+            patch("provide.uterm.cli.tunnel.urllib.request.urlopen") as mock_open,
             pytest.raises(SystemExit),
         ):
             mock_open.side_effect = urllib.error.HTTPError(
@@ -111,7 +111,7 @@ class TestCreateTunnel:
         import urllib.error
 
         with (
-            patch("provide.terminal.cli.tunnel.urllib.request.urlopen") as mock_open,
+            patch("provide.uterm.cli.tunnel.urllib.request.urlopen") as mock_open,
             pytest.raises(SystemExit),
         ):
             mock_open.side_effect = urllib.error.URLError("no host")
@@ -219,7 +219,7 @@ class TestCmdTunnel:
         )
         with (
             patch(
-                "provide.terminal.cli.tunnel._create_tunnel",
+                "provide.uterm.cli.tunnel._create_tunnel",
                 return_value={"ws_endpoint": "", "worker_token": "", "share_url": ""},
             ),
             pytest.raises(SystemExit),
@@ -236,14 +236,14 @@ class TestCmdTunnel:
         )
         with (
             patch(
-                "provide.terminal.cli.tunnel._create_tunnel",
+                "provide.uterm.cli.tunnel._create_tunnel",
                 return_value={
                     "ws_endpoint": "/tunnel/tunnel-abc",
                     "worker_token": "wt",
                     "share_url": "https://example.com/s/tunnel-abc",
                 },
             ),
-            patch("provide.terminal.cli.tunnel.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.tunnel.asyncio.run") as mock_run,
         ):
             _cmd_tunnel(args)
             mock_run.assert_called_once()
@@ -257,8 +257,8 @@ class TestCmdTunnel:
             token_file="/nonexistent",
         )
         with (
-            patch("provide.terminal.cli.tunnel._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.tunnel.asyncio.run"),
+            patch("provide.uterm.cli.tunnel._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.tunnel.asyncio.run"),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             _cmd_tunnel(args)
@@ -274,14 +274,14 @@ class TestCmdTunnel:
         )
         with (
             patch(
-                "provide.terminal.cli.tunnel._create_tunnel",
+                "provide.uterm.cli.tunnel._create_tunnel",
                 return_value={
                     "ws_endpoint": "ws://x/tunnel/t",
                     "worker_token": "",
                     "share_url": "",
                 },
             ),
-            patch("provide.terminal.cli.tunnel.asyncio.run", side_effect=KeyboardInterrupt),
+            patch("provide.uterm.cli.tunnel.asyncio.run", side_effect=KeyboardInterrupt),
         ):
             _cmd_tunnel(args)  # should not raise
 

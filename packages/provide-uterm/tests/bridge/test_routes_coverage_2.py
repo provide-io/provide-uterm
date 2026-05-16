@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.client import connect_test_ws
 
 from tests.helpers import decode_chunk
 
@@ -318,7 +318,7 @@ class TestWsBrowserResumeWithoutOwner:
 class TestBrowserHandlerAnalyzeReqNotOwner:
     async def test_analyze_req_not_owner_does_nothing(self) -> None:
         """Line 57->178: touch_if_owner returns None → request_analysis not called."""
-        from provide.terminal.bridge.routes.browser_handlers import handle_browser_message
+        from provide.uterm.bridge.routes.browser_handlers import handle_browser_message
 
         hub = TermHub()
         ws = MagicMock()
@@ -338,7 +338,7 @@ class TestBrowserHandlerAnalyzeReqNotOwner:
 class TestBrowserHandlerHijackStepNotOwner:
     async def test_hijack_step_not_owner_does_nothing(self) -> None:
         """Line 122->178: touch_if_owner returns None → send_worker not called."""
-        from provide.terminal.bridge.routes.browser_handlers import handle_browser_message
+        from provide.uterm.bridge.routes.browser_handlers import handle_browser_message
 
         hub = TermHub()
         ws = MagicMock()
@@ -357,7 +357,7 @@ class TestBrowserHandlerHijackStepNotOwner:
 class TestBrowserHandlerHijackRelease:
     async def test_hijack_release_do_resume_true_sends_resume(self) -> None:
         """Lines 147->152, 153->155: _do_resume=True → send resume + notify."""
-        from provide.terminal.bridge.routes.browser_handlers import handle_browser_message
+        from provide.uterm.bridge.routes.browser_handlers import handle_browser_message
 
         hub = TermHub()
         worker_ws = MagicMock()
@@ -400,7 +400,7 @@ class TestBrowserHandlerHijackRelease:
 
     async def test_hijack_release_do_resume_false_after_recheck(self) -> None:
         """Line 146: _do_resume=False after re-check finds hijack still active."""
-        from provide.terminal.bridge.routes.browser_handlers import handle_browser_message
+        from provide.uterm.bridge.routes.browser_handlers import handle_browser_message
 
         hub = TermHub()
         worker_ws = MagicMock()

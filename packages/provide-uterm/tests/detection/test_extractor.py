@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.detection.extractor import KVExtractor, extract_kv
+from provide.uterm.detection.extractor import KVExtractor, extract_kv
 
 
 class TestKVExtractorBasics:

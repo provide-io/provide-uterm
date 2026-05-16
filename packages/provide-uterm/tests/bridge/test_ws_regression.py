@@ -17,9 +17,9 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import HijackSession, WorkerTermState
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.client import connect_test_ws
 
 # ---------------------------------------------------------------------------
 # Shared helpers (mirrors test_hijack_ws.py)
@@ -353,8 +353,8 @@ def test_stale_worker_output_is_ignored_after_reconnect() -> None:
 def test_idle_loops_still_cleanup_expired_hijack() -> None:
     """Regression: idle sockets must still wake up and expire dashboard hijacks."""
     with (
-        patch("provide.terminal.bridge.routes.websockets._WORKER_HIJACK_CLEANUP_INTERVAL_S", 0.05),
-        patch("provide.terminal.bridge.routes.websockets._BROWSER_HIJACK_CLEANUP_INTERVAL_S", 0.05),
+        patch("provide.uterm.bridge.routes.websockets._WORKER_HIJACK_CLEANUP_INTERVAL_S", 0.05),
+        patch("provide.uterm.bridge.routes.websockets._BROWSER_HIJACK_CLEANUP_INTERVAL_S", 0.05),
     ):
         hub = TermHub(dashboard_hijack_lease_s=1, resolve_browser_role=lambda _ws, _worker_id: "admin")
         app = FastAPI()

@@ -1,7 +1,7 @@
 import pytest
 
-from provide.terminal.server.config import config_from_mapping
-from provide.terminal.server.config_schema import UtermServerConfig
+from provide.uterm.server.config import config_from_mapping
+from provide.uterm.server.config_schema import UtermServerConfig
 
 
 def test_config_strict_validation():

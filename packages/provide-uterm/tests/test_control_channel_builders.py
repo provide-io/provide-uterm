@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.control_channel import ControlChannelDecoder, encode_control
-from provide.terminal.control_channel_builders import (
+from provide.uterm.control_channel import ControlChannelDecoder, encode_control
+from provide.uterm.control_channel_builders import (
     make_identity,
     make_link_patterns,
     make_presence_update,

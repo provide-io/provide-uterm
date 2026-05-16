@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 
 
 class _FakeHub(DeckMuxMixin):
@@ -704,7 +704,7 @@ async def test_principal_no_display_name_attr_falls_back_to_subject_id() -> None
 @pytest.mark.asyncio
 async def test_colors_avoid_collision_with_taken_colors() -> None:
     """generate_color is called with store.taken_colors() — prevents same-index collision."""
-    from provide.terminal.deckmux._names import _COLORS, _hash_int
+    from provide.uterm.deckmux._names import _COLORS, _hash_int
 
     # Find two subject_ids that hash to the same default color index
     ids_by_idx: dict[int, list[str]] = {}

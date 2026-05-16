@@ -14,7 +14,7 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -47,7 +47,7 @@ def app_client() -> TestClient:
 
 def _jwt_app():  # type: ignore[return]
     """Single FastAPI app with JWT auth shared across admin and viewer clients."""
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     cfg = default_server_config()
     cfg.auth = AuthConfig(
@@ -277,9 +277,9 @@ class TestQuickConnectConflict:
 class TestMaxSessions:
     def test_max_sessions_blocks_create(self) -> None:
         """SessionRegistry enforces max_sessions limit."""
-        from provide.terminal.bridge.hub.core import TermHub
-        from provide.terminal.server.models import RecordingConfig
-        from provide.terminal.server.registry import SessionRegistry
+        from provide.uterm.bridge.hub.core import TermHub
+        from provide.uterm.server.models import RecordingConfig
+        from provide.uterm.server.registry import SessionRegistry
 
         hub = TermHub()
         reg = SessionRegistry(
@@ -296,9 +296,9 @@ class TestMaxSessions:
 
     def test_max_sessions_none_is_unbounded(self) -> None:
         """max_sessions=None (default) does not limit session creation."""
-        from provide.terminal.bridge.hub.core import TermHub
-        from provide.terminal.server.models import RecordingConfig
-        from provide.terminal.server.registry import SessionRegistry
+        from provide.uterm.bridge.hub.core import TermHub
+        from provide.uterm.server.models import RecordingConfig
+        from provide.uterm.server.registry import SessionRegistry
 
         hub = TermHub()
         reg = SessionRegistry([], hub=hub, public_base_url="http://localhost", recording=RecordingConfig())
@@ -318,7 +318,7 @@ class TestMaxSessions:
 
 class TestValidateAuthConfig:
     def test_jwt_mode_without_worker_token_raises(self) -> None:
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         cfg = default_server_config()
         cfg.auth = AuthConfig(
@@ -331,7 +331,7 @@ class TestValidateAuthConfig:
             create_server_app(cfg)
 
     def test_header_mode_without_acknowledged_raises(self) -> None:
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         cfg = default_server_config()
         cfg.auth = AuthConfig(mode="header")
@@ -339,7 +339,7 @@ class TestValidateAuthConfig:
             create_server_app(cfg)
 
     def test_header_mode_without_worker_token_raises(self) -> None:
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         cfg = default_server_config()
         cfg.auth = AuthConfig(mode="header", header_mode_acknowledged=True)
@@ -347,7 +347,7 @@ class TestValidateAuthConfig:
             create_server_app(cfg)
 
     def test_jwt_empty_algorithms_raises(self) -> None:
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         now = int(time.time())
         worker_token = jwt.encode(
@@ -366,7 +366,7 @@ class TestValidateAuthConfig:
             create_server_app(cfg)
 
     def test_jwt_none_algorithm_raises(self) -> None:
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         now = int(time.time())
         worker_token = jwt.encode(
@@ -385,7 +385,7 @@ class TestValidateAuthConfig:
             create_server_app(cfg)
 
     def test_jwt_no_key_or_jwks_raises(self) -> None:
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         now = int(time.time())
         worker_token = jwt.encode(

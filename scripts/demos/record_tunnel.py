@@ -54,14 +54,14 @@ def _sync_local_packages_into_python_modules() -> None:
     pm = provide_root / "terminal"
     pm.mkdir(parents=True, exist_ok=True)
 
-    # provide.terminal.cloudflare — the CF package itself
+    # provide.uterm.cloudflare — the CF package itself
     cf_src = _REPO_ROOT / "packages" / "provide-uterm-cloudflare" / "src" / "provide" / "terminal" / "cloudflare"
     cf_dst = pm / "cloudflare"
     if cf_dst.exists():
         shutil.rmtree(cf_dst)
     shutil.copytree(cf_src, cf_dst)
 
-    # provide.terminal.bridge — server-side hijack/hub coordinator
+    # provide.uterm.bridge — server-side hijack/hub coordinator
     bridge_src = _REPO_ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "terminal" / "bridge"
     bridge_dst = pm / "bridge"
     if bridge_dst.exists():

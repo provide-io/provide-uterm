@@ -12,8 +12,8 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import AuthConfig, SessionDefinition
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import AuthConfig, SessionDefinition
 
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -231,7 +231,7 @@ def test_tunnel_share_token_sets_httponly_cookie() -> None:
 
 def test_cdn_sri_emitted_when_configured() -> None:
     """When xterm_cdn_integrity is set, the <script> tag must include integrity=."""
-    from provide.terminal.server import create_server_app, default_server_config
+    from provide.uterm.server import create_server_app, default_server_config
 
     config = default_server_config()
     config.auth.mode = "dev"
@@ -248,7 +248,7 @@ def test_cdn_sri_emitted_when_configured() -> None:
 
 def test_cdn_sri_omitted_by_default() -> None:
     """Without configured integrity, the CDN <script> tags have no integrity= attr."""
-    from provide.terminal.server import create_server_app, default_server_config
+    from provide.uterm.server import create_server_app, default_server_config
 
     config = default_server_config()
     config.auth.mode = "dev"
@@ -401,7 +401,7 @@ def test_set_page_cookies_skips_token_for_anonymous() -> None:
     from fastapi.responses import HTMLResponse
     from starlette.requests import Request
 
-    from provide.terminal.server.routes.pages import _set_page_cookies
+    from provide.uterm.server.routes.pages import _set_page_cookies
 
     cfg = default_server_config()
     cfg.auth = AuthConfig(

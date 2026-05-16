@@ -50,7 +50,7 @@ async def run_terminal_demo() -> None:
 
     # Instantiate MCP app and list tools
     info("Initializing MCP server app...")
-    from provide.terminal.ai.server import create_mcp_app
+    from provide.uterm.ai.server import create_mcp_app
 
     mcp_app = create_mcp_app(base_url)
     tools = await mcp_app.list_tools()

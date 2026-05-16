@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
-from provide.terminal.bridge.base import HijackableMixin
+from provide.uterm.bridge.base import HijackableMixin
 
 
 class SimpleBot(HijackableMixin):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from provide.terminal.filters import (
+from provide.uterm.filters import (
     DO,
     DONT,
     IAC,

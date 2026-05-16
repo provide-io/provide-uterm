@@ -195,7 +195,7 @@ async def favicon() -> dict[str, bool]:
     return {"ok": True}
 
 
-frontend_path = importlib.resources.files("provide.terminal.server") / "frontend"
+frontend_path = importlib.resources.files("provide.uterm.server") / "frontend"
 app.mount("/hijack", StaticFiles(directory=str(frontend_path), html=True), name="hijack-ui")
 
 

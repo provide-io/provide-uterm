@@ -39,7 +39,7 @@ Requires Python 3.11+.
 ## Usage
 
 ```python
-from provide.terminal.client import HijackClient
+from provide.uterm.client import HijackClient
 
 async with HijackClient("http://localhost:8780") as c:
     ok, data = await c.acquire("worker-1", owner="agent")
@@ -51,9 +51,9 @@ async with HijackClient("http://localhost:8780") as c:
 
 ## Key modules
 
-- `provide.terminal.client.hijack` -- `HijackClient` async REST client
-- `provide.terminal.client.control_ws` -- `AsyncInlineWebSocketClient`, `SyncInlineWebSocketClient`, `LogicalFrameDecoder`
-- `provide.terminal.client.mcp_tools` -- shared helpers used by the AI package
+- `provide.uterm.client.hijack` -- `HijackClient` async REST client
+- `provide.uterm.client.control_ws` -- `AsyncInlineWebSocketClient`, `SyncInlineWebSocketClient`, `LogicalFrameDecoder`
+- `provide.uterm.client.mcp_tools` -- shared helpers used by the AI package
 
 ## Links
 

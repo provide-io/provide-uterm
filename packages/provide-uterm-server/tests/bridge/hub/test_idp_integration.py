@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import WebSocket
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.identity import IdentityProvider, Principal
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.identity import IdentityProvider, Principal
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
+from provide.uterm.server.connectors.websocket import WebSocketSessionConnector
 
 
 def _make(config: dict[str, Any] | None = None) -> WebSocketSessionConnector:

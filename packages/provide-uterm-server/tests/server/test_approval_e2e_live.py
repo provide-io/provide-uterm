@@ -6,13 +6,13 @@
 import pytest
 from playwright.sync_api import Page
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 
 @pytest.mark.playwright
 def test_approval_ux_e2e(page: Page):
     # This test assumes the mock External Management Tier is NOT running (we'll mock the policy gate in Python)
-    from provide.terminal.bridge.hub import PolicyDecision, TermHub
+    from provide.uterm.bridge.hub import PolicyDecision, TermHub
 
     class LiveHoldPolicy:
         async def intercept_input(self, data, context):

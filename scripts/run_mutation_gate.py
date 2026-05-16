@@ -29,8 +29,8 @@ CONFIG_FILES: Final[tuple[str, ...]] = (
 )
 MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = ("--randomly-dont-reorganize",)
 DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
-    "packages/provide-uterm/src/provide/terminal/",
-    "packages/provide-uterm-platform/src/provide/terminal/pty/",
+    "packages/provide-uterm/src/provide/uterm/",
+    "packages/provide-uterm-platform/src/provide/uterm/pty/",
 )
 
 
@@ -113,9 +113,9 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
 
     mutmut reads paths_to_mutate as given in pyproject.toml.  In this repo,
     `src/` at the root is a symlink tree that mirrors every package's source,
-    so mutmut uses paths like `src/provide/terminal/pty/connector.py`.  Git
+    so mutmut uses paths like `src/provide/uterm/pty/connector.py`.  Git
     diff returns the real file path, e.g.
-    `packages/provide-uterm-platform/src/provide/terminal/pty/connector.py`.
+    `packages/provide-uterm-platform/src/provide/uterm/pty/connector.py`.
 
     Strategy: walk paths_to_mutate from the root pyproject.toml and return the
     first entry whose resolved inode matches the changed file's inode, so we

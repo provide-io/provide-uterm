@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-uterm-mcp = "provide.terminal.ai.cli:main"
+uterm-mcp = "provide.uterm.ai.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -42,7 +42,7 @@ version = {file = "VERSION"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"provide.terminal" = ["py.typed"]
+"provide.uterm" = ["py.typed"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -53,9 +53,9 @@ addopts = [
     "--strict-markers",
     "--tb=short",
     "-ra",
-    "--cov=provide.terminal.client",
-    "--cov=provide.terminal.transports",
-    "--cov=provide.terminal.ai",
+    "--cov=provide.uterm.client",
+    "--cov=provide.uterm.transports",
+    "--cov=provide.uterm.ai",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",

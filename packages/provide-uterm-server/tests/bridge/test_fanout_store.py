@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from provide.terminal.bridge.fanout._models import FanOutGroup
-from provide.terminal.bridge.fanout._store import InMemoryFanOutStore
+from provide.uterm.bridge.fanout._models import FanOutGroup
+from provide.uterm.bridge.fanout._store import InMemoryFanOutStore
 
 
 def _make_group(

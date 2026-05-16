@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     DLE,
     STX,
     ControlChannelDecoder,
@@ -161,7 +161,7 @@ class TestDecoderEdgeCases:
 
     def test_buffer_overflow_raises_and_clears(self) -> None:
         """Buffer overflow protection (lines 83-88) clears state and raises."""
-        from provide.terminal.control_channel import ControlChannelProtocolError
+        from provide.uterm.control_channel import ControlChannelProtocolError
 
         decoder = ControlChannelDecoder(max_buffer_bytes=5)
         # First feed is within limit (3 bytes ≤ 5)

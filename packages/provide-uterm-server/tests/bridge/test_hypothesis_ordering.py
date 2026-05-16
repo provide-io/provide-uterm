@@ -18,8 +18,8 @@ import hypothesis.strategies as st_h
 import pytest
 from hypothesis import HealthCheck, given, settings
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
 
 def _mock_ws() -> AsyncMock:

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Integration tests for provide.terminal.manager routes."""
+"""Integration tests for provide.uterm.manager routes."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.manager.app import create_manager_app
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.models import AgentStatusBase
+from provide.uterm.manager.app import create_manager_app
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.models import AgentStatusBase
 
 
 @pytest.fixture

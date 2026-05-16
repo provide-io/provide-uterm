@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.manager.app import create_manager_app
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.routes.spawn import _validate_config_path
+from provide.uterm.manager.app import create_manager_app
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.routes.spawn import _validate_config_path
 
 
 @pytest.fixture

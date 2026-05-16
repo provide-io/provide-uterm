@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.bridge.worker_link import TermBridge
+from provide.uterm.bridge.worker_link import TermBridge
 
 # ---------------------------------------------------------------------------
 # bridge.py line 336->exit — _send_keys when session is None

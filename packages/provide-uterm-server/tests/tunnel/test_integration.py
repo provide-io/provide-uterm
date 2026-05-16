@@ -14,10 +14,10 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.control_channel import ControlChannelDecoder
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import ServerConfig, TunnelConfig
-from provide.terminal.tunnel.protocol import CHANNEL_DATA, encode_frame
+from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import ServerConfig, TunnelConfig
+from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_frame
 
 # ---------------------------------------------------------------------------
 # Helpers

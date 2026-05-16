@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.hub.ext import PolicyDecision
-from provide.terminal.bridge.models import WorkerTermState
-from provide.terminal.bridge.routes.browser_handlers import handle_browser_message
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.hub.ext import PolicyDecision
+from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.bridge.routes.browser_handlers import handle_browser_message
 
 
 def _make_hub() -> TermHub:

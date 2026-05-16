@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from httpx import ASGITransport
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
-from provide.terminal.client.mcp_tools import hijack_tools
+from provide.uterm.client.mcp_tools import hijack_tools
 
 WID = "mcp-worker"
 
@@ -162,13 +162,13 @@ class TestMCPLifecycle:
 
 class TestOkHelper:
     def test_ok_with_non_dict_data(self) -> None:
-        from provide.terminal.client.mcp_tools import _ok
+        from provide.uterm.client.mcp_tools import _ok
 
         result = _ok(True, [1, 2, 3])
         assert result == {"success": True, "data": [1, 2, 3]}
 
     def test_ok_with_dict_data(self) -> None:
-        from provide.terminal.client.mcp_tools import _ok
+        from provide.uterm.client.mcp_tools import _ok
 
         result = _ok(False, {"error": "fail"})
         assert result == {"success": False, "error": "fail"}

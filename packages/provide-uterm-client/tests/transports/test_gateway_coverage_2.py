@@ -17,8 +17,8 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from provide.terminal.control_channel import encode_data
-from provide.terminal.gateway._gateway import (
+from provide.uterm.control_channel import encode_data
+from provide.uterm.gateway._gateway import (
     _handle_ws_control,
     _handle_ws_control_frame,
     _ws_to_ssh,
@@ -85,7 +85,7 @@ class TestHandleWsControlProtocolErrorFallback:
         # Instead: patch decoder.feed to raise directly, then use a valid JSON message body.
         from unittest.mock import patch
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChannelProtocolError,
         )
@@ -110,7 +110,7 @@ class TestHandleWsControlProtocolErrorFallback:
 
         from unittest.mock import patch
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChannelProtocolError,
         )
@@ -134,7 +134,7 @@ class TestHandleWsControlProtocolErrorFallback:
 
         from unittest.mock import patch
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChannelProtocolError,
         )
@@ -159,7 +159,7 @@ class TestHandleWsControlProtocolErrorFallback:
 
         from unittest.mock import patch
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChannelProtocolError,
         )
@@ -233,7 +233,7 @@ class TestWsToTcpProtocolError:
         # We patch the decoder's feed method to raise on first call only.
         from unittest.mock import patch
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChannelProtocolError,
         )
@@ -299,7 +299,7 @@ class TestWsToSshProtocolError:
 
         from unittest.mock import patch
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChannelProtocolError,
         )

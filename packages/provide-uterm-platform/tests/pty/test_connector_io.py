@@ -278,7 +278,7 @@ async def test_handle_input_writes_to_pty() -> None:
             written.append(data)
         return original_write(fd, data)
 
-    with patch("provide.terminal.pty.connector.os.write", side_effect=_spy_write):
+    with patch("provide.uterm.pty.connector.os.write", side_effect=_spy_write):
         await conn.handle_input("ping\n")
     await conn.stop()
     assert written == [b"ping\n"]
@@ -293,7 +293,7 @@ async def test_handle_input_no_write_when_not_connected() -> None:
         written.append(data)
         return len(data)
 
-    with patch("provide.terminal.pty.connector.os.write", side_effect=_spy_write):
+    with patch("provide.uterm.pty.connector.os.write", side_effect=_spy_write):
         await conn.handle_input("ping\n")
     assert written == []
 
@@ -316,7 +316,7 @@ async def test_handle_input_no_write_when_disconnected_but_fd_set() -> None:
             written.append(data)
         return original_write(fd, data)
 
-    with patch("provide.terminal.pty.connector.os.write", side_effect=_spy_write):
+    with patch("provide.uterm.pty.connector.os.write", side_effect=_spy_write):
         await conn.handle_input("should not be written\n")
     conn._connected = True
     await conn.stop()

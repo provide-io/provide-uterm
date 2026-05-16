@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from provide.terminal.cloudflare.api.http_routes import route_http
-from provide.terminal.cloudflare.api.http_routes._shared import _extract_prompt_id
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.api.http_routes import route_http
+from provide.uterm.cloudflare.api.http_routes._shared import _extract_prompt_id
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 
 # ---------------------------------------------------------------------------
 # Shared helpers (same pattern as test_api_contracts.py)

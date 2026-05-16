@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.cli (uterm entry point)."""
+"""Tests for provide.uterm.cli (uterm entry point)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from provide.terminal.cli import _build_parser, main
+from provide.uterm.cli import _build_parser, main
 
 pytestmark = pytest.mark.timeout(5)
 
@@ -160,7 +160,7 @@ class TestCmdProxy:
 
         with (
             patch.dict("sys.modules", {"uvicorn": mock_uv_mod}),
-            patch("provide.terminal.cli._FRONTEND_DIR", MagicMock(is_dir=MagicMock(return_value=False))),
+            patch("provide.uterm.cli._FRONTEND_DIR", MagicMock(is_dir=MagicMock(return_value=False))),
         ):
             main(["proxy", "bbs.example.com", "23"])
 
@@ -201,7 +201,7 @@ class TestCmdProxy:
         mock_uvicorn = MagicMock()
         with (
             patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
-            patch("provide.terminal.fastapi_utils.WsTerminalProxy", _CapturingProxy),
+            patch("provide.uterm.fastapi_utils.WsTerminalProxy", _CapturingProxy),
         ):
             main(["proxy", "bbs.example.com", "23"])
 
@@ -214,7 +214,7 @@ class TestCmdProxy:
         mock_ssh_module = MagicMock()
         mock_ssh_module.SSHTransport = MagicMock()
         with (
-            patch.dict("sys.modules", {"uvicorn": mock_uvicorn, "provide.terminal.transports.ssh": mock_ssh_module}),
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn, "provide.uterm.transports.ssh": mock_ssh_module}),
         ):
             # Just verify the SSH branch is exercised without raising unexpectedly
             try:
@@ -303,7 +303,7 @@ class TestListenParser:
 
         captured = io.StringIO()
         with pytest.raises(SystemExit) as exc_info, contextlib.redirect_stderr(captured):
-            from provide.terminal.cli import _cmd_listen
+            from provide.uterm.cli import _cmd_listen
 
             _cmd_listen(args)
         assert exc_info.value.code == 1
@@ -327,8 +327,8 @@ class TestCmdListen:
         ws_port = ws_srv.sockets[0].getsockname()[1]
         ws_url = f"ws://127.0.0.1:{ws_port}"
         try:
-            from provide.terminal.cli import _run_listen
-            from provide.terminal.gateway import SshWsGateway, TelnetWsGateway
+            from provide.uterm.cli import _run_listen
+            from provide.uterm.gateway import SshWsGateway, TelnetWsGateway
 
             task = asyncio.create_task(
                 _run_listen(ws_url, "127.0.0.1", 0, 0, None, "passthrough", TelnetWsGateway, SshWsGateway)
@@ -354,7 +354,7 @@ class TestCmdListen:
         ws_srv = await websockets.serve(_handler, "127.0.0.1", 0)
         ws_port = ws_srv.sockets[0].getsockname()[1]
         try:
-            from provide.terminal.gateway import TelnetWsGateway
+            from provide.uterm.gateway import TelnetWsGateway
 
             # iac_negotiate=False: this test asserts on byte-level banner
             # echo; the default TTYPE/NEW-ENVIRON handshake would otherwise
@@ -381,8 +381,8 @@ class TestCmdProxySshImportError:
     def test_ssh_import_error_exits(self) -> None:
         """SSH import failure in _cmd_proxy prints error to stderr and exits with code 1."""
 
-        original = sys.modules.get("provide.terminal.transports.ssh")
-        sys.modules["provide.terminal.transports.ssh"] = None  # type: ignore[assignment]
+        original = sys.modules.get("provide.uterm.transports.ssh")
+        sys.modules["provide.uterm.transports.ssh"] = None  # type: ignore[assignment]
         try:
             captured = io.StringIO()
             with pytest.raises(SystemExit) as exc_info, contextlib.redirect_stderr(captured):
@@ -391,15 +391,15 @@ class TestCmdProxySshImportError:
             assert "asyncssh" in captured.getvalue().lower() or "ssh" in captured.getvalue().lower()
         finally:
             if original is None:
-                sys.modules.pop("provide.terminal.transports.ssh", None)
+                sys.modules.pop("provide.uterm.transports.ssh", None)
             else:
-                sys.modules["provide.terminal.transports.ssh"] = original
+                sys.modules["provide.uterm.transports.ssh"] = original
 
 
 class TestRunListen:
     async def test_run_listen_telnet_only(self) -> None:
         """_run_listen with telnet_port > 0 starts a server and stops on cancel."""
-        from provide.terminal.cli import _run_listen
+        from provide.uterm.cli import _run_listen
 
         start_calls: list[tuple[str, int]] = []
 
@@ -434,7 +434,7 @@ class TestRunListen:
 
     async def test_run_listen_no_ports_is_noop(self) -> None:
         """_run_listen with both ports=0 starts nothing and returns."""
-        from provide.terminal.cli import _run_listen
+        from provide.uterm.cli import _run_listen
 
         class _FakeGateway:
             async def start(self, host: str, port: int) -> object:
@@ -444,7 +444,7 @@ class TestRunListen:
 
     async def test_run_listen_ssh_port_starts_ssh(self) -> None:
         """_run_listen with ssh_port > 0 starts an SSH gateway."""
-        from provide.terminal.cli import _run_listen
+        from provide.uterm.cli import _run_listen
 
         class _FakeTelnetGateway:
             pass
@@ -486,7 +486,7 @@ class TestRunListen:
 
     async def test_run_listen_ssh_import_error_warns(self) -> None:
         """_run_listen continues when SshWsGateway raises ImportError."""
-        from provide.terminal.cli import _run_listen
+        from provide.uterm.cli import _run_listen
 
         class _BadSshGateway:
             def __init__(self, ws_url: str, **kw: object) -> None:
@@ -525,7 +525,7 @@ class TestRunListen:
 
     def test_cmd_listen_both_ports_zero_exits(self) -> None:
         """_cmd_listen exits with code 1 when both --port and --ssh-port are 0."""
-        from provide.terminal.cli import _build_parser, _cmd_listen
+        from provide.uterm.cli import _build_parser, _cmd_listen
 
         args = _build_parser().parse_args(["listen", "ws://localhost", "--port", "0", "--ssh-port", "0"])
         captured = io.StringIO()

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from provide.terminal.cloudflare.api._profiles import route_profiles
+from provide.uterm.cloudflare.api._profiles import route_profiles
 
 # ---------------------------------------------------------------------------
 # Fake KV store (in-memory dict)
@@ -330,7 +330,7 @@ async def test_profiles_no_kv() -> None:
 @pytest.mark.asyncio
 async def test_connect_without_session_kv() -> None:
     """_connect returns 500 when SESSION_REGISTRY is not available."""
-    from provide.terminal.cloudflare.api._profiles import _connect
+    from provide.uterm.cloudflare.api._profiles import _connect
 
     kv = _FakeKV()
     # Create a profile directly in KV

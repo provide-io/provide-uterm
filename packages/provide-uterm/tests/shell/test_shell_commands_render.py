@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.shell._commands — render command."""
+"""Tests for provide.uterm.shell._commands — render command."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
-from provide.terminal.shell.commands import AnimatedResult, CommandDispatcher
+from provide.uterm.shell.commands import AnimatedResult, CommandDispatcher
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -184,7 +184,7 @@ async def test_render_missing_pillow():
     with (
         patch("urllib.request.urlopen", return_value=_mock_urlopen(png_bytes)),
         patch(
-            "provide.terminal.shell._render.image_to_ansi_frames",
+            "provide.uterm.shell._render.image_to_ansi_frames",
             side_effect=ImportError(
                 "missing dependency — Pillow\ninstall the images extra: pip install 'provide-uterm[emulator]'"
             ),
@@ -232,7 +232,7 @@ async def test_render_empty_image():
     with (
         patch("urllib.request.urlopen", return_value=_mock_urlopen(png_bytes)),
         patch(
-            "provide.terminal.shell._render.image_to_ansi_frames",
+            "provide.uterm.shell._render.image_to_ansi_frames",
             return_value=([], 0.0),
         ),
     ):

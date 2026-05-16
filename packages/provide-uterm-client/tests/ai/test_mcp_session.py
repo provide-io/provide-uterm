@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
-from provide.terminal.ai.server import create_mcp_app
+from provide.uterm.ai.server import create_mcp_app
 
 WID = "mcp-worker"
 
@@ -48,8 +48,8 @@ def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
 
 
 def _make_server_app() -> FastAPI:
-    from provide.terminal.server.app import create_server_app
-    from provide.terminal.server.config import config_from_mapping
+    from provide.uterm.server.app import create_server_app
+    from provide.uterm.server.config import config_from_mapping
 
     cfg = config_from_mapping(
         {
@@ -232,7 +232,7 @@ class TestSessionTools:
             "rows": 24,
         }
         with patch(
-            "provide.terminal.client.hijack.HijackClient.session_snapshot",
+            "provide.uterm.client.hijack.HijackClient.session_snapshot",
             return_value=(True, {"snapshot": fake_snapshot}),
         ):
             data = await _call(
@@ -259,7 +259,7 @@ class TestSessionTools:
             "rows": 24,
         }
         with patch(
-            "provide.terminal.client.hijack.HijackClient.session_snapshot",
+            "provide.uterm.client.hijack.HijackClient.session_snapshot",
             return_value=(True, {"snapshot": fake_snapshot}),
         ):
             data = await _call(
@@ -285,7 +285,7 @@ class TestSessionTools:
             "rows": 24,
         }
         with patch(
-            "provide.terminal.client.hijack.HijackClient.session_snapshot",
+            "provide.uterm.client.hijack.HijackClient.session_snapshot",
             return_value=(True, {"snapshot": fake_snapshot}),
         ):
             data = await _call(

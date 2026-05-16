@@ -20,7 +20,7 @@ package "provide-uterm / shell" {
   [_output.py\nOutputResult, AnimatedResult] as OUTPUT
   [_sandbox.py\nrestricted exec for `py`] as SANDBOX
   [_render.py\nrender command + frame streaming] as REND
-  [__main__.py\npython -m provide.terminal.shell] as MAIN
+  [__main__.py\npython -m provide.uterm.shell] as MAIN
 
   package "Commands" #eff6ff {
     [help] as CMD_HELP

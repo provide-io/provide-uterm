@@ -19,13 +19,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     ControlChannelProtocolError,
     encode_control,
     encode_data,
 )
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime, _encode_runtime_frame
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime, _encode_runtime_frame
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -209,7 +209,7 @@ class TestBridgeSessionControlChannelError:
         rt._connector = connector
 
         # Patch ControlChannelDecoder.feed to raise ControlChannelProtocolError
-        with patch("provide.terminal.server.runtime.ControlChannelDecoder") as mock_decoder_cls:
+        with patch("provide.uterm.server.runtime.ControlChannelDecoder") as mock_decoder_cls:
             mock_decoder = MagicMock()
             mock_decoder_cls.return_value = mock_decoder
             mock_decoder.feed.side_effect = ControlChannelProtocolError("bad frame")

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.shell._render — ANSI image rendering."""
+"""Tests for provide.uterm.shell._render — ANSI image rendering."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from collections.abc import Generator
 import pytest
 from PIL import Image
 
-from provide.terminal.shell._render import (
+from provide.uterm.shell._render import (
     _color_dist_sq,
     _nearest_16,
     _nearest_256,
@@ -267,7 +267,7 @@ def test_invalid_bytes_raises() -> None:
 
 def test_pillow_import_error_raises_helpful_message() -> None:
     """Cover _render.py:224-225 — ImportError when PIL is not installed."""
-    import provide.terminal.shell._render as render_mod
+    import provide.uterm.shell._render as render_mod
 
     # Block PIL so the lazy import inside image_to_ansi_frames raises ImportError.
     pil_modules = {k: v for k, v in sys.modules.items() if k == "PIL" or k.startswith("PIL.")}
@@ -335,7 +335,7 @@ def test_color_dist_sq_symmetric() -> None:
 @pytest.fixture(autouse=False)
 def fresh_xterm256() -> Generator[None, None, None]:
     """Clear and rebuild _XTERM256 for each test that needs fresh state."""
-    import provide.terminal.shell._render as render_mod
+    import provide.uterm.shell._render as render_mod
 
     original = list(render_mod._XTERM256)
     render_mod._XTERM256.clear()
@@ -356,7 +356,7 @@ def _fresh_build() -> object:
     which was already populated before the fork.  The mutant only writes to the
     module's own list, so assertions must follow that same reference.
     """
-    import provide.terminal.shell._render as render_mod
+    import provide.uterm.shell._render as render_mod
 
     render_mod._XTERM256.clear()
     render_mod._build_xterm256()
@@ -627,8 +627,8 @@ def test_render_frame_alpha_threshold_128_opaque() -> None:
 def test_render_frame_odd_height_last_row_padding() -> None:
     # When px_h is odd, the last row's bottom pixel uses the (0,0,0,0) fallback.
     # Call _render_frame directly with px_h=1 to force the odd-height code path.
-    from provide.terminal.shell._render import _render_frame
-    from provide.terminal.shell._render import _sgr_truecolor as sgr_fn
+    from provide.uterm.shell._render import _render_frame
+    from provide.uterm.shell._render import _sgr_truecolor as sgr_fn
 
     class FakePixels:
         def __getitem__(self, xy: tuple[int, int]) -> tuple[int, int, int, int]:
@@ -788,8 +788,8 @@ def test_render_frame_y_plus_1_not_y_minus_1() -> None:
     #   mutant:   pixels[x, 1] (row 1 = green, fg=green, bg=blue)
     # Verify that the combined SGR for row 1 (y=2) uses yellow fg + blue bg,
     # not green fg + blue bg.
-    from provide.terminal.shell._render import _render_frame
-    from provide.terminal.shell._render import _sgr_truecolor as sgr_fn
+    from provide.uterm.shell._render import _render_frame
+    from provide.uterm.shell._render import _sgr_truecolor as sgr_fn
 
     row_colors = [
         (255, 0, 0, 255),  # y=0: red   → bg for terminal row 0

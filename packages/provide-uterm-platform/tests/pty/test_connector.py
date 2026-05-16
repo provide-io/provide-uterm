@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from provide.terminal.pty.connector import PTYConnector
+from provide.uterm.pty.connector import PTYConnector
 
 _skip_needs_root = pytest.mark.skipif(os.getuid() != 0, reason="requires root or CAP_SETUID")
 
@@ -203,7 +203,7 @@ async def test_start_pam_requires_root_mocked() -> None:
 
     Uses anchored pattern so 'XXuser-switching...' mutations are caught.
     """
-    with patch("provide.terminal.pty.connector.os.geteuid", return_value=1000):
+    with patch("provide.uterm.pty.connector.os.geteuid", return_value=1000):
         conn = make_connector("/bin/echo", username="nobody", password="pass")
         with pytest.raises(PermissionError, match=r"^user-switching via PAM"):
             await conn.start()
@@ -217,8 +217,8 @@ async def test_start_pam_path_mocked_as_root() -> None:
     mock_pam = MagicMock()
     mock_pam.get_env.return_value = {}
     with (
-        patch("provide.terminal.pty.connector.os.geteuid", return_value=0),
-        patch("provide.terminal.pty.connector.PamSession", return_value=mock_pam),
+        patch("provide.uterm.pty.connector.os.geteuid", return_value=0),
+        patch("provide.uterm.pty.connector.PamSession", return_value=mock_pam),
     ):
         conn = make_connector("/bin/echo", ["x"], username="nobody", password="secret")
         await conn.start()
@@ -242,16 +242,16 @@ async def test_start_username_without_password_skips_pam() -> None:
 
 
 def test_register_import_error_silently_returns() -> None:
-    from provide.terminal.pty.connector import _register
+    from provide.uterm.pty.connector import _register
 
-    with patch.dict(sys.modules, {"provide.terminal.server.connectors.registry": None}):
+    with patch.dict(sys.modules, {"provide.uterm.server.connectors.registry": None}):
         _register()
 
 
 def test_register_no_refresh_when_connectors_module_absent() -> None:
-    from provide.terminal.pty.connector import PTYConnector, _register
+    from provide.uterm.pty.connector import PTYConnector, _register
 
-    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+    fake_registry = ModuleType("provide.uterm.server.connectors.registry")
     calls: list[tuple[str, object]] = []
 
     fake_registry.register_connector = lambda n, c: calls.append((n, c))  # type: ignore[attr-defined]
@@ -260,8 +260,8 @@ def test_register_no_refresh_when_connectors_module_absent() -> None:
     with patch.dict(
         sys.modules,
         {
-            "provide.terminal.server.connectors.registry": fake_registry,
-            "provide.terminal.server.connectors": None,
+            "provide.uterm.server.connectors.registry": fake_registry,
+            "provide.uterm.server.connectors": None,
         },
     ):
         _register()
@@ -269,22 +269,22 @@ def test_register_no_refresh_when_connectors_module_absent() -> None:
 
 
 def test_register_refreshes_known_connector_types() -> None:
-    from provide.terminal.pty.connector import PTYConnector, _register
+    from provide.uterm.pty.connector import PTYConnector, _register
 
-    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+    fake_registry = ModuleType("provide.uterm.server.connectors.registry")
     calls: list[tuple[str, object]] = []
 
     fake_registry.register_connector = lambda n, c: calls.append((n, c))  # type: ignore[attr-defined]
     fake_registry.registered_types = lambda: frozenset({"pty"})  # type: ignore[attr-defined]
 
-    fake_connectors = ModuleType("provide.terminal.server.connectors")
+    fake_connectors = ModuleType("provide.uterm.server.connectors")
     fake_connectors.KNOWN_CONNECTOR_TYPES = frozenset()  # type: ignore[attr-defined]
 
     with patch.dict(
         sys.modules,
         {
-            "provide.terminal.server.connectors.registry": fake_registry,
-            "provide.terminal.server.connectors": fake_connectors,
+            "provide.uterm.server.connectors.registry": fake_registry,
+            "provide.uterm.server.connectors": fake_connectors,
         },
     ):
         _register()
@@ -294,21 +294,21 @@ def test_register_refreshes_known_connector_types() -> None:
 
 def test_register_no_refresh_when_known_connector_types_absent() -> None:
     """Kills 'and' → 'or' mutation in the hasattr guard."""
-    from provide.terminal.pty.connector import _register
+    from provide.uterm.pty.connector import _register
 
-    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+    fake_registry = ModuleType("provide.uterm.server.connectors.registry")
     refresh_calls: list[int] = []
 
     fake_registry.register_connector = lambda n, c: None  # type: ignore[attr-defined]
     fake_registry.registered_types = lambda: refresh_calls.append(1) or frozenset({"pty"})  # type: ignore[attr-defined]
 
-    fake_connectors = ModuleType("provide.terminal.server.connectors")
+    fake_connectors = ModuleType("provide.uterm.server.connectors")
 
     with patch.dict(
         sys.modules,
         {
-            "provide.terminal.server.connectors.registry": fake_registry,
-            "provide.terminal.server.connectors": fake_connectors,
+            "provide.uterm.server.connectors.registry": fake_registry,
+            "provide.uterm.server.connectors": fake_connectors,
         },
     ):
         _register()

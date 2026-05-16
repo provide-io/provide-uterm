@@ -25,8 +25,8 @@ from typing import Any
 import websockets
 import websockets.server
 
-from provide.terminal.gateway import TelnetWsGateway
-from provide.terminal.transports.telnet import TelnetTransport
+from provide.uterm.gateway import TelnetWsGateway
+from provide.uterm.transports.telnet import TelnetTransport
 
 # ---------------------------------------------------------------------------
 # Helpers

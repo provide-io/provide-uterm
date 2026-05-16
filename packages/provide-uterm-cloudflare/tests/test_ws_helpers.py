@@ -10,8 +10,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
 
 
 def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:

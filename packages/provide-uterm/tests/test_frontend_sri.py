@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]  # tests/ → provide-uterm/ → packages/ → repo root
-FRONTEND_DIR = _REPO_ROOT / "packages/provide-uterm-server/src/provide/terminal/server/frontend"
-CF_FRONTEND_DIR = _REPO_ROOT / "packages/provide-uterm-cloudflare/python_modules/provide/terminal/frontend"
+FRONTEND_DIR = _REPO_ROOT / "packages/provide-uterm-server/src/provide/uterm/server/frontend"
+CF_FRONTEND_DIR = _REPO_ROOT / "packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend"
 DEMO_DIR = _REPO_ROOT / "demo"
 
 _JSDELIVR = r"<(?:script|link)[^>]+cdn\.jsdelivr\.net[^>]+>"

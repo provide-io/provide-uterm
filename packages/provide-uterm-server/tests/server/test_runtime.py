@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime
 
 
 def _make_session(session_id: str = "test-session", connector_type: str = "shell") -> SessionDefinition:
@@ -232,7 +232,7 @@ class TestStartConnectorRecording:
         rt = HostedSessionRuntime(session, public_base_url="http://localhost:9999", recording=recording)
 
         connector = _make_connector()
-        with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+        with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
             await rt._start_connector()
 
         assert rt._logger is not None
@@ -258,7 +258,7 @@ class TestStartConnectorRecording:
         rt = HostedSessionRuntime(session, public_base_url="http://localhost:9999", recording=recording)
 
         connector = _make_connector()
-        with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+        with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
             await rt._start_connector()
 
         assert rt._logger is not None

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from provide.terminal.cloudflare.entry.fallback_stubs import Response
-from provide.terminal.cloudflare.entry.share_tokens import (
+from provide.uterm.cloudflare.entry.fallback_stubs import Response
+from provide.uterm.cloudflare.entry.share_tokens import (
     _attach_share_token_cookie,
     _share_token_cookie_header,
 )
@@ -110,7 +110,7 @@ def test_query_parse_failure_falls_back_to_cookie() -> None:
     # ``str(getattr(request, "url", ""))`` produce "None" — a valid string.
     # The genuine exception path is exercised by patching urlparse to raise on
     # the first call; we use a callable wrapper to flip behavior between calls.
-    from provide.terminal.cloudflare.entry import share_tokens as st
+    from provide.uterm.cloudflare.entry import share_tokens as st
 
     calls = {"n": 0}
     real = st.urlparse

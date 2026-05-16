@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from provide.terminal.bridge.hub.event_bus import EventBus, _compile_pattern
+from provide.uterm.bridge.hub.event_bus import EventBus, _compile_pattern
 
 # ---------------------------------------------------------------------------
 # subscribe + _enqueue: basic delivery

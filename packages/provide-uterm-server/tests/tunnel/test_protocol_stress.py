@@ -15,7 +15,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from provide.terminal.tunnel.protocol import (
+from provide.uterm.tunnel.protocol import (
     CHANNEL_CONTROL,
     FLAG_DATA,
     TunnelProtocolError,

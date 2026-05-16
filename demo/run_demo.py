@@ -49,9 +49,9 @@ for _p in [
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from provide.terminal.server.app import create_server_app  # noqa: E402
-from provide.terminal.server.config import config_from_mapping  # noqa: E402
-from provide.terminal.transports.telnet_server import (  # noqa: E402
+from provide.uterm.server.app import create_server_app  # noqa: E402
+from provide.uterm.server.config import config_from_mapping  # noqa: E402
+from provide.uterm.transports.telnet_server import (  # noqa: E402
     _build_telnet_handshake,  # type: ignore[attr-defined]
 )
 
@@ -287,7 +287,7 @@ async def main() -> None:
     print(f"[demo] FastAPI server ready: http://127.0.0.1:{DEMO_SERVER_PORT}/")
 
     # Attach EventBus so SSE streams and webhooks work
-    from provide.terminal.bridge.hub import EventBus
+    from provide.uterm.bridge.hub import EventBus
 
     app.state.uterm_registry._hub._event_bus = EventBus()
 

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from provide.terminal.server.models import AuthConfig
+from provide.uterm.server.models import AuthConfig
 
 
 def test_auth_config_idp_validation():

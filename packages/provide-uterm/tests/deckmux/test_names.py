@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.deckmux._names — deterministic name and color generation."""
+"""Tests for provide.uterm.deckmux._names — deterministic name and color generation."""
 
 from __future__ import annotations
 
-from provide.terminal.deckmux._names import (
+from provide.uterm.deckmux._names import (
     _ADJECTIVES,
     _ANIMALS,
     _COLORS,

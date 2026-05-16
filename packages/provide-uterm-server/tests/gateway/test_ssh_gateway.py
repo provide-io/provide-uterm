@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.gateway._ssh_gateway.SshWsGateway."""
+"""Tests for provide.uterm.gateway._ssh_gateway.SshWsGateway."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.gateway._ssh_gateway import SshWsGateway
+from provide.uterm.gateway._ssh_gateway import SshWsGateway
 
 
 class TestSshWsGatewayInit:

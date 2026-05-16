@@ -10,7 +10,7 @@ import base64
 
 import pytest
 
-from provide.terminal.tunnel.http_proxy import (
+from provide.uterm.tunnel.http_proxy import (
     BINARY_CONTENT_TYPES,
     BODY_MAX_BYTES,
     _human_size,

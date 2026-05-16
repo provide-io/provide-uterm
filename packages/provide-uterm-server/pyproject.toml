@@ -47,8 +47,8 @@ dev = [
 ]
 
 [project.scripts]
-uterm = "provide.terminal.cli:main"
-uterm-server = "provide.terminal.server.cli:main"
+uterm = "provide.uterm.cli:main"
+uterm-server = "provide.uterm.server.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -57,8 +57,8 @@ version = {file = "VERSION"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"provide.terminal" = ["py.typed"]
-"provide.terminal.server" = [
+"provide.uterm" = ["py.typed"]
+"provide.uterm.server" = [
     "frontend/**",
     "frontend/**/*",
 ]
@@ -86,10 +86,10 @@ addopts = [
     "-ra",
     "-m",
     "not playwright and not slow",
-    "--cov=provide.terminal.bridge",
-    "--cov=provide.terminal.server",
-    "--cov=provide.terminal.tunnel",
-    "--cov=provide.terminal.gateway",
+    "--cov=provide.uterm.bridge",
+    "--cov=provide.uterm.server",
+    "--cov=provide.uterm.tunnel",
+    "--cov=provide.uterm.gateway",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
@@ -97,10 +97,10 @@ addopts = [
 
 [tool.coverage.run]
 source = [
-    "provide.terminal.bridge",
-    "provide.terminal.server",
-    "provide.terminal.tunnel",
-    "provide.terminal.gateway",
+    "provide.uterm.bridge",
+    "provide.uterm.server",
+    "provide.uterm.tunnel",
+    "provide.uterm.gateway",
 ]
 omit = ["tests/*"]
 branch = true

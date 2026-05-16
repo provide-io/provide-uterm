@@ -19,8 +19,8 @@ import pytest
 import uvicorn
 import websockets
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
+from provide.uterm.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
     from collections.abc import Generator

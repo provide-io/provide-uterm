@@ -15,12 +15,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from provide.terminal.cloudflare.do._webhooks import (
+from provide.uterm.cloudflare.do._webhooks import (
     _deliver_webhook,
     fire_webhooks,
     route_webhooks,
 )
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -179,7 +179,7 @@ async def test_deliver_webhook_fetch_error_logged_not_raised() -> None:
 @pytest.mark.asyncio
 async def test_deliver_webhook_uses_module_level_fetch_when_no_fetch_arg(monkeypatch: pytest.MonkeyPatch) -> None:
     """When _fetch is None and _outbound_fetch is set, uses _outbound_fetch."""
-    import provide.terminal.cloudflare.do._webhooks as wh_mod
+    import provide.uterm.cloudflare.do._webhooks as wh_mod
 
     calls: list[str] = []
 
@@ -194,7 +194,7 @@ async def test_deliver_webhook_uses_module_level_fetch_when_no_fetch_arg(monkeyp
 @pytest.mark.asyncio
 async def test_deliver_webhook_no_fetch_and_no_js_module(monkeypatch: pytest.MonkeyPatch) -> None:
     """When no fetch available and js is not importable, silently skips."""
-    import provide.terminal.cloudflare.do._webhooks as wh_mod
+    import provide.uterm.cloudflare.do._webhooks as wh_mod
 
     monkeypatch.setattr(wh_mod, "_outbound_fetch", None)
     # No _fetch provided, no js module → should return without raising
@@ -462,8 +462,8 @@ async def test_dispatch_sse_route() -> None:
     store = _make_store()
     store.append_event("w1", "snapshot", {"screen": "$ test"})
 
-    from provide.terminal.cloudflare.api.http_routes import route_http
-    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+    from provide.uterm.cloudflare.api.http_routes import route_http
+    from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 
     class _FullRuntime:
         worker_id = "w1"
@@ -524,8 +524,8 @@ async def test_dispatch_webhook_register_route() -> None:
     """Webhook POST route dispatches correctly via route_http."""
     store = _make_store()
 
-    from provide.terminal.cloudflare.api.http_routes import route_http
-    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+    from provide.uterm.cloudflare.api.http_routes import route_http
+    from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 
     class _FullRuntime:
         worker_id = "w1"

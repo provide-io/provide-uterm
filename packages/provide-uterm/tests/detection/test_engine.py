@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from provide.terminal.detection.engine import DetectionEngine
-from provide.terminal.detection.rules import RuleSet
+from provide.uterm.detection.engine import DetectionEngine
+from provide.uterm.detection.rules import RuleSet
 
 
 def test_engine_init_from_path(simple_rules_file) -> None:
@@ -201,7 +201,7 @@ async def test_hook_receives_correct_args(simple_rules_file, snap_factory) -> No
 
 @pytest.mark.asyncio
 async def test_screen_saver_called_on_match(simple_rules_file, snap_factory, tmp_path) -> None:
-    from provide.terminal.detection.saver import ScreenSaver
+    from provide.uterm.detection.saver import ScreenSaver
 
     saver = ScreenSaver(base_dir=tmp_path, enabled=True)
     engine = DetectionEngine(simple_rules_file, screen_saver=saver)
@@ -211,7 +211,7 @@ async def test_screen_saver_called_on_match(simple_rules_file, snap_factory, tmp
 
 @pytest.mark.asyncio
 async def test_set_namespace_updates_screen_saver(simple_rules_file, tmp_path) -> None:
-    from provide.terminal.detection.saver import ScreenSaver
+    from provide.uterm.detection.saver import ScreenSaver
 
     saver = ScreenSaver(base_dir=tmp_path, namespace="old")
     engine = DetectionEngine(simple_rules_file, screen_saver=saver, namespace="old")
@@ -272,7 +272,7 @@ async def test_saver_exception_does_not_discard_detection(simple_rules_file, sna
     """If the screen saver raises, process_screen still returns the detection result."""
     from unittest.mock import MagicMock
 
-    from provide.terminal.detection.saver import ScreenSaver
+    from provide.uterm.detection.saver import ScreenSaver
 
     saver = MagicMock(spec=ScreenSaver)
     saver.save_screen.side_effect = OSError("disk full")
@@ -332,7 +332,7 @@ def test_set_namespace_without_screen_saver(simple_rules_file) -> None:
 
 def test_get_screen_saver_status_with_saver(simple_rules_file, tmp_path) -> None:
     """get_screen_saver_status returns dict with saver info when saver is present."""
-    from provide.terminal.detection.saver import ScreenSaver
+    from provide.uterm.detection.saver import ScreenSaver
 
     saver = ScreenSaver(base_dir=tmp_path, enabled=True, namespace="game1")
     engine = DetectionEngine(simple_rules_file, screen_saver=saver)
@@ -344,7 +344,7 @@ def test_get_screen_saver_status_with_saver(simple_rules_file, tmp_path) -> None
 
 def test_set_screen_saving_with_saver(simple_rules_file, tmp_path) -> None:
     """set_screen_saving toggles the ScreenSaver._enabled flag."""
-    from provide.terminal.detection.saver import ScreenSaver
+    from provide.uterm.detection.saver import ScreenSaver
 
     saver = ScreenSaver(base_dir=tmp_path, enabled=True)
     engine = DetectionEngine(simple_rules_file, screen_saver=saver)

@@ -137,7 +137,7 @@ def test_tunnels_create_for_pam_session(wrangler_server: str) -> None:
 @pytest.mark.e2e
 async def test_forward_to_relay_delivers_open_event(wrangler_server: str) -> None:
     """_forward_to_relay() sends an open event to the live server without raising."""
-    from provide.terminal.server.pam_integration import _forward_to_relay
+    from provide.uterm.server.pam_integration import _forward_to_relay
 
     # Best-effort — must not raise on success
     await _forward_to_relay(
@@ -157,7 +157,7 @@ async def test_forward_to_relay_delivers_open_event(wrangler_server: str) -> Non
 @pytest.mark.e2e
 async def test_create_relay_tunnel_returns_token_and_endpoint(wrangler_server: str) -> None:
     """_create_relay_tunnel() returns (worker_token, ws_endpoint) from live server."""
-    from provide.terminal.server.pam_integration import _create_relay_tunnel
+    from provide.uterm.server.pam_integration import _create_relay_tunnel
 
     sid = f"pam-relay-e2e-{uuid.uuid4().hex[:8]}"
     result = await _create_relay_tunnel(wrangler_server, _DEV_TOKEN, sid, "E2E Relay Tunnel")
@@ -171,7 +171,7 @@ async def test_create_relay_tunnel_returns_token_and_endpoint(wrangler_server: s
 @pytest.mark.e2e
 async def test_relay_open_close_full_cycle(wrangler_server: str) -> None:
     """Full relay cycle: _forward_to_relay open → _forward_to_relay close."""
-    from provide.terminal.server.pam_integration import _forward_to_relay
+    from provide.uterm.server.pam_integration import _forward_to_relay
 
     tty = _unique_tty()
     username = f"relay-cycle-{uuid.uuid4().hex[:4]}"

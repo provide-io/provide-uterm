@@ -14,13 +14,13 @@ import pytest
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from provide.terminal.recording import LocalFileRecordingStore
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.auth import Principal
-from provide.terminal.server.connectors import TelnetSessionConnector, build_connector
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.policy import SessionPolicyResolver
-from provide.terminal.server.registry import SessionRegistry
+from provide.uterm.recording import LocalFileRecordingStore
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.auth import Principal
+from provide.uterm.server.connectors import TelnetSessionConnector, build_connector
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.policy import SessionPolicyResolver
+from provide.uterm.server.registry import SessionRegistry
 
 if TYPE_CHECKING:
     pass
@@ -62,7 +62,7 @@ def test_build_connector_unsupported_type_raises() -> None:
 
 
 def test_validate_frontend_assets_raises_when_missing() -> None:
-    from provide.terminal.server.app import _validate_frontend_assets
+    from provide.uterm.server.app import _validate_frontend_assets
 
     class _FakePath:
         def __truediv__(self, name: str) -> _FakePath:
@@ -76,7 +76,7 @@ def test_validate_frontend_assets_raises_when_missing() -> None:
             return _FakePath()
 
     with (
-        patch("provide.terminal.server.app.importlib.resources.files", return_value=_FakeRoot()),
+        patch("provide.uterm.server.app.importlib.resources.files", return_value=_FakeRoot()),
         pytest.raises(RuntimeError, match="missing required frontend assets"),
     ):
         _validate_frontend_assets()
@@ -89,7 +89,7 @@ def test_validate_frontend_assets_raises_when_missing() -> None:
 
 def test_validate_auth_config_header_mode_passes() -> None:
     """Mode 'header' with acknowledged flag and worker_bearer_token should not raise."""
-    from provide.terminal.server.app import _validate_auth_config
+    from provide.uterm.server.app import _validate_auth_config
 
     cfg = default_server_config()
     cfg.auth.mode = "header"

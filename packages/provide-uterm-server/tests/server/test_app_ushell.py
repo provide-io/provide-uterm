@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""E2E tests: UshellConnector through a live provide.terminal server."""
+"""E2E tests: UshellConnector through a live provide.uterm server."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ import httpx
 import pytest
 import websockets
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_data
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_data
+from provide.uterm.server import create_server_app, default_server_config
 
 
 def _ws_url(base_url: str, path: str) -> str:

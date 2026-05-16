@@ -22,8 +22,8 @@ import pytest
 import websockets
 import websockets.server
 
-from provide.terminal.auth import AuthorizedKeysFileResolver, ResolvedIdentity
-from provide.terminal.gateway import SshWsGateway
+from provide.uterm.auth import AuthorizedKeysFileResolver, ResolvedIdentity
+from provide.uterm.gateway import SshWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 pytestmark = pytest.mark.asyncio

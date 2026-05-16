@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.file_io."""
+"""Tests for provide.uterm.file_io."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from provide.terminal.ansi import DEFAULT_PALETTE
-from provide.terminal.file_io import load_ans, load_palette, load_txt
+from provide.uterm.ansi import DEFAULT_PALETTE
+from provide.uterm.file_io import load_ans, load_palette, load_txt
 
 if TYPE_CHECKING:
     from pathlib import Path

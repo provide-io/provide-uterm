@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.auth import Principal
-from provide.terminal.server.config import config_from_mapping, default_server_config, load_server_config
-from provide.terminal.server.models import AuthConfig, RecordingConfig, SessionDefinition, validation_error_message
-from provide.terminal.server.policy import SessionPolicyResolver
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.auth import Principal
+from provide.uterm.server.config import config_from_mapping, default_server_config, load_server_config
+from provide.uterm.server.models import AuthConfig, RecordingConfig, SessionDefinition, validation_error_message
+from provide.uterm.server.policy import SessionPolicyResolver
 
 
 def test_default_server_config_has_demo_session() -> None:
@@ -367,14 +367,14 @@ def test_validation_error_message_handles_empty_and_prefixed_errors() -> None:
 
 
 def test_server_bind_config_derives_url_from_custom_host_port() -> None:
-    from provide.terminal.server.models import ServerBindConfig
+    from provide.uterm.server.models import ServerBindConfig
 
     cfg = ServerBindConfig(host="10.0.0.1", port=9090)
     assert cfg.public_base_url == "http://10.0.0.1:9090"
 
 
 def test_server_bind_config_preserves_explicit_public_base_url() -> None:
-    from provide.terminal.server.models import ServerBindConfig
+    from provide.uterm.server.models import ServerBindConfig
 
     cfg = ServerBindConfig(host="10.0.0.1", port=9090, public_base_url="https://proxy.example.com")
     assert cfg.public_base_url == "https://proxy.example.com"
@@ -449,7 +449,7 @@ def test_config_from_mapping_produces_correct_datetime_type() -> None:
     """
     from datetime import datetime
 
-    from provide.terminal.server.models import ServerConfig
+    from provide.uterm.server.models import ServerConfig
 
     # config_from_mapping() internally uses _merged_config_mapping which calls model_dump(mode='python')
     config = config_from_mapping({})

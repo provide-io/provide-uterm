@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("asyncssh", reason="asyncssh not installed; skip SSH transport tests")
 
-from provide.terminal.transports.ssh import SSHStreamReader, SSHStreamWriter
+from provide.uterm.transports.ssh import SSHStreamReader, SSHStreamWriter
 
 
 class MockStdin:
@@ -152,7 +152,7 @@ class TestSSHStreamWriterEdgeCases:
 
 class TestTerminalSSHServer:
     def test_connection_made_increments_count(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         ip_connections: dict = {}
         server = TerminalSSHServer(ip_connections, max_connections_per_ip=5)
@@ -162,7 +162,7 @@ class TestTerminalSSHServer:
         assert ip_connections.get("127.0.0.1", 0) >= 1
 
     def test_connection_made_rate_limit(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         ip_connections: dict = {"10.0.0.1": 10}  # over limit
         server = TerminalSSHServer(ip_connections, max_connections_per_ip=5)
@@ -172,7 +172,7 @@ class TestTerminalSSHServer:
         conn.close.assert_called_once()
 
     def test_connection_made_no_peer(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         ip_connections: dict = {}
         server = TerminalSSHServer(ip_connections, max_connections_per_ip=5)
@@ -182,7 +182,7 @@ class TestTerminalSSHServer:
         server.connection_made(conn)
 
     def test_connection_lost_decrements_count(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         ip_connections: dict = {"127.0.0.1": 2}
         server = TerminalSSHServer(ip_connections, max_connections_per_ip=5)
@@ -191,7 +191,7 @@ class TestTerminalSSHServer:
         assert ip_connections.get("127.0.0.1") == 1
 
     def test_connection_lost_removes_zero_count(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         ip_connections: dict = {"127.0.0.1": 1}
         server = TerminalSSHServer(ip_connections, max_connections_per_ip=5)
@@ -200,7 +200,7 @@ class TestTerminalSSHServer:
         assert "127.0.0.1" not in ip_connections
 
     def test_connection_lost_unknown_ip_noop(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         ip_connections: dict = {}
         server = TerminalSSHServer(ip_connections, max_connections_per_ip=5)
@@ -208,7 +208,7 @@ class TestTerminalSSHServer:
         server.connection_lost(None)  # should not raise
 
     def test_auth_methods(self) -> None:
-        from provide.terminal.transports.ssh import TerminalSSHServer
+        from provide.uterm.transports.ssh import TerminalSSHServer
 
         server = TerminalSSHServer({}, max_connections_per_ip=5)
         # The gateway-style SSH server is intentionally permissive — it relays
@@ -226,7 +226,7 @@ class TestSSHPerInstanceIsolation:
 
     def test_two_factories_have_independent_counts(self) -> None:
         """Regression: _make_ssh_server_factory creates isolated ip_connections per call."""
-        from provide.terminal.transports.ssh import _make_ssh_server_factory
+        from provide.uterm.transports.ssh import _make_ssh_server_factory
 
         ip_a: dict = {}
         ip_b: dict = {}
@@ -262,7 +262,7 @@ class TestSSHPerInstanceIsolation:
 
     def test_rate_limit_applies_per_instance(self) -> None:
         """Regression: per-IP limit is scoped to each server instance."""
-        from provide.terminal.transports.ssh import _make_ssh_server_factory
+        from provide.uterm.transports.ssh import _make_ssh_server_factory
 
         ip_a: dict = {"10.0.0.1": 3}  # 3 connections in server A
         ip_b: dict = {}  # 0 connections in server B
@@ -296,7 +296,7 @@ class TestSSHPerInstanceIsolation:
 
 class TestGetOrCreateHostKey:
     def test_creates_new_key(self, tmp_path) -> None:
-        from provide.terminal.transports.ssh import _get_or_create_host_key
+        from provide.uterm.transports.ssh import _get_or_create_host_key
 
         key = _get_or_create_host_key(tmp_path)
         assert key is not None
@@ -305,7 +305,7 @@ class TestGetOrCreateHostKey:
     def test_loads_existing_key(self, tmp_path) -> None:
         import asyncssh
 
-        from provide.terminal.transports.ssh import _get_or_create_host_key
+        from provide.uterm.transports.ssh import _get_or_create_host_key
 
         existing_key = asyncssh.generate_private_key("ssh-ed25519")
         (tmp_path / "ssh_host_key").write_bytes(existing_key.export_private_key())
@@ -314,7 +314,7 @@ class TestGetOrCreateHostKey:
         assert loaded is not None
 
     def test_regenerates_corrupted_key(self, tmp_path) -> None:
-        from provide.terminal.transports.ssh import _get_or_create_host_key
+        from provide.uterm.transports.ssh import _get_or_create_host_key
 
         (tmp_path / "ssh_host_key").write_bytes(b"not a valid key")
         key = _get_or_create_host_key(tmp_path)
@@ -323,7 +323,7 @@ class TestGetOrCreateHostKey:
 
 class TestStartSshServer:
     async def test_start_ssh_server_basic(self, tmp_path) -> None:
-        from provide.terminal.transports.ssh import (
+        from provide.uterm.transports.ssh import (
             SSHStreamReader,
             SSHStreamWriter,
             start_ssh_server,
@@ -345,7 +345,7 @@ class TestStartSshServer:
             await process_factory(cast("asyncssh.SSHServerProcess[bytes]", proc))
             return MagicMock()
 
-        with patch("provide.terminal.transports.ssh.asyncssh.create_server", side_effect=_create_server) as mock_create:
+        with patch("provide.uterm.transports.ssh.asyncssh.create_server", side_effect=_create_server) as mock_create:
             server = await start_ssh_server(_handler, host="127.0.0.1", port=0, host_key_path=tmp_path)
         assert server is not None
         assert isinstance(seen["reader"], SSHStreamReader)
@@ -353,7 +353,7 @@ class TestStartSshServer:
         mock_create.assert_called_once()
 
     async def test_start_ssh_server_uses_injected_factories(self, tmp_path) -> None:
-        from provide.terminal.transports.ssh import start_ssh_server
+        from provide.uterm.transports.ssh import start_ssh_server
 
         seen: dict[str, object] = {}
 
@@ -378,7 +378,7 @@ class TestStartSshServer:
             await process_factory(cast("asyncssh.SSHServerProcess[bytes]", proc))
             return MagicMock()
 
-        with patch("provide.terminal.transports.ssh.asyncssh.create_server", side_effect=_create_server):
+        with patch("provide.uterm.transports.ssh.asyncssh.create_server", side_effect=_create_server):
             server = await start_ssh_server(
                 _handler,
                 host="127.0.0.1",
@@ -402,7 +402,7 @@ class TestGetOrCreateHostKeySaveFailure:
         """When saving the generated key fails, the key is still returned."""
         import stat
 
-        from provide.terminal.transports.ssh import _get_or_create_host_key
+        from provide.uterm.transports.ssh import _get_or_create_host_key
 
         # Make the directory read-only so key_path.write_bytes() fails
         tmp_path.chmod(stat.S_IRUSR | stat.S_IXUSR)

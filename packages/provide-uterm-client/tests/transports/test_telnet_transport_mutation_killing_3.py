@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import asyncio
 
-from provide.terminal.transports.telnet import TelnetTransport
-from provide.terminal.transports.telnet_transport import (
+from provide.uterm.transports.telnet import TelnetTransport
+from provide.uterm.transports.telnet_transport import (
     IAC,
     OPT_TTYPE,
     SB,

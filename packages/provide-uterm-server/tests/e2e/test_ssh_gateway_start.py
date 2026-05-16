@@ -60,7 +60,7 @@ async def _ws_capture_server() -> tuple[Any, int, list[str]]:
 
 class TestSshWsGatewayStart:
     async def test_start_ephemeral_host_key(self) -> None:
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.gateway import SshWsGateway
 
         gw = SshWsGateway("wss://unreachable.invalid/ws")
         srv = await gw.start("127.0.0.1", 0)
@@ -72,7 +72,7 @@ class TestSshWsGatewayStart:
             await srv.wait_closed()
 
     async def test_start_with_file_key(self, tmp_path: Any) -> None:
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.gateway import SshWsGateway
 
         key = asyncssh.generate_private_key("ssh-ed25519")
         key_path = tmp_path / "host_key.pem"
@@ -89,7 +89,7 @@ class TestSshWsGatewayStart:
 
     async def test_process_handler_runs_on_ssh_connect(self) -> None:
         """Connecting a real SSH client through SshWsGateway exercises _process_handler."""
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.gateway import SshWsGateway
 
         ws_srv, ws_port = await _start_ws_echo_server(banner="HELLO\r\n")
         gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}")
@@ -117,8 +117,8 @@ class TestSshWsGatewayStart:
 
     async def test_process_handler_resumes_after_token_received(self) -> None:
         """After server sends session_token, next WS reconnect sends a resume frame."""
-        from provide.terminal.control_channel import encode_control
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.control_channel import encode_control
+        from provide.uterm.gateway import SshWsGateway
 
         connection_count = 0
         resume_msgs: list[str] = []
@@ -173,7 +173,7 @@ class TestSshWsGatewayStart:
 
     async def test_colormode_256_from_term_only(self) -> None:
         """Live: TERM=xterm-256color with no COLORTERM → ?colormode=256."""
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.gateway import SshWsGateway
 
         ws_srv, ws_port, captured_paths = await _ws_capture_server()
         gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}/ws")
@@ -204,7 +204,7 @@ class TestSshWsGatewayStart:
 
     async def test_no_pty_no_env_leaves_url_untouched(self) -> None:
         """Live: no pty-req, no env → no colormode in URL."""
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.gateway import SshWsGateway
 
         ws_srv, ws_port, captured_paths = await _ws_capture_server()
         gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}/ws")
@@ -235,7 +235,7 @@ class TestSshWsGatewayStart:
 
     async def test_process_handler_exception_is_swallowed(self) -> None:
         """If WS is unreachable, _process_handler logs and exits cleanly (no hang)."""
-        from provide.terminal.gateway import SshWsGateway
+        from provide.uterm.gateway import SshWsGateway
 
         # Point gateway at a port with nothing listening — WS connect will fail.
         gw = SshWsGateway("ws://127.0.0.1:1")

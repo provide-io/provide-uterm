@@ -22,12 +22,12 @@ import pytest
 
 class TestProtocols:
     def test_import_terminal_reader(self) -> None:
-        from provide.terminal.protocols import TerminalReader
+        from provide.uterm.protocols import TerminalReader
 
         assert TerminalReader is not None
 
     def test_import_terminal_writer(self) -> None:
-        from provide.terminal.protocols import TerminalWriter
+        from provide.uterm.protocols import TerminalWriter
 
         assert TerminalWriter is not None
 
@@ -39,26 +39,26 @@ class TestProtocols:
 
 class TestScreenRegexErrors:
     def test_extract_menu_options_invalid_regex(self) -> None:
-        from provide.terminal.screen import extract_menu_options
+        from provide.uterm.screen import extract_menu_options
 
         # Invalid regex — should return empty list (except re.error branch)
         result = extract_menu_options("some screen text", pattern="[invalid(")
         assert result == []
 
     def test_extract_numbered_list_invalid_regex(self) -> None:
-        from provide.terminal.screen import extract_numbered_list
+        from provide.uterm.screen import extract_numbered_list
 
         result = extract_numbered_list("1. Item one\n2. Item two", pattern="[invalid(")
         assert result == []
 
     def test_extract_key_value_pairs_invalid_regex(self) -> None:
-        from provide.terminal.screen import extract_key_value_pairs
+        from provide.uterm.screen import extract_key_value_pairs
 
         result = extract_key_value_pairs("Credits: 1000", {"credits": "[invalid("})
         assert result == {}
 
     def test_extract_key_value_pairs_mixed_valid_invalid(self) -> None:
-        from provide.terminal.screen import extract_key_value_pairs
+        from provide.uterm.screen import extract_key_value_pairs
 
         # One valid, one invalid — valid should succeed
         result = extract_key_value_pairs(
@@ -69,7 +69,7 @@ class TestScreenRegexErrors:
         assert "bad" not in result
 
     def test_extract_menu_options_valid_pattern(self) -> None:
-        from provide.terminal.screen import extract_menu_options
+        from provide.uterm.screen import extract_menu_options
 
         # Ensure normal path still works
         result = extract_menu_options("[A] Attack  [D] Defend", None)
@@ -83,7 +83,7 @@ class TestScreenRegexErrors:
 
 class TestReplayViewerJsonError:
     def test_replay_log_skips_corrupt_lines(self) -> None:
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
             # corrupt line
@@ -108,7 +108,7 @@ class TestReplayViewerJsonError:
 class TestSessionLoggerBranches:
     async def test_start_exception_closes_file_and_reraises(self) -> None:
         """Lines 57-60: except Exception in start() closes file and re-raises."""
-        from provide.terminal.session_logger import SessionLogger
+        from provide.uterm.session_logger import SessionLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "test.jsonl"
@@ -126,7 +126,7 @@ class TestSessionLoggerBranches:
 
     async def test_stop_without_start_is_noop(self) -> None:
         """Lines 67->73 and 73->exit: stop() when _file is None — both False branches."""
-        from provide.terminal.session_logger import SessionLogger
+        from provide.uterm.session_logger import SessionLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "test.jsonl"
@@ -136,7 +136,7 @@ class TestSessionLoggerBranches:
 
     async def test_stop_twice_second_is_noop(self) -> None:
         """Line 73->exit: second stop() call hits file_to_close is None branch."""
-        from provide.terminal.session_logger import SessionLogger
+        from provide.uterm.session_logger import SessionLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "test.jsonl"
@@ -148,7 +148,7 @@ class TestSessionLoggerBranches:
 
     async def test_write_event_with_context(self) -> None:
         """Lines 144->146: context is set, so record['ctx'] is included."""
-        from provide.terminal.session_logger import SessionLogger
+        from provide.uterm.session_logger import SessionLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "test.jsonl"
@@ -174,25 +174,25 @@ class TestSessionLoggerBranches:
 
 class TestExtractPromptId:
     def test_empty_string_prompt_id_returns_none(self) -> None:
-        from provide.terminal.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": ""}}
         assert extract_prompt_id(snapshot) is None
 
     def test_non_string_prompt_id_returns_none(self) -> None:
-        from provide.terminal.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": 42}}
         assert extract_prompt_id(snapshot) is None
 
     def test_none_prompt_id_returns_none(self) -> None:
-        from provide.terminal.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": None}}
         assert extract_prompt_id(snapshot) is None
 
     def test_valid_prompt_id_returned(self) -> None:
-        from provide.terminal.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": "menu_main"}}
         assert extract_prompt_id(snapshot) == "menu_main"
@@ -206,8 +206,8 @@ class TestExtractPromptId:
 class TestWaitForGuardNoNewSnapshot:
     async def test_snap_ts_not_advanced_triggers_request_snapshot(self) -> None:
         """Line 106->109: snap_ts <= last_snap_ts → request_snapshot called again."""
-        from provide.terminal.bridge.hub import TermHub
-        from provide.terminal.bridge.models import WorkerTermState
+        from provide.uterm.bridge.hub import TermHub
+        from provide.uterm.bridge.models import WorkerTermState
 
         hub = TermHub()
 
@@ -252,7 +252,7 @@ class TestWaitForGuardNoNewSnapshot:
 class TestHijackableMixinBranches:
     async def test_watchdog_fires_with_on_stuck_none(self) -> None:
         """Lines 146->152: on_stuck is None, watchdog fires but does not call it."""
-        from provide.terminal.bridge.base import HijackableMixin
+        from provide.uterm.bridge.base import HijackableMixin
 
         class MyWorker(HijackableMixin):
             pass
@@ -267,7 +267,7 @@ class TestHijackableMixinBranches:
 
     async def test_stop_watchdog_before_start_is_noop(self) -> None:
         """Line 163->exit: stop_watchdog() when _watchdog_task is None."""
-        from provide.terminal.bridge.base import HijackableMixin
+        from provide.uterm.bridge.base import HijackableMixin
 
         class MyWorker(HijackableMixin):
             pass
@@ -286,7 +286,7 @@ class TestHijackableMixinBranches:
 class TestAnsiCoverage:
     def test_tilde_code_not_in_tilde_map_falls_through(self) -> None:
         """Line 326->333: code not in _TILDE_MAP → out.append(text[i])."""
-        from provide.terminal.ansi import preview_ansi
+        from provide.uterm.ansi import preview_ansi
 
         # '~z' — 'z' is not in _TILDE_MAP, so both ~ and z are appended as-is
         result = preview_ansi("hello~zworld")
@@ -294,7 +294,7 @@ class TestAnsiCoverage:
 
     def test_tilde_code_emit_color_returns_empty(self) -> None:
         """Line 329->333: seq is empty (invalid color char via direct call)."""
-        from provide.terminal.ansi import _emit_color, _handle_tilde_codes
+        from provide.uterm.ansi import _emit_color, _handle_tilde_codes
 
         # Directly verify _emit_color returns "" for unknown color char
         assert _emit_color("+", "z") == ""
@@ -306,14 +306,14 @@ class TestAnsiCoverage:
         # Call _handle_tilde_codes with a custom text that simulates seq=""
         # by monkeypatching _emit_color
 
-        with patch("provide.terminal.ansi._emit_color", return_value=""):
+        with patch("provide.uterm.ansi._emit_color", return_value=""):
             result = _handle_tilde_codes("~1text")
         # When seq is empty (""), the continue is skipped, so "~" and "1" are appended normally
         assert "~" in result or "1" in result
 
     def test_brace_token_polarity_not_plus_or_minus_falls_through(self) -> None:
         """Line 345->351: polarity not in ('+', '-') → fall through to out.append."""
-        from provide.terminal.ansi import _handle_brace_tokens
+        from provide.uterm.ansi import _handle_brace_tokens
 
         # '{x+g}' — polarity 'x' is not '+' or '-' → falls through
         result = _handle_brace_tokens("{x+g}rest")
@@ -321,7 +321,7 @@ class TestAnsiCoverage:
 
     def test_brace_token_emit_color_empty_falls_through(self) -> None:
         """Line 348->351: seq is empty → the continue is skipped."""
-        from provide.terminal.ansi import _handle_brace_tokens
+        from provide.uterm.ansi import _handle_brace_tokens
 
         # An unrecognised brace sequence falls through: '{' is emitted literally.
         result = _handle_brace_tokens("{??}rest")

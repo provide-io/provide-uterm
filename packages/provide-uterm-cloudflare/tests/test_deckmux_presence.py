@@ -17,8 +17,8 @@ from __future__ import annotations
 import sqlite3
 from types import SimpleNamespace
 
-from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, encode_control
+from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, encode_control
 
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_session_runtime_unit.py conventions)

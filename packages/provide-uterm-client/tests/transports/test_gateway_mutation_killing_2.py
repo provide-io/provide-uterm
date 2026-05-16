@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import asyncio
 
-from provide.terminal.control_channel import encode_control
-from provide.terminal.gateway._gateway import (
+from provide.uterm.control_channel import encode_control
+from provide.uterm.gateway._gateway import (
     _handle_ws_control,
     _read_token,
     _tcp_to_ws,

@@ -12,8 +12,8 @@ import time
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from provide.terminal.tunnel.http_proxy import BODY_MAX_BYTES, encode_body, format_log_line
-from provide.terminal.tunnel.protocol import CHANNEL_HTTP, decode_frame, encode_frame
+from provide.uterm.tunnel.http_proxy import BODY_MAX_BYTES, encode_body, format_log_line
+from provide.uterm.tunnel.protocol import CHANNEL_HTTP, decode_frame, encode_frame
 
 # ---------------------------------------------------------------------------
 # Hypothesis: encode_body

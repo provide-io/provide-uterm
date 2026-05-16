@@ -16,7 +16,7 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -40,7 +40,7 @@ def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
 
 def _jwt_app(tmp_path: Path) -> Any:
     """Create a JWT-auth FastAPI app with a shared temp profile store directory."""
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     cfg = default_server_config()
     cfg.auth = AuthConfig(
@@ -100,7 +100,7 @@ def test_principal_not_resolved_returns_500() -> None:
     """Calling a profiles route with no principal on request.state returns 500."""
     from fastapi import HTTPException
 
-    from provide.terminal.server.routes.profiles import _principal
+    from provide.uterm.server.routes.profiles import _principal
 
     req = SimpleNamespace(state=SimpleNamespace())  # no uterm_principal attribute
     with pytest.raises(HTTPException) as exc_info:
@@ -254,7 +254,7 @@ def test_connect_from_profile_recording_enabled_set(admin_client: TestClient) ->
 
 def test_connect_from_profile_422_on_session_validation_error(admin_client: TestClient, jwt_app: Any) -> None:
     """If registry.create_session raises SessionValidationError, route returns 422."""
-    from provide.terminal.server.registry import SessionValidationError
+    from provide.uterm.server.registry import SessionValidationError
 
     profile = _create_profile(admin_client, connector_type="ushell")
     with patch.object(

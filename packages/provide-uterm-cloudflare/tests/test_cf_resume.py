@@ -12,10 +12,10 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.contracts import frame_json
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.contracts import frame_json
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 
 @pytest.fixture()
@@ -330,7 +330,7 @@ class TestWsRoutesResume:
         self, runtime: _MockRuntime, store: SqliteStateStore
     ) -> None:
         """Line 130->140: hijack acquire returns ok=False → reclaim skipped, resume still succeeds."""
-        from provide.terminal.cloudflare.bridge.hijack import HijackSession
+        from provide.uterm.cloudflare.bridge.hijack import HijackSession
 
         store.create_resume_token("tok-fail-acq", "w1", "admin", 300)
         store.mark_resume_hijack_owner("tok-fail-acq", True)
@@ -369,7 +369,7 @@ class TestWsRoutesResume:
         """Line 134->136: is_renewal=True → push_worker_control('pause') not called."""
         import time as _time
 
-        from provide.terminal.cloudflare.bridge.hijack import HijackSession
+        from provide.uterm.cloudflare.bridge.hijack import HijackSession
 
         store.create_resume_token("tok-renew", "w1", "admin", 300)
         store.mark_resume_hijack_owner("tok-renew", True)

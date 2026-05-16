@@ -16,8 +16,8 @@ from fastapi import FastAPI, WebSocketException
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from provide.terminal.bridge.hub import BrowserRoleResolutionError, TermHub
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.hub import BrowserRoleResolutionError, TermHub
+from provide.uterm.client import connect_test_ws
 
 
 def _make_client(hub: TermHub) -> TestClient:

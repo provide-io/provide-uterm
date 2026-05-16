@@ -16,8 +16,8 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.bridge.hub import InMemoryResumeStore, TermHub
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
+from provide.uterm.client import connect_test_ws
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from provide.terminal.screen import (
+from provide.uterm.screen import (
     clean_screen_for_display,
     extract_action_tags,
     extract_key_value_pairs,
@@ -122,7 +122,7 @@ class TestExtractMenuOptionsEmptyDescription:
     """Covers the ``if description`` false branch in extract_menu_options."""
 
     def test_whitespace_only_description_skipped(self) -> None:
-        from provide.terminal.screen import extract_menu_options
+        from provide.uterm.screen import extract_menu_options
 
         # <A> has only a space before the next menu entry → description is empty
         screen = "<A>   <B> real option"

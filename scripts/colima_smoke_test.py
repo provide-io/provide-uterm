@@ -36,9 +36,9 @@ EVENT_LOG = Path.home() / ".colima" / "uterm-smoke-events.json"  # virtiofs shar
 LISTENER_SCRIPT = """\
 import asyncio, contextlib, json, os
 from pathlib import Path
-from provide.terminal.server.models import PamConfig, ServerConfig
-from provide.terminal.server.pam_integration import run_pam_integration
-from provide.terminal.pty.pam_listener import PamNotifyListener
+from provide.uterm.server.models import PamConfig, ServerConfig
+from provide.uterm.server.pam_integration import run_pam_integration
+from provide.uterm.pty.pam_listener import PamNotifyListener
 
 SOCKET = "{socket}"
 LOG = "{log}"
@@ -124,7 +124,7 @@ def main() -> None:
 
     # Pre-flight: verify provide-uterm is importable inside Colima
     r2 = _colima(
-        "python3 -c 'from provide.terminal.server.pam_integration import run_pam_integration; print(\"ok\")' 2>&1",
+        "python3 -c 'from provide.uterm.server.pam_integration import run_pam_integration; print(\"ok\")' 2>&1",
         capture=True,
     )
     if "ok" not in r2.stdout:

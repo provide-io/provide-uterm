@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import TunnelConfig
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import TunnelConfig
 
 
 def _make_app(**config_overrides: Any) -> tuple[Any, Any]:
@@ -320,7 +320,7 @@ class TestLifespanPamTeardown:
         original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__  # type: ignore[union-attr]
 
         def _blocking_import(name: str, *args: Any, **kwargs: Any) -> Any:
-            if name == "provide.terminal.server.pam_integration":
+            if name == "provide.uterm.server.pam_integration":
                 raise ImportError("fake: no PAM")
             return original_import(name, *args, **kwargs)
 
@@ -328,14 +328,14 @@ class TestLifespanPamTeardown:
         # actually goes through __import__ again.
         import sys
 
-        saved = sys.modules.pop("provide.terminal.server.pam_integration", None)
+        saved = sys.modules.pop("provide.uterm.server.pam_integration", None)
         try:
             with patch("builtins.__import__", side_effect=_blocking_import):
                 app, _config = _make_app()
                 await _run_lifespan_one_tick(app)
         finally:
             if saved is not None:
-                sys.modules["provide.terminal.server.pam_integration"] = saved
+                sys.modules["provide.uterm.server.pam_integration"] = saved
 
     async def test_hub_shutdown_called_in_finally(self) -> None:
         """hub.shutdown() is called during lifespan teardown."""

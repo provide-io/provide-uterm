@@ -22,10 +22,10 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.bridge.fanout._controller import FanOutController
-from provide.terminal.bridge.fanout._models import FanOutGroup
-from provide.terminal.bridge.hub import EventBus, TermHub
-from provide.terminal.client import connect_test_ws
+from provide.uterm.bridge.fanout._controller import FanOutController
+from provide.uterm.bridge.fanout._models import FanOutGroup
+from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.client import connect_test_ws
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -61,7 +61,7 @@ def _make_group(
 
 def _make_rest_app() -> object:
     """Create a server app in dev mode with fan-out controller."""
-    from provide.terminal.server import create_server_app, default_server_config
+    from provide.uterm.server import create_server_app, default_server_config
 
     cfg = default_server_config()
     cfg.auth.mode = "dev"
@@ -138,7 +138,7 @@ class TestParallelCollectTaskException:
         await ctrl.create_group(group, principal="admin")
 
         # Patch OutputCollector.collect so it raises for w1 and succeeds for w2.
-        from provide.terminal.bridge.fanout._collector import OutputCollector
+        from provide.uterm.bridge.fanout._collector import OutputCollector
 
         original_collect = OutputCollector.collect
 
@@ -191,7 +191,7 @@ class TestDeleteGroupForbidden:
     def test_delete_group_by_non_creator_returns_403(self) -> None:
         """The group creator is 'dev' (dev-mode principal). Attempts to delete while
         the hub reports a different group creator return 403."""
-        from provide.terminal.bridge.fanout._routes import register_fanout_routes
+        from provide.uterm.bridge.fanout._routes import register_fanout_routes
 
         # Create a hub with a fan-out controller and register routes.
         hub = TermHub()
@@ -249,7 +249,7 @@ class TestGrantAccessForbidden:
 
     def test_grant_access_by_non_creator_returns_403(self) -> None:
         """Only the group creator can grant access; non-creator gets 403."""
-        from provide.terminal.bridge.fanout._routes import register_fanout_routes
+        from provide.uterm.bridge.fanout._routes import register_fanout_routes
 
         hub = TermHub()
         ctrl = FanOutController(hub)

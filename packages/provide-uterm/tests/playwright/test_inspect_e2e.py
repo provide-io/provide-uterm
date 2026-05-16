@@ -24,9 +24,9 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from playwright.sync_api import Page, expect
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes
-from provide.terminal.tunnel.protocol import CHANNEL_HTTP, encode_frame
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes
+from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
 from starlette.responses import HTMLResponse
 
 # ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ from starlette.responses import HTMLResponse
 
 def _inspect_page_html(session_id: str, assets_path: str) -> str:
     """Generate an inspect page using the server's UI helper."""
-    from provide.terminal.server.ui import inspect_page_html
+    from provide.uterm.server.ui import inspect_page_html
 
     return inspect_page_html(
         title=f"Inspect {session_id}",
@@ -58,7 +58,7 @@ def inspect_server():
     )
 
     # Mount frontend assets
-    frontend = importlib.resources.files("provide.terminal.server") / "frontend"
+    frontend = importlib.resources.files("provide.uterm.server") / "frontend"
     frontend_str = str(frontend)
 
     from starlette.staticfiles import StaticFiles

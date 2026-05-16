@@ -15,8 +15,8 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import HijackSession, WorkerTermState
 
 # ---------------------------------------------------------------------------
 # Fix 3 regression — _try_release_ws_hijack atomic check-and-clear

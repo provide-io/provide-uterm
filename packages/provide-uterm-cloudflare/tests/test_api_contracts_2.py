@@ -10,8 +10,8 @@ from __future__ import annotations
 import time
 
 import jwt
-from provide.terminal.cloudflare.auth.jwt import decode_jwt
-from provide.terminal.cloudflare.config import CloudflareConfig, JwtConfig
+from provide.uterm.cloudflare.auth.jwt import decode_jwt
+from provide.uterm.cloudflare.config import CloudflareConfig, JwtConfig
 
 # ---------------------------------------------------------------------------
 # Contract: JWT roles_claim parity with FastAPI AuthConfig
@@ -122,12 +122,12 @@ def test_config_from_env_jwt_claims_default_values() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Contract: assets — local static/ files must not shadow provide.terminal
+# Contract: assets — local static/ files must not shadow provide.uterm
 # ---------------------------------------------------------------------------
 
 
 def test_no_local_static_overrides() -> None:
-    """ui/static/ must not contain hand-authored files that shadow provide.terminal.
+    """ui/static/ must not contain hand-authored files that shadow provide.uterm.
 
     Build-time artifacts (populated by wrangler [build] or Docker COPY) are
     allowed — they are gitignored and will not be present in a clean checkout.
@@ -145,12 +145,12 @@ def test_no_local_static_overrides() -> None:
         return
 
     try:
-        static_root = importlib.resources.files("provide.terminal.cloudflare.ui") / "static"
+        static_root = importlib.resources.files("provide.uterm.cloudflare.ui") / "static"
         static_files = [p for p in static_root.iterdir() if p.is_file()]  # type: ignore[union-attr]
     except (ModuleNotFoundError, TypeError, NotImplementedError, FileNotFoundError):
         static_files = []
 
     assert static_files == [], (
-        f"Found local static overrides that shadow provide.terminal: {[str(f) for f in static_files]}. "
-        "Delete them and use the provide.terminal package as the single source of truth."
+        f"Found local static overrides that shadow provide.uterm: {[str(f) for f in static_files]}. "
+        "Delete them and use the provide.uterm package as the single source of truth."
     )
