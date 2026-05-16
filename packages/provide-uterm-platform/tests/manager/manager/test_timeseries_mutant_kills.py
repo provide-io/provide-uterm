@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from provide.terminal.manager.timeseries.manager import TimeseriesManager
+from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
 
 def _make_status(

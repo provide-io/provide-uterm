@@ -11,8 +11,8 @@ import contextlib
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime
 
 
 def _make_session(

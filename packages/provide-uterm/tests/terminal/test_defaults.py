@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from provide.terminal.defaults import TerminalDefaults
+from provide.uterm.defaults import TerminalDefaults
 
 
 class TestTerminalDefaults:

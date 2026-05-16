@@ -41,12 +41,12 @@ import httpx
 import pytest
 import uvicorn
 import websockets
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.config import config_from_mapping
-from provide.terminal.transports.telnet_server import start_telnet_server
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.config import config_from_mapping
+from provide.uterm.transports.telnet_server import start_telnet_server
 
-from provide.terminal.control_channel import ControlChannelDecoder as ControlStreamDecoder
-from provide.terminal.control_channel import ControlChunk, DataChunk
+from provide.uterm.control_channel import ControlChannelDecoder as ControlStreamDecoder
+from provide.uterm.control_channel import ControlChunk, DataChunk
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 

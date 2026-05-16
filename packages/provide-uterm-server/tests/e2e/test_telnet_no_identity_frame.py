@@ -27,7 +27,7 @@ import pytest
 import websockets
 import websockets.server
 
-from provide.terminal.gateway import TelnetWsGateway
+from provide.uterm.gateway import TelnetWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 pytestmark = pytest.mark.asyncio

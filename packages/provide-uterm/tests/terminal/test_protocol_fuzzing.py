@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     DLE,
     STX,
     ControlChannelDecoder,

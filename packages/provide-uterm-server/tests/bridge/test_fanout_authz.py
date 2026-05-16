@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 
 def _make_app() -> Any:

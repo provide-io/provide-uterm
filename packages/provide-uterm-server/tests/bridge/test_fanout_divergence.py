@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-from provide.terminal.bridge.fanout._divergence import compute_divergence
+from provide.uterm.bridge.fanout._divergence import compute_divergence
 
 
 def test_all_identical_outputs_not_divergent() -> None:

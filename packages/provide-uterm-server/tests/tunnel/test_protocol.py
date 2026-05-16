@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.tunnel.protocol import (
+from provide.uterm.tunnel.protocol import (
     CHANNEL_CONTROL,
     CHANNEL_DATA,
     FLAG_DATA,

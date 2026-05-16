@@ -17,7 +17,7 @@ import time
 from typing import Any
 
 import httpx
-from provide.terminal.client import connect_async_ws
+from provide.uterm.client import connect_async_ws
 
 from tests.e2e._live_server import live_server_with_bus
 

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for src/provide/terminal/hijack/hub/core.py (part 2).
+"""Mutation-killing tests for src/provide/uterm/hijack/hub/core.py (part 2).
 
 Covers:
 - disconnect_worker: was_hijacked logic; broadcast payload correctness;
@@ -18,8 +18,8 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 from tests.bridge.control_channel_helpers import decode_control_payloads
 
 
@@ -321,7 +321,7 @@ class TestDisconnectWorkerCloseException:
             st.browsers[browser_ws] = "operator"
 
         mock_logger = MagicMock()
-        with patch("provide.terminal.bridge.hub.messaging.logger", mock_logger):
+        with patch("provide.uterm.bridge.hub.messaging.logger", mock_logger):
             await hub.disconnect_worker("w1")
 
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
@@ -455,7 +455,7 @@ async def test_hub_shutdown_cancels_background_tasks() -> None:
     """shutdown() cancels background tasks and logs the count."""
     import asyncio
 
-    from provide.terminal.bridge.hub import TermHub
+    from provide.uterm.bridge.hub import TermHub
 
     hub = TermHub()
 
@@ -473,7 +473,7 @@ async def test_hub_shutdown_cancels_background_tasks() -> None:
 
 async def test_hub_shutdown_empty_tasks_is_noop() -> None:
     """shutdown() with no background tasks returns without error."""
-    from provide.terminal.bridge.hub import TermHub
+    from provide.uterm.bridge.hub import TermHub
 
     hub = TermHub()
     assert len(hub._background_tasks) == 0
@@ -484,7 +484,7 @@ async def test_shutdown_background_tasks_returns_count() -> None:
     """shutdown_background_tasks() returns the number of tasks cancelled."""
     import asyncio
 
-    from provide.terminal.bridge.hub.connections import shutdown_background_tasks
+    from provide.uterm.bridge.hub.connections import shutdown_background_tasks
 
     async def _long() -> None:
         await asyncio.sleep(60)
@@ -506,7 +506,7 @@ async def test_shutdown_background_tasks_empty_returns_zero() -> None:
     """shutdown_background_tasks() with empty set returns 0."""
     import asyncio
 
-    from provide.terminal.bridge.hub.connections import shutdown_background_tasks
+    from provide.uterm.bridge.hub.connections import shutdown_background_tasks
 
     task_set: set[asyncio.Task[None]] = set()
     count = await shutdown_background_tasks(task_set)

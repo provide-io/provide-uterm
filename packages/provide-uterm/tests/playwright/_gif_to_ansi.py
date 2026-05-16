@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""GIF-to-ANSI converter for Playwright tests — delegates to provide.terminal.render."""
+"""GIF-to-ANSI converter for Playwright tests — delegates to provide.uterm.render."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from provide.terminal.render.image import image_to_ansi_frames as _image_to_ansi_frames
-from provide.terminal.render.sgr import ColorMode
+from provide.uterm.render.image import image_to_ansi_frames as _image_to_ansi_frames
+from provide.uterm.render.sgr import ColorMode
 
 
 def gif_to_ansi_frames(

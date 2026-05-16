@@ -27,7 +27,7 @@ from typing import Any
 
 import httpx
 import uvicorn
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 DEMO_DIR = Path("demo/recordings")
 DEMO_DIR.mkdir(parents=True, exist_ok=True)

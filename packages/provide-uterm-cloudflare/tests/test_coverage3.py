@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
-from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
-from provide.terminal.cloudflare.config import JwtConfig
-from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
+from provide.uterm.cloudflare.config import JwtConfig
+from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
 
 
 def _decode_control_frames(messages: list[str]) -> list[dict]:
@@ -100,7 +100,7 @@ class _AsyncWs(_MockWs):
 
 async def test_fetch_jwks_urllib_fallback() -> None:
     """_fetch_jwks falls back to urllib when js.fetch is unavailable."""
-    from provide.terminal.cloudflare.auth.jwt import _fetch_jwks
+    from provide.uterm.cloudflare.auth.jwt import _fetch_jwks
 
     fake_keys: dict = {"keys": []}
     encoded = json.dumps(fake_keys).encode()
@@ -152,7 +152,7 @@ async def test_decode_jwt_unexpected_signing_key_error_wrapped() -> None:
 
     with (
         patch(
-            "provide.terminal.cloudflare.auth.jwt._resolve_signing_key",
+            "provide.uterm.cloudflare.auth.jwt._resolve_signing_key",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
         pytest.raises(JwtValidationError, match="failed to verify token"),
@@ -167,7 +167,7 @@ async def test_decode_jwt_unexpected_signing_key_error_wrapped() -> None:
 
 async def test_jwks_no_matching_key_raises() -> None:
     """When no JWKS key matches kid, JwtValidationError is raised."""
-    from provide.terminal.cloudflare.auth.jwt import _resolve_signing_key
+    from provide.uterm.cloudflare.auth.jwt import _resolve_signing_key
 
     empty_jwks = {"keys": []}
 
@@ -185,7 +185,7 @@ async def test_jwks_no_matching_key_raises() -> None:
     )
 
     with (
-        patch("provide.terminal.cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value=empty_jwks)),
+        patch("provide.uterm.cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value=empty_jwks)),
         pytest.raises(JwtValidationError, match="no matching key"),
     ):
         await _resolve_signing_key(token, config)
@@ -223,10 +223,10 @@ async def test_jwks_no_kid_matches_by_algorithm() -> None:
     mock_key.algorithm_name = "RS256"
     mock_key.key = public_key
 
-    from provide.terminal.cloudflare.auth.jwt import _resolve_signing_key
+    from provide.uterm.cloudflare.auth.jwt import _resolve_signing_key
 
     with (
-        patch("provide.terminal.cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
+        patch("provide.uterm.cloudflare.auth.jwt._fetch_jwks", new=AsyncMock(return_value={})),
         patch("jwt.PyJWKSet.from_dict", return_value=MagicMock(keys=[mock_key])),
         patch("jwt.get_unverified_header", return_value={"alg": "RS256"}),
     ):
@@ -286,7 +286,7 @@ def test_extract_token_url_parse_raises_returns_none() -> None:
 
 async def test_browser_role_for_request_jwt_validation_error_returns_viewer() -> None:
     """JwtValidationError (bad/expired token) falls back to viewer — not a server fault."""
-    from provide.terminal.cloudflare.auth.jwt import JwtValidationError
+    from provide.uterm.cloudflare.auth.jwt import JwtValidationError
 
     rt = _make_runtime(mode="jwt")
 
@@ -297,7 +297,7 @@ async def test_browser_role_for_request_jwt_validation_error_returns_viewer() ->
         url = "http://localhost/"
 
     with patch(
-        "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
+        "provide.uterm.cloudflare.do.session_runtime.auth.decode_jwt",
         new=AsyncMock(side_effect=JwtValidationError("bad token")),
     ):
         role = await rt.browser_role_for_request(_Req())
@@ -318,7 +318,7 @@ async def test_browser_role_for_request_network_error_propagates() -> None:
 
     with (
         patch(
-            "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
+            "provide.uterm.cloudflare.do.session_runtime.auth.decode_jwt",
             new=AsyncMock(side_effect=RuntimeError("JWKS network error")),
         ),
         pytest.raises(RuntimeError, match="JWKS network error"),
@@ -345,7 +345,7 @@ async def test_browser_subject_for_request_returns_none_in_dev_mode() -> None:
 
 async def test_browser_subject_for_request_returns_subject_in_jwt_mode() -> None:
     """In jwt mode, browser_subject_for_request returns the JWT subject_id."""
-    from provide.terminal.cloudflare.auth.jwt import Principal
+    from provide.uterm.cloudflare.auth.jwt import Principal
 
     rt = _make_runtime(mode="jwt")
     token = _make_token(sub="alice")
@@ -355,7 +355,7 @@ async def test_browser_subject_for_request_returns_subject_in_jwt_mode() -> None
         url = "http://localhost/"
 
     with patch(
-        "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
+        "provide.uterm.cloudflare.do.session_runtime.auth.decode_jwt",
         new=AsyncMock(return_value=Principal(subject_id="alice", roles=("viewer",))),
     ):
         result = await rt.browser_subject_for_request(_Req())
@@ -377,7 +377,7 @@ async def test_browser_subject_for_request_returns_none_without_token() -> None:
 
 async def test_browser_subject_for_request_returns_none_on_jwt_error() -> None:
     """JwtValidationError returns None instead of propagating."""
-    from provide.terminal.cloudflare.auth.jwt import JwtValidationError
+    from provide.uterm.cloudflare.auth.jwt import JwtValidationError
 
     rt = _make_runtime(mode="jwt")
     token = _make_token(sub="u1")
@@ -387,7 +387,7 @@ async def test_browser_subject_for_request_returns_none_on_jwt_error() -> None:
         url = "http://localhost/"
 
     with patch(
-        "provide.terminal.cloudflare.do.session_runtime.auth.decode_jwt",
+        "provide.uterm.cloudflare.do.session_runtime.auth.decode_jwt",
         new=AsyncMock(side_effect=JwtValidationError("bad")),
     ):
         result = await rt.browser_subject_for_request(_Req())

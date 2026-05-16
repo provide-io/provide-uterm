@@ -37,8 +37,8 @@ sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm/src"))
 sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm-platform/src"))
 
 import uvicorn  # noqa: E402
-from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
-from provide.terminal.server.models import ServerBindConfig  # noqa: E402
+from provide.uterm.server import create_server_app, default_server_config  # noqa: E402
+from provide.uterm.server.models import ServerBindConfig  # noqa: E402
 
 _PYWRANGLER_PORT = 8992
 _PYWRANGLER_BASE = f"http://127.0.0.1:{_PYWRANGLER_PORT}"

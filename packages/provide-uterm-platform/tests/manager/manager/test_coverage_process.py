@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import provide.terminal.manager.process as process_module
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.process import AgentProcessManager
+import provide.uterm.manager.process as process_module
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:

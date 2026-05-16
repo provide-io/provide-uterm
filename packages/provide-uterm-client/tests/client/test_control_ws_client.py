@@ -9,9 +9,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from provide.terminal.control_channel import encode_control, encode_data
+from provide.uterm.control_channel import encode_control, encode_data
 
-from provide.terminal.client.control_ws import (
+from provide.uterm.client.control_ws import (
     AsyncInlineWebSocketClient,
     LogicalFrameDecoder,
     SyncInlineWebSocketClient,

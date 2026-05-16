@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.gateway — token helpers, WS control, IAC stripping; color helpers from provide.terminal.colors."""
+"""Tests for provide.uterm.gateway — token helpers, WS control, IAC stripping; color helpers from provide.uterm.colors."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ import asyncio
 from typing import Any
 
 import websockets
-from provide.terminal.colors import apply_color_mode as _apply_color_mode
-from provide.terminal.colors import rgb_to_256 as _rgb_to_256
-from provide.terminal.colors.rgb import _clamp8
-from provide.terminal.control_channel import encode_control
-from provide.terminal.gateway import (
+from provide.uterm.colors import apply_color_mode as _apply_color_mode
+from provide.uterm.colors import rgb_to_256 as _rgb_to_256
+from provide.uterm.colors.rgb import _clamp8
+from provide.uterm.control_channel import encode_control
+from provide.uterm.gateway import (
     TelnetWsGateway,
     _delete_token,
     _handle_ws_control,

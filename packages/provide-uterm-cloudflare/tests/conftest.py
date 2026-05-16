@@ -25,7 +25,7 @@ import pytest
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _CF_VENDOR_MISSING = not (_PACKAGE_ROOT / "python_modules").exists()
 
-# Ensure the main provide-uterm src is on sys.path so `provide.terminal` is
+# Ensure the main provide-uterm src is on sys.path so `provide.uterm` is
 # importable in E2E tests that use HostedSessionRuntime.  The `provide` namespace
 # package can resolve to provide-engine only if its src isn't first on sys.path.
 _UTERM_SRC = _PACKAGE_ROOT.parents[1] / "src"

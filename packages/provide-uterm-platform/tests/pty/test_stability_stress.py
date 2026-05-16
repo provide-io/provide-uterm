@@ -1,8 +1,8 @@
 import psutil
 import pytest
 
-from provide.terminal.pty.capture_connector import CaptureConnector
-from provide.terminal.pty.connector import PTYConnector
+from provide.uterm.pty.capture_connector import CaptureConnector
+from provide.uterm.pty.connector import PTYConnector
 
 
 @pytest.mark.asyncio

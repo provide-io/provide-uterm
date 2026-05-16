@@ -9,10 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 
-from provide.terminal.bridge.hub import EventBus, TermHub
-from provide.terminal.server.config import config_from_mapping
-from provide.terminal.server.models import RecordingConfig
-from provide.terminal.server.registry import SessionRegistry
+from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.config import config_from_mapping
+from provide.uterm.server.models import RecordingConfig
+from provide.uterm.server.registry import SessionRegistry
 
 
 def _make_registry(with_bus: bool = True) -> tuple[SessionRegistry, TermHub, EventBus | None]:
@@ -191,7 +191,7 @@ async def test_stream_pattern_filter() -> None:
 async def test_stream_route_404_unknown_session() -> None:
     from fastapi.testclient import TestClient
 
-    from provide.terminal.server.app import create_server_app
+    from provide.uterm.server.app import create_server_app
 
     cfg = config_from_mapping({"server": {"host": "127.0.0.1", "port": 8780}, "auth": {"mode": "dev"}, "sessions": []})
     app = create_server_app(cfg)
@@ -207,7 +207,7 @@ async def test_stream_route_404_unknown_session() -> None:
 async def test_stream_route_403_insufficient_privileges() -> None:
     from fastapi.testclient import TestClient
 
-    from provide.terminal.server.app import create_server_app
+    from provide.uterm.server.app import create_server_app
 
     cfg = config_from_mapping(
         {
@@ -239,7 +239,7 @@ async def test_stream_route_no_bus_returns_empty_stream() -> None:
     """
     from fastapi.testclient import TestClient
 
-    from provide.terminal.server.app import create_server_app
+    from provide.uterm.server.app import create_server_app
 
     cfg = config_from_mapping(
         {

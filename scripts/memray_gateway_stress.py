@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Memray stress test for ControlChannel encoding/decoding."""
 
-from provide.terminal.control_channel import ControlChannelDecoder, encode_control, encode_data
+from provide.uterm.control_channel import ControlChannelDecoder, encode_control, encode_data
 
 # Payload size variants
 SMALL = "x" * 10

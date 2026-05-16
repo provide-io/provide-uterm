@@ -10,10 +10,10 @@ import base64
 
 import pytest
 
-from provide.terminal.cli import _build_parser
-from provide.terminal.cli._watch_app import Exchange, _decode_body, human_size, parse_http_frames, status_style
-from provide.terminal.cli.watch import extract_tunnel_id
-from provide.terminal.control_channel import encode_control
+from provide.uterm.cli import _build_parser
+from provide.uterm.cli._watch_app import Exchange, _decode_body, human_size, parse_http_frames, status_style
+from provide.uterm.cli.watch import extract_tunnel_id
+from provide.uterm.control_channel import encode_control
 
 
 class TestWatchArgParsing:
@@ -182,7 +182,7 @@ class TestReadToken:
     def test_explicit_token(self) -> None:
         from unittest.mock import MagicMock
 
-        from provide.terminal.cli.watch import _read_token
+        from provide.uterm.cli.watch import _read_token
 
         args = MagicMock(token="my-tok", token_file=None)
         assert _read_token(args) == "my-tok"
@@ -191,7 +191,7 @@ class TestReadToken:
         from pathlib import Path
         from unittest.mock import MagicMock
 
-        from provide.terminal.cli.watch import _read_token
+        from provide.uterm.cli.watch import _read_token
 
         token_file = Path(str(tmp_path)) / "token"
         token_file.write_text("file-token-123\n")
@@ -201,7 +201,7 @@ class TestReadToken:
     def test_no_token(self) -> None:
         from unittest.mock import MagicMock
 
-        from provide.terminal.cli.watch import _read_token
+        from provide.uterm.cli.watch import _read_token
 
         args = MagicMock(token=None, token_file="/nonexistent")
         assert _read_token(args) is None

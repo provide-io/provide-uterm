@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.server.connectors import KNOWN_CONNECTOR_TYPES, build_connector
-from provide.terminal.server.connectors.websocket import WebSocketSessionConnector
+from provide.uterm.server.connectors import KNOWN_CONNECTOR_TYPES, build_connector
+from provide.uterm.server.connectors.websocket import WebSocketSessionConnector
 
 
 class TestWebSocketSessionConnector:
@@ -319,7 +319,7 @@ class TestWebSocketSessionConnector:
         assert "websocket" in KNOWN_CONNECTOR_TYPES
 
     def test_build_connector_ushell(self) -> None:
-        from provide.terminal.shell.terminal._connector import UshellConnector
+        from provide.uterm.shell.terminal._connector import UshellConnector
 
         c = build_connector("sid", "dn", "ushell", {})
         assert isinstance(c, UshellConnector)
@@ -336,7 +336,7 @@ class TestWebSocketSessionConnector:
         assert "ushell" in KNOWN_CONNECTOR_TYPES
 
     def test_build_connector_shell(self) -> None:
-        from provide.terminal.server.connectors.shell import ShellSessionConnector
+        from provide.uterm.server.connectors.shell import ShellSessionConnector
 
         c = build_connector("my-sid", "my-dn", "shell", {})
         assert isinstance(c, ShellSessionConnector)
@@ -344,7 +344,7 @@ class TestWebSocketSessionConnector:
         assert c._display_name == "my-dn"
 
     def test_build_connector_telnet(self) -> None:
-        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+        from provide.uterm.server.connectors.telnet import TelnetSessionConnector
 
         c = build_connector("my-sid", "my-dn", "telnet", {})
         assert isinstance(c, TelnetSessionConnector)
@@ -352,7 +352,7 @@ class TestWebSocketSessionConnector:
         assert c._display_name == "my-dn"
 
     def test_build_connector_ssh(self) -> None:
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         c = build_connector("my-sid", "my-dn", "ssh", {"insecure_no_host_check": True})
         assert isinstance(c, SshSessionConnector)

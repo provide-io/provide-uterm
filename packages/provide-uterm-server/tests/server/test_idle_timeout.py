@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
 
 @pytest.fixture
@@ -171,7 +171,7 @@ async def test_activity_updated_on_worker_data() -> None:
 
 async def test_config_default_idle_timeout() -> None:
     """ServerConfig.session_idle_timeout_s defaults to 0 (disabled)."""
-    from provide.terminal.server.models import ServerConfig
+    from provide.uterm.server.models import ServerConfig
 
     cfg = ServerConfig()
     assert cfg.session_idle_timeout_s == 0
@@ -179,7 +179,7 @@ async def test_config_default_idle_timeout() -> None:
 
 async def test_config_custom_idle_timeout() -> None:
     """ServerConfig.session_idle_timeout_s can be set to a positive value."""
-    from provide.terminal.server.models import ServerConfig
+    from provide.uterm.server.models import ServerConfig
 
     cfg = ServerConfig(session_idle_timeout_s=300)
     assert cfg.session_idle_timeout_s == 300

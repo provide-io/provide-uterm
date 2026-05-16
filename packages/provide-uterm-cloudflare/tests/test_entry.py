@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from provide.terminal.cloudflare.entry.registry import _extract_worker_id
+from provide.uterm.cloudflare.entry.registry import _extract_worker_id
 
 
 def test_extract_worker_id_for_ws_route() -> None:

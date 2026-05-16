@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.server.profiles import ConnectionProfile, FileProfileStore
+from provide.uterm.server.profiles import ConnectionProfile, FileProfileStore
 
 
 def _make_profile(

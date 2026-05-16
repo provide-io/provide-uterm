@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from provide.terminal.server.auth import Principal
-from provide.terminal.server.authorization import AuthorizationService
-from provide.terminal.server.models import SessionDefinition
+from provide.uterm.server.auth import Principal
+from provide.uterm.server.authorization import AuthorizationService
+from provide.uterm.server.models import SessionDefinition
 
 if TYPE_CHECKING:
-    from provide.terminal.server.profiles import ConnectionProfile
+    from provide.uterm.server.profiles import ConnectionProfile
 
 
 @pytest.fixture()
@@ -214,7 +214,7 @@ def _make_test_profile(owner: str, visibility: str = "private") -> ConnectionPro
     """Return a minimal ConnectionProfile for auth tests."""
     import time
 
-    from provide.terminal.server.profiles import ConnectionProfile
+    from provide.uterm.server.profiles import ConnectionProfile
 
     now = time.time()
     return ConnectionProfile(

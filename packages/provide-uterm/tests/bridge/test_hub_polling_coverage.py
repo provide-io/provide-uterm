@@ -15,8 +15,8 @@ import re
 import time
 from unittest.mock import AsyncMock
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
 from tests.bridge.control_channel_helpers import decode_control_payload
 
@@ -81,7 +81,7 @@ async def test_notify_hijack_changed_async_exception_is_logged(caplog) -> None:
 
     hub = TermHub(on_hijack_changed=failing_cb)
 
-    with caplog.at_level(logging.WARNING, logger="provide.terminal.bridge.hub"):
+    with caplog.at_level(logging.WARNING, logger="provide.uterm.bridge.hub"):
         hub.notify_hijack_changed("bot1", enabled=True, owner="me")
         await asyncio.sleep(0.05)  # let the fire-and-forget task run
 
@@ -98,7 +98,7 @@ async def test_notify_hijack_changed_successful_async_does_not_log(caplog) -> No
 
     hub = TermHub(on_hijack_changed=ok_cb)
 
-    with caplog.at_level(logging.WARNING, logger="provide.terminal.bridge.hub"):
+    with caplog.at_level(logging.WARNING, logger="provide.uterm.bridge.hub"):
         hub.notify_hijack_changed("bot1", enabled=True, owner="me")
         await asyncio.sleep(0.05)
 

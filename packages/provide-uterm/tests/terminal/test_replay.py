@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from provide.terminal.replay.raw import rebuild_raw_stream
+from provide.uterm.replay.raw import rebuild_raw_stream
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -110,7 +110,7 @@ class TestReplayLog:
     def test_replay_log_renders_screens(self, tmp_path: Path, capsys) -> None:
         import json
 
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         log = tmp_path / "session.jsonl"
         log.write_text(
@@ -126,7 +126,7 @@ class TestReplayLog:
     def test_replay_log_skips_non_matching_events(self, tmp_path: Path, capsys) -> None:
         import json
 
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         log = tmp_path / "session.jsonl"
         log.write_text(json.dumps({"ts": 1.0, "event": "send", "data": {"screen": "Should Not Appear"}}) + "\n")
@@ -137,7 +137,7 @@ class TestReplayLog:
     def test_replay_log_step_mode(self, tmp_path: Path, monkeypatch) -> None:
         import json
 
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         log = tmp_path / "session.jsonl"
         log.write_text(json.dumps({"ts": 1.0, "event": "screen", "data": {"screen": "Frame 1"}}) + "\n")
@@ -148,7 +148,7 @@ class TestReplayLog:
     def test_replay_log_skips_records_without_screen(self, tmp_path: Path, capsys) -> None:
         import json
 
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         log = tmp_path / "session.jsonl"
         log.write_text(json.dumps({"ts": 1.0, "event": "screen", "data": {}}) + "\n")
@@ -159,7 +159,7 @@ class TestReplayLog:
         """Blank lines in the log file are skipped (covers line 45)."""
         import json
 
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         log = tmp_path / "session.jsonl"
         log.write_text(
@@ -175,7 +175,7 @@ class TestReplayLog:
         """time.sleep is called when delta > 0 between frames (covers line 56)."""
         import json
 
-        from provide.terminal.replay.viewer import replay_log
+        from provide.uterm.replay.viewer import replay_log
 
         sleep_calls: list[float] = []
         monkeypatch.setattr("time.sleep", sleep_calls.append)

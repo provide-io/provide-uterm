@@ -1,4 +1,4 @@
-from provide.terminal.client.sanitizer import sanitize_keystrokes
+from provide.uterm.client.sanitizer import sanitize_keystrokes
 
 
 def test_sanitizer_keeps_printable():

@@ -9,7 +9,7 @@ Run via: python -m memray run -o gateway_stress.bin scripts/memray_gateway_stres
 
 from __future__ import annotations
 
-from provide.terminal.control_channel import ControlChannelDecoder, encode_control, encode_data
+from provide.uterm.control_channel import ControlChannelDecoder, encode_control, encode_data
 
 NUM_ITERATIONS = 100_000
 DATA_PAYLOADS = [

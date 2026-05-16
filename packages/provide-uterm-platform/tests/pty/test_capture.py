@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.pty.capture import (
+from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,

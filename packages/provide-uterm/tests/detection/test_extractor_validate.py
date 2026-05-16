@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.detection.extractor import KVExtractor
+from provide.uterm.detection.extractor import KVExtractor
 
 
 class TestKVExtractorValidateInternals:
@@ -134,7 +134,7 @@ class TestKVExtractorValidateInternals:
         mock_pattern.finditer.return_value = [mock_match]
 
         config = {"field": "val", "type": "string", "regex": r"val: (\w+)"}
-        with patch("provide.terminal.detection.extractor.re.compile", return_value=mock_pattern):
+        with patch("provide.uterm.detection.extractor.re.compile", return_value=mock_pattern):
             result = KVExtractor.extract("val: something", config, run_validation=False)
         assert result is not None
         assert result["val"] == "fallback"

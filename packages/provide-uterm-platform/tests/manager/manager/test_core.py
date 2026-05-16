@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.core."""
+"""Tests for provide.uterm.manager.core."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ class TestSwarmStatus:
 
     def test_custom_builder(self, config):
         def custom_builder(mgr):
-            from provide.terminal.manager.models import SwarmStatus
+            from provide.uterm.manager.models import SwarmStatus
 
             return SwarmStatus(
                 total_agents=42,

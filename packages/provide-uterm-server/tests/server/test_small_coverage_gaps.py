@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 # ---------------------------------------------------------------------------
 # 1. tracing.py — lines 33-35 (set_attribute loop when span has set_attribute)
@@ -27,7 +27,7 @@ class TestTracingSetAttribute:
 
     def test_span_calls_set_attribute_for_non_none_values(self) -> None:
         """When the span has a callable set_attribute, attributes are forwarded."""
-        from provide.terminal.server.tracing import _SpanContext
+        from provide.uterm.server.tracing import _SpanContext
 
         recorded: dict[str, str] = {}
 
@@ -56,7 +56,7 @@ class TestTracingSetAttribute:
 
 class TestTunnelConfigTtlValidation:
     def test_token_ttl_too_short_raises(self) -> None:
-        from provide.terminal.server.models import TunnelConfig
+        from provide.uterm.server.models import TunnelConfig
 
         with pytest.raises(ValidationError, match="token_ttl_s must be >= 60"):
             TunnelConfig(token_ttl_s=59)
@@ -70,8 +70,8 @@ class TestTunnelConfigTtlValidation:
 class TestRuntimeRecvTaskCancelled:
     async def test_bridge_session_breaks_on_cancelled_recv_task(self) -> None:
         """When a completed recv_task raises CancelledError, _bridge_session breaks."""
-        from provide.terminal.server.models import RecordingConfig, SessionDefinition
-        from provide.terminal.server.runtime import HostedSessionRuntime
+        from provide.uterm.server.models import RecordingConfig, SessionDefinition
+        from provide.uterm.server.runtime import HostedSessionRuntime
 
         defn = SessionDefinition(
             session_id="test-cancel",
@@ -146,14 +146,14 @@ class TestRuntimeRecvTaskCancelled:
 class TestRestHelpersPromptIdBranch:
     def test_extract_prompt_id_empty_string(self) -> None:
         """extract_prompt_id returns None when prompt_id is an empty string."""
-        from provide.terminal.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.bridge.rest_helpers import extract_prompt_id
 
         result = extract_prompt_id({"prompt_detected": {"prompt_id": ""}})
         assert result is None
 
     def test_extract_prompt_id_non_string(self) -> None:
         """extract_prompt_id returns None when prompt_id is not a string."""
-        from provide.terminal.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.bridge.rest_helpers import extract_prompt_id
 
         result = extract_prompt_id({"prompt_detected": {"prompt_id": 123}})
         assert result is None
@@ -167,7 +167,7 @@ class TestRestHelpersPromptIdBranch:
 class TestHijackAcquireCompensatingResumeFails:
     async def test_compensating_resume_logs_warning_on_failure(self) -> None:
         """When the finally-block resume fails, the exception is caught and logged."""
-        from provide.terminal.bridge.hub import TermHub
+        from provide.uterm.bridge.hub import TermHub
 
         hub = TermHub(resolve_browser_role=lambda _ws, _wid: "admin")
         router = hub.create_router()
@@ -222,7 +222,7 @@ class TestHijackAcquireCompensatingResumeFails:
 class TestWorkerLinkCancelledTask:
     async def test_handle_connection_cancelled_task_in_done(self) -> None:
         """When a done task is cancelled, _handle_connection skips it."""
-        from provide.terminal.bridge.worker_link import TermBridge
+        from provide.uterm.bridge.worker_link import TermBridge
 
         worker = MagicMock()
         worker.session = None
@@ -247,7 +247,7 @@ class TestWorkerLinkCancelledTask:
 
     async def test_handle_connection_both_tasks_cancel(self) -> None:
         """When _handle_connection is cancelled, both tasks are cancelled."""
-        from provide.terminal.bridge.worker_link import TermBridge
+        from provide.uterm.bridge.worker_link import TermBridge
 
         worker = MagicMock()
         worker.session = None
@@ -273,8 +273,8 @@ class TestWorkerLinkCancelledTask:
 class TestWorkerLinkEmptyDataChunk:
     async def test_recv_loop_empty_data_chunk_skipped(self) -> None:
         """Empty DataChunk in _recv_loop should not call _send_keys."""
-        from provide.terminal.bridge.worker_link import TermBridge
-        from provide.terminal.control_channel import encode_data
+        from provide.uterm.bridge.worker_link import TermBridge
+        from provide.uterm.control_channel import encode_data
 
         worker = MagicMock()
         worker.session = None
@@ -321,7 +321,7 @@ class TestWorkerLinkEmptyDataChunk:
 class TestApiKeyRoutesMissingPrincipal:
     def test_missing_principal_raises_500(self) -> None:
         """When uterm_principal is not on request.state, _principal raises 500."""
-        from provide.terminal.server.routes.api_keys import _principal
+        from provide.uterm.server.routes.api_keys import _principal
 
         request = MagicMock()
         request.state = MagicMock(spec=[])  # no uterm_principal attribute

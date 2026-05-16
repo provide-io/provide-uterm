@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 
-from provide.terminal.emulator import TerminalEmulator, _parse_screen_text
+from provide.uterm.emulator import TerminalEmulator, _parse_screen_text
 
 # ---------------------------------------------------------------------------
 # _parse_screen_text

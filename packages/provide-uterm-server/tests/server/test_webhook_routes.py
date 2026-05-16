@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.config import config_from_mapping
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.config import config_from_mapping
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 VIEWER_H = {"X-Uterm-Principal": "viewer-user", "X-Uterm-Role": "viewer"}

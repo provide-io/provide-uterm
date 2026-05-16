@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "../../packages/provide-uterm-server/src/provide/terminal/server/frontend",
+    outDir: "../../packages/provide-uterm-server/src/provide/uterm/server/frontend",
     emptyOutDir: false,
     manifest: true,
     rollupOptions: {

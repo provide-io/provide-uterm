@@ -14,12 +14,12 @@ import pytest
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport, AsyncClient
-from provide.terminal.bridge.hub import EventBus, TermHub
-from provide.terminal.server.config import config_from_mapping
-from provide.terminal.server.models import RecordingConfig
-from provide.terminal.server.registry import SessionRegistry
+from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.config import config_from_mapping
+from provide.uterm.server.models import RecordingConfig
+from provide.uterm.server.registry import SessionRegistry
 
-from provide.terminal.ai.server import TOOL_COUNT, create_mcp_app
+from provide.uterm.ai.server import TOOL_COUNT, create_mcp_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -28,7 +28,7 @@ from provide.terminal.ai.server import TOOL_COUNT, create_mcp_app
 
 def _make_server_app_with_bus() -> tuple[FastAPI, TermHub, EventBus]:
     """Create a minimal server app with an EventBus wired into TermHub."""
-    from provide.terminal.server.app import create_server_app
+    from provide.uterm.server.app import create_server_app
 
     cfg = config_from_mapping(
         {
@@ -81,7 +81,7 @@ def test_tool_count_is_21() -> None:
 
 class TestSessionWatchMcpTool:
     async def test_watch_returns_events(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -101,7 +101,7 @@ class TestSessionWatchMcpTool:
         mcp = _mcp_for_server(app)
 
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=AsyncMock(
                 return_value=(
                     True,
@@ -121,7 +121,7 @@ class TestSessionWatchMcpTool:
         assert data["timed_out"] is True
 
     async def test_watch_client_error_returns_failure(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -141,7 +141,7 @@ class TestSessionWatchMcpTool:
         mcp = _mcp_for_server(app)
 
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=AsyncMock(return_value=(False, {"error": "connection refused"})),
         ):
             data = await _call(mcp, "session_watch", {"session_id": "s1"})
@@ -149,7 +149,7 @@ class TestSessionWatchMcpTool:
         assert data["success"] is False
 
     async def test_watch_passes_event_types_and_pattern(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -170,7 +170,7 @@ class TestSessionWatchMcpTool:
 
         mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=mock_watch,
         ):
             await _call(
@@ -194,7 +194,7 @@ class TestSessionWatchMcpTool:
         assert call_kwargs.kwargs["max_events"] == 20
 
     async def test_watch_clamps_timeout_to_30s(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -215,7 +215,7 @@ class TestSessionWatchMcpTool:
 
         mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=mock_watch,
         ):
             await _call(mcp, "session_watch", {"session_id": "s1", "timeout_s": 999.0})
@@ -231,7 +231,7 @@ class TestSessionWatchMcpTool:
 
 class TestHijackClientWatchEvents:
     async def test_watch_builds_correct_params(self) -> None:
-        from provide.terminal.client.hijack import HijackClient
+        from provide.uterm.client.hijack import HijackClient
 
         recorded: dict[str, Any] = {}
 
@@ -263,7 +263,7 @@ class TestHijackClientWatchEvents:
         assert recorded["timeout"] == pytest.approx(8.0)
 
     async def test_watch_omits_none_params(self) -> None:
-        from provide.terminal.client.hijack import HijackClient
+        from provide.uterm.client.hijack import HijackClient
 
         recorded: dict[str, Any] = {}
 
@@ -285,7 +285,7 @@ class TestHijackClientWatchEvents:
 
         import httpx
 
-        from provide.terminal.client.hijack import HijackClient
+        from provide.uterm.client.hijack import HijackClient
 
         mock_response = MagicMock(spec=httpx.Response)
         mock_response.is_success = True
@@ -395,7 +395,7 @@ class TestRegistryWatchEvents:
 
 class TestWatchEndpoint:
     def _make_app_with_bus(self) -> tuple[FastAPI, TermHub, EventBus]:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -416,7 +416,7 @@ class TestWatchEndpoint:
         return app, None, bus  # hub injected post-lifespan in tests
 
     async def test_watch_endpoint_no_bus_returns_empty(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -447,7 +447,7 @@ class TestWatchEndpoint:
         assert isinstance(body["timed_out"], bool)
 
     async def test_watch_endpoint_authz_enforced(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -474,7 +474,7 @@ class TestWatchEndpoint:
         assert r.status_code == 403
 
     async def test_watch_endpoint_with_bus_receives_event(self) -> None:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -533,7 +533,7 @@ class TestWatchEndpoint:
 
 class TestSessionSubscribeMcpTool:
     def _make_app(self) -> FastAPI:
-        from provide.terminal.server.app import create_server_app
+        from provide.uterm.server.app import create_server_app
 
         cfg = config_from_mapping(
             {
@@ -556,7 +556,7 @@ class TestSessionSubscribeMcpTool:
         mcp = _mcp_for_server(app)
 
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=AsyncMock(
                 return_value=(
                     True,
@@ -579,7 +579,7 @@ class TestSessionSubscribeMcpTool:
         mcp = _mcp_for_server(app)
 
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=AsyncMock(
                 return_value=(
                     True,
@@ -601,7 +601,7 @@ class TestSessionSubscribeMcpTool:
         mcp = _mcp_for_server(app)
 
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True})),
         ):
             data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": r"\$ "})
@@ -612,7 +612,7 @@ class TestSessionSubscribeMcpTool:
         app = self._make_app()
         mcp = _mcp_for_server(app)
         mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
-        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
             await _call(mcp, "session_subscribe", {"session_id": "s1", "duration_s": 0.001})
 
         call_kwargs = mock_watch.call_args
@@ -622,7 +622,7 @@ class TestSessionSubscribeMcpTool:
         app = self._make_app()
         mcp = _mcp_for_server(app)
         mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
-        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
             await _call(mcp, "session_subscribe", {"session_id": "s1", "duration_s": 9999.0})
 
         call_kwargs = mock_watch.call_args
@@ -632,7 +632,7 @@ class TestSessionSubscribeMcpTool:
         app = self._make_app()
         mcp = _mcp_for_server(app)
         mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
-        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
             await _call(mcp, "session_subscribe", {"session_id": "s1", "max_events": 0})
 
         call_kwargs = mock_watch.call_args
@@ -642,7 +642,7 @@ class TestSessionSubscribeMcpTool:
         app = self._make_app()
         mcp = _mcp_for_server(app)
         mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
-        with patch("provide.terminal.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
             await _call(mcp, "session_subscribe", {"session_id": "s1", "max_events": 10000})
 
         call_kwargs = mock_watch.call_args
@@ -653,7 +653,7 @@ class TestSessionSubscribeMcpTool:
         mcp = _mcp_for_server(app)
 
         with patch(
-            "provide.terminal.client.hijack.HijackClient.watch_session_events",
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
             new=AsyncMock(return_value=(False, {"error": "timeout"})),
         ):
             data = await _call(mcp, "session_subscribe", {"session_id": "s1"})

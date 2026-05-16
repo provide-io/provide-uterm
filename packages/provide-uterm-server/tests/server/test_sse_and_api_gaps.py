@@ -20,8 +20,8 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import SessionDefinition
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import SessionDefinition
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -70,7 +70,7 @@ class TestSseStreamEvents403:
 
         _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.models import AuthConfig
 
         cfg = default_server_config()
         now2 = int(time.time())
@@ -147,15 +147,15 @@ class TestSseStreamEventsSuccess:
         """
         from fastapi import FastAPI
 
-        from provide.terminal.bridge.hub import TermHub
-        from provide.terminal.server.routes.sse import create_sse_router
+        from provide.uterm.bridge.hub import TermHub
+        from provide.uterm.server.routes.sse import create_sse_router
 
         # Build a minimal app with only the SSE router and a known session.
         hub = TermHub()  # NO EventBus — stream returns immediately
         app = FastAPI()
 
         # Attach the state the SSE route needs.
-        from provide.terminal.server.models import SessionDefinition as _SD
+        from provide.uterm.server.models import SessionDefinition as _SD
 
         session_def = _SD(
             session_id="s-stream",
@@ -218,8 +218,8 @@ class TestRegistryStreamNoEventBus:
 
     async def test_stream_session_events_no_event_bus_returns_empty(self) -> None:
         """When the hub has no EventBus, stream_session_events yields nothing."""
-        from provide.terminal.bridge.hub import TermHub
-        from provide.terminal.server.registry import SessionRegistry
+        from provide.uterm.bridge.hub import TermHub
+        from provide.uterm.server.registry import SessionRegistry
 
         # Hub without EventBus.
         hub = TermHub()
@@ -248,8 +248,8 @@ class TestRegistryStreamHeartbeat:
         Then the worker disconnect sentinel stops the generator."""
         from unittest.mock import AsyncMock
 
-        from provide.terminal.bridge.hub import EventBus, TermHub
-        from provide.terminal.server.registry import SessionRegistry
+        from provide.uterm.bridge.hub import EventBus, TermHub
+        from provide.uterm.server.registry import SessionRegistry
 
         hub = TermHub(event_bus=EventBus())
 
@@ -288,8 +288,8 @@ class TestRegistryStreamHeartbeat:
         """When an event arrives, it is yielded as a data: line (line 388)."""
         from unittest.mock import AsyncMock
 
-        from provide.terminal.bridge.hub import EventBus, TermHub
-        from provide.terminal.server.registry import SessionRegistry
+        from provide.uterm.bridge.hub import EventBus, TermHub
+        from provide.uterm.server.registry import SessionRegistry
 
         hub = TermHub(event_bus=EventBus())
 

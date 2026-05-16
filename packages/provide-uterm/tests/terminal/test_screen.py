@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.screen."""
+"""Tests for provide.uterm.screen."""
 
 from __future__ import annotations
 
-from provide.terminal.screen import (
+from provide.uterm.screen import (
     clean_screen_for_display,
     decode_cp437,
     encode_cp437,
@@ -96,10 +96,10 @@ class TestExtractActionTagsEmptyTag:
     def test_empty_raw_tag_skipped(self) -> None:
         from unittest.mock import patch
 
-        from provide.terminal.screen import extract_action_tags
+        from provide.uterm.screen import extract_action_tags
 
         # The findall returns empty string which should be skipped
-        with patch("provide.terminal.screen._ACTION_TAG_RE") as mock_re:
+        with patch("provide.uterm.screen._ACTION_TAG_RE") as mock_re:
             mock_re.findall.return_value = ["", "valid_tag", "VALID_TAG"]
             result = extract_action_tags("anything")
         # Empty tag should be skipped; "valid_tag" and "VALID_TAG" deduplicated
@@ -110,20 +110,20 @@ class TestExtractActionTagsEmptyTag:
 
 class TestActionTagsBoundaries:
     def test_max_tags_zero_defaults_to_one(self) -> None:
-        from provide.terminal.screen import extract_action_tags
+        from provide.uterm.screen import extract_action_tags
 
         result = extract_action_tags("<Tag1> <Tag2> <Tag3>", max_tags=0)
         assert len(result) == 1
         assert result[0] == "Tag1"
 
     def test_max_tags_clamps_to_one(self) -> None:
-        from provide.terminal.screen import extract_action_tags
+        from provide.uterm.screen import extract_action_tags
 
         result = extract_action_tags("<Only>", max_tags=0)
         assert result == ["Only"]
 
     def test_long_tag_names(self) -> None:
-        from provide.terminal.screen import extract_action_tags
+        from provide.uterm.screen import extract_action_tags
 
         long_tag = "x" * 80
         screen = f"<{long_tag}>"
@@ -131,7 +131,7 @@ class TestActionTagsBoundaries:
         assert long_tag in result
 
     def test_tag_too_long_rejected(self) -> None:
-        from provide.terminal.screen import extract_action_tags
+        from provide.uterm.screen import extract_action_tags
 
         long_tag = "x" * 81
         screen = f"<{long_tag}>"

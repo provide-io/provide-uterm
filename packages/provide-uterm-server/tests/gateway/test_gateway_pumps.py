@@ -10,8 +10,8 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.control_channel import encode_control, encode_data
-from provide.terminal.gateway._gateway import (
+from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.gateway._gateway import (
     _pipe_ws,
     _ssh_to_ws,
     _tcp_to_ws,

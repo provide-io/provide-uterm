@@ -43,8 +43,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from provide.terminal.auth import AuthorizedKeysFileResolver
-from provide.terminal.gateway import SshWsGateway
+from provide.uterm.auth import AuthorizedKeysFileResolver
+from provide.uterm.gateway import SshWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 pytestmark = pytest.mark.asyncio

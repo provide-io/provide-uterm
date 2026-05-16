@@ -51,7 +51,7 @@ RUN uv sync --extra dev
 
 # Populate the CF package's static dir with compiled frontend assets so the
 # worker can serve the UI without needing the provide-uterm package at runtime.
-RUN cp -r /app/packages/provide-uterm/src/provide/terminal/frontend/. \
+RUN cp -r /app/packages/provide-uterm/src/provide/uterm/frontend/. \
         src/provide_uterm_cloudflare/ui/static/
 
 EXPOSE 27788

@@ -11,19 +11,19 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.recording import (
+from provide.uterm.recording import (
     InMemoryRecordingStore,
     NullRecordingStore,
 )
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.config import default_server_config
-from provide.terminal.server.recording import WebhookRecordingStore
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.config import default_server_config
+from provide.uterm.server.recording import WebhookRecordingStore
 
 
 @pytest.mark.asyncio
 async def test_factory_initializes_webhook_behavioral_audit_gate() -> None:
     """When governance.behavioral_audit_url is set, a WebhookBehavioralAuditGate is wired into the hub."""
-    from provide.terminal.bridge.hub.ext import WebhookBehavioralAuditGate
+    from provide.uterm.bridge.hub.ext import WebhookBehavioralAuditGate
 
     config = default_server_config()
     config.governance.behavioral_audit_url = "https://fleet.example.com/audit"

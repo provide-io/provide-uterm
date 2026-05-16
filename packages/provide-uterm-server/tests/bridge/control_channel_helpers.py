@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
 
 
 def decode_control_payload(payload: str) -> dict[str, Any]:

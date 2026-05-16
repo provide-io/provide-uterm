@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.deckmux._edge — viewport range calculation."""
+"""Tests for provide.uterm.deckmux._edge — viewport range calculation."""
 
 from __future__ import annotations
 
-from provide.terminal.deckmux._edge import (
+from provide.uterm.deckmux._edge import (
     line_to_edge_position,
     scroll_center_line,
     viewport_to_edge_range,

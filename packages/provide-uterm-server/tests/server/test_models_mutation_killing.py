@@ -11,8 +11,8 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from provide.terminal.server.config_schema import _clean_path
-from provide.terminal.server.models import (
+from provide.uterm.server.config_schema import _clean_path
+from provide.uterm.server.models import (
     SessionDefinition,
     model_dump,
     validation_error_message,

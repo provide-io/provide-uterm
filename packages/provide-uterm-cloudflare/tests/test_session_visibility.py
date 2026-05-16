@@ -11,9 +11,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from provide.terminal.cloudflare.api.http_routes import route_http
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.config import CloudflareConfig
+from provide.uterm.cloudflare.api.http_routes import route_http
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.config import CloudflareConfig
 
 
 class _Req:
@@ -216,7 +216,7 @@ async def test_route_sse_operator_session_allows_operator() -> None:
 @pytest.mark.asyncio
 async def test_handle_sessions_get_filters_for_non_admin() -> None:
     """Non-admin JWT principal sees only sessions they own (when all are private)."""
-    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
+    from provide.uterm.cloudflare.entry.handlers import _handle_sessions
 
     sessions = [
         {"session_id": "s1", "owner": "alice", "visibility": "private"},
@@ -225,10 +225,10 @@ async def test_handle_sessions_get_filters_for_non_admin() -> None:
     ]
 
     with patch(
-        "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
+        "provide.uterm.cloudflare.entry.auth._decode_jwt_principal",
         new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("viewer",))),
     ):
-        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+        with patch("provide.uterm.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
             resp = await _handle_sessions(
                 SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
             )
@@ -240,7 +240,7 @@ async def test_handle_sessions_get_filters_for_non_admin() -> None:
 @pytest.mark.asyncio
 async def test_handle_sessions_get_admin_sees_all() -> None:
     """Admin JWT principal sees all sessions regardless of owner."""
-    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
+    from provide.uterm.cloudflare.entry.handlers import _handle_sessions
 
     sessions = [
         {"session_id": "s1", "owner": "alice"},
@@ -248,10 +248,10 @@ async def test_handle_sessions_get_admin_sees_all() -> None:
     ]
 
     with patch(
-        "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
+        "provide.uterm.cloudflare.entry.auth._decode_jwt_principal",
         new=AsyncMock(return_value=SimpleNamespace(subject_id="admin-user", roles=("admin",))),
     ):
-        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+        with patch("provide.uterm.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
             resp = await _handle_sessions(
                 SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
             )
@@ -262,7 +262,7 @@ async def test_handle_sessions_get_admin_sees_all() -> None:
 @pytest.mark.asyncio
 async def test_handle_sessions_get_viewer_sees_public_sessions() -> None:
     """A viewer (non-owner) can see public sessions from other owners."""
-    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
+    from provide.uterm.cloudflare.entry.handlers import _handle_sessions
 
     sessions = [
         {"session_id": "s1", "owner": "alice", "visibility": "public"},
@@ -271,10 +271,10 @@ async def test_handle_sessions_get_viewer_sees_public_sessions() -> None:
     ]
 
     with patch(
-        "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
+        "provide.uterm.cloudflare.entry.auth._decode_jwt_principal",
         new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("viewer",))),
     ):
-        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+        with patch("provide.uterm.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
             resp = await _handle_sessions(
                 SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
             )
@@ -286,7 +286,7 @@ async def test_handle_sessions_get_viewer_sees_public_sessions() -> None:
 @pytest.mark.asyncio
 async def test_handle_sessions_get_operator_sees_operator_sessions() -> None:
     """An operator (non-owner) can see operator-visibility sessions from other owners."""
-    from provide.terminal.cloudflare.entry.handlers import _handle_sessions
+    from provide.uterm.cloudflare.entry.handlers import _handle_sessions
 
     sessions = [
         {"session_id": "s1", "owner": "bob", "visibility": "operator"},
@@ -294,10 +294,10 @@ async def test_handle_sessions_get_operator_sees_operator_sessions() -> None:
     ]
 
     with patch(
-        "provide.terminal.cloudflare.entry.auth._decode_jwt_principal",
+        "provide.uterm.cloudflare.entry.auth._decode_jwt_principal",
         new=AsyncMock(return_value=SimpleNamespace(subject_id="alice", roles=("operator",))),
     ):
-        with patch("provide.terminal.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
+        with patch("provide.uterm.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=sessions)):
             resp = await _handle_sessions(
                 SimpleNamespace(method="GET"), SimpleNamespace(SESSION_REGISTRY=AsyncMock()), CloudflareConfig()
             )

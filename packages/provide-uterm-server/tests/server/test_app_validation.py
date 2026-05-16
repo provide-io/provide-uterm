@@ -10,13 +10,13 @@ import importlib.resources
 
 import pytest
 
-from provide.terminal.server.app import _validate_auth_config, _validate_frontend_assets
-from provide.terminal.server.models import AuthConfig, ServerConfig
+from provide.uterm.server.app import _validate_auth_config, _validate_frontend_assets
+from provide.uterm.server.models import AuthConfig, ServerConfig
 
 # True only when frontend assets have been built (npm run build:frontend).
 # Used to skip tests that exercise the real asset presence check so that
 # the server package can be tested in isolation without a Node build.
-_FRONTEND_BUILT = importlib.resources.files("provide.terminal.server").joinpath("frontend/hijack.html").is_file()
+_FRONTEND_BUILT = importlib.resources.files("provide.uterm.server").joinpath("frontend/hijack.html").is_file()
 
 
 class TestValidateAuthConfigDevMode:
@@ -237,7 +237,7 @@ class TestValidateFrontendAssets:
 
         with (
             patch(
-                "provide.terminal.server.app.importlib.resources.files",
+                "provide.uterm.server.app.importlib.resources.files",
                 return_value=MagicMock(__truediv__=MagicMock(return_value=mock_frontend)),
             ),
             pytest.raises(RuntimeError, match="missing required frontend"),
@@ -252,11 +252,11 @@ class TestCreateServerAppApiOnly:
         """create_server_app(api_only=True) must not call _validate_frontend_assets."""
         from unittest.mock import patch
 
-        from provide.terminal.server.app import create_server_app
-        from provide.terminal.server.models import AuthConfig, ServerConfig
+        from provide.uterm.server.app import create_server_app
+        from provide.uterm.server.models import AuthConfig, ServerConfig
 
         config = ServerConfig(auth=AuthConfig(mode="dev"))
-        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+        with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config, api_only=True)
         mock_validate.assert_not_called()
 
@@ -264,12 +264,12 @@ class TestCreateServerAppApiOnly:
         """UTERM_API_ONLY=1 env var must skip _validate_frontend_assets."""
         from unittest.mock import patch
 
-        from provide.terminal.server.app import create_server_app
-        from provide.terminal.server.models import AuthConfig, ServerConfig
+        from provide.uterm.server.app import create_server_app
+        from provide.uterm.server.models import AuthConfig, ServerConfig
 
         monkeypatch.setenv("UTERM_API_ONLY", "1")
         config = ServerConfig(auth=AuthConfig(mode="dev"))
-        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+        with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config)
         mock_validate.assert_not_called()
 
@@ -277,11 +277,11 @@ class TestCreateServerAppApiOnly:
         """By default (api_only=False, no env var), _validate_frontend_assets is called."""
         from unittest.mock import patch
 
-        from provide.terminal.server.app import create_server_app
-        from provide.terminal.server.models import AuthConfig, ServerConfig
+        from provide.uterm.server.app import create_server_app
+        from provide.uterm.server.models import AuthConfig, ServerConfig
 
         config = ServerConfig(auth=AuthConfig(mode="dev"))
-        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+        with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config)
         mock_validate.assert_called_once()
 
@@ -289,12 +289,12 @@ class TestCreateServerAppApiOnly:
         """UTERM_API_ONLY=0 must NOT skip _validate_frontend_assets (presence-based check was a bug)."""
         from unittest.mock import patch
 
-        from provide.terminal.server.app import create_server_app
-        from provide.terminal.server.models import AuthConfig, ServerConfig
+        from provide.uterm.server.app import create_server_app
+        from provide.uterm.server.models import AuthConfig, ServerConfig
 
         monkeypatch.setenv("UTERM_API_ONLY", "0")
         config = ServerConfig(auth=AuthConfig(mode="dev"))
-        with patch("provide.terminal.server.app._validate_frontend_assets") as mock_validate:
+        with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config)
         mock_validate.assert_called_once()
 
@@ -306,7 +306,7 @@ class TestIncMetricHelper:
         """Metrics dict should be initialized with all counters."""
         config = ServerConfig()
         try:
-            app = __import__("provide.terminal.server.app", fromlist=["create_server_app"]).create_server_app(config)
+            app = __import__("provide.uterm.server.app", fromlist=["create_server_app"]).create_server_app(config)
             # If app creation succeeds, metrics were initialized properly
             assert app is not None
         except Exception:

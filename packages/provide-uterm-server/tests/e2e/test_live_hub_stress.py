@@ -11,7 +11,7 @@ import json
 import time
 from typing import Any
 
-from provide.terminal.client import connect_async_ws
+from provide.uterm.client import connect_async_ws
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 

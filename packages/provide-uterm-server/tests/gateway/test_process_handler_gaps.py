@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.gateway._ssh_handler import _make_process_handler
+from provide.uterm.gateway._ssh_handler import _make_process_handler
 
 # ---------------------------------------------------------------------------
 # Async iterator helper
@@ -134,7 +134,7 @@ class TestHandlerTokenResume:
         # token_holder gets populated on attempt=0, then at_eof returns False
         # after the first loop so attempt=1 sees a non-empty holder.
 
-        from provide.terminal.control_channel import encode_control as _ec
+        from provide.uterm.control_channel import encode_control as _ec
 
         # player_id must be an int for _handle_ws_control_frame to store it
         session_token_frame = _ec({"type": "session_token", "token": "tok123", "player_id": 99})
@@ -174,7 +174,7 @@ class TestHandlerTokenResume:
     async def test_handler_sends_resume_frame_without_player_id(self) -> None:
         """When token_holder has a token WITHOUT player_id, the resume frame is sent
         but without player_id (covers the 'if player_id in token_data' False branch)."""
-        from provide.terminal.control_channel import encode_control as _ec
+        from provide.uterm.control_channel import encode_control as _ec
 
         handler = await _make_process_handler("ws://test", "passthrough")
 

@@ -15,7 +15,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.bridge.worker_link import TermBridge
+from provide.uterm.bridge.worker_link import TermBridge
 
 # ---------------------------------------------------------------------------
 # Helpers

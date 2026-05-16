@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.timeseries."""
+"""Tests for provide.uterm.manager.timeseries."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from provide.terminal.manager.models import SwarmStatus
-from provide.terminal.manager.timeseries.manager import TimeseriesManager
+from provide.uterm.manager.models import SwarmStatus
+from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
 
 def _make_status(**overrides):

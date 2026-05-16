@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.defaults import TerminalDefaults
-from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+from provide.uterm.defaults import TerminalDefaults
+from provide.uterm.server.connectors.telnet import TelnetSessionConnector
 
 
 def _make_transport(connected: bool = True, recv_data: bytes = b"") -> MagicMock:

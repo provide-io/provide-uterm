@@ -22,7 +22,7 @@ import pytest
 class TestEmulatorCachedSnapshot:
     def test_get_snapshot_uses_cache_when_not_dirty(self) -> None:
         """Line 83->98: _last_snapshot is not None and not dirty → return cached."""
-        from provide.terminal.emulator import TerminalEmulator
+        from provide.uterm.emulator import TerminalEmulator
 
         emulator = TerminalEmulator(cols=80, rows=25)
         emulator.process(b"Hello world")
@@ -45,7 +45,7 @@ class TestCliSSHTransportMissing:
         """Line 72: raise AttributeError('SSHTransport') when attr is None."""
         import argparse
 
-        from provide.terminal.cli import _cmd_proxy
+        from provide.uterm.cli import _cmd_proxy
 
         args = argparse.Namespace(
             transport="ssh",
@@ -74,7 +74,7 @@ class TestCliSSHTransportMissing:
 class TestReplayRawBranch:
     def test_rebuild_raw_stream_skips_empty_raw_bytes_b64(self) -> None:
         """Line 33->26: raw_b64 is empty → out.extend not called for that record."""
-        from provide.terminal.replay.raw import rebuild_raw_stream
+        from provide.uterm.replay.raw import rebuild_raw_stream
 
         with tempfile.TemporaryDirectory() as tmpdir:
             log_path = Path(tmpdir) / "test.jsonl"
@@ -106,7 +106,7 @@ class TestReplayRawBranch:
 class TestServerConfigRelativeDir:
     def test_load_server_config_resolves_relative_recording_dir(self) -> None:
         """Line 57->59: if recording dir is relative, resolve against config file dir."""
-        from provide.terminal.server.config import load_server_config
+        from provide.uterm.server.config import load_server_config
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg_path = Path(tmpdir) / "server.toml"
@@ -129,8 +129,8 @@ class TestServerConfigRelativeDir:
 class TestRegistryRuntimeStop:
     async def test_ephemeral_session_runtime_stop_called(self) -> None:
         """Line 77->78: runtime is not None → await runtime.stop()."""
-        from provide.terminal.server.models import RecordingConfig, SessionDefinition
-        from provide.terminal.server.registry import SessionRegistry
+        from provide.uterm.server.models import RecordingConfig, SessionDefinition
+        from provide.uterm.server.registry import SessionRegistry
 
         mock_hub = MagicMock()
         mock_hub.force_release_hijack = AsyncMock(return_value=True)
@@ -174,7 +174,7 @@ class TestRegistryRuntimeStop:
 class TestIoBranches:
     async def test_on_prompt_rejected_none_when_not_idle(self) -> None:
         """Line 127->129: on_prompt_rejected is None, not_idle branch is skipped."""
-        from provide.terminal.io import PromptWaiter
+        from provide.uterm.io import PromptWaiter
 
         call_count = 0
 
@@ -209,7 +209,7 @@ class TestIoBranches:
 
     async def test_on_prompt_rejected_none_when_callback_rejects(self) -> None:
         """Line 141->143: on_prompt_rejected is None, callback_reject branch skipped."""
-        from provide.terminal.io import PromptWaiter
+        from provide.uterm.io import PromptWaiter
 
         call_count = 0
 

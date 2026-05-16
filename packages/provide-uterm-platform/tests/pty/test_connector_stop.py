@@ -21,10 +21,10 @@ async def test_stop_without_start_is_safe() -> None:
 
 async def test_inject_start_creates_capture_socket() -> None:
     """start() with inject=True wires up a CaptureSocket and cleans up on stop."""
-    from provide.terminal.pty.capture import CaptureSocket
+    from provide.uterm.pty.capture import CaptureSocket
 
     mock_cap = AsyncMock(spec=CaptureSocket)
-    with patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap):
+    with patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap):
         conn = make_connector(__import__("sys").executable, ["-c", "import time; time.sleep(0.1)"], inject=True)
         await conn.start()
         assert conn._capture_socket is mock_cap

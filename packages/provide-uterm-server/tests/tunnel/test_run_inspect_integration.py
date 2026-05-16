@@ -17,8 +17,8 @@ import pytest
 import uvicorn
 import websockets.server
 
-from provide.terminal.cli.inspect import _run_inspect
-from provide.terminal.tunnel.protocol import (
+from provide.uterm.cli.inspect import _run_inspect
+from provide.uterm.tunnel.protocol import (
     CHANNEL_DATA,
     CHANNEL_HTTP,
     decode_frame,

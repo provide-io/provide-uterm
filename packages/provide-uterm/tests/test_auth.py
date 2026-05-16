@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.auth — the pubkey-resolver boundary.
+"""Tests for provide.uterm.auth — the pubkey-resolver boundary.
 
 Covers the Protocol, the NullResolver no-op, the AuthorizedKeysFileResolver
 parser, and the fingerprint helper. Gateway integration is tested separately
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.auth import (
+from provide.uterm.auth import (
     AuthorizedKeysFileResolver,
     NullResolver,
     ResolvedIdentity,

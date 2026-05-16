@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.pty.capture import CHANNEL_CONNECT, CHANNEL_STDIN, CHANNEL_STDOUT
-from provide.terminal.pty.capture_connector import CaptureConnector
+from provide.uterm.pty.capture import CHANNEL_CONNECT, CHANNEL_STDIN, CHANNEL_STDOUT
+from provide.uterm.pty.capture_connector import CaptureConnector
 
 FRAME_COUNT = 10_000
 FRAME_DATA = b"x" * 80 + b"\r\n"  # typical terminal line

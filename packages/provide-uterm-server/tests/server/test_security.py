@@ -16,13 +16,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from provide.terminal.client import connect_test_ws
-from provide.terminal.server import config_from_mapping, create_server_app, default_server_config
-from provide.terminal.server.auth import Principal
-from provide.terminal.server.models import AuthConfig, SessionDefinition
-from provide.terminal.server.policy import SessionPolicyResolver
-from provide.terminal.server.routes.health import create_health_router
-from provide.terminal.server.runtime import _cancel_and_wait
+from provide.uterm.client import connect_test_ws
+from provide.uterm.server import config_from_mapping, create_server_app, default_server_config
+from provide.uterm.server.auth import Principal
+from provide.uterm.server.models import AuthConfig, SessionDefinition
+from provide.uterm.server.policy import SessionPolicyResolver
+from provide.uterm.server.routes.health import create_health_router
+from provide.uterm.server.runtime import _cancel_and_wait
 
 _TEST_SIGNING_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -381,7 +381,7 @@ def test_recording_download_rejects_path_outside_recording_dir(tmp_path: Path) -
 def test_ssh_connector_raises_without_known_hosts() -> None:
     """SshSessionConnector must reject a config with no known_hosts and no explicit opt-out."""
     pytest.importorskip("asyncssh", reason="asyncssh not installed")
-    from provide.terminal.server.connectors.ssh import SshSessionConnector
+    from provide.uterm.server.connectors.ssh import SshSessionConnector
 
     with pytest.raises(ValueError, match="known_hosts"):
         SshSessionConnector("sess1", "Session 1", {"host": "localhost"})
@@ -406,7 +406,7 @@ def test_create_session_rejects_unknown_connector_type() -> None:
 
 def test_telnet_client_connect_timeout_parameter() -> None:
     """TelnetClient must accept a connect_timeout parameter."""
-    from provide.terminal.transports.telnet import TelnetClient
+    from provide.uterm.transports.telnet import TelnetClient
 
     client = TelnetClient("127.0.0.1", 9, connect_timeout=5.0)
     assert client._connect_timeout == 5.0
@@ -445,7 +445,7 @@ def test_replay_log_speed_clamps_to_maximum(tmp_path: Path) -> None:
     import io
     import time
 
-    from provide.terminal.replay.viewer import replay_log
+    from provide.uterm.replay.viewer import replay_log
 
     log = tmp_path / "session.jsonl"
     now = time.time()
@@ -465,7 +465,7 @@ def test_replay_log_speed_clamps_to_maximum(tmp_path: Path) -> None:
 
 def test_session_definition_has_no_last_active_at_field() -> None:
     """SessionDefinition must not expose last_active_at (field removed in fourth review)."""
-    from provide.terminal.server.models import SessionDefinition
+    from provide.uterm.server.models import SessionDefinition
 
     sd = SessionDefinition(session_id="s1", display_name="S1", connector_type="shell")
     assert not hasattr(sd, "last_active_at")
@@ -474,7 +474,7 @@ def test_session_definition_has_no_last_active_at_field() -> None:
 def test_ssh_connector_allows_insecure_no_host_check_flag() -> None:
     """insecure_no_host_check=True must bypass the known_hosts requirement with a warning."""
     pytest.importorskip("asyncssh", reason="asyncssh not installed")
-    from provide.terminal.server.connectors.ssh import SshSessionConnector
+    from provide.uterm.server.connectors.ssh import SshSessionConnector
 
     connector = SshSessionConnector("sess1", "Session 1", {"host": "localhost", "insecure_no_host_check": True})
     assert connector._known_hosts is None

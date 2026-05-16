@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal
 
-from provide.terminal.bridge.hub import TermHub
+from provide.uterm.bridge.hub import TermHub
 
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
     DataChunk,

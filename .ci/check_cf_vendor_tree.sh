@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Validates the CF Worker python_modules vendor tree. The Worker needs both
-# the external `provide.shell` package AND the internal `provide.terminal.shell`
+# the external `provide.shell` package AND the internal `provide.uterm.shell`
 # submodule vendored. A missing tree indicates `pywrangler sync` wasn't run.
 set -euo pipefail
 
 VENDOR=packages/provide-uterm-cloudflare/python_modules
 
-for sub in "provide/shell" "provide/terminal/shell"; do
+for sub in "provide/shell" "provide/uterm/shell"; do
     path="$VENDOR/$sub"
     if [ ! -d "$path" ]; then
         echo "ERROR: $sub missing from CF vendor tree ($path)"

@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-from provide.terminal.bridge.fanout._controller import FanOutController
-from provide.terminal.bridge.fanout._models import FanOutGroup, FanOutResult
-from provide.terminal.bridge.hub.core import TermHub
-from provide.terminal.bridge.hub.ext import FanOutPolicyGate, PolicyContext, PolicyDecision
+from provide.uterm.bridge.fanout._controller import FanOutController
+from provide.uterm.bridge.fanout._models import FanOutGroup, FanOutResult
+from provide.uterm.bridge.hub.core import TermHub
+from provide.uterm.bridge.hub.ext import FanOutPolicyGate, PolicyContext, PolicyDecision
 
 
 class MockFanOutGate(FanOutPolicyGate):
@@ -282,7 +282,7 @@ async def test_fanout_approval_rbac_admin_only(controller, hub, gate):
 
     from fastapi import HTTPException
 
-    from provide.terminal.server.routes.approvals import create_approvals_router
+    from provide.uterm.server.routes.approvals import create_approvals_router
 
     group_id = await controller.create_group(
         FanOutGroup(group_id="g-rbac", name="GR", worker_ids=["w1"], created_by="admin", created_at=time.time()),

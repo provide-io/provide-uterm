@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.fastapi_utils — create_ws_terminal_router + WsTerminalProxy."""
+"""Tests for provide.uterm.fastapi_utils — create_ws_terminal_router + WsTerminalProxy."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ import pytest
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 
-from provide.terminal.fastapi_utils import WsTerminalProxy, create_ws_terminal_router
-from provide.terminal.transports.websocket import WebSocketStreamReader, WebSocketStreamWriter
+from provide.uterm.fastapi_utils import WsTerminalProxy, create_ws_terminal_router
+from provide.uterm.transports.websocket import WebSocketStreamReader, WebSocketStreamWriter
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -322,27 +322,27 @@ class TestExplicitImportSurface:
     """Optional server exports must be imported from explicit leaf modules."""
 
     def test_mount_terminal_ui_accessible_from_fastapi_utils(self) -> None:
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         assert callable(mount_terminal_ui)
 
     def test_create_ws_terminal_router_accessible_from_fastapi_utils(self) -> None:
-        from provide.terminal.fastapi_utils import create_ws_terminal_router
+        from provide.uterm.fastapi_utils import create_ws_terminal_router
 
         assert callable(create_ws_terminal_router)
 
     def test_ws_terminal_proxy_accessible_from_fastapi_utils(self) -> None:
-        from provide.terminal.fastapi_utils import WsTerminalProxy
+        from provide.uterm.fastapi_utils import WsTerminalProxy
 
         assert isinstance(WsTerminalProxy, type)
 
     def test_telnet_ws_gateway_accessible_from_gateway(self) -> None:
-        from provide.terminal.gateway import TelnetWsGateway
+        from provide.uterm.gateway import TelnetWsGateway
 
         assert isinstance(TelnetWsGateway, type)
 
     def test_root_package_does_not_expose_removed_lazy_exports(self) -> None:
-        import provide.terminal as pkg
+        import provide.uterm as pkg
 
         with pytest.raises(AttributeError):
             _ = pkg.mount_terminal_ui
@@ -353,9 +353,9 @@ class TestExplicitImportSurface:
 
         from fastapi import FastAPI
 
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         app = FastAPI()
-        with patch("provide.terminal.fastapi_utils.Path.is_dir", return_value=False):  # noqa: SIM117
+        with patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=False):  # noqa: SIM117
             with pytest.raises(RuntimeError, match="terminal UI assets not found"):
                 mount_terminal_ui(app)

@@ -126,7 +126,7 @@ explicit_package_bases = true
 mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-server/src", "packages/provide-uterm-platform/src", "packages/provide-uterm-client/src"]
 
 [[tool.mypy.overrides]]
-module = ["provide.telemetry", "provide.telemetry.*", "provide.terminal.deckmux", "provide.terminal.deckmux.*", "structlog", "structlog.*"]
+module = ["provide.telemetry", "provide.telemetry.*", "provide.uterm.deckmux", "provide.uterm.deckmux.*", "structlog", "structlog.*"]
 ignore_missing_imports = true
 
 
@@ -135,8 +135,8 @@ ignore_missing_imports = true
 # and SessionRegistry from call sites in other modules. Ignores are unused from mypy's
 # perspective — suppress the warn_unused_ignores noise.
 module = [
-    "provide.terminal.mcp.server",
-    "provide.terminal.server.routes.api",
+    "provide.uterm.mcp.server",
+    "provide.uterm.server.routes.api",
 ]
 warn_unused_ignores = false
 
@@ -149,7 +149,7 @@ invalid-argument-type = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.codespell]
-skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-uterm/src/provide/terminal/frontend/assets/*.js,packages/provide-uterm-server/src/provide/terminal/server/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/terminal/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,mutants"
+skip = ".git,*.pyc,__pycache__,.venv,node_modules,uv.lock,*.mmd,packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,mutants"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable"
 
 [tool.bandit]
@@ -212,15 +212,15 @@ max_average = "A"
 
 [tool.mutmut]
 paths_to_mutate = [
-    "src/provide/terminal/pty/connector.py",
-    "src/provide/terminal/control_channel.py",
-    "src/provide/terminal/control_channel_builders.py",
-    "src/provide/terminal/control_channel_patterns.py",
-    "src/provide/terminal/auth.py",
-    "src/provide/terminal/detection/detector.py",
-    "src/provide/terminal/detection/engine.py",
-    "src/provide/terminal/io.py",
-    "src/provide/terminal/recording.py",
+    "src/provide/uterm/pty/connector.py",
+    "src/provide/uterm/control_channel.py",
+    "src/provide/uterm/control_channel_builders.py",
+    "src/provide/uterm/control_channel_patterns.py",
+    "src/provide/uterm/auth.py",
+    "src/provide/uterm/detection/detector.py",
+    "src/provide/uterm/detection/engine.py",
+    "src/provide/uterm/io.py",
+    "src/provide/uterm/recording.py",
 ]
 tests_dir = [
     "packages/provide-uterm/tests/shell/test_shell_render.py",

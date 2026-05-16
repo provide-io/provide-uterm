@@ -16,9 +16,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.terminal.auth import ResolvedIdentity
-from provide.terminal.deckmux import identity_as_principal
-from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.auth import ResolvedIdentity
+from provide.uterm.deckmux import identity_as_principal
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 
 pytestmark = pytest.mark.asyncio
 

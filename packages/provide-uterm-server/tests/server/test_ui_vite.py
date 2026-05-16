@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from provide.terminal.server import ui
+from provide.uterm.server import ui
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +32,7 @@ class TestReadViteManifest:
             mock_files.return_value.__truediv__ = lambda self, name: (
                 fake_path if name == "frontend" else mock.MagicMock(__truediv__=lambda s, n: fake_path)
             )
-            # Simulate the path chain: files("provide.terminal") / "frontend" / ".vite" / "manifest.json"
+            # Simulate the path chain: files("provide.uterm") / "frontend" / ".vite" / "manifest.json"
             frontend_mock = mock.MagicMock()
             vite_mock = mock.MagicMock()
             manifest_mock = mock.MagicMock()

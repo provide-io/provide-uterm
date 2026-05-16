@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from provide.terminal.bridge.hub import TermHub
+from provide.uterm.bridge.hub import TermHub
 from tests.bridge.control_channel_helpers import decode_control_payload, decode_control_payloads
 
 
@@ -47,7 +47,7 @@ class TestWaitForSnapshot:
         """_wait_for_snapshot returns a snapshot with ts > request time."""
         hub, _ = _make_app()
         async with hub._lock:
-            from provide.terminal.bridge.models import WorkerTermState
+            from provide.uterm.bridge.models import WorkerTermState
 
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
@@ -81,7 +81,7 @@ class TestTouchHijackOwner:
     async def test_returns_none_when_no_owner(self) -> None:
         hub, _ = _make_app()
         async with hub._lock:
-            from provide.terminal.bridge.models import WorkerTermState
+            from provide.uterm.bridge.models import WorkerTermState
 
             hub._workers["w1"] = WorkerTermState()
         result = await hub.touch_hijack_owner("w1")
@@ -99,7 +99,7 @@ class TestRestSessionValidation:
     async def test_snapshot_returns_404_for_bad_hijack_id(self) -> None:
         hub, app = _make_app()
         async with hub._lock:
-            from provide.terminal.bridge.models import WorkerTermState
+            from provide.uterm.bridge.models import WorkerTermState
 
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
@@ -112,7 +112,7 @@ class TestRestSessionValidation:
     async def test_events_returns_404_for_bad_hijack_id(self) -> None:
         hub, app = _make_app()
         async with hub._lock:
-            from provide.terminal.bridge.models import WorkerTermState
+            from provide.uterm.bridge.models import WorkerTermState
 
             hub._workers.setdefault("w1", WorkerTermState())
 
@@ -123,7 +123,7 @@ class TestRestSessionValidation:
     async def test_send_returns_404_for_bad_hijack_id(self) -> None:
         hub, app = _make_app()
         async with hub._lock:
-            from provide.terminal.bridge.models import WorkerTermState
+            from provide.uterm.bridge.models import WorkerTermState
 
             hub._workers.setdefault("w1", WorkerTermState())
 
@@ -137,7 +137,7 @@ class TestRestSessionValidation:
     async def test_step_returns_404_for_bad_hijack_id(self) -> None:
         hub, app = _make_app()
         async with hub._lock:
-            from provide.terminal.bridge.models import WorkerTermState
+            from provide.uterm.bridge.models import WorkerTermState
 
             hub._workers.setdefault("w1", WorkerTermState())
 
@@ -150,7 +150,7 @@ class TestRestSessionValidation:
         hub, app = _make_app()
         # Set up worker with a REST session that we can expire
         async with hub._lock:
-            from provide.terminal.bridge.models import HijackSession, WorkerTermState
+            from provide.uterm.bridge.models import HijackSession, WorkerTermState
 
             st = hub._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
@@ -178,12 +178,12 @@ class TestRestSessionValidation:
 
 class TestRoutesWsSafeInt:
     async def test_safe_int_non_numeric(self) -> None:
-        from provide.terminal.bridge.routes.websockets import _safe_int
+        from provide.uterm.bridge.routes.websockets import _safe_int
 
         assert _safe_int("not_a_number", 80) == 80
 
     async def test_safe_int_object(self) -> None:
-        from provide.terminal.bridge.routes.websockets import _safe_int
+        from provide.uterm.bridge.routes.websockets import _safe_int
 
         assert _safe_int(object(), 25) == 25
 
@@ -198,7 +198,7 @@ class TestWebSocketStreamReaderBufferedDisconnect:
         """When WS disconnects with data in buffer, read() returns remaining bytes."""
         from starlette.websockets import WebSocketDisconnect
 
-        from provide.terminal.transports.websocket import WebSocketStreamReader
+        from provide.uterm.transports.websocket import WebSocketStreamReader
 
         ws = AsyncMock()
         call_count = 0
@@ -230,7 +230,7 @@ class TestWebSocketStreamReaderBufferedDisconnect:
 class TestMountTerminalUi:
     async def test_mount_registers_route(self) -> None:
         """mount_terminal_ui registers a static file mount on the app."""
-        from provide.terminal.fastapi_utils import mount_terminal_ui
+        from provide.uterm.fastapi_utils import mount_terminal_ui
 
         app = FastAPI()
         mount_terminal_ui(app)
@@ -249,7 +249,7 @@ class TestBroadcastDeadSocketHijackOwner:
     the hub must clear ownership and send 'resume' to the worker."""
 
     async def test_dead_hijack_owner_triggers_resume(self) -> None:
-        from provide.terminal.bridge.models import WorkerTermState
+        from provide.uterm.bridge.models import WorkerTermState
 
         hijack_changed_calls: list[dict[str, Any]] = []
 
@@ -300,7 +300,7 @@ class TestBroadcastHijackStateDeadSocketOwner:
     """Same dead-socket-with-owner path, but triggered via _broadcast_hijack_state."""
 
     async def test_dead_hijack_owner_in_broadcast_hijack_state(self) -> None:
-        from provide.terminal.bridge.models import WorkerTermState
+        from provide.uterm.bridge.models import WorkerTermState
 
         hub, _ = _make_app()
 
@@ -341,7 +341,7 @@ class TestTryAcquireRestHijackNoWorker:
         assert err == "no_worker"
 
     async def test_returns_no_worker_when_ws_is_none(self) -> None:
-        from provide.terminal.bridge.models import WorkerTermState
+        from provide.uterm.bridge.models import WorkerTermState
 
         hub, _ = _make_app()
         async with hub._lock:
@@ -360,7 +360,7 @@ class TestTryAcquireRestHijackNoWorker:
 
 class TestTouchHijackOwnerWithLease:
     async def test_custom_lease_s(self) -> None:
-        from provide.terminal.bridge.models import WorkerTermState
+        from provide.uterm.bridge.models import WorkerTermState
 
         hub, _ = _make_app()
         mock_ws = AsyncMock()
@@ -384,7 +384,7 @@ class TestAllowRestAcquireForLruEviction:
     """connections.py — on cache overflow, oldest half is evicted (not all)."""
 
     async def test_evicts_oldest_half_not_all(self) -> None:
-        from provide.terminal.bridge.hub.connections import _REST_CLIENT_CACHE_MAX, _REST_CLIENT_EVICT_COUNT
+        from provide.uterm.bridge.hub.connections import _REST_CLIENT_CACHE_MAX, _REST_CLIENT_EVICT_COUNT
 
         hub, _ = _make_app()
 

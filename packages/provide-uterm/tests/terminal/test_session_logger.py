@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.recording import RecordingStore
-from provide.terminal.session_logger import SessionLogger
+from provide.uterm.recording import RecordingStore
+from provide.uterm.session_logger import SessionLogger
 
 if TYPE_CHECKING:
     pass

@@ -10,12 +10,12 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from provide.terminal.cloudflare.api.http_routes import route_http
-from provide.terminal.cloudflare.api.http_routes._shared import (
+from provide.uterm.cloudflare.api.http_routes import route_http
+from provide.uterm.cloudflare.api.http_routes._shared import (
     _wait_for_analysis,
     _wait_for_prompt,
 )
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 
 
 class _Req:
@@ -275,7 +275,7 @@ async def test_send_invalid_expect_regex_returns_400() -> None:
 
 async def test_send_expect_regex_too_long_returns_400() -> None:
     """send with an expect_regex exceeding _MAX_REGEX_LEN returns 400."""
-    from provide.terminal.cloudflare.api.http_routes._shared import _MAX_REGEX_LEN
+    from provide.uterm.cloudflare.api.http_routes._shared import _MAX_REGEX_LEN
 
     mock_ws = object()
     runtime = _Runtime(worker_ws=mock_ws)

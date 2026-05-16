@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from provide.terminal.transports.telnet import IAC, TelnetTransport
+from provide.uterm.transports.telnet import IAC, TelnetTransport
 from tests.helpers.mock_server import MockTelnetServer
 
 
@@ -200,7 +200,7 @@ class TestTelnetTransportReceiveEdgeCases:
 class TestTelnetServerHandshakeReset:
     async def test_connection_reset_during_handshake(self) -> None:
         """start_telnet_server handles ConnectionResetError during handshake."""
-        from provide.terminal.transports.telnet import start_telnet_server
+        from provide.uterm.transports.telnet import start_telnet_server
 
         handled: list[bool] = []
 
@@ -228,7 +228,7 @@ class TestTelnetServerHandshakeReset:
 class TestTelnetClient:
     async def test_wont_and_dont_builders(self) -> None:
         """TelnetClient.wont() and dont() build correct IAC sequences."""
-        from provide.terminal.transports.telnet import DONT, IAC, WONT, TelnetClient
+        from provide.uterm.transports.telnet import DONT, IAC, WONT, TelnetClient
 
         c = TelnetClient("127.0.0.1", 9)  # don't connect
         assert c.wont(1) == bytes([IAC, WONT, 1])
@@ -236,7 +236,7 @@ class TestTelnetClient:
 
     async def test_will_and_do_builders(self) -> None:
         """TelnetClient.will() and do() build correct IAC sequences."""
-        from provide.terminal.transports.telnet import DO, IAC, WILL, TelnetClient
+        from provide.uterm.transports.telnet import DO, IAC, WILL, TelnetClient
 
         c = TelnetClient("127.0.0.1", 9)
         assert c.will(3) == bytes([IAC, WILL, 3])
@@ -244,7 +244,7 @@ class TestTelnetClient:
 
     async def test_aenter_aexit_context_manager(self) -> None:
         """TelnetClient can be used as async context manager."""
-        from provide.terminal.transports.telnet import TelnetClient
+        from provide.uterm.transports.telnet import TelnetClient
 
         async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             await asyncio.sleep(2)
@@ -261,7 +261,7 @@ class TestTelnetClient:
 
     async def test_read_method(self) -> None:
         """TelnetClient.read() reads bytes from the server."""
-        from provide.terminal.transports.telnet import TelnetClient
+        from provide.uterm.transports.telnet import TelnetClient
 
         async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             writer.write(b"hello")
@@ -283,7 +283,7 @@ class TestTelnetClient:
 
     async def test_readuntil_and_write_and_drain(self) -> None:
         """TelnetClient readuntil/write/drain with a real connection."""
-        from provide.terminal.transports.telnet import TelnetClient
+        from provide.uterm.transports.telnet import TelnetClient
 
         server_data: list[bytes] = []
 

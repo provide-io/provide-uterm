@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from provide.terminal.server.auth import WebhookIdentityProvider
+from provide.uterm.server.auth import WebhookIdentityProvider
 
 
 @pytest.mark.asyncio

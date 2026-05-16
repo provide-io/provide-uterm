@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 
 def _make_app() -> TestClient:
@@ -52,7 +52,7 @@ def test_annotate_no_active_runtime_returns_404() -> None:
     cfg = default_server_config()
     cfg.auth.mode = "dev"
     # Add a never-started session
-    from provide.terminal.server.models import SessionDefinition
+    from provide.uterm.server.models import SessionDefinition
 
     cfg.sessions = [
         SessionDefinition(

@@ -22,12 +22,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
-from provide.terminal.bridge.rest_helpers import compile_expect_regex
-from provide.terminal.bridge.worker_link import TermBridge
-from provide.terminal.client import connect_test_ws
-from provide.terminal.control_channel import ControlChannelProtocolError, encode_data
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.bridge.rest_helpers import compile_expect_regex
+from provide.uterm.bridge.worker_link import TermBridge
+from provide.uterm.client import connect_test_ws
+from provide.uterm.control_channel import ControlChannelProtocolError, encode_data
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -131,7 +131,7 @@ class TestBridgeRecvLoopProtocolError:
         bridge = TermBridge(bot, "w1", "http://localhost:8080")
         bridge._running = True  # must be True or while loop exits immediately
 
-        from provide.terminal.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlChannelDecoder
 
         call_count = 0
         original_feed = ControlChannelDecoder.feed
@@ -223,7 +223,7 @@ class TestWorkerWsBadStream:
 
     def test_bad_stream_closes_with_1003(self) -> None:
         """A worker that sends an unparsable control channel message triggers close(1003)."""
-        from provide.terminal.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlChannelDecoder
 
         app, hub = _make_app("admin")
 
@@ -304,7 +304,7 @@ class TestBrowserWsBadStream:
 
     def test_browser_bad_stream_closes_connection(self) -> None:
         """A browser that sends an unparsable control channel message → server closes with 1003."""
-        from provide.terminal.control_channel import ControlChannelDecoder
+        from provide.uterm.control_channel import ControlChannelDecoder
 
         app, hub = _make_app("admin")
 
@@ -351,8 +351,8 @@ class TestBrowserHandlersResumeReclaimFail:
         but the lock check fails because input_mode == 'open' → reclaimed_hijack stays False.
         check_still_hijacked returns False (no REST/WS hijack) → compensating resume is sent (line 274-276).
         """
-        from provide.terminal.bridge.hub.resume import InMemoryResumeStore
-        from provide.terminal.bridge.routes.browser_handlers import _handle_resume
+        from provide.uterm.bridge.hub.resume import InMemoryResumeStore
+        from provide.uterm.bridge.routes.browser_handlers import _handle_resume
 
         hub = _make_hub()
         store = InMemoryResumeStore()

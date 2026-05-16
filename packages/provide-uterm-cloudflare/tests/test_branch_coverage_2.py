@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 def test_socket_role_colon_format_invalid_first_part_falls_back() -> None:
     """Line 50->52: attachment is colon-split string but parts[0] not in known roles."""
-    from provide.terminal.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
+    from provide.uterm.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
 
     class _Host(_WsHelperMixin):
         worker_id = "w"
@@ -46,7 +46,7 @@ def test_socket_role_colon_format_invalid_first_part_falls_back() -> None:
 
 def test_socket_role_to_py_returns_other_type_falls_back() -> None:
     """Line 62->66: to_py() returns an int (not str or dict) → role stays None → browser."""
-    from provide.terminal.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
+    from provide.uterm.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
 
     class _Host(_WsHelperMixin):
         worker_id = "w"
@@ -73,7 +73,7 @@ def test_socket_role_to_py_returns_other_type_falls_back() -> None:
 
 async def test_list_kv_sessions_skips_empty_raw_value() -> None:
     """Line 96->90: kv.get() returns empty string → session is not appended."""
-    from provide.terminal.cloudflare.state.registry import list_kv_sessions
+    from provide.uterm.cloudflare.state.registry import list_kv_sessions
 
     async def _get(key: str) -> str:
         return ""  # falsy → `if raw:` is False
@@ -95,7 +95,7 @@ async def test_list_kv_sessions_skips_empty_raw_value() -> None:
 
 def test_read_asset_text_importlib_file_not_found_falls_through() -> None:
     """Line 29->33: importlib.resources.files succeeds but is_file() returns False."""
-    from provide.terminal.cloudflare.ui.assets import read_asset_text
+    from provide.uterm.cloudflare.ui.assets import read_asset_text
 
     not_found = SimpleNamespace(is_file=lambda: False, name="missing.js")
 
@@ -107,7 +107,7 @@ def test_read_asset_text_importlib_file_not_found_falls_through() -> None:
 
     with (
         patch.object(importlib.resources, "files", return_value=pkg),
-        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-branch-test")),
+        patch("provide.uterm.cloudflare.ui.assets._LOCAL_STATIC", Path("/nonexistent-branch-test")),
     ):
         result = read_asset_text("missing.js")
 
@@ -122,12 +122,12 @@ def test_read_asset_text_importlib_file_not_found_falls_through() -> None:
 
 def test_read_asset_text_local_static_file_not_found_falls_through(tmp_path: Path) -> None:
     """Line 42->46: _LOCAL_STATIC directory accessible but file not present → falls through."""
-    from provide.terminal.cloudflare.ui.assets import read_asset_text
+    from provide.uterm.cloudflare.ui.assets import read_asset_text
 
     # tmp_path exists but we don't create the target file
     with (
         patch("importlib.resources.files", side_effect=ModuleNotFoundError("no pkg")),
-        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
+        patch("provide.uterm.cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
     ):
         result = read_asset_text("absent.js")
 
@@ -141,7 +141,7 @@ def test_read_asset_text_local_static_file_not_found_falls_through(tmp_path: Pat
 
 def test_serve_asset_importlib_file_not_found_falls_through(tmp_path: Path) -> None:
     """Line 58->66: importlib succeeds, is_file() returns False → falls through to _LOCAL_STATIC."""
-    from provide.terminal.cloudflare.ui.assets import serve_asset
+    from provide.uterm.cloudflare.ui.assets import serve_asset
 
     not_found = SimpleNamespace(is_file=lambda: False, name="missing.js")
     local_root = MagicMock()
@@ -152,9 +152,9 @@ def test_serve_asset_importlib_file_not_found_falls_through(tmp_path: Path) -> N
     # tmp_path exists but file not there → _LOCAL_STATIC fallback also misses
     with (
         patch.object(importlib.resources, "files", return_value=pkg),
-        patch("provide.terminal.cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
+        patch("provide.uterm.cloudflare.ui.assets._LOCAL_STATIC", tmp_path),
     ):
         resp = serve_asset("missing.js")
 
-    # Falls through to provide.terminal package or returns 404
+    # Falls through to provide.uterm package or returns 404
     assert resp.status in {200, 404}

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
-from provide.terminal.transports.telnet import IAC, TelnetTransport
+from provide.uterm.transports.telnet import IAC, TelnetTransport
 
 
 async def _read_until(
@@ -80,7 +80,7 @@ class TestTelnetTransportIACParsing:
         assert events == []
 
     def test_parse_telnet_buffer_negotiate(self) -> None:
-        from provide.terminal.transports.telnet import DO, ECHO
+        from provide.uterm.transports.telnet import DO, ECHO
 
         data = bytes([IAC, DO, ECHO])
         payload, events, consumed = TelnetTransport._parse_telnet_buffer(data)
@@ -104,7 +104,7 @@ class TestTelnetTransportIACParsing:
 class TestParseTelnetBufferEdgeCases:
     def test_incomplete_negotiate_command(self) -> None:
         """IAC DO with no option byte is not consumed."""
-        from provide.terminal.transports.telnet import DO, IAC
+        from provide.uterm.transports.telnet import DO, IAC
 
         data = bytes([IAC, DO])  # incomplete — missing option byte
         payload, events, consumed = TelnetTransport._parse_telnet_buffer(data)
@@ -114,7 +114,7 @@ class TestParseTelnetBufferEdgeCases:
 
     def test_incomplete_subnegotiation_not_consumed(self) -> None:
         """SB without matching SE is not consumed."""
-        from provide.terminal.transports.telnet import IAC, OPT_TTYPE, SB
+        from provide.uterm.transports.telnet import IAC, OPT_TTYPE, SB
 
         data = bytes([IAC, SB, OPT_TTYPE, 0, 65])  # no IAC SE terminator
         payload, events, consumed = TelnetTransport._parse_telnet_buffer(data)
@@ -123,7 +123,7 @@ class TestParseTelnetBufferEdgeCases:
 
     def test_unknown_iac_command_skipped(self) -> None:
         """An unknown IAC command (not DO/DONT/WILL/WONT/SB/SE/IAC) consumes 2 bytes."""
-        from provide.terminal.transports.telnet import IAC
+        from provide.uterm.transports.telnet import IAC
 
         # IAC 5 (unknown command) followed by some data
         data = bytes([IAC, 5]) + b"hello"
@@ -141,7 +141,7 @@ class TestParseTelnetBufferEdgeCases:
 class TestTelnetTransportNegotiate:
     async def test_negotiate_do_binary(self) -> None:
         """Transport responds to DO BINARY with WILL BINARY."""
-        from provide.terminal.transports.telnet import DO, IAC, OPT_BINARY
+        from provide.uterm.transports.telnet import DO, IAC, OPT_BINARY
 
         reply_data: list[bytes] = []
         ready = asyncio.Event()
@@ -168,7 +168,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_do_naws(self) -> None:
         """Transport responds to DO NAWS with WILL NAWS + NAWS subnegotiation."""
-        from provide.terminal.transports.telnet import DO, IAC, OPT_NAWS, SB, WILL
+        from provide.uterm.transports.telnet import DO, IAC, OPT_NAWS, SB, WILL
 
         all_data = bytearray()
         ready = asyncio.Event()
@@ -206,7 +206,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_do_ttype(self) -> None:
         """Transport responds to DO TTYPE with WILL TTYPE + SB."""
-        from provide.terminal.transports.telnet import DO, IAC, OPT_TTYPE
+        from provide.uterm.transports.telnet import DO, IAC, OPT_TTYPE
 
         received: list[bytes] = []
         ready = asyncio.Event()
@@ -232,7 +232,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_do_unknown_option(self) -> None:
         """Transport responds to DO <unknown> with WONT."""
-        from provide.terminal.transports.telnet import DO, IAC
+        from provide.uterm.transports.telnet import DO, IAC
 
         received: list[bytes] = []
         ready = asyncio.Event()
@@ -261,7 +261,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_dont_sends_wont(self) -> None:
         """Transport responds to DONT with WONT."""
-        from provide.terminal.transports.telnet import DONT, IAC
+        from provide.uterm.transports.telnet import DONT, IAC
 
         ready = asyncio.Event()
 
@@ -285,7 +285,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_will_echo_sends_do(self) -> None:
         """Transport responds to server WILL ECHO with DO ECHO."""
-        from provide.terminal.transports.telnet import IAC, OPT_ECHO, WILL
+        from provide.uterm.transports.telnet import IAC, OPT_ECHO, WILL
 
         ready = asyncio.Event()
 
@@ -309,7 +309,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_will_unknown_sends_dont(self) -> None:
         """Transport responds to WILL <unknown> with DONT."""
-        from provide.terminal.transports.telnet import IAC, WILL
+        from provide.uterm.transports.telnet import IAC, WILL
 
         ready = asyncio.Event()
 
@@ -333,7 +333,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_negotiate_wont_sends_dont(self) -> None:
         """Transport responds to WONT with DONT."""
-        from provide.terminal.transports.telnet import IAC, WONT
+        from provide.uterm.transports.telnet import IAC, WONT
 
         ready = asyncio.Event()
 
@@ -357,7 +357,7 @@ class TestTelnetTransportNegotiate:
 
     async def test_handle_subnegotiation_ttype(self) -> None:
         """SB TTYPE SEND triggers TTYPE IS response."""
-        from provide.terminal.transports.telnet import IAC, OPT_TTYPE, SB, SE
+        from provide.uterm.transports.telnet import IAC, OPT_TTYPE, SB, SE
 
         all_data = bytearray()
         ready = asyncio.Event()
@@ -398,7 +398,7 @@ class TestTelnetTransportNegotiate:
         """SB with a non-TTYPE option should NOT trigger _send_ttype."""
         from unittest.mock import AsyncMock, patch
 
-        from provide.terminal.transports.telnet import IAC, SB, SE
+        from provide.uterm.transports.telnet import IAC, SB, SE
 
         # Use option 99 (not OPT_TTYPE) — _send_ttype must not be called
         non_ttype_option = 99

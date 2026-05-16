@@ -2,11 +2,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.protocols."""
+"""Tests for provide.uterm.manager.protocols."""
 
 from __future__ import annotations
 
-from provide.terminal.manager.protocols import (
+from provide.uterm.manager.protocols import (
     AccountPoolPlugin,
     IdentityStorePlugin,
     ManagedAgentPlugin,

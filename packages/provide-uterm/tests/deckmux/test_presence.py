@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.deckmux._presence — per-session user tracking."""
+"""Tests for provide.uterm.deckmux._presence — per-session user tracking."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from provide.terminal.deckmux._presence import PresenceStore, UserPresence
+from provide.uterm.deckmux._presence import PresenceStore, UserPresence
 
 # --- UserPresence ---
 
@@ -85,7 +85,7 @@ def test_store_get_missing() -> None:
 def test_store_update() -> None:
     store = PresenceStore()
     store.add("u1", "Alice", "#fff", "admin")
-    with patch("provide.terminal.deckmux._presence.time") as mock_time:
+    with patch("provide.uterm.deckmux._presence.time") as mock_time:
         mock_time.time.return_value = 999.0
         p = store.update("u1", typing=True, scroll_line=42)
     assert p is not None

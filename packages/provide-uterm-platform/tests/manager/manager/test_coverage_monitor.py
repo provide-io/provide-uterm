@@ -13,14 +13,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.manager._monitor import (
+from provide.uterm.manager._monitor import (
     _handle_desired_state,
     _handle_exited_processes,
 )
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.process import AgentProcessManager
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -121,7 +121,7 @@ class TestHandleDesiredStateAlreadyRegistered:
         with (
             patch.object(pm, "allocate_agent_id", return_value="agent_000"),
             patch.object(pm, "_launch_queued_agent", new_callable=AsyncMock),
-            patch("provide.terminal.manager._monitor.asyncio.create_task", return_value=asyncio.Future()),
+            patch("provide.uterm.manager._monitor.asyncio.create_task", return_value=asyncio.Future()),
         ):
             await _handle_desired_state(pm)
 
@@ -154,7 +154,7 @@ class TestHandleDesiredStateAlreadyRegistered:
         # allocate_agent_id returns "agent_001" which IS already in agents → if False → skip block
         with (
             patch.object(pm, "allocate_agent_id", return_value="agent_001"),
-            patch("provide.terminal.manager._monitor.asyncio.create_task", side_effect=_capture_task),
+            patch("provide.uterm.manager._monitor.asyncio.create_task", side_effect=_capture_task),
         ):
             await _handle_desired_state(pm)
 
@@ -218,7 +218,7 @@ class TestWaitForProcessExitAwaitable:
         loop = asyncio.get_running_loop()
         with (
             patch.object(loop, "run_in_executor", side_effect=fake_run_in_executor),
-            patch("provide.terminal.manager.process.inspect.isawaitable", return_value=True),
+            patch("provide.uterm.manager.process.inspect.isawaitable", return_value=True),
         ):
             await AgentProcessManager._wait_for_process_exit(proc, 5.0)
 

@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from provide.terminal.client.hijack import HijackClient
+from provide.uterm.client.hijack import HijackClient
 
 
 @pytest.mark.asyncio
 async def test_request_sanitization_on_http_error():
-    with patch("provide.terminal.client.hijack.log") as mock_log:
+    with patch("provide.uterm.client.hijack.log") as mock_log:
         client = HijackClient("http://test")
 
         # Mock a response with sensitive data
@@ -47,7 +47,7 @@ async def test_request_sanitization_on_http_error():
 
 @pytest.mark.asyncio
 async def test_request_sanitization_on_failure_response():
-    with patch("provide.terminal.client.hijack.log") as mock_log:
+    with patch("provide.uterm.client.hijack.log") as mock_log:
         client = HijackClient("http://test")
 
         # Mock a response with sensitive data, but no exception raised by httpx

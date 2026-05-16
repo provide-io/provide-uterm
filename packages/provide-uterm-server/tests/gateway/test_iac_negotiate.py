@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.gateway._iac_negotiate import (
+from provide.uterm.gateway._iac_negotiate import (
     IacNegotiator,
     _parse_new_environ_is,
     _parse_ttype_is,

@@ -60,7 +60,7 @@ graph TB
 ### Embed a terminal in FastAPI
 
 ```python
-from provide.terminal.fastapi import mount_terminal_ui
+from provide.uterm.fastapi import mount_terminal_ui
 app = FastAPI()
 mount_terminal_ui(app)  # serves at /terminal
 ```

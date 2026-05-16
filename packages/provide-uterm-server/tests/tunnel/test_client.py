@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from websockets.asyncio.server import serve
 
-from provide.terminal.tunnel.client import (
+from provide.uterm.tunnel.client import (
     BACKOFF_SCHEDULE,
     TunnelClient,
 )
-from provide.terminal.tunnel.protocol import (
+from provide.uterm.tunnel.protocol import (
     CHANNEL_CONTROL,
     CHANNEL_DATA,
     FLAG_DATA,
@@ -88,7 +88,7 @@ class TestConnect:
         async def fake_connect(*a: object, **kw: object) -> object:
             return mock_ws
 
-        with patch("provide.terminal.tunnel.client.connect", side_effect=fake_connect):
+        with patch("provide.uterm.tunnel.client.connect", side_effect=fake_connect):
             await client.connect()
         assert client._ws is mock_ws
 
@@ -98,7 +98,7 @@ class TestConnect:
         async def fake_connect(*a: object, **kw: object) -> object:
             return _mock_ws()
 
-        with patch("provide.terminal.tunnel.client.connect", side_effect=fake_connect) as mock_connect:
+        with patch("provide.uterm.tunnel.client.connect", side_effect=fake_connect) as mock_connect:
             await client.connect()
             mock_connect.assert_called_once_with(
                 "ws://localhost:9999",
@@ -240,7 +240,7 @@ class TestReconnectLoop:
         client = TunnelClient("ws://localhost:9999", "tok")
         with (
             patch.object(client, "connect", new_callable=AsyncMock) as mock_connect,
-            patch("provide.terminal.tunnel.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("provide.uterm.tunnel.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             await client.reconnect_loop(max_attempts=3)
         mock_connect.assert_awaited_once()
@@ -258,7 +258,7 @@ class TestReconnectLoop:
 
         with (
             patch.object(client, "connect", side_effect=fail_then_succeed),
-            patch("provide.terminal.tunnel.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("provide.uterm.tunnel.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             await client.reconnect_loop(max_attempts=5)
         assert call_count == 3
@@ -270,7 +270,7 @@ class TestReconnectLoop:
         client = TunnelClient("ws://localhost:9999", "tok")
         with (
             patch.object(client, "connect", side_effect=ConnectionRefusedError("nope")),
-            patch("provide.terminal.tunnel.client.asyncio.sleep", new_callable=AsyncMock),
+            patch("provide.uterm.tunnel.client.asyncio.sleep", new_callable=AsyncMock),
         ):
             await client.reconnect_loop(max_attempts=2)
         # Should not raise, just log and return
@@ -280,7 +280,7 @@ class TestReconnectLoop:
         client = TunnelClient("ws://localhost:9999", "tok")
         with (
             patch.object(client, "connect", side_effect=ConnectionRefusedError("nope")),
-            patch("provide.terminal.tunnel.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("provide.uterm.tunnel.client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         ):
             await client.reconnect_loop(max_attempts=7)
         delays = [c.args[0] for c in mock_sleep.await_args_list]

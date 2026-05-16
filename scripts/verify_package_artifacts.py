@@ -58,7 +58,7 @@ def main() -> int:
     required = _expected_frontend_files()
     if not required:
         raise RuntimeError(
-            "no frontend files found in packages/provide-uterm-server/src/provide/terminal/server/frontend/"
+            "no frontend files found in packages/provide-uterm-server/src/provide/uterm/server/frontend/"
         )
 
     wheel_members = _wheel_members(wheels[-1])

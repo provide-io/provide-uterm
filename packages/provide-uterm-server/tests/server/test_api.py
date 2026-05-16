@@ -14,8 +14,8 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import AuthConfig, SessionDefinition
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import AuthConfig, SessionDefinition
 
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -81,7 +81,7 @@ def test_health_ready(app_client: TestClient) -> None:
 def test_health_not_ready_without_registry() -> None:
     from fastapi import FastAPI
 
-    from provide.terminal.server.routes.health import create_health_router
+    from provide.uterm.server.routes.health import create_health_router
 
     bare = FastAPI()
     with TestClient(bare) as client:
@@ -102,7 +102,7 @@ def test_healthz_no_auth_required() -> None:
     """``/healthz`` must work even without any auth setup."""
     from fastapi import FastAPI
 
-    from provide.terminal.server.routes.health import create_health_router
+    from provide.uterm.server.routes.health import create_health_router
 
     bare = FastAPI()
     bare.include_router(create_health_router())
@@ -135,7 +135,7 @@ def test_health_shows_startup_time_zero_when_missing() -> None:
     """When uterm_startup_time is not set, uptime_s defaults to 0."""
     from fastapi import FastAPI
 
-    from provide.terminal.server.routes.health import create_health_router
+    from provide.uterm.server.routes.health import create_health_router
 
     bare = FastAPI()
     bare.state.uterm_registry = object()  # type: ignore[assignment]
@@ -573,7 +573,7 @@ def test_quick_connect_forbidden_without_create_privilege() -> None:
         key=key,
         algorithm="HS256",
     )
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     config = default_server_config()
     now2 = int(time.time())

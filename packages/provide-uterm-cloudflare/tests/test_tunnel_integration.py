@@ -18,12 +18,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from provide.terminal.cloudflare.api._tunnel_api import (
+from provide.uterm.cloudflare.api._tunnel_api import (
     handle_share_route,
     handle_tunnels,
     resolve_share_context,
 )
-from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -291,10 +291,10 @@ class TestSessionRuntimeBinaryDispatch:
 
         mock_handler = AsyncMock()
         # The lazy import inside webSocketMessage does:
-        #   from provide.terminal.cloudflare.api.tunnel_routes import handle_tunnel_message
+        #   from provide.uterm.cloudflare.api.tunnel_routes import handle_tunnel_message
         # So we patch the function on the tunnel_routes module.
         with patch(
-            "provide.terminal.cloudflare.api.tunnel_routes.handle_tunnel_message",
+            "provide.uterm.cloudflare.api.tunnel_routes.handle_tunnel_message",
             mock_handler,
         ):
             await rt.webSocketMessage(ws, b"\x01\x00hello")

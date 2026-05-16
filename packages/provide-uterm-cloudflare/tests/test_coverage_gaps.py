@@ -9,7 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import provide.terminal.cloudflare.cf_types  # noqa: F401
+import provide.uterm.cloudflare.cf_types  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -50,7 +50,7 @@ class TestTunnelApiGaps:
 
     async def test_json_parse_error_defaults_to_empty(self) -> None:
         """Lines 29-30: body defaults to {} on JSON parse error."""
-        from provide.terminal.cloudflare.api._tunnel_api import handle_tunnels
+        from provide.uterm.cloudflare.api._tunnel_api import handle_tunnels
 
         req = _req("/api/tunnels", method="POST")
         # json() raises → body should default to {}
@@ -60,7 +60,7 @@ class TestTunnelApiGaps:
 
     async def test_resolve_session_corrupt_json(self) -> None:
         """Lines 154-155: corrupt KV entry returns None via resolve_share_context."""
-        from provide.terminal.cloudflare.api._tunnel_api import (
+        from provide.uterm.cloudflare.api._tunnel_api import (
             resolve_share_context,
         )
 
@@ -76,7 +76,7 @@ class TestTunnelApiGaps:
 
     async def test_resolve_share_context_no_token(self) -> None:
         """Lines 164-165, 176-182: no token in query or cookies."""
-        from provide.terminal.cloudflare.api._tunnel_api import (
+        from provide.uterm.cloudflare.api._tunnel_api import (
             resolve_share_context,
         )
 
@@ -89,7 +89,7 @@ class TestTunnelApiGaps:
         """Lines 164-165: URL parse exception silently caught."""
         import json as _json
 
-        from provide.terminal.cloudflare.api._tunnel_api import (
+        from provide.uterm.cloudflare.api._tunnel_api import (
             resolve_share_context,
         )
 
@@ -115,7 +115,7 @@ class TestTunnelApiGaps:
         """Lines 178-179: cookie parse exception silently caught."""
         import json as _json
 
-        from provide.terminal.cloudflare.api._tunnel_api import (
+        from provide.uterm.cloudflare.api._tunnel_api import (
             resolve_share_context,
         )
 
@@ -135,7 +135,7 @@ class TestTunnelApiGaps:
 
     async def test_handle_share_route_valid_context(self) -> None:
         """Lines 213-216: share page rendered with valid context."""
-        from provide.terminal.cloudflare.api._tunnel_api import (
+        from provide.uterm.cloudflare.api._tunnel_api import (
             handle_share_route,
         )
 
@@ -143,7 +143,7 @@ class TestTunnelApiGaps:
         mock_spa.return_value = SimpleNamespace(status=200)
 
         with patch(
-            "provide.terminal.cloudflare.api._tunnel_api.resolve_share_context",
+            "provide.uterm.cloudflare.api._tunnel_api.resolve_share_context",
             new_callable=AsyncMock,
             return_value=("operator", "operator"),
         ):
@@ -157,7 +157,7 @@ class TestTunnelApiGaps:
         self,
     ) -> None:
         """Lines 178-179: SimpleCookie parse error silently ignored."""
-        from provide.terminal.cloudflare.api._tunnel_api import (
+        from provide.uterm.cloudflare.api._tunnel_api import (
             resolve_share_context,
         )
 
@@ -181,7 +181,7 @@ class TestSessionRuntimeGaps:
     def _make_runtime(self) -> object:
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -267,7 +267,7 @@ class TestSessionRuntimeGaps:
         """Lines 277-278: tunnel session token accepted in fetch()."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -320,7 +320,7 @@ class TestSessionRuntimeGaps:
         """F1: tunnel_token_transport=cookie → query token ignored."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -344,7 +344,7 @@ class TestSessionRuntimeGaps:
         """F1: tunnel_token_transport=query → cookie token ignored."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -368,7 +368,7 @@ class TestSessionRuntimeGaps:
         """F1: tunnel_ip_binding=True + IP mismatch → None."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -393,7 +393,7 @@ class TestSessionRuntimeGaps:
         """F1: tunnel_ip_binding=True + IP match → role returned."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -418,7 +418,7 @@ class TestSessionRuntimeGaps:
         """F1: _ensure_meta populates _issued_ip from KV data."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -436,7 +436,7 @@ class TestSessionRuntimeGaps:
         """F1: if headers.get raises, client_ip defaults to '' which skips binding."""
         import sqlite3
 
-        from provide.terminal.cloudflare.do.session_runtime import SessionRuntime
+        from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
         ctx = SimpleNamespace(
             storage=SimpleNamespace(
@@ -474,7 +474,7 @@ class TestWsHelpersGaps:
 
     async def test_get_presence_ids_ctx_failure_fallback(self) -> None:
         """Lines 196-197: getWebSockets() failure falls back."""
-        from provide.terminal.cloudflare.do.session_runtime.ws_helpers import (
+        from provide.uterm.cloudflare.do.session_runtime.ws_helpers import (
             _WsHelperMixin,
         )
 
@@ -492,7 +492,7 @@ class TestWsHelpersGaps:
         self,
     ) -> None:
         """Lines 198-200: empty getWebSockets falls back to browser_sockets."""
-        from provide.terminal.cloudflare.do.session_runtime.ws_helpers import (
+        from provide.uterm.cloudflare.do.session_runtime.ws_helpers import (
             _WsHelperMixin,
         )
 
@@ -509,7 +509,7 @@ class TestWsHelpersGaps:
 
     async def test_get_presence_ids_skips_non_browser(self) -> None:
         """Line 203: non-browser sockets skipped."""
-        from provide.terminal.cloudflare.do.session_runtime.ws_helpers import (
+        from provide.uterm.cloudflare.do.session_runtime.ws_helpers import (
             _WsHelperMixin,
         )
 
@@ -535,7 +535,7 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnels_via_fetch(self) -> None:
         """Line 379: /api/tunnels route matched via _match_api_route."""
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         d = Default(SimpleNamespace(AUTH_MODE="dev"))
         req = _req("/api/tunnels", method="GET")
@@ -544,7 +544,7 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnels_dispatch(self) -> None:
         """Lines 413-418: _api_tunnels calls handle_tunnels."""
-        from provide.terminal.cloudflare.entry.handlers import _api_tunnels
+        from provide.uterm.cloudflare.entry.handlers import _api_tunnels
 
         req = _req("/api/tunnels", method="GET")
         env = SimpleNamespace(SESSION_REGISTRY=None)
@@ -554,8 +554,8 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnel_revoke_dispatch(self) -> None:
         """Lines 422-427: _api_tunnel_revoke calls handler."""
-        from provide.terminal.cloudflare.config import CloudflareConfig
-        from provide.terminal.cloudflare.entry.handlers import _api_tunnel_revoke
+        from provide.uterm.cloudflare.config import CloudflareConfig
+        from provide.uterm.cloudflare.entry.handlers import _api_tunnel_revoke
 
         cfg = CloudflareConfig.from_env(
             SimpleNamespace(AUTH_MODE="dev", JWT_ALGORITHMS="HS256", WORKER_BEARER_TOKEN="t")
@@ -567,7 +567,7 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnel_rotate_dispatch(self) -> None:
         """Lines 431-436: _api_tunnel_rotate calls handler."""
-        from provide.terminal.cloudflare.entry.handlers import _api_tunnel_rotate
+        from provide.uterm.cloudflare.entry.handlers import _api_tunnel_rotate
 
         cfg = MagicMock()
         cfg.tunnel_token_ttl_s = 3600
@@ -578,7 +578,7 @@ class TestEntryDispatchGaps:
 
     async def test_share_redirect_without_query_string(self) -> None:
         """Line 337->339: /s/{id} redirects without query string."""
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         d = Default(SimpleNamespace(AUTH_MODE="dev"))
         req = _req("/s/my-session")
@@ -590,7 +590,7 @@ class TestEntryDispatchGaps:
 
     async def test_share_redirect_with_query_string(self) -> None:
         """Lines 337-339: /s/{id}?token=x redirects with query."""
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         d = Default(SimpleNamespace(AUTH_MODE="dev"))
         req = _req("/s/my-session?token=abc123")
@@ -604,7 +604,7 @@ class TestEntryDispatchGaps:
         """Short-share /s/{id} for an HTTP tunnel must redirect to /app/inspect/."""
         import json
 
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         kv = AsyncMock()
         kv.get = AsyncMock(return_value=json.dumps({"share_page": "inspect"}))
@@ -617,7 +617,7 @@ class TestEntryDispatchGaps:
 
     async def test_share_redirect_kv_returns_none_falls_back_to_session(self) -> None:
         """Short-share KV returning None must fall back to /app/session/."""
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         kv = AsyncMock()
         kv.get = AsyncMock(return_value=None)
@@ -630,7 +630,7 @@ class TestEntryDispatchGaps:
 
     async def test_share_redirect_kv_exception_falls_back_to_session(self) -> None:
         """Short-share KV lookup failure must fall back to /app/session/."""
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         kv = AsyncMock()
         kv.get = AsyncMock(side_effect=RuntimeError("kv unavailable"))
@@ -643,13 +643,13 @@ class TestEntryDispatchGaps:
 
     async def test_share_page_with_context(self) -> None:
         """Lines 344-345: SPA response for share page with context."""
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
         d = Default(SimpleNamespace(AUTH_MODE="dev"))
 
         # Mock resolve_share_context to return valid context
         with patch(
-            "provide.terminal.cloudflare.api._tunnel_api.resolve_share_context",
+            "provide.uterm.cloudflare.api._tunnel_api.resolve_share_context",
             new_callable=AsyncMock,
             return_value=("operator", "operator"),
         ):

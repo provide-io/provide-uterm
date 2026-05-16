@@ -10,7 +10,7 @@ try/except that switches between the installed package path and the bare module
 path used inside Cloudflare Workers Python runtime:
 
     try:
-        from provide.terminal.cloudflare.X import Y   # installed package path
+        from provide.uterm.cloudflare.X import Y   # installed package path
     except Exception:
         from X import Y                              # CF Workers flat path
 
@@ -98,14 +98,14 @@ def _fresh_import(
 
 def test_ui_assets_cf_types_fallback() -> None:
     """ui/assets.py falls back to bare 'cf_types' when package path is unavailable."""
-    from provide.terminal.cloudflare.cf_types import Response as _RealResponse
+    from provide.uterm.cloudflare.cf_types import Response as _RealResponse
 
     mock_cf = ModuleType("cf_types")
     mock_cf.Response = _RealResponse  # type: ignore[attr-defined]
 
     mod = _fresh_import(
-        "provide.terminal.cloudflare.ui.assets",
-        block=["provide.terminal.cloudflare.cf_types"],
+        "provide.uterm.cloudflare.ui.assets",
+        block=["provide.uterm.cloudflare.cf_types"],
         inject={"cf_types": mock_cf},
     )
     assert mod.Response is _RealResponse
@@ -118,12 +118,12 @@ def test_ui_assets_cf_types_fallback() -> None:
 
 def test_entry_module_level_fallback() -> None:
     """entry.py module-level imports fall back to bare module names."""
-    from provide.terminal.cloudflare import config as real_config
-    from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
-    from provide.terminal.cloudflare.cf_types import Response, WorkerEntrypoint, json_response
-    from provide.terminal.cloudflare.do import session_runtime as real_sr_mod
-    from provide.terminal.cloudflare.state import registry as real_reg
-    from provide.terminal.cloudflare.ui import assets as real_assets
+    from provide.uterm.cloudflare import config as real_config
+    from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
+    from provide.uterm.cloudflare.cf_types import Response, WorkerEntrypoint, json_response
+    from provide.uterm.cloudflare.do import session_runtime as real_sr_mod
+    from provide.uterm.cloudflare.state import registry as real_reg
+    from provide.uterm.cloudflare.ui import assets as real_assets
 
     cf = ModuleType("cf_types")
     cf.Response = Response  # type: ignore[attr-defined]
@@ -157,8 +157,8 @@ def test_entry_module_level_fallback() -> None:
     }
 
     mod = _fresh_import(
-        "provide.terminal.cloudflare.entry",
-        block=["provide.terminal.cloudflare.cf_types"],
+        "provide.uterm.cloudflare.entry",
+        block=["provide.uterm.cloudflare.cf_types"],
         inject=inject,
     )
     # Default class was built using the fallback WorkerEntrypoint
@@ -182,7 +182,7 @@ async def test_entry_inline_jwt_fallback() -> None:
     _workers_stub.WorkerEntrypoint = object  # type: ignore[attr-defined]
     _workers_stub.Response = None  # type: ignore[attr-defined]
     with _patched_sys_modules([], {"workers": _workers_stub}):
-        from provide.terminal.cloudflare.entry import Default
+        from provide.uterm.cloudflare.entry import Default
 
     class _FakeJwtError(Exception):
         pass
@@ -190,7 +190,7 @@ async def test_entry_inline_jwt_fallback() -> None:
     async def _always_invalid(token: str, config: object) -> None:
         raise _FakeJwtError("test token rejected")
 
-    from provide.terminal.cloudflare.auth.jwt import extract_bearer_or_cookie
+    from provide.uterm.cloudflare.auth.jwt import extract_bearer_or_cookie
 
     mock_auth_jwt = ModuleType("auth.jwt")
     mock_auth_jwt.JwtValidationError = _FakeJwtError  # type: ignore[attr-defined]
@@ -217,7 +217,7 @@ async def test_entry_inline_jwt_fallback() -> None:
             return "{}"
 
     with _patched_sys_modules(
-        block=["provide.terminal.cloudflare.auth.jwt"],
+        block=["provide.uterm.cloudflare.auth.jwt"],
         inject={"auth": ModuleType("auth"), "auth.jwt": mock_auth_jwt},
     ):
         resp = await default.fetch(_FakeRequest())
@@ -232,19 +232,19 @@ async def test_entry_inline_jwt_fallback() -> None:
 
 def test_session_runtime_module_level_fallback() -> None:
     """session_runtime.py module-level imports fall back to bare module names."""
-    from provide.terminal.cloudflare.api.http_routes import route_http
-    from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
-    from provide.terminal.cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
-    from provide.terminal.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
-    from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator, HijackSession
-    from provide.terminal.cloudflare.cf_types import CFWebSocket, DurableObject, Response
-    from provide.terminal.cloudflare.config import CloudflareConfig
-    from provide.terminal.cloudflare.do.persistence import clear_lease as _clear_lease
-    from provide.terminal.cloudflare.do.persistence import persist_lease as _persist_lease
-    from provide.terminal.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
-    from provide.terminal.cloudflare.do.ushell import init_ushell, on_browser_connected
-    from provide.terminal.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
-    from provide.terminal.cloudflare.state.store import LeaseRecord, SqliteStateStore
+    from provide.uterm.cloudflare.api.http_routes import route_http
+    from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
+    from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt, extract_bearer_or_cookie
+    from provide.uterm.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
+    from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator, HijackSession
+    from provide.uterm.cloudflare.cf_types import CFWebSocket, DurableObject, Response
+    from provide.uterm.cloudflare.config import CloudflareConfig
+    from provide.uterm.cloudflare.do.persistence import clear_lease as _clear_lease
+    from provide.uterm.cloudflare.do.persistence import persist_lease as _persist_lease
+    from provide.uterm.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
+    from provide.uterm.cloudflare.do.ushell import init_ushell, on_browser_connected
+    from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
+    from provide.uterm.cloudflare.state.store import LeaseRecord, SqliteStateStore
 
     # Build flat mock modules using real classes so base-class inheritance works.
     api_http = ModuleType("api.http_routes")
@@ -310,8 +310,8 @@ def test_session_runtime_module_level_fallback() -> None:
     }
 
     mod = _fresh_import(
-        "provide.terminal.cloudflare.do.session_runtime",
-        block=["provide.terminal.cloudflare.api.http_routes"],
+        "provide.uterm.cloudflare.do.session_runtime",
+        block=["provide.uterm.cloudflare.api.http_routes"],
         inject=inject,
     )
     # SessionRuntime was built using fallback DurableObject and _WsHelperMixin

@@ -26,7 +26,7 @@ import uuid
 
 import pytest
 import websockets
-from provide.terminal.control_channel import encode_control
+from provide.uterm.control_channel import encode_control
 
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-uterm-e2e-test/1.0"

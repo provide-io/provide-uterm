@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from textual.widgets import Static
 
-from provide.terminal.cli._watch_app import Exchange, WatchApp, _detail_lines
+from provide.uterm.cli._watch_app import Exchange, WatchApp, _detail_lines
 
 
 @pytest.fixture

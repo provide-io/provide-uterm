@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.bridge.hub import PolicyContext, PolicyDecision, TermHub
-from provide.terminal.bridge.routes.browser_handlers import _handle_input
-from provide.terminal.control_channel import ControlChannelDecoder, DataChunk
+from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
+from provide.uterm.bridge.routes.browser_handlers import _handle_input
+from provide.uterm.control_channel import ControlChannelDecoder, DataChunk
 
 
 @pytest.mark.asyncio

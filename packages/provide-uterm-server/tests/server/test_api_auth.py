@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -47,7 +47,7 @@ def viewer_client() -> TestClient:
 
     import jwt as _jwt
 
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     key = "uterm-test-secret-32-byte-minimum-key"
     now = int(time.time())
@@ -220,7 +220,7 @@ def test_hijack_snapshot_viewer_private_session_403() -> None:
 
     import jwt as _jwt
 
-    from provide.terminal.server.models import AuthConfig, SessionDefinition
+    from provide.uterm.server.models import AuthConfig, SessionDefinition
 
     key = "uterm-test-secret-32-byte-minimum-key"
     now = int(time.time())
@@ -262,7 +262,7 @@ def test_create_session_owner_mismatch_forbidden() -> None:
 
     import jwt as _jwt
 
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     key = "uterm-test-secret-32-byte-minimum-key"
     now = int(time.time())
@@ -315,7 +315,7 @@ def _two_principal_jwt_app() -> tuple[TestClient, str, str]:
 
     import jwt as _jwt
 
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     key = "uterm-test-secret-32-byte-minimum-key"
     now = int(time.time())
@@ -463,7 +463,7 @@ def test_session_delete_revokes_tunnel_tokens() -> None:
 
     import jwt as _jwt
 
-    from provide.terminal.server.models import AuthConfig
+    from provide.uterm.server.models import AuthConfig
 
     key = "uterm-test-secret-32-byte-minimum-key"
     now = int(time.time())
@@ -546,7 +546,7 @@ def test_principal_guard_500_when_missing() -> None:
     """_principal() raises 500 if middleware failed to set uterm_principal."""
     from fastapi import FastAPI
 
-    from provide.terminal.server.routes.api import create_api_router
+    from provide.uterm.server.routes.api import create_api_router
 
     bare = FastAPI()
     bare.include_router(create_api_router())
@@ -574,7 +574,7 @@ def test_principal_guard_detail_message_when_missing() -> None:
     """
     from fastapi import FastAPI
 
-    from provide.terminal.server.routes.api import create_api_router
+    from provide.uterm.server.routes.api import create_api_router
 
     bare = FastAPI()
     bare.include_router(create_api_router())

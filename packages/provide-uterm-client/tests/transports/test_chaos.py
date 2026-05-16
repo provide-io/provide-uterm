@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from provide.terminal.transports.base import ConnectionTransport
-from provide.terminal.transports.chaos import ChaosTransport
+from provide.uterm.transports.base import ConnectionTransport
+from provide.uterm.transports.chaos import ChaosTransport
 
 
 class StubTransport(ConnectionTransport):

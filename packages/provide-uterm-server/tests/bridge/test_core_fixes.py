@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for src/provide/terminal/hijack/hub/core.py — part 1.
+"""Mutation-killing tests for src/provide/uterm/hijack/hub/core.py — part 1.
 
 Covers:
 - browser_count: returns actual browser count (not 0) when workers registered.
@@ -17,8 +17,8 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
 
 def _make_hub(**kwargs: Any) -> TermHub:

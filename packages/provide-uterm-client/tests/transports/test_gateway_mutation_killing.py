@@ -2,17 +2,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for gateway/_gateway.py and provide.terminal.colors."""
+"""Mutation-killing tests for gateway/_gateway.py and provide.uterm.colors."""
 
 from __future__ import annotations
 
-from provide.terminal.colors import (
+from provide.uterm.colors import (
     apply_color_mode,
     rgb_to_16_index,
     rgb_to_256,
 )
-from provide.terminal.colors.rgb import _clamp8
-from provide.terminal.gateway._gateway import (
+from provide.uterm.colors.rgb import _clamp8
+from provide.uterm.gateway._gateway import (
     _strip_iac,
 )
 

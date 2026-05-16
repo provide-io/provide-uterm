@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from provide.terminal.bridge.annotation import Annotation, AnnotationSpan, DetectionRule
+from provide.uterm.bridge.annotation import Annotation, AnnotationSpan, DetectionRule
 
 
 class TestAnnotationDefaults:

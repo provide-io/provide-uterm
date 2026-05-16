@@ -112,7 +112,7 @@ if hub._detector is not None and data:
 
 ### Built-In Rule Library
 
-A default `provide.terminal.detection.rules` module ships a curated starter set:
+A default `provide.uterm.detection.rules` module ships a curated starter set:
 
 | Rule ID | Name | Severity | Pattern |
 |---|---|---|---|

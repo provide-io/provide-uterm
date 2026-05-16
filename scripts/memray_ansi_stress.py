@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Memray stress test for ANSI color processing and normalization."""
 
-from provide.terminal.ansi import normalize_colors, upgrade_to_256, upgrade_to_truecolor
+from provide.uterm.ansi import normalize_colors, upgrade_to_256, upgrade_to_truecolor
 
 # Representative BBS strings covering all color token types
 CORPUS = [

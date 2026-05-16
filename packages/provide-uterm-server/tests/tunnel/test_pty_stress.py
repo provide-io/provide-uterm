@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from provide.terminal.tunnel.pty_capture import (
+from provide.uterm.tunnel.pty_capture import (
     install_sigwinch_handler,
     spawn_pty,
 )

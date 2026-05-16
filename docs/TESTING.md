@@ -62,10 +62,10 @@ Tests are organized by markers, which allow selective execution:
 
 ### Coverage Requirements
 
-The project enforces **100% branch coverage** on the `provide.terminal` package:
+The project enforces **100% branch coverage** on the `provide.uterm` package:
 
 ```bash
-uv run pytest --cov=provide.terminal --cov-branch --cov-fail-under=100
+uv run pytest --cov=provide.uterm --cov-branch --cov-fail-under=100
 ```
 
 This is automatically checked in the pytest gate and CI.
@@ -250,7 +250,7 @@ python -m memray stats memray-output/*.bin
 If coverage drops below 100%, identify uncovered lines:
 
 ```bash
-uv run pytest --cov=provide.terminal --cov-branch --cov-report=term-missing
+uv run pytest --cov=provide.uterm --cov-branch --cov-report=term-missing
 ```
 
 Then either:

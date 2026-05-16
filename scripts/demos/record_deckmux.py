@@ -18,9 +18,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from provide.terminal.bridge.hub import TermHub
+from provide.uterm.bridge.hub import TermHub
 
-from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from scripts.demos import (
     BASE_OUT,
     BrowserStep,

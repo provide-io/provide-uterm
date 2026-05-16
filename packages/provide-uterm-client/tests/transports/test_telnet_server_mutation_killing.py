@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 
-from provide.terminal.transports.telnet_server import (
+from provide.uterm.transports.telnet_server import (
     DO,
     DONT,
     ECHO,
@@ -186,7 +186,7 @@ class TestStartTelnetServer:
         # This is a parameter verification test.
         import inspect
 
-        from provide.terminal.transports.telnet_server import start_telnet_server as sts
+        from provide.uterm.transports.telnet_server import start_telnet_server as sts
 
         sig = inspect.signature(sts)
         default = sig.parameters["negotiation_delay_s"].default

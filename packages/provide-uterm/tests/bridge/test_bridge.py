@@ -12,7 +12,7 @@ import asyncio
 from typing import Any
 from unittest.mock import MagicMock
 
-from provide.terminal.bridge.worker_link import TermBridge, _to_ws_url
+from provide.uterm.bridge.worker_link import TermBridge, _to_ws_url
 
 from tests.bridge.control_channel_helpers import decode_control_payload
 
@@ -362,7 +362,7 @@ class TestTermBridgeDroppedFrameLogging:
 
         watch_fn = session._watches[0]
 
-        with patch("provide.terminal.bridge.worker_link.logger") as mock_logger:
+        with patch("provide.uterm.bridge.worker_link.logger") as mock_logger:
             watch_fn({"screen": "test"}, b"dropped data")
 
         mock_logger.debug.assert_called_once()
@@ -380,7 +380,7 @@ class TestTermBridgeDroppedFrameLogging:
 
         watch_fn = session._watches[0]
 
-        with caplog.at_level(logging.DEBUG, logger="provide.terminal.bridge.worker_link"):
+        with caplog.at_level(logging.DEBUG, logger="provide.uterm.bridge.worker_link"):
             watch_fn({"screen": "test"}, b"normal data")
 
         assert not any("term_bridge_drop" in r.message for r in caplog.records)

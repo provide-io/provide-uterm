@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 import pytest
-from provide.terminal.client import connect_async_ws
+from provide.uterm.client import connect_async_ws
 
 from tests.e2e._live_server import live_server_with_bus
 
@@ -104,7 +104,7 @@ async def test_three_subscribers_different_event_filters(live_server: Any) -> No
         resp1 = await asyncio.wait_for(sub1_task, timeout=8.0)
 
         # Acquire hijack via WS — sub2 and sub3 (already got snapshot, now gets hijack too)
-        from provide.terminal.client import connect_async_ws as _caws
+        from provide.uterm.client import connect_async_ws as _caws
 
         async with _caws(ws_url(base_url, "/ws/browser/flt1/term")) as browser_ws:
             await asyncio.sleep(0.05)

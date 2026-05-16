@@ -4,8 +4,8 @@
 #
 import pytest
 
-from provide.terminal.server.auth import LocalIdentityProvider
-from provide.terminal.server.models import AuthConfig
+from provide.uterm.server.auth import LocalIdentityProvider
+from provide.uterm.server.models import AuthConfig
 
 
 def test_local_idp_instantiation():

@@ -21,9 +21,9 @@ import time
 from typing import Any
 
 import websockets
-from provide.terminal.client import connect_async_ws
+from provide.uterm.client import connect_async_ws
 
-from provide.terminal.control_channel import DLE, STX, encode_control
+from provide.uterm.control_channel import DLE, STX, encode_control
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 

@@ -2,13 +2,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.ansi."""
+"""Tests for provide.uterm.ansi."""
 
 from __future__ import annotations
 
 import pytest
 
-from provide.terminal.ansi import (
+from provide.uterm.ansi import (
     BOLD,
     CLEAR_SCREEN,
     DEFAULT_RGB,
@@ -25,7 +25,7 @@ from provide.terminal.ansi import (
 @pytest.fixture()
 def _save_registry():
     """Save and restore dialect registry around a test."""
-    from provide.terminal.ansi import _dialect_registry
+    from provide.uterm.ansi import _dialect_registry
 
     saved = list(_dialect_registry)
     yield

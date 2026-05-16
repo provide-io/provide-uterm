@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 
 import pytest
-from provide.terminal.cloudflare.auth.jwt import (
+from provide.uterm.cloudflare.auth.jwt import (
     JwtValidationError,
     _apply_role_map,
     _b64url_decode,
@@ -25,7 +25,7 @@ from provide.terminal.cloudflare.auth.jwt import (
     _validate_claims,
     decode_jwt,
 )
-from provide.terminal.cloudflare.config import JwtConfig
+from provide.uterm.cloudflare.config import JwtConfig
 
 # ---------------------------------------------------------------------------
 # _b64url_decode (lines 50-53)
@@ -390,7 +390,7 @@ async def test_fetch_jwks_urllib_timeout() -> None:
     import json
     from unittest.mock import MagicMock, patch
 
-    from provide.terminal.cloudflare.auth.jwt import _fetch_jwks
+    from provide.uterm.cloudflare.auth.jwt import _fetch_jwks
 
     url = "https://example.com/jwks-timeout-test-internal.json"
     mock_response = MagicMock()

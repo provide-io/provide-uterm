@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.manager.auth import TokenAuthMiddleware, setup_auth
+from provide.uterm.manager.auth import TokenAuthMiddleware, setup_auth
 
 
 def _make_mw(bearer: str = "secret", **kwargs) -> TokenAuthMiddleware:  # type: ignore[return]

@@ -9,8 +9,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from provide.terminal.server.models import SecurityConfig
-from provide.terminal.server.security import (
+from provide.uterm.server.models import SecurityConfig
+from provide.uterm.server.security import (
     _DEV_DEFAULTS,
     _FIELD_TO_HEADER,
     _STRICT_DEFAULTS,

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-from provide.terminal.pty.connector import PTYConnector
+from provide.uterm.pty.connector import PTYConnector
 
 
 def make_connector(command: str = "/bin/echo", args: list[str] | None = None, **kwargs: Any) -> PTYConnector:
@@ -33,19 +33,19 @@ def _child_fork_patches(captured_env: dict[str, str]) -> list[Any]:
         raise SystemExit(0)
 
     return [
-        patch("provide.terminal.pty.connector.os.fork", return_value=0),
-        patch("provide.terminal.pty.connector.os.close"),
-        patch("provide.terminal.pty.connector.os.setsid"),
-        patch("provide.terminal.pty.connector.fcntl.ioctl"),
-        patch("provide.terminal.pty.connector.os.dup2"),
-        patch("provide.terminal.pty.connector.termios.tcgetattr", return_value=[0, 0, 0, 0b11111111, 0, 0, []]),
-        patch("provide.terminal.pty.connector.termios.tcsetattr"),
-        patch("provide.terminal.pty.connector.fcntl.fcntl"),
-        patch("provide.terminal.pty.connector.os.execve", side_effect=_fake_execve),
-        patch("provide.terminal.pty.connector.os._exit"),
-        patch("provide.terminal.pty.connector.os.setgid"),
-        patch("provide.terminal.pty.connector.os.initgroups"),
-        patch("provide.terminal.pty.connector.os.setuid"),
+        patch("provide.uterm.pty.connector.os.fork", return_value=0),
+        patch("provide.uterm.pty.connector.os.close"),
+        patch("provide.uterm.pty.connector.os.setsid"),
+        patch("provide.uterm.pty.connector.fcntl.ioctl"),
+        patch("provide.uterm.pty.connector.os.dup2"),
+        patch("provide.uterm.pty.connector.termios.tcgetattr", return_value=[0, 0, 0, 0b11111111, 0, 0, []]),
+        patch("provide.uterm.pty.connector.termios.tcsetattr"),
+        patch("provide.uterm.pty.connector.fcntl.fcntl"),
+        patch("provide.uterm.pty.connector.os.execve", side_effect=_fake_execve),
+        patch("provide.uterm.pty.connector.os._exit"),
+        patch("provide.uterm.pty.connector.os.setgid"),
+        patch("provide.uterm.pty.connector.os.initgroups"),
+        patch("provide.uterm.pty.connector.os.setuid"),
     ]
 
 
@@ -96,17 +96,17 @@ def _child_fork_patches_recording(
             tcsetattr_calls.append((fd, when, attrs))
 
     return [
-        patch("provide.terminal.pty.connector.os.fork", return_value=0),
-        patch("provide.terminal.pty.connector.os.close"),
-        patch("provide.terminal.pty.connector.os.setsid"),
-        patch("provide.terminal.pty.connector.fcntl.ioctl", side_effect=_fake_ioctl),
-        patch("provide.terminal.pty.connector.os.dup2", side_effect=_fake_dup2),
-        patch("provide.terminal.pty.connector.termios.tcgetattr", return_value=[0, 0, 0, 0b11111111, 0, 0, []]),
-        patch("provide.terminal.pty.connector.termios.tcsetattr", side_effect=_fake_tcsetattr),
-        patch("provide.terminal.pty.connector.fcntl.fcntl"),
-        patch("provide.terminal.pty.connector.os.execve", side_effect=_fake_execve),
-        patch("provide.terminal.pty.connector.os._exit", side_effect=_fake_exit),
-        patch("provide.terminal.pty.connector.os.setgid", side_effect=_fake_setgid),
-        patch("provide.terminal.pty.connector.os.initgroups", side_effect=_fake_initgroups),
-        patch("provide.terminal.pty.connector.os.setuid", side_effect=_fake_setuid),
+        patch("provide.uterm.pty.connector.os.fork", return_value=0),
+        patch("provide.uterm.pty.connector.os.close"),
+        patch("provide.uterm.pty.connector.os.setsid"),
+        patch("provide.uterm.pty.connector.fcntl.ioctl", side_effect=_fake_ioctl),
+        patch("provide.uterm.pty.connector.os.dup2", side_effect=_fake_dup2),
+        patch("provide.uterm.pty.connector.termios.tcgetattr", return_value=[0, 0, 0, 0b11111111, 0, 0, []]),
+        patch("provide.uterm.pty.connector.termios.tcsetattr", side_effect=_fake_tcsetattr),
+        patch("provide.uterm.pty.connector.fcntl.fcntl"),
+        patch("provide.uterm.pty.connector.os.execve", side_effect=_fake_execve),
+        patch("provide.uterm.pty.connector.os._exit", side_effect=_fake_exit),
+        patch("provide.uterm.pty.connector.os.setgid", side_effect=_fake_setgid),
+        patch("provide.uterm.pty.connector.os.initgroups", side_effect=_fake_initgroups),
+        patch("provide.uterm.pty.connector.os.setuid", side_effect=_fake_setuid),
     ]

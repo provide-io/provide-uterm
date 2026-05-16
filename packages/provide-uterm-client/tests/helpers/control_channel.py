@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from provide.terminal.client.control_ws import LogicalFrameDecoder, encode_logical_frame
+from provide.uterm.client.control_ws import LogicalFrameDecoder, encode_logical_frame
 
 
 def encode_frame(payload: Mapping[str, Any]) -> str:

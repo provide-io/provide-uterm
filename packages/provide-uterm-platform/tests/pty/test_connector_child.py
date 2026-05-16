@@ -105,8 +105,8 @@ async def test_start_inject_no_lib_path_skips_env_var() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
-        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=None),
+        patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap),
     ):
         conn = make_connector("/bin/echo", ["x"], inject=True)
         with pytest.raises(SystemExit):
@@ -135,9 +135,9 @@ async def test_start_inject_sets_lib_env_when_lib_present() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=fake_lib),
-        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
-        patch("provide.terminal.pty.connector.sys") as mock_sys,
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=fake_lib),
+        patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.uterm.pty.connector.sys") as mock_sys,
     ):
         mock_sys.platform = "darwin"
         conn = make_connector("/bin/echo", ["x"], inject=True)
@@ -167,9 +167,9 @@ async def test_start_inject_sets_ld_preload_on_linux() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=fake_lib),
-        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
-        patch("provide.terminal.pty.connector.sys") as mock_sys,
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=fake_lib),
+        patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.uterm.pty.connector.sys") as mock_sys,
     ):
         mock_sys.platform = "linux"
         conn = make_connector("/bin/echo", ["x"], inject=True)
@@ -254,7 +254,7 @@ async def test_start_env_setdefault_values_from_resolved_user() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
+        patch("provide.uterm.pty.connector.UidMap", return_value=mock_uid_map),
         patch.dict(os.environ, safe_env, clear=True),
     ):
         conn = make_connector("/bin/echo", run_as_uid=os.geteuid())
@@ -297,7 +297,7 @@ async def test_start_resolve_called_with_run_as_only() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
+        patch("provide.uterm.pty.connector.UidMap", return_value=mock_uid_map),
         patch.dict(os.environ, safe_env, clear=True),
     ):
         conn = make_connector("/bin/echo", run_as="operator")
@@ -337,7 +337,7 @@ async def test_start_resolve_args_include_run_as_and_gid() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
+        patch("provide.uterm.pty.connector.UidMap", return_value=mock_uid_map),
     ):
         conn = make_connector("/bin/echo", run_as_uid=os.geteuid(), run_as="myuser", run_as_gid=999)
         with pytest.raises(SystemExit):
@@ -375,9 +375,9 @@ async def test_start_capture_socket_path_uses_cap_sock() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.tempfile.mkdtemp", return_value=known_tmpdir),
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
-        patch("provide.terminal.pty.connector.CaptureSocket", side_effect=_fake_capture_socket),
+        patch("provide.uterm.pty.connector.tempfile.mkdtemp", return_value=known_tmpdir),
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=None),
+        patch("provide.uterm.pty.connector.CaptureSocket", side_effect=_fake_capture_socket),
     ):
         conn = make_connector("/bin/echo", inject=True)
         with pytest.raises(SystemExit):
@@ -410,9 +410,9 @@ async def test_start_capture_socket_env_key_exact() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.tempfile.mkdtemp", return_value=known_tmpdir),
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
-        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.uterm.pty.connector.tempfile.mkdtemp", return_value=known_tmpdir),
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=None),
+        patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap),
     ):
         conn = make_connector("/bin/echo", inject=True)
         with pytest.raises(SystemExit):
@@ -440,8 +440,8 @@ async def test_start_inject_uterm_capture_socket_value() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
-        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=None),
+        patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap),
     ):
         conn = make_connector("/bin/echo", inject=True)
         with pytest.raises(SystemExit):
@@ -520,7 +520,7 @@ async def test_start_child_setgid_initgroups_setuid_args() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
+        patch("provide.uterm.pty.connector.UidMap", return_value=mock_uid_map),
     ):
         conn = make_connector("/bin/echo", run_as_uid=5001)
         with pytest.raises(SystemExit):
@@ -611,7 +611,7 @@ async def test_start_child_exit_code_is_127() -> None:
 
     patches = _child_fork_patches_recording(captured_env, exit_calls=exit_calls)
     # Replace execve with no-raise version
-    patches[8] = patch("provide.terminal.pty.connector.os.execve", side_effect=_fake_execve_no_raise)
+    patches[8] = patch("provide.uterm.pty.connector.os.execve", side_effect=_fake_execve_no_raise)
 
     with (
         patches[0],
@@ -664,7 +664,7 @@ async def test_start_resolve_username_fallback_is_empty_string() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.UidMap", return_value=mock_uid_map),
+        patch("provide.uterm.pty.connector.UidMap", return_value=mock_uid_map),
     ):
         conn = make_connector("/bin/echo", run_as_uid=os.geteuid())
         with pytest.raises(SystemExit):
@@ -708,9 +708,9 @@ async def test_start_mkdtemp_prefix_is_uterm_cap() -> None:
         patches[10],
         patches[11],
         patches[12],
-        patch("provide.terminal.pty.connector.tempfile.mkdtemp", side_effect=_fake_mkdtemp),
-        patch("provide.terminal.pty.connector.get_capture_lib_path", return_value=None),
-        patch("provide.terminal.pty.connector.CaptureSocket", return_value=mock_cap),
+        patch("provide.uterm.pty.connector.tempfile.mkdtemp", side_effect=_fake_mkdtemp),
+        patch("provide.uterm.pty.connector.get_capture_lib_path", return_value=None),
+        patch("provide.uterm.pty.connector.CaptureSocket", return_value=mock_cap),
     ):
         conn = make_connector("/bin/echo", inject=True)
         with pytest.raises(SystemExit):

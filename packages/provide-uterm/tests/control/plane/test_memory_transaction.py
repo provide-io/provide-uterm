@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from provide.terminal.control.plane import ControlPlaneConfig, bootstrap_control_plane
-from provide.terminal.control.plane.session.types import SessionRecord
+from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
+from provide.uterm.control.plane.session.types import SessionRecord
 
 
 @pytest.mark.asyncio

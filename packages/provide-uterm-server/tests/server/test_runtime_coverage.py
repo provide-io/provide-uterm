@@ -11,8 +11,8 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime
 
 
 def _make_definition(**kwargs: Any) -> SessionDefinition:
@@ -63,7 +63,7 @@ class TestStartConnectorIsConnected:
         connector = _make_connector()
         connector.is_connected = MagicMock(return_value=True)  # Returns True
 
-        with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+        with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
             result = await runtime._start_connector()
 
         assert runtime._connected is True

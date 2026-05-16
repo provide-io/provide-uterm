@@ -10,7 +10,7 @@ import asyncio
 from collections import deque
 from unittest.mock import MagicMock
 
-from provide.terminal.cloudflare.cf_transport import (
+from provide.uterm.cloudflare.cf_transport import (
     CFWebSocketStreamReader,
     CFWebSocketStreamWriter,
 )

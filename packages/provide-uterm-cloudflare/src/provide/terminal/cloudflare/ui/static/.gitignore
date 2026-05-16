@@ -1,7 +1,0 @@
-# Generated at deploy time by wrangler [build] command:
-#   cp -r ../../src/provide/terminal/frontend/. src/provide_uterm_cloudflare/ui/static/
-#
-# provide.terminal/frontend/ is the single source of truth.
-# Do not commit these files — they are regenerated on every pywrangler deploy/dev.
-*
-!.gitignore

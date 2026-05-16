@@ -10,8 +10,8 @@ import asyncio
 
 import pytest
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, encode_control
-from provide.terminal.control_channel_patterns import LinkPattern, LinkPatternRegistry
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, encode_control
+from provide.uterm.control_channel_patterns import LinkPattern, LinkPatternRegistry
 
 # ---------------------------------------------------------------------------
 # LinkPattern construction

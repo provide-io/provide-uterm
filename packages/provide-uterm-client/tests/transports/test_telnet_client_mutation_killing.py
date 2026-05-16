@@ -14,7 +14,7 @@ import asyncio
 
 import pytest
 
-from provide.terminal.transports.telnet_client import (
+from provide.uterm.transports.telnet_client import (
     DO,
     DONT,
     IAC,

@@ -26,7 +26,7 @@ prioritize debuggability over confidentiality.
 ## What is recorded
 
 The store interface is `RecordingStore` in
-`packages/provide-uterm/src/provide/terminal/recording.py`. Each session is
+`packages/provide-uterm/src/provide/uterm/recording.py`. Each session is
 written as a sequence of JSONL events:
 
 | Event type                | Source         | Contents                      |
@@ -80,7 +80,7 @@ expected to:
 ## Configuration reference
 
 The recording configuration lives under `recording.*` in
-`packages/provide-uterm-server/src/provide/terminal/server/config_schema.py`:
+`packages/provide-uterm-server/src/provide/uterm/server/config_schema.py`:
 
 | Knob                         | Default              | Notes                          |
 | ---------------------------- | -------------------- | ------------------------------ |

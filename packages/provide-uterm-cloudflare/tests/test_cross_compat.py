@@ -16,9 +16,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from provide.terminal.cloudflare.api.http_routes._dispatch import route_http
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.api.http_routes._dispatch import route_http
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 # ---------------------------------------------------------------------------
 # CF backend (unit-level stub)
@@ -111,8 +111,8 @@ async def _cf_call(runtime: _CfRuntime, method: str, path: str, body: dict | Non
 
 def _make_fastapi_client():
     """Create a FastAPI TestClient with one auto-start shell session."""
-    from provide.terminal.server.app import create_server_app
-    from provide.terminal.server.config import config_from_mapping
+    from provide.uterm.server.app import create_server_app
+    from provide.uterm.server.config import config_from_mapping
     from starlette.testclient import TestClient
 
     cfg = config_from_mapping(
@@ -283,7 +283,7 @@ async def test_worker_input_mode_hijack_conflict_cf() -> None:
     rt = _CfRuntime()
     import time
 
-    from provide.terminal.cloudflare.bridge.hijack import HijackSession
+    from provide.uterm.cloudflare.bridge.hijack import HijackSession
 
     rt.hijack._session = HijackSession(hijack_id="h1", owner="x", lease_expires_at=time.time() + 300)
     status, body = await _cf_call(rt, "POST", "/worker/w1/input_mode", {"input_mode": "open"})

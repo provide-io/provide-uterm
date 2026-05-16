@@ -19,9 +19,9 @@ import pytest
 import uvicorn
 import websockets
 
-from provide.terminal.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.transports.ssh import start_ssh_server
+from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.transports.ssh import start_ssh_server
 
 if TYPE_CHECKING:
     from collections.abc import Generator

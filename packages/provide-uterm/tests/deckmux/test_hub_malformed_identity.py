@@ -24,11 +24,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.terminal.deckmux import (
+from provide.uterm.deckmux import (
     identity_as_principal,
     parse_identity_frame,
 )
-from provide.terminal.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 
 pytestmark = pytest.mark.asyncio
 

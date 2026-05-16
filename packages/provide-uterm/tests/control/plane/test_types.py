@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import is_dataclass
 from typing import Literal, get_type_hints
 
-from provide.terminal.control.plane.approval import ApprovalRecord, ApprovalStore
-from provide.terminal.control.plane.lease import LeaseRecord, LeaseStore
-from provide.terminal.control.plane.session import SessionRecord, SessionStore
-from provide.terminal.control.plane.token import ResumeTokenRecord, SessionTokenRecord, TokenStore
+from provide.uterm.control.plane.approval import ApprovalRecord, ApprovalStore
+from provide.uterm.control.plane.lease import LeaseRecord, LeaseStore
+from provide.uterm.control.plane.session import SessionRecord, SessionStore
+from provide.uterm.control.plane.token import ResumeTokenRecord, SessionTokenRecord, TokenStore
 
 
 def test_portable_feature_contracts_exist() -> None:

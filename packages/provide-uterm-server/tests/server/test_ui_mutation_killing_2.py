@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from provide.terminal.server import ui
-from provide.terminal.server.ui import (
+from provide.uterm.server import ui
+from provide.uterm.server.ui import (
     connect_page_html,
     replay_page_html,
     session_page_html,

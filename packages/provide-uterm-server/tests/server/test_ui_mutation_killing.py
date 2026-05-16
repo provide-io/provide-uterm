@@ -11,8 +11,8 @@ from unittest import mock
 
 import pytest
 
-from provide.terminal.server import ui
-from provide.terminal.server.ui import (
+from provide.uterm.server import ui
+from provide.uterm.server.ui import (
     _bootstrap_tag,
     _shell,
     _vite_entry_tags,
@@ -35,7 +35,7 @@ def _reset_vite_cache():
 # mutmut_1: _vite_manifest_loaded = None  (not True — would re-read every call)
 # mutmut_2: _vite_manifest_loaded = False (not True — infinite re-read)
 # mutmut_7: files(None)  (wrong package name)
-# mutmut_8: files("XXprovide.terminalXX")  (wrong package name)
+# mutmut_8: files("XXprovide.utermXX")  (wrong package name)
 # mutmut_9-15: path components wrong
 # mutmut_17-19: is_file() check broken
 # mutmut_22-36: manifest loading/encoding broken
@@ -73,8 +73,8 @@ class TestReadViteManifestMutationKilling:
         assert result == {"cached": "yes"}
 
     def test_uses_correct_package_name(self):
-        """importlib.resources.files called with 'provide.terminal.server'.
-        Kills mutmut_7 (None) and mutmut_8 ('XXprovide.terminalXX')."""
+        """importlib.resources.files called with 'provide.uterm.server'.
+        Kills mutmut_7 (None) and mutmut_8 ('XXprovide.utermXX')."""
         captured_args = []
 
         def mock_files(pkg):
@@ -93,7 +93,7 @@ class TestReadViteManifestMutationKilling:
             ui._read_vite_manifest()
 
         assert len(captured_args) == 1
-        assert captured_args[0] == "provide.terminal.server"
+        assert captured_args[0] == "provide.uterm.server"
 
     def test_manifest_path_reads_utf8(self):
         """manifest.read_text called with encoding='utf-8'.

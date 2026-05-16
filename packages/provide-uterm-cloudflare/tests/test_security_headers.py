@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from provide.terminal.cloudflare.cf_types import Response
-from provide.terminal.cloudflare.config import CloudflareConfig
-from provide.terminal.cloudflare.entry import Default
-from provide.terminal.cloudflare.entry.security import (
+from provide.uterm.cloudflare.cf_types import Response
+from provide.uterm.cloudflare.config import CloudflareConfig
+from provide.uterm.cloudflare.entry import Default
+from provide.uterm.cloudflare.entry.security import (
     _apply_security_headers,
     _resolve_security_headers,
 )

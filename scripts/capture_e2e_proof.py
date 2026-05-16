@@ -49,7 +49,7 @@ sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm/src"))
 sys.path.insert(0, str(_REPO_ROOT / "packages/provide-uterm-platform/src"))
 
 import uvicorn  # noqa: E402
-from provide.terminal.server import create_server_app, default_server_config  # noqa: E402
+from provide.uterm.server import create_server_app, default_server_config  # noqa: E402
 
 _PYWRANGLER_PORT = 8991
 _PYWRANGLER_BASE = f"http://127.0.0.1:{_PYWRANGLER_PORT}"
@@ -171,7 +171,7 @@ async def _drain_snapshot(ws_url: str, timeout: float = 8.0) -> str | None:
     try:
         import websockets  # type: ignore[import-untyped]
 
-        from provide.terminal.control_channel import (
+        from provide.uterm.control_channel import (
             ControlChannelDecoder,
             ControlChunk,
             DataChunk,
@@ -214,8 +214,8 @@ def main() -> None:
 
     # ── 0. Check for provide-uterm-platform ────────────────────────────────
     try:
-        from provide.terminal.pty._build import get_capture_lib_path
-        from provide.terminal.pty.pam_listener import PamNotifyListener  # noqa: F401
+        from provide.uterm.pty._build import get_capture_lib_path
+        from provide.uterm.pty.pam_listener import PamNotifyListener  # noqa: F401
 
         _ok("provide-uterm-platform importable")
     except ImportError as exc:
@@ -266,7 +266,7 @@ def main() -> None:
             # ── 2. Start provide-uterm server ────────────────────────────────
             print()
             print("Step 2: Start provide-uterm FastAPI server with PAM config...")
-            from provide.terminal.server.models import PamConfig
+            from provide.uterm.server.models import PamConfig
 
             config = default_server_config()
             config.auth.mode = "dev"  # type: ignore[assignment]

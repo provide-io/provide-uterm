@@ -28,7 +28,7 @@ def _make_mock_transport(*, connected: bool = True, recv_data: bytes = b"") -> M
 
 class TestTelnetSessionConnector:
     def _make(self, config: dict[str, Any] | None = None, transport: MagicMock | None = None) -> Any:
-        from provide.terminal.server.connectors.telnet import TelnetSessionConnector
+        from provide.uterm.server.connectors.telnet import TelnetSessionConnector
 
         c = TelnetSessionConnector("sess2", "Test Telnet", config or {"host": "127.0.0.1", "port": 2323})
         if transport is not None:
@@ -178,7 +178,7 @@ class TestTelnetSessionConnector:
 
 def _make_ssh_connector(config: dict[str, Any] | None = None) -> Any:
     pytest.importorskip("asyncssh", reason="asyncssh not installed")
-    from provide.terminal.server.connectors.ssh import SshSessionConnector
+    from provide.uterm.server.connectors.ssh import SshSessionConnector
 
     return SshSessionConnector("sess3", "Test SSH", config or {"host": "localhost", "insecure_no_host_check": True})
 
@@ -201,7 +201,7 @@ def _attach_mock_ssh(connector: Any) -> tuple[MagicMock, MagicMock, MagicMock]:
 class TestSshSessionConnector:
     def test_client_keys_list(self) -> None:
         pytest.importorskip("asyncssh")
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         c = SshSessionConnector(
             "s", "S", {"host": "h", "insecure_no_host_check": True, "client_keys": ["key1", None, "key2"]}
@@ -212,21 +212,21 @@ class TestSshSessionConnector:
 
     def test_client_keys_scalar(self) -> None:
         pytest.importorskip("asyncssh")
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         c = SshSessionConnector("s", "S", {"host": "h", "insecure_no_host_check": True, "client_keys": "mykey"})
         assert "mykey" in c._client_keys
 
     def test_client_key_path(self) -> None:
         pytest.importorskip("asyncssh")
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         c = SshSessionConnector("s", "S", {"host": "h", "insecure_no_host_check": True, "client_key_path": "/tmp/id"})  # noqa: S108,RUF100
         assert "/tmp/id" in c._client_keys  # noqa: S108
 
     def test_client_key_str(self) -> None:
         pytest.importorskip("asyncssh")
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         c = SshSessionConnector("s", "S", {"host": "h", "insecure_no_host_check": True, "client_key": "inline_key"})
         assert "inline_key" in c._client_keys
@@ -235,7 +235,7 @@ class TestSshSessionConnector:
         pytest.importorskip("asyncssh")
         import asyncssh
 
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         sentinel = object()
         with patch.object(asyncssh, "import_private_key", return_value=sentinel) as mock_import:
@@ -249,7 +249,7 @@ class TestSshSessionConnector:
         pytest.importorskip("asyncssh")
         import asyncssh
 
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         sentinel = object()
         with patch.object(asyncssh, "import_private_key", return_value=sentinel) as mock_import:
@@ -425,7 +425,7 @@ class TestSshSessionConnector:
 
     def test_known_hosts_path_stored(self) -> None:
         pytest.importorskip("asyncssh")
-        from provide.terminal.server.connectors.ssh import SshSessionConnector
+        from provide.uterm.server.connectors.ssh import SshSessionConnector
 
         c = SshSessionConnector("s", "S", {"host": "h", "known_hosts": "/etc/ssh/known_hosts"})
         assert c._known_hosts == "/etc/ssh/known_hosts"

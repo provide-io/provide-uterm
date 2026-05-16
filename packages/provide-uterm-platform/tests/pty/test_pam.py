@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from provide.terminal.pty.pam import PamError, PamSession
+from provide.uterm.pty.pam import PamError, PamSession
 
 _PAM_SVC = Path("/etc/pam.d/provide-uterm")
 _IN_DOCKER = Path("/.dockerenv").exists()
@@ -153,7 +153,7 @@ def test_load_libpam_returns_none_when_library_not_found() -> None:
     """_load_libpam() returns None when find_library can't locate libpam."""
     import ctypes.util
 
-    from provide.terminal.pty.pam import _load_libpam
+    from provide.uterm.pty.pam import _load_libpam
 
     with patch.object(ctypes.util, "find_library", return_value=None):
         assert _load_libpam() is None
@@ -164,7 +164,7 @@ def test_load_libpam_returns_none_on_oserror() -> None:
     import ctypes
     import ctypes.util
 
-    from provide.terminal.pty.pam import _load_libpam
+    from provide.uterm.pty.pam import _load_libpam
 
     with (
         patch.object(ctypes.util, "find_library", return_value="libpam.so.0"),
@@ -175,7 +175,7 @@ def test_load_libpam_returns_none_on_oserror() -> None:
 
 def test_authenticate_raises_when_libpam_unavailable() -> None:
     """authenticate() raises PamError immediately when _libpam is None."""
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with patch.object(pam_mod, "_libpam", None):
         session = PamSession()
@@ -186,7 +186,7 @@ def test_authenticate_raises_when_libpam_unavailable() -> None:
 
 def test_strerror_returns_str_when_libpam_unavailable() -> None:
     """_strerror falls back to str(retval) when _libpam is None."""
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with patch.object(pam_mod, "_libpam", None):
         session = PamSession()
@@ -195,7 +195,7 @@ def test_strerror_returns_str_when_libpam_unavailable() -> None:
 
 def test_acct_mgmt_returns_early_when_no_libpam() -> None:
     """acct_mgmt() skips the PAM call when _libpam is None."""
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with patch.object(pam_mod, "_libpam", None):
         session = PamSession()
@@ -205,7 +205,7 @@ def test_acct_mgmt_returns_early_when_no_libpam() -> None:
 
 def test_open_session_sets_flag_when_no_libpam() -> None:
     """open_session() sets _session_open=True even when _libpam is None."""
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with patch.object(pam_mod, "_libpam", None):
         session = PamSession()
@@ -219,7 +219,7 @@ def test_open_session_sets_flag_when_no_libpam() -> None:
 
 def _requires_libpam() -> None:
     """Skip test if libpam is not available on this system."""
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     if pam_mod._libpam is None:  # type: ignore[attr-defined]
         pytest.skip("libpam not available on this system")
@@ -228,7 +228,7 @@ def _requires_libpam() -> None:
 def test_strerror_returns_str_when_pam_strerror_returns_none() -> None:
     """`_strerror` falls back to str(retval) when pam_strerror returns None."""
     _requires_libpam()
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     session = PamSession()
     with patch.object(pam_mod, "_pam_strerror", return_value=None):
@@ -238,7 +238,7 @@ def test_strerror_returns_str_when_pam_strerror_returns_none() -> None:
 def test_authenticate_raises_on_pam_start_failure() -> None:
     """authenticate() raises PamError when pam_start returns non-success."""
     _requires_libpam()
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with patch.object(pam_mod, "_pam_start", return_value=7):
         session = PamSession()
@@ -251,7 +251,7 @@ def test_authenticate_raises_on_pam_authenticate_failure() -> None:
     _requires_libpam()
     import ctypes
 
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with (
         patch.object(pam_mod, "_pam_start", return_value=0),
@@ -271,7 +271,7 @@ def test_acct_mgmt_raises_on_failure() -> None:
     _requires_libpam()
     import ctypes
 
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with (
         patch.object(pam_mod, "_pam_acct_mgmt", return_value=6),
@@ -289,7 +289,7 @@ def test_open_session_raises_on_failure() -> None:
     _requires_libpam()
     import ctypes
 
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     with (
         patch.object(pam_mod, "_pam_open_session", return_value=6),
@@ -307,7 +307,7 @@ def test_open_session_null_pam_envlist() -> None:
     _requires_libpam()
     import ctypes
 
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     session = PamSession()
     session._username = "alice"  # type: ignore[assignment]
@@ -326,7 +326,7 @@ def test_open_session_populates_env_from_pam_envlist() -> None:
     _requires_libpam()
     import ctypes
 
-    import provide.terminal.pty.pam as pam_mod
+    import provide.uterm.pty.pam as pam_mod
 
     session = PamSession()
     session._username = "alice"  # type: ignore[assignment]
@@ -359,7 +359,7 @@ def test_conv_callback_echo_on_and_text_info_branches() -> None:
     _requires_libpam()
     import ctypes
 
-    from provide.terminal.pty.pam import (
+    from provide.uterm.pty.pam import (
         _PAM_SUCCESS,
         _make_conv_callback,
         _PamMessage,
@@ -400,8 +400,8 @@ def test_conv_callback_calloc_failure_returns_conv_err() -> None:
     import ctypes
     from unittest.mock import MagicMock
 
-    import provide.terminal.pty.pam as pam_mod
-    from provide.terminal.pty.pam import (
+    import provide.uterm.pty.pam as pam_mod
+    from provide.uterm.pty.pam import (
         _PAM_CONV_ERR,
         _make_conv_callback,
         _PamMessage,

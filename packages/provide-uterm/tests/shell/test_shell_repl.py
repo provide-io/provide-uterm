@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.shell._repl — LineBuffer keystroke handling."""
+"""Tests for provide.uterm.shell._repl — LineBuffer keystroke handling."""
 
-from provide.terminal.shell._repl import LineBuffer
+from provide.uterm.shell._repl import LineBuffer
 
 
 def test_printable_chars_echoed():

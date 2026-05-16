@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp static/* ../../packages/provide-uterm-server/src/provide/terminal/server/frontend/",
+    "build": "tsc -p tsconfig.json && cp static/* ../../packages/provide-uterm-server/src/provide/uterm/server/frontend/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

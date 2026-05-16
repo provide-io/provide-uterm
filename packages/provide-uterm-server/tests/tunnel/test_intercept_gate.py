@@ -11,7 +11,7 @@ import base64
 
 import pytest
 
-from provide.terminal.tunnel.intercept import (
+from provide.uterm.tunnel.intercept import (
     InterceptDecision,
     InterceptGate,
     _default_decision,

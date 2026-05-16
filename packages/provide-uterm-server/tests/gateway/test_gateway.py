@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.gateway._gateway — non-pump helper functions."""
+"""Tests for provide.uterm.gateway._gateway — non-pump helper functions."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from provide.terminal.control_channel import encode_control, encode_data
-from provide.terminal.gateway._gateway import (
+from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.gateway._gateway import (
     _handle_ws_control,
     _handle_ws_control_frame,
     _normalize_crlf,
@@ -19,7 +19,7 @@ from provide.terminal.gateway._gateway import (
     _skip_subneg_sequence,
     _strip_iac,
 )
-from provide.terminal.gateway._ssh_handler import _make_no_auth_server_class
+from provide.uterm.gateway._ssh_handler import _make_no_auth_server_class
 
 # ---------------------------------------------------------------------------
 # CRLF normalization
@@ -202,8 +202,8 @@ class TestHandleWsControl:
         """Trigger the ControlChannelProtocolError -> JSON fallback path."""
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        with patch("provide.terminal.gateway._gateway.ControlChannelDecoder") as mock_cls:
-            from provide.terminal.control_channel import ControlChannelProtocolError
+        with patch("provide.uterm.gateway._gateway.ControlChannelDecoder") as mock_cls:
+            from provide.uterm.control_channel import ControlChannelProtocolError
 
             instance = mock_cls.return_value
             instance.feed.side_effect = ControlChannelProtocolError("test")
@@ -216,8 +216,8 @@ class TestHandleWsControl:
         """Fallback path: valid JSON but not a dict."""
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        with patch("provide.terminal.gateway._gateway.ControlChannelDecoder") as mock_cls:
-            from provide.terminal.control_channel import ControlChannelProtocolError
+        with patch("provide.uterm.gateway._gateway.ControlChannelDecoder") as mock_cls:
+            from provide.uterm.control_channel import ControlChannelProtocolError
 
             instance = mock_cls.return_value
             instance.feed.side_effect = ControlChannelProtocolError("test")
@@ -228,8 +228,8 @@ class TestHandleWsControl:
         """Fallback path: not valid JSON either."""
         holder: list[dict | None] = [None]
         write_fn = AsyncMock()
-        with patch("provide.terminal.gateway._gateway.ControlChannelDecoder") as mock_cls:
-            from provide.terminal.control_channel import ControlChannelProtocolError
+        with patch("provide.uterm.gateway._gateway.ControlChannelDecoder") as mock_cls:
+            from provide.uterm.control_channel import ControlChannelProtocolError
 
             instance = mock_cls.return_value
             instance.feed.side_effect = ControlChannelProtocolError("test")

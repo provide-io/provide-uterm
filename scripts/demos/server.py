@@ -13,7 +13,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
-from provide.terminal.server import create_server_app, default_server_config
+from provide.uterm.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -43,7 +43,7 @@ def start_server(
     Pass sessions to replace the default session list entirely.
     Pass extra_sessions to append additional sessions to the defaults.
     """
-    from provide.terminal.server.models import SessionDefinition
+    from provide.uterm.server.models import SessionDefinition
 
     p = port or free_port()
     base_url = f"http://127.0.0.1:{p}"

@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from provide.terminal.pty.capture import CHANNEL_CONNECT, CHANNEL_STDIN, CHANNEL_STDOUT
-from provide.terminal.pty.capture_connector import CaptureConnector
+from provide.uterm.pty.capture import CHANNEL_CONNECT, CHANNEL_STDIN, CHANNEL_STDOUT
+from provide.uterm.pty.capture_connector import CaptureConnector
 
 
 def _make_frame(channel: int, data: bytes) -> bytes:
@@ -236,9 +236,9 @@ async def test_no_snapshot_when_no_stdout_frames() -> None:
 
 def test_capture_register_import_error_silently_returns() -> None:
     """_register() returns silently when server package absent."""
-    from provide.terminal.pty.capture_connector import _register
+    from provide.uterm.pty.capture_connector import _register
 
-    with patch.dict(sys.modules, {"provide.terminal.server.connectors.registry": None}):
+    with patch.dict(sys.modules, {"provide.uterm.server.connectors.registry": None}):
         _register()  # must not raise
 
 
@@ -246,9 +246,9 @@ def test_capture_register_success() -> None:
     """_register() calls register_connector when server package is available."""
     from types import ModuleType
 
-    from provide.terminal.pty.capture_connector import CaptureConnector, _register
+    from provide.uterm.pty.capture_connector import CaptureConnector, _register
 
-    fake_registry = ModuleType("provide.terminal.server.connectors.registry")
+    fake_registry = ModuleType("provide.uterm.server.connectors.registry")
     registered: dict[str, object] = {}
 
     def _fake_register(name: str, cls: object) -> None:
@@ -258,7 +258,7 @@ def test_capture_register_success() -> None:
 
     with patch.dict(
         sys.modules,
-        {"provide.terminal.server.connectors.registry": fake_registry},
+        {"provide.uterm.server.connectors.registry": fake_registry},
     ):
         _register()
 
@@ -428,7 +428,7 @@ async def test_forward_stdin_both_attempts_fail_exhausts_loop() -> None:
         conn._stdin_sock = broken_sock
 
         with patch(
-            "provide.terminal.pty.capture_connector.socket.socket",
+            "provide.uterm.pty.capture_connector.socket.socket",
             side_effect=_patched_socket,
         ):
             conn._forward_stdin(b"test")

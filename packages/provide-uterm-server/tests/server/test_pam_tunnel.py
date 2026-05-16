@@ -10,7 +10,7 @@ import types
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.server.pam_tunnel import PamTunnelBridge
+from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
 
 def _make_tunnel_mock() -> MagicMock:
@@ -49,7 +49,7 @@ async def test_bridge_start_connects_tunnel() -> None:
     connector = _make_capture_connector()
     connector._capture.read_frame = AsyncMock(side_effect=asyncio.CancelledError)
 
-    with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+    with patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
         await bridge.stop()
@@ -63,7 +63,7 @@ async def test_bridge_stop_closes_tunnel() -> None:
     connector = _make_capture_connector()
     connector._capture.read_frame = AsyncMock(side_effect=asyncio.CancelledError)
 
-    with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+    with patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
         await bridge.stop()
@@ -81,7 +81,7 @@ async def test_bridge_stop_cancels_tasks() -> None:
 
     connector._capture.read_frame = AsyncMock(side_effect=_block)
 
-    with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+    with patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
         assert len(bridge._tasks) == 1
@@ -94,7 +94,7 @@ async def test_bridge_stop_idempotent() -> None:
     connector = _make_capture_connector()
     connector._capture.read_frame = AsyncMock(side_effect=asyncio.CancelledError)
 
-    with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+    with patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
         await bridge.stop()
@@ -105,8 +105,8 @@ async def test_bridge_stop_idempotent() -> None:
 
 
 def _fake_capture_module() -> types.ModuleType:
-    """Return a minimal stub for provide.terminal.pty.capture."""
-    mod = types.ModuleType("provide.terminal.pty.capture")
+    """Return a minimal stub for provide.uterm.pty.capture."""
+    mod = types.ModuleType("provide.uterm.pty.capture")
     mod.CHANNEL_STDOUT = 1  # type: ignore[attr-defined]
     mod.CHANNEL_STDIN = 0  # type: ignore[attr-defined]
     return mod
@@ -114,10 +114,10 @@ def _fake_capture_module() -> types.ModuleType:
 
 def _pty_modules_patch() -> dict[str, types.ModuleType]:
     fake_capture = _fake_capture_module()
-    fake_pty = types.ModuleType("provide.terminal.pty")
+    fake_pty = types.ModuleType("provide.uterm.pty")
     return {
-        "provide.terminal.pty": fake_pty,
-        "provide.terminal.pty.capture": fake_capture,
+        "provide.uterm.pty": fake_pty,
+        "provide.uterm.pty.capture": fake_capture,
     }
 
 
@@ -139,7 +139,7 @@ async def test_capture_bridge_sends_stdout_to_tunnel() -> None:
 
     with (
         patch.dict(sys.modules, _pty_modules_patch()),
-        patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+        patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
     ):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
@@ -167,7 +167,7 @@ async def test_capture_bridge_ignores_non_stdout_frames() -> None:
 
     with (
         patch.dict(sys.modules, _pty_modules_patch()),
-        patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+        patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
     ):
         bridge = PamTunnelBridge("wss://x", "tok", connector)
         await bridge.start()
@@ -184,7 +184,7 @@ async def test_pty_bridge_reads_from_master_fd() -> None:
     """_start_pty_bridge registers an add_reader callback on master_fd."""
     tunnel = _make_tunnel_mock()
 
-    from provide.terminal.tunnel.protocol import TunnelFrame
+    from provide.uterm.tunnel.protocol import TunnelFrame
 
     # recv returns an EOF frame immediately
     tunnel.recv = AsyncMock(
@@ -199,7 +199,7 @@ async def test_pty_bridge_reads_from_master_fd() -> None:
         added_readers.append(fd)
 
     with (
-        patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+        patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
         patch("asyncio.get_event_loop") as mock_loop,
     ):
         mock_loop.return_value.add_reader = _add_reader
@@ -215,7 +215,7 @@ async def test_pty_bridge_reads_from_master_fd() -> None:
 async def test_pty_bridge_writes_tunnel_data_to_fd() -> None:
     """Tunnel CHANNEL_DATA frames are written to master_fd."""
 
-    from provide.terminal.tunnel.protocol import CHANNEL_DATA, TunnelFrame
+    from provide.uterm.tunnel.protocol import CHANNEL_DATA, TunnelFrame
 
     tunnel = _make_tunnel_mock()
     call_count = 0
@@ -237,7 +237,7 @@ async def test_pty_bridge_writes_tunnel_data_to_fd() -> None:
         return len(data)
 
     with (
-        patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+        patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
         patch("asyncio.get_event_loop") as mock_loop,
         patch("os.write", side_effect=_fake_write),
     ):

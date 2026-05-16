@@ -2,8 +2,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from provide.terminal.server.models import RecordingConfig, SessionDefinition
-from provide.terminal.server.runtime import HostedSessionRuntime
+from provide.uterm.server.models import RecordingConfig, SessionDefinition
+from provide.uterm.server.runtime import HostedSessionRuntime
 
 
 async def _get_next_message(runtime: HostedSessionRuntime) -> dict[str, object]:

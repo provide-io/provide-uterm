@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from provide.terminal.cloudflare.api.ws_routes import handle_socket_message
-from provide.terminal.cloudflare.bridge.hijack import HijackCoordinator
-from provide.terminal.cloudflare.contracts import frame_json
+from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
+from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.contracts import frame_json
 
 # ---------------------------------------------------------------------------
 # Minimal runtime mock

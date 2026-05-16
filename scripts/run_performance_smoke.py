@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from statistics import median
 from typing import TYPE_CHECKING
 
-from provide.terminal.ansi import normalize_colors
-from provide.terminal.screen import strip_ansi
+from provide.uterm.ansi import normalize_colors
+from provide.uterm.screen import strip_ansi
 
 if TYPE_CHECKING:
     from collections.abc import Callable

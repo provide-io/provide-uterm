@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.mcp_tools import TOOL_COUNT, create_manager_mcp_tools
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.process import AgentProcessManager
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.mcp_tools import TOOL_COUNT, create_manager_mcp_tools
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -108,7 +108,7 @@ class TestFactory:
 
         callback_mock = AsyncMock()
 
-        with patch("provide.terminal.manager.mcp_tools._http_request") as mock_http_request:
+        with patch("provide.uterm.manager.mcp_tools._http_request") as mock_http_request:
             # Mock the HTTP request to return swarm status
             mock_http_request.return_value = (
                 True,

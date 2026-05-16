@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
 
 def _make_app(**hub_kwargs: Any) -> tuple[TermHub, FastAPI, TestClient]:
@@ -60,7 +60,7 @@ async def _register_browser_ws(hub: TermHub, worker_id: str, browser_ws: Any, ro
 class TestBridgeInvalidUriFixed:
     async def test_invalid_uri_stops_reconnect_via_run(self) -> None:
         """Lines 214-220: InvalidURI exception → _running=False, break from reconnect loop."""
-        from provide.terminal.bridge.worker_link import TermBridge, _InvalidURI
+        from provide.uterm.bridge.worker_link import TermBridge, _InvalidURI
 
         if _InvalidURI is None:
             return  # websockets not installed
@@ -104,8 +104,8 @@ class TestStartConnectorIsConnectedFalse:
         """Line 148->150: connector.is_connected() returns False → _connected stays False."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from provide.terminal.server.models import RecordingConfig, SessionDefinition
-        from provide.terminal.server.runtime import HostedSessionRuntime
+        from provide.uterm.server.models import RecordingConfig, SessionDefinition
+        from provide.uterm.server.runtime import HostedSessionRuntime
 
         definition = SessionDefinition(
             session_id="test-sess",
@@ -123,7 +123,7 @@ class TestStartConnectorIsConnectedFalse:
         connector.is_connected = MagicMock(return_value=False)  # False branch
         connector.start = AsyncMock()
 
-        with patch("provide.terminal.server.runtime.build_connector", return_value=connector):
+        with patch("provide.uterm.server.runtime.build_connector", return_value=connector):
             result = await runtime._start_connector()
 
         assert runtime._connected is False  # NOT set (False branch of line 148)
@@ -142,8 +142,8 @@ class TestBridgeSessionUnknownMtypeRecvWins:
         import json
         from unittest.mock import AsyncMock, MagicMock
 
-        from provide.terminal.server.models import RecordingConfig, SessionDefinition
-        from provide.terminal.server.runtime import HostedSessionRuntime
+        from provide.uterm.server.models import RecordingConfig, SessionDefinition
+        from provide.uterm.server.runtime import HostedSessionRuntime
 
         definition = SessionDefinition(
             session_id="test-session",
@@ -214,7 +214,7 @@ class TestBridgeSessionUnknownMtypeRecvWins:
 class TestAnsiTildeCodeNotInMap:
     def test_tilde_code_not_in_map_falls_through(self) -> None:
         """Line 326->333: tilde code not in _TILDE_MAP → literal passthrough."""
-        from provide.terminal.ansi import _handle_tilde_codes
+        from provide.uterm.ansi import _handle_tilde_codes
 
         # '~Z' — 'Z' is not in _TILDE_MAP → False branch of line 326 → appends '~' literally
         result = _handle_tilde_codes("~Z")
@@ -224,7 +224,7 @@ class TestAnsiTildeCodeNotInMap:
 class TestAnsiBraceTokenInvalidPolarity:
     def test_brace_token_with_invalid_polarity_falls_through(self) -> None:
         """Line 345->351: polarity NOT in ('+', '-') → falls through to out.append(text[i])."""
-        from provide.terminal.ansi import _handle_brace_tokens
+        from provide.uterm.ansi import _handle_brace_tokens
 
         # '{xR}' - polarity='x' is not in ('+', '-') → False branch of line 345 → appends '{'
         # Note: brace token format is exactly 4 chars: {<polarity><color>}
@@ -234,7 +234,7 @@ class TestAnsiBraceTokenInvalidPolarity:
 
     def test_brace_token_with_unknown_color_char_falls_through(self) -> None:
         """Line 347->351: polarity valid but emit_color returns '' (unknown char) → fall through."""
-        from provide.terminal.ansi import _handle_brace_tokens
+        from provide.uterm.ansi import _handle_brace_tokens
 
         # color_char 'Z' is not in _PREVIEW_COLOR_MAP and not 'x', so _emit_color returns ""
         result = _handle_brace_tokens("{+Z}")
@@ -250,7 +250,7 @@ class TestAnsiBraceTokenInvalidPolarity:
 class TestScreenRegexErrors:
     def test_extract_menu_options_empty_description_skipped(self) -> None:
         """Line 140->137: if description: False → description is whitespace/empty after strip."""
-        from provide.terminal.screen import extract_menu_options
+        from provide.uterm.screen import extract_menu_options
 
         # Use a custom pattern that matches but produces an empty description group
         # Pattern: match <A> followed by spaces only (description = whitespace → strip = "")
@@ -264,7 +264,7 @@ class TestScreenRegexErrors:
 
     def test_extract_numbered_list_empty_description_skipped(self) -> None:
         """Line 169->164: if description: False → description is whitespace after strip."""
-        from provide.terminal.screen import extract_numbered_list
+        from provide.uterm.screen import extract_numbered_list
 
         # Use a custom pattern where the second group can match empty/whitespace
         result = extract_numbered_list(
@@ -287,7 +287,7 @@ class TestSessionLoggerStopWhenNotStarted:
         import tempfile
         from pathlib import Path
 
-        from provide.terminal.session_logger import SessionLogger
+        from provide.uterm.session_logger import SessionLogger
 
         with tempfile.TemporaryDirectory() as tmp:
             logger = SessionLogger(Path(tmp) / "test.jsonl")
@@ -303,7 +303,7 @@ class TestSessionLoggerWriteAtQuota:
         import tempfile
         from pathlib import Path
 
-        from provide.terminal.session_logger import SessionLogger
+        from provide.uterm.session_logger import SessionLogger
 
         with tempfile.TemporaryDirectory() as tmp:
             log_path = Path(tmp) / "quota.jsonl"
@@ -330,7 +330,7 @@ class TestServerConfigAbsoluteDirectory:
         import tempfile
         from pathlib import Path
 
-        from provide.terminal.server.config import load_server_config
+        from provide.uterm.server.config import load_server_config
 
         with tempfile.TemporaryDirectory() as tmp:
             abs_dir = Path(tmp).resolve()
@@ -352,7 +352,7 @@ class TestServerConfigAbsoluteDirectory:
 class TestWatchdogOnStuckNone:
     async def test_watchdog_fires_without_on_stuck_callback(self) -> None:
         """Line 146->152: idle_for >= stuck_timeout_s and on_stuck is None → skip call."""
-        from provide.terminal.bridge.base import HijackableMixin
+        from provide.uterm.bridge.base import HijackableMixin
 
         class FakeWorker(HijackableMixin):
             pass

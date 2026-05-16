@@ -8,7 +8,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import provide.terminal.cloudflare.cf_types  # noqa: F401  — loads fallback classes
+import provide.uterm.cloudflare.cf_types  # noqa: F401  — loads fallback classes
 
 
 def _env(kv: object | None = None) -> SimpleNamespace:
@@ -35,14 +35,14 @@ def _req(body: dict | None = None, method: str = "POST") -> SimpleNamespace:
 
 
 async def test_pam_event_wrong_method_returns_405() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     resp = await handle_pam_event(_req(method="GET"), _env())
     assert resp.status == 405
 
 
 async def test_pam_event_bad_json_returns_400() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     async def _bad_json():
         raise ValueError("not json")
@@ -58,7 +58,7 @@ async def test_pam_event_bad_json_returns_400() -> None:
 
 
 async def test_pam_event_unknown_event_type_returns_422() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     req = _req({"event": "reboot", "username": "alice", "tty": "/dev/pts/3", "pid": 1})
     resp = await handle_pam_event(req, _env())
@@ -66,7 +66,7 @@ async def test_pam_event_unknown_event_type_returns_422() -> None:
 
 
 async def test_pam_event_missing_username_returns_422() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     req = _req({"event": "open", "username": "", "tty": "/dev/pts/3", "pid": 1})
     resp = await handle_pam_event(req, _env())
@@ -74,7 +74,7 @@ async def test_pam_event_missing_username_returns_422() -> None:
 
 
 async def test_pam_event_open_writes_to_kv() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     kv = AsyncMock()
     kv.put = AsyncMock()
@@ -97,7 +97,7 @@ async def test_pam_event_open_writes_to_kv() -> None:
 
 async def test_pam_event_open_no_kv_succeeds() -> None:
     """No KV binding configured — should still return 200."""
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     req = _req({"event": "open", "username": "bob", "tty": "/dev/pts/7", "pid": 99})
     resp = await handle_pam_event(req, _env(kv=None))
@@ -105,7 +105,7 @@ async def test_pam_event_open_no_kv_succeeds() -> None:
 
 
 async def test_pam_event_close_deletes_from_kv() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     kv = AsyncMock()
     kv.delete = AsyncMock()
@@ -120,7 +120,7 @@ async def test_pam_event_close_deletes_from_kv() -> None:
 
 
 async def test_pam_event_close_no_kv_succeeds() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     req = _req({"event": "close", "username": "alice", "tty": "/dev/pts/3", "pid": 1})
     resp = await handle_pam_event(req, _env(kv=None))
@@ -128,7 +128,7 @@ async def test_pam_event_close_no_kv_succeeds() -> None:
 
 
 async def test_pam_event_visibility_is_operator() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     kv = AsyncMock()
     req = _req({"event": "open", "username": "carol", "tty": "/dev/pts/1", "pid": 5})
@@ -140,7 +140,7 @@ async def test_pam_event_visibility_is_operator() -> None:
 
 
 async def test_pam_event_tty_empty_uses_tty_fallback() -> None:
-    from provide.terminal.cloudflare.api._pam import handle_pam_event
+    from provide.uterm.cloudflare.api._pam import handle_pam_event
 
     kv = AsyncMock()
     req = _req({"event": "open", "username": "dave", "tty": "", "pid": 2})
@@ -155,7 +155,7 @@ async def test_pam_event_tty_empty_uses_tty_fallback() -> None:
 
 async def test_route_http_dispatches_pam_events() -> None:
     """entry.py must route /api/pam-events to the pam handler."""
-    from provide.terminal.cloudflare.entry import Default
+    from provide.uterm.cloudflare.entry import Default
 
     env = SimpleNamespace(
         AUTH_MODE="dev",

@@ -12,8 +12,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.api_keys import ApiKey, ApiKeyStore, _hash_key
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.api_keys import ApiKey, ApiKeyStore, _hash_key
 
 # ---------------------------------------------------------------------------
 # Unit tests: ApiKeyStore
@@ -57,7 +57,7 @@ class TestApiKeyStore:
         store = ApiKeyStore()
         raw_key, _record = store.create("my-key", expires_in_s=1)
         # Expire the key by shifting time
-        with patch("provide.terminal.server.api_keys.time") as mock_time:
+        with patch("provide.uterm.server.api_keys.time") as mock_time:
             mock_time.time.return_value = time.time() + 3600
             assert store.validate(raw_key) is None
 
@@ -108,7 +108,7 @@ class TestApiKeyStore:
         raw_key, _record = store.create("test")
         # Patch compare_digest to verify it is called
         with patch(
-            "provide.terminal.server.api_keys.secrets.compare_digest", wraps=__import__("secrets").compare_digest
+            "provide.uterm.server.api_keys.secrets.compare_digest", wraps=__import__("secrets").compare_digest
         ) as mock_cmp:
             store.validate(raw_key)
             assert mock_cmp.called
@@ -195,8 +195,8 @@ class TestApiKeyPrincipalRoles:
     """Test role mapping from API key scopes."""
 
     def test_empty_scopes_gets_admin(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("admin-key")
@@ -206,8 +206,8 @@ class TestApiKeyPrincipalRoles:
         assert "admin" in principal.roles
 
     def test_admin_scope_gets_admin(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("admin-key", scopes=frozenset({"admin"}))
@@ -217,8 +217,8 @@ class TestApiKeyPrincipalRoles:
         assert "admin" in principal.roles
 
     def test_operator_scope_gets_operator(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("op-key", scopes=frozenset({"operator"}))
@@ -236,9 +236,9 @@ class TestApiKeyPrincipalRoles:
         scope {"session.control.create"} mapped to viewer whose role caps did not
         include create, yielding an empty capability set.
         """
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.authorization import AuthorizationService
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.authorization import AuthorizationService
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("read-key", scopes=frozenset({"session.read"}))
@@ -253,9 +253,9 @@ class TestApiKeyPrincipalRoles:
 
     async def test_capability_scope_create_grants_create_not_delete(self) -> None:
         """Scope {session.control.create} → can create, cannot delete."""
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.authorization import AuthorizationService
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.authorization import AuthorizationService
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("creator-key", scopes=frozenset({"session.control.create"}))
@@ -269,9 +269,9 @@ class TestApiKeyPrincipalRoles:
 
     async def test_viewer_role_marker_gets_viewer_role(self) -> None:
         """Scope {viewer} is a role marker — gives viewer role with unrestricted scope."""
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.authorization import AuthorizationService
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.authorization import AuthorizationService
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("viewer-key", scopes=frozenset({"viewer"}))
@@ -285,16 +285,16 @@ class TestApiKeyPrincipalRoles:
         assert await authz.has_capability(principal, "session.control.create") is False
 
     def test_disabled_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(api_keys_enabled=False, mode="dev")
         result = _principal_from_api_key({"x-api-key": "some-key"}, auth, None)
         assert result is None
 
     def test_empty_header_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
@@ -302,8 +302,8 @@ class TestApiKeyPrincipalRoles:
         assert result is None
 
     def test_no_store_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         auth = AuthConfig(api_keys_enabled=True, mode="dev")
         result = _principal_from_api_key({"x-api-key": "some-key"}, auth, None)
@@ -311,8 +311,8 @@ class TestApiKeyPrincipalRoles:
 
     def test_per_app_isolation(self) -> None:
         """Two apps with separate stores must not share key validity."""
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store_a = ApiKeyStore()
         store_b = ApiKeyStore()
@@ -324,8 +324,8 @@ class TestApiKeyPrincipalRoles:
         assert _principal_from_api_key({"x-api-key": raw_key_a}, auth, store_b) is None
 
     def test_invalid_key_returns_none(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         store.create("real-key")
@@ -492,8 +492,8 @@ class TestApiKeyRoutes:
     # Scoped keys: principal has correct scopes
 
     def test_scoped_key_principal_has_scopes(self) -> None:
-        from provide.terminal.server.auth import _principal_from_api_key
-        from provide.terminal.server.models import AuthConfig
+        from provide.uterm.server.auth import _principal_from_api_key
+        from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("scoped", scopes=frozenset({"session.read", "session.write"}))

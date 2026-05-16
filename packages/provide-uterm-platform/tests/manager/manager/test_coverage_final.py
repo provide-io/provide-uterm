@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.manager.app import create_manager_app
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
-from provide.terminal.manager.process import AgentProcessManager
+from provide.uterm.manager.app import create_manager_app
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.process import AgentProcessManager
 
 
 class FakeWorkerPlugin:
@@ -42,7 +42,7 @@ class TestModelsRequireManager503:
     def test_require_manager_raises_503(self):
         from fastapi import Depends, FastAPI
 
-        from provide.terminal.manager.routes.models import require_manager
+        from provide.uterm.manager.routes.models import require_manager
 
         app = FastAPI()
 
@@ -74,7 +74,7 @@ class TestModelsRequireManagerSuccess:
         """The get_account_pool dep is used by game-specific routes via extra_routers."""
         from fastapi import APIRouter, Depends
 
-        from provide.terminal.manager.routes.models import get_account_pool
+        from provide.uterm.manager.routes.models import get_account_pool
 
         extra = APIRouter()
 
@@ -426,7 +426,7 @@ class TestBustRespawnSkipsNonBust:
 
 class TestUpdateHistoryNoMatch:
     def test_update_no_matching_seq(self):
-        from provide.terminal.manager.routes.agent_ops import _update_command_history
+        from provide.uterm.manager.routes.agent_ops import _update_command_history
 
         agent = AgentStatusBase(agent_id="b")
         agent.manager_command_history = [{"seq": 1, "status": "queued"}]

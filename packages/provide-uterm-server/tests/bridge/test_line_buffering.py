@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from provide.terminal.bridge.hub.core import TermHub
+from provide.uterm.bridge.hub.core import TermHub
 
 
 @pytest.mark.asyncio

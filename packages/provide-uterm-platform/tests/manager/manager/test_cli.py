@@ -2,13 +2,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.cli."""
+"""Tests for provide.uterm.manager.cli."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.manager.cli import main
+from provide.uterm.manager.cli import main
 
 
 def test_main_parses_args_and_runs():
@@ -17,7 +17,7 @@ def test_main_parses_args_and_runs():
 
     with (
         patch("sys.argv", ["uterm-manager", "--host", "0.0.0.0", "--port", "9999", "--log-level", "debug"]),
-        patch("provide.terminal.manager.app.create_manager_app") as mock_create,
+        patch("provide.uterm.manager.app.create_manager_app") as mock_create,
         patch("asyncio.run") as mock_run,
     ):
         mock_create.return_value = (MagicMock(), mock_manager)
@@ -36,7 +36,7 @@ def test_main_defaults():
     mock_manager = MagicMock()
     with (
         patch("sys.argv", ["uterm-manager"]),
-        patch("provide.terminal.manager.app.create_manager_app") as mock_create,
+        patch("provide.uterm.manager.app.create_manager_app") as mock_create,
         patch("asyncio.run"),
     ):
         mock_create.return_value = (MagicMock(), mock_manager)
@@ -51,7 +51,7 @@ def test_main_unknown_args():
     mock_manager = MagicMock()
     with (
         patch("sys.argv", ["uterm-manager", "--unknown", "value"]),
-        patch("provide.terminal.manager.app.create_manager_app") as mock_create,
+        patch("provide.uterm.manager.app.create_manager_app") as mock_create,
         patch("asyncio.run"),
     ):
         mock_create.return_value = (MagicMock(), mock_manager)

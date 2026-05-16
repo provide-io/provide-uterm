@@ -4,7 +4,7 @@
 #
 from __future__ import annotations
 
-from provide.terminal.detection import (
+from provide.uterm.detection import (
     BufferManager,
     DetectionEngine,
     KVExtractor,

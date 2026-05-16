@@ -1,6 +1,6 @@
 import pytest
 
-from provide.terminal.line_editor import LineEditor
+from provide.uterm.line_editor import LineEditor
 
 
 @pytest.mark.asyncio

@@ -17,7 +17,7 @@ import base64
 import json
 from pathlib import Path
 
-from provide.terminal.session_logger import SessionLogger
+from provide.uterm.session_logger import SessionLogger
 
 # ---------------------------------------------------------------------------
 # __init__ — stored attributes

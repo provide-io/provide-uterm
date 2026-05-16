@@ -27,7 +27,7 @@ from typing import Any
 
 import websockets
 
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChunk,
     encode_control,
@@ -78,7 +78,7 @@ def _fastapi_server():
 
     import uvicorn
     from fastapi import FastAPI
-    from provide.terminal.bridge.hub.core import TermHub
+    from provide.uterm.bridge.hub.core import TermHub
 
     logging.getLogger("provide").setLevel(logging.CRITICAL)
 

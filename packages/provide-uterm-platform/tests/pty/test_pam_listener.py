@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.terminal.pty.pam_listener import PamEvent, PamNotifyListener, _parse_event
+from provide.uterm.pty.pam_listener import PamEvent, PamNotifyListener, _parse_event
 
 # ── _parse_event ─────────────────────────────────────────────────────────────
 

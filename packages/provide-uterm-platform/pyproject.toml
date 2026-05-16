@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-uterm-manager = "provide.terminal.manager.cli:main"
+uterm-manager = "provide.uterm.manager.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -42,8 +42,8 @@ version = {file = "VERSION"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"provide.terminal" = ["py.typed"]
-"provide.terminal.pty" = ["py.typed", "_native/*"]
+"provide.uterm" = ["py.typed"]
+"provide.uterm.pty" = ["py.typed", "_native/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -56,8 +56,8 @@ addopts = [
     "--strict-config",
     "--tb=short",
     "-ra",
-    "--cov=provide.terminal.pty",
-    "--cov=provide.terminal.manager",
+    "--cov=provide.uterm.pty",
+    "--cov=provide.uterm.manager",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",

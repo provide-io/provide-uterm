@@ -16,14 +16,14 @@ import jwt as _jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.recording import LocalFileRecordingStore
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.models import (
+from provide.uterm.recording import LocalFileRecordingStore
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.models import (
     AuthConfig,
     RecordingConfig,
     SessionDefinition,
 )
-from provide.terminal.server.registry import SessionRegistry
+from provide.uterm.server.registry import SessionRegistry
 
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
@@ -98,30 +98,30 @@ class TestPamIntegrationGaps:
         """Line 114-116: ImportError when provide-uterm-platform not installed."""
         import sys
 
-        from provide.terminal.server.models import PamConfig, ServerConfig
-        from provide.terminal.server.pam_integration import run_pam_integration
+        from provide.uterm.server.models import PamConfig, ServerConfig
+        from provide.uterm.server.pam_integration import run_pam_integration
 
         config = ServerConfig(pam=PamConfig(notify_socket="/run/test.sock"))
 
         # Remove the module from sys.modules so the lazy import inside
         # run_pam_integration actually triggers and we can make it fail.
-        saved = sys.modules.pop("provide.terminal.pty.pam_listener", None)
+        saved = sys.modules.pop("provide.uterm.pty.pam_listener", None)
         try:
-            with patch.dict(sys.modules, {"provide.terminal.pty.pam_listener": None}):
+            with patch.dict(sys.modules, {"provide.uterm.pty.pam_listener": None}):
                 await run_pam_integration(config, MagicMock())
         finally:
             if saved is not None:
-                sys.modules["provide.terminal.pty.pam_listener"] = saved
+                sys.modules["provide.uterm.pty.pam_listener"] = saved
 
     async def test_handle_close_event_dispatch(self) -> None:
         """Line 132-133: handle() dispatches 'close' events to _on_close."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_close
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_close
 
         ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
         cfg = PamConfig()
@@ -134,12 +134,12 @@ class TestPamIntegrationGaps:
     async def test_on_open_bridge_start_success_stores_bridge(self) -> None:
         """Line 191: successful bridge.start() stores bridge in bridges dict."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_open
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_open
 
         ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42)
         cfg = PamConfig(
@@ -171,7 +171,7 @@ class TestPamIntegrationGaps:
         bridges: dict[str, object] = {}
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch("provide.terminal.server.pam_tunnel.PamTunnelBridge", return_value=bridge_mock),
+            patch("provide.uterm.server.pam_tunnel.PamTunnelBridge", return_value=bridge_mock),
         ):
             await _on_open(ev, cfg, registry, bridges)
 
@@ -182,12 +182,12 @@ class TestPamIntegrationGaps:
     async def test_on_close_stops_bridge(self) -> None:
         """Lines 211-216: _on_close stops the bridge from the bridges dict."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_close
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_close
 
         ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
         cfg = PamConfig()
@@ -206,12 +206,12 @@ class TestPamIntegrationGaps:
     async def test_on_close_bridge_stop_exception_swallowed(self) -> None:
         """Lines 211-216: bridge.stop() exception is caught and logged."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_close
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_close
 
         ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
         cfg = PamConfig()
@@ -227,12 +227,12 @@ class TestPamIntegrationGaps:
     async def test_on_close_runtime_stop_callable(self) -> None:
         """Line 230->232: runtime has stop_fn that is callable."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_close
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_close
 
         ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
         cfg = PamConfig()
@@ -247,11 +247,11 @@ class TestPamIntegrationGaps:
     async def test_create_capture_session_none_socket_returns_early(self) -> None:
         """Line 271: _create_capture_session returns early when capture_socket is None."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.pam_integration import _create_capture_session
+        from provide.uterm.server.pam_integration import _create_capture_session
 
         ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42, capture_socket=None)
         registry = MagicMock()
@@ -262,7 +262,7 @@ class TestPamIntegrationGaps:
 
     async def test_safe_create_exception_swallowed(self) -> None:
         """Lines 299-300: _safe_create catches registry.create_session exceptions."""
-        from provide.terminal.server.pam_integration import _safe_create
+        from provide.uterm.server.pam_integration import _safe_create
 
         registry = MagicMock()
         registry.create_session = AsyncMock(side_effect=RuntimeError("db error"))
@@ -271,7 +271,7 @@ class TestPamIntegrationGaps:
 
     async def test_get_connector_returns_none_on_no_runtime(self) -> None:
         """Line 313: _get_connector returns None when runtime is None."""
-        from provide.terminal.server.pam_integration import _get_connector
+        from provide.uterm.server.pam_integration import _get_connector
 
         registry = MagicMock()
         registry.get_runtime = MagicMock(return_value=None)
@@ -280,7 +280,7 @@ class TestPamIntegrationGaps:
 
     async def test_get_connector_returns_connector_attribute(self) -> None:
         """Line 314: _get_connector returns runtime.connector."""
-        from provide.terminal.server.pam_integration import _get_connector
+        from provide.uterm.server.pam_integration import _get_connector
 
         connector = MagicMock()
         runtime = MagicMock()
@@ -292,7 +292,7 @@ class TestPamIntegrationGaps:
 
     async def test_get_connector_exception_returns_none(self) -> None:
         """Lines 315-316: _get_connector returns None on exception."""
-        from provide.terminal.server.pam_integration import _get_connector
+        from provide.uterm.server.pam_integration import _get_connector
 
         registry = MagicMock()
         registry.get_runtime = MagicMock(side_effect=RuntimeError("boom"))
@@ -301,7 +301,7 @@ class TestPamIntegrationGaps:
 
     async def test_get_connector_no_connector_attr(self) -> None:
         """Line 314: _get_connector returns None when runtime lacks connector attr."""
-        from provide.terminal.server.pam_integration import _get_connector
+        from provide.uterm.server.pam_integration import _get_connector
 
         runtime = MagicMock(spec=[])  # no attributes at all
         registry = MagicMock()
@@ -312,12 +312,12 @@ class TestPamIntegrationGaps:
     async def test_on_open_relay_connector_none_skips_bridge(self) -> None:
         """Line 187->exit: when _get_connector returns None, bridge is not created."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_open
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_open
 
         ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42)
         cfg = PamConfig(
@@ -350,12 +350,12 @@ class TestPamIntegrationGaps:
     async def test_on_close_runtime_stop_not_callable(self) -> None:
         """Line 230->232: when stop_fn is not callable, it's skipped."""
         try:
-            from provide.terminal.pty.pam_listener import PamEvent
+            from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig
-        from provide.terminal.server.pam_integration import _on_close
+        from provide.uterm.server.models import PamConfig
+        from provide.uterm.server.pam_integration import _on_close
 
         ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
         cfg = PamConfig()
@@ -373,12 +373,12 @@ class TestPamIntegrationGaps:
         import tempfile
 
         try:
-            import provide.terminal.pty.pam_listener  # noqa: F401
+            import provide.uterm.pty.pam_listener  # noqa: F401
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
-        from provide.terminal.server.models import PamConfig, ServerConfig
-        from provide.terminal.server.pam_integration import run_pam_integration
+        from provide.uterm.server.models import PamConfig, ServerConfig
+        from provide.uterm.server.pam_integration import run_pam_integration
 
         with tempfile.TemporaryDirectory() as td:
             sock_path = str(Path(td) / "pam-close.sock")
@@ -445,7 +445,7 @@ class TestPamTunnelGaps:
 
     async def test_on_pty_output_callback_reads_and_sends(self) -> None:
         """Lines 54-58: _on_pty_output reads from master_fd and sends to tunnel."""
-        from provide.terminal.server.pam_tunnel import PamTunnelBridge
+        from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
         tunnel = MagicMock()
         tunnel.connect = AsyncMock()
@@ -453,7 +453,7 @@ class TestPamTunnelGaps:
         tunnel.send_data = AsyncMock()
         tunnel.close = AsyncMock()
 
-        from provide.terminal.tunnel.protocol import TunnelFrame
+        from provide.uterm.tunnel.protocol import TunnelFrame
 
         tunnel.recv = AsyncMock(
             return_value=TunnelFrame(channel=1, flags=0x01, payload=b"")  # EOF
@@ -470,7 +470,7 @@ class TestPamTunnelGaps:
             captured_callback = cb
 
         with (
-            patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+            patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
             patch("asyncio.get_event_loop") as mock_loop,
         ):
             mock_loop.return_value.add_reader = _add_reader
@@ -489,7 +489,7 @@ class TestPamTunnelGaps:
 
     async def test_on_pty_output_oserror_handled(self) -> None:
         """Lines 54-58: _on_pty_output handles OSError from os.read."""
-        from provide.terminal.server.pam_tunnel import PamTunnelBridge
+        from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
         tunnel = MagicMock()
         tunnel.connect = AsyncMock()
@@ -497,7 +497,7 @@ class TestPamTunnelGaps:
         tunnel.send_data = AsyncMock()
         tunnel.close = AsyncMock()
 
-        from provide.terminal.tunnel.protocol import TunnelFrame
+        from provide.uterm.tunnel.protocol import TunnelFrame
 
         tunnel.recv = AsyncMock(return_value=TunnelFrame(channel=1, flags=0x01, payload=b""))
 
@@ -512,7 +512,7 @@ class TestPamTunnelGaps:
             captured_callback = cb
 
         with (
-            patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+            patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
             patch("asyncio.get_event_loop") as mock_loop,
         ):
             mock_loop.return_value.add_reader = _add_reader
@@ -529,7 +529,7 @@ class TestPamTunnelGaps:
 
     async def test_tunnel_to_pty_loop_non_cancelled_exception(self) -> None:
         """Lines 75-76: generic exception in _tunnel_to_pty_loop is logged."""
-        from provide.terminal.server.pam_tunnel import PamTunnelBridge
+        from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
         tunnel = MagicMock()
         tunnel.connect = AsyncMock()
@@ -543,7 +543,7 @@ class TestPamTunnelGaps:
         connector._master_fd = 42
 
         with (
-            patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel),
+            patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel),
             patch("asyncio.get_event_loop") as mock_loop,
         ):
             mock_loop.return_value.add_reader = MagicMock()
@@ -555,7 +555,7 @@ class TestPamTunnelGaps:
 
     async def test_capture_to_tunnel_loop_non_cancelled_exception(self) -> None:
         """Lines 89-90: generic exception in _capture_to_tunnel_loop is logged."""
-        from provide.terminal.server.pam_tunnel import PamTunnelBridge
+        from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
         tunnel = MagicMock()
         tunnel.connect = AsyncMock()
@@ -569,7 +569,7 @@ class TestPamTunnelGaps:
         capture_socket.read_frame = AsyncMock(side_effect=RuntimeError("socket error"))
         connector._capture = capture_socket
 
-        with patch("provide.terminal.tunnel.client.TunnelClient", return_value=tunnel):
+        with patch("provide.uterm.tunnel.client.TunnelClient", return_value=tunnel):
             bridge = PamTunnelBridge("wss://x", "tok", connector)
             await bridge.start()
             await asyncio.sleep(0.05)
@@ -770,7 +770,7 @@ class TestUiGaps:
 
     def test_hijack_js_version_returns_zero_on_exception(self) -> None:
         """Lines 31-33: _hijack_js_version returns '0' when exception occurs."""
-        from provide.terminal.server import ui
+        from provide.uterm.server import ui
 
         with patch("importlib.resources.files", side_effect=Exception("boom")):
             result = ui._hijack_js_version()
@@ -778,7 +778,7 @@ class TestUiGaps:
 
     def test_hijack_js_version_returns_zero_when_not_file(self) -> None:
         """Lines 31-33: _hijack_js_version returns '0' when path is not a file."""
-        from provide.terminal.server import ui
+        from provide.uterm.server import ui
 
         mock_path = MagicMock()
         mock_path.is_file.return_value = False
@@ -794,7 +794,7 @@ class TestUiGaps:
 
     def test_inspect_page_html_minimal(self) -> None:
         """Lines 256-273: inspect_page_html with minimal args."""
-        from provide.terminal.server import ui
+        from provide.uterm.server import ui
 
         ui._vite_manifest = None
         ui._vite_manifest_loaded = True
@@ -977,7 +977,7 @@ class TestApiGaps:
 
         # Force a validation error by making the registry fail
         async def _fail(payload: dict[str, Any]) -> Any:
-            from provide.terminal.server.registry import SessionValidationError
+            from provide.uterm.server.registry import SessionValidationError
 
             raise SessionValidationError("bad tunnel")
 

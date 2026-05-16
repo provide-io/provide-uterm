@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.terminal.server import create_server_app, default_server_config
-from provide.terminal.server.registry import SessionRegistry
+from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.registry import SessionRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -237,8 +237,8 @@ def test_combined_filters(client: TestClient) -> None:
 
 async def test_retention_sweep() -> None:
     """Stopped sessions older than retention_s are removed by the sweep."""
-    from provide.terminal.bridge.hub import TermHub
-    from provide.terminal.server.models import RecordingConfig
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.models import RecordingConfig
 
     hub = TermHub()
     registry = SessionRegistry(
@@ -278,8 +278,8 @@ async def test_retention_sweep() -> None:
 
 async def test_retention_disabled() -> None:
     """When retention_s=0, no sessions are removed."""
-    from provide.terminal.bridge.hub import TermHub
-    from provide.terminal.server.models import RecordingConfig
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.models import RecordingConfig
 
     hub = TermHub()
     registry = SessionRegistry(

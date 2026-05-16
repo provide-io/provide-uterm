@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.manager.app factory."""
+"""Tests for provide.uterm.manager.app factory."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import APIRouter
 
-from provide.terminal.manager.app import create_manager_app
-from provide.terminal.manager.config import ManagerConfig
-from provide.terminal.manager.core import AgentManager
-from provide.terminal.manager.models import AgentStatusBase
+from provide.uterm.manager.app import create_manager_app
+from provide.uterm.manager.config import ManagerConfig
+from provide.uterm.manager.core import AgentManager
+from provide.uterm.manager.models import AgentStatusBase
 
 
 @pytest.fixture
@@ -187,7 +187,7 @@ class TestAutoShutdown:
         app, manager = create_manager_app(config)
 
         # Add an active agent
-        from provide.terminal.manager.models import AgentStatusBase
+        from provide.uterm.manager.models import AgentStatusBase
 
         manager.agents["agent-1"] = AgentStatusBase(agent_id="agent-1", state="running")
 
@@ -268,7 +268,7 @@ class TestAutoShutdown:
         # Start shutdown, then add an active agent before grace period ends
         import asyncio
 
-        from provide.terminal.manager.models import AgentStatusBase
+        from provide.uterm.manager.models import AgentStatusBase
 
         task = asyncio.create_task(manager._auto_shutdown_after(0.2))
         await asyncio.sleep(0.05)

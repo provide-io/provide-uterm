@@ -8,9 +8,9 @@ from typing import cast
 
 import pytest
 
-from provide.terminal.server.app import create_server_app
-from provide.terminal.server.authorization import AuthorizationService, WebhookAuthorizationProvider
-from provide.terminal.server.config import default_server_config
+from provide.uterm.server.app import create_server_app
+from provide.uterm.server.authorization import AuthorizationService, WebhookAuthorizationProvider
+from provide.uterm.server.config import default_server_config
 
 
 def test_app_initializes_webhook_authz() -> None:
@@ -26,7 +26,7 @@ def test_app_initializes_webhook_authz() -> None:
 
 
 def test_app_initializes_webhook_policy() -> None:
-    from provide.terminal.bridge.hub.ext import WebhookPolicyGate
+    from provide.uterm.bridge.hub.ext import WebhookPolicyGate
 
     config = default_server_config()
     config.governance.policy_webhook_url = "https://fleet.example.com/policy"

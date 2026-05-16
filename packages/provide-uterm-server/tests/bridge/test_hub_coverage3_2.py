@@ -10,8 +10,8 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import HijackSession, WorkerTermState
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 

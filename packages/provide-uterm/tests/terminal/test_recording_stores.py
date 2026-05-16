@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from provide.terminal.recording import InMemoryRecordingStore, NullRecordingStore, RecordingStore
+from provide.uterm.recording import InMemoryRecordingStore, NullRecordingStore, RecordingStore
 
 
 class TestInMemoryRecordingStoreProtocol:

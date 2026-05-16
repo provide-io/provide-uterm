@@ -12,9 +12,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.tunnel.fastapi_routes import register_tunnel_routes as _tunnel_registrar
-from provide.terminal.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_frame
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes as _tunnel_registrar
+from provide.uterm.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_frame
 
 
 @pytest.fixture

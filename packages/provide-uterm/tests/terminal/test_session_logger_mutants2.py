@@ -17,7 +17,7 @@ import json
 import time
 from pathlib import Path
 
-from provide.terminal.session_logger import SessionLogger
+from provide.uterm.session_logger import SessionLogger
 
 # ---------------------------------------------------------------------------
 # __init__ (mutmut_1: max_bytes=1 instead of 0; mutmut_6: session_id=None; mutmut_7: context={})

@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.terminal.gateway._ssh_handler import _make_process_handler
+from provide.uterm.gateway._ssh_handler import _make_process_handler
 
 # ---------------------------------------------------------------------------
 # Async iterator helper
@@ -231,7 +231,7 @@ class TestMakeProcessHandler:
 
     async def test_handler_cancels_pending(self) -> None:
         """Cover task.cancel() in _process_handler."""
-        from provide.terminal.control_channel import encode_data
+        from provide.uterm.control_channel import encode_data
 
         handler = await _make_process_handler("ws://test", "passthrough")
 
@@ -260,7 +260,7 @@ class TestMakeProcessHandler:
 
     async def test_handler_ssh_reconnect_indicator(self) -> None:
         """SSH handler writes reconnect indicator when WS drops but SSH client stays."""
-        from provide.terminal.control_channel import encode_data
+        from provide.uterm.control_channel import encode_data
 
         handler = await _make_process_handler("ws://test", "passthrough")
 

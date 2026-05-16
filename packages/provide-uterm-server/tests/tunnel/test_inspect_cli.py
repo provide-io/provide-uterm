@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from provide.terminal.cli import _build_parser
-from provide.terminal.cli.inspect import _cmd_inspect, _create_tunnel, _read_token
+from provide.uterm.cli import _build_parser
+from provide.uterm.cli.inspect import _cmd_inspect, _create_tunnel, _read_token
 
 
 class TestInspectArgParsing:
@@ -51,7 +51,7 @@ class TestInspectArgParsing:
 class TestCreateTunnel:
     def test_success(self):
         resp = json.dumps({"tunnel_id": "t", "ws_endpoint": "ws://x", "worker_token": "w", "share_url": ""}).encode()
-        with patch("provide.terminal.cli.inspect.urllib.request.urlopen") as mock_open:
+        with patch("provide.uterm.cli.inspect.urllib.request.urlopen") as mock_open:
             mock_open.return_value.__enter__ = lambda s: MagicMock(read=lambda: resp)
             mock_open.return_value.__exit__ = MagicMock(return_value=False)
             result = _create_tunnel("https://example.com", "test", None, 3000)
@@ -59,7 +59,7 @@ class TestCreateTunnel:
 
     def test_with_token(self):
         resp = json.dumps({"tunnel_id": "t", "ws_endpoint": "ws://x", "worker_token": "w", "share_url": ""}).encode()
-        with patch("provide.terminal.cli.inspect.urllib.request.urlopen") as mock_open:
+        with patch("provide.uterm.cli.inspect.urllib.request.urlopen") as mock_open:
             mock_open.return_value.__enter__ = lambda s: MagicMock(read=lambda: resp)
             mock_open.return_value.__exit__ = MagicMock(return_value=False)
             _create_tunnel("https://example.com", "test", "my-token", 3000)
@@ -69,14 +69,14 @@ class TestCreateTunnel:
     def test_http_error(self):
         import urllib.error
 
-        with patch("provide.terminal.cli.inspect.urllib.request.urlopen") as mock_open, pytest.raises(SystemExit):
+        with patch("provide.uterm.cli.inspect.urllib.request.urlopen") as mock_open, pytest.raises(SystemExit):
             mock_open.side_effect = urllib.error.HTTPError("http://x", 500, "fail", {}, None)
             _create_tunnel("https://example.com", "test", None, 3000)
 
     def test_url_error(self):
         import urllib.error
 
-        with patch("provide.terminal.cli.inspect.urllib.request.urlopen") as mock_open, pytest.raises(SystemExit):
+        with patch("provide.uterm.cli.inspect.urllib.request.urlopen") as mock_open, pytest.raises(SystemExit):
             mock_open.side_effect = urllib.error.URLError("no host")
             _create_tunnel("https://example.com", "test", None, 3000)
 
@@ -98,7 +98,7 @@ class TestCmdInspect:
         )
         with (
             patch(
-                "provide.terminal.cli.inspect._create_tunnel",
+                "provide.uterm.cli.inspect._create_tunnel",
                 return_value={"ws_endpoint": "", "worker_token": "", "share_url": ""},
             ),
             pytest.raises(SystemExit),
@@ -110,8 +110,8 @@ class TestCmdInspect:
             server="https://x.com", port=3000, display_name=None, token=None, token_file="/nonexistent", listen_port=0
         )
         with (
-            patch("provide.terminal.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.terminal.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
+            patch("provide.uterm.cli.inspect.asyncio.run"),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             _cmd_inspect(args)
@@ -128,10 +128,10 @@ class TestCmdInspect:
         )
         with (
             patch(
-                "provide.terminal.cli.inspect._create_tunnel",
+                "provide.uterm.cli.inspect._create_tunnel",
                 return_value={"ws_endpoint": "/tunnel/t", "worker_token": "w", "share_url": ""},
             ),
-            patch("provide.terminal.cli.inspect.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.inspect.asyncio.run") as mock_run,
         ):
             _cmd_inspect(args)
             mock_run.assert_called_once()

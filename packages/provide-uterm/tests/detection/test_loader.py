@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.detection.loader import load_ruleset
-from provide.terminal.detection.rules import RuleSet
+from provide.uterm.detection.loader import load_ruleset
+from provide.uterm.detection.rules import RuleSet
 
 
 class TestLoadRulesetFromPath:

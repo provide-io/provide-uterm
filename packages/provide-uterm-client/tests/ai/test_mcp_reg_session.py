@@ -16,10 +16,10 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
-from provide.terminal.bridge.hub import TermHub
-from provide.terminal.bridge.models import WorkerTermState
+from provide.uterm.bridge.hub import TermHub
+from provide.uterm.bridge.models import WorkerTermState
 
-from provide.terminal.ai.server import create_mcp_app
+from provide.uterm.ai.server import create_mcp_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,8 +66,8 @@ def _mcp_for(app: FastAPI) -> FastMCP:
 def _server_app(
     sessions: list[dict[str, Any]] | None = None,
 ) -> FastAPI:
-    from provide.terminal.server.app import create_server_app
-    from provide.terminal.server.config import config_from_mapping
+    from provide.uterm.server.app import create_server_app
+    from provide.uterm.server.config import config_from_mapping
 
     if sessions is None:
         sessions = [

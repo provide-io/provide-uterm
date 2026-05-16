@@ -26,7 +26,7 @@ Browser UI for the [provide-uterm](../../README.md) platform. Vanilla TypeScript
 
 ```bash
 npm ci                  # install dependencies
-npm run build:frontend  # output to src/provide/terminal/frontend/
+npm run build:frontend  # output to src/provide/uterm/frontend/
 ```
 
 Output is served by the FastAPI server or CF Worker as static assets.

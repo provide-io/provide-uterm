@@ -13,8 +13,8 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from provide.terminal.bridge.worker_link import TermBridge
-from provide.terminal.control_channel import encode_control, encode_data
+from provide.uterm.bridge.worker_link import TermBridge
+from provide.uterm.control_channel import encode_control, encode_data
 
 _DLE_STX = "\x10\x02"
 _HEADER_LEN = 11  # DLE STX + 8 hex + ':'

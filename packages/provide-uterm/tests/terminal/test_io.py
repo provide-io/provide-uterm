@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from provide.terminal.io import InputSender, PromptWaiter
+from provide.uterm.io import InputSender, PromptWaiter
 
 
 class MockSession:
@@ -144,7 +144,7 @@ class TestInputSender:
 
 class TestSessionIsConnected:
     async def test_no_is_connected_attr_returns_true(self) -> None:
-        from provide.terminal.io import _session_is_connected
+        from provide.uterm.io import _session_is_connected
 
         class SessionWithoutChecker:
             pass
@@ -152,7 +152,7 @@ class TestSessionIsConnected:
         assert await _session_is_connected(SessionWithoutChecker())
 
     async def test_async_is_connected(self) -> None:
-        from provide.terminal.io import _session_is_connected
+        from provide.uterm.io import _session_is_connected
 
         class AsyncSession:
             async def is_connected(self) -> bool:
@@ -161,7 +161,7 @@ class TestSessionIsConnected:
         assert await _session_is_connected(AsyncSession())
 
     async def test_callable_is_connected_false(self) -> None:
-        from provide.terminal.io import _session_is_connected
+        from provide.uterm.io import _session_is_connected
 
         class SyncSession:
             def is_connected(self) -> bool:

@@ -32,8 +32,8 @@ from pathlib import Path
 
 import pytest
 
-from provide.terminal.pty.pam import PamError, PamSession
-from provide.terminal.pty.pam_listener import PamEvent, PamNotifyListener
+from provide.uterm.pty.pam import PamError, PamSession
+from provide.uterm.pty.pam_listener import PamEvent, PamNotifyListener
 
 pytestmark = pytest.mark.requires_root
 

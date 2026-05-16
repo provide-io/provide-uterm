@@ -18,8 +18,8 @@ import pytest
 import uvicorn
 import websockets.server
 
-from provide.terminal.cli.inspect import _run_inspect
-from provide.terminal.tunnel.protocol import CHANNEL_HTTP, decode_frame, encode_frame
+from provide.uterm.cli.inspect import _run_inspect
+from provide.uterm.tunnel.protocol import CHANNEL_HTTP, decode_frame, encode_frame
 
 # ---------------------------------------------------------------------------
 # Shared helpers (reuse pattern from test_run_inspect_integration.py)

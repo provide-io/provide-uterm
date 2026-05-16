@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from provide.terminal.cloudflare.do._sse import build_sse_response, route_sse
-from provide.terminal.cloudflare.state.store import SqliteStateStore
+from provide.uterm.cloudflare.do._sse import build_sse_response, route_sse
+from provide.uterm.cloudflare.state.store import SqliteStateStore
 
 # ---------------------------------------------------------------------------
 # Helpers

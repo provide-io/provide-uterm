@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.gateway — pump helpers (tcp↔ws) and TelnetWsGateway."""
+"""Tests for provide.uterm.gateway — pump helpers (tcp↔ws) and TelnetWsGateway."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import websockets
 import websockets.server
-from provide.terminal.control_channel import (
+from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChunk,
     encode_control,
 )
-from provide.terminal.gateway import (
+from provide.uterm.gateway import (
     TelnetWsGateway,
     _normalize_crlf,
     _pipe_ws,
@@ -283,7 +283,7 @@ class TestPipeWs:
             ws_srv.close()
 
 
-_PIPE_WS_PATH = "provide.terminal.gateway._telnet_gateway._pipe_ws"
+_PIPE_WS_PATH = "provide.uterm.gateway._telnet_gateway._pipe_ws"
 
 
 class TestTelnetWsGatewayHandleException:
@@ -322,7 +322,7 @@ class TestTelnetWsGatewayHandleException:
 
         with (
             patch(_PIPE_WS_PATH, side_effect=_fake_pipe),
-            patch("provide.terminal.gateway._telnet_gateway.asyncio.sleep", new_callable=AsyncMock),
+            patch("provide.uterm.gateway._telnet_gateway.asyncio.sleep", new_callable=AsyncMock),
         ):
             await gw._handle(reader, writer)
 

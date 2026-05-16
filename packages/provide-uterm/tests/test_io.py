@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Tests for provide.terminal.io — PromptWaiter and InputSender primitives."""
+"""Tests for provide.uterm.io — PromptWaiter and InputSender primitives."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.terminal.io import InputSender, PromptWaiter, _session_is_connected
+from provide.uterm.io import InputSender, PromptWaiter, _session_is_connected
 
 # ---------------------------------------------------------------------------
 # Helpers

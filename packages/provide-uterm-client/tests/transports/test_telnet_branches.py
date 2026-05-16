@@ -12,7 +12,7 @@ import contextlib
 
 import pytest
 
-from provide.terminal.transports.telnet import IAC, TelnetTransport
+from provide.uterm.transports.telnet import IAC, TelnetTransport
 
 
 async def _make_server_that_sends(data: bytes) -> tuple[asyncio.Server, int]:
@@ -51,55 +51,55 @@ class TestTelnetNegotiateBranches:
 
     async def test_negotiate_dont_branch(self) -> None:
         """DONT branch records in negotiated['dont'] and calls _send_wont."""
-        from provide.terminal.transports.telnet import DONT
+        from provide.uterm.transports.telnet import DONT
 
         await self._negotiate_with(bytes([IAC, DONT, 1]))
 
     async def test_negotiate_will_branch_known(self) -> None:
         """WILL ECHO branch calls _send_do."""
-        from provide.terminal.transports.telnet import OPT_ECHO, WILL
+        from provide.uterm.transports.telnet import OPT_ECHO, WILL
 
         await self._negotiate_with(bytes([IAC, WILL, OPT_ECHO]))
 
     async def test_negotiate_will_branch_unknown(self) -> None:
         """WILL <unknown> branch calls _send_dont."""
-        from provide.terminal.transports.telnet import WILL
+        from provide.uterm.transports.telnet import WILL
 
         await self._negotiate_with(bytes([IAC, WILL, 77]))
 
     async def test_negotiate_wont_branch(self) -> None:
         """WONT branch calls _send_dont."""
-        from provide.terminal.transports.telnet import WONT
+        from provide.uterm.transports.telnet import WONT
 
         await self._negotiate_with(bytes([IAC, WONT, 1]))
 
     async def test_negotiate_do_binary_branch(self) -> None:
         """DO BINARY branch calls _send_will."""
-        from provide.terminal.transports.telnet import DO, OPT_BINARY
+        from provide.uterm.transports.telnet import DO, OPT_BINARY
 
         await self._negotiate_with(bytes([IAC, DO, OPT_BINARY]))
 
     async def test_negotiate_do_naws_branch(self) -> None:
         """DO NAWS branch calls _send_will + _send_naws."""
-        from provide.terminal.transports.telnet import DO, OPT_NAWS
+        from provide.uterm.transports.telnet import DO, OPT_NAWS
 
         await self._negotiate_with(bytes([IAC, DO, OPT_NAWS]))
 
     async def test_negotiate_do_ttype_branch(self) -> None:
         """DO TTYPE branch calls _send_will + _send_ttype."""
-        from provide.terminal.transports.telnet import DO, OPT_TTYPE
+        from provide.uterm.transports.telnet import DO, OPT_TTYPE
 
         await self._negotiate_with(bytes([IAC, DO, OPT_TTYPE]))
 
     async def test_negotiate_do_unknown_branch(self) -> None:
         """DO <unknown> branch calls _send_wont."""
-        from provide.terminal.transports.telnet import DO
+        from provide.uterm.transports.telnet import DO
 
         await self._negotiate_with(bytes([IAC, DO, 99]))
 
     async def test_negotiate_not_connected_early_return(self) -> None:
         """_negotiate() returns immediately if writer is None."""
-        from provide.terminal.transports.telnet import DO
+        from provide.uterm.transports.telnet import DO
 
         t = TelnetTransport()
         # _writer is None — should return immediately without error
@@ -112,7 +112,7 @@ class TestTelnetNegotiateBranches:
 
     async def test_send_cmd_writer_closing_returns(self) -> None:
         """_send_cmd() returns immediately if writer is None."""
-        from provide.terminal.transports.telnet import DO
+        from provide.uterm.transports.telnet import DO
 
         t = TelnetTransport()
         await t._send_cmd(DO, 1)  # should not raise

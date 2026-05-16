@@ -4,7 +4,7 @@
 #
 import pytest
 
-from provide.terminal.pty._validate import (
+from provide.uterm.pty._validate import (
     validate_command,
     validate_env,
     validate_service_name,
