@@ -1,3 +1,7 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -13,10 +17,7 @@ from provide.uterm.control_channel import (
 )
 
 
-@given(
-    chaos_data=st.lists(st.binary(min_size=1, max_size=100), min_size=1, max_size=50),
-    inject_control=st.booleans()
-)
+@given(chaos_data=st.lists(st.binary(min_size=1, max_size=100), min_size=1, max_size=50), inject_control=st.booleans())
 @settings(max_examples=100, deadline=None)
 def test_decoder_resilience_under_binary_chaos(chaos_data, inject_control):
     decoder = ControlChannelDecoder()
@@ -39,6 +40,7 @@ def test_decoder_resilience_under_binary_chaos(chaos_data, inject_control):
     except ControlChannelProtocolError:
         pass
 
+
 def test_decoder_boundary_splitting_on_control_frames():
     decoder = ControlChannelDecoder()
     payload = {"type": "test", "data": "A" * 100}
@@ -52,21 +54,24 @@ def test_decoder_boundary_splitting_on_control_frames():
     assert isinstance(events[0], ControlChunk)
     assert events[0].control == payload
 
+
 def test_decoder_rejects_truncated_header_at_finish():
     decoder = ControlChannelDecoder()
-    decoder.feed(f"{DLE}{STX}0000") # Truncated length
+    decoder.feed(f"{DLE}{STX}0000")  # Truncated length
     with pytest.raises(ControlChannelProtocolError, match="truncated control frame"):
         decoder.finish()
+
 
 def test_decoder_rejects_invalid_hex_length():
     decoder = ControlChannelDecoder()
     with pytest.raises(ControlChannelProtocolError, match="invalid control header"):
-        decoder.feed(f"{DLE}{STX}G0000000:{{}}") # G is not hex
+        decoder.feed(f"{DLE}{STX}G0000000:{{}}")  # G is not hex
+
 
 def test_decoder_preserves_complex_ansi_sequences():
     decoder = ControlChannelDecoder()
     # A mix of colors, cursor movements, and a fake Sixel-like sequence
-    ansi_data = "\x1b[31mRed\x1b[0m\x1b[H\x1b[2J\x1bP0;0;1q\"1;1;100;100#0;2;0;0;0#1;2;100;0;0\x1b\\"
+    ansi_data = '\x1b[31mRed\x1b[0m\x1b[H\x1b[2J\x1bP0;0;1q"1;1;100;100#0;2;0;0;0#1;2;100;0;0\x1b\\'
 
     events = decoder.feed(ansi_data)
     assert len(events) == 1

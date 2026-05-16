@@ -23,9 +23,7 @@ def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
         repo_root = script_path.parents[2]
         env = dict(os.environ)
         existing_pythonpath = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = (
-            str(repo_root) if not existing_pythonpath else f"{repo_root}:{existing_pythonpath}"
-        )
+        env["PYTHONPATH"] = str(repo_root) if not existing_pythonpath else f"{repo_root}:{existing_pythonpath}"
         cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))} --run-demo"
         subprocess.run(
             [

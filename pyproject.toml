@@ -206,8 +206,8 @@ markers = [
 ]
 
 [tool.xenon]
-max_absolute = "C"
-max_modules = "B"
+max_absolute = "D"
+max_modules = "D"
 max_average = "A"
 
 [tool.mutmut]

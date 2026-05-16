@@ -1,3 +1,7 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 from __future__ import annotations
 
 import time
@@ -17,11 +21,15 @@ class SqliteMigrationError(RuntimeError):
 
 async def apply_migrations(conn: aiosqlite.Connection, migration_table: str = "cp_schema_version") -> None:
     """Apply the inert control-plane schema migrations in order."""
+    if not migration_table.isidentifier():
+        raise SqliteMigrationError(f"invalid migration table name: {migration_table!r}")
     try:
         await conn.execute(
             f"CREATE TABLE IF NOT EXISTS {migration_table} (version INTEGER PRIMARY KEY, applied_at REAL NOT NULL)"
         )
-        cursor = await conn.execute(f"SELECT COALESCE(MAX(version), 0) FROM {migration_table}")
+        cursor = await conn.execute(
+            f"SELECT COALESCE(MAX(version), 0) FROM {migration_table}"  # noqa: S608  # nosec B608
+        )
         row = await cursor.fetchone()
         await cursor.close()
         current_version = int(row[0] if row is not None and row[0] is not None else 0)
@@ -30,7 +38,7 @@ async def apply_migrations(conn: aiosqlite.Connection, migration_table: str = "c
                 continue
             await conn.executescript(sql)
             await conn.execute(
-                f"INSERT INTO {migration_table}(version, applied_at) VALUES(?, ?)",
+                f"INSERT INTO {migration_table}(version, applied_at) VALUES(?, ?)",  # nosec B608
                 (version, time.time()),
             )
         await conn.commit()

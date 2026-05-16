@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-import os
 import sys
 import timeit
+from pathlib import Path
 
 # Add packages to sys.path
-sys.path.insert(0, os.path.abspath("packages/provide-uterm-server/src"))
+sys.path.insert(0, str(Path("packages/provide-uterm-server/src").resolve()))
 
 from provide.uterm.bridge.hub.ext import RedactionRule
 from provide.uterm.bridge.hub.redaction import StreamRedactor

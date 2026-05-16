@@ -40,6 +40,7 @@ class SessionLogger:
         batch_size: int = 100,
     ) -> None:
 
+        self._log_path: Path | None
         if isinstance(store, (str, Path)):
             p = Path(store)
             # Legacy compatibility: tests pass a full file path like tmp/s.jsonl.
@@ -77,6 +78,34 @@ class SessionLogger:
                         "exists": self._path.exists(),
                         "size_bytes": self._path.stat().st_size if self._path.exists() else 0,
                     }
+
+                async def get_entries(
+                    self,
+                    session_id: str,
+                    limit: int = 200,
+                    offset: int | None = None,
+                    event: str | None = None,
+                ) -> list[dict[str, Any]]:
+                    if not self._path.exists():
+                        return []
+                    normalized_limit = max(1, min(limit, 500))
+                    entries: list[dict[str, Any]] = []
+                    skipped = 0
+                    with self._path.open(encoding="utf-8") as f:
+                        for line in f:
+                            try:
+                                item = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+                            if event and item.get("event") != event:
+                                continue
+                            if offset is not None and skipped < offset:
+                                skipped += 1
+                                continue
+                            entries.append(item)
+                    if offset is None:
+                        return entries[-normalized_limit:]
+                    return entries[:normalized_limit]
 
             self._store: RecordingStore = LegacyFileStore(p)
             self._log_path = p

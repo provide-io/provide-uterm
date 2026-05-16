@@ -1,6 +1,6 @@
-import os
 import subprocess
 import time
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -22,10 +22,15 @@ async def policy(request: Request):
     return {"action": "allow"}
 uvicorn.run(app, port=8888)
 """
-    with open("mock_fleet.py", "w") as f:
+    mock_fleet_path = Path("mock_fleet.py")
+    proof_config_path = Path("proof-ux.toml")
+
+    with mock_fleet_path.open("w") as f:
         f.write(fleet_code)
 
-    fleet_proc = subprocess.Popen(["python3", "mock_fleet.py"], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    fleet_proc = subprocess.Popen(
+        ["python3", str(mock_fleet_path)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+    )
     time.sleep(2)
 
     # 2. Setup Server Config
@@ -42,11 +47,11 @@ display_name = "Dual UX Proof"
 connector_type = "shell"
 visibility = "public"
 """
-    with open("proof-ux.toml", "w") as f:
+    with proof_config_path.open("w") as f:
         f.write(config_content)
 
     server_proc = subprocess.Popen(
-        ["uv", "run", "uterm-server", "--config", "proof-ux.toml", "--port", "8000"],
+        ["uv", "run", "uterm-server", "--config", str(proof_config_path), "--port", "8000"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
     )
@@ -113,10 +118,10 @@ visibility = "public"
     finally:
         server_proc.terminate()
         fleet_proc.terminate()
-        if os.path.exists("mock_fleet.py"):
-            os.remove("mock_fleet.py")
-        if os.path.exists("proof-ux.toml"):
-            os.remove("proof-ux.toml")
+        if mock_fleet_path.exists():
+            mock_fleet_path.unlink()
+        if proof_config_path.exists():
+            proof_config_path.unlink()
         print("\n--- PROOF COMPLETE ---\n")
 
 

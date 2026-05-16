@@ -26,12 +26,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.transports.telnet_transport import TelnetTransport
 
 from provide.uterm.emulator import TerminalEmulator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 async def connect_telnet(

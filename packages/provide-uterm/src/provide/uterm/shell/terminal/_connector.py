@@ -34,12 +34,12 @@ from typing import Any
 try:
     from provide.uterm.server.connectors.base import SessionConnector as _SessionConnector
 except ImportError:  # pragma: no cover
-    _SessionConnector = object  # type: ignore[assignment,misc]
+    _SessionConnector = object  # type: ignore[assignment,misc]  # ty:ignore[invalid-assignment]
 
-from provide.uterm.shell.commands import AnimatedResult, CommandDispatcher
 from provide.uterm.shell._output import BANNER, CLEAR_SCREEN, PROMPT
 from provide.uterm.shell._repl import LineBuffer
 from provide.uterm.shell._sandbox import Sandbox
+from provide.uterm.shell.commands import AnimatedResult, CommandDispatcher
 from provide.uterm.shell.terminal._output import term, worker_hello
 
 

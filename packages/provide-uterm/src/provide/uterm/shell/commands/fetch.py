@@ -38,7 +38,7 @@ async def cmd_fetch(arg: str) -> list[str]:
 
     try:
         try:
-            import js  # type: ignore[import-not-found]
+            import js  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
             opts: dict[str, object] = {"method": method}
             if body is not None:

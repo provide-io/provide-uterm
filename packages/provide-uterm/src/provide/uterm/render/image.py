@@ -117,7 +117,7 @@ def image_to_ansi_frames(
 
     for frame_idx in range(n_frames):
         img.seek(frame_idx)
-        frame = img.convert("RGBA").resize((px_w, px_h), Image.LANCZOS)  # type: ignore[attr-defined]
+        frame = img.convert("RGBA").resize((px_w, px_h), Image.LANCZOS)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
         pixels = frame.load()
         frames.append(render_frame(pixels, px_w, px_h, sgr_fn))
 

@@ -10,8 +10,8 @@ import asyncio
 import sys
 from typing import Any
 
-from provide.uterm.shell.commands import AnimatedResult, CommandDispatcher
 from provide.uterm.shell._output import BANNER, PROMPT
+from provide.uterm.shell.commands import AnimatedResult, CommandDispatcher
 
 
 async def _play_animation(result: AnimatedResult, write: Any) -> None:
@@ -53,7 +53,7 @@ async def _cli() -> None:
             for text in result:
                 sys.stdout.write(text.replace("\r\n", "\n"))
             sys.stdout.flush()
-        if isinstance(result, list) and any("Goodbye" in r for r in result):
+        if isinstance(result, list) and any("Goodbye" in r for r in result):  # ty:ignore[unsupported-operator]
             break
 
 
