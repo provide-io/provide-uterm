@@ -78,6 +78,7 @@ async def collect_sse_events(
     timeout_s: float = 6.0,
     event_types: str | None = None,
     pattern: str | None = None,
+    ready: asyncio.Event | None = None,
 ) -> list[dict[str, Any]]:
     """Connect to SSE stream and collect up to *max_events* events."""
     params: dict[str, Any] = {}
@@ -93,6 +94,8 @@ async def collect_sse_events(
     ):
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
+        if ready is not None:
+            ready.set()
         async for line in resp.aiter_lines():
             if line.startswith("data: "):
                 payload = json.loads(line[6:])
@@ -113,8 +116,11 @@ async def test_sse_shell_snapshot_received(shell_server: Any) -> None:
     async with connect_async_ws(ws_url(base_url, "/ws/worker/sse1/term")) as worker:
         await worker.recv()  # snapshot_req
 
-        collect_task = asyncio.create_task(collect_sse_events(base_url, "sse1", max_events=1, timeout_s=8.0))
-        await asyncio.sleep(0.15)
+        ready = asyncio.Event()
+        collect_task = asyncio.create_task(
+            collect_sse_events(base_url, "sse1", max_events=1, timeout_s=8.0, ready=ready)
+        )
+        await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         await worker.send(json.dumps(snapshot_msg("$ shell sse test")))
         events = await asyncio.wait_for(collect_task, timeout=10.0)
@@ -140,8 +146,11 @@ async def test_sse_two_sessions_isolated(multi_session_server: Any) -> None:
         await w_shell.recv()
         await w_telnet.recv()
 
-        collect_task = asyncio.create_task(collect_sse_events(base_url, "sse-shell", max_events=1, timeout_s=8.0))
-        await asyncio.sleep(0.15)
+        ready = asyncio.Event()
+        collect_task = asyncio.create_task(
+            collect_sse_events(base_url, "sse-shell", max_events=1, timeout_s=8.0, ready=ready)
+        )
+        await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         # Fire from telnet session first — should NOT reach sse-shell SSE
         await w_telnet.send(json.dumps(snapshot_msg("$ telnet event")))
@@ -174,12 +183,14 @@ async def test_sse_worker_disconnect_closes_stream(shell_server: Any) -> None:
                 httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=12) as http,
                 http.stream("GET", "/api/sessions/sse1/events/stream") as resp,
             ):
+                ready.set()
                 async for line in resp.aiter_lines():
                     if line.startswith("data: "):
                         events.append(json.loads(line[6:]))
 
+        ready = asyncio.Event()
         stream_task = asyncio.create_task(_stream())
-        await asyncio.sleep(0.15)
+        await asyncio.wait_for(ready.wait(), timeout=3.0)
 
     # Worker disconnected (context exited) — stream should have closed
     await asyncio.wait_for(stream_task, timeout=5.0)
@@ -197,6 +208,7 @@ async def test_sse_pattern_filter(shell_server: Any) -> None:
     async with connect_async_ws(ws_url(base_url, "/ws/worker/sse1/term")) as worker:
         await worker.recv()
 
+        ready = asyncio.Event()
         collect_task = asyncio.create_task(
             collect_sse_events(
                 base_url,
@@ -205,9 +217,10 @@ async def test_sse_pattern_filter(shell_server: Any) -> None:
                 timeout_s=8.0,
                 event_types="snapshot",
                 pattern=r"\$ ",
+                ready=ready,
             )
         )
-        await asyncio.sleep(0.15)
+        await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         # Non-matching — filtered
         await worker.send(json.dumps(snapshot_msg("loading...")))
@@ -233,6 +246,7 @@ async def test_sse_event_types_filter(shell_server: Any) -> None:
     async with connect_async_ws(ws_url(base_url, "/ws/worker/sse1/term")) as worker:
         await worker.recv()
 
+        ready = asyncio.Event()
         collect_task = asyncio.create_task(
             collect_sse_events(
                 base_url,
@@ -240,9 +254,10 @@ async def test_sse_event_types_filter(shell_server: Any) -> None:
                 max_events=1,
                 timeout_s=8.0,
                 event_types="hijack_acquired",
+                ready=ready,
             )
         )
-        await asyncio.sleep(0.15)
+        await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         # snapshot should be filtered
         await worker.send(json.dumps(snapshot_msg("$ x")))

@@ -30,8 +30,10 @@ from .conftest import (
     connect_browser,
     drain_all,
     drain_until,
+    drain_until_hijack_state,
     long_poll,
     snapshot_msg,
+    wait_for_event_subscriber,
     ws_url,
 )
 
@@ -55,7 +57,7 @@ async def test_viewer_cannot_send_input_eventbus_stable(live_server: Any) -> Non
 
             # Start long-poll subscriber
             poll_task = asyncio.create_task(long_poll(base_url, "s1", timeout_ms=5000, max_events=1))
-            await asyncio.sleep(0.1)
+            await wait_for_event_subscriber(hub, "s1")
 
             # Worker sends a snapshot — EventBus delivers it
             await worker.send(json.dumps(snapshot_msg("$ after viewer input")))
@@ -103,7 +105,7 @@ async def test_operator_open_mode_input_eventbus_delivers(live_server: Any) -> N
                         params={"timeout_ms": 5000, "max_events": 1, "event_types": "input_send"},
                     )
                 )
-                await asyncio.sleep(0.1)
+                await wait_for_event_subscriber(hub, "s1")
 
                 # Operator sends input
                 await op_ws.send(json.dumps({"type": "input", "data": "hello\r"}))
@@ -139,11 +141,11 @@ async def test_admin_hijack_eventbus_delivers_hijack_acquired(live_server: Any) 
                         params={"timeout_ms": 5000, "max_events": 1, "event_types": "hijack_acquired"},
                     )
                 )
-                await asyncio.sleep(0.1)
+                await wait_for_event_subscriber(hub, "s1")
 
                 # Admin browser acquires WS hijack
                 await admin_ws.send(json.dumps({"type": "hijack_request"}))
-                state = await drain_until(admin_ws, "hijack_state", timeout=2.0)
+                state = await drain_until_hijack_state(admin_ws, hijacked=True, timeout=2.0)
                 assert state is not None, "Admin browser should receive hijack_state after hijack_request"
                 assert state["hijacked"] is True
 
