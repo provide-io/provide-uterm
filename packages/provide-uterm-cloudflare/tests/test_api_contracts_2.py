@@ -137,7 +137,7 @@ def test_no_local_static_overrides() -> None:
     import importlib.resources
     from pathlib import Path
 
-    static_dir = Path(__file__).parent.parent / "src" / "provide" / "terminal" / "cloudflare" / "ui" / "static"
+    static_dir = Path(__file__).parent.parent / "src" / "provide" / "uterm" / "cloudflare" / "ui" / "static"
     gitignore = static_dir / ".gitignore"
     # If the .gitignore sentinel exists, all other files are gitignored build
     # artifacts — not committed overrides.  Skip the check in that case.

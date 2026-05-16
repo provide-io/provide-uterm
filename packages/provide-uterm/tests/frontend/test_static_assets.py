@@ -16,7 +16,7 @@ def _frontend_path(name: str) -> Path:
         / "provide-uterm-server"
         / "src"
         / "provide"
-        / "terminal"
+        / "uterm"
         / "server"
         / "frontend"
         / name

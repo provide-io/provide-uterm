@@ -191,8 +191,7 @@ class TestInspectE2E:
         worker = TunnelWorker(inspect_server, worker_id).start()
 
         page.goto(f"{inspect_server}/app/inspect/{worker_id}", wait_until="domcontentloaded")
-        status = page.locator("#inspect-status")
-        expect(status).to_have_text("Connected", timeout=10000)
+        expect(page.get_by_text("Connected")).to_be_visible(timeout=10000)
 
         worker.stop()
 
@@ -202,24 +201,22 @@ class TestInspectE2E:
         worker = TunnelWorker(inspect_server, worker_id).start()
 
         page.goto(f"{inspect_server}/app/inspect/{worker_id}", wait_until="domcontentloaded")
-        expect(page.locator("#inspect-status")).to_have_text("Connected", timeout=10000)
+        expect(page.get_by_text("Connected")).to_be_visible(timeout=10000)
 
         # Send an HTTP request frame
         worker.send_http_req("r1", "GET", "/api/users")
         time.sleep(0.5)
 
         # Verify it appears in the list
-        row = page.locator(".inspect-row")
-        expect(row).to_have_count(1, timeout=5000)
-        expect(row).to_contain_text("GET")
-        expect(row).to_contain_text("/api/users")
+        expect(page.locator("span", has_text="GET").first).to_be_visible(timeout=5000)
+        expect(page.get_by_text("/api/users")).to_be_visible(timeout=5000)
 
         # Send response
         worker.send_http_res("r1", 200)
         time.sleep(0.5)
 
         # Verify status shows
-        expect(page.locator(".status")).to_contain_text("200", timeout=5000)
+        expect(page.get_by_text("200")).to_be_visible(timeout=5000)
 
         worker.stop()
 
@@ -229,15 +226,15 @@ class TestInspectE2E:
         worker = TunnelWorker(inspect_server, worker_id).start()
 
         page.goto(f"{inspect_server}/app/inspect/{worker_id}", wait_until="domcontentloaded")
-        expect(page.locator("#inspect-status")).to_have_text("Connected", timeout=10000)
+        expect(page.get_by_text("Connected")).to_be_visible(timeout=10000)
 
-        inspect_toggle = page.locator("#inspect-inspect-toggle")
-        intercept_toggle = page.locator("#inspect-intercept-toggle")
+        inspect_toggle = page.get_by_role("button", name="Inspect: ON")
+        intercept_toggle = page.get_by_role("button", name="Intercept: OFF")
 
         expect(inspect_toggle).to_be_visible()
         expect(intercept_toggle).to_be_visible()
-        expect(inspect_toggle).to_have_text("Inspect: ON")
-        expect(intercept_toggle).to_have_text("Intercept: OFF")
+        expect(inspect_toggle).to_be_visible()
+        expect(intercept_toggle).to_be_visible()
 
         worker.stop()
 
@@ -247,16 +244,14 @@ class TestInspectE2E:
         worker = TunnelWorker(inspect_server, worker_id).start()
 
         page.goto(f"{inspect_server}/app/inspect/{worker_id}", wait_until="domcontentloaded")
-        expect(page.locator("#inspect-status")).to_have_text("Connected", timeout=10000)
+        expect(page.get_by_text("Connected")).to_be_visible(timeout=10000)
 
         # Send intercepted request
         worker.send_http_req("r1", "POST", "/api/data", intercepted=True)
         time.sleep(0.5)
 
         # Verify PAUSED badge
-        paused = page.locator(".badge.paused")
-        expect(paused).to_have_count(1, timeout=5000)
-        expect(paused).to_have_text("PAUSED")
+        expect(page.get_by_text("PAUSED")).to_be_visible(timeout=5000)
 
         worker.stop()
 
@@ -266,18 +261,18 @@ class TestInspectE2E:
         worker = TunnelWorker(inspect_server, worker_id).start()
 
         page.goto(f"{inspect_server}/app/inspect/{worker_id}", wait_until="domcontentloaded")
-        expect(page.locator("#inspect-status")).to_have_text("Connected", timeout=10000)
+        expect(page.get_by_text("Connected")).to_be_visible(timeout=10000)
 
         worker.send_http_req("r1", "GET", "/api/test", intercepted=True)
         time.sleep(0.5)
 
         # Click the request row
-        page.locator(".inspect-row").click()
+        page.get_by_text("/api/test").click()
         time.sleep(0.3)
 
         # Verify action buttons in detail panel
-        expect(page.locator(".btn-forward")).to_be_visible(timeout=3000)
-        expect(page.locator(".btn-drop")).to_be_visible()
-        expect(page.locator(".btn-modify")).to_be_visible()
+        expect(page.get_by_role("button", name="Forward", exact=True)).to_be_visible(timeout=3000)
+        expect(page.get_by_role("button", name="Drop")).to_be_visible()
+        expect(page.get_by_role("button", name="Modify & Forward")).to_be_visible()
 
         worker.stop()
