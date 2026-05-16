@@ -95,7 +95,7 @@ class DeckMuxMixin:
         # Broadcast updated sync to all existing browsers so they see the new user.
         # addUser in the frontend is idempotent — re-joining existing users just updates them.
         if store.count > 1:
-            await self.broadcast(worker_id, result)  # type: ignore[attr-defined]
+            await self.broadcast(worker_id, result)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
         return result
 
@@ -113,7 +113,7 @@ class DeckMuxMixin:
         removed = store.remove(user_id)
         if removed:
             msg = make_presence_leave(user_id)
-            await self.broadcast(worker_id, msg)  # type: ignore[attr-defined]
+            await self.broadcast(worker_id, msg)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
     async def deckmux_handle_message(
         self,
@@ -151,7 +151,7 @@ class DeckMuxMixin:
                 # Broadcast to other browsers
                 update_msg = user.to_dict()
                 update_msg["type"] = MSG_PRESENCE_UPDATE
-                await self.broadcast(worker_id, update_msg)  # type: ignore[attr-defined]
+                await self.broadcast(worker_id, update_msg)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
                 # Reset auto-transfer warning if owner is active
                 tm = self._get_transfer_manager(worker_id)
@@ -168,7 +168,7 @@ class DeckMuxMixin:
             if user:
                 update_msg = user.to_dict()
                 update_msg["type"] = MSG_PRESENCE_UPDATE
-                await self.broadcast(worker_id, update_msg)  # type: ignore[attr-defined]
+                await self.broadcast(worker_id, update_msg)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
 
         elif msg_type == MSG_CONTROL_REQUEST:
             owner = store.get_owner()
@@ -177,12 +177,12 @@ class DeckMuxMixin:
                 store.set_owner(user_id)
                 tm = self._get_transfer_manager(worker_id)
                 transfer = tm.build_transfer_message("", user_id, "handover")
-                await self.broadcast(worker_id, transfer)  # type: ignore[attr-defined]
+                await self.broadcast(worker_id, transfer)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             elif owner.user_id == user_id:
                 # Requester is already the owner — release control
                 store.clear_owner()
                 transfer = make_control_transfer(user_id, "", "handover")
-                await self.broadcast(worker_id, transfer)  # type: ignore[attr-defined]
+                await self.broadcast(worker_id, transfer)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             # else: another user owns — ignore the request
 
     def deckmux_cleanup(self, worker_id: str) -> None:

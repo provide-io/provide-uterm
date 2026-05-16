@@ -383,7 +383,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         import httpx as _h
 
         with _h.Client(base_url=base_url, timeout=10.0) as http:
-            http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {remote_gif_url}\r"})
+            http.post(
+                f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {remote_gif_url}\r"}
+            )
 
     steps: list[BrowserStep] = [
         # Navigate to operator view (WebSocket connects here)

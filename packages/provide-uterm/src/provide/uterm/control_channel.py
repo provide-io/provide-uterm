@@ -9,20 +9,22 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from string import hexdigits
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 try:
-    import orjson
+    import orjson  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
     def _json_dumps(obj: Any) -> str:
-        return orjson.dumps(obj).decode("utf-8")
+        return cast("str", orjson.dumps(obj).decode("utf-8"))
 
-    _json_loads = orjson.loads
+    _json_loads: Callable[[str], Any] = orjson.loads
 except ImportError:
     try:
-        import ujson
+        import ujson  # type: ignore[import-untyped]  # ty:ignore[unresolved-import]
 
-        _json_dumps = ujson.dumps
+        def _json_dumps(obj: Any) -> str:
+            return cast("str", ujson.dumps(obj))
+
         _json_loads = ujson.loads
     except ImportError:
 

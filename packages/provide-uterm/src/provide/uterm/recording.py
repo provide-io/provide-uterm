@@ -167,9 +167,9 @@ class LocalFileRecordingStore(RecordingStore):
 
         normalized_limit = max(1, min(limit, 500))
 
-        def _read():
+        def _read() -> list[dict[str, Any]]:
             if offset is not None:
-                entries = []
+                entries: list[dict[str, Any]] = []
                 skipped = 0
                 with path.open(encoding="utf-8") as f:
                     for line in f:
@@ -186,7 +186,7 @@ class LocalFileRecordingStore(RecordingStore):
                         except json.JSONDecodeError:
                             continue
                 return entries
-            tail = deque(maxlen=normalized_limit)
+            tail: deque[dict[str, Any]] = deque(maxlen=normalized_limit)
             with path.open(encoding="utf-8") as f:
                 for line in f:
                     try:

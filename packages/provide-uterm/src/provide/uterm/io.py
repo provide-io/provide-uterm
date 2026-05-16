@@ -88,7 +88,7 @@ class PromptWaiter:
             on_prompt_rejected(detected_full, "not_idle")
         remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
         wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
-        await self.session.wait_for_update(timeout_ms=wait_ms)  # type: ignore[union-attr]
+        await self.session.wait_for_update(timeout_ms=wait_ms)  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
         return True
 
     async def _check_prompt_filters(
@@ -104,12 +104,12 @@ class PromptWaiter:
         if expected_prompt_id and expected_prompt_id not in prompt_id:
             if on_prompt_rejected:
                 on_prompt_rejected(detected_full, "expected_mismatch")
-            await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))  # type: ignore[union-attr]
+            await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
             return True
         if on_prompt_detected and not on_prompt_detected(detected_full):
             if on_prompt_rejected:
                 on_prompt_rejected(detected_full, "callback_reject")
-            await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))  # type: ignore[union-attr]
+            await self.session.wait_for_update(timeout_ms=int(read_interval_sec * 1000))  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
             return True
         return False
 
@@ -149,7 +149,7 @@ class PromptWaiter:
 
         while time.monotonic() - start_mono < timeout_sec:
             await self._assert_session_connected()
-            snapshot = self.session.snapshot()  # type: ignore[union-attr]
+            snapshot = self.session.snapshot()  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
             screen = snapshot.get("screen", "")
 
             if self.on_screen_update:
@@ -199,7 +199,7 @@ class PromptWaiter:
                 }
 
             remaining = max(0, timeout_sec - (time.monotonic() - start_mono))
-            await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))  # type: ignore[union-attr]
+            await self.session.wait_for_update(timeout_ms=int(min(read_interval_sec, remaining) * 1000))  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
 
         raise TimeoutError(f"No prompt detected within {timeout_ms}ms")
 

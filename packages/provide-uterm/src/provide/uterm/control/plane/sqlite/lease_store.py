@@ -1,8 +1,12 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.uterm.control.plane.lease import LeaseRecord
 
@@ -11,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class SqliteLeaseStore:
-    def __init__(self, tx) -> None:
+    def __init__(self, tx: Any) -> None:
         self._tx = tx
 
     @property
@@ -21,7 +25,7 @@ class SqliteLeaseStore:
             conn = getattr(self._tx, "_conn", None)
         if conn is None:  # pragma: no cover - defensive guard for bad adapters
             raise AttributeError("transaction has no sqlite connection")
-        return conn
+        return cast("aiosqlite.Connection", conn)
 
     async def put_lease(self, record: LeaseRecord) -> None:
         data = asdict(record)

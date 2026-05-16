@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import pytest
+
 from provide.uterm.ws_bytes import channel_str_to_bytes, ws_frame_to_channel_str
 
 
