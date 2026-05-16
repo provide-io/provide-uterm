@@ -202,8 +202,8 @@ class TestDemoServerWs:
                 await _drain_until(browser, "snapshot")
 
             await _send_frame(b1, {"type": "hijack_request"})
-            b1_state = await _drain_until(b1, "hijack_state")
-            b2_state = await _drain_until(b2, "hijack_state")
+            b1_state = await _wait_for_hijack_state(b1, owner="me")
+            b2_state = await _wait_for_hijack_state(b2, owner="other")
             assert b1_state is not None and b1_state["owner"] == "me"
             assert b2_state is not None and b2_state["owner"] == "other"
 
@@ -212,7 +212,7 @@ class TestDemoServerWs:
             await _drain_until(b2, "hijack_state")
 
             await _send_frame(b2, {"type": "hijack_request"})
-            b2_state2 = await _drain_until(b2, "hijack_state")
-            b1_state2 = await _drain_until(b1, "hijack_state")
+            b2_state2 = await _wait_for_hijack_state(b2, owner="me")
+            b1_state2 = await _wait_for_hijack_state(b1, owner="other")
             assert b2_state2 is not None and b2_state2["owner"] == "me"
             assert b1_state2 is not None and b1_state2["owner"] == "other"
