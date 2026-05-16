@@ -18,6 +18,8 @@ from provide.uterm.manager.core import AgentManager
 from provide.uterm.manager.models import AgentStatusBase
 from provide.uterm.manager.process import AgentProcessManager
 
+SAFE_FAKE_PID = 999_999_999
+
 
 class FakeWorkerPlugin:
     @property
@@ -440,7 +442,7 @@ class TestProcessSpawnEdgeCases:
     @pytest.mark.asyncio
     async def test_kill_cleanup_handles_missing_agent(self, pm, manager):
         """arc 296->299: agent_id not in agents during kill_agent cleanup."""
-        proc = MagicMock()
+        proc = MagicMock(pid=SAFE_FAKE_PID)
         proc.wait = AsyncMock(return_value=None)
         proc.poll.return_value = None
         manager.processes["ghost"] = proc
