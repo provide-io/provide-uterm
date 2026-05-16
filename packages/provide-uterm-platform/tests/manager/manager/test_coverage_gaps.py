@@ -198,28 +198,18 @@ class TestCleanupOldWorkerLogs:
 
         log_dir = tmp_path / "logs" / "workers"
         log_dir.mkdir(parents=True)
-        bad_file = log_dir / "agent_bad.log"
-        bad_file.write_text("data")
+        bad_file = MagicMock()
+        bad_file.is_file.return_value = True
+        bad_file.stat.side_effect = OSError("stat failed")
 
         pm = MagicMock()
         pm._log_dir = str(log_dir)
         pm.manager.agents = {}
 
-        orig_stat = Path.stat
-        call_count: dict[str, int] = {}
-
-        def broken_stat(self_path, *a, **kw):
-            if self_path.name == "agent_bad.log":
-                count = call_count.get("agent_bad.log", 0)
-                call_count["agent_bad.log"] = count + 1
-                # First call is from is_file(); second is the explicit stat()
-                if count >= 1:
-                    raise OSError("stat failed")
-            return orig_stat(self_path, *a, **kw)
-
-        with patch.object(Path, "stat", broken_stat):
+        with patch.object(Path, "iterdir", return_value=iter([bad_file])):
             deleted = _cleanup_old_worker_logs(pm)
         assert deleted == 0
+        bad_file.stat.assert_called_once()
 
     def test_recent_prev_not_deleted(self, tmp_path: Path) -> None:
         """Line 103->94: recent .prev file loops back without deletion."""
