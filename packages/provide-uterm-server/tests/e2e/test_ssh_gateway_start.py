@@ -102,6 +102,7 @@ class TestSshWsGatewayStart:
                     port=ssh_port,
                     known_hosts=None,
                     username="guest",
+                    password="anything",
                     config=[],
                 ) as conn,
                 conn.create_process() as proc,
@@ -155,6 +156,7 @@ class TestSshWsGatewayStart:
                     port=ssh_port,
                     known_hosts=None,
                     username="guest",
+                    password="anything",
                     config=[],
                 ) as conn:
                     async with conn.create_process() as proc:
@@ -186,6 +188,7 @@ class TestSshWsGatewayStart:
                     port=ssh_port,
                     known_hosts=None,
                     username="guest",
+                    password="anything",
                     config=[],
                 ) as conn,
                 conn.create_process(term_type="xterm-256color") as proc,
@@ -217,6 +220,7 @@ class TestSshWsGatewayStart:
                     port=ssh_port,
                     known_hosts=None,
                     username="guest",
+                    password="anything",
                     config=[],
                 ) as conn,
                 # No term_type, no env — bare session.
@@ -248,6 +252,7 @@ class TestSshWsGatewayStart:
                     port=ssh_port,
                     known_hosts=None,
                     username="guest",
+                    password="anything",
                     config=[],
                 ) as conn:
                     async with conn.create_process() as proc:

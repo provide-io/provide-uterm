@@ -88,7 +88,7 @@ jobs:
       - run: npm ci
       - run: npm run build:frontend
       - run: uv sync --group dev
-      # Run server package tests with its own 100% branch coverage gate
+      # Run server package tests with its own package coverage gate
       - run: uv run pytest -q packages/provide-uterm-server/tests/
 
   pty-unit:
