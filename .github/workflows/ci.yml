@@ -62,7 +62,7 @@ jobs:
       - run: uv run python scripts/check_licenses.py
       - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-uterm/tests/playwright/test_example.py --ignore=packages/provide-uterm/tests/playwright/test_frontend_coverage.py
       - name: Run Hub Performance Benchmark
-        run: uv run pytest benchmarks/test_hub_performance.py -v -s
+        run: uv run python scripts/run_performance_smoke.py --iterations 100000 --enforce
       - name: Check CF vendor tree
         run: bash .ci/check_cf_vendor_tree.sh
       - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
@@ -157,7 +157,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --group dev
-      - run: uv run pytest packages/provide-uterm-platform/tests/manager/manager/test_process.py -q -k kill_bot_terminates_spawned_child_process_tree --no-cov -vv
+      - run: uv run pytest packages/provide-uterm-platform/tests/manager/manager/test_process.py -q -k kill_agent_terminates_spawned_child_process_tree --no-cov -vv
 
   mutation-gate:
     runs-on: ubuntu-latest

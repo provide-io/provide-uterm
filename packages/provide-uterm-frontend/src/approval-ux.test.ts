@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProvideHijack } from "./hijack.js";
 import { encodeControlFrame } from "./hijack-codec.js";
 
-// Re-use mocks logic
+// Reuse mocks logic
 class MockWebSocket {
   readyState = 1; // OPEN
   _onmessage: any = null;

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from provide.uterm.manager.app import create_manager_app
 from provide.uterm.manager.config import ManagerConfig
 from provide.uterm.manager.models import AgentStatusBase
+from provide.uterm.manager.routes.spawn import _respawn_after_restart_exit
 
 
 @pytest.fixture
@@ -326,6 +327,145 @@ class TestAgentRestart:
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
         resp = client.post("/agent/agent_000/restart")
         assert resp.status_code == 200
+
+    def test_restart_without_plugin_schedules_respawn_for_configured_agent(self, client, manager):
+        manager.agents["agent_000"] = AgentStatusBase(
+            agent_id="agent_000",
+            state="running",
+            config="/tmp/agent.yaml",
+        )
+        fake_task = MagicMock()
+
+        def fake_create_task(coro):
+            coro.close()
+            return fake_task
+
+        with patch("provide.uterm.manager.routes.spawn.asyncio.create_task", side_effect=fake_create_task) as create_task:
+            resp = client.post("/agent/agent_000/restart")
+
+        assert resp.status_code == 200
+        assert fake_task in manager._background_tasks
+        fake_task.add_done_callback.assert_called_once()
+        create_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_respawn_after_restart_exit_respawns_and_clears_pending_command(self, manager):
+        agent = AgentStatusBase(agent_id="agent_000", state="stopped", config="/tmp/agent.yaml")
+        agent.pending_command_seq = 7
+        agent.pending_command_type = "restart"
+        agent.pending_command_payload = {"reason": "test"}
+        manager.agents["agent_000"] = agent
+        manager.spawn_agent = AsyncMock()
+
+        await _respawn_after_restart_exit(
+            manager,
+            "agent_000",
+            "/tmp/agent.yaml",
+            exit_timeout_s=0.1,
+            poll_interval_s=0,
+        )
+
+        assert agent.pending_command_seq == 0
+        assert agent.pending_command_type is None
+        assert agent.pending_command_payload == {}
+        manager.spawn_agent.assert_awaited_once_with("/tmp/agent.yaml", "agent_000")
+
+    @pytest.mark.asyncio
+    async def test_respawn_after_restart_exit_returns_when_agent_disappears(self, manager):
+        manager.spawn_agent = AsyncMock()
+
+        await _respawn_after_restart_exit(
+            manager,
+            "agent_000",
+            "/tmp/agent.yaml",
+            exit_timeout_s=0.1,
+            poll_interval_s=0,
+        )
+
+        manager.spawn_agent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_respawn_after_restart_exit_times_out_while_agent_running(self, manager):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running", config="/tmp/agent.yaml")
+        manager.spawn_agent = AsyncMock()
+
+        await _respawn_after_restart_exit(
+            manager,
+            "agent_000",
+            "/tmp/agent.yaml",
+            exit_timeout_s=0,
+            poll_interval_s=0,
+        )
+
+        manager.spawn_agent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_respawn_after_restart_exit_swallows_spawn_failure(self, manager):
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="stopped", config="/tmp/agent.yaml")
+        manager.spawn_agent = AsyncMock(side_effect=RuntimeError("spawn failed"))
+
+        await _respawn_after_restart_exit(
+            manager,
+            "agent_000",
+            "/tmp/agent.yaml",
+            exit_timeout_s=0.1,
+            poll_interval_s=0,
+        )
+
+        manager.spawn_agent.assert_awaited_once_with("/tmp/agent.yaml", "agent_000")
+
+    @pytest.mark.asyncio
+    async def test_respawn_after_restart_exit_polls_until_agent_stops(self, manager):
+        agent = AgentStatusBase(agent_id="agent_000", state="running", config="/tmp/agent.yaml")
+        manager.agents["agent_000"] = agent
+        manager.spawn_agent = AsyncMock()
+        polls = 0
+
+        async def stop_after_first_poll(_interval):
+            nonlocal polls
+            polls += 1
+            if polls == 2:
+                agent.state = "stopped"
+
+        with patch("provide.uterm.manager.routes.spawn.asyncio.sleep", side_effect=stop_after_first_poll):
+            await _respawn_after_restart_exit(
+                manager,
+                "agent_000",
+                "/tmp/agent.yaml",
+                exit_timeout_s=0.1,
+                poll_interval_s=0,
+            )
+
+        manager.spawn_agent.assert_awaited_once_with("/tmp/agent.yaml", "agent_000")
+        assert polls == 2
+
+    @pytest.mark.asyncio
+    async def test_respawn_after_restart_exit_handles_agent_removed_after_terminal_state(self, manager):
+        agent = AgentStatusBase(agent_id="agent_000", state="stopped", config="/tmp/agent.yaml")
+
+        class VanishingAgents(dict):
+            def __init__(self):
+                super().__init__({"agent_000": agent})
+                self.get_calls = 0
+
+            def get(self, key, default=None):
+                self.get_calls += 1
+                if self.get_calls == 1:
+                    return super().get(key, default)
+                return default
+
+        manager.agents = VanishingAgents()
+        manager.spawn_agent = AsyncMock()
+
+        await _respawn_after_restart_exit(
+            manager,
+            "agent_000",
+            "/tmp/agent.yaml",
+            exit_timeout_s=0.1,
+            poll_interval_s=0,
+        )
+
+        manager.spawn_agent.assert_awaited_once_with("/tmp/agent.yaml", "agent_000")
 
 
 class TestSetGoal:

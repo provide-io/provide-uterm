@@ -122,7 +122,7 @@ export function InspectDetail({ exchange, onAction }: InspectDetailProps) {
         <div style={{ marginTop: 16, padding: 12, border: "1px solid var(--border-primary)", borderRadius: 6 }}>
           <h4 style={{ margin: "0 0 8px", fontSize: 12 }}>Modify Request</h4>
           {editHeaders.map(([k, v], i) => (
-            <div key={i} style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+            <div key={`${k}:${v}`} style={{ display: "flex", gap: 4, marginBottom: 4 }}>
               <input value={k} onChange={(e) => { const h = [...editHeaders]; h[i] = [e.target.value, h[i]?.[1] ?? ""]; setEditHeaders(h); }} style={{ flex: 1, fontSize: 12 }} />
               <input value={v} onChange={(e) => { const h = [...editHeaders]; h[i] = [h[i]?.[0] ?? "", e.target.value]; setEditHeaders(h); }} style={{ flex: 2, fontSize: 12 }} />
             </div>

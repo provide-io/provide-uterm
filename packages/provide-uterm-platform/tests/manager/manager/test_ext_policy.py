@@ -8,9 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from provide.uterm.manager.app import create_manager_app
 from provide.uterm.manager.config import ManagerConfig
 from provide.uterm.manager.core import AgentManager
-from provide.uterm.manager.ext import EVENT_AGENT_KILLED, EVENT_AGENT_SPAWNED
+from provide.uterm.manager.ext import EVENT_AGENT_KILLED, EVENT_AGENT_SPAWNED, WebhookAgentSpawnPolicyGate
 from provide.uterm.manager.process import AgentProcessManager
 
 
@@ -86,3 +87,62 @@ async def test_lifecycle_telemetry(manager):
         # Kill
         await pm.kill_agent("agent_001")
         mock_logger.info.assert_any_call(EVENT_AGENT_KILLED, agent_id="agent_001")
+
+
+def test_create_manager_app_installs_webhook_policy_gate(tmp_path):
+    config = ManagerConfig(
+        state_file=str(tmp_path / "state.json"),
+        timeseries_dir=str(tmp_path / "metrics"),
+        log_dir=str(tmp_path / "logs"),
+        spawn_policy_webhook_url="https://policy.example/spawn",
+        spawn_policy_webhook_secret="secret",
+        spawn_policy_webhook_timeout_s=1.25,
+    )
+
+    _app, mgr = create_manager_app(config)
+
+    gate = mgr.agent_process_manager._policy_gate
+    assert isinstance(gate, WebhookAgentSpawnPolicyGate)
+    assert gate.url == "https://policy.example/spawn"
+    assert gate.secret == "secret"
+    assert gate.timeout == 1.25
+
+
+@pytest.mark.asyncio
+async def test_webhook_policy_gate_allows_on_200_allow_true():
+    gate = WebhookAgentSpawnPolicyGate("https://policy.example/spawn", timeout_s=0.5)
+    response = MagicMock(status_code=200)
+    response.json.return_value = {"allow": True}
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = response
+
+    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client) as async_client:
+        assert await gate.intercept_spawn("agent_123", "config.yaml", {"worker_type": "shell"}) is True
+
+    async_client.assert_called_once_with(timeout=0.5)
+    client.post.assert_awaited_once_with(
+        "https://policy.example/spawn",
+        json={
+            "agent_id": "agent_123",
+            "config_path": "config.yaml",
+            "raw_config": {"worker_type": "shell"},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_webhook_policy_gate_rejects_non_200_or_exception():
+    gate = WebhookAgentSpawnPolicyGate("https://policy.example/spawn")
+    response = MagicMock(status_code=503)
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = response
+
+    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client):
+        assert await gate.intercept_spawn("agent_123", "config.yaml", {}) is False
+
+    failing_client = AsyncMock()
+    failing_client.__aenter__.side_effect = RuntimeError("network down")
+    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=failing_client):
+        assert await gate.intercept_spawn("agent_123", "config.yaml", {}) is False

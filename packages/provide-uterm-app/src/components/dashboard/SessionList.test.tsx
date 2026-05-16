@@ -67,7 +67,7 @@ describe("SessionList", () => {
       makeSession({ sessionId: "s1", displayName: "Alpha" }),
       makeSession({ sessionId: "s2", displayName: "Beta" }),
     ]);
-    render(<SessionList bootstrap={BOOTSTRAP} filter="alph" />);
+    render(<SessionList bootstrap={BOOTSTRAP} filter="alpha" />);
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.queryByText("Beta")).toBeNull();
   });
