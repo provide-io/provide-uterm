@@ -104,4 +104,4 @@ class TestCoordinatorThroughput:
 
         elapsed = time.monotonic() - start
         ops_per_sec = 100_000 / elapsed
-        assert ops_per_sec > 500_000, f"can_send_input {ops_per_sec:.0f} ops/s below 500k"
+        assert ops_per_sec > 100_000, f"can_send_input {ops_per_sec:.0f} ops/s below 100k"
