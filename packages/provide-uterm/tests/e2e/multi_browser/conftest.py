@@ -77,6 +77,28 @@ async def drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, An
     return None
 
 
+async def drain_until_hijack_state(
+    ws: Any,
+    *,
+    hijacked: bool | None = None,
+    owner: str | None = None,
+    timeout: float = 3.0,
+) -> dict[str, Any] | None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        state = await drain_until(
+            ws, "hijack_state", timeout=min(0.3, max(0.0, deadline - asyncio.get_running_loop().time()))
+        )
+        if state is None:
+            continue
+        if hijacked is not None and state.get("hijacked") is not hijacked:
+            continue
+        if owner is not None and state.get("owner") != owner:
+            continue
+        return state
+    return None
+
+
 async def drain_all(ws: Any, timeout: float = 0.4) -> list[dict[str, Any]]:
     """Collect all messages that arrive within *timeout* seconds.
 
@@ -93,6 +115,17 @@ async def drain_all(ws: Any, timeout: float = 0.4) -> list[dict[str, Any]]:
         except TimeoutError:
             break
     return msgs
+
+
+async def wait_for_event_subscriber(hub: Any, worker_id: str, *, min_count: int = 1, timeout: float = 3.0) -> None:
+    event_bus = hub.event_bus
+    assert event_bus is not None
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        if event_bus.subscriber_count(worker_id) >= min_count:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"EventBus subscriber for {worker_id!r} was not registered")
 
 
 @asynccontextmanager
