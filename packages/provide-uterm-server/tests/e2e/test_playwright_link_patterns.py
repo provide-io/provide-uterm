@@ -50,7 +50,7 @@ from playwright.sync_api import Page, sync_playwright
 # packages/provide-uterm-server/tests/e2e/  → parents[4] = repo root
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _XTERM_SERVER_LINKS_JS = (
-    _REPO_ROOT / "packages" / "provide-uterm" / "src" / "provide" / "terminal" / "frontend" / "xterm-server-links.js"
+    _REPO_ROOT / "packages" / "provide-uterm" / "src" / "provide" / "uterm" / "frontend" / "xterm-server-links.js"
 )
 
 _VIDEO_DIR = Path("/tmp/playwright-link-patterns")

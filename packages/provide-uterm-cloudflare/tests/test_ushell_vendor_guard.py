@@ -26,7 +26,7 @@ def test_ushell_vendor_tree_exists() -> None:
     vendor_root = Path(__file__).resolve().parents[1] / "python_modules"
     if not vendor_root.exists():
         pytest.skip("python_modules/ not present — CF vendor tree not initialised (clean checkout)")
-    ushell_path = vendor_root / "provide" / "terminal" / "shell"
+    ushell_path = vendor_root / "provide" / "uterm" / "shell"
     if not (ushell_path.exists() and ushell_path.is_dir()):
         if os.getenv("UTERM_VENDOR_GUARD_STRICT") == "1":
             pytest.fail(

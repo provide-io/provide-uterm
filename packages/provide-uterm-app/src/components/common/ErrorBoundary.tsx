@@ -19,7 +19,7 @@ interface State {
  * Standard React Error Boundary to catch UI crashes and show a fallback.
  */
 export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
+  public override state: State = {
     hasError: false,
     error: null,
   };
@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // In a production app, we'd log this to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
   }
@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
-  public render() {
+  public override render() {
     if (this.state.hasError) {
       return (
         <PageShell>
