@@ -48,18 +48,24 @@ export function InspectList({ exchanges, selected, onSelect }: InspectListProps)
         const isSelected = ex.id === selected;
         const paused = ex.intercepted && !ex.interceptResolved && !res;
         return (
-          <div
+          <button
+            type="button"
             key={ex.id}
             onClick={() => onSelect(ex.id)}
             style={{
               display: "flex",
+              width: "100%",
               gap: 8,
               alignItems: "center",
               padding: "6px 12px",
+              border: 0,
               cursor: "pointer",
               background: isSelected ? "var(--bg-selected, rgba(100,140,255,0.12))" : "transparent",
               borderLeft: isSelected ? "3px solid var(--accent, #58f)" : "3px solid transparent",
+              color: "inherit",
               fontSize: 13,
+              fontFamily: "inherit",
+              textAlign: "left",
             }}
           >
             <span style={{ fontWeight: 700, width: 56, flexShrink: 0 }}>{r.method}</span>
@@ -89,7 +95,7 @@ export function InspectList({ exchanges, selected, onSelect }: InspectListProps)
             <span style={{ width: 48, textAlign: "right", color: "var(--text-secondary)", fontSize: 12 }}>
               {res ? humanSize(res.body_size) : "—"}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>

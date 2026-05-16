@@ -176,4 +176,4 @@ These are independent and can be sequenced or parallelized as desired.
 - `uv run pytest packages/provide-uterm-server/tests/server/test_auth_guardrails.py -v` — verify auth guardrails still trigger after `app.py` split.
 - `uv run python scripts/run_all_tests.py` — every package's pytest with its own coverage config.
 - For UI-touching changes: `npm run typecheck:frontend && npm run lint:frontend` and `uv run pytest -m playwright`.
-- For mutation regressions on changed modules: `uv run python scripts/run_mutation_gate.py --changed-only`.
+- For mutation regressions on changed modules: `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100`.

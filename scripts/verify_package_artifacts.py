@@ -14,11 +14,11 @@ DIST = ROOT / "dist"
 
 def _expected_frontend_files() -> tuple[str, ...]:
     """Discover all frontend files from the source tree at build time."""
-    frontend = ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "terminal" / "server" / "frontend"
+    frontend = ROOT / "packages" / "provide-uterm-server" / "src" / "provide" / "uterm" / "server" / "frontend"
     return tuple(
         str(p.relative_to(ROOT / "packages" / "provide-uterm-server" / "src")).replace("\\", "/")
         for p in frontend.rglob("*")
-        if p.is_file() and "__pycache__" not in p.parts and not p.name.startswith(".")
+        if p.is_file() and "__pycache__" not in p.parts and not any(part.startswith(".") for part in p.parts)
     )
 
 

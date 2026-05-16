@@ -23,6 +23,7 @@ dev = [
     "pytest-cov>=7.0",
     "pytest-timeout>=2.4.0",
     "mypy>=1.19",
+    "psutil>=5.9",
     "ruff>=0.15",
     "bandit>=1.9",
     "provide-uterm>=0.4.0",

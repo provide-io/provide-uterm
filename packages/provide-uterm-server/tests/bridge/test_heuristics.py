@@ -59,6 +59,6 @@ async def test_heuristics_cleanup_on_disconnect():
     assert ws in hub._keystroke_timestamps
 
     # cleanup_browser_disconnect is async in some mixins but we can call it
-    # We need a worker_id but it doesnt matter for our mock
+    # We need a worker_id but it does not matter for our mock
     await hub.cleanup_browser_disconnect("any", ws, False)
     assert ws not in hub._keystroke_timestamps
