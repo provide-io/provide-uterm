@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import yaml  # type: ignore[import-untyped]
-from provide.telemetry import get_logger, logger
+from provide.telemetry import get_logger
 
 from provide.uterm.manager.ext import (
     EVENT_AGENT_KILLED,
@@ -348,6 +348,13 @@ class AgentProcessManager:
         )
         await proc.wait()
 
+    @staticmethod
+    def _resolve_stop_pid(process: subprocess.Popen[bytes] | None, pid: int | None) -> int:
+        raw_pid = pid if pid is not None else getattr(process, "pid", 0)
+        if type(raw_pid) is int:
+            return raw_pid
+        return 0
+
     async def _stop_process_tree(
         self,
         *,
@@ -356,7 +363,7 @@ class AgentProcessManager:
         pid: int | None = None,
         timeout_s: float = _STOP_TIMEOUT_S,
     ) -> None:
-        resolved_pid = int(pid or getattr(process, "pid", 0) or 0)
+        resolved_pid = self._resolve_stop_pid(process, pid)
         if resolved_pid <= 0:
             return
 

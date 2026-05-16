@@ -335,6 +335,13 @@ class TestProcessTreeHelpers:
         proc.terminate.assert_not_called()
         mock_taskkill.assert_awaited_once_with(987)
 
+    @pytest.mark.asyncio
+    async def test_stop_process_tree_ignores_non_int_mock_pid(self, pm):
+        proc = MagicMock()
+        with patch.object(pm, "_signal_posix_process_group") as mock_signal:
+            await pm._stop_process_tree(agent_id="agent_000", process=proc)
+        mock_signal.assert_not_called()
+
     def test_try_set_subreaper_linux(self, pm):
         """_try_set_subreaper calls prctl(PR_SET_CHILD_SUBREAPER) on Linux."""
         mock_libc = MagicMock()
