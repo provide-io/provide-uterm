@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def extract_poster(mp4: Path, out: Path, at_seconds: float = 0.5) -> None:
