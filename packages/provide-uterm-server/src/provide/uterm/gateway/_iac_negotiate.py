@@ -6,7 +6,7 @@
 
 The gateway has historically treated every IAC sequence as noise and
 stripped it. That was fine when the upstream server needed nothing from
-the client. Now the upstream (uwarp) wants to auto-negotiate a colour
+the client. Now the upstream (uterm) wants to auto-negotiate a colour
 palette from ``TERM`` / ``COLORTERM`` — which means the gateway has to
 *respond* to IAC subnegotiations instead of discarding them.
 
