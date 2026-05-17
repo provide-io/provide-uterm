@@ -51,7 +51,7 @@ visibility = "public"
         f.write(config_content)
 
     server_proc = subprocess.Popen(
-        ["uv", "run", "uterm-server", "--config", str(proof_config_path), "--port", "8000"],
+        ["uv", "run", "uterm", "server", "--config", str(proof_config_path), "--port", "8000"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
     )

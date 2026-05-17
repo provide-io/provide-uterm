@@ -46,4 +46,4 @@ COPY docker/server.toml /config/server.toml
 
 EXPOSE 27780
 
-CMD ["uterm-server", "--config", "/config/server.toml", "--host", "0.0.0.0", "--port", "27780"]
+CMD ["uterm", "server", "--config", "/config/server.toml", "--host", "0.0.0.0", "--port", "27780"]
