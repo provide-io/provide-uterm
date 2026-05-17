@@ -199,7 +199,11 @@ class CaptureConnector:
             "cursor": {"row": 0, "col": 0},
             "cols": self._cols,
             "rows": self._rows,
-            "screen_hash": hashlib.md5(screen.encode()).hexdigest(),  # noqa: S324  # nosec B324 — non-crypto change-detection hash
+            # Non-cryptographic change-detection hash; `usedforsecurity=False`
+            # is the canonical way to tell bandit/ruff and Python itself
+            # that this is not a security boundary. Drops the orphan `nosec`
+            # annotation that previously didn't match any active rule id.
+            "screen_hash": hashlib.md5(screen.encode(), usedforsecurity=False).hexdigest(),
             "cursor_at_end": True,
             "has_trailing_space": False,
             "prompt_detected": False,

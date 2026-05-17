@@ -19,6 +19,7 @@ import time
 from urllib.parse import urlparse
 
 from provide.telemetry import get_tracer
+
 from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
 from provide.uterm.control_channel import encode_control
 
