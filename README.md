@@ -73,7 +73,7 @@ mount_terminal_ui(app)  # serves at /terminal
 
 ```bash
 pip install 'provide-uterm-server[server]'
-uterm-server --config server.toml
+uterm server --config server.toml
 # Dashboard: http://localhost:27780/app/
 ```
 

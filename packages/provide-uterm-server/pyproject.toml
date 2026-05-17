@@ -48,7 +48,6 @@ dev = [
 
 [project.scripts]
 uterm = "provide.uterm.cli:main"
-uterm-server = "provide.uterm.server.cli:main"
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}

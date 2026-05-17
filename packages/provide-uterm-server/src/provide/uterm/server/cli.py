@@ -2,14 +2,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""CLI entry point for the standalone hosted terminal server.
+"""CLI entry point for the hosted terminal server.
 
-Two surfaces share one handler:
-
-- ``uterm server [--config ...]`` — the canonical, unified path mounted as a
-  subcommand on the ``uterm`` parser (see :mod:`provide.uterm.cli`).
-- ``uterm-server [--config ...]`` — kept as a console_script alias for
-  backward compatibility with existing deployments, scripts, and docs.
+The canonical invocation is the unified ``uterm server`` subcommand,
+registered on the main ``uterm`` parser by :func:`add_server_subcommand`.
+A direct ``python -m provide.uterm.server.cli`` invocation routes through
+:func:`main`, which builds the same argparse surface and calls the same
+handler.
 """
 
 from __future__ import annotations
@@ -45,12 +44,7 @@ def _cmd_server(args: argparse.Namespace) -> None:
 
 
 def add_server_subcommand(sub: argparse._SubParsersAction) -> None:
-    """Register ``server`` as a subcommand on the unified ``uterm`` CLI.
-
-    Called by :mod:`provide.uterm.cli` so that ``uterm server`` is the
-    canonical invocation. The standalone ``uterm-server`` binary
-    (:func:`main` below) is kept as an alias for backward compatibility.
-    """
+    """Register ``server`` as a subcommand on the unified ``uterm`` CLI."""
     server_p = sub.add_parser(
         "server",
         help="run the reference hosted terminal server",
@@ -61,8 +55,15 @@ def add_server_subcommand(sub: argparse._SubParsersAction) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Standalone entry point for the legacy ``uterm-server`` console script."""
-    parser = argparse.ArgumentParser(prog="uterm-server", description="Run the provide-uterm reference server")
+    """Direct module entry point (``python -m provide.uterm.server.cli``)."""
+    parser = argparse.ArgumentParser(
+        prog="python -m provide.uterm.server.cli",
+        description="Run the provide-uterm reference server. Prefer `uterm server`.",
+    )
     _add_server_arguments(parser)
     args = parser.parse_args(argv)
     _cmd_server(args)
+
+
+if __name__ == "__main__":
+    main()
