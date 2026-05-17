@@ -55,9 +55,16 @@ if [[ "${COSIGN_AVAILABLE}" -eq 1 ]]; then
     echo "signed: $artifact -> $bundle"
   done
 
-  # Sign the SBOM.
-  cosign sign-blob --yes "${OUT_DIR}/sbom.json" --bundle "${OUT_DIR}/sbom.json.bundle"
-  echo "signed: ${OUT_DIR}/sbom.json -> ${OUT_DIR}/sbom.json.bundle"
+  # Sign the SBOM and the pip-audit report so the supply-chain evidence
+  # itself is tamper-evident. A consumer that fetches sbom.json from a
+  # release page can verify against the matching .bundle:
+  #   cosign verify-blob --bundle sbom.json.bundle sbom.json
+  for evidence in "${OUT_DIR}/sbom.json" "${OUT_DIR}/pip-audit.txt"; do
+    [ -f "$evidence" ] || continue
+    bundle="${evidence}.bundle"
+    cosign sign-blob --yes "$evidence" --bundle "$bundle"
+    echo "signed: $evidence -> $bundle"
+  done
 fi
 
 echo "release governance checks completed: ${OUT_DIR}"
