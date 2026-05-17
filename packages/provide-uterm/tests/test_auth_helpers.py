@@ -437,3 +437,188 @@ def test_split_options_quotes_open_but_never_close_keeps_everything_as_one() -> 
     # so subsequent commas are NOT split points.
     assert _split_options('"a,b,c') == ['"a,b,c']
     assert _split_options('a,"b,c') == ["a", '"b,c']
+
+
+# ---------------------------------------------------------------------------
+# Surgical mutation-killers (third batch)
+#
+# These tests target very specific code-level decisions in auth.py that
+# mutmut likes to mutate:
+#   - boolean-operator flips (or → and)
+#   - comparison flips (== → !=, < → <=)
+#   - constant changes (string content, integer ±1)
+#   - return-value substitution (True ↔ False, "" ↔ "XX")
+#   - method-arg constant changes (strip('"') → strip("'"))
+# Each test pins one observable behaviour so flipping the underlying
+# operator/constant makes a test fail.
+# ---------------------------------------------------------------------------
+
+
+def test_parse_options_only_double_quotes_are_stripped_not_single() -> None:
+    # ``value.strip('"')`` removes only the literal double-quote character.
+    # A value like ``'a'`` (single-quoted) must keep its single quotes —
+    # OpenSSH-options grammar doesn't use single quotes for delimiters.
+    out = _parse_options("k='a'")
+    assert out == {"k": "'a'"}
+
+
+def test_parse_options_partition_consumes_only_the_first_equals_sign() -> None:
+    # ``token.partition("=")`` yields (before, "=", after). Any later
+    # ``=`` is part of ``after`` and must be preserved verbatim after
+    # ``.strip()`` + ``.strip('"')``.
+    out = _parse_options('env="A=B=C=D"')
+    assert out == {"env": "A=B=C=D"}
+
+
+def test_parse_options_strips_outer_whitespace_around_key() -> None:
+    # ``key.strip()`` is what makes ``  foo=bar`` parse as {"foo": "bar"}
+    # — without the strip, the key would be ``"  foo"``.
+    out = _parse_options("   foo=bar")
+    assert "foo" in out
+    assert "  foo" not in out
+
+
+def test_parse_options_strips_outer_whitespace_around_value() -> None:
+    out = _parse_options("foo=   bar   ")
+    assert out == {"foo": "bar"}
+
+
+def test_split_options_buf_drained_only_when_non_empty() -> None:
+    # The ``if buf:`` branch protects against emitting an extra empty
+    # token at the end. Pin via a trailing-comma case — output has
+    # exactly one token, not two.
+    assert _split_options("foo,") == ["foo"]
+    # And the same for a leading-comma case at the start.
+    assert _split_options(",foo") == ["foo"]
+
+
+def test_find_first_token_end_returns_length_when_no_whitespace_outside_quotes() -> None:
+    # The else branch (``return len(line)``) fires when the loop completes
+    # without finding an unquoted whitespace. Pin both halves.
+    assert _find_first_token_end("contiguous") == len("contiguous")
+    assert _find_first_token_end('a"b c"d') == len('a"b c"d')
+
+
+def test_find_first_token_end_returns_zero_for_leading_whitespace() -> None:
+    # Leading space at position 0 must return 0 (not 1 or len).
+    assert _find_first_token_end(" rest") == 0
+    assert _find_first_token_end("\trest") == 0
+    assert _find_first_token_end("\nrest") == 0
+
+
+def test_parse_authorized_keys_line_uses_payload_token_for_fingerprint_not_comment() -> None:
+    # ``blob_text = f"{keytype} {payload}"`` — the fingerprint must be
+    # derived from keytype+payload, NOT keytype+payload+comment. Two
+    # entries with the same key but different comments share a fp.
+    line_a = f"{_ED25519_SAMPLE} alice"
+    line_b = f"{_ED25519_SAMPLE} bob"
+    entry_a = _parse_authorized_keys_line(line_a)
+    entry_b = _parse_authorized_keys_line(line_b)
+    assert entry_a.fingerprint == entry_b.fingerprint
+    # But subjects differ.
+    assert entry_a.subject != entry_b.subject
+
+
+def test_parse_authorized_keys_line_options_field_with_comment_does_not_leak_into_payload() -> None:
+    # When the first token is options, the second token must be the
+    # keytype (not get absorbed into options). Pin by checking the
+    # subject precedence works.
+    line = f'subject="explicit" {_ED25519_SAMPLE} comment-ignored'
+    entry = _parse_authorized_keys_line(line)
+    assert entry.subject == "explicit"
+    # The keytype hash must still validate — i.e. the parser found
+    # the payload token correctly past the options.
+    assert entry.fingerprint.startswith("SHA256:")
+
+
+def test_resolver_load_entries_strips_each_line_independently() -> None:
+    # ``line = raw.strip()`` must remove leading + trailing whitespace
+    # from each line individually before deciding blank/comment.
+    body = "\n".join(
+        [
+            f"   {_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} alice  ",
+            "  # indented comment with trailing whitespace  ",
+        ]
+    )
+    p = pytest.importorskip("pathlib")  # always present; pin import shape
+    del p
+    # Use a real temp path.
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".keys", delete=False) as f:
+        f.write(body)
+        path = f.name
+    resolver = AuthorizedKeysFileResolver(path)
+    entries = resolver._load_entries()
+    assert len(entries) == 1
+    assert entries[0].subject == "alice"
+
+
+def test_resolver_load_entries_or_short_circuits_on_empty_line_before_comment_check() -> None:
+    # ``if not line or line.startswith("#")``: an empty line shouldn't
+    # ever reach the startswith() probe. Pin by stress-testing both
+    # halves of the boolean independently.
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".keys", delete=False) as f:
+        # Empty line (handled by `not line`), then comment line (handled
+        # by `line.startswith("#")`), then a real entry.
+        f.write(f'\n# this is a comment\n{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} z\n')
+        path = f.name
+    entries = AuthorizedKeysFileResolver(path)._load_entries()
+    assert len(entries) == 1
+    assert entries[0].subject == "z"
+
+
+def test_fingerprint_uses_sha256_prefix_literally() -> None:
+    # The prefix is the literal string "SHA256:". A mutation that swapped
+    # the case ("Sha256:" / "sha256:") or character set must fail this.
+    fp = fingerprint_from_openssh_blob(b"\x00\x00\x00\x0bssh-ed25519")
+    assert fp.startswith("SHA256:")
+    # Exact prefix length: 7 chars.
+    assert fp.find(":") == 6
+
+
+def test_coerce_to_binary_pubkey_strip_removes_both_sides() -> None:
+    # ``blob.strip()`` must trim BOTH leading and trailing whitespace —
+    # mutmut may mutate to lstrip() or rstrip() only.
+    payload = base64.b64encode(b"PAYLOAD").decode("ascii")
+    leading = f"  ssh-ed25519 {payload}".encode("ascii")
+    trailing = f"ssh-ed25519 {payload}  ".encode("ascii")
+    both = f"  ssh-ed25519 {payload}  ".encode("ascii")
+    assert _coerce_to_binary_pubkey(leading) == b"PAYLOAD"
+    assert _coerce_to_binary_pubkey(trailing) == b"PAYLOAD"
+    assert _coerce_to_binary_pubkey(both) == b"PAYLOAD"
+
+
+def test_coerce_to_binary_pubkey_split_keeps_only_payload_token() -> None:
+    # ``parts = stripped.split(None, 2)`` — we want index [1] (the
+    # payload), not [0] (keytype) or [2] (comment).
+    payload = base64.b64encode(b"P").decode("ascii")
+    blob = f"ssh-ed25519 {payload} long comment with spaces".encode("ascii")
+    assert _coerce_to_binary_pubkey(blob) == b"P"
+
+
+def test_parse_options_True_is_the_singleton_True_not_string_or_int() -> None:
+    # Defensive: mutating ``True`` to e.g. ``1`` or ``"True"`` should
+    # be caught — flag values must be the singleton bool True.
+    out = _parse_options("no-pty")
+    assert out["no-pty"] is True
+    # bool(1) is also truthy but bool(1) is True only when comparing
+    # via `is`. The `is` check above is the pinning assertion.
+    assert isinstance(out["no-pty"], bool)
+
+
+def test_split_options_quote_state_persists_across_comma_inside_quotes() -> None:
+    # Pin the inner state: while in_quotes is True, commas DON'T split.
+    # A mutation that flips the ``not in_quotes`` to ``in_quotes`` would
+    # split inside quotes and not split outside.
+    assert _split_options('"a,b","c,d"') == ['"a,b"', '"c,d"']
+
+
+def test_parse_options_value_with_only_double_quotes_collapses_to_empty() -> None:
+    # ``""`` value → after .strip('"') the value is empty string, not None,
+    # not the literal "" with quotes.
+    out = _parse_options('k=""')
+    assert out == {"k": ""}
+    assert out["k"] == ""
