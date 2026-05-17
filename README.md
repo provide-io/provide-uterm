@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/provide-io/provide-uterm/main/docs/images/uterm-banner.png" alt="provide-uterm" width="420">
+</p>
+
 # provide-uterm
 
 A terminal access and control platform. Creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers.
