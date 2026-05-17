@@ -156,11 +156,7 @@ def build_manifest(*, generate_posters: bool = False) -> dict[str, Any]:
         # Graceful downgrade: when an mp4-format demo's video failed to record
         # but the asciinema cast made it, surface the cast on the site rather
         # than rendering a "no video" fallback.
-        if (
-            meta["format"] == "mp4"
-            and "video" not in meta["artifacts"]
-            and "cast" in meta["artifacts"]
-        ):
+        if meta["format"] == "mp4" and "video" not in meta["artifacts"] and "cast" in meta["artifacts"]:
             log.info("%s: downgrading mp4 → cast (no video recorded)", feature)
             meta["format"] = "cast"
 
