@@ -28,24 +28,51 @@ this file tracks what's been *captured* and where the artifacts live.
 | Rollback drill | `scripts/rollback_drill.py` | `artifacts/rollback-drill/rollback-drill-*.json` | ✅ all 7 steps pass; reconnect 3.13ms; 0 5xx spike |
 | Mutation gate (auth.py, changed-only) | `scripts/run_mutation_gate.py` | `mutants/mutmut-cicd-stats.json` | ⚠ 80.43% (148/184 killed); see Known gaps |
 
+## Security posture additions this RC
+
+Beyond the test gates, these landed during the v0.4.0-rc2 cycle to
+harden the out-of-box posture:
+
+- **`SECURITY.md`** — disclosure channel, 72h ack / 90d coordinated
+  disclosure SLA, in-scope / out-of-scope inventory.
+- **`docs/security-considerations.md`** — comprehensive non-test
+  posture checklist (10 layers; current state per item).
+- **`.github/dependabot.yml`** — weekly updates across pip / npm /
+  github-actions / docker ecosystems, with patch+minor grouping so
+  the PR queue is reviewable.
+- **`.github/workflows/container-scan.yml`** — Trivy scan of the
+  Dockerfile.server build on push, PR, weekly cron, and dispatch;
+  HIGH/CRITICAL gate fails the run, SARIF uploaded to the Security
+  tab.
+- **Default secret-redaction ruleset** — `redaction_defaults.py`
+  ships out-of-box rules for AWS keys, GitHub PATs, Slack tokens,
+  JWTs, PEM private-key blocks, and generic password/api_key/token
+  shapes. 25 parametrised tests verify each format redacts and
+  that innocuous text passes through.
+- **JWKS scheme preflight** — CF JWT validator now rejects
+  non-http(s) JWKS URLs before opening them (turns a bandit B310
+  false positive into a real defence-in-depth check).
+- **MD5 hash semantics** — non-security uses now declare
+  `usedforsecurity=False` so static analysis (bandit, ruff) and the
+  CPython hashlib itself understand the boundary.
+
 ## Known gaps
 
 These prevent the GA promotion from `rc/0.4.0` to a final `v0.4.0` tag.
 
-### Mutation gate kill rate on `auth.py` (80.43%, target 100%)
+### Mutation gate kill rate on `auth.py` (87.50%, target 100%)
 
 `scripts/run_mutation_gate.py --changed-only` triggers a full mutmut
 run on `packages/provide-uterm/src/provide/uterm/auth.py` whenever any
-change touches that file. The current kill rate is 80.43% (148 of 184
-mutations killed); 36 mutants still survive in the internal option
-parsers (`_split_options`, `_parse_options`, `_find_first_token_end`,
-`_parse_authorized_keys_line`).
+change touches that file. The current kill rate is 87.50% (161 of 184
+mutations killed); 23 mutants still survive in the internal option
+parsers and `_load_entries` branches.
 
 **Progress this RC:** `packages/provide-uterm/tests/test_auth_helpers.py`
-added 40 targeted tests, killing 18 prior survivors and moving the rate
-from 70.65% to 80.43%.
+grew from 40 to 60 tests across two batches. Cumulative move: 70.65% →
+80.43% → 87.50%.
 
-**Next pass:** use `mutmut show <id>` against the 36 remaining survivors
+**Next pass:** use `mutmut show <id>` against the 23 remaining survivors
 to identify their exact mutation patterns and write pinning tests.
 
 ### Lint / type / security tooling rc-baseline noise
@@ -66,6 +93,15 @@ regressions; they don't block the test suite or coverage gates:
 
 Each item is its own targeted fix; none are release-blocking on the
 test-correctness axis, but a battle-hardened GA should clear them.
+
+### WebSocket origin validation (deployment-time)
+
+The hub accepts WebSocket upgrade requests from any `Origin`. For
+non-localhost deployments this lets a stale browser tab from any
+domain probe the WS endpoint. Adding an `--allowed-origins` flag
+(comma-separated allowlist; rejects mismatches at the 101 upgrade)
+is straightforward and listed as the next priority item in
+`docs/security-considerations.md` §4.
 
 ## How to refresh evidence locally
 
