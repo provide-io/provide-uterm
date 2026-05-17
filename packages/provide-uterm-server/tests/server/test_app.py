@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import socket
 import threading
 import time
@@ -62,6 +63,15 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, A
         except TimeoutError:
             continue
     return None
+
+
+async def _delete_session(base_url: str, session_id: str) -> None:
+    async def _delete() -> None:
+        async with httpx.AsyncClient(base_url=base_url, timeout=5.0) as http:
+            await http.delete(f"/api/sessions/{session_id}")
+
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(_delete(), timeout=6.0)
 
 
 @pytest.fixture()
@@ -139,7 +149,9 @@ class TestReferenceServerApp:
             assert '"page_kind": "operator"' in operator_page.text
             assert "uterm_surface=operator" in ",".join(operator_page.headers.get_list("set-cookie"))
             # Vite manifest entry (React app) required
-            assert "assets/main-" in operator_page.text or ".vite" in operator_page.text or "module" in operator_page.text
+            assert (
+                "assets/main-" in operator_page.text or ".vite" in operator_page.text or "module" in operator_page.text
+            )
             assert "<style>" not in operator_page.text
             assert "const SESSION_ID=" not in operator_page.text
             assert "btn-refresh" not in operator_page.text
@@ -320,6 +332,7 @@ class TestReferenceServerApp:
                 assert snapshot is not None
                 assert "welcome from ssh server" in snapshot["screen"]
         finally:
+            await _delete_session(live_reference_server, "ssh-local")
             ssh_server.close()
             await ssh_server.wait_closed()
 
@@ -380,6 +393,7 @@ class TestReferenceServerApp:
                 assert snapshot is not None
                 assert "welcome from key-backed ssh server" in snapshot["screen"]
         finally:
+            await _delete_session(live_reference_server, "ssh-key-local")
             ssh_server.close()
             await ssh_server.wait_closed()
 
@@ -440,6 +454,7 @@ class TestReferenceServerApp:
                 assert snapshot is not None
                 assert "welcome from inline-key ssh server" in snapshot["screen"]
         finally:
+            await _delete_session(live_reference_server, "ssh-inline-key-local")
             ssh_server.close()
             await ssh_server.wait_closed()
 
