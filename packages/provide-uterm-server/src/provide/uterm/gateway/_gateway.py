@@ -345,7 +345,7 @@ async def _pipe_ws(
     performs a brief RFC 1091 TTYPE + RFC 1572 NEW-ENVIRON negotiation
     with the TCP client before opening the upstream WebSocket. Any
     detected colour-palette hint is appended to the WS URL as
-    ``?colormode=…`` so the uwarp-side auto-negotiator picks the
+    ``?colormode=…`` so the uterm-side auto-negotiator picks the
     correct palette from the very first byte of the welcome banner.
     """
     import websockets

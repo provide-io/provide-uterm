@@ -31,7 +31,7 @@ proxy asserts an identity to the upstream server (via the hello frame),
 the server is trusting the proxy to have done the auth correctly. This is
 a pure bearer-trust model — the upstream should only opt in when the
 proxy is under the same operational control (e.g. DeckMux's proxy and
-multiplexer co-deployed on one host). For hostile-proxy scenarios (uwarp's
+multiplexer co-deployed on one host). For hostile-proxy scenarios (uterm's
 player-laptop proxy talking to Cloudflare), the upstream should ignore
 identity frames and re-authenticate independently.
 """

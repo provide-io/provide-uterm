@@ -79,7 +79,7 @@ class TestMakeProcessHandler:
         """SSH client advertising TERM=xterm-256color via pty-req must cause
         the process handler to open the upstream WS at
         ``ws://test?colormode=256`` — same query-param entry point the
-        uwarp-worker expects for browser and telnet paths."""
+        uterm worker expects for browser and telnet paths."""
         handler = await _make_process_handler("ws://test", "passthrough")
 
         process = MagicMock()
