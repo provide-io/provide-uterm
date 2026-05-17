@@ -1,0 +1,106 @@
+# Weekly dependency updates. Closes the supply-chain gap identified in
+# docs/security-considerations.md §1 — without Dependabot, dep updates
+# only land when a human notices a CVE.
+#
+# All ecosystems use the same weekly cadence on Monday morning so the
+# PRs land together and can be reviewed in one batch.
+
+version: 2
+updates:
+  # Python: the canonical pyproject.toml at the repo root.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Group all transitive bumps together so the PR queue doesn't explode.
+    groups:
+      transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # npm: frontend bundle in packages/provide-uterm-app.
+  - package-ecosystem: "npm"
+    directory: "/packages/provide-uterm-app"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # npm: Cloudflare Worker wrangler config.
+  - package-ecosystem: "npm"
+    directory: "/packages/provide-uterm-cloudflare"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # GitHub Actions: keeps workflow action versions current. Closes the
+  # "GHA workflow pinning" gap in docs/security-considerations.md §9.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # Docker base image bumps for the reference server.
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
