@@ -1,0 +1,87 @@
+# Scan the reference server's Docker image for known CVEs before it goes
+# anywhere. Trivy reports both OS-level (apt / apk / etc.) and language-level
+# (pip resolved deps) findings. Fail the workflow on HIGH/CRITICAL so a
+# broken base image can't ship a release.
+#
+# Closes docs/security-considerations.md §5 ("Container image scanning")
+# and §9 ("Build / CI hardening" — image vulnerability gate).
+
+name: "🐋 Container Scan"
+
+on:
+  push:
+    branches:
+      - main
+      - "rc/**"
+    paths:
+      - "docker/**"
+      - "packages/provide-uterm/**"
+      - "packages/provide-uterm-server/**"
+      - "packages/provide-uterm-platform/**"
+      - ".github/workflows/container-scan.yml"
+  pull_request:
+    branches:
+      - main
+      - "rc/**"
+    paths:
+      - "docker/**"
+      - ".github/workflows/container-scan.yml"
+  schedule:
+    # Weekly run so newly-disclosed CVEs against an unchanged base image
+    # are still caught. Wednesday morning PST = mid-week, post-Dependabot.
+    - cron: "0 15 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # upload SARIF to the Security tab
+
+jobs:
+  trivy:
+    name: Trivy image scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Build the server image. We don't push it anywhere from this
+      # workflow; we just scan it.
+      - name: Build server image
+        run: |
+          docker build \
+            -f docker/Dockerfile.server \
+            -t provide-uterm-server:scan \
+            .
+
+      # SARIF report uploaded to GitHub's Security tab so findings have
+      # a permanent home and dismissals persist across runs.
+      - name: Trivy scan (SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: provide-uterm-server:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0      # don't fail the SARIF stage; fail in the gate below
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      # Gate: this step fails the workflow on HIGH/CRITICAL findings.
+      # ignore-unfixed=true so we don't block on CVEs the base image hasn't
+      # shipped a fix for yet (those are documented elsewhere and require
+      # an image migration, not a code change).
+      - name: Trivy gate (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: provide-uterm-server:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
