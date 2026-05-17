@@ -241,3 +241,199 @@ def test_parse_authorized_keys_line_sk_keytype_prefix_recognized() -> None:
     )
     entry = _parse_authorized_keys_line(f"{fake_sk} yubikey-prod")
     assert entry.subject == "yubikey-prod"
+
+
+# ---------------------------------------------------------------------------
+# _coerce_to_binary_pubkey + fingerprint_from_openssh_blob (lower-level helpers)
+# ---------------------------------------------------------------------------
+
+import base64  # noqa: E402
+
+from provide.uterm.auth import (  # noqa: E402
+    AuthorizedKeysFileResolver,
+    _coerce_to_binary_pubkey,
+    fingerprint_from_openssh_blob,
+)
+
+_ED25519_KEYTYPE = "ssh-ed25519"
+_ED25519_PAYLOAD_B64 = "AAAAC3NzaC1lZDI1NTE5AAAAIK7nKaxTKmzX0z3V6tGqmmOvkSiGXh3yF2J5vqkQTOY+"
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [b"ssh-", b"ecdsa-", b"sk-ssh-", b"sk-ecdsa-"],
+)
+def test_coerce_to_binary_pubkey_each_textual_prefix(prefix: bytes) -> None:
+    # Build a minimal valid line for each prefix shape; only the first token
+    # and the base64 payload matter for the decoder.
+    payload = base64.b64encode(b"hello-bytes").decode("ascii")
+    line = prefix + b"any " + payload.encode("ascii")
+    out = _coerce_to_binary_pubkey(line)
+    assert out == b"hello-bytes"
+
+
+def test_coerce_to_binary_pubkey_text_form_missing_payload_raises() -> None:
+    with pytest.raises(ValueError, match="malformed OpenSSH public key line"):
+        _coerce_to_binary_pubkey(b"ssh-ed25519")
+
+
+def test_coerce_to_binary_pubkey_invalid_base64_raises_with_helpful_message() -> None:
+    with pytest.raises(ValueError, match="invalid base64 in public key"):
+        _coerce_to_binary_pubkey(b"ssh-ed25519 !not-base64!")
+
+
+def test_coerce_to_binary_pubkey_binary_form_passes_through_after_strip() -> None:
+    # No recognised prefix — assume binary wire format; only .strip() applies.
+    raw = b"  \x00\x00\x00\x0bssh-ed25519PAYLOAD  "
+    assert _coerce_to_binary_pubkey(raw) == raw.strip()
+
+
+def test_fingerprint_from_openssh_blob_text_and_binary_agree() -> None:
+    text = f"{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64}".encode("ascii")
+    binary = base64.b64decode(_ED25519_PAYLOAD_B64)
+    fp_text = fingerprint_from_openssh_blob(text)
+    fp_bin = fingerprint_from_openssh_blob(binary)
+    assert fp_text == fp_bin
+    assert fp_text.startswith("SHA256:")
+
+
+def test_fingerprint_format_omits_padding_equals() -> None:
+    fp = fingerprint_from_openssh_blob(b"\x00\x00\x00\x0bssh-ed25519")
+    # OpenSSH-style fingerprints strip the base64 '=' padding.
+    assert "=" not in fp.split(":", 1)[1]
+
+
+# ---------------------------------------------------------------------------
+# AuthorizedKeysFileResolver.resolve + _load_entries (file-level behavior)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def keys_file(tmp_path):  # type: ignore[no-untyped-def]
+    return tmp_path / "authorized_keys"
+
+
+async def test_resolver_resolve_returns_none_for_fingerprint_miss(keys_file) -> None:  # type: ignore[no-untyped-def]
+    keys_file.write_text(f"{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} alice@laptop\n")
+    resolver = AuthorizedKeysFileResolver(keys_file)
+    out = await resolver.resolve(
+        fingerprint="SHA256:does-not-match",
+        pubkey_blob=b"",
+        username="anyone",
+    )
+    assert out is None
+
+
+async def test_resolver_resolve_returns_identity_with_matching_fingerprint(keys_file) -> None:  # type: ignore[no-untyped-def]
+    line = f"{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} alice@laptop"
+    keys_file.write_text(line + "\n")
+    expected_fp = fingerprint_from_openssh_blob(line.encode("ascii"))
+    resolver = AuthorizedKeysFileResolver(keys_file)
+    identity = await resolver.resolve(
+        fingerprint=expected_fp,
+        pubkey_blob=b"",
+        username="alice",
+    )
+    assert identity is not None
+    assert identity.fingerprint == expected_fp
+    assert identity.subject == "alice@laptop"
+
+
+async def test_resolver_resolve_ignores_username_when_fingerprint_matches(keys_file) -> None:  # type: ignore[no-untyped-def]
+    # Resolver dispatches on fingerprint only; the username arg must NOT
+    # gate the match (changing the resolver to require username == subject
+    # would silently break SSH integrations).
+    line = f"{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} alice@laptop"
+    keys_file.write_text(line + "\n")
+    fp = fingerprint_from_openssh_blob(line.encode("ascii"))
+    resolver = AuthorizedKeysFileResolver(keys_file)
+    out = await resolver.resolve(fingerprint=fp, pubkey_blob=b"", username="bob")
+    assert out is not None
+    assert out.subject == "alice@laptop"
+
+
+def test_resolver_load_entries_returns_empty_when_file_missing(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    resolver = AuthorizedKeysFileResolver(tmp_path / "absent")
+    # _load_entries is the synchronous arm of resolve; missing file → [].
+    assert resolver._load_entries() == []
+
+
+def test_resolver_load_entries_skips_blank_and_comment_lines(keys_file) -> None:  # type: ignore[no-untyped-def]
+    body = "\n".join(
+        [
+            "",
+            "# leading comment",
+            "   ",
+            "  # indented comment",
+            f"{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} alice@laptop",
+            "",
+            "# trailing comment",
+        ]
+    )
+    keys_file.write_text(body)
+    resolver = AuthorizedKeysFileResolver(keys_file)
+    entries = resolver._load_entries()
+    assert len(entries) == 1
+    assert entries[0].subject == "alice@laptop"
+
+
+def test_resolver_load_entries_continues_past_malformed_line(keys_file) -> None:  # type: ignore[no-untyped-def]
+    body = "\n".join(
+        [
+            "ssh-ed25519",  # malformed: missing payload
+            f"{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} alice@laptop",
+        ]
+    )
+    keys_file.write_text(body)
+    resolver = AuthorizedKeysFileResolver(keys_file)
+    entries = resolver._load_entries()
+    # Exactly one entry survives — the malformed line MUST be skipped,
+    # not crash the entire file load.
+    assert len(entries) == 1
+    assert entries[0].subject == "alice@laptop"
+
+
+def test_resolver_load_entries_reads_utf8_subject_correctly(keys_file) -> None:  # type: ignore[no-untyped-def]
+    # Encoding mutation: switching read_text(encoding="utf-8") to a
+    # different codec would mangle non-ASCII subjects. Pin UTF-8.
+    line = f'subject="óscar" {_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} fallback'
+    keys_file.write_text(line, encoding="utf-8")
+    resolver = AuthorizedKeysFileResolver(keys_file)
+    entries = resolver._load_entries()
+    assert len(entries) == 1
+    assert entries[0].subject == "óscar"
+
+
+def test_resolver_path_argument_accepts_string_and_pathlib(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    p = tmp_path / "k"
+    p.write_text("")
+    r1 = AuthorizedKeysFileResolver(str(p))
+    r2 = AuthorizedKeysFileResolver(p)
+    assert r1._path == r2._path  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# _parse_options additional boundary cases
+# ---------------------------------------------------------------------------
+
+
+def test_parse_options_quotes_with_only_whitespace_inside_are_stripped() -> None:
+    # ``strip('"')`` then nothing remains — value is empty string.
+    out = _parse_options('key="   "')
+    # Whitespace inside quotes is preserved by the parser's partition+strip.
+    # Specifically: the value side is `"   "`; .strip() removes the outer
+    # whitespace (none here), .strip('"') removes the quotes, leaving
+    # `   ` which is NOT further trimmed. Pin that exactly.
+    assert out == {"key": "   "}
+
+
+def test_parse_options_no_options_does_not_invent_a_key() -> None:
+    # Defensive: empty input must NOT introduce a `""` key.
+    assert "" not in _parse_options("")
+
+
+def test_split_options_quotes_open_but_never_close_keeps_everything_as_one() -> None:
+    # Unbalanced quote → in_quotes flips and stays True until end of string,
+    # so subsequent commas are NOT split points.
+    assert _split_options('"a,b,c') == ['"a,b,c']
+    assert _split_options('a,"b,c') == ["a", '"b,c']
