@@ -29,6 +29,32 @@ def _percentile(values: list[float], p: float) -> float:
     return sorted(values)[idx]
 
 
+def _parse_control_frame(raw: str) -> dict | None:
+    """Decode a single control frame from the DLE/STX-framed WS stream.
+
+    The wire format is ``\\x10\\x02 <8-hex-length> : <json>`` (see
+    ``provide.uterm.control_channel``); raw terminal bytes are interleaved
+    with control frames on the same socket. The probe only cares about the
+    first control frame (the ``hello``), so anything that doesn't decode
+    into a JSON object returns ``None``.
+    """
+    if not raw or not raw.startswith("\x10\x02"):
+        # Some servers omit the DLE/STX prefix for the very first frame and
+        # send the bare ``<len>:<json>`` body. Accept that too.
+        head = raw
+    else:
+        head = raw[2:]
+    sep = head.find(":")
+    if sep == -1 or sep > 16:
+        return None
+    try:
+        payload = head[sep + 1 :]
+        decoded = json.loads(payload)
+        return decoded if isinstance(decoded, dict) else None
+    except (ValueError, json.JSONDecodeError):
+        return None
+
+
 async def _probe_ws(base_url: str, worker_id: str, timeout_s: float) -> ProbeResult:
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
     ws_url = f"{ws_url}/ws/browser/{worker_id}/term"
@@ -36,21 +62,33 @@ async def _probe_ws(base_url: str, worker_id: str, timeout_s: float) -> ProbeRes
     try:
         async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
             connected = time.perf_counter()
-            raw = await asyncio.wait_for(ws.recv(), timeout=timeout_s)
-            msg = json.loads(raw)
-            if msg.get("type") != "hello":
+            # The first frame is a hello control frame. The browser channel
+            # can interleave snapshots and PTY bytes before/after, so loop
+            # until we see hello (or time out).
+            deadline = connected + timeout_s
+            msg: dict | None = None
+            while time.perf_counter() < deadline:
+                remaining = max(0.0, deadline - time.perf_counter())
+                raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+                if not isinstance(raw, str):
+                    continue
+                decoded = _parse_control_frame(raw)
+                if decoded is not None and decoded.get("type") == "hello":
+                    msg = decoded
+                    break
+            if msg is None:
                 return ProbeResult(
                     connect_ms=(connected - start) * 1000.0,
                     hello_ms=(time.perf_counter() - connected) * 1000.0,
                     ok=False,
-                    error="first frame was not hello",
+                    error="no hello frame received before timeout",
                 )
             return ProbeResult(
                 connect_ms=(connected - start) * 1000.0,
                 hello_ms=(time.perf_counter() - connected) * 1000.0,
                 ok=True,
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — probe must report all errors
         return ProbeResult(connect_ms=0.0, hello_ms=0.0, ok=False, error=str(exc))
 
 
