@@ -6,7 +6,14 @@ mkdir -p "${OUT_DIR}"
 
 echo "[1/4] dependency vulnerability scan"
 # Use an ephemeral tool env so local preinstalls are not required.
-uv run --with pip-audit pip-audit --desc --local --skip-editable > "${OUT_DIR}/pip-audit.txt"
+# We intentionally do NOT pass --skip-editable: that was hiding the fact
+# that all workspace packages were being skipped, which made the report
+# look empty. pip-audit reports the editable + private workspace packages
+# as "Dependency not found on PyPI" (expected — they aren't published yet)
+# and still scans every transitive dep for CVEs.
+# pip-audit emits "No known vulnerabilities found" on stderr and the skip
+# table on stdout — capture both so the artifact tells the full story.
+uv run --with pip-audit pip-audit --desc --local > "${OUT_DIR}/pip-audit.txt" 2>&1
 
 echo "[2/4] build artifacts"
 uv build
