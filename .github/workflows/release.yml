@@ -6,7 +6,7 @@
 #
 # Dependency order: provide-uterm → provide-uterm-{server,client,platform} → provide-uterm-cloudflare
 
-name: Release
+name: "🚀 Release"
 
 on:
   push:
@@ -35,9 +35,9 @@ jobs:
           - provide-uterm-platform
           - provide-uterm-cloudflare
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v8.1.0
 
       # Build sdist + wheel for each package
       - name: Build sdist + wheel
@@ -45,7 +45,7 @@ jobs:
 
       # Upload build artifacts for later publish stages
       - name: Upload dists
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: dist-${{ matrix.package }}
           path: dist/*
@@ -59,11 +59,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist-provide-uterm
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -73,8 +73,8 @@ jobs:
     needs: testpypi-terminal
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.11"
       # Read expected version from VERSION file
@@ -111,11 +111,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist-provide-uterm
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
 
   # ── Stage 2: server, client, platform (depend on provide-uterm) ─────
   testpypi-dependents:
@@ -133,11 +133,11 @@ jobs:
           - provide-uterm-client
           - provide-uterm-platform
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist-${{ matrix.package }}
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -158,11 +158,11 @@ jobs:
           - provide-uterm-client
           - provide-uterm-platform
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist-${{ matrix.package }}
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
 
   # ── Stage 3: provide-uterm-cloudflare (depends on core) ─────────────
   testpypi-cloudflare:
@@ -173,11 +173,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist-provide-uterm-cloudflare
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -187,8 +187,8 @@ jobs:
     needs: testpypi-cloudflare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.11"
       # Read expected version
@@ -225,11 +225,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: dist-provide-uterm-cloudflare
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
 
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
@@ -243,7 +243,7 @@ jobs:
     steps:
       # Download all build artifacts
       - name: Download all dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: dist-*
           path: dist/
@@ -251,7 +251,7 @@ jobs:
 
       # Sign each artifact with Sigstore
       - name: Sign with Sigstore
-        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        uses: sigstore/gh-action-sigstore-python@v3.3.0
         with:
           inputs: >-
             dist/*.tar.gz
