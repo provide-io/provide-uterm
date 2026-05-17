@@ -39,11 +39,25 @@ SRC_ROOTS=(
 
 # Quality gates — capture full output, never abort the script on a single
 # tool exiting non-zero. The pass/fail criteria are summarised at the end.
+#
+# mypy is run per-package because both ``provide-uterm`` and
+# ``provide-uterm-server`` contribute submodules to the
+# ``provide.uterm.bridge`` namespace (legacy pkgutil.extend_path pattern);
+# running mypy across both source roots at once short-circuits on a
+# duplicate-module error and hides every other type finding.
 set +e
 uv run ruff check "${SRC_ROOTS[@]}" packages/provide-uterm/tests scripts > "${OUT_DIR}/ruff.txt" 2>&1
 ruff_rc=$?
-uv run mypy "${SRC_ROOTS[@]}" > "${OUT_DIR}/mypy.txt" 2>&1
-mypy_rc=$?
+
+: > "${OUT_DIR}/mypy.txt"
+mypy_rc=0
+for root in "${SRC_ROOTS[@]}"; do
+  echo "##### mypy ${root} #####" >> "${OUT_DIR}/mypy.txt"
+  if ! uv run mypy "${root}" >> "${OUT_DIR}/mypy.txt" 2>&1; then
+    mypy_rc=1
+  fi
+done
+
 uv run ty check "${SRC_ROOTS[@]}" > "${OUT_DIR}/ty.txt" 2>&1
 ty_rc=$?
 uv run bandit -q -r "${SRC_ROOTS[@]}" -ll > "${OUT_DIR}/bandit.txt" 2>&1
