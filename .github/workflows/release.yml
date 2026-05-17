@@ -15,6 +15,12 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Build, verify artifacts, and sign without publishing"
+        required: false
+        default: true
+        type: boolean
 
 # Restrict permissions globally; jobs opt-in as needed.
 permissions:
@@ -54,6 +60,7 @@ jobs:
   testpypi-terminal:
     name: TestPyPI · provide-uterm
     needs: build
+    if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
@@ -71,6 +78,7 @@ jobs:
   verify-terminal:
     name: Verify TestPyPI · provide-uterm
     needs: testpypi-terminal
+    if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
@@ -121,6 +129,7 @@ jobs:
   testpypi-dependents:
     name: TestPyPI · ${{ matrix.package }}
     needs: [build, pypi-terminal]
+    if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
@@ -168,6 +177,7 @@ jobs:
   testpypi-cloudflare:
     name: TestPyPI · provide-uterm-cloudflare
     needs: [build, pypi-terminal]
+    if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
@@ -185,6 +195,7 @@ jobs:
   verify-cloudflare:
     name: Verify TestPyPI · provide-uterm-cloudflare
     needs: testpypi-cloudflare
+    if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
@@ -265,3 +276,34 @@ jobs:
           gh release upload "$GITHUB_REF_NAME"
           dist/**
           --repo "$GITHUB_REPOSITORY"
+
+  dry-run:
+    name: Dry run release artifacts
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.dry-run == true
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: dist-*
+          path: dist/
+          merge-multiple: true
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Check release artifacts
+        run: |
+          python -m pip install twine
+          python -m twine check dist/*
+
+      - name: Sign artifacts with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.3.0
+        with:
+          inputs: >-
+            dist/*.tar.gz
+            dist/*.whl
