@@ -26,16 +26,31 @@ if ! command -v cosign >/dev/null 2>&1; then
   exit 2
 fi
 
-# Sign each built wheel and sdist with a Sigstore keyless bundle.
-for artifact in dist/*.whl dist/*.tar.gz; do
-  [ -f "$artifact" ] || continue
-  bundle="${OUT_DIR}/$(basename "$artifact").bundle"
-  cosign sign-blob --yes "$artifact" --bundle "$bundle"
-  echo "signed: $artifact -> $bundle"
-done
+# Cosign keyless signing needs an ambient OIDC token. GitHub Actions provides
+# one via ``id-token: write`` permission (the SIGSTORE_ID_TOKEN env or the
+# GHA-provided OIDC endpoint cosign auto-detects). Local runs have neither
+# and would otherwise hang waiting for an interactive browser OAuth flow,
+# so we skip the signing step locally with a clear notice. CI runs perform
+# the real signing and upload the bundles as workflow artifacts.
+COSIGN_AVAILABLE=1
+if [[ -z "${GITHUB_ACTIONS:-}" && -z "${CI:-}" && -z "${SIGSTORE_ID_TOKEN:-}" ]]; then
+  echo "  ↳ skipping cosign signing: no CI OIDC token detected" >&2
+  echo "    (set CI=1 or SIGSTORE_ID_TOKEN=<token> to force signing locally)" >&2
+  COSIGN_AVAILABLE=0
+fi
 
-# Sign the SBOM.
-cosign sign-blob --yes "${OUT_DIR}/sbom.json" --bundle "${OUT_DIR}/sbom.json.bundle"
-echo "signed: ${OUT_DIR}/sbom.json -> ${OUT_DIR}/sbom.json.bundle"
+if [[ "${COSIGN_AVAILABLE}" -eq 1 ]]; then
+  # Sign each built wheel and sdist with a Sigstore keyless bundle.
+  for artifact in dist/*.whl dist/*.tar.gz; do
+    [ -f "$artifact" ] || continue
+    bundle="${OUT_DIR}/$(basename "$artifact").bundle"
+    cosign sign-blob --yes "$artifact" --bundle "$bundle"
+    echo "signed: $artifact -> $bundle"
+  done
+
+  # Sign the SBOM.
+  cosign sign-blob --yes "${OUT_DIR}/sbom.json" --bundle "${OUT_DIR}/sbom.json.bundle"
+  echo "signed: ${OUT_DIR}/sbom.json -> ${OUT_DIR}/sbom.json.bundle"
+fi
 
 echo "release governance checks completed: ${OUT_DIR}"
