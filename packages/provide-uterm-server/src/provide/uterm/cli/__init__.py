@@ -397,6 +397,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     add_watch_subcommand(sub)
 
+    # ---- server subcommand ----
+    # The reference hosted server is also reachable via the legacy
+    # ``uterm-server`` console script, but ``uterm server`` is canonical.
+    from provide.uterm.server.cli import add_server_subcommand
+
+    add_server_subcommand(sub)
+
     return parser
 
 
