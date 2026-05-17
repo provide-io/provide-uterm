@@ -45,6 +45,8 @@ packages/provide-uterm-cloudflare/python_modules/
 # Playwright MCP output (screenshots, console logs)
 .playwright-mcp/
 *.png
+# But commit the canonical brand images (banner + size ladder).
+!docs/images/*.png
 .pymutant-state/
 mutants/
 .pymutant-ledger.json
