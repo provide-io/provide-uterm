@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, cast
 
 from provide.uterm.ai.policy import Role, required_role, role_at_least
 
@@ -189,9 +189,16 @@ def authorized(tool_name: str, auth_ctx: AuthorizationContext) -> Callable[[F], 
                 return deny_payload(err)
             return await fn(*args, **kwargs)
 
-        # Stash metadata for tests / introspection.
-        _wrapper.__uterm_tool_name__ = tool_name  # type: ignore[attr-defined]
-        _wrapper.__uterm_required_role__ = minimum  # type: ignore[attr-defined]
-        return _wrapper  # type: ignore[return-value]
+        # Stash metadata for tests / introspection. Using ``setattr`` makes
+        # the dynamic attribute attachment explicit to both mypy and ty
+        # (both type checkers treat direct ``obj.attr = …`` on a typed
+        # callable as an unresolved-attribute error; ``setattr`` is the
+        # canonical opt-out).
+        setattr(_wrapper, "__uterm_tool_name__", tool_name)
+        setattr(_wrapper, "__uterm_required_role__", minimum)
+        # ``functools.wraps`` returns ``_Wrapped[…]`` rather than the
+        # original ``F``; the cast tells both type checkers the wrapper
+        # honours the same callable shape as the wrapped function.
+        return cast(F, _wrapper)
 
     return _decorator

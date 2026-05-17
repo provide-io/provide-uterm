@@ -348,7 +348,11 @@ class SqliteStateStore:
             suffix += " OFFSET ?"
             params.append(max(0, offset))  # type: ignore[arg-type]
 
-        sql = f"SELECT ts, event_type, payload_json FROM session_events {where} {suffix}"  # noqa: S608
+        # nosec B608 — `where` is built from string-literal fragments above
+        # (no user data) and every user value (session_id, event, limit,
+        # offset) goes through `?` placeholders in `params`. The f-string
+        # only stitches static SQL together.
+        sql = f"SELECT ts, event_type, payload_json FROM session_events {where} {suffix}"  # noqa: S608  # nosec B608
         rows = self._rows(self._run(sql, *params))
         if tail:
             rows = list(reversed(rows))
