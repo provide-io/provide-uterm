@@ -277,6 +277,55 @@ jobs:
           dist/**
           --repo "$GITHUB_REPOSITORY"
 
+  # ── SLSA Level 3 provenance attestation ──────────────────────────────
+  #
+  # The Sigstore step above proves "this blob was signed by the GHA OIDC
+  # identity for this repo". SLSA provenance goes one level further:
+  # cryptographically attests *which workflow file produced the artifact*
+  # at *which source SHA*. That closes the gap where an attacker who
+  # compromises the build environment could swap an artifact for a
+  # similarly-signed but differently-produced binary.
+  #
+  # The reusable workflow is the canonical SLSA-3 generator.
+  hash-artifacts:
+    name: Hash artifacts for SLSA
+    needs: [pypi-terminal, pypi-dependents, pypi-cloudflare]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
+    steps:
+      - name: Download all dists
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: dist-*
+          path: dist/
+          merge-multiple: true
+
+      # Compute the base64-encoded SHA256-hash manifest the SLSA generator
+      # expects as its `base64-subjects` input.
+      - name: Hash dists
+        id: hash
+        run: |
+          cd dist
+          echo "hashes=$(sha256sum *.whl *.tar.gz | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    name: SLSA Level 3 provenance
+    needs: [hash-artifacts]
+    if: github.event_name == 'release'
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: ${{ needs.hash-artifacts.outputs.hashes }}
+      # Attach the resulting .intoto.jsonl provenance file to the GitHub
+      # Release alongside the signed wheels and sdist.
+      upload-assets: true
+      provenance-name: provide-uterm-workspace.intoto.jsonl
+
   dry-run:
     name: Dry run release artifacts
     needs: build
