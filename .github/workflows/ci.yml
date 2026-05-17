@@ -177,6 +177,8 @@ jobs:
             uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100 --changed-only --base-ref "origin/${{ github.base_ref }}"
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100 --changed-only --base-ref "${{ github.event.before }}"
+          elif [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100 --changed-only --base-ref "HEAD~1"
           else
             uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100
           fi
@@ -245,5 +247,5 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: memray-output
-          path: memray-output/
+          path: packages/provide-uterm/memray-output/
           retention-days: 30
