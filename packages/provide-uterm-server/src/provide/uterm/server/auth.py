@@ -20,6 +20,19 @@ if TYPE_CHECKING:
 
     from provide.uterm.server.models import AuthConfig
 
+# Explicit re-export list for mypy strict mode. ``Principal`` is the
+# canonical name callers reach for when they need the authenticated-user
+# type; it lives in ``provide.uterm.bridge.identity`` but is also
+# imported here so server-side modules don't need to know that.
+__all__ = [
+    "IdentityProvider",
+    "LocalIdentityProvider",
+    "Principal",
+    "WebhookIdentityProvider",
+    "extract_bearer_token",
+    "resolve_http_principal",
+]
+
 logger = get_logger(__name__)
 # Module-level cache: jwks_url → PyJWKClient instance.
 # PyJWKClient fetches and caches the JWKS document internally; sharing one

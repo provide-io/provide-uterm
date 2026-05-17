@@ -34,6 +34,37 @@ from provide.uterm.server.config_schema import (
 # Alias for backward compatibility if needed, though we should transition to UtermServerConfig.
 ServerConfig = UtermServerConfig
 
+# Explicit re-export list for mypy strict mode. Anything listed here is
+# importable as ``from provide.uterm.server.models import X`` without
+# triggering an ``[attr-defined]`` error in callers compiled under
+# ``--strict``. The CDN-default constants are re-exported for the unified
+# ``uterm`` CLI's ``proxy`` subcommand; the config classes are re-exported
+# so callers don't need to know whether the type lives in this module or
+# config_schema.
+__all__ = [
+    "AuthConfig",
+    "ControlPlaneConfig",
+    "FITADDON_CDN_DEFAULT",
+    "FONTS_CDN_DEFAULT",
+    "GovernanceConfig",
+    "InputMode",
+    "PamConfig",
+    "ProfileStoreConfig",
+    "RecordingConfig",
+    "SecurityConfig",
+    "ServerBaseModel",
+    "ServerBindConfig",
+    "ServerConfig",
+    "SessionDefinition",
+    "SessionLifecycle",
+    "TunnelConfig",
+    "UiConfig",
+    "UtermServerConfig",
+    "ValidationError",
+    "Visibility",
+    "XTERM_CDN_DEFAULT",
+]
+
 
 class SessionRuntimeStatus(ServerBaseModel):
     """Runtime-facing summary for a hosted session."""
