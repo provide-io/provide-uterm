@@ -12,6 +12,7 @@ wrong worker_id, two-tab race, no resume_store configured).
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -253,6 +254,20 @@ class TestResumeFlow:
 
 
 class TestResumeHijackReclaim:
+    def test_startup_pending_browser_does_not_receive_broadcast_until_activated(self) -> None:
+        """Queued worker output must not overtake a browser's startup hello."""
+        hub = TermHub()
+        ws = MagicMock()
+        ws.send_text = AsyncMock()
+
+        asyncio.run(hub.register_browser(WID, ws, "admin", defer_broadcast=True))
+        asyncio.run(hub.broadcast(WID, {"type": "snapshot", "screen": "early"}))
+        ws.send_text.assert_not_called()
+
+        asyncio.run(hub.activate_browser_broadcasts(WID, ws))
+        asyncio.run(hub.broadcast(WID, {"type": "snapshot", "screen": "after-startup"}))
+        ws.send_text.assert_awaited_once()
+
     def test_resume_reclaims_hijack(self) -> None:
         """Acquire hijack → disconnect → resume → hijack reclaimed.
 

@@ -134,6 +134,7 @@ class TermHub(
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
         self._on_resume = on_resume
         self._ws_to_resume_token: dict[WebSocket, str] = {}
+        self._startup_pending_browsers: set[WebSocket] = set()
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus = event_bus
         self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))

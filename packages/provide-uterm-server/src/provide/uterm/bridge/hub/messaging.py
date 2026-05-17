@@ -26,6 +26,8 @@ logger = get_logger(__name__)
 
 
 class HubMessagingMixin:
+    _startup_pending_browsers: set[Any]
+
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it."""
         payload = data or {}
@@ -49,7 +51,9 @@ class HubMessagingMixin:
             st = self._workers.get(worker_id)
             if st is None:
                 return
-            browsers_with_roles = list(st.browsers.items())
+            browsers_with_roles = [
+                (ws, role) for ws, role in st.browsers.items() if ws not in self._startup_pending_browsers
+            ]
 
         dead: set[WebSocket] = set()
         is_term_data = msg.get("type") == "term"
@@ -126,7 +130,7 @@ class HubMessagingMixin:
             st = self._workers.get(worker_id)
             if st is None:
                 return
-            browsers = list(st.browsers.keys())
+            browsers = [ws for ws in st.browsers if ws not in self._startup_pending_browsers]
             hijack_owner = st.hijack_owner
             is_hijacked = self.is_hijacked(st)
             is_dashboard = self.is_dashboard_hijack_active(st)
@@ -154,7 +158,7 @@ class HubMessagingMixin:
                 st2 = self._workers.get(worker_id)
                 if st2 is None:
                     return
-                survivors = list(st2.browsers.keys())
+                survivors = [ws for ws in st2.browsers if ws not in self._startup_pending_browsers]
                 is_h2 = self.is_hijacked(st2)
                 is_dashboard2 = self.is_dashboard_hijack_active(st2)
                 is_rest2 = self.has_valid_rest_lease(st2)
@@ -230,6 +234,7 @@ class HubMessagingMixin:
         for ws in dead:
             self._input_buffers.pop(ws, None)
             self._hold_buffers.pop(ws, None)
+            self._startup_pending_browsers.discard(ws)
         return await super().remove_dead_browsers(worker_id, dead)
 
     async def _run_behavioral_audit_loop(self) -> None:

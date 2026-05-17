@@ -287,7 +287,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         # ownership — check hub state for that.
         owned_hijack = False
         # Capture all startup state atomically while registering the browser.
-        browser_state = await hub.register_browser(worker_id, websocket, role)
+        browser_state = await hub.register_browser(worker_id, websocket, role, defer_broadcast=True)
         await hub.touch_activity(worker_id)
         with get_tracer(__name__).start_as_current_span("uterm.ws.browser.connect") as _b_span:
             _set_ws_span_attrs(_b_span, worker_id=worker_id, operation="ws.browser.connect", role=role)
@@ -332,6 +332,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             await websocket.send_text(encode_control(initial_snapshot))
         else:
             await hub.request_snapshot(worker_id)
+        await hub.activate_browser_broadcasts(worker_id, websocket)
 
         cleanup_task = asyncio.create_task(_periodic_hijack_cleanup(hub, worker_id, _BROWSER_HIJACK_CLEANUP_INTERVAL_S))
         decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)

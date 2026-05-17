@@ -17,7 +17,7 @@ import uuid
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger, get_tracer, logger
+from provide.telemetry import get_logger, get_tracer
 from provide.uterm.bridge.hub.ext import (
     EVENT_RATE_LIMIT_TRIGGERED,
     EVENT_SESSION_DISCONNECTED,
@@ -81,6 +81,7 @@ class _ConnectionMixin:
     _resume_store: ResumeTokenStore | None
     _resume_ttl_s: float
     _ws_to_resume_token: dict[Any, str]
+    _startup_pending_browsers: set[Any]
 
     # Methods provided by TermHub / _HijackOwnershipMixin used in this mixin.
     is_hijacked: Callable[..., bool]
@@ -157,14 +158,8 @@ class _ConnectionMixin:
                 # (lease_expires_at) is already the security guarantee;
                 # WS register is not a security event.
                 _now_mono = time.monotonic()
-                _expired = (
-                    st.hijack_session is not None
-                    and st.hijack_session.lease_expires_at <= _now_mono
-                )
-                prev_was_hijacked = (
-                    _expired
-                    or (st.hijack_session is None and st.hijack_owner is not None)
-                )
+                _expired = st.hijack_session is not None and st.hijack_session.lease_expires_at <= _now_mono
+                prev_was_hijacked = _expired or (st.hijack_session is None and st.hijack_owner is not None)
                 if _expired:
                     st.hijack_session = None
                 if prev_was_hijacked:
@@ -233,7 +228,9 @@ class _ConnectionMixin:
 
     # -- Browser connection lifecycle ------------------------------------------
 
-    async def register_browser(self, worker_id: str, ws: WebSocket, role: str) -> dict[str, Any]:
+    async def register_browser(
+        self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
+    ) -> dict[str, Any]:
         r"""Register *ws* as a browser for *worker_id* and return initial state.
 
         Returns a dict with keys: \`\`is_hijacked\`\`, \`\`hijacked_by_me\`\`,
@@ -248,6 +245,8 @@ class _ConnectionMixin:
             async with self._lock:
                 st = self._workers.setdefault(worker_id, WorkerTermState())
                 st.browsers[ws] = role
+                if defer_broadcast:
+                    self._startup_pending_browsers.add(ws)
                 initial_state = {
                     "is_hijacked": self.is_hijacked(st),
                     "hijacked_by_me": self.is_dashboard_hijack_active(st) and st.hijack_owner is ws,
@@ -258,6 +257,13 @@ class _ConnectionMixin:
                 }
             logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="browser", role=role)
             return initial_state
+
+    async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
+        """Allow broadcasts to a browser after its startup frames have been sent."""
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is not None and ws in st.browsers:
+                self._startup_pending_browsers.discard(ws)
 
     @staticmethod
     def _scan_events_for_resume(st: Any) -> bool:
@@ -320,6 +326,7 @@ class _ConnectionMixin:
                 token = self._ws_to_resume_token.pop(ws, None)
                 if token and (was_owner or owned_hijack):
                     await self._resume_store.mark_hijack_owner(token, True)
+            self._startup_pending_browsers.discard(ws)
 
             # Fire empty-browser callback outside the lock when the last browser left.
             on_empty = getattr(self, "on_worker_empty", None)
