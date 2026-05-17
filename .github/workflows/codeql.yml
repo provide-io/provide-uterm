@@ -1,0 +1,67 @@
+# CodeQL static analysis for the Python source tree + the bundled TypeScript
+# frontend. Catches SAST patterns that bandit / ruff / mypy / ty miss —
+# tainted-input flows, hard-to-spot SQL injection, prototype-pollution-style
+# JS issues, dangerous deserialization paths.
+#
+# Closes docs/security-considerations.md §2 (deep-SAST scanner) and shows
+# findings in the repo's Security tab as a permanent record.
+
+name: "🔬 CodeQL"
+
+on:
+  push:
+    branches:
+      - main
+      - "rc/**"
+  pull_request:
+    branches:
+      - main
+      - "rc/**"
+  schedule:
+    # Weekly run so newly-released CodeQL rule packs catch issues against
+    # an unchanged tree. Wednesday 16:00 UTC = mid-week, mid-day for most
+    # contributors.
+    - cron: "0 16 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Required for writing findings to the Security tab.
+      security-events: write
+      # Required for private repos so CodeQL can read the file content.
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Use the security-and-quality query suite for broader coverage
+          # than the default "code-scanning" pack. Includes maintainability
+          # checks alongside security ones.
+          queries: security-and-quality
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
