@@ -274,7 +274,7 @@ class SessionRegistry:
         await runtime.restart()
         return runtime.status()
 
-    async def set_mode(self, session_id: str, mode: str) -> SessionRuntimeStatus:
+    async def set_mode(self, session_id: str, mode: str) -> SessionRuntimeStatus:  # noqa: D102
         async with self._lock:
             session = self._require_session(session_id)
             try:
@@ -289,7 +289,9 @@ class SessionRegistry:
         await runtime.set_mode(mode)
         # Synchronously update the hub's input_mode so REST acquire checks
         # see the new mode immediately (connector WS pipeline is async).
-        await self._hub.set_input_mode(session_id, mode)
+        # SessionDefinition.model_validate above already enforced the
+        # ``Literal['hijack', 'open']`` shape — cast tells mypy that.
+        await self._hub.set_input_mode(session_id, mode)  # type: ignore[arg-type]
         return runtime.status()
 
     async def clear_session(self, session_id: str) -> SessionRuntimeStatus:

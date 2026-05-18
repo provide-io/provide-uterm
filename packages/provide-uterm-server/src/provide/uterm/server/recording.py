@@ -38,7 +38,7 @@ class WebhookRecordingStore(RecordingStore):
     async def get_entries(
         self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
     ) -> list[dict[str, Any]]:
-        params = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
         if offset is not None:
             params["offset"] = offset
         if event is not None:

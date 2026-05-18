@@ -23,6 +23,7 @@ from provide.uterm.bridge.hub.ext import (
     EVENT_SESSION_DISCONNECTED,
     EVENT_SESSION_REGISTERED,
 )
+from provide.uterm.bridge.contracts import InputMode
 from provide.uterm.bridge.models import WorkerTermState
 
 if TYPE_CHECKING:
@@ -175,7 +176,7 @@ class _ConnectionMixin:
             st = self._workers.get(worker_id)
             return st is not None and st.worker_ws is ws
 
-    async def set_worker_hello(self, worker_id: str, mode: str, protocol_version: int | None = None) -> bool:
+    async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
         r"""Process a \`\`worker_hello\`\` message: set input_mode and log protocol.
 
         Returns \`\`True\`\` if the mode was applied, \`\`False\`\` if the worker is no

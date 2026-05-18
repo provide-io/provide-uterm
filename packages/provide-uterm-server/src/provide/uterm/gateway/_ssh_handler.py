@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from provide.uterm.colors import ColorMode
 
 if TYPE_CHECKING:
     import collections.abc
@@ -189,7 +191,8 @@ def _fingerprint_for_key(key: object) -> str | None:
     if not callable(get_fp):
         return None
     try:
-        return get_fp("sha256")
+        fp: str | None = get_fp("sha256")
+        return fp
     except Exception:
         return None
 
@@ -214,7 +217,7 @@ def _token_file_for_connection(base: Path | None, fingerprint: str | None) -> Pa
 
 async def _make_process_handler(
     ws_url: str,
-    color_mode: str,
+    color_mode: ColorMode,
     token_file: Path | None = None,
     *,
     ws_ssl: object = None,
@@ -309,7 +312,7 @@ async def _make_process_handler(
         # Per-connection token-holder, optionally seeded from disk when the
         # caller opted in via ``token_file``. Discarded when this coroutine
         # returns; file persists across proxy restarts.
-        token_holder: list[dict | None] = [None]
+        token_holder: list[dict[str, Any] | None] = [None]
         if effective_token_file is not None:
             saved = _read_token(effective_token_file)
             if saved:
@@ -327,7 +330,11 @@ async def _make_process_handler(
                     connect_kwargs: dict[str, object] = {}
                     if ws_ssl is not None:
                         connect_kwargs["ssl"] = ws_ssl
-                    async with websockets.connect(effective_ws_url, **connect_kwargs) as ws:
+                    # websockets.connect has 14+ specifically-typed keyword
+                    # arguments; passing a heterogeneous ``**dict[str, object]``
+                    # makes mypy enumerate them all. The runtime call is fine
+                    # because we only ever populate the ``ssl`` key.
+                    async with websockets.connect(effective_ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]
                         # Proxy-asserted identity (from resolver) goes first,
                         # so the upstream can choose to trust it *before*
                         # any resume/banner traffic. Only emitted when a

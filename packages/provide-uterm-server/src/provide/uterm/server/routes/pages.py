@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse
@@ -44,7 +44,7 @@ def _set_auth_cookie(
     value: str,
     *,
     secure: bool,
-    samesite: str = "lax",
+    samesite: Literal["lax", "strict", "none"] = "lax",
 ) -> None:
     response.set_cookie(
         key=key,

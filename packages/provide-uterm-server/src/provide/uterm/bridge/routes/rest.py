@@ -449,7 +449,9 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         request: InputModeRequest = Body(...),  # noqa: B008
     ) -> Any:
-        ok, err = await hub.set_input_mode(worker_id, request.input_mode)
+        # input_mode is validated by Pydantic to be "hijack" or "open" via the
+        # regex pattern on InputModeRequest, so the cast is sound.
+        ok, err = await hub.set_input_mode(worker_id, request.input_mode)  # type: ignore[arg-type]
         if not ok:
             status = 404 if err == "not_found" else 409
             error_msg = (

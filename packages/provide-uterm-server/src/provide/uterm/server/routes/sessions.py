@@ -402,7 +402,7 @@ def create_sessions_router() -> APIRouter:
         definition = await session_definition(request, session_id)
         if not await az.can_read_session(p, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        return await registry(request).watch_session_events(  # type: ignore[attr-defined]
+        return await registry(request).watch_session_events(
             session_id,
             timeout_ms=timeout_ms,
             event_types=event_types.split(",") if event_types else None,

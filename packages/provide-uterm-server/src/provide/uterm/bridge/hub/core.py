@@ -166,4 +166,8 @@ class TermHub(
 
     async def set_worker_hello_mode(self, worker_id: str, mode: str) -> bool:
         """Backward-compatible wrapper for worker hello mode handling."""
-        return await self.set_worker_hello(worker_id, mode)
+        # Narrow the str arg to InputMode at the wrapper boundary; reject
+        # unknown values so the cast on the next line is sound.
+        if mode not in ("hijack", "open"):
+            raise ValueError(f"invalid input mode: {mode!r}")
+        return await self.set_worker_hello(worker_id, mode)  # type: ignore[arg-type]

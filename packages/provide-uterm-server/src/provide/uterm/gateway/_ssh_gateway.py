@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from provide.uterm.colors import ColorMode
+
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.gateway._gateway import _require_websockets
 from provide.uterm.gateway._ssh_handler import (
@@ -74,7 +76,7 @@ class SshWsGateway:
         ws_url: str,
         *,
         server_key: str | Path | None = None,
-        color_mode: str = "passthrough",
+        color_mode: ColorMode = "passthrough",
         token_file: Path | None = None,
         key_resolver: SSHKeyResolver | None = None,
         require_resolver: bool = False,

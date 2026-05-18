@@ -16,6 +16,8 @@ from provide.uterm.bridge.identity import IdentityProvider, Principal
 from provide.uterm.server.audit import audit_event
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from fastapi import Request, WebSocket
 
     from provide.uterm.server.models import AuthConfig
@@ -99,7 +101,7 @@ def _resolve_principal(
     api_key_store: Any,
 ) -> Principal:
     connection = _HeadersAndCookies(headers=headers, cookies=cookies)
-    return _provider(auth, api_key_store).resolve_principal_sync(connection)
+    return _provider(auth, api_key_store).resolve_principal_sync(connection)  # type: ignore[arg-type]
 
 
 @dataclass(slots=True)
@@ -309,7 +311,7 @@ class _AwaitablePrincipal:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._principal, name)
 
-    def __await__(self):
+    def __await__(self) -> Generator[Any, None, Principal]:
         async def _resolve() -> Principal:
             return self._principal
 

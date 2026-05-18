@@ -251,19 +251,22 @@ class AuthorizationService:
     async def has_capability(self, principal: Principal, capability: Capability) -> bool:
         provider = self._provider
         if hasattr(provider, "has_capability"):
-            return await provider.has_capability(principal, capability)
+            result: bool = await provider.has_capability(principal, capability)
+            return result
         return capability in await provider.capabilities_for(principal)
 
     async def is_admin(self, principal: Principal) -> bool:
         provider = self._provider
         if hasattr(provider, "is_admin"):
-            return await provider.is_admin(principal)
+            result: bool = await provider.is_admin(principal)
+            return result
         return await LocalAuthorizationProvider().is_admin(principal)
 
     async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
         provider = self._provider
         if hasattr(provider, "is_owner"):
-            return await provider.is_owner(principal, session)
+            result: bool = await provider.is_owner(principal, session)
+            return result
         return await LocalAuthorizationProvider().is_owner(principal, session)
 
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
