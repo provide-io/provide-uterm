@@ -11,8 +11,17 @@
 
 1. Dependency vulnerability scan passes policy (no high/critical findings).
 2. SBOM generated for wheel and sdist artifacts.
-3. Artifacts are signed. *(Provenance metadata attachment: planned)*
-4. *(Planned)* Rollback drill executed on staging (`scripts/rollback_drill.py`; artifact in `artifacts/rollback-drill/`).
+3. Artifacts are signed (cosign keyless via GHA OIDC).
+4. SLSA Level 3 provenance attestation (`.intoto.jsonl`) attached
+   to the GitHub Release; SBOM and pip-audit report also signed.
+5. Reproducible builds — every artifact uses ``SOURCE_DATE_EPOCH``
+   pinned to the source-SHA commit timestamp, so rebuilds from the
+   same SHA on a different host are byte-identical. The release
+   workflow sets this; the local governance script does too.
+6. Rollback drill executed on staging (`scripts/rollback_drill.py`;
+   artifact in `artifacts/rollback-drill/`).
+7. Load profile + baseline captured (`scripts/load_profile.py` and
+   `scripts/capture_rc_baseline.sh`; artifacts under `artifacts/`).
 
 ## Release checklist
 
