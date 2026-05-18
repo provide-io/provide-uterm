@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 from provide.uterm.control_channel import encode_data
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from fastapi import WebSocket
 
     from provide.uterm.bridge.hub.core import TermHub
@@ -21,6 +23,24 @@ logger = get_logger(__name__)
 
 
 class HubApprovalFlowMixin:
+    """Buffered approval flow for hijack handoffs.
+
+    Composed into :class:`provide.uterm.bridge.hub.core.TermHub`. The
+    underscore-prefixed attributes below are *type-only* declarations
+    that describe what the composing class must initialise; see the
+    same pattern on ``HubMessagingMixin`` and ``HubStateMixin``.
+    """
+
+    _approval_store: Any
+    _background_tasks: set[Any]
+    _hold_buffers: dict[Any, str]
+    _paused_browsers: set[Any]
+    _on_browser_message: Any | None
+
+    if TYPE_CHECKING:
+        _get: Callable[..., Any]
+        send_worker: Callable[..., Awaitable[Any]]
+
     async def resolve_approval(self, worker_id: str, request_id: str, decision: PolicyDecision, command: str) -> None:
         """Resolve a pending approval and resume the worker if approved."""
         from provide.uterm.bridge.hub.core import _encode_browser_frame

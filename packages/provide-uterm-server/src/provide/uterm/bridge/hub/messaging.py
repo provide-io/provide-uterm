@@ -16,6 +16,8 @@ from provide.uterm.bridge.frames import make_hijack_state_frame, make_worker_dis
 from provide.uterm.bridge.hub.redaction import StreamRedactor
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from fastapi import APIRouter, WebSocket
 
     from provide.uterm.bridge.contracts import InputMode
@@ -26,7 +28,45 @@ logger = get_logger(__name__)
 
 
 class HubMessagingMixin:
+    """Routes hub I/O between workers and connected browsers.
+
+    Composed into :class:`provide.uterm.bridge.hub.core.TermHub` together
+    with the other ``Hub*Mixin`` siblings. All the underscore-prefixed
+    attributes below are *type-only* declarations that describe what
+    the composing class must initialise — they are never assigned in
+    this mixin (initialisation lives in :meth:`TermHub.__init__`).
+
+    Declaring them here is the canonical mypy-strict pattern for the
+    "fat mixin" idiom: mypy sees the contract, runtime ignores the
+    declarations, and the duck-typed composition keeps working.
+    """
+
+    # Shared state (initialised in TermHub.__init__).
+    _lock: asyncio.Lock
+    _workers: dict[str, Any]
+    _input_buffers: dict[Any, str]
+    _hold_buffers: dict[Any, str]
+    _keystroke_timestamps: dict[Any, Any]
     _startup_pending_browsers: set[Any]
+    _event_bus: Any | None
+    _output_policy_gate: Any | None
+    _resume_store: ResumeTokenStore | None
+    _behavioral_audit_gate: Any | None
+    _behavioral_thresholds: Any | None
+    _behavioral_audit_interval_s: float
+    _dashboard_hijack_lease_s: int
+
+    # Methods supplied by sibling mixins (HubStateMixin / _HijackOwnershipMixin
+    # / HubApprovalFlowMixin). Listed here as `Callable[..., Any]` so cross-
+    # mixin calls in this module typecheck without each call needing a per-
+    # line ``# type: ignore[attr-defined]``. The actual signatures live on
+    # the implementing mixins; this is only an interface contract.
+    if TYPE_CHECKING:
+        prepare_policy_context: Callable[..., Awaitable[Any]]
+        is_hijacked: Callable[..., bool]
+        is_dashboard_hijack_active: Callable[..., bool]
+        has_valid_rest_lease: Callable[..., bool]
+        notify_hijack_changed: Callable[..., Awaitable[None]]
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it."""
