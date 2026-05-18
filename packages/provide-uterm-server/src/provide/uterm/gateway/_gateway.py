@@ -9,14 +9,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import collections.abc
     from pathlib import Path
 
 from provide.telemetry import get_logger
-from provide.uterm.colors import apply_color_mode
+from provide.uterm.colors import ColorMode, apply_color_mode
 from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _read_token(path: Path) -> dict | None:
+def _read_token(path: Path) -> dict[str, Any] | None:
     """Read a persisted token record from disk.
 
     The file is JSON: ``{"token": "...", "player_id": 42}``. ``player_id`` is
@@ -102,7 +102,7 @@ _EOF = 236
 
 async def _handle_ws_control(
     message: str,
-    token_holder: list[dict | None],
+    token_holder: list[dict[str, Any] | None],
     write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
     *,
     token_file: Path | None = None,
@@ -135,7 +135,7 @@ async def _handle_ws_control(
 
 async def _handle_ws_control_frame(
     data: dict[str, object],
-    token_holder: list[dict | None],
+    token_holder: list[dict[str, Any] | None],
     write_fn: collections.abc.Callable[[bytes], collections.abc.Coroutine[object, object, None]],
     *,
     token_file: Path | None = None,
@@ -291,8 +291,8 @@ async def _ws_to_tcp(
     ws: object,
     writer: asyncio.StreamWriter,
     *,
-    token_holder: list[dict | None],
-    color_mode: str = "passthrough",
+    token_holder: list[dict[str, Any] | None],
+    color_mode: ColorMode = "passthrough",
     token_file: Path | None = None,
 ) -> None:
     """Forward WebSocket messages → raw TCP bytes."""
@@ -332,8 +332,8 @@ async def _pipe_ws(
     writer: asyncio.StreamWriter,
     ws_url: str,
     *,
-    token_holder: list[dict | None],
-    color_mode: str = "passthrough",
+    token_holder: list[dict[str, Any] | None],
+    color_mode: ColorMode = "passthrough",
     telnet: bool = False,
     token_file: Path | None = None,
     iac_negotiate: bool = False,
@@ -431,8 +431,8 @@ async def _ws_to_ssh(
     ws: object,
     process: object,
     *,
-    token_holder: list[dict | None],
-    color_mode: str = "passthrough",
+    token_holder: list[dict[str, Any] | None],
+    color_mode: ColorMode = "passthrough",
     token_file: Path | None = None,
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
