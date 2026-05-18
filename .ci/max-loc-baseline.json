@@ -1,6 +1,5 @@
 {
   "allow_over_limit": {
-    "packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/state/store.py": 535,
     "packages/provide-uterm-cloudflare/tests/test_branch_coverage.py": 511,
     "packages/provide-uterm-cloudflare/tests/test_coverage_entry_registry.py": 740,
     "packages/provide-uterm-cloudflare/tests/test_coverage_gaps.py": 658,

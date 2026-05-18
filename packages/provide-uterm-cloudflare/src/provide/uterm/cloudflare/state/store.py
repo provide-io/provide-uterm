@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from . import _row_utils
+
 
 class SqlExecutor(Protocol):
     def __call__(self, sql: str, *params: object) -> Any: ...
@@ -485,55 +487,9 @@ class SqliteStateStore:
         self._run("DELETE FROM resume_tokens WHERE expires_at <= ?", now)
         return 0  # row count not available through all executors
 
-    @classmethod
-    def _row_value(cls, row: Any, key: str, idx: int) -> Any:
-        if isinstance(row, dict):
-            return row.get(key)
-        if hasattr(row, "get"):
-            with contextlib.suppress(Exception):
-                value = row.get(key)
-                if value is not None:
-                    return value
-        if hasattr(row, key):
-            with contextlib.suppress(Exception):
-                return getattr(row, key)
-        if hasattr(row, "to_py"):
-            try:
-                py_row = row.to_py()
-            except Exception:
-                py_row = None
-            if py_row is not None:
-                return cls._row_value(py_row, key, idx)
-        return cls._get(row, idx)
-
-    @staticmethod
-    def _rows(result: Any) -> list[Any]:
-        if result is None:
-            return []
-        to_array = getattr(result, "toArray", None)
-        if callable(to_array):
-            return list(to_array())
-        if isinstance(result, list):
-            return result
-        if hasattr(result, "fetchall"):
-            return list(result.fetchall())
-        return []
-
-    @staticmethod
-    def _get(row: Any, idx: int) -> Any:
-        if isinstance(row, dict):
-            values = list(row.values())
-            return values[idx] if idx < len(values) else None
-        if hasattr(row, "keys") and hasattr(row, "__getitem__"):
-            keys = list(row.keys())
-            if idx >= len(keys):
-                return None
-            return row[keys[idx]]
-        if hasattr(row, "to_py"):
-            try:
-                py_row = row.to_py()
-            except Exception:
-                py_row = None
-            if py_row is not None:
-                return SqliteStateStore._get(py_row, idx)
-        return row[idx]
+    # Row-shape adapters live in ``_row_utils`` so this module stays focused
+    # on SQL/state behaviour. Exposed as staticmethods on the class for
+    # backwards compatibility with callers using ``SqliteStateStore._rows`` etc.
+    _row_value = staticmethod(_row_utils.row_value)
+    _rows = staticmethod(_row_utils.rows)
+    _get = staticmethod(_row_utils.get_by_index)
