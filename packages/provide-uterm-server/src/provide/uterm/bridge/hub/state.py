@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 from provide.uterm.bridge.hub.ext import PolicyContext
@@ -23,6 +23,26 @@ logger = get_logger(__name__)
 
 
 class HubStateMixin:
+    """Holds the hub's shared state (workers, locks, callbacks).
+
+    Composed into :class:`provide.uterm.bridge.hub.core.TermHub`. The
+    underscore-prefixed attributes below are *type-only* declarations
+    that describe what the composing class must initialise — they are
+    never assigned in this mixin. Same pattern as ``HubMessagingMixin``.
+    """
+
+    # Shared state (initialised in TermHub.__init__).
+    _lock: asyncio.Lock
+    _workers: dict[str, Any]
+    _input_buffers: dict[Any, str]
+    _background_tasks: set[Any]
+    _event_bus: EventBus | None
+    _on_metric: Any | None
+    _on_hijack_changed: Any | None
+    _resolve_browser_role: Any | None
+    _identity_provider: Any | None
+    _delegate_roles: bool
+
     @property
     def event_bus(self) -> EventBus | None:
         """Public accessor for the EventBus instance (None if not configured)."""
