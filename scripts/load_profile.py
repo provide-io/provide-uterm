@@ -88,7 +88,7 @@ async def _probe_ws(base_url: str, worker_id: str, timeout_s: float) -> ProbeRes
                 hello_ms=(time.perf_counter() - connected) * 1000.0,
                 ok=True,
             )
-    except Exception as exc:  # noqa: BLE001 — probe must report all errors
+    except Exception as exc:
         return ProbeResult(connect_ms=0.0, hello_ms=0.0, ok=False, error=str(exc))
 
 
