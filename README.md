@@ -4,6 +4,16 @@
   <img src="https://raw.githubusercontent.com/provide-io/provide-uterm/main/docs/images/uterm-banner.png" alt="provide-uterm" width="420">
 </p>
 
+<p align="center">
+  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/ci.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/release-governance.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/release-governance.yml/badge.svg" alt="Release Governance"></a>
+  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/codeql.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/container-scan.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/container-scan.yml/badge.svg" alt="Container Scan"></a>
+  <a href="SECURITY.md"><img src="https://img.shields.io/badge/security-policy-blue.svg" alt="Security Policy"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg" alt="Python 3.11–3.14"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-green.svg" alt="License: AGPL-3.0"></a>
+</p>
+
 A terminal access and control platform. Creates, transports, secures, shares, records, replays, and arbitrates terminal sessions across browsers, WebSockets, telnet, SSH, local PTYs, and remote workers.
 
 > xterm.js is the screen. Provide Terminal is the whole system around the screen.

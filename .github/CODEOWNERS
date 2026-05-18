@@ -1,0 +1,37 @@
+# CODEOWNERS for provide-uterm
+#
+# Routes review requests automatically. Today the project has a single
+# maintainer; this file is here so that as collaborators arrive, ownership
+# can be split per-tree without bouncing every PR through one inbox.
+#
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+#
+# The first matching pattern wins, so put narrower paths after broader ones.
+
+# Default fallback — everything not matched below.
+*                                                @livingstaccato
+
+# CI, release pipeline, supply-chain workflows.
+/.github/                                        @livingstaccato
+/.github/workflows/release.yml                   @livingstaccato
+/.github/workflows/release-governance.yml        @livingstaccato
+/.github/workflows/container-scan.yml            @livingstaccato
+/.github/workflows/codeql.yml                    @livingstaccato
+
+# Security-critical surfaces.
+/SECURITY.md                                     @livingstaccato
+/docs/security-considerations.md                 @livingstaccato
+/docs/release-governance.md                      @livingstaccato
+/packages/provide-uterm/src/provide/uterm/auth.py                            @livingstaccato
+/packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/auth/        @livingstaccato
+/packages/provide-uterm-server/src/provide/uterm/server/auth.py              @livingstaccato
+/packages/provide-uterm-server/src/provide/uterm/server/security.py          @livingstaccato
+/packages/provide-uterm-server/src/provide/uterm/bridge/hub/redaction.py     @livingstaccato
+/packages/provide-uterm-server/src/provide/uterm/bridge/hub/redaction_defaults.py @livingstaccato
+
+# Release-readiness artifacts and the readiness tracker itself.
+/RELEASE_READINESS.md                            @livingstaccato
+/scripts/release_governance_check.sh             @livingstaccato
+/scripts/rollback_drill.py                       @livingstaccato
+/scripts/capture_rc_baseline.sh                  @livingstaccato
+/scripts/load_profile.py                         @livingstaccato
