@@ -45,6 +45,15 @@ jobs:
 
       - uses: astral-sh/setup-uv@v8.1.0
 
+      # Reproducible builds: derive SOURCE_DATE_EPOCH from the commit
+      # being built so wheels rebuilt from this SHA on a different host
+      # are byte-identical. Required for SLSA L3 provenance to actually
+      # mean something — without it, a re-run of the same workflow on
+      # the same SHA would produce mismatched bytes.
+      - name: Pin SOURCE_DATE_EPOCH from commit timestamp
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       # Build sdist + wheel for each package
       - name: Build sdist + wheel
         run: uv build --package ${{ matrix.package }}

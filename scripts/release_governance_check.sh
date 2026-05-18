@@ -16,6 +16,18 @@ echo "[1/4] dependency vulnerability scan"
 uv run --with pip-audit pip-audit --desc --local > "${OUT_DIR}/pip-audit.txt" 2>&1
 
 echo "[2/4] build artifacts"
+# Reproducible builds: pin every embedded timestamp to the commit time
+# of the source SHA being built. The wheel/sdist will then be byte-
+# identical when rebuilt from the same SHA on a different host. See
+# https://reproducible-builds.org/docs/source-date-epoch/ for the
+# canonical spec; hatchling, setuptools, and the standard zip/tar
+# writers all honour SOURCE_DATE_EPOCH when set.
+if [[ -z "${SOURCE_DATE_EPOCH:-}" ]]; then
+  if commit_epoch="$(git log -1 --format=%ct 2>/dev/null)"; then
+    export SOURCE_DATE_EPOCH="${commit_epoch}"
+    echo "  ↳ SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} (from git HEAD)"
+  fi
+fi
 uv build
 
 echo "[3/4] SBOM generation"
