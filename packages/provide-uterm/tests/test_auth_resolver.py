@@ -153,7 +153,7 @@ def test_resolver_load_entries_or_short_circuits_on_empty_line_before_comment_ch
     with tempfile.NamedTemporaryFile("w", suffix=".keys", delete=False) as f:
         # Empty line (handled by `not line`), then comment line (handled
         # by `line.startswith("#")`), then a real entry.
-        f.write(f'\n# this is a comment\n{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} z\n')
+        f.write(f"\n# this is a comment\n{_ED25519_KEYTYPE} {_ED25519_PAYLOAD_B64} z\n")
         path = f.name
     entries = AuthorizedKeysFileResolver(path)._load_entries()
     assert len(entries) == 1
