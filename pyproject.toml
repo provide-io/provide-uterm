@@ -123,7 +123,7 @@ follow_imports = "normal"
 ignore_missing_imports = false
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-server/src", "packages/provide-uterm-platform/src", "packages/provide-uterm-client/src"]
+mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-server/src", "packages/provide-uterm-platform/src", "packages/provide-uterm-client/src", "packages/provide-uterm-cloudflare/src"]
 
 [[tool.mypy.overrides]]
 module = ["provide.telemetry", "provide.telemetry.*", "provide.uterm.deckmux", "provide.uterm.deckmux.*", "structlog", "structlog.*"]
