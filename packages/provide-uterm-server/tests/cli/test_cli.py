@@ -170,7 +170,13 @@ class TestCmdProxy:
 
     def test_missing_uvicorn_exits(self) -> None:
         """SystemExit(1) when uvicorn is not installed."""
+        # Drop any cached importers of uvicorn so the missing-module signal
+        # actually reaches ``_cmd_proxy``'s try/except instead of being
+        # short-circuited by a previously-loaded sibling module that already
+        # bound the name. Without this the test passes or fails depending
+        # on collection order.
         original = sys.modules.get("uvicorn")
+        cached_server_cli = sys.modules.pop("provide.uterm.server.cli", None)
         sys.modules["uvicorn"] = None  # type: ignore[assignment]
         try:
             captured = io.StringIO()
@@ -183,6 +189,8 @@ class TestCmdProxy:
                 sys.modules.pop("uvicorn", None)
             else:
                 sys.modules["uvicorn"] = original
+            if cached_server_cli is not None:
+                sys.modules["provide.uterm.server.cli"] = cached_server_cli
 
     def test_proxy_passes_transport_factory(self) -> None:
         """_cmd_proxy passes a non-None transport_factory to WsTerminalProxy."""

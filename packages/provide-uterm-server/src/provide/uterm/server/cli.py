@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import argparse
 
-import uvicorn
-
 from provide.uterm.server import load_server_config
 from provide.uterm.server.app import create_server_app
 
@@ -30,6 +28,13 @@ def _add_server_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _cmd_server(args: argparse.Namespace) -> None:
     """Run the reference hosted terminal server with the parsed args."""
+    # Defer the uvicorn import to the moment it is actually needed so the
+    # whole CLI module can be imported even when uvicorn isn't installed
+    # (e.g. the ``uterm proxy`` flow has its own "missing dependency"
+    # error handler which expects ``import uvicorn`` to fail there, not
+    # at module-load time of this sibling module).
+    import uvicorn
+
     config = load_server_config(args.config)
     if args.host:
         config.server.host = args.host
