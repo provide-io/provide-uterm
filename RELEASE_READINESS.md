@@ -94,6 +94,14 @@ regressions; they don't block the test suite or coverage gates:
 Each item is its own targeted fix; none are release-blocking on the
 test-correctness axis, but a battle-hardened GA should clear them.
 
+### Recording encryption at rest — moved to enterprise tier
+
+Plaintext JSONL recording stays as the open-source default. The
+encrypted-at-rest implementation is now spec'd as an enterprise
+module in
+[`provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`](../provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md).
+This isn't a GA blocker for the AGPL line; it's a follow-up product.
+
 ### WebSocket origin validation (deployment-time)
 
 The hub accepts WebSocket upgrade requests from any `Origin`. For

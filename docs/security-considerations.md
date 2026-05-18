@@ -95,7 +95,7 @@ The columns map to:
 | Pattern-based annotation (anomaly detection) | ✅ | 16 built-in rules; `PatternDetector`. |
 | Credential leak detection in output | ✅ | Bandit rules + redaction patterns in `redaction` module. |
 | Recording PII redaction | ⚠ | Redaction is opt-in via patterns; ship a default ruleset for known secret formats (AWS keys, GitHub tokens, JWTs, etc.). |
-| Recording encryption at rest | ❌ | Recordings are unencrypted JSONL files. Encrypt-at-rest or filesystem-level encryption is a deployment concern but should be documented. |
+| Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in [`provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`](../../provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
 | Recording retention policy | ⚠ | No automatic purge today; documented retention is a deployment concern. |
 | Tamper-evident audit log | ❌ | Hash-chain or signed log entries would let auditors detect post-fact modification. |
 | Immutable storage hooks | ⚠ | Cloudflare DO + SQLite at the edge; on-prem reference server stores locally. |
@@ -145,7 +145,7 @@ The columns map to:
 | Secrets in environment, not on disk | ✅ | Tunnel tokens are in-memory only. |
 | Secret rotation hooks | ✅ | Token rotation per-session. |
 | Encryption in transit | ⚠ | Depends on deployment-time TLS; document. |
-| Encryption at rest for recordings | ❌ | See §6. |
+| Encryption at rest for recordings | 📋 spec'd | Enterprise tier; see §6 and the referenced monetization spec. |
 | Backups | — | Out of scope for the library; consumer concern. |
 | Key management for JWT signing keys | ⚠ | If self-signing, document the key-rotation procedure. JWKS endpoint already supports it. |
 
