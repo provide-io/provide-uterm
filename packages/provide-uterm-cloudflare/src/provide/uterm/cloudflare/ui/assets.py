@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import importlib.resources
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import Response
-except Exception:
-    from cf_types import Response  # type: ignore[import-not-found]
+else:
+    try:
+        from provide.uterm.cloudflare.cf_types import Response
+    except Exception:
+        from cf_types import Response  # type: ignore[import-not-found]
 
 _MIME = {
     ".html": "text/html; charset=utf-8",

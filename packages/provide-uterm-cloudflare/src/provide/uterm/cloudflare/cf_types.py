@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 __all__ = [
     "CFWebSocket",
@@ -23,43 +23,70 @@ class CFWebSocket(Protocol):
     def deserializeAttachment(self) -> Any: ...  # noqa: N802
 
 
-try:
-    from workers import DurableObject, Response, WorkerEntrypoint  # type: ignore
-except Exception:  # pragma: no cover
+# The ``workers`` runtime module exists only inside Pyodide/CF Workers; outside
+# that environment we fall back to the lightweight stand-ins below. At type-
+# check time we only expose the fallback definitions so ``Response`` carries a
+# real shape instead of devolving to ``Any`` via the missing-stubs import.
+if TYPE_CHECKING:
 
-    class DurableObject:  # type: ignore[no-redef]  # pragma: no cover
-        def __init__(self, *args: Any, **kwargs: Any):
-            ctx = kwargs.get("ctx")
-            env = kwargs.get("env")
-            if len(args) >= 1:
-                ctx = args[0]
-            if len(args) >= 2:
-                env = args[1]
-            self.ctx = ctx
-            self.env = env
+    class DurableObject:
+        ctx: Any
+        env: Any
 
-    class WorkerEntrypoint:  # type: ignore[no-redef]  # pragma: no cover
-        def __init__(self, *args: Any, **kwargs: Any):
-            env = kwargs.get("env")
-            if len(args) >= 2:
-                env = args[1]
-            elif len(args) == 1:
-                env = args[0]
-            self.env = env
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+    class WorkerEntrypoint:
+        env: Any
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
     @dataclass(slots=True)
-    class Response:  # type: ignore[no-redef]  # pragma: no cover
+    class Response:
         body: str | None
         status: int = 200
         headers: dict[str, str] | None = None
         web_socket: CFWebSocket | None = None
 
         @classmethod
-        def json(cls, data: Any, *, status: int = 200, headers: dict[str, str] | None = None) -> Response:
-            merged_headers = {"content-type": "application/json"}
-            if headers:
-                merged_headers.update(headers)
-            return cls(json.dumps(data, ensure_ascii=True), status=status, headers=merged_headers)
+        def json(cls, data: Any, *, status: int = 200, headers: dict[str, str] | None = None) -> Response: ...
+else:
+    try:
+        from workers import DurableObject, Response, WorkerEntrypoint
+    except Exception:  # pragma: no cover
+
+        class DurableObject:  # pragma: no cover
+            def __init__(self, *args: Any, **kwargs: Any):
+                ctx = kwargs.get("ctx")
+                env = kwargs.get("env")
+                if len(args) >= 1:
+                    ctx = args[0]
+                if len(args) >= 2:
+                    env = args[1]
+                self.ctx = ctx
+                self.env = env
+
+        class WorkerEntrypoint:  # pragma: no cover
+            def __init__(self, *args: Any, **kwargs: Any):
+                env = kwargs.get("env")
+                if len(args) >= 2:
+                    env = args[1]
+                elif len(args) == 1:
+                    env = args[0]
+                self.env = env
+
+        @dataclass(slots=True)
+        class Response:  # pragma: no cover
+            body: str | None
+            status: int = 200
+            headers: dict[str, str] | None = None
+            web_socket: CFWebSocket | None = None
+
+            @classmethod
+            def json(cls, data: Any, *, status: int = 200, headers: dict[str, str] | None = None) -> Response:
+                merged_headers = {"content-type": "application/json"}
+                if headers:
+                    merged_headers.update(headers)
+                return cls(json.dumps(data, ensure_ascii=True), status=status, headers=merged_headers)
 
 
 def json_response(data: Any, status: int = 200, headers: dict[str, str] | None = None) -> Response:

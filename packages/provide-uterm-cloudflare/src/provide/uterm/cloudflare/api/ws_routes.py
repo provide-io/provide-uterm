@@ -17,8 +17,12 @@ from __future__ import annotations
 import logging
 import secrets
 import time
+from typing import TYPE_CHECKING
 
 from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
+
+if TYPE_CHECKING:
+    from provide.uterm.cloudflare.cf_types import CFWebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,7 @@ except Exception:  # pragma: no cover
     )
 
 
-async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, *, is_worker: bool) -> None:
+async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: str, *, is_worker: bool) -> None:
     try:
         frames = parse_stream(
             raw,
@@ -106,7 +110,7 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: object, raw: str, 
         # heartbeat / ping: keep-alive frames, no response required.
 
 
-async def _handle_presence_message(runtime: RuntimeProtocol, ws: object, frame: dict) -> None:  # type: ignore[type-arg]
+async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict) -> None:  # type: ignore[type-arg]
     """Relay a DeckMux presence message to all other connected browsers.
 
     The DO acts as a message router only — browser-side coordinators own state.
@@ -154,7 +158,7 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: object, frame: 
             runtime.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
 
 
-async def _handle_resume(runtime: RuntimeProtocol, ws: object, frame: dict) -> None:  # type: ignore[type-arg]
+async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict) -> None:  # type: ignore[type-arg]
     """Handle a browser resume request using a previously issued token."""
     old_token = str(frame.get("token", ""))
     if not old_token:

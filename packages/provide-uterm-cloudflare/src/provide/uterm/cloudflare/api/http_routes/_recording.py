@@ -22,10 +22,13 @@ from urllib.parse import parse_qs, urlparse
 
 from ._shared import _safe_int
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import json_response
-except ImportError:  # pragma: no cover
-    from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path
+else:
+    try:
+        from provide.uterm.cloudflare.cf_types import json_response
+    except ImportError:  # pragma: no cover
+        from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path
 
 if TYPE_CHECKING:
     import re
@@ -91,10 +94,13 @@ def _recording_entries(runtime: RuntimeProtocol, _session_id: str, url: str) -> 
 
 def _recording_download(runtime: RuntimeProtocol, session_id: str) -> object:
     """Stream all events as JSONL (one JSON object per line)."""
-    try:
+    if TYPE_CHECKING:
         from provide.uterm.cloudflare.cf_types import Response
-    except ImportError:  # pragma: no cover
-        from cf_types import Response
+    else:
+        try:
+            from provide.uterm.cloudflare.cf_types import Response
+        except ImportError:  # pragma: no cover
+            from cf_types import Response
 
     entries = runtime.store.list_recording_entries(runtime.worker_id, limit=500, offset=0)
     lines = [json.dumps(e, ensure_ascii=True) for e in entries]

@@ -16,10 +16,13 @@ from ._shared import (
     _wait_for_analysis,
 )
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import json_response
-except ImportError:  # pragma: no cover
-    from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
+else:
+    try:
+        from provide.uterm.cloudflare.cf_types import json_response
+    except ImportError:  # pragma: no cover
+        from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
 
 if TYPE_CHECKING:
     import re
