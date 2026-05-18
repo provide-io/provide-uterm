@@ -19,7 +19,7 @@ from ._shared import (
 try:
     from provide.uterm.cloudflare.cf_types import json_response
 except ImportError:  # pragma: no cover
-    from cf_types import json_response  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
+    from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
 
 if TYPE_CHECKING:
     import re
@@ -143,7 +143,7 @@ async def route_session(
         sockets.extend(getattr(runtime, "raw_sockets", {}).values())
         for sock in sockets:
             with contextlib.suppress(Exception):
-                sock.close(1001, "session deleted")
+                sock.close(1001, "session deleted")  # type: ignore[attr-defined]
         return json_response({"ok": True, "session_id": runtime.worker_id, "deleted": True})
 
     if sub == "restart" and method == "POST":

@@ -27,12 +27,12 @@ try:
     from provide.uterm.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
     from provide.uterm.cloudflare.cf_types import Response
 except Exception:  # pragma: no cover
-    from auth.jwt import (  # type: ignore[import-not-found]
+    from auth.jwt import (  # type: ignore[import-not-found,no-redef]
         JwtValidationError,
         decode_jwt,
         extract_bearer_or_cookie,
     )
-    from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[import-not-found]
+    from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[no-redef]
     from cf_types import Response  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class _AuthMixin:
             try:
                 from http.cookies import SimpleCookie
 
-                cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[union-attr]
+                cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[attr-defined]
                 cookies = SimpleCookie(cookie_header)
                 cookie_key = f"uterm_tunnel_{self.worker_id}"  # type: ignore[attr-defined]
                 if cookie_key in cookies:
@@ -80,7 +80,7 @@ class _AuthMixin:
             issued_ip = self._issued_ip or ""  # type: ignore[attr-defined]
             client_ip = ""
             try:
-                client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[union-attr]
+                client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[attr-defined]
             except Exception:
                 pass
             if issued_ip and client_ip != issued_ip:
@@ -122,7 +122,7 @@ class _AuthMixin:
         # CF Access Service Auth: if the request carries a service token
         # header, CF Access already validated it — trust the request.
         try:
-            cf_client_id = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[union-attr]
+            cf_client_id = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[attr-defined]
             if len(cf_client_id) > 0:
                 return None, None
         except Exception:

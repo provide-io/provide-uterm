@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlparse
 try:
     from provide.uterm.cloudflare.cf_types import Response, json_response
 except ImportError:  # pragma: no cover
-    from cf_types import Response, json_response  # type: ignore[import-not-found]
+    from cf_types import Response, json_response  # type: ignore[import-not-found,no-redef]
 
 
 async def handle_tunnels(request: object, env: object, principal: object | None = None) -> object:
@@ -32,7 +32,7 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
     if method != "POST":
         return json_response({"error": "method not allowed"}, status=405)
     try:
-        raw = await request.json()  # type: ignore[union-attr]
+        raw = await request.json()  # type: ignore[attr-defined]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         body = {}

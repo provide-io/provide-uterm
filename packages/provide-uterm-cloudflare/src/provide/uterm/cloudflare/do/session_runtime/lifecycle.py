@@ -26,10 +26,10 @@ try:
     from provide.uterm.cloudflare.do.ushell import on_browser_connected
     from provide.uterm.cloudflare.state.registry import update_kv_session
 except Exception:  # pragma: no cover
-    from api.ws_routes import handle_socket_message  # type: ignore[import-not-found]
-    from cf_types import CFWebSocket  # type: ignore[import-not-found]  # noqa: TC002
-    from do.ushell import on_browser_connected  # type: ignore[import-not-found]
-    from state.registry import update_kv_session  # type: ignore[import-not-found]
+    from api.ws_routes import handle_socket_message  # type: ignore[import-not-found,no-redef]
+    from cf_types import CFWebSocket  # type: ignore[import-not-found,no-redef]  # noqa: TC002
+    from do.ushell import on_browser_connected  # type: ignore[import-not-found,no-redef]
+    from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +50,8 @@ class _LifecycleMixin:
         already_initialized = ws_id in self.browser_sockets  # type: ignore[attr-defined]
         self._register_socket(ws, role)  # type: ignore[attr-defined]
         if role == "worker":
-            self.worker_ws = ws  # type: ignore[attr-defined]
-            self.lifecycle_state = "running"  # type: ignore[attr-defined]
+            self.worker_ws = ws
+            self.lifecycle_state = "running"
             await self.broadcast_worker_frame(  # type: ignore[attr-defined]
                 {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}  # type: ignore[attr-defined]
             )
@@ -82,7 +82,7 @@ class _LifecycleMixin:
                     {
                         "type": "hello",
                         "worker_id": self.worker_id,  # type: ignore[attr-defined]
-                        "worker_online": self.worker_ws is not None or self._ushell is not None,  # type: ignore[attr-defined]
+                        "worker_online": self.worker_ws is not None or self._ushell is not None,
                         # can_hijack and role reflect the JWT-resolved browser role.
                         "can_hijack": browser_role == "admin",
                         "input_mode": self.input_mode,  # type: ignore[attr-defined]
@@ -129,7 +129,7 @@ class _LifecycleMixin:
             try:
                 from provide.uterm.cloudflare.api.tunnel_routes import handle_tunnel_message
             except ImportError:  # pragma: no cover
-                from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found]
+                from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found,no-redef]
 
             await handle_tunnel_message(self, ws, bytes(_bin))
             return
@@ -159,7 +159,7 @@ class _LifecycleMixin:
         self._remove_ws(ws)  # type: ignore[attr-defined]
         if role == "worker":
             if not deleted:
-                self.lifecycle_state = "stopped"  # type: ignore[attr-defined]
+                self.lifecycle_state = "stopped"
                 await self.broadcast_worker_frame(  # type: ignore[attr-defined]
                     {"type": "worker_disconnected", "worker_id": wid, "ts": time.time()}
                 )
@@ -183,7 +183,7 @@ class _LifecycleMixin:
         self._remove_ws(ws)  # type: ignore[attr-defined]
         if role == "worker":
             if not deleted:
-                self.lifecycle_state = "error"  # type: ignore[attr-defined]
+                self.lifecycle_state = "error"
                 await self.broadcast_worker_frame(  # type: ignore[attr-defined]
                     {"type": "worker_disconnected", "worker_id": wid, "ts": time.time()}
                 )

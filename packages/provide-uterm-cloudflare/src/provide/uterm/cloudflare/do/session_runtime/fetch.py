@@ -30,11 +30,11 @@ try:
     from provide.uterm.cloudflare.do.ushell import init_ushell
     from provide.uterm.cloudflare.state.registry import update_kv_session
 except Exception:  # pragma: no cover
-    from api.http_routes import route_http  # type: ignore[import-not-found]
-    from auth.jwt import extract_bearer_or_cookie  # type: ignore[import-not-found]
+    from api.http_routes import route_http  # type: ignore[import-not-found,no-redef]
+    from auth.jwt import extract_bearer_or_cookie  # type: ignore[import-not-found,no-redef]
     from cf_types import Response  # type: ignore[import-not-found]
-    from do.ushell import init_ushell  # type: ignore[import-not-found]
-    from state.registry import update_kv_session  # type: ignore[import-not-found]
+    from do.ushell import init_ushell  # type: ignore[import-not-found,no-redef]
+    from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -49,7 +49,7 @@ class _FetchMixin:
         Called at the start of fetch() so KV writes and state operations use
         the real worker_id extracted from the URL path.
         """
-        if self.worker_id != "default":  # type: ignore[attr-defined]
+        if self.worker_id != "default":
             return
         try:
             path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
@@ -59,7 +59,7 @@ class _FetchMixin:
             if path.startswith(prefix):
                 segment = path[len(prefix) :].split("/")[0]
                 if segment:
-                    self.worker_id = segment  # type: ignore[attr-defined]
+                    self.worker_id = segment
                     return
 
     async def fetch(self, request: object) -> Response:
@@ -89,7 +89,7 @@ class _FetchMixin:
         _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/", "/ws/raw/"))
         if _is_worker_ws and self.config.worker_bearer_token:  # type: ignore[attr-defined]
             # CF Access service tokens bypass worker bearer token check.
-            _cf_client = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[union-attr]
+            _cf_client = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[attr-defined]
             if _cf_client.endswith(".access"):
                 _principal, auth_error = None, None
             else:
@@ -107,7 +107,7 @@ class _FetchMixin:
                     valid_worker_token = True
                     auth_type = "tunnel_session"
                 if not valid_worker_token:
-                    logger.info("tunnel_token_validated worker_id=%s valid=false", self.worker_id)  # type: ignore[attr-defined]
+                    logger.info("tunnel_token_validated worker_id=%s valid=false", self.worker_id)
                     return Response(
                         json.dumps({"error": "worker authentication required"}),
                         status=403,
@@ -115,7 +115,7 @@ class _FetchMixin:
                     )
                 logger.info(
                     "tunnel_token_validated worker_id=%s auth_type=%s",
-                    self.worker_id,  # type: ignore[attr-defined]
+                    self.worker_id,
                     auth_type,
                 )
                 _principal, auth_error = None, None
@@ -161,11 +161,11 @@ class _FetchMixin:
                 # Encode socket type, browser role, and worker_id for hibernation safety.
                 # Format: "browser:admin:e2e-abc123", "worker:admin:e2e-abc123", "raw:admin:e2e-abc123"
                 # worker_id in the attachment lets webSocketClose recover the ID after hibernation.
-                server.serializeAttachment(f"{socket_role}:{browser_role}:{self.worker_id}")  # type: ignore[attr-defined]
+                server.serializeAttachment(f"{socket_role}:{browser_role}:{self.worker_id}")
             except Exception as exc:
                 logger.warning(
                     "serializeAttachment failed — role lost on hibernation worker_id=%s: %s",
-                    self.worker_id,  # type: ignore[attr-defined]
+                    self.worker_id,
                     exc,
                 )
                 server._ut_role = socket_role
@@ -181,7 +181,7 @@ class _FetchMixin:
                 try:
                     await update_kv_session(
                         self.env,  # type: ignore[attr-defined]
-                        self.worker_id,  # type: ignore[attr-defined]
+                        self.worker_id,
                         connected=True,
                         hijacked=self.hijack.session is not None,  # type: ignore[attr-defined]
                         input_mode=self.input_mode,  # type: ignore[attr-defined]
@@ -204,7 +204,7 @@ class _FetchMixin:
                         encode_control(
                             {
                                 "type": "hello",
-                                "worker_id": self.worker_id,  # type: ignore[attr-defined]
+                                "worker_id": self.worker_id,
                                 "worker_online": self.worker_ws is not None or self._ushell is not None,  # type: ignore[attr-defined]
                                 "can_hijack": browser_role == "admin",
                                 "input_mode": self.input_mode,  # type: ignore[attr-defined]

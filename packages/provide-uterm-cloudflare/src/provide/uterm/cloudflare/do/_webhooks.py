@@ -123,14 +123,14 @@ async def route_webhooks(
     try:
         from provide.uterm.cloudflare.cf_types import json_response
     except ImportError:  # pragma: no cover
-        from cf_types import json_response  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
+        from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
 
     if session_id != runtime.worker_id:
         return json_response({"error": "not_found", "path": path}, status=404)
 
     # POST /api/sessions/{id}/webhooks — register
     if method == "POST" and webhook_id is None:
-        payload = await runtime.request_json(request)  # type: ignore[attr-defined]
+        payload = await runtime.request_json(request)
         hook_url = payload.get("url")
         if not hook_url or not isinstance(hook_url, str):
             return json_response({"error": "url is required"}, status=422)
@@ -138,7 +138,7 @@ async def route_webhooks(
         if event_types is not None and not isinstance(event_types, list):
             return json_response({"error": "event_types must be a list"}, status=422)
         wh_id = uuid.uuid4().hex
-        runtime.store.save_webhook(  # type: ignore[attr-defined]
+        runtime.store.save_webhook(
             wh_id,
             session_id,
             hook_url,
@@ -158,7 +158,7 @@ async def route_webhooks(
 
     # GET /api/sessions/{id}/webhooks — list
     if method == "GET" and webhook_id is None:
-        webhooks = runtime.store.load_webhooks(session_id)  # type: ignore[attr-defined]
+        webhooks = runtime.store.load_webhooks(session_id)
         return json_response(
             {
                 "webhooks": [
@@ -177,10 +177,10 @@ async def route_webhooks(
     # DELETE /api/sessions/{id}/webhooks/{webhook_id}
     if method == "DELETE" and webhook_id is not None:
         # Verify it belongs to this session before deleting.
-        webhooks = runtime.store.load_webhooks(session_id)  # type: ignore[attr-defined]
+        webhooks = runtime.store.load_webhooks(session_id)
         if not any(wh["webhook_id"] == webhook_id for wh in webhooks):
             return json_response({"error": "not_found", "webhook_id": webhook_id}, status=404)
-        runtime.store.delete_webhook(webhook_id)  # type: ignore[attr-defined]
+        runtime.store.delete_webhook(webhook_id)
         return json_response({"ok": True, "webhook_id": webhook_id})
 
     return json_response({"error": "not_found", "path": path}, status=404)
