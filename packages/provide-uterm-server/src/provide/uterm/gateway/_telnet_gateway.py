@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
+from provide.uterm.colors import ColorMode
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.gateway._gateway import (
     _pipe_ws,
@@ -84,7 +85,7 @@ class TelnetWsGateway:
         self,
         ws_url: str,
         *,
-        color_mode: str = "passthrough",
+        color_mode: ColorMode = "passthrough",
         token_file: Path | None = None,
         iac_negotiate: bool = True,
         iac_negotiate_timeout: float = 0.4,
@@ -128,7 +129,7 @@ class TelnetWsGateway:
         # Per-connection token-holder, optionally seeded from disk when the
         # gateway was configured with ``token_file``. Updated when the server
         # sends a session_token frame; persisted to disk in the handler.
-        token_holder: list[dict | None] = [None]
+        token_holder: list[dict[str, Any] | None] = [None]
         if self._token_file is not None:
             saved = _read_token(self._token_file)
             if saved:

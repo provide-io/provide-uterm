@@ -203,7 +203,8 @@ class ControlPlaneResumeStore:
                 wall_created_at=float(record.created_at),
             )
 
-        return await self._run_tx(_op)
+        result: ResumeSession | None = await self._run_tx(_op)
+        return result
 
     async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
         async def _op(store: _ControlPlaneResumeTokenStore) -> None:

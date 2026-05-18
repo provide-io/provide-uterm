@@ -48,7 +48,7 @@ def create_approvals_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="Admin role required")
 
     @router.post("/{request_id}/approve")
-    async def approve_command(request_id: str, request: Request):
+    async def approve_command(request_id: str, request: Request) -> dict[str, str]:
         await _require_admin(request)
         hub = request.app.state.uterm_hub
         approval_req = hub._approval_store.get(request_id)
@@ -65,7 +65,7 @@ def create_approvals_router() -> APIRouter:
         return {"status": "approved"}
 
     @router.post("/{request_id}/reject")
-    async def reject_command(request_id: str, request: Request, reason: str | None = None):
+    async def reject_command(request_id: str, request: Request, reason: str | None = None) -> dict[str, str]:
         await _require_admin(request)
         hub = request.app.state.uterm_hub
         approval_req = hub._approval_store.get(request_id)

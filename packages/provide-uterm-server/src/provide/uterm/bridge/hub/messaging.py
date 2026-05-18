@@ -16,12 +16,11 @@ from provide.uterm.bridge.frames import make_hijack_state_frame, make_worker_dis
 from provide.uterm.bridge.hub.redaction import StreamRedactor
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from fastapi import APIRouter, WebSocket
 
     from provide.uterm.bridge.contracts import InputMode
     from provide.uterm.bridge.frames import HijackStateFrame
+    from provide.uterm.bridge.hub.core import TermHub
     from provide.uterm.bridge.hub.resume import ResumeTokenStore
 
 logger = get_logger(__name__)
@@ -56,17 +55,25 @@ class HubMessagingMixin:
     _behavioral_audit_interval_s: float
     _dashboard_hijack_lease_s: int
 
-    # Methods supplied by sibling mixins (HubStateMixin / _HijackOwnershipMixin
-    # / HubApprovalFlowMixin). Listed here as `Callable[..., Any]` so cross-
-    # mixin calls in this module typecheck without each call needing a per-
-    # line ``# type: ignore[attr-defined]``. The actual signatures live on
-    # the implementing mixins; this is only an interface contract.
+    # Cross-mixin methods (defined on HubStateMixin / _HijackOwnershipMixin
+    # / HubApprovalFlowMixin / _ConnectionMixin). Declared as type-only
+    # ``def`` stubs that mirror the canonical signatures so mypy can
+    # type-check call sites in this module without surfacing them as
+    # ``[attr-defined]``. The actual implementations live on the
+    # sibling mixins; these stubs are never called.
     if TYPE_CHECKING:
-        prepare_policy_context: Callable[..., Awaitable[Any]]
-        is_hijacked: Callable[..., bool]
-        is_dashboard_hijack_active: Callable[..., bool]
-        has_valid_rest_lease: Callable[..., bool]
-        notify_hijack_changed: Callable[..., Awaitable[None]]
+        from provide.uterm.bridge.hub.ext import PolicyContext as _PolicyContext  # noqa: N814
+        from provide.uterm.bridge.models import WorkerTermState as _WorkerTermState  # noqa: N814
+
+        async def prepare_policy_context(
+            self, ws: WebSocket, worker_id: str, action: str | None = None
+        ) -> _PolicyContext: ...
+        def is_hijacked(self, st: _WorkerTermState) -> bool: ...
+        def is_dashboard_hijack_active(self, st: _WorkerTermState) -> bool: ...
+        def has_valid_rest_lease(self, st: _WorkerTermState) -> bool: ...
+        def notify_hijack_changed(
+            self, worker_id: str, *, enabled: bool, owner: str | None = None
+        ) -> None: ...
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it."""
@@ -267,7 +274,8 @@ class HubMessagingMixin:
         self._keystroke_timestamps.pop(ws, None)
         self._input_buffers.pop(ws, None)
         self._hold_buffers.pop(ws, None)
-        return await super().cleanup_browser_disconnect(worker_id, ws, owned_hijack)
+        # cooperative MRO super-call — defined on a sibling mixin.
+        return await super().cleanup_browser_disconnect(worker_id, ws, owned_hijack)  # type: ignore[misc, no-any-return]
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
         """Clear input buffers for dead browsers and call parent cleanup."""
@@ -275,7 +283,8 @@ class HubMessagingMixin:
             self._input_buffers.pop(ws, None)
             self._hold_buffers.pop(ws, None)
             self._startup_pending_browsers.discard(ws)
-        return await super().remove_dead_browsers(worker_id, dead)
+        # cooperative MRO super-call — defined on a sibling mixin.
+        return await super().remove_dead_browsers(worker_id, dead)  # type: ignore[misc, no-any-return]
 
     async def _run_behavioral_audit_loop(self) -> None:
         """Periodically audit active connections for behavioral anomalies."""
@@ -303,6 +312,10 @@ class HubMessagingMixin:
                 timestamp=time.time(),
             )
             context = await self.prepare_policy_context(ws, worker_id, action="behavioral_audit")
+            # _behavioral_audit_gate is Any | None; the guard above already
+            # exited the loop when it's None (see _run_behavioral_audit_loop),
+            # but the narrow doesn't survive across awaits.
+            assert self._behavioral_audit_gate is not None  # noqa: S101
             decision = await self._behavioral_audit_gate.audit_connection(
                 heuristics, context, self._behavioral_thresholds
             )
@@ -317,7 +330,8 @@ class HubMessagingMixin:
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
         """Deregister the worker WS and notify the EventBus on disconnect."""
-        should_broadcast, was_hijacked = await super().deregister_worker(worker_id, ws)
+        # cooperative MRO super-call — defined on a sibling mixin.
+        should_broadcast, was_hijacked = await super().deregister_worker(worker_id, ws)  # type: ignore[misc]
         if should_broadcast and self._event_bus is not None:
             self._event_bus.close_worker(worker_id)
         return should_broadcast, was_hijacked
@@ -450,7 +464,8 @@ class HubMessagingMixin:
             st = self._workers.get(worker_id)
             if st is None:
                 return None
-            return st.browsers.get(ws)
+            role: str | None = st.browsers.get(ws)
+            return role
 
     async def get_last_snapshot(self, worker_id: str) -> dict[str, Any] | None:
         """Return the most recent snapshot for *worker_id*, or ``None`` if not registered."""
@@ -485,8 +500,12 @@ class HubMessagingMixin:
         from provide.uterm.bridge.routes.websockets import register_ws_routes
 
         router = APIRouter()
-        register_rest_routes(self, router)
-        register_ws_routes(self, router)
+        # The route registrars are typed for ``TermHub`` (the composing
+        # class). At runtime ``self`` IS a TermHub when this mixin method
+        # runs; the cast tells mypy that's the contract.
+        hub = cast("TermHub", self)
+        register_rest_routes(hub, router)
+        register_ws_routes(hub, router)
         for registrar in extra_route_registrars or []:
             registrar(self, router)
         return router

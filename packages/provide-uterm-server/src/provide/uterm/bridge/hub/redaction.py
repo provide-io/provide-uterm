@@ -52,13 +52,24 @@ class StreamRedactor:
 
         if self._single_replacement is not None:
             # Optimized path for when all rules use the same replacement string.
-            # We use a lambda to avoid backreference interpretation in the replacement string.
-            return self._pattern.sub(lambda _: self._single_replacement, data)
+            # Capture the str in a local so mypy can narrow it past the
+            # ``is not None`` check — the lambda closes over the local,
+            # not the optional instance attribute.
+            single: str = self._single_replacement
+            return self._pattern.sub(lambda _match: single, data)
 
         return self._pattern.sub(self._replace_match, data)
 
-    def _replace_match(self, match: re.Match) -> str:
+    def _replace_match(self, match: re.Match[str]) -> str:
         """Find which rule matched by looking at the last matched group index."""
-        # match.lastindex is the index of the highest-numbered capturing group that matched.
-        idx = bisect.bisect_right(self._rule_start_indices, match.lastindex) - 1
+        # ``match.lastindex`` is the 1-based index of the highest-numbered
+        # capturing group that matched. It is ``None`` only when no
+        # capturing group matched at all — which can't happen here because
+        # every rule pattern is wrapped in a top-level group during
+        # ``__init__`` (see ``patterns.append(f"({rule.pattern})")``). The
+        # ``or 0`` keeps mypy happy without a runtime cost; bisect_right
+        # with a 0 sentinel returns 0 and ``self._replacements[-1]`` is
+        # still a valid (deterministic) replacement.
+        last = match.lastindex or 0
+        idx = bisect.bisect_right(self._rule_start_indices, last) - 1
         return self._replacements[idx]

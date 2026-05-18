@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
 from provide.uterm.control_channel import encode_data
@@ -39,7 +39,12 @@ class HubApprovalFlowMixin:
 
     if TYPE_CHECKING:
         _get: Callable[..., Any]
-        send_worker: Callable[..., Awaitable[Any]]
+
+        # Mirrors HubMessagingMixin.send_worker exactly (per-mixin type-only
+        # stubs must match the canonical signature across the MRO).
+        async def send_worker(
+            self, worker_id: str, msg: dict[str, Any], *, source: Any = None
+        ) -> bool: ...
 
     async def resolve_approval(self, worker_id: str, request_id: str, decision: PolicyDecision, command: str) -> None:
         """Resolve a pending approval and resume the worker if approved."""
@@ -96,7 +101,7 @@ class HubApprovalFlowMixin:
 
                         task = asyncio.create_task(
                             playback(
-                                self,
+                                cast("TermHub", self),
                                 ws,
                                 worker_id,
                                 st.browsers.get(ws, "viewer"),
