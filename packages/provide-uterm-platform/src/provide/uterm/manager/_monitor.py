@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from provide.telemetry import get_logger, logger
+from provide.telemetry import get_logger
 
 from provide.uterm.manager.ext import EVENT_AGENT_EXITED
 
