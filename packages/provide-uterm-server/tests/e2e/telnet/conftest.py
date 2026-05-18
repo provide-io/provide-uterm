@@ -313,8 +313,11 @@ async def drain_for_snapshot_with_text(
         if remaining <= 0:
             break
         snap = await _drain_until(ws, "snapshot", timeout=min(0.5, remaining))
+        # A 0.5s slice with no snapshot just means the worker hasn't produced
+        # one yet — keep waiting until the outer deadline rather than giving
+        # up on the first idle window.
         if snap is None:
-            return None
+            continue
         if text in snap.get("screen", ""):
             return snap
     return None
