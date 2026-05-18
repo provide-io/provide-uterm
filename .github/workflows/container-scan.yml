@@ -57,7 +57,7 @@ jobs:
       # SARIF report uploaded to GitHub's Security tab so findings have
       # a permanent home and dismissals persist across runs.
       - name: Trivy scan (SARIF)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: provide-uterm-server:scan
           format: sarif
@@ -78,7 +78,7 @@ jobs:
       # shipped a fix for yet (those are documented elsewhere and require
       # an image migration, not a code change).
       - name: Trivy gate (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # v0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: provide-uterm-server:scan
           format: table
