@@ -33,8 +33,12 @@ WORKDIR /app
 # Copy workspace root metadata
 COPY pyproject.toml uv.lock README.md ./
 
-# Copy core and server packages
+# Copy core, client (workspace dependency of server), and server packages.
+# provide-uterm-server requires provide-uterm-client, which is declared as a
+# workspace member in the root pyproject — uv refuses to resolve the install
+# if the workspace member directory is missing from the build context.
 COPY packages/provide-uterm/ packages/provide-uterm/
+COPY packages/provide-uterm-client/ packages/provide-uterm-client/
 COPY packages/provide-uterm-server/ packages/provide-uterm-server/
 
 # Install the server with all extras
