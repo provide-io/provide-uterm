@@ -26,7 +26,18 @@ FROM python:3.11-slim
 # Keeps Python from buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir uv
+# Pull in the latest base-image security patches (Debian point releases ship
+# fixes for libcap2 / libsystemd0 / libudev1 that the trailing python:3.11-slim
+# digest doesn't yet pick up). Required to keep the Trivy HIGH/CRITICAL gate
+# green even between python:3.11-slim digest pins.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bring pip's bundled wheel / setuptools (which vendors jaraco.context) up to
+# the post-fix versions before uv consumes them.
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=80.10.0" "wheel>=0.46.2" \
+    && pip install --no-cache-dir uv
 
 WORKDIR /app
 
