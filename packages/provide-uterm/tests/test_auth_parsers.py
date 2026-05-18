@@ -44,11 +44,14 @@ from provide.uterm.auth import (
         # Quotes alone produce a single empty-string-with-quotes token.
         ('""', ['""']),
         # Mixed quotes + unquoted commas.
-        ('no-pty,command="foo",permitopen="1.2.3.4:22"', [
-            "no-pty",
-            'command="foo"',
-            'permitopen="1.2.3.4:22"',
-        ]),
+        (
+            'no-pty,command="foo",permitopen="1.2.3.4:22"',
+            [
+                "no-pty",
+                'command="foo"',
+                'permitopen="1.2.3.4:22"',
+            ],
+        ),
     ],
 )
 def test_split_options_known_inputs(options_str: str, expected: list[str]) -> None:
@@ -97,7 +100,7 @@ def test_parse_options_empty_returns_empty_dict() -> None:
     assert _parse_options("") == {}
 
 
-def test_parse_options_boolean_flag_value_is_True_singleton() -> None:
+def test_parse_options_boolean_flag_value_is_True_singleton() -> None:  # noqa: N802
     # The flag value must be the bool ``True`` (not the string ``"True"``)
     # because callers branch on it via ``isinstance(value, str)``.
     out = _parse_options("no-pty")
@@ -143,7 +146,7 @@ def test_parse_options_keyvalue_with_no_value_yields_empty_string() -> None:
     # ``foo=`` (trailing equals, no value) maps to empty string, not True.
     out = _parse_options("foo=")
     assert out == {"foo": ""}
-    assert out["foo"] is not True  # noqa: E712
+    assert out["foo"] is not True
 
 
 def test_parse_options_quotes_with_only_whitespace_inside_are_stripped() -> None:
@@ -190,7 +193,7 @@ def test_parse_options_strips_outer_whitespace_around_value() -> None:
     assert out == {"foo": "bar"}
 
 
-def test_parse_options_True_is_the_singleton_True_not_string_or_int() -> None:
+def test_parse_options_True_is_the_singleton_True_not_string_or_int() -> None:  # noqa: N802
     # Defensive: mutating ``True`` to e.g. ``1`` or ``"True"`` should
     # be caught — flag values must be the singleton bool True.
     out = _parse_options("no-pty")

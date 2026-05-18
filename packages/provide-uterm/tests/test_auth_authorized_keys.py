@@ -21,9 +21,7 @@ from provide.uterm.auth import (
     fingerprint_from_openssh_blob,
 )
 
-_ED25519_SAMPLE = (
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7nKaxTKmzX0z3V6tGqmmOvkSiGXh3yF2J5vqkQTOY+"
-)
+_ED25519_SAMPLE = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7nKaxTKmzX0z3V6tGqmmOvkSiGXh3yF2J5vqkQTOY+"
 _ED25519_KEYTYPE = "ssh-ed25519"
 _ED25519_PAYLOAD_B64 = "AAAAC3NzaC1lZDI1NTE5AAAAIK7nKaxTKmzX0z3V6tGqmmOvkSiGXh3yF2J5vqkQTOY+"
 
@@ -99,9 +97,7 @@ def test_parse_authorized_keys_line_ecdsa_keytype_prefix_recognized() -> None:
 
 
 def test_parse_authorized_keys_line_sk_keytype_prefix_recognized() -> None:
-    fake_sk = (
-        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIA=="
-    )
+    fake_sk = "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIA=="
     entry = _parse_authorized_keys_line(f"{fake_sk} yubikey-prod")
     assert entry.subject == "yubikey-prod"
 
