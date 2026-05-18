@@ -26,10 +26,10 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
     ControlChannelProtocolError = Exception  # type: ignore[assignment]
     DataChunk = Any  # type: ignore[assignment]
 
-    def encode_control(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
+    def encode_control(*_a: Any, **_k: Any) -> bytes:
         return b""
 
-    def encode_data(*_a: Any, **_k: Any) -> bytes:  # type: ignore[assignment]
+    def encode_data(*_a: Any, **_k: Any) -> bytes:
         return b""
 
 

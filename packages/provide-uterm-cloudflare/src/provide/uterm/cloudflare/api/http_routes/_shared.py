@@ -9,6 +9,16 @@ import re
 import time
 from typing import TYPE_CHECKING, Any, cast
 
+__all__ = [
+    "MAX_EXPECT_REGEX_LEN",
+    "PromptRegexError",
+    "build_hijack_events_response",
+    "build_hijack_snapshot_response",
+    "compile_expect_regex",
+    "extract_prompt_id",
+    "snapshot_matches",
+]
+
 try:
     from provide.uterm.bridge.rest_helpers import (
         MAX_EXPECT_REGEX_LEN,
@@ -23,7 +33,7 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
     # Fallback for Cloudflare Durable Objects validation phase where
     # provide.uterm modules are not in the import path yet.
     # These will be imported at runtime when actually needed.
-    MAX_EXPECT_REGEX_LEN = 10000  # type: ignore[assignment]
+    MAX_EXPECT_REGEX_LEN = 10000
     PromptRegexError = Exception  # type: ignore[assignment]
 
     def build_hijack_events_response(*_args, **_kwargs):  # type: ignore[no-untyped-def]

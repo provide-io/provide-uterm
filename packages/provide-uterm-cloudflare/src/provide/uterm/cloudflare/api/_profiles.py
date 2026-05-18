@@ -23,7 +23,7 @@ from typing import Any
 try:
     from provide.uterm.cloudflare.cf_types import json_response
 except ImportError:  # pragma: no cover
-    from cf_types import json_response  # type: ignore[import-not-found]
+    from cf_types import json_response  # type: ignore[import-not-found,no-redef]
 
 _MUTABLE_FIELDS = frozenset(
     {"name", "host", "port", "username", "tags", "input_mode", "recording_enabled", "visibility"}
@@ -77,14 +77,14 @@ async def route_profiles(
 
 
 async def _kv_get_profile(kv: object, pid: str) -> dict[str, Any] | None:
-    raw = await kv.get(f"profile:{pid}")  # type: ignore[union-attr]
+    raw = await kv.get(f"profile:{pid}")  # type: ignore[attr-defined]
     if raw is None:
         return None
     return json.loads(str(raw) if isinstance(raw, str) else raw)
 
 
 async def _kv_put_profile(kv: object, profile: dict[str, Any]) -> None:
-    await kv.put(f"profile:{profile['profile_id']}", json.dumps(profile, ensure_ascii=True))  # type: ignore[union-attr]
+    await kv.put(f"profile:{profile['profile_id']}", json.dumps(profile, ensure_ascii=True))  # type: ignore[attr-defined]
 
 
 def _can_access(profile: dict[str, Any], principal_id: str) -> bool:
@@ -97,11 +97,11 @@ def _can_access(profile: dict[str, Any], principal_id: str) -> bool:
 
 
 async def _list(kv: object, principal_id: str) -> object:
-    keys_result = await kv.list(prefix="profile:")  # type: ignore[union-attr]
+    keys_result = await kv.list(prefix="profile:")  # type: ignore[attr-defined]
     keys = [k.get("name") or k for k in (getattr(keys_result, "keys", None) or keys_result or [])]
     profiles = []
     for key in keys:
-        raw = await kv.get(str(key))  # type: ignore[union-attr]
+        raw = await kv.get(str(key))  # type: ignore[attr-defined]
         if not raw:
             continue
         try:
@@ -124,7 +124,7 @@ async def _get(kv: object, pid: str, principal_id: str) -> object:
 
 async def _create(request: object, kv: object, principal_id: str) -> object:
     try:
-        raw = await request.json()  # type: ignore[union-attr]
+        raw = await request.json()  # type: ignore[attr-defined]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         body = {}
@@ -158,7 +158,7 @@ async def _update(request: object, kv: object, pid: str, principal_id: str) -> o
     if p.get("owner") != principal_id:
         return json_response({"detail": "insufficient privileges"}, status=403)
     try:
-        raw = await request.json()  # type: ignore[union-attr]
+        raw = await request.json()  # type: ignore[attr-defined]
         body = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         body = {}
@@ -176,7 +176,7 @@ async def _delete(kv: object, pid: str, principal_id: str) -> object:
         return json_response({"detail": f"unknown profile: {pid}"}, status=404)
     if p.get("owner") != principal_id:
         return json_response({"detail": "insufficient privileges"}, status=403)
-    await kv.delete(f"profile:{pid}")  # type: ignore[union-attr]
+    await kv.delete(f"profile:{pid}")  # type: ignore[attr-defined]
     return json_response({"ok": True})
 
 
@@ -193,7 +193,7 @@ async def _connect(
     if not _can_access(p, principal_id):
         return json_response({"detail": "insufficient privileges"}, status=403)
     try:
-        raw = await request.json()  # type: ignore[union-attr]
+        raw = await request.json()  # type: ignore[attr-defined]
         raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         pass

@@ -38,7 +38,7 @@ class _WsHelperMixin:
 
         key = f"{time.time_ns()}_{secrets.token_hex(4)}"
         with contextlib.suppress(Exception):
-            ws._ut_ws_key = key
+            ws._ut_ws_key = key  # type: ignore[attr-defined]
         return key
 
     def _socket_role(self, ws: CFWebSocket) -> str:
@@ -128,7 +128,7 @@ class _WsHelperMixin:
     def _register_socket(self, ws: CFWebSocket, role: str) -> None:
         ws_id = self.ws_key(ws)
         if role == "worker":
-            self.worker_ws = ws  # type: ignore[attr-defined]
+            self.worker_ws = ws
             return
         if role == "raw":
             self.raw_sockets[ws_id] = ws  # type: ignore[attr-defined]
@@ -138,8 +138,8 @@ class _WsHelperMixin:
     def _remove_ws(self, ws: CFWebSocket) -> None:
         """Remove *ws* from all socket registries (worker, browser, raw)."""
         ws_id = self.ws_key(ws)
-        if ws is self.worker_ws:  # type: ignore[attr-defined]
-            self.worker_ws = None  # type: ignore[attr-defined]
+        if ws is self.worker_ws:
+            self.worker_ws = None
         self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
         self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
         self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
@@ -169,7 +169,7 @@ class _WsHelperMixin:
             return
         exclude_ws: CFWebSocket | None = ws if exclude_self else None
         connected_ids = self._get_presence_browser_ids(exclude_ws=exclude_ws)
-        await self.send_ws(  # type: ignore[attr-defined]
+        await self.send_ws(
             ws,
             {
                 "type": "presence_sync",

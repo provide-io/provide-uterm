@@ -52,8 +52,8 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
     """Import and instantiate UshellConnector, wiring CF env bindings."""
     global _IMPORT_ERROR
     try:
-        from provide.uterm.shell.commands import CommandDispatcher  # type: ignore[import-not-found] # noqa: F401
-        from provide.uterm.shell.terminal._connector import UshellConnector  # type: ignore[import-not-found]
+        from provide.uterm.shell.commands import CommandDispatcher  # noqa: F401
+        from provide.uterm.shell.terminal._connector import UshellConnector
     except ImportError as exc:
         _IMPORT_ERROR = str(exc)
         logger.warning("ushell: could not import UshellConnector: %s", exc)
@@ -74,7 +74,7 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
         try:
             from state.registry import list_kv_sessions as _lks  # type: ignore[import-not-found]
 
-            async def _list_sessions2() -> list[dict[str, Any]]:  # type: ignore[misc]
+            async def _list_sessions2() -> list[dict[str, Any]]:
                 return await _lks(env)
 
             ctx["list_kv_sessions"] = _list_sessions2

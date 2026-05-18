@@ -29,13 +29,13 @@ try:
     from provide.uterm.cloudflare.state.registry import KV_REFRESH_S, update_kv_session
     from provide.uterm.cloudflare.state.store import LeaseRecord
 except Exception:  # pragma: no cover
-    from bridge.hijack import HijackSession  # type: ignore[import-not-found]
-    from cf_types import CFWebSocket  # type: ignore[import-not-found]  # noqa: TC002
-    from do._webhooks import fire_webhooks  # type: ignore[import-not-found]
-    from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found]
-    from do.persistence import persist_lease as _persist_lease  # type: ignore[import-not-found]
-    from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found]
-    from state.store import LeaseRecord  # type: ignore[import-not-found]
+    from bridge.hijack import HijackSession  # type: ignore[import-not-found,no-redef]
+    from cf_types import CFWebSocket  # type: ignore[import-not-found,no-redef]  # noqa: TC002
+    from do._webhooks import fire_webhooks  # type: ignore[import-not-found,no-redef]
+    from do.persistence import clear_lease as _clear_lease  # type: ignore[import-not-found,no-redef]
+    from do.persistence import persist_lease as _persist_lease  # type: ignore[no-redef]
+    from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found,no-redef]
+    from state.store import LeaseRecord  # type: ignore[import-not-found,no-redef]
 
 
 logger = logging.getLogger(__name__)
@@ -61,15 +61,15 @@ class _SessionRuntimeIoMixin:
     def _restore_state(self) -> None:
         saved_meta = self.store.load_session_meta(self.worker_id)  # type: ignore[attr-defined]
         if saved_meta is not None:
-            self.meta = saved_meta  # type: ignore[attr-defined]
-            self._meta_loaded = True  # type: ignore[attr-defined]
+            self.meta = saved_meta
+            self._meta_loaded = True
         row = self.store.load_session(self.worker_id)  # type: ignore[attr-defined]
         if row is None:
             return
         deleted_at = row.get("deleted_at")
         if deleted_at is not None:
-            self._deleted_at = float(deleted_at)  # type: ignore[attr-defined]
-            self.lifecycle_state = "deleted"  # type: ignore[attr-defined]
+            self._deleted_at = float(deleted_at)
+            self.lifecycle_state = "deleted"
             return
         hijack_id = row.get("hijack_id")
         owner = row.get("owner")
@@ -87,10 +87,10 @@ class _SessionRuntimeIoMixin:
             )
         snapshot = row.get("last_snapshot")
         if isinstance(snapshot, dict):
-            self.last_snapshot = snapshot  # type: ignore[attr-defined]
+            self.last_snapshot = snapshot
         stored_mode = row.get("input_mode")
         if stored_mode in {"hijack", "open"}:
-            self.input_mode = stored_mode  # type: ignore[attr-defined]
+            self.input_mode = stored_mode
 
     # ------------------------------------------------------------------
     # Request helpers
@@ -131,7 +131,7 @@ class _SessionRuntimeIoMixin:
                 "hijacked": session is not None,
                 "owner": owner,
                 "lease_expires_at": (_mono_to_wall(session.lease_expires_at) if session is not None else None),
-                "input_mode": self.input_mode,  # type: ignore[attr-defined]
+                "input_mode": self.input_mode,
                 "ts": time.time(),
             },
         )
@@ -211,7 +211,7 @@ class _SessionRuntimeIoMixin:
                     continue
                 self._queue_bytes += msg_len
                 await self.send_ws(ws, payload)
-                self._queue_bytes = max(0, self._queue_bytes - msg_len)  # type: ignore[attr-defined]
+                self._queue_bytes = max(0, self._queue_bytes - msg_len)
             except Exception:
                 self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
                 self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
@@ -228,7 +228,7 @@ class _SessionRuntimeIoMixin:
         elif frame_type == "snapshot":
             screen = payload.get("screen")
             text_payload = str(screen) if screen is not None else ""
-            self.last_snapshot = payload  # type: ignore[attr-defined]
+            self.last_snapshot = payload
         elif frame_type == "worker_connected":
             text_payload = "\r\n[worker connected]\r\n"
         elif frame_type == "worker_disconnected":
@@ -260,7 +260,7 @@ class _SessionRuntimeIoMixin:
                 self.worker_id,  # type: ignore[attr-defined]
                 connected=True,
                 hijacked=self.hijack.session is not None,  # type: ignore[attr-defined]
-                input_mode=self.input_mode,  # type: ignore[attr-defined]
+                input_mode=self.input_mode,
             )
             if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
                 _s.setAlarm(int((wall_now + KV_REFRESH_S) * 1000))

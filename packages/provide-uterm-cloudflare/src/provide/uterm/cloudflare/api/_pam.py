@@ -41,14 +41,14 @@ async def handle_pam_event(request: object, env: object) -> object:
     try:
         from provide.uterm.cloudflare.cf_types import json_response
     except ImportError:  # pragma: no cover
-        from cf_types import json_response  # type: ignore[import-not-found]
+        from cf_types import json_response  # type: ignore[import-not-found,no-redef]
 
     method = str(getattr(request, "method", "GET")).upper()
     if method != "POST":
         return json_response({"error": "method_not_allowed"}, status=405)
 
     try:
-        raw = await request.json()  # type: ignore[union-attr]
+        raw = await request.json()  # type: ignore[attr-defined]
         body: dict[str, Any] = raw.to_py() if hasattr(raw, "to_py") else raw
     except Exception:
         return json_response({"error": "invalid_json"}, status=400)

@@ -189,7 +189,7 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
     try:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import resolve_share_context  # type: ignore[import-not-found]
+        from api._tunnel_api import resolve_share_context  # type: ignore[import-not-found,no-redef]
 
     spa = _resolve_spa_route(path)
     if spa is not None and spa[0] == "share" and "session_id" in spa[1]:
@@ -288,7 +288,7 @@ async def _api_tunnels(request: object, env: object, config: CloudflareConfig) -
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnels
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnels
+        from api._tunnel_api import handle_tunnels  # type: ignore[no-redef]
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnels(request, env, principal)
@@ -298,7 +298,7 @@ async def _api_tunnel_revoke(request: object, env: object, config: CloudflareCon
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnel_revoke_tokens
+        from api._tunnel_api import handle_tunnel_revoke_tokens  # type: ignore[no-redef]
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnel_revoke_tokens(request, env, tunnel_id, principal)
@@ -308,7 +308,7 @@ async def _api_tunnel_rotate(request: object, env: object, config: CloudflareCon
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_rotate_tokens
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnel_rotate_tokens
+        from api._tunnel_api import handle_tunnel_rotate_tokens  # type: ignore[no-redef]
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnel_rotate_tokens(request, env, tunnel_id, principal, ttl_s=config.tunnel_token_ttl_s)
@@ -318,7 +318,7 @@ async def _api_pam_events(request: object, env: object, _config: CloudflareConfi
     try:
         from provide.uterm.cloudflare.api._pam import handle_pam_event
     except ImportError:  # pragma: no cover
-        from api._pam import handle_pam_event  # type: ignore[import-not-found]
+        from api._pam import handle_pam_event  # type: ignore[import-not-found,no-redef]
 
     return await handle_pam_event(request, env)
 

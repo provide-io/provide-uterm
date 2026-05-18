@@ -21,9 +21,9 @@ try:
     from provide.uterm.cloudflare.do._sse import route_sse
     from provide.uterm.cloudflare.do._webhooks import route_webhooks
 except ImportError:  # pragma: no cover
-    from cf_types import json_response  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
-    from do._sse import route_sse  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
-    from do._webhooks import route_webhooks  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
+    from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
+    from do._sse import route_sse  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
+    from do._webhooks import route_webhooks  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.contracts import RuntimeProtocol

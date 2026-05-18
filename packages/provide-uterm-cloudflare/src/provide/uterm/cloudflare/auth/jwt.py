@@ -23,7 +23,7 @@ try:
 
     _js_crypto = _js_mod.crypto  # pragma: no cover
     _js_object = _js_mod.Object  # pragma: no cover
-    from pyodide.ffi import to_js  # pragma: no cover  # CF Pyodide-only — requires real workers runtime
+    from pyodide.ffi import to_js  # pragma: no cover  # CF Pyodide-only — requires real workers runtime  # type: ignore[import-not-found]
 
     _to_js = to_js  # pragma: no cover
 

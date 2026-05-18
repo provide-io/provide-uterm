@@ -4,6 +4,14 @@ import json
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+__all__ = [
+    "CFWebSocket",
+    "DurableObject",
+    "Response",
+    "WorkerEntrypoint",
+    "json_response",
+]
+
 
 @runtime_checkable
 class CFWebSocket(Protocol):
@@ -19,7 +27,7 @@ try:
     from workers import DurableObject, Response, WorkerEntrypoint  # type: ignore
 except Exception:  # pragma: no cover
 
-    class DurableObject:  # pragma: no cover
+    class DurableObject:  # type: ignore[no-redef]  # pragma: no cover
         def __init__(self, *args: Any, **kwargs: Any):
             ctx = kwargs.get("ctx")
             env = kwargs.get("env")
@@ -30,7 +38,7 @@ except Exception:  # pragma: no cover
             self.ctx = ctx
             self.env = env
 
-    class WorkerEntrypoint:  # pragma: no cover
+    class WorkerEntrypoint:  # type: ignore[no-redef]  # pragma: no cover
         def __init__(self, *args: Any, **kwargs: Any):
             env = kwargs.get("env")
             if len(args) >= 2:
@@ -40,7 +48,7 @@ except Exception:  # pragma: no cover
             self.env = env
 
     @dataclass(slots=True)
-    class Response:  # pragma: no cover
+    class Response:  # type: ignore[no-redef]  # pragma: no cover
         body: str | None
         status: int = 200
         headers: dict[str, str] | None = None
@@ -56,7 +64,7 @@ except Exception:  # pragma: no cover
 
 def json_response(data: Any, status: int = 200, headers: dict[str, str] | None = None) -> Response:
     if hasattr(Response, "json"):
-        return Response.json(data, status=status, headers=headers)  # type: ignore[attr-defined]
+        return Response.json(data, status=status, headers=headers)
     body = json.dumps(data, ensure_ascii=True)  # pragma: no cover
     merged_headers = {"content-type": "application/json"}  # pragma: no cover
     if headers:  # pragma: no cover
