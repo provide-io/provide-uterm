@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
 
@@ -77,7 +77,7 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
         frame_type = frame.get("type")
 
         if frame_type == "resume":
-            await _handle_resume(runtime, ws, frame)
+            await _handle_resume(runtime, ws, cast("dict[str, Any]", frame))
             continue
 
         if frame_type == "input":
@@ -102,15 +102,15 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
             # CF backend: hijack is REST-only. Inform the client rather than silently dropping.
             await runtime.send_ws(ws, {"type": "error", "message": "use_rest_hijack_api"})
         elif frame_type in {"presence_update", "queued_input", "control_request"}:
-            await _handle_presence_message(runtime, ws, frame)
+            await _handle_presence_message(runtime, ws, cast("dict[str, Any]", frame))
         elif frame_type in {"http_action", "http_intercept_toggle", "http_inspect_toggle"}:
             # Relay intercept/inspect commands from browser back to the worker
             if runtime.worker_ws is not None:
-                await runtime.send_ws(runtime.worker_ws, frame)
+                await runtime.send_ws(runtime.worker_ws, cast("dict[str, object]", frame))
         # heartbeat / ping: keep-alive frames, no response required.
 
 
-async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict) -> None:  # type: ignore[type-arg]
+async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[str, Any]) -> None:
     """Relay a DeckMux presence message to all other connected browsers.
 
     The DO acts as a message router only — browser-side coordinators own state.
@@ -158,7 +158,7 @@ async def _handle_presence_message(runtime: RuntimeProtocol, ws: CFWebSocket, fr
             runtime.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
 
 
-async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict) -> None:  # type: ignore[type-arg]
+async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[str, Any]) -> None:
     """Handle a browser resume request using a previously issued token."""
     old_token = str(frame.get("token", ""))
     if not old_token:
@@ -180,7 +180,7 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict)
 
     # Update socket attachment with restored role
     try:
-        ws.serializeAttachment(f"browser:{effective_role}:{runtime.worker_id}")  # type: ignore[attr-defined]
+        ws.serializeAttachment(f"browser:{effective_role}:{runtime.worker_id}")
     except Exception as exc:
         logger.debug("resume: serializeAttachment failed: %s", exc)
 

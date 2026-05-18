@@ -348,6 +348,8 @@ class SqliteStateStore:
         suffix = f"{order} LIMIT ?"
         if not tail:
             suffix += " OFFSET ?"
+            # ``tail`` is True iff ``offset is None``; narrow for mypy here.
+            assert offset is not None
             params.append(max(0, offset))
 
         # nosec B608 — `where` is built from string-literal fragments above

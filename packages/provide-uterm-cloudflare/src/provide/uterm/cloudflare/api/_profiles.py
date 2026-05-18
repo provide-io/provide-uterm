@@ -83,7 +83,8 @@ async def _kv_get_profile(kv: object, pid: str) -> dict[str, Any] | None:
     raw = await kv.get(f"profile:{pid}")  # type: ignore[attr-defined]
     if raw is None:
         return None
-    return json.loads(str(raw) if isinstance(raw, str) else raw)
+    decoded: dict[str, Any] = json.loads(str(raw) if isinstance(raw, str) else raw)
+    return decoded
 
 
 async def _kv_put_profile(kv: object, profile: dict[str, Any]) -> None:

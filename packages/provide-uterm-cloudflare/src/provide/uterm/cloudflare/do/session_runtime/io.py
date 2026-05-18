@@ -15,7 +15,7 @@ import contextlib
 import json
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_tracer
 from provide.uterm.control_channel import encode_control, encode_data
@@ -52,7 +52,20 @@ def _mono_to_wall(mono: float | None) -> float | None:
 
 
 class _SessionRuntimeIoMixin:
-    """Mixin providing request helpers, broadcast, worker I/O, and alarm for SessionRuntime."""
+    """Mixin providing request helpers, broadcast, worker I/O, and alarm for SessionRuntime.
+
+    The attributes below are *type-only* declarations describing what the
+    composing ``SessionRuntime`` class initialises elsewhere — the mixin
+    itself never assigns them. Matches the cross-mixin pattern used by
+    the server-side hub mixins.
+    """
+
+    if TYPE_CHECKING:
+        worker_id: str
+        max_buffer_bytes: int
+        _queue_bytes: int
+
+        async def send_ws(self, ws: CFWebSocket, frame: dict[str, object]) -> None: ...
 
     # ------------------------------------------------------------------
     # State restore (called from SessionRuntime.__init__)
@@ -124,7 +137,7 @@ class _SessionRuntimeIoMixin:
         owner = None
         if session is not None:
             owner = "me" if self.browser_hijack_owner.get(ws_id) == session.hijack_id else "other"  # type: ignore[attr-defined]
-        await self.send_ws(  # type: ignore[attr-defined]
+        await self.send_ws(
             ws,
             {
                 "type": "hijack_state",
@@ -155,7 +168,7 @@ class _SessionRuntimeIoMixin:
             return True
         if self.worker_ws is None:  # type: ignore[attr-defined]
             return False
-        await self.send_ws(  # type: ignore[attr-defined]
+        await self.send_ws(
             self.worker_ws,  # type: ignore[attr-defined]
             {"type": "control", "action": action, "owner": owner, "lease_s": lease_s, "ts": time.time()},
         )
@@ -257,7 +270,7 @@ class _SessionRuntimeIoMixin:
         if self.worker_ws is not None or self._ushell is not None:  # type: ignore[attr-defined]
             await update_kv_session(
                 self.env,  # type: ignore[attr-defined]
-                self.worker_id,  # type: ignore[attr-defined]
+                self.worker_id,
                 connected=True,
                 hijacked=self.hijack.session is not None,  # type: ignore[attr-defined]
                 input_mode=self.input_mode,
@@ -266,4 +279,6 @@ class _SessionRuntimeIoMixin:
                 _s.setAlarm(int((wall_now + KV_REFRESH_S) * 1000))
         elif self.hijack.session is not None:  # type: ignore[attr-defined]
             if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
-                _s.setAlarm(int(_mono_to_wall(self.hijack.session.lease_expires_at) * 1000))  # type: ignore[attr-defined]
+                lease_wall = _mono_to_wall(self.hijack.session.lease_expires_at)  # type: ignore[attr-defined]
+                if lease_wall is not None:
+                    _s.setAlarm(int(lease_wall * 1000))

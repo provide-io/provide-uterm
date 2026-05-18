@@ -29,7 +29,7 @@ Event format (one per event)::
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ _RETRY_MS = 3000
 _MAX_EVENTS = 100
 
 
-def build_sse_response(events: list[dict], *, retry_ms: int = _RETRY_MS) -> Response:
+def build_sse_response(events: list[dict[str, Any]], *, retry_ms: int = _RETRY_MS) -> Response:
     """Build a polling-SSE ``Response`` from a list of event dicts.
 
     Each event should have a ``seq`` field used as the SSE ``id``.

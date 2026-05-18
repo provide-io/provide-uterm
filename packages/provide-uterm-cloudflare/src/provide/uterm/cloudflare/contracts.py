@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 from provide.uterm.bridge.contracts import (
     Frame,
@@ -81,7 +81,9 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
     if not isinstance(frame_type, str):
         raise ProtocolError("missing frame type")
 
-    normalized: Frame = {"type": frame_type, "ts": float(value.get("ts", time.time()))}
+    # ``frame_type`` is validated below against the closed ``FrameType`` literal
+    # union; the cast keeps mypy from flagging the generic ``str`` form here.
+    normalized: Frame = {"type": cast("FrameType", frame_type), "ts": float(value.get("ts", time.time()))}
 
     if frame_type == "input":
         data = str(value.get("data", ""))
@@ -139,9 +141,12 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
         "http_inspect_toggle",
     }:
         # Copy all non-type, non-ts fields through so the relay is lossless.
+        # Cast to a plain dict to bypass TypedDict's literal-key requirement —
+        # the relay is intentionally lossy on shape, not on values.
+        relay = cast("dict[str, Any]", normalized)
         for k, v in value.items():
             if k not in ("type", "ts"):
-                normalized[k] = v
+                relay[k] = v
     else:
         raise ProtocolError(f"unsupported frame type: {frame_type}")
 

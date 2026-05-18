@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 import logging
 import secrets
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.auth.jwt import (
         JwtValidationError,
         decode_jwt,
@@ -26,14 +26,23 @@ try:
     )
     from provide.uterm.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
     from provide.uterm.cloudflare.cf_types import Response
-except Exception:  # pragma: no cover
-    from auth.jwt import (  # type: ignore[import-not-found,no-redef]
-        JwtValidationError,
-        decode_jwt,
-        extract_bearer_or_cookie,
-    )
-    from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[no-redef]
-    from cf_types import Response  # type: ignore[import-not-found]
+else:
+    try:
+        from provide.uterm.cloudflare.auth.jwt import (
+            JwtValidationError,
+            decode_jwt,
+            extract_bearer_or_cookie,
+        )
+        from provide.uterm.cloudflare.auth.jwt import resolve_role as _resolve_jwt_role
+        from provide.uterm.cloudflare.cf_types import Response
+    except Exception:  # pragma: no cover
+        from auth.jwt import (  # type: ignore[import-not-found,no-redef]
+            JwtValidationError,
+            decode_jwt,
+            extract_bearer_or_cookie,
+        )
+        from auth.jwt import resolve_role as _resolve_jwt_role  # type: ignore[no-redef]
+        from cf_types import Response  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +58,8 @@ class _AuthMixin:
         if transport != "cookie":  # "query" or "both"
             try:
                 qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-                token = ((qs.get("token", []) + qs.get("access_token", [])) or [None])[0]
+                tokens = qs.get("token", []) + qs.get("access_token", [])
+                token = tokens[0] if tokens else None
             except Exception as exc:
                 logger.debug("failed to parse share token: %s", exc)
         # Cookie fallback: uterm_tunnel_{worker_id}

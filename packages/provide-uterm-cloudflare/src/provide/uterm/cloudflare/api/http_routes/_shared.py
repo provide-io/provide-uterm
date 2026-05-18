@@ -19,7 +19,7 @@ __all__ = [
     "snapshot_matches",
 ]
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.bridge.rest_helpers import (
         MAX_EXPECT_REGEX_LEN,
         PromptRegexError,
@@ -29,27 +29,38 @@ try:
         extract_prompt_id,
         snapshot_matches,
     )
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    # Fallback for Cloudflare Durable Objects validation phase where
-    # provide.uterm modules are not in the import path yet.
-    # These will be imported at runtime when actually needed.
-    MAX_EXPECT_REGEX_LEN = 10000
-    PromptRegexError = Exception  # type: ignore[assignment]
+else:
+    try:
+        from provide.uterm.bridge.rest_helpers import (
+            MAX_EXPECT_REGEX_LEN,
+            PromptRegexError,
+            build_hijack_events_response,
+            build_hijack_snapshot_response,
+            compile_expect_regex,
+            extract_prompt_id,
+            snapshot_matches,
+        )
+    except (ImportError, ModuleNotFoundError):  # pragma: no cover
+        # Fallback for Cloudflare Durable Objects validation phase where
+        # provide.uterm modules are not in the import path yet.
+        # These will be imported at runtime when actually needed.
+        MAX_EXPECT_REGEX_LEN = 10000
+        PromptRegexError = Exception
 
-    def build_hijack_events_response(*_args, **_kwargs):  # type: ignore[no-untyped-def]
-        raise RuntimeError("Should not be called during validation")
+        def build_hijack_events_response(*_args, **_kwargs):
+            raise RuntimeError("Should not be called during validation")
 
-    def build_hijack_snapshot_response(*_args, **_kwargs):  # type: ignore[no-untyped-def]
-        raise RuntimeError("Should not be called during validation")
+        def build_hijack_snapshot_response(*_args, **_kwargs):
+            raise RuntimeError("Should not be called during validation")
 
-    def compile_expect_regex(*_args, **_kwargs):  # type: ignore[no-untyped-def]
-        raise RuntimeError("Should not be called during validation")
+        def compile_expect_regex(*_args, **_kwargs):
+            raise RuntimeError("Should not be called during validation")
 
-    def extract_prompt_id(*_args, **_kwargs):  # type: ignore[no-untyped-def]
-        raise RuntimeError("Should not be called during validation")
+        def extract_prompt_id(*_args, **_kwargs):
+            raise RuntimeError("Should not be called during validation")
 
-    def snapshot_matches(*_args, **_kwargs):  # type: ignore[no-untyped-def]
-        raise RuntimeError("Should not be called during validation")
+        def snapshot_matches(*_args, **_kwargs):
+            raise RuntimeError("Should not be called during validation")
 
 
 if TYPE_CHECKING:
