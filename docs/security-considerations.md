@@ -95,7 +95,7 @@ The columns map to:
 | Pattern-based annotation (anomaly detection) | ✅ | 16 built-in rules; `PatternDetector`. |
 | Credential leak detection in output | ✅ | Bandit rules + redaction patterns in `redaction` module. |
 | Recording PII redaction | ⚠ | Redaction is opt-in via patterns; ship a default ruleset for known secret formats (AWS keys, GitHub tokens, JWTs, etc.). |
-| Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in [`provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`](../../provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
+| Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
 | Recording retention policy | ⚠ | No automatic purge today; documented retention is a deployment concern. |
 | Tamper-evident audit log | ❌ | Hash-chain or signed log entries would let auditors detect post-fact modification. |
 | Immutable storage hooks | ⚠ | Cloudflare DO + SQLite at the edge; on-prem reference server stores locally. |

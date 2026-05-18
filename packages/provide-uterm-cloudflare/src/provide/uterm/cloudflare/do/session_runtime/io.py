@@ -279,6 +279,9 @@ class _SessionRuntimeIoMixin:
                 _s.setAlarm(int((wall_now + KV_REFRESH_S) * 1000))
         elif self.hijack.session is not None:  # type: ignore[attr-defined]
             if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
+                # ``self.hijack.session.lease_expires_at`` is a non-None float
+                # (the surrounding branch already gated on ``session is not
+                # None``), so ``_mono_to_wall`` cannot return None here.
                 lease_wall = _mono_to_wall(self.hijack.session.lease_expires_at)  # type: ignore[attr-defined]
-                if lease_wall is not None:
-                    _s.setAlarm(int(lease_wall * 1000))
+                assert lease_wall is not None
+                _s.setAlarm(int(lease_wall * 1000))
