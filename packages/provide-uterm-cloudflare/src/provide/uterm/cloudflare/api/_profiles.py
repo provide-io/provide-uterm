@@ -18,12 +18,15 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import json_response
-except ImportError:  # pragma: no cover
-    from cf_types import json_response  # type: ignore[import-not-found,no-redef]
+else:
+    try:
+        from provide.uterm.cloudflare.cf_types import json_response
+    except ImportError:  # pragma: no cover
+        from cf_types import json_response  # type: ignore[import-not-found,no-redef]
 
 _MUTABLE_FIELDS = frozenset(
     {"name", "host", "port", "username", "tags", "input_mode", "recording_enabled", "visibility"}

@@ -10,7 +10,7 @@ from provide.uterm.bridge.contracts import (
     SessionStatusResponse,
 )
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.control_channel import (
         ControlChannelDecoder,
         ControlChannelProtocolError,
@@ -19,18 +19,28 @@ try:
         encode_control,
         encode_data,
     )
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    # Fallback for Cloudflare Durable Objects validation phase
-    ControlChunk = Any  # type: ignore[assignment]
-    ControlChannelDecoder = Any  # type: ignore[assignment]
-    ControlChannelProtocolError = Exception  # type: ignore[assignment]
-    DataChunk = Any  # type: ignore[assignment]
+else:
+    try:
+        from provide.uterm.control_channel import (
+            ControlChannelDecoder,
+            ControlChannelProtocolError,
+            ControlChunk,
+            DataChunk,
+            encode_control,
+            encode_data,
+        )
+    except (ImportError, ModuleNotFoundError):  # pragma: no cover
+        # Fallback for Cloudflare Durable Objects validation phase
+        ControlChunk = Any
+        ControlChannelDecoder = Any
+        ControlChannelProtocolError = Exception
+        DataChunk = Any
 
-    def encode_control(*_a: Any, **_k: Any) -> bytes:
-        return b""
+        def encode_control(*_a: Any, **_k: Any) -> bytes:
+            return b""
 
-    def encode_data(*_a: Any, **_k: Any) -> bytes:
-        return b""
+        def encode_data(*_a: Any, **_k: Any) -> bytes:
+            return b""
 
 
 if TYPE_CHECKING:

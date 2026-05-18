@@ -32,10 +32,13 @@ import json
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import Response
-except ImportError:  # pragma: no cover
-    from cf_types import Response  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
+else:
+    try:
+        from provide.uterm.cloudflare.cf_types import Response
+    except ImportError:  # pragma: no cover
+        from cf_types import Response  # type: ignore[import-not-found]  # CF flat path  # pragma: no cover
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.contracts import RuntimeProtocol

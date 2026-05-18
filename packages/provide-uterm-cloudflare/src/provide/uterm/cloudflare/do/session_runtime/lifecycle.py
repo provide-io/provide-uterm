@@ -16,20 +16,26 @@ import contextlib
 import logging
 import secrets
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
     from provide.uterm.cloudflare.cf_types import CFWebSocket
     from provide.uterm.cloudflare.do.ushell import on_browser_connected
     from provide.uterm.cloudflare.state.registry import update_kv_session
-except Exception:  # pragma: no cover
-    from api.ws_routes import handle_socket_message  # type: ignore[import-not-found,no-redef]
-    from cf_types import CFWebSocket  # type: ignore[import-not-found,no-redef]  # noqa: TC002
-    from do.ushell import on_browser_connected  # type: ignore[import-not-found,no-redef]
-    from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
+else:
+    try:
+        from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
+        from provide.uterm.cloudflare.cf_types import CFWebSocket
+        from provide.uterm.cloudflare.do.ushell import on_browser_connected
+        from provide.uterm.cloudflare.state.registry import update_kv_session
+    except Exception:  # pragma: no cover
+        from api.ws_routes import handle_socket_message  # type: ignore[import-not-found,no-redef]
+        from cf_types import CFWebSocket  # type: ignore[import-not-found,no-redef]  # noqa: TC002
+        from do.ushell import on_browser_connected  # type: ignore[import-not-found,no-redef]
+        from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +132,13 @@ class _LifecycleMixin:
         elif hasattr(_bin, "to_bytes"):  # pragma: no cover — Pyodide JsProxy only
             _bin = _bin.to_bytes()
         if isinstance(_bin, (bytes, bytearray, memoryview)) and role == "worker":
-            try:
+            if TYPE_CHECKING:
                 from provide.uterm.cloudflare.api.tunnel_routes import handle_tunnel_message
-            except ImportError:  # pragma: no cover
-                from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found,no-redef]
+            else:
+                try:
+                    from provide.uterm.cloudflare.api.tunnel_routes import handle_tunnel_message
+                except ImportError:  # pragma: no cover
+                    from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found,no-redef]
 
             await handle_tunnel_message(self, ws, bytes(_bin))
             return

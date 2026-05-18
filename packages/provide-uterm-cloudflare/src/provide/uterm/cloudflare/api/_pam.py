@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 _TTY_SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
 
@@ -38,10 +38,13 @@ def _tty_slug(tty: str) -> str:
 
 async def handle_pam_event(request: object, env: object) -> object:
     """Handle POST /api/pam-events."""
-    try:
+    if TYPE_CHECKING:
         from provide.uterm.cloudflare.cf_types import json_response
-    except ImportError:  # pragma: no cover
-        from cf_types import json_response  # type: ignore[import-not-found,no-redef]
+    else:
+        try:
+            from provide.uterm.cloudflare.cf_types import json_response
+        except ImportError:  # pragma: no cover
+            from cf_types import json_response  # type: ignore[import-not-found,no-redef]
 
     method = str(getattr(request, "method", "GET")).upper()
     if method != "POST":

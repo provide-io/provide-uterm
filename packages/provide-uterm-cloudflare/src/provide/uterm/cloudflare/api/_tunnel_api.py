@@ -10,12 +10,16 @@ import json
 import secrets
 import time
 import uuid
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import Response, json_response
-except ImportError:  # pragma: no cover
-    from cf_types import Response, json_response  # type: ignore[import-not-found,no-redef]
+else:
+    try:
+        from provide.uterm.cloudflare.cf_types import Response, json_response
+    except ImportError:  # pragma: no cover
+        from cf_types import Response, json_response  # type: ignore[import-not-found,no-redef]
 
 
 async def handle_tunnels(request: object, env: object, principal: object | None = None) -> object:
