@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       # Build the server image. We don't push it anywhere from this
       # workflow; we just scan it.
@@ -57,7 +57,7 @@ jobs:
       # SARIF report uploaded to GitHub's Security tab so findings have
       # a permanent home and dismissals persist across runs.
       - name: Trivy scan (SARIF)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # v0.28.0
         with:
           image-ref: provide-uterm-server:scan
           format: sarif
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b  # v3
         with:
           sarif_file: trivy-results.sarif
           category: trivy
@@ -78,7 +78,7 @@ jobs:
       # shipped a fix for yet (those are documented elsewhere and require
       # an image migration, not a code change).
       - name: Trivy gate (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # v0.28.0
         with:
           image-ref: provide-uterm-server:scan
           format: table
