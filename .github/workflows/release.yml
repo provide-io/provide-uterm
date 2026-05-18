@@ -41,9 +41,9 @@ jobs:
           - provide-uterm-platform
           - provide-uterm-cloudflare
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - uses: astral-sh/setup-uv@v8.1.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
       # Reproducible builds: derive SOURCE_DATE_EPOCH from the commit
       # being built so wheels rebuilt from this SHA on a different host
@@ -60,7 +60,7 @@ jobs:
 
       # Upload build artifacts for later publish stages
       - name: Upload dists
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: dist-${{ matrix.package }}
           path: dist/*
@@ -75,11 +75,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: dist-provide-uterm
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -90,8 +90,8 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
-      - uses: actions/setup-python@v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       # Read expected version from VERSION file
@@ -128,11 +128,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: dist-provide-uterm
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
 
   # ── Stage 2: server, client, platform (depend on provide-uterm) ─────
   testpypi-dependents:
@@ -151,11 +151,11 @@ jobs:
           - provide-uterm-client
           - provide-uterm-platform
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: dist-${{ matrix.package }}
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -176,11 +176,11 @@ jobs:
           - provide-uterm-client
           - provide-uterm-platform
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: dist-${{ matrix.package }}
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
 
   # ── Stage 3: provide-uterm-cloudflare (depends on core) ─────────────
   testpypi-cloudflare:
@@ -192,11 +192,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: dist-provide-uterm-cloudflare
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -207,8 +207,8 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.dry-run != true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
-      - uses: actions/setup-python@v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       # Read expected version
@@ -245,11 +245,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: dist-provide-uterm-cloudflare
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.0
+      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
 
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
@@ -263,7 +263,7 @@ jobs:
     steps:
       # Download all build artifacts
       - name: Download all dists
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: dist-*
           path: dist/
@@ -271,7 +271,7 @@ jobs:
 
       # Sign each artifact with Sigstore
       - name: Sign with Sigstore
-        uses: sigstore/gh-action-sigstore-python@v3.3.0
+        uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc  # v3.3.0
         with:
           inputs: >-
             dist/*.tar.gz
@@ -305,7 +305,7 @@ jobs:
       hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - name: Download all dists
-        uses: actions/download-artifact@v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: dist-*
           path: dist/
@@ -327,6 +327,8 @@ jobs:
       actions: read
       id-token: write
       contents: write
+    # v2.0.0 — reusable workflow refs MUST use a tag (not a SHA) per GitHub
+    # rules. SLSA project signs the v2.0.0 tag with their release key.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
       base64-subjects: ${{ needs.hash-artifacts.outputs.hashes }}
@@ -344,13 +346,13 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: dist-*
           path: dist/
           merge-multiple: true
 
-      - uses: actions/setup-python@v6.2.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
 
@@ -360,7 +362,7 @@ jobs:
           python -m twine check dist/*
 
       - name: Sign artifacts with Sigstore
-        uses: sigstore/gh-action-sigstore-python@v3.3.0
+        uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc  # v3.3.0
         with:
           inputs: >-
             dist/*.tar.gz
