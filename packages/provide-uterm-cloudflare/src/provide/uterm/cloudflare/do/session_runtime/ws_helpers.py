@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 class _WsHelperMixin:
     """Mixin providing WebSocket helper methods for SessionRuntime."""
 
+    if TYPE_CHECKING:
+        worker_ws: CFWebSocket | None
+
     def ws_key(self, ws: CFWebSocket) -> str:
         try:
             existing = getattr(ws, "_ut_ws_key", None)
@@ -123,7 +126,8 @@ class _WsHelperMixin:
                     return parts[2]
         except Exception as exc:
             logger.debug("failed to deserialize worker_id from attachment: %s", exc)
-        return self.worker_id  # type: ignore[attr-defined]
+        worker_id: str = self.worker_id  # type: ignore[attr-defined]
+        return worker_id
 
     def _register_socket(self, ws: CFWebSocket, role: str) -> None:
         ws_id = self.ws_key(ws)

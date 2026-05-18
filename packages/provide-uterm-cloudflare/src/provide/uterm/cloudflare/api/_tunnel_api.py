@@ -10,7 +10,8 @@ import json
 import secrets
 import time
 import uuid
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
 if TYPE_CHECKING:
@@ -103,7 +104,7 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
     )
 
 
-def _principal_can_manage_tunnel(principal: object | None, entry: dict) -> bool:
+def _principal_can_manage_tunnel(principal: object | None, entry: dict[str, Any]) -> bool:
     """Return True if ``principal`` is admin or the tunnel's owner.
 
     ``principal=None`` (open-access / none/dev mode) is permitted so that
@@ -295,7 +296,7 @@ async def handle_share_route(
     request: object,
     env: object,
     tunnel_id: str,
-    spa_response: object,
+    spa_response: Callable[..., Response],
 ) -> Response:
     """Serve a shared tunnel page when the presented token is valid."""
     share_context = await resolve_share_context(request, env, tunnel_id)
@@ -305,7 +306,8 @@ async def handle_share_route(
 
     page_kind, share_role = share_context
     query = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-    token = ((query.get("token", []) + query.get("access_token", [])) or [None])[0]
+    tokens = query.get("token", []) + query.get("access_token", [])
+    token: str | None = tokens[0] if tokens else None
     return spa_response(
         page_kind,
         session_id=tunnel_id,

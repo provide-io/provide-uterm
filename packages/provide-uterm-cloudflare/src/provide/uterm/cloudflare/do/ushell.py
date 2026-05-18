@@ -75,7 +75,8 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
             from state.registry import list_kv_sessions as _lks  # type: ignore[import-not-found]
 
             async def _list_sessions2() -> list[dict[str, Any]]:
-                return await _lks(env)
+                result: list[dict[str, Any]] = await _lks(env)
+                return result
 
             ctx["list_kv_sessions"] = _list_sessions2
         except Exception:

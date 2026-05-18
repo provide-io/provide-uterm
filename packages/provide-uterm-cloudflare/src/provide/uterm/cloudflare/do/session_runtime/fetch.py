@@ -16,6 +16,7 @@ import json
 import logging
 import secrets
 import time
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
 from provide.telemetry import get_tracer
@@ -23,18 +24,26 @@ from provide.telemetry import get_tracer
 from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
 from provide.uterm.control_channel import encode_control
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.cloudflare.api.http_routes import route_http
     from provide.uterm.cloudflare.auth.jwt import extract_bearer_or_cookie
     from provide.uterm.cloudflare.cf_types import Response
+    from provide.uterm.cloudflare.contracts import RuntimeProtocol
     from provide.uterm.cloudflare.do.ushell import init_ushell
     from provide.uterm.cloudflare.state.registry import update_kv_session
-except Exception:  # pragma: no cover
-    from api.http_routes import route_http  # type: ignore[import-not-found,no-redef]
-    from auth.jwt import extract_bearer_or_cookie  # type: ignore[import-not-found,no-redef]
-    from cf_types import Response  # type: ignore[import-not-found]
-    from do.ushell import init_ushell  # type: ignore[import-not-found,no-redef]
-    from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
+else:
+    try:
+        from provide.uterm.cloudflare.api.http_routes import route_http
+        from provide.uterm.cloudflare.auth.jwt import extract_bearer_or_cookie
+        from provide.uterm.cloudflare.cf_types import Response
+        from provide.uterm.cloudflare.do.ushell import init_ushell
+        from provide.uterm.cloudflare.state.registry import update_kv_session
+    except Exception:  # pragma: no cover
+        from api.http_routes import route_http  # type: ignore[import-not-found,no-redef]
+        from auth.jwt import extract_bearer_or_cookie  # type: ignore[import-not-found,no-redef]
+        from cf_types import Response  # type: ignore[import-not-found]
+        from do.ushell import init_ushell  # type: ignore[import-not-found,no-redef]
+        from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -42,6 +51,9 @@ tracer = get_tracer(__name__)
 
 class _FetchMixin:
     """Mixin providing the DO fetch dispatch and WS upgrade for SessionRuntime."""
+
+    if TYPE_CHECKING:
+        worker_id: str
 
     def _lazy_init_worker_id(self, request: object) -> None:
         """Update worker_id from the request URL when ctx.id.name() returned 'default'.
@@ -122,7 +134,7 @@ class _FetchMixin:
         else:
             _principal, auth_error = await self.resolve_principal(request)  # type: ignore[attr-defined]
             if auth_error is not None:
-                return auth_error
+                return cast("Response", auth_error)
         if upgrade_header == "websocket":
             from js import WebSocketPair  # type: ignore[import-not-found]
 
@@ -227,4 +239,5 @@ class _FetchMixin:
                     logger.warning("failed to send presence_sync from fetch(): %s", exc)
 
             return Response(None, status=101, web_socket=client)
-        return await route_http(self, request)
+        result = await route_http(cast("RuntimeProtocol", self), request)
+        return cast("Response", result)

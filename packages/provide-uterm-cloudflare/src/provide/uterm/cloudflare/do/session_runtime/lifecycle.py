@@ -16,13 +16,14 @@ import contextlib
 import logging
 import secrets
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
     from provide.uterm.cloudflare.cf_types import CFWebSocket
+    from provide.uterm.cloudflare.contracts import RuntimeProtocol
     from provide.uterm.cloudflare.do.ushell import on_browser_connected
     from provide.uterm.cloudflare.state.registry import update_kv_session
 else:
@@ -42,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 class _LifecycleMixin:
     """Mixin providing Durable Object WebSocket lifecycle handlers for SessionRuntime."""
+
+    if TYPE_CHECKING:
+        worker_ws: CFWebSocket | None
 
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
         if self._deleted_at is not None:  # type: ignore[attr-defined]
@@ -88,7 +92,7 @@ class _LifecycleMixin:
                     {
                         "type": "hello",
                         "worker_id": self.worker_id,  # type: ignore[attr-defined]
-                        "worker_online": self.worker_ws is not None or self._ushell is not None,
+                        "worker_online": self.worker_ws is not None or self._ushell is not None,  # type: ignore[attr-defined]
                         # can_hijack and role reflect the JWT-resolved browser role.
                         "can_hijack": browser_role == "admin",
                         "input_mode": self.input_mode,  # type: ignore[attr-defined]
@@ -140,11 +144,11 @@ class _LifecycleMixin:
                 except ImportError:  # pragma: no cover
                     from api.tunnel_routes import handle_tunnel_message  # type: ignore[import-not-found,no-redef]
 
-            await handle_tunnel_message(self, ws, bytes(_bin))
+            await handle_tunnel_message(cast("RuntimeProtocol", self), ws, bytes(_bin))
             return
 
         raw = message if isinstance(message, str) else str(message)
-        await handle_socket_message(self, ws, raw, is_worker=(role == "worker"))
+        await handle_socket_message(cast("RuntimeProtocol", self), ws, raw, is_worker=(role == "worker"))
 
     async def webSocketClose(self, ws: CFWebSocket, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
