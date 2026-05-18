@@ -402,3 +402,18 @@ async def test_fetch_jwks_urllib_timeout() -> None:
         assert mock_urlopen.called
         _, kwargs = mock_urlopen.call_args
         assert kwargs.get("timeout") == 5
+
+
+@pytest.mark.asyncio
+async def test_fetch_jwks_rejects_non_http_scheme() -> None:
+    """_fetch_jwks raises ValueError for non-http(s) schemes before opening the URL.
+
+    The preflight scheme check turns bandit B310's URL-scheme concern into a real
+    runtime gate; this test pins both branches of the rejection (file:// and a
+    bare path) so a mutation that drops or weakens the check fails.
+    """
+    from provide.uterm.cloudflare.auth.jwt import _fetch_jwks
+
+    for bad_url in ("file:///etc/passwd", "ftp://example.com/jwks.json", "/local/path"):
+        with pytest.raises(ValueError, match="JWKS URL must be http"):
+            await _fetch_jwks(bad_url)
