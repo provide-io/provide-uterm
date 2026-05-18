@@ -10,7 +10,7 @@ import asyncio
 import re
 import time
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.uterm.bridge.fanout._collector import OutputCollector
 from provide.uterm.bridge.fanout._divergence import compute_divergence
@@ -58,7 +58,10 @@ class FanOutController:
             async def intercept_fanout(self, command: str, context: Any, group_id: str) -> PolicyDecision:
                 return PolicyDecision(action="allow")
 
-        return NoOpFanOutGate()
+        # ``FanOutPolicyGate`` is a Protocol; ``NoOpFanOutGate`` matches its
+        # ``intercept_fanout`` signature structurally. The cast tells mypy
+        # that's intentional — runtime checks the Protocol via duck typing.
+        return cast("FanOutPolicyGate", NoOpFanOutGate())
 
     # -- Group CRUD --------------------------------------------------------
 

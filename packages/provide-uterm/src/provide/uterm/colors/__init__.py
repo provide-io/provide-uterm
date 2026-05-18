@@ -25,10 +25,11 @@ or from the package root:
 from __future__ import annotations
 
 from provide.uterm.colors.downgrade import downgrade_to_16, downgrade_to_256
-from provide.uterm.colors.mode import apply_color_mode
+from provide.uterm.colors.mode import ColorMode, apply_color_mode
 from provide.uterm.colors.rgb import rgb_to_16_index, rgb_to_256
 
 __all__ = [
+    "ColorMode",
     "apply_color_mode",
     "downgrade_to_16",
     "downgrade_to_256",
