@@ -23,7 +23,7 @@
 # State persists in the container's /tmp — it is NOT written to Cloudflare.
 #
 
-FROM node:20-slim
+FROM node:26-slim
 
 # Install Python 3.11 and uv
 RUN apt-get update && apt-get install -y --no-install-recommends \
