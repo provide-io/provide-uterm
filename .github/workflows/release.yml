@@ -329,7 +329,7 @@ jobs:
       contents: write
     # v2.0.0 — reusable workflow refs MUST use a tag (not a SHA) per GitHub
     # rules. SLSA project signs the v2.0.0 tag with their release key.
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: ${{ needs.hash-artifacts.outputs.hashes }}
       # Attach the resulting .intoto.jsonl provenance file to the GitHub
