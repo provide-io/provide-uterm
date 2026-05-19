@@ -81,7 +81,7 @@ The columns map to:
 | PTY isolation | ✅ | Per-session PTY; UID mapping via `provide.uterm.platform.uid_map`. |
 | PAM integration for credential check | ✅ | Optional, off by default; documented in `ard-pty-architecture`. |
 | Capability drop after spawn | ⚠ | Confirm `setuid`/`setgid` boundaries on the worker process before connecting the master fd. |
-| seccomp profile for worker subprocess | ❌ | Not implemented. Would harden against escape from a compromised shell session; consider a `seccomp.BPF` filter that allows only the syscalls the connector needs. |
+| seccomp profile for worker subprocess | 📋 spec'd | Open-source library spawns workers with the host's full syscall surface by design (portable across macOS/Linux/Windows, debuggable with stock tools). Enterprise-tier seccomp confinement of connector + agent subprocesses is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-seccomp-worker-filter-design.md`) — per-connector JSON profiles + `log`/`enforce` modes + post-exec health probe. |
 | Resource limits (memory, file descriptors) | ⚠ | The server has memory baseline calibration; per-session memory caps aren't enforced via `setrlimit`. |
 | LD_PRELOAD capture security | ⚠ | The platform-tier `LD_PRELOAD` integration captures stdout/stderr; verify it can't be turned into an exfil channel by a compromised worker. |
 | Docker base image (Dockerfile.server) | ⚠ | Currently uses `python:3.11-slim`. Distroless or `gcr.io/distroless/python3-debian12` would shrink attack surface. |
@@ -97,7 +97,7 @@ The columns map to:
 | Recording PII redaction | ⚠ | Redaction is opt-in via patterns; ship a default ruleset for known secret formats (AWS keys, GitHub tokens, JWTs, etc.). |
 | Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
 | Recording retention policy | ⚠ | No automatic purge today; documented retention is a deployment concern. |
-| Tamper-evident audit log | ❌ | Hash-chain or signed log entries would let auditors detect post-fact modification. |
+| Tamper-evident audit log | 📋 spec'd | Open-source library writes plain audit events through `audit_event()` to whatever sink the operator configures. Enterprise-tier tamper-evidence (hash-chain + optional HMAC + optional ed25519 signing, configurable) is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-tamper-evident-audit-log-design.md`) — ships with an `audit-verify` CLI for post-fact verification. |
 | Immutable storage hooks | ⚠ | Cloudflare DO + SQLite at the edge; on-prem reference server stores locally. |
 
 ## 7. Disclosure / response
@@ -159,4 +159,4 @@ If you can only do five things before GA:
 4. **Default redaction ruleset** for AWS keys / GitHub tokens / JWTs in the recording pipeline. Most likely real-world incident.
 5. **Container image scanning** (Trivy) on the Dockerfile.server build. Catches CVEs in the base image and OS deps before deploy.
 
-After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`), SBOM signing, seccomp for the worker subprocess, and codifying the SLO doc.
+After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`) and SBOM signing — both shipped — and codifying the SLO doc. The two heaviest remaining items (tamper-evident audit log and worker-process seccomp confinement) have been moved to the `provide-terminal-monetization` repository as enterprise-tier specs; see the table rows above for the file paths.
