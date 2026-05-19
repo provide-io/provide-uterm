@@ -31,6 +31,9 @@ dist/
 .idea/
 pyrightconfig.json
 
+# Claude Code runtime artifacts (scheduled task lock, local permission overrides)
+.claude/
+
 # bfiles bundles (code-context snapshots, not source)
 *-bf-*.txt
 *-bf.txt
