@@ -74,3 +74,32 @@ async def live_server_with_bus(
         server.should_exit = True
         with contextlib.suppress(Exception):
             await asyncio.wait_for(task, timeout=shutdown_timeout)
+
+
+async def wait_for_subscribers(
+    hub: Any,
+    worker_id: str,
+    expected: int,
+    *,
+    timeout: float = 5.0,
+    interval: float = 0.01,
+) -> None:
+    """Poll the EventBus until *worker_id* has at least *expected* subscribers.
+
+    Replaces the brittle ``await asyncio.sleep(0.1)`` hope-and-pray pattern in
+    fan-out tests. HTTP long-poll subscribers register themselves with
+    :class:`EventBus` from inside their request handler; on a loaded CI runner
+    the registration can take >100ms, after which any events fired in the
+    interim are missed and the subscriber returns 0 events.
+    """
+    bus = hub._event_bus
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        if len(bus._subs.get(worker_id, [])) >= expected:
+            return
+        await asyncio.sleep(interval)
+    current = len(bus._subs.get(worker_id, []))
+    raise TimeoutError(
+        f"wait_for_subscribers({worker_id!r}, expected={expected}) timed out after {timeout}s; saw {current}"
+    )

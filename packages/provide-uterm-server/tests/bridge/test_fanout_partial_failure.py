@@ -50,7 +50,16 @@ async def test_partial_failure_disconnected_workers() -> None:
     await ctrl.create_group(group, principal="admin")
 
     async def _emit_output() -> None:
-        await asyncio.sleep(0.02)
+        # Wait until the OutputCollector inside ``ctrl.send`` has actually
+        # subscribed to w1 on the EventBus. A fixed ``asyncio.sleep(0.02)``
+        # races the collector setup on slow runners — the emit fires before
+        # the subscription is in place and the event is dropped, leaving
+        # ``output_delta = ""`` instead of "output from w1".
+        deadline = asyncio.get_running_loop().time() + 5.0
+        while asyncio.get_running_loop().time() < deadline:
+            if len(hub.event_bus._subs.get("w1", [])) >= 1:  # type: ignore[union-attr]
+                break
+            await asyncio.sleep(0.01)
         await hub.append_event("w1", "term", {"data": "output from w1"})
 
     task = asyncio.create_task(_emit_output())

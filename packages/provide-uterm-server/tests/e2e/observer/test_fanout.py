@@ -22,7 +22,7 @@ import httpx
 import pytest
 
 from provide.uterm.client import connect_async_ws
-from tests.e2e._live_server import live_server_with_bus
+from tests.e2e._live_server import live_server_with_bus, wait_for_subscribers
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 _N_SUBSCRIBERS = 5
@@ -91,7 +91,10 @@ async def test_five_concurrent_subscribers_all_receive(live_server: Any) -> None
             )
             for _ in range(_N_SUBSCRIBERS)
         ]
-        await asyncio.sleep(0.1)
+        # Wait until all subscribers have actually registered with the
+        # EventBus — without this barrier, events fired in the interim are
+        # missed and the long-poll returns 0 events on slow runners.
+        await wait_for_subscribers(hub, "obs1", _N_SUBSCRIBERS)
 
         # Worker fires _N_EVENTS snapshots
         for i in range(_N_EVENTS):
@@ -102,9 +105,6 @@ async def test_five_concurrent_subscribers_all_receive(live_server: Any) -> None
     for idx, response in enumerate(responses):
         assert response.status_code == 200, f"subscriber {idx} got {response.status_code}"
         body = response.json()
-        import time
-
-        time.sleep(0.5)
         assert len(body["events"]) == _N_EVENTS, (
             f"subscriber {idx} expected {_N_EVENTS} events, got {len(body['events'])}"
         )
@@ -139,7 +139,7 @@ async def test_worker_reconnect_new_subscription_works(live_server: Any) -> None
                 params={"timeout_ms": 5000, "max_events": 1, "event_types": "snapshot"},
             )
         )
-        await asyncio.sleep(0.1)
+        await wait_for_subscribers(hub, "obs1", 1)
 
         await worker2.send(json.dumps(snapshot_msg("$ after reconnect")))
         response = await asyncio.wait_for(poll_task, timeout=8.0)
