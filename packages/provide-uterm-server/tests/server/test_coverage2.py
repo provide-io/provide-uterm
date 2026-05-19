@@ -40,6 +40,11 @@ def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
 def app_client() -> TestClient:
     cfg = default_server_config()
     cfg.auth.mode = "dev"
+    # Drop the auto-start demo session. ``TestKeyErrorPaths`` below patches
+    # ``registry.start_session`` to raise KeyError, and a still-in-flight
+    # background ``auto_start_sessions`` for the demo session would surface
+    # that KeyError during teardown — see the trace at factory.py:502.
+    cfg.sessions = []
     app = create_server_app(cfg)
     with TestClient(app) as client:
         yield client  # type: ignore[misc]

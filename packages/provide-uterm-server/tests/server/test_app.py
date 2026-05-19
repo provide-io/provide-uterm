@@ -65,6 +65,27 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, A
     return None
 
 
+async def _drain_snapshot_containing(ws: Any, text: str, timeout: float = 10.0) -> dict[str, Any] | None:
+    """Drain snapshots until one whose ``screen`` contains *text* is seen.
+
+    Tests against a real worker need this rather than ``_drain_until("snapshot")``
+    because the first snapshot is often just the session banner — the actual
+    content from the connector arrives in a later snapshot once the upstream
+    process (SSH echo, telnet greeting, etc.) has produced output.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            break
+        snap = await _drain_until(ws, "snapshot", timeout=min(0.5, remaining))
+        if snap is None:
+            continue
+        if text in str(snap.get("screen", "")):
+            return snap
+    return None
+
+
 async def _delete_session(base_url: str, session_id: str) -> None:
     async def _delete() -> None:
         async with httpx.AsyncClient(base_url=base_url, timeout=5.0) as http:
@@ -165,14 +186,28 @@ class TestReferenceServerApp:
 
     async def test_demo_session_browser_ws_is_online(self, live_reference_server: str) -> None:
         await self._wait_for_connected(live_reference_server, "provide-shell")
-        async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/provide-shell/term")) as browser:
-            hello = await _drain_until(browser, "hello", timeout=5.0)
-            assert hello is not None
-            assert hello["worker_online"] is True
-            assert hello["input_mode"] == "open"
-            assert hello["resume_supported"] is True
-            assert isinstance(hello["resume_token"], str)
-            assert len(hello["resume_token"]) > 10
+        # The session API's ``connected`` flag only reflects connector state;
+        # the hub may register the worker's WS slightly later. If the browser
+        # WS opens before the worker is in the hub's ``_workers`` dict the
+        # hello frame falls back to the default ``input_mode = "hijack"``.
+        # Retry the WS open+hello read a few times until the hello reflects
+        # the worker-registered state (or fail after a real deadline).
+        deadline = time.monotonic() + 5.0
+        hello: dict[str, Any] | None = None
+        while time.monotonic() < deadline:
+            async with websockets.connect(
+                _ws_url(live_reference_server, "/ws/browser/provide-shell/term")
+            ) as browser:
+                hello = await _drain_until(browser, "hello", timeout=5.0)
+            if hello is not None and hello.get("input_mode") == "open" and hello.get("worker_online") is True:
+                break
+            await asyncio.sleep(0.1)
+        assert hello is not None
+        assert hello["worker_online"] is True
+        assert hello["input_mode"] == "open"
+        assert hello["resume_supported"] is True
+        assert isinstance(hello["resume_token"], str)
+        assert len(hello["resume_token"]) > 10
 
     async def test_metrics_prometheus_endpoint(self, live_reference_server: str) -> None:
         async with httpx.AsyncClient(base_url=live_reference_server) as http:
@@ -398,9 +433,10 @@ class TestReferenceServerApp:
                 hello = await _drain_until(browser, "hello", timeout=5.0)
                 assert hello is not None
                 assert hello["worker_online"] is True
-                snapshot = await _drain_until(browser, "snapshot", timeout=5.0)
-                assert snapshot is not None
-                assert "welcome from key-backed ssh server" in snapshot["screen"]
+                snapshot = await _drain_snapshot_containing(
+                    browser, "welcome from key-backed ssh server", timeout=10.0
+                )
+                assert snapshot is not None, "SSH echo greeting did not appear in any snapshot"
         finally:
             await _delete_session(live_reference_server, "ssh-key-local")
             ssh_server.close()
@@ -459,9 +495,10 @@ class TestReferenceServerApp:
                 hello = await _drain_until(browser, "hello", timeout=5.0)
                 assert hello is not None
                 assert hello["worker_online"] is True
-                snapshot = await _drain_until(browser, "snapshot", timeout=5.0)
-                assert snapshot is not None
-                assert "welcome from inline-key ssh server" in snapshot["screen"]
+                snapshot = await _drain_snapshot_containing(
+                    browser, "welcome from inline-key ssh server", timeout=10.0
+                )
+                assert snapshot is not None, "SSH echo greeting did not appear in any snapshot"
         finally:
             await _delete_session(live_reference_server, "ssh-inline-key-local")
             ssh_server.close()
