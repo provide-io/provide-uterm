@@ -23,7 +23,7 @@ import httpx
 import pytest
 
 from provide.uterm.client import connect_async_ws
-from tests.e2e._live_server import live_server_with_bus
+from tests.e2e._live_server import live_server_with_bus, wait_for_subscribers
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -97,7 +97,7 @@ async def test_three_subscribers_different_event_filters(live_server: Any) -> No
                 params={"timeout_ms": 6000, "max_events": 2},
             )
         )
-        await asyncio.sleep(0.1)
+        await wait_for_subscribers(hub, "flt1", 3)
 
         # Fire a snapshot — sub1 and sub3 should unblock; sub2 stays blocked
         await worker.send(json.dumps(snapshot_msg("$ filter test")))

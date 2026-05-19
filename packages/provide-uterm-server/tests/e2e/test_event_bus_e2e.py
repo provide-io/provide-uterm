@@ -25,7 +25,7 @@ import httpx
 import pytest
 
 from provide.uterm.client import connect_async_ws
-from tests.e2e._live_server import live_server_with_bus
+from tests.e2e._live_server import live_server_with_bus, wait_for_subscribers
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -100,8 +100,9 @@ async def test_worker_snapshot_arrives_via_long_poll(live_app_with_bus: Any) -> 
                 http.get("/api/sessions/s1/events/watch", params={"timeout_ms": 5000, "max_events": 1})
             )
 
-            # Give the long-poll a moment to register its subscription
-            await asyncio.sleep(0.1)
+            # Wait for the long-poll to actually register its subscription
+            # rather than racing against a fixed 100ms sleep.
+            await wait_for_subscribers(_hub, "s1", 1)
 
             # Worker sends a snapshot — hub.broadcast → append_event → EventBus
             await worker.send(json.dumps(_snapshot_msg("$ e2e live poll")))
@@ -127,7 +128,7 @@ async def test_worker_disconnect_terminates_long_poll(live_app_with_bus: Any) ->
         async with connect_async_ws(ws_url):
             # Start long-poll
             poll_task = asyncio.create_task(http.get("/api/sessions/s1/events/watch", params={"timeout_ms": 8000}))
-            await asyncio.sleep(0.1)
+            await wait_for_subscribers(_hub, "s1", 1)
             # Worker disconnects here (context manager exits)
 
         response = await asyncio.wait_for(poll_task, timeout=5.0)
@@ -153,7 +154,7 @@ async def test_event_types_filter_excludes_non_matching(live_app_with_bus: Any) 
                     params={"timeout_ms": 4000, "max_events": 1, "event_types": "snapshot"},
                 )
             )
-            await asyncio.sleep(0.1)
+            await wait_for_subscribers(_hub, "s1", 1)
 
             # Send snapshot (should be returned) — hub routes it through broadcast
             await worker.send(json.dumps(_snapshot_msg("$ filtered")))
