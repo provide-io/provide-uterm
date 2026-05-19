@@ -115,11 +115,21 @@ class TestCoreSavePeriodically:
         mgr.timeseries_manager.loop = AsyncMock()
         mgr.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
 
-        async def serve_briefly():
-            await asyncio.sleep(0.15)  # long enough for save to fire
+        state_path = tmp_path / "state.json"
+
+        async def serve_until_saved():
+            # Wait for the first periodic save to actually land — a fixed
+            # 0.15s sleep flaked on loaded runners because the first save
+            # tick hadn't fired yet. Poll the state file with a generous
+            # deadline; cap at 5s so a real bug still fails fast.
+            deadline = asyncio.get_running_loop().time() + 5.0
+            while asyncio.get_running_loop().time() < deadline:
+                if state_path.exists():
+                    return
+                await asyncio.sleep(0.02)
 
         mock_server = AsyncMock()
-        mock_server.serve = serve_briefly
+        mock_server.serve = serve_until_saved
 
         with patch("uvicorn.Config", return_value=MagicMock()), patch("uvicorn.Server", return_value=mock_server):
             await mgr.run()
@@ -127,7 +137,6 @@ class TestCoreSavePeriodically:
         # State file should have been written
         import json
 
-        state_path = tmp_path / "state.json"
         assert state_path.exists()
         data = json.loads(state_path.read_text())
         assert "agent_000" in data.get("agents", {})

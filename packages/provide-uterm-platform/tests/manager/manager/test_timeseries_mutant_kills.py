@@ -436,11 +436,22 @@ class TestLoop:
         """mut: samples_count must increment."""
         mgr = _make_mgr(tmp_path, interval_s=1)
 
-        # Run loop briefly then cancel
+        # Run loop and poll for the first ``samples_count`` increment. A fixed
+        # ``asyncio.sleep`` is unreliable on slow runners because the first
+        # ``write_sample`` runs in a thread and can take longer than the
+        # sleep window — leaving ``samples_count == 0`` at cancel time.
         task = asyncio.create_task(mgr.loop())
-        await asyncio.sleep(0.05)
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        deadline = asyncio.get_running_loop().time() + 5.0
+        try:
+            while mgr.samples_count < 1:
+                if asyncio.get_running_loop().time() > deadline:
+                    raise AssertionError(
+                        f"samples_count never incremented (still {mgr.samples_count}) after 5s"
+                    )
+                await asyncio.sleep(0.01)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
         assert mgr.samples_count >= 1

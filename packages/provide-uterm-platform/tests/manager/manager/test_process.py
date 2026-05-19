@@ -424,12 +424,31 @@ class TestProcessTreeHelpers:
 
             await pm.kill_agent("agent_123")
 
+            # Wait for the parent process to actually exit. ``kill_agent``
+            # only awaits its own bookkeeping — the kernel still needs to
+            # deliver and reap the signal across parent + child.
+            deadline = time.time() + 5.0
+            while time.time() < deadline and process.poll() is None:
+                await asyncio.sleep(0.05)
+            assert process.poll() is not None, "parent process did not exit within 5s of kill_agent()"
+
+            # Wait for the heartbeat to stabilise — sample until two
+            # consecutive readings show the same mtime, then assert that
+            # remains true through the platform-specific settle window.
+            # Polling avoids the fixed-sleep flake on slow runners.
+            settle_window = 0.5 if os.name == "nt" else 0.25
+            stable_deadline = time.time() + 5.0
             stopped_mtime = heartbeat_file.stat().st_mtime_ns
-            await asyncio.sleep(0.5 if os.name == "nt" else 0.25)
+            while time.time() < stable_deadline:
+                await asyncio.sleep(0.05)
+                current = heartbeat_file.stat().st_mtime_ns
+                if current == stopped_mtime:
+                    break
+                stopped_mtime = current
+            await asyncio.sleep(settle_window)
             assert heartbeat_file.stat().st_mtime_ns == stopped_mtime, (
                 "child heartbeat kept advancing after kill_agent()"
             )
-            assert process.poll() is not None
         finally:
             if process.poll() is None:
                 await pm._stop_process_tree(agent_id="agent_123", process=process)
