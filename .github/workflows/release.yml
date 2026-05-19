@@ -79,7 +79,7 @@ jobs:
         with:
           name: dist-provide-uterm
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -132,7 +132,7 @@ jobs:
         with:
           name: dist-provide-uterm
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
 
   # ── Stage 2: server, client, platform (depend on provide-uterm) ─────
   testpypi-dependents:
@@ -155,7 +155,7 @@ jobs:
         with:
           name: dist-${{ matrix.package }}
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -180,7 +180,7 @@ jobs:
         with:
           name: dist-${{ matrix.package }}
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
 
   # ── Stage 3: provide-uterm-cloudflare (depends on core) ─────────────
   testpypi-cloudflare:
@@ -196,7 +196,7 @@ jobs:
         with:
           name: dist-provide-uterm-cloudflare
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
@@ -249,7 +249,7 @@ jobs:
         with:
           name: dist-provide-uterm-cloudflare
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d  # v1.14.0
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
 
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
