@@ -268,9 +268,7 @@ class TestDetectInTextFlow:
             {"id": "second", "regex": r"\$\s*$"},
         ]
         d = PromptDetector(patterns)
-        diag = d.detect_prompt_with_diagnostics(
-            {"screen": "user$ ", "cursor_at_end": True, "cursor": {"x": 0, "y": 0}}
-        )
+        diag = d.detect_prompt_with_diagnostics({"screen": "user$ ", "cursor_at_end": True, "cursor": {"x": 0, "y": 0}})
         # Original: first regex fails → continue → second matches.
         # Mutant (break): first regex fails → break → no patterns left → None.
         assert diag.match is not None
@@ -315,13 +313,9 @@ class TestDetectInTextFlow:
         # cursor_at_end=False; both patterns trigger cursor_position diagnostic.
         # Under original: continue → second pattern's cursor check also fails → no match.
         # Under mutant (break): break after first → only one diagnostic entry.
-        diag = d.detect_prompt_with_diagnostics(
-            {"screen": screen, "cursor_at_end": False, "cursor": {"x": 0, "y": 0}}
-        )
+        diag = d.detect_prompt_with_diagnostics({"screen": screen, "cursor_at_end": False, "cursor": {"x": 0, "y": 0}})
         # Two diagnostic entries (one per pattern) under original; one under mutant.
-        cursor_position_entries = [
-            e for e in diag.regex_matched_but_failed if e.get("reason") == "cursor_position"
-        ]
+        cursor_position_entries = [e for e in diag.regex_matched_but_failed if e.get("reason") == "cursor_position"]
         assert len(cursor_position_entries) == 2, (
             f"expected 2 cursor_position entries, got {len(cursor_position_entries)} — "
             f"continue mutated to break? entries={cursor_position_entries!r}"
@@ -342,9 +336,7 @@ class TestSliceSigns:
     Targets: detection.detector.PromptDetector.detect_prompt_with_diagnostics__mutmut_{54,118}
     """
 
-    def test_region_tail_log_includes_last_200_chars_not_chars_from_200(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_region_tail_log_includes_last_200_chars_not_chars_from_200(self, caplog: pytest.LogCaptureFixture) -> None:
         """Region length must be > 400 so ``[-200:]`` and ``[+200:]`` reach
         different starting indexes (300 vs 200) with non-overlapping content."""
         d = PromptDetector([{"id": "p", "regex": "x"}])
@@ -375,9 +367,7 @@ class TestSliceSigns:
         # [+150:] → indices 150-400 = 'M'*100 + 'E'*150. 'M' present.
         long_screen = "S" * 150 + "M" * 100 + "E" * 150
         with caplog.at_level(logging.DEBUG, logger="provide.uterm.detection.detector"):
-            d.detect_prompt_with_diagnostics(
-                {"screen": long_screen, "cursor": {"x": 0, "y": 0}, "cursor_at_end": True}
-            )
+            d.detect_prompt_with_diagnostics({"screen": long_screen, "cursor": {"x": 0, "y": 0}, "cursor_at_end": True})
         no_match_logs = [r for r in caplog.records if "prompt_detection_no_match" in r.getMessage()]
         assert no_match_logs
         preview = no_match_logs[0].getMessage().split("screen_preview=")[-1]

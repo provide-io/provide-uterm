@@ -60,9 +60,7 @@ class TestDetectInTextNegativeMatch:
         assert diag.regex_matched_but_failed[0]["reason"] == "negative_match"
 
     def test_negative_match_diagnostic_includes_pattern_id(self) -> None:
-        patterns = [
-            {"id": "p.id.literal", "regex": r"\$\s*$", "negative_regex": r"banner"}
-        ]
+        patterns = [{"id": "p.id.literal", "regex": r"\$\s*$", "negative_regex": r"banner"}]
         d = PromptDetector(patterns)
         snap = _snap("banner here\nuser$ ")
         diag = d.detect_prompt_with_diagnostics(snap)
@@ -70,9 +68,7 @@ class TestDetectInTextNegativeMatch:
         assert diag.regex_matched_but_failed[0]["pattern_id"] == "p.id.literal"
 
     def test_negative_match_diagnostic_includes_negative_pattern_field(self) -> None:
-        patterns = [
-            {"id": "p", "regex": r"\$\s*$", "negative_regex": r"forbidden-substring"}
-        ]
+        patterns = [{"id": "p", "regex": r"\$\s*$", "negative_regex": r"forbidden-substring"}]
         d = PromptDetector(patterns)
         snap = _snap("forbidden-substring\nuser$ ")
         diag = d.detect_prompt_with_diagnostics(snap)
@@ -109,9 +105,7 @@ class TestDetectInTextCursorPosition:
     _SCREEN_MULTI = "header line\n\n\n\n\n\n\n\n\n\n\n\n\nuser$ "
 
     def test_cursor_not_at_end_skips_pattern(self) -> None:
-        patterns = [
-            {"id": "p", "regex": r"\$\s*$", "expect_cursor_at_end": True}
-        ]
+        patterns = [{"id": "p", "regex": r"\$\s*$", "expect_cursor_at_end": True}]
         d = PromptDetector(patterns)
         snap = _snap(self._SCREEN_MULTI, cursor_at_end=False, cursor_y=0)
         diag = d.detect_prompt_with_diagnostics(snap)
@@ -121,9 +115,7 @@ class TestDetectInTextCursorPosition:
 
     def test_cursor_position_diagnostic_uses_pattern_id_key(self) -> None:
         """Diagnostic entry uses literal ``pattern_id`` key (not 'XXpattern_idXX')."""
-        patterns = [
-            {"id": "shell.x", "regex": r"\$\s*$", "expect_cursor_at_end": True}
-        ]
+        patterns = [{"id": "shell.x", "regex": r"\$\s*$", "expect_cursor_at_end": True}]
         d = PromptDetector(patterns)
         snap = _snap(self._SCREEN_MULTI, cursor_at_end=False, cursor_y=0)
         diag = d.detect_prompt_with_diagnostics(snap)
@@ -133,9 +125,7 @@ class TestDetectInTextCursorPosition:
         assert entry["pattern_id"] == "shell.x"
 
     def test_cursor_position_diagnostic_reports_expected_and_actual(self) -> None:
-        patterns = [
-            {"id": "p", "regex": r"\$\s*$", "expect_cursor_at_end": True}
-        ]
+        patterns = [{"id": "p", "regex": r"\$\s*$", "expect_cursor_at_end": True}]
         d = PromptDetector(patterns)
         snap = _snap(self._SCREEN_MULTI, cursor_at_end=False, cursor_y=0)
         diag = d.detect_prompt_with_diagnostics(snap)
@@ -144,9 +134,7 @@ class TestDetectInTextCursorPosition:
         assert entry["actual_cursor_at_end"] is False
 
     def test_cursor_at_end_true_allows_match(self) -> None:
-        patterns = [
-            {"id": "p", "regex": r"\$\s*$", "expect_cursor_at_end": True}
-        ]
+        patterns = [{"id": "p", "regex": r"\$\s*$", "expect_cursor_at_end": True}]
         d = PromptDetector(patterns)
         snap = _snap("user$ ", cursor_at_end=True)
         diag = d.detect_prompt_with_diagnostics(snap)
