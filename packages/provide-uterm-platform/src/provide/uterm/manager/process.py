@@ -119,8 +119,8 @@ class AgentProcessManager:
             rc = libc.prctl(pr_set_child_subreaper, 1, 0, 0, 0)
             if rc == 0:
                 logger.debug("subreaper_set")
-        except Exception:
-            pass  # not available — fall back to killpg-only
+        except Exception:  # noqa: S110 — best-effort prctl; fall back to killpg-only when unavailable
+            pass
 
     @staticmethod
     def _parse_agent_index(agent_id: str) -> int | None:
