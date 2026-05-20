@@ -17,7 +17,6 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
-from provide.uterm.colors import ColorMode
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.gateway._gateway import (
     _pipe_ws,
@@ -27,6 +26,8 @@ from provide.uterm.gateway._gateway import (
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from provide.uterm.colors import ColorMode
 
 logger = get_logger(__name__)
 

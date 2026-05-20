@@ -62,8 +62,8 @@ class HubMessagingMixin:
     # ``[attr-defined]``. The actual implementations live on the
     # sibling mixins; these stubs are never called.
     if TYPE_CHECKING:
-        from provide.uterm.bridge.hub.ext import PolicyContext as _PolicyContext  # noqa: N814
-        from provide.uterm.bridge.models import WorkerTermState as _WorkerTermState  # noqa: N814
+        from provide.uterm.bridge.hub.ext import PolicyContext as _PolicyContext
+        from provide.uterm.bridge.models import WorkerTermState as _WorkerTermState
 
         async def prepare_policy_context(
             self, ws: WebSocket, worker_id: str, action: str | None = None
@@ -71,9 +71,7 @@ class HubMessagingMixin:
         def is_hijacked(self, st: _WorkerTermState) -> bool: ...
         def is_dashboard_hijack_active(self, st: _WorkerTermState) -> bool: ...
         def has_valid_rest_lease(self, st: _WorkerTermState) -> bool: ...
-        def notify_hijack_changed(
-            self, worker_id: str, *, enabled: bool, owner: str | None = None
-        ) -> None: ...
+        def notify_hijack_changed(self, worker_id: str, *, enabled: bool, owner: str | None = None) -> None: ...
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it."""
@@ -315,7 +313,7 @@ class HubMessagingMixin:
             # _behavioral_audit_gate is Any | None; the guard above already
             # exited the loop when it's None (see _run_behavioral_audit_loop),
             # but the narrow doesn't survive across awaits.
-            assert self._behavioral_audit_gate is not None  # noqa: S101
+            assert self._behavioral_audit_gate is not None
             decision = await self._behavioral_audit_gate.audit_connection(
                 heuristics, context, self._behavioral_thresholds
             )

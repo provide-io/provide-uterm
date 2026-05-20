@@ -20,4 +20,3 @@ def sanitize_keystrokes(keys: str, max_bytes: int = 4096) -> str:
 
     # Truncate at character boundary
     return encoded[:max_bytes].decode("utf-8", "ignore")
-

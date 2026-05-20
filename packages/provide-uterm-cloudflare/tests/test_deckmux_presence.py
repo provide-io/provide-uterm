@@ -18,6 +18,7 @@ import sqlite3
 from types import SimpleNamespace
 
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
+
 from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, encode_control
 
 # ---------------------------------------------------------------------------

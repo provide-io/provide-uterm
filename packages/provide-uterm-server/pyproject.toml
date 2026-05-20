@@ -123,7 +123,31 @@ select = [
     "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
     "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
 ]
-ignore = ["E501", "S104", "S112", "S311"]
+# Aligned with the workspace-root ruff config in ../../pyproject.toml so the
+# subproject doesn't surface lint warnings the root deliberately ignores.
+ignore = [
+    "E501",  # line-too-long
+    "S101",  # use-of-assert
+    "S104",  # hardcoded-bind-all-interfaces
+    "S108",  # hardcoded-temp-file
+    "S110",  # try-except-pass
+    "S112",  # try-except-continue
+    "S311",  # suspicious-non-cryptographic-random
+    "S603",  # subprocess-without-shell
+    "S607",  # start-process-with-partial-path
+    "S604",  # call-with-shell-equals-true
+    "F811",  # redefined-while-unused
+    "N806",  # non-lowercase-variable-in-function
+    "N814",  # camelcase-imported-as-constant
+    "B017",  # assert-raises-exception
+    "SIM105",  # suppressible-exception
+    "SIM117",  # multiple-with-statements
+    "ARG001",  # unused-function-argument
+    "ARG002",  # unused-method-argument — protocol interfaces
+    "PTH108",  # os-unlink — stylistic
+    "SIM108",  # ternary-operator — stylistic
+    "PERF401",  # manual-list-comprehension
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["provide"]

@@ -99,7 +99,9 @@ def test_jwt_mode_rejects_invalid_issuer() -> None:
     app = create_server_app(config)
 
     with TestClient(app) as client:
-        sessions = client.get("/api/sessions", headers=_jwt_headers(sub="alice", roles=["admin"], issuer="wrong-issuer"))
+        sessions = client.get(
+            "/api/sessions", headers=_jwt_headers(sub="alice", roles=["admin"], issuer="wrong-issuer")
+        )
         assert sessions.status_code == 401
 
 

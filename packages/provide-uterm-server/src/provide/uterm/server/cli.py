@@ -48,7 +48,7 @@ def _cmd_server(args: argparse.Namespace) -> None:
     uvicorn.run(app, host=config.server.host, port=config.server.port, log_level="info")
 
 
-def add_server_subcommand(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+def add_server_subcommand(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register ``server`` as a subcommand on the unified ``uterm`` CLI."""
     server_p = sub.add_parser(
         "server",

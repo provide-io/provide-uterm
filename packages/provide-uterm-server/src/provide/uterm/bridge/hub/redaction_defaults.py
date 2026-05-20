@@ -49,7 +49,7 @@ _AWS_ACCESS_KEY_ID = r"\b(?:AKIA|ASIA|AROA|AIDA|AGPA|ANPA|ANVA|ASCA)[0-9A-Z]{16}
 # positive; pin to the canonical aws_secret_access_key=... form.
 # NOTE: ``(?i:...)`` scoped flag (not global ``(?i)``) — global flags
 # inside an alternation are rejected by Python's `re` module.
-_AWS_SECRET_ACCESS_KEY = r"(?i:aws[_ -]?secret[_ -]?access[_ -]?key\s*[:=]\s*['\"]?[A-Za-z0-9/+=]{40}['\"]?)"
+_AWS_SECRET_ACCESS_KEY = r"(?i:aws[_ -]?secret[_ -]?access[_ -]?key\s*[:=]\s*['\"]?[A-Za-z0-9/+=]{40}['\"]?)"  # noqa: S105 — variable name matches the redaction *pattern*, not a real secret
 
 # ---------------------------------------------------------------------------
 # GitHub credentials
@@ -57,7 +57,7 @@ _AWS_SECRET_ACCESS_KEY = r"(?i:aws[_ -]?secret[_ -]?access[_ -]?key\s*[:=]\s*['\
 
 # GitHub personal access token (classic + fine-grained). All start with a
 # 4-char ghX_ prefix; the rest is alphanumeric/underscore of fixed length.
-_GITHUB_TOKEN = r"\bgh[opusr]_[A-Za-z0-9_]{36,251}\b"
+_GITHUB_TOKEN = r"\bgh[opusr]_[A-Za-z0-9_]{36,251}\b"  # noqa: S105
 
 # GitHub Actions OIDC token — JWT, but easily spotted via the leading
 # `eyJ` of the base64 header. JWT_PATTERN below catches this too.
@@ -69,7 +69,7 @@ _GITHUB_TOKEN = r"\bgh[opusr]_[A-Za-z0-9_]{36,251}\b"
 # Slack tokens: xoxb-, xoxa-, xoxp-, xoxr-, xoxs-, xoxe- followed by
 # numeric workspace/user/tail ids. See:
 #   https://api.slack.com/authentication/token-types
-_SLACK_TOKEN = r"\bxox[abeprs]-(?:[0-9]+-){2,}[A-Za-z0-9-]{20,}\b"
+_SLACK_TOKEN = r"\bxox[abeprs]-(?:[0-9]+-){2,}[A-Za-z0-9-]{20,}\b"  # noqa: S105
 
 # ---------------------------------------------------------------------------
 # Generic shapes
@@ -95,13 +95,13 @@ _BEARER_HEADER = r"(?i:\bauthorization\s*:\s*bearer\s+([A-Za-z0-9._\-+/=]+))"
 # `password=...` / `passwd=...` / `pwd=...` shapes in command lines or
 # config snippets. Limit the value to non-whitespace, max 128 chars so we
 # don't gobble paragraphs. Allow ``key: value`` and ``key=value``.
-_GENERIC_PASSWORD = r"(?i:\b(?:password|passwd|pwd)\s*[:=]\s*['\"]?(\S{1,128}?)['\"]?(?=\s|$|,|;|&))"
+_GENERIC_PASSWORD = r"(?i:\b(?:password|passwd|pwd)\s*[:=]\s*['\"]?(\S{1,128}?)['\"]?(?=\s|$|,|;|&))"  # noqa: S105
 
 # `api[_-]key=...` shapes.
 _GENERIC_API_KEY = r"(?i:\bapi[_-]?key\s*[:=]\s*['\"]?(\S{6,128}?)['\"]?(?=\s|$|,|;|&))"
 
 # `token=...` shape (loose; matches a lot but bounded length).
-_GENERIC_TOKEN = r"(?i:\btoken\s*[:=]\s*['\"]?(\S{8,256}?)['\"]?(?=\s|$|,|;|&))"
+_GENERIC_TOKEN = r"(?i:\btoken\s*[:=]\s*['\"]?(\S{8,256}?)['\"]?(?=\s|$|,|;|&))"  # noqa: S105
 
 
 def default_rules() -> list[RedactionRule]:

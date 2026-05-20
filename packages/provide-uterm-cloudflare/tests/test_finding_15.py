@@ -1,4 +1,5 @@
 import pytest
+
 from provide.uterm.deckmux._presence import PresenceStore
 
 

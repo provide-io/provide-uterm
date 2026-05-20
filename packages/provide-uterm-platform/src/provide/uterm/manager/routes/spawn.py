@@ -281,9 +281,7 @@ async def restart_agent(agent_id: str, request: Request, manager: AgentManager =
     # bot dies but never comes back. Schedule a watcher to spawn a fresh
     # process from the same config_path once the existing one exits.
     if agent_status.config:
-        task = asyncio.create_task(
-            _respawn_after_restart_exit(manager, agent_id, agent_status.config)
-        )
+        task = asyncio.create_task(_respawn_after_restart_exit(manager, agent_id, agent_status.config))
         manager._background_tasks.add(task)
         task.add_done_callback(manager._background_tasks.discard)
     await manager.broadcast_status()

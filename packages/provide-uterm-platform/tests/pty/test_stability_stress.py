@@ -23,6 +23,7 @@ async def test_pty_connector_rapid_lifecycle_no_fd_leak():
     # Allow some overhead but should not grow linearly
     assert final_fds <= initial_fds + 5
 
+
 @pytest.mark.asyncio
 async def test_capture_connector_with_complex_binary():
     # Use a dummy path for testing

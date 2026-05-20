@@ -12,7 +12,7 @@ from provide.telemetry import get_logger
 from provide.uterm.control_channel import encode_data
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
 
     from fastapi import WebSocket
 
@@ -42,9 +42,7 @@ class HubApprovalFlowMixin:
 
         # Mirrors HubMessagingMixin.send_worker exactly (per-mixin type-only
         # stubs must match the canonical signature across the MRO).
-        async def send_worker(
-            self, worker_id: str, msg: dict[str, Any], *, source: Any = None
-        ) -> bool: ...
+        async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool: ...
 
     async def resolve_approval(self, worker_id: str, request_id: str, decision: PolicyDecision, command: str) -> None:
         """Resolve a pending approval and resume the worker if approved."""

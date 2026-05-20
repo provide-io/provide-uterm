@@ -18,6 +18,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_tracer
+
 from provide.uterm.control_channel import encode_control, encode_data
 
 try:

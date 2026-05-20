@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
+
 from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
 
 

@@ -94,8 +94,8 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
         # comes from server config and should always be http/https; this
         # gate makes the assumption explicit and turns a bandit B310 false
         # positive into a real preflight check.
-        if not (url.startswith("http://") or url.startswith("https://")):
-            raise ValueError(f"JWKS URL must be http(s), got: {url!r}")
+        if not (url.startswith(("http://", "https://"))):
+            raise ValueError(f"JWKS URL must be http(s), got: {url!r}") from None
         _req = urllib.request.Request(url, headers={"User-Agent": "provide-uterm/1.0"})  # noqa: S310
         with urllib.request.urlopen(_req, timeout=5) as resp:  # noqa: S310  # nosec B310 — scheme validated above
             result = json.loads(resp.read())

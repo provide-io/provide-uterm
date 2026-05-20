@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from starlette.middleware.base import RequestResponseEndpoint
     from starlette.requests import Request
     from starlette.responses import Response
-    from starlette.types import ASGIApp, Message, Receive, Scope, Send
+    from starlette.types import ASGIApp, Receive, Scope, Send
 
     from provide.uterm.server.models import ServerConfig
 

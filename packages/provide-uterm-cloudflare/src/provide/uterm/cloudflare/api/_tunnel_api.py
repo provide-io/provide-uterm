@@ -10,11 +10,12 @@ import json
 import secrets
 import time
 import uuid
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from provide.uterm.cloudflare.cf_types import Response, json_response
 else:
     try:

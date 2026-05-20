@@ -30,6 +30,7 @@ import uuid
 
 import pytest
 import websockets
+
 from provide.uterm.control_channel import encode_control
 
 _WS_TIMEOUT_S = 0.5

@@ -445,9 +445,7 @@ class TestLoop:
         try:
             while mgr.samples_count < 1:
                 if asyncio.get_running_loop().time() > deadline:
-                    raise AssertionError(
-                        f"samples_count never incremented (still {mgr.samples_count}) after 5s"
-                    )
+                    raise AssertionError(f"samples_count never incremented (still {mgr.samples_count}) after 5s")
                 await asyncio.sleep(0.01)
         finally:
             task.cancel()

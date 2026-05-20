@@ -114,7 +114,7 @@ def _build_pending_command_response(agent: Any, ack_seq: int) -> dict[str, Any] 
 
 @router.post("/agent/{agent_id}/status")
 async def update_status(
-    request: Request,  # noqa: ARG001
+    request: Request,
     agent_id: str = Path(pattern=r"^[\w\-]+$"),
     update: StatusUpdatePayload = Body(...),  # noqa: B008
     manager: AgentManager = Depends(require_manager),  # noqa: B008

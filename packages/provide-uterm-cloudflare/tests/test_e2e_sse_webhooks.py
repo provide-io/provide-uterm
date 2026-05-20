@@ -39,6 +39,7 @@ import uuid
 
 import pytest
 import websockets
+
 from provide.uterm.control_channel import encode_control
 
 _WS_TIMEOUT_S = 0.5  # short drain — worker WS gets no hello; just let it time out quickly

@@ -205,7 +205,7 @@ class TestSseStreamEventsSuccess:
 async def _empty_async_gen():  # type: ignore[return]
     """Async generator that yields nothing."""
     return
-    yield  # noqa: unreachable
+    yield  # pragma: no cover — unreachable but required to make this an async generator
 
 
 # ---------------------------------------------------------------------------
