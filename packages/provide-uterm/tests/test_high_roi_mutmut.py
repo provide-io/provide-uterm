@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import re
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -33,7 +31,6 @@ from provide.uterm.control_channel import (
 )
 from provide.uterm.detection.detector import PromptDetector
 from provide.uterm.io import PromptWaiter
-
 
 # ---------------------------------------------------------------------------
 # BOUNDARY (7) — control_channel + io
