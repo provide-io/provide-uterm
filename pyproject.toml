@@ -252,6 +252,7 @@ tests_dir = [
     "packages/provide-uterm/tests/detection/test_detector.py",
     "packages/provide-uterm/tests/detection/test_detector_compile_mutmut.py",
     "packages/provide-uterm/tests/detection/test_detector_detect_mutmut.py",
+    "packages/provide-uterm/tests/detection/test_detector_diagnostics_mutmut.py",
     "packages/provide-uterm/tests/detection/test_engine.py",
     "packages/provide-uterm/tests/detection/test_extractor.py",
     "packages/provide-uterm/tests/detection/test_extractor_validate.py",
