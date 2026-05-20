@@ -19,7 +19,6 @@ import pytest
 
 from provide.uterm.io import InputSender, PromptWaiter
 
-
 # ---------------------------------------------------------------------------
 # InputSender.send_input — input_type branches
 # ---------------------------------------------------------------------------

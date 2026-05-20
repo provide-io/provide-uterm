@@ -11,21 +11,15 @@ and ``_report_error`` callback invocation.
 
 from __future__ import annotations
 
-import json
-from typing import Any
-
 import pytest
 
 from provide.uterm.control_channel import (
-    ControlChannelChunk,
     ControlChannelDecoder,
     ControlChannelProtocolError,
     ControlChunk,
     DataChunk,
     encode_control,
-    encode_data,
 )
-
 
 # ---------------------------------------------------------------------------
 # __init__ defaults

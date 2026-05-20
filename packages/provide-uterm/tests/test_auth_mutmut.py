@@ -21,16 +21,13 @@ import pytest
 
 from provide.uterm.auth import (
     AuthorizedKeysFileResolver,
-    fingerprint_from_openssh_blob,
-)
-from provide.uterm.auth import (
     _coerce_to_binary_pubkey,
     _find_first_token_end,
     _parse_authorized_keys_line,
     _parse_options,
     _split_options,
+    fingerprint_from_openssh_blob,
 )
-
 
 # ---------------------------------------------------------------------------
 # fingerprint_from_openssh_blob — SHA256 prefix + format

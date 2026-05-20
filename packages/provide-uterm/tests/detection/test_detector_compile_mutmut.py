@@ -27,7 +27,6 @@ import pytest
 
 from provide.uterm.detection.detector import PromptDetector
 
-
 # ---------------------------------------------------------------------------
 # Logger-content assertions — kill mutations that reorder or strip logger args
 # ---------------------------------------------------------------------------
@@ -132,11 +131,10 @@ class TestCompilePatternsFailedShape:
 
         def tap(msg: str, *args: Any, **kwargs: Any) -> None:
             # pattern_compile_failures count=N failed=[{...}, {...}]
-            if "pattern_compile_failures" in msg and args:
-                # args[1] is the failed-patterns list when the format string is
-                # "count=%d failed=%s"
-                if len(args) >= 2 and isinstance(args[1], list):
-                    captured.append(args[1])
+            # args[1] is the failed-patterns list when the format string is
+            # "count=%d failed=%s"
+            if "pattern_compile_failures" in msg and args and len(args) >= 2 and isinstance(args[1], list):
+                captured.append(args[1])
             original_error(msg, *args, **kwargs)
 
         with patch.object(logging.getLogger("provide.uterm.detection.detector"), "error", side_effect=tap):

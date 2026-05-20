@@ -12,15 +12,12 @@ and stored attribute identity), ``process_screen`` (async detection + buffer
 
 from __future__ import annotations
 
-import time
-from collections.abc import Awaitable
 from typing import Any
 
 import pytest
 
 from provide.uterm.detection.engine import DetectionEngine
 from provide.uterm.detection.rules import RuleSet
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: small reusable RuleSets
