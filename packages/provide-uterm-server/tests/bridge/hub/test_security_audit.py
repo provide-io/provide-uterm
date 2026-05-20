@@ -20,16 +20,11 @@ async def test_hub_drops_input_immediately_after_lease_expiry():
     hijack_id = "h1"
 
     # Mock a worker state
-    hub._workers[worker_id] = WorkerTermState(
-        input_mode="hijack",
-        worker_ws=AsyncMock()
-    )
+    hub._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
 
     # 1. Acquire REST lease
     now = time.monotonic()
-    success, err = await hub.try_acquire_rest_hijack(
-        worker_id, owner="admin", lease_s=1, hijack_id=hijack_id, now=now
-    )
+    success, err = await hub.try_acquire_rest_hijack(worker_id, owner="admin", lease_s=1, hijack_id=hijack_id, now=now)
     assert success is True
 
     # 2. Wait for expiration
@@ -42,6 +37,7 @@ async def test_hub_drops_input_immediately_after_lease_expiry():
         st = hub._workers.get(worker_id)
         assert st.hijack_session is None
 
+
 @pytest.mark.asyncio
 async def test_hub_rejects_heartbeat_from_wrong_principal():
     hub = TermHub()
@@ -49,23 +45,17 @@ async def test_hub_rejects_heartbeat_from_wrong_principal():
     hijack_id = "h2"
 
     # Mock a worker state
-    hub._workers[worker_id] = WorkerTermState(
-        input_mode="hijack",
-        worker_ws=AsyncMock()
-    )
+    hub._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
 
     # 1. Admin acquires lease
     now = time.monotonic()
-    await hub.try_acquire_rest_hijack(
-        worker_id, owner="admin", lease_s=60, hijack_id=hijack_id, now=now
-    )
+    await hub.try_acquire_rest_hijack(worker_id, owner="admin", lease_s=60, hijack_id=hijack_id, now=now)
 
     # 2. Operator attempts heartbeat for the same hijack_id
-    success = await hub.extend_hijack_lease(
-        worker_id, hijack_id, owner="operator", lease_s=60, now=now + 10
-    )
+    success = await hub.extend_hijack_lease(worker_id, hijack_id, owner="operator", lease_s=60, now=now + 10)
     # This should now FAIL because owner doesn't match
     assert success is None
+
 
 @pytest.mark.asyncio
 async def test_hub_atomic_hijack_acquisition():
@@ -73,10 +63,7 @@ async def test_hub_atomic_hijack_acquisition():
     worker_id = "w3"
 
     # Mock a worker state
-    hub._workers[worker_id] = WorkerTermState(
-        input_mode="hijack",
-        worker_ws=AsyncMock()
-    )
+    hub._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
 
     async def attempt_hijack(user_id):
         success, err = await hub.try_acquire_rest_hijack(

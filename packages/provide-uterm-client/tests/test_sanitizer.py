@@ -8,12 +8,15 @@ from provide.uterm.client.sanitizer import sanitize_keystrokes
 def test_sanitizer_keeps_printable():
     assert sanitize_keystrokes("hello world 123!") == "hello world 123!"
 
+
 def test_sanitizer_strips_binary():
     # \x00 is null, \x01 is SOH, etc.
     assert sanitize_keystrokes("hello\x00\x01world") == "helloworld"
 
+
 def test_sanitizer_keeps_controls():
     assert sanitize_keystrokes("\r\n\t\x03\x1b") == "\r\n\t\x03\x1b"
+
 
 def test_sanitizer_truncates_long_string():
     long_str = "A" * 5000

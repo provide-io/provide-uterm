@@ -47,9 +47,7 @@ def redactor() -> StreamRedactor:
         ),
     ],
 )
-def test_default_rules_redact_known_secret_formats(
-    redactor: StreamRedactor, clear: str, redaction_marker: str
-) -> None:
+def test_default_rules_redact_known_secret_formats(redactor: StreamRedactor, clear: str, redaction_marker: str) -> None:
     out = redactor.redact(clear)
     assert redaction_marker in out, f"expected {redaction_marker!r} in {out!r}"
 
@@ -80,9 +78,7 @@ def test_pem_private_key_block_is_redacted(redactor: StreamRedactor) -> None:
         "the password is on the post-it",
     ],
 )
-def test_default_rules_do_not_redact_innocuous_text(
-    redactor: StreamRedactor, clear: str
-) -> None:
+def test_default_rules_do_not_redact_innocuous_text(redactor: StreamRedactor, clear: str) -> None:
     assert redactor.redact(clear) == clear
 
 

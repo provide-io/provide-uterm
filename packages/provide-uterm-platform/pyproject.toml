@@ -85,7 +85,12 @@ select = [
     "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
     "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
 ]
-ignore = ["E501", "S104", "S112", "S311", "S603", "S604", "S108", "SIM105", "ARG002"]
+# Aligned with the workspace-root ruff config in ../../pyproject.toml.
+ignore = [
+    "E501", "S101", "S104", "S108", "S110", "S112", "S311", "S603", "S607",
+    "S604", "F811", "N806", "N814", "B017", "SIM105", "SIM117", "ARG001",
+    "ARG002", "PTH108", "SIM108", "PERF401",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "RUF022"]

@@ -140,7 +140,9 @@ class _OwnershipMixin:
             \`\`(False, "no_worker")\`\` if the worker disconnected before the lock.
             \`\`(False, "already_hijacked")\`\` if another session is active.
         """
-        with tracer.start_as_current_span("uterm.hijack.acquire.rest", attributes={"worker_id": worker_id, "owner": owner}):
+        with tracer.start_as_current_span(
+            "uterm.hijack.acquire.rest", attributes={"worker_id": worker_id, "owner": owner}
+        ):
             async with self._lock:
                 st = self._workers.get(worker_id)
                 if st is None or st.worker_ws is None:
@@ -273,9 +275,13 @@ class _OwnershipMixin:
             self.notify_hijack_changed(worker_id, enabled=False, owner=None)  # type: ignore[attr-defined]
         return notify_hijack_off
 
-    async def extend_hijack_lease(self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float) -> float | None:
+    async def extend_hijack_lease(
+        self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float
+    ) -> float | None:
         """Extend the REST hijack lease. Returns the new expiry or None if the session is not found or owner mismatch."""
-        with tracer.start_as_current_span("uterm.hijack.heartbeat", attributes={"worker_id": worker_id, "owner": owner}):
+        with tracer.start_as_current_span(
+            "uterm.hijack.heartbeat", attributes={"worker_id": worker_id, "owner": owner}
+        ):
             async with self._lock:
                 st = self._workers.get(worker_id)
                 if st is None or st.hijack_session is None or st.hijack_session.hijack_id != hijack_id:

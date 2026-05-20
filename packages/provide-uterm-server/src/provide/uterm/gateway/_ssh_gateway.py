@@ -9,8 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from provide.uterm.colors import ColorMode
-
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.gateway._gateway import _require_websockets
 from provide.uterm.gateway._ssh_handler import (
@@ -22,6 +20,7 @@ if TYPE_CHECKING:
     import ssl as _ssl
 
     from provide.uterm.auth import SSHKeyResolver
+    from provide.uterm.colors import ColorMode
 
 # ---------------------------------------------------------------------------
 # SshWsGateway
@@ -108,9 +107,7 @@ class SshWsGateway:
         try:
             import asyncssh  # noqa: F401
         except ImportError as exc:  # pragma: no cover
-            raise ImportError(
-                "asyncssh is required for SSH gateway support: pip install 'provide-uterm[ssh]'"
-            ) from exc
+            raise ImportError("asyncssh is required for SSH gateway support: pip install 'provide-uterm[ssh]'") from exc
         self._ws_url = ws_url
         self._server_key = server_key
         self._color_mode = color_mode

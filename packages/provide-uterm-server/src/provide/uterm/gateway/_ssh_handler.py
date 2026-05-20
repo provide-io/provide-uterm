@@ -16,13 +16,12 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from provide.uterm.colors import ColorMode
-
 if TYPE_CHECKING:
     import collections.abc
     from pathlib import Path
 
     from provide.uterm.auth import SSHKeyResolver
+    from provide.uterm.colors import ColorMode
 
 from provide.telemetry import get_logger
 from provide.uterm.auth import ResolvedIdentity
@@ -89,7 +88,7 @@ def _make_no_auth_server_class(
             with contextlib.suppress(Exception):
                 conn._warp_gateway_server = self  # type: ignore[attr-defined]
 
-        def begin_auth(self, username: str) -> bool:  # noqa: ARG002
+        def begin_auth(self, username: str) -> bool:
             # Require auth so asyncssh actually exercises the pubkey
             # handler below. Callers still get no-gate behaviour because
             # we accept everything (unless require_resolver is set).
@@ -146,7 +145,7 @@ def _make_no_auth_server_class(
             )
             return True
 
-        def validate_password(self, username: str, password: str) -> bool:  # noqa: ARG002
+        def validate_password(self, username: str, password: str) -> bool:
             return True
 
         def kbdint_auth_supported(self) -> bool:

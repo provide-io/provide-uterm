@@ -356,6 +356,6 @@ class TestExplicitImportSurface:
         from provide.uterm.fastapi_utils import mount_terminal_ui
 
         app = FastAPI()
-        with patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=False):  # noqa: SIM117
+        with patch("provide.uterm.fastapi_utils.Path.is_dir", return_value=False):
             with pytest.raises(RuntimeError, match="terminal UI assets not found"):
                 mount_terminal_ui(app)

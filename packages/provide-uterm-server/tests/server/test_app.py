@@ -195,9 +195,7 @@ class TestReferenceServerApp:
         deadline = time.monotonic() + 5.0
         hello: dict[str, Any] | None = None
         while time.monotonic() < deadline:
-            async with websockets.connect(
-                _ws_url(live_reference_server, "/ws/browser/provide-shell/term")
-            ) as browser:
+            async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/provide-shell/term")) as browser:
                 hello = await _drain_until(browser, "hello", timeout=5.0)
             if hello is not None and hello.get("input_mode") == "open" and hello.get("worker_online") is True:
                 break
@@ -251,9 +249,7 @@ class TestReferenceServerApp:
             try:
                 before = (await http.get("/api/metrics")).json()["metrics"]
                 base_conflicts = int(before.get("hijack_conflicts_total", 0))
-                first = await http.post(
-                    "/worker/provide-shell/hijack/acquire", json={"owner": "test-a", "lease_s": 60}
-                )
+                first = await http.post("/worker/provide-shell/hijack/acquire", json={"owner": "test-a", "lease_s": 60})
                 assert first.status_code == 200
                 second = await http.post(
                     "/worker/provide-shell/hijack/acquire", json={"owner": "test-b", "lease_s": 60}
@@ -433,9 +429,7 @@ class TestReferenceServerApp:
                 hello = await _drain_until(browser, "hello", timeout=5.0)
                 assert hello is not None
                 assert hello["worker_online"] is True
-                snapshot = await _drain_snapshot_containing(
-                    browser, "welcome from key-backed ssh server", timeout=10.0
-                )
+                snapshot = await _drain_snapshot_containing(browser, "welcome from key-backed ssh server", timeout=10.0)
                 assert snapshot is not None, "SSH echo greeting did not appear in any snapshot"
         finally:
             await _delete_session(live_reference_server, "ssh-key-local")
@@ -495,9 +489,7 @@ class TestReferenceServerApp:
                 hello = await _drain_until(browser, "hello", timeout=5.0)
                 assert hello is not None
                 assert hello["worker_online"] is True
-                snapshot = await _drain_snapshot_containing(
-                    browser, "welcome from inline-key ssh server", timeout=10.0
-                )
+                snapshot = await _drain_snapshot_containing(browser, "welcome from inline-key ssh server", timeout=10.0)
                 assert snapshot is not None, "SSH echo greeting did not appear in any snapshot"
         finally:
             await _delete_session(live_reference_server, "ssh-inline-key-local")

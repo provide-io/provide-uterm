@@ -186,7 +186,7 @@ async def test_sse_worker_disconnect_closes_stream(shell_server: Any) -> None:
                 ready.set()
                 async for line in resp.aiter_lines():
                     if line.startswith("data: "):
-                        events.append(json.loads(line[6:]))  # noqa: PERF401
+                        events.append(json.loads(line[6:]))
 
         ready = asyncio.Event()
         stream_task = asyncio.create_task(_stream())

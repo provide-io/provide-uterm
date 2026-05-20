@@ -126,7 +126,9 @@ async def route_webhooks(
         try:
             from provide.uterm.cloudflare.cf_types import json_response
         except ImportError:  # pragma: no cover
-            from cf_types import json_response  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
+            from cf_types import (
+                json_response,  # type: ignore[import-not-found,no-redef]  # CF flat path  # pragma: no cover
+            )
 
     if session_id != runtime.worker_id:
         return json_response({"error": "not_found", "path": path}, status=404)

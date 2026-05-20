@@ -340,7 +340,9 @@ class TestAgentRestart:
             coro.close()
             return fake_task
 
-        with patch("provide.uterm.manager.routes.spawn.asyncio.create_task", side_effect=fake_create_task) as create_task:
+        with patch(
+            "provide.uterm.manager.routes.spawn.asyncio.create_task", side_effect=fake_create_task
+        ) as create_task:
             resp = client.post("/agent/agent_000/restart")
 
         assert resp.status_code == 200

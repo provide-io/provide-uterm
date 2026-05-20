@@ -9,13 +9,13 @@ from __future__ import annotations
 from datetime import datetime  # noqa: TC003
 from typing import Any, TypeAlias
 
-from pydantic import ValidationError  # noqa: TC002
+from pydantic import ValidationError
 
-from provide.uterm.bridge.contracts import InputMode, SessionLifecycle, Visibility  # noqa: TC001
+from provide.uterm.bridge.contracts import InputMode, SessionLifecycle, Visibility
 from provide.uterm.server.config_schema import (
-    FITADDON_CDN_DEFAULT,  # noqa: F401  re-exported for cli/__init__.py
-    FONTS_CDN_DEFAULT,  # noqa: F401  re-exported for cli/__init__.py
-    XTERM_CDN_DEFAULT,  # noqa: F401  re-exported for cli/__init__.py
+    FITADDON_CDN_DEFAULT,
+    FONTS_CDN_DEFAULT,
+    XTERM_CDN_DEFAULT,
     AuthConfig,
     ControlPlaneConfig,
     GovernanceConfig,
@@ -42,10 +42,11 @@ ServerConfig = UtermServerConfig
 # so callers don't need to know whether the type lives in this module or
 # config_schema.
 __all__ = [
-    "AuthConfig",
-    "ControlPlaneConfig",
     "FITADDON_CDN_DEFAULT",
     "FONTS_CDN_DEFAULT",
+    "XTERM_CDN_DEFAULT",
+    "AuthConfig",
+    "ControlPlaneConfig",
     "GovernanceConfig",
     "InputMode",
     "PamConfig",
@@ -62,7 +63,6 @@ __all__ = [
     "UtermServerConfig",
     "ValidationError",
     "Visibility",
-    "XTERM_CDN_DEFAULT",
 ]
 
 

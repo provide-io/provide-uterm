@@ -67,5 +67,5 @@ class CaptureSocket:
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:  # noqa: S110
+            except Exception:
                 pass

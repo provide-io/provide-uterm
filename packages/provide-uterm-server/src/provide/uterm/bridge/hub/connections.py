@@ -23,10 +23,10 @@ from provide.uterm.bridge.hub.ext import (
     EVENT_SESSION_DISCONNECTED,
     EVENT_SESSION_REGISTERED,
 )
-from provide.uterm.bridge.contracts import InputMode
 from provide.uterm.bridge.models import WorkerTermState
 
 if TYPE_CHECKING:
+    from provide.uterm.bridge.contracts import InputMode
     from provide.uterm.bridge.hub.resume import ResumeTokenStore
 from provide.uterm.bridge.ratelimit import TokenBucket
 

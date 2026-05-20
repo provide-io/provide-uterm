@@ -194,11 +194,11 @@ def authorized(tool_name: str, auth_ctx: AuthorizationContext) -> Callable[[F], 
         # (both type checkers treat direct ``obj.attr = …`` on a typed
         # callable as an unresolved-attribute error; ``setattr`` is the
         # canonical opt-out).
-        setattr(_wrapper, "__uterm_tool_name__", tool_name)
-        setattr(_wrapper, "__uterm_required_role__", minimum)
+        setattr(_wrapper, "__uterm_tool_name__", tool_name)  # noqa: B010
+        setattr(_wrapper, "__uterm_required_role__", minimum)  # noqa: B010
         # ``functools.wraps`` returns ``_Wrapped[…]`` rather than the
         # original ``F``; the cast tells both type checkers the wrapper
         # honours the same callable shape as the wrapped function.
-        return cast(F, _wrapper)
+        return cast("F", _wrapper)
 
     return _decorator

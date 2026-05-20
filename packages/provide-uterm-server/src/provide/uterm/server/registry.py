@@ -274,7 +274,7 @@ class SessionRegistry:
         await runtime.restart()
         return runtime.status()
 
-    async def set_mode(self, session_id: str, mode: str) -> SessionRuntimeStatus:  # noqa: D102
+    async def set_mode(self, session_id: str, mode: str) -> SessionRuntimeStatus:
         async with self._lock:
             session = self._require_session(session_id)
             try:
