@@ -247,6 +247,7 @@ tests_dir = [
     "packages/provide-uterm/tests/test_control_channel_ordering.py",
     "packages/provide-uterm/tests/test_control_channel_patterns.py",
     "packages/provide-uterm/tests/test_auth.py",
+    "packages/provide-uterm/tests/test_auth_mutmut.py",
     "packages/provide-uterm/tests/test_auth_parsers.py",
     "packages/provide-uterm/tests/test_auth_authorized_keys.py",
     "packages/provide-uterm/tests/test_auth_resolver.py",
