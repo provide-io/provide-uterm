@@ -263,8 +263,6 @@ tests_dir = [
     "packages/provide-uterm/tests/test_io_mutations.py",
     "packages/provide-uterm/tests/test_io_mutations_2.py",
     "packages/provide-uterm/tests/terminal/test_io.py",
-    "packages/provide-uterm/tests/terminal/test_recording_stores.py",
-    "packages/provide-uterm/tests/terminal/test_session_logger.py",
 ]
 also_copy = [
     "src",
