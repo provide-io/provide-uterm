@@ -220,9 +220,7 @@ class TestAuthorizedKeysFileResolverLoad:
         )
         resolver = AuthorizedKeysFileResolver(path)
         # Compute the actual fingerprint of the line so we can resolve it.
-        fp = fingerprint_from_openssh_blob(
-            f"ssh-ed25519 {base64.b64encode(b'k').decode()}".encode()
-        )
+        fp = fingerprint_from_openssh_blob(f"ssh-ed25519 {base64.b64encode(b'k').decode()}".encode())
         identity = await resolver.resolve(fp, pubkey_blob=b"", username="alice")
         assert identity is not None
         assert identity.subject == "alice"
@@ -240,9 +238,7 @@ class TestAuthorizedKeysFileResolverLoad:
         good = f"ssh-ed25519 {base64.b64encode(b'k').decode()} bob"
         path.write_text(f"garbage line no payload\n{good}\n")  # type: ignore[union-attr]
         resolver = AuthorizedKeysFileResolver(path)
-        fp = fingerprint_from_openssh_blob(
-            f"ssh-ed25519 {base64.b64encode(b'k').decode()}".encode()
-        )
+        fp = fingerprint_from_openssh_blob(f"ssh-ed25519 {base64.b64encode(b'k').decode()}".encode())
         identity = await resolver.resolve(fp, pubkey_blob=b"", username="bob")
         assert identity is not None
         assert identity.subject == "bob"
