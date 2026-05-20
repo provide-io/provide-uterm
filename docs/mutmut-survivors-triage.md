@@ -1,13 +1,28 @@
 # Mutmut survivor triage
 
-**Snapshot:** 2026-05-19 after the surgical-killer pass (60.69% → 70.19%).
+**Snapshot:** 2026-05-20 after the high-ROI killer pass (60.69% → 70.19% →
+71.25%).
 
-After killing 161 mutants this session, 247 survive plus 255 `no_tests` on
-`recording.py`. This document classifies the 247 survivors so future work
-can pick a category and ship the right kind of fix.
+Two attack waves landed this work cycle:
+
+1. **Surgical-killer pass (2026-05-19).** Killed 161 mutants, dropping
+   survivors from ~408 to 247. Kill rate 60.69% → 70.19%.
+2. **High-ROI batch (2026-05-19, evening).** Targeted the 20 highest-ROI
+   survivors identified by this document (comparison-boundary flips, numeric
+   literals, `b64decode(validate=True)` drops, `str.split` limits,
+   `continue`/`break`, negative-vs-positive slice signs) via
+   `packages/provide-uterm/tests/test_high_roi_mutmut.py`. Killed 11/20.
+   Kill rate 70.19% → 71.25%. Approximately **236 survivors** remain plus
+   the 255 `no_tests` on `recording.py`.
+
+The bucket counts and category analysis below were computed against the
+247-survivor snapshot from after step 1. Step 2 removed ~11 from the `TEST`
+bucket (mostly boundary + numeric + b64 + slice categories). The
+*structural* picture — what is and isn't killable — is unchanged, so the
+recommended attack order and EQUIV analysis still apply.
 
 The numbers below are from `/tmp/triage2.py` (in-repo script ad-hoc) run
-against the final mutmut state.
+against the post-step-1 mutmut state.
 
 ## Bucket counts
 
