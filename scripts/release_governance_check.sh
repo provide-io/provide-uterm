@@ -13,7 +13,14 @@ echo "[1/4] dependency vulnerability scan"
 # and still scans every transitive dep for CVEs.
 # pip-audit emits "No known vulnerabilities found" on stderr and the skip
 # table on stdout — capture both so the artifact tells the full story.
-uv run --with pip-audit pip-audit --desc --local > "${OUT_DIR}/pip-audit.txt" 2>&1
+#
+# Ignored advisories (--ignore-vuln):
+# - PYSEC-2025-183 (pyjwt): disputed by upstream — "the key length is
+#   chosen by the application that uses the library". Library users
+#   pick the HMAC key length, so this isn't a pyjwt-side fix.
+uv run --with pip-audit pip-audit --desc --local \
+    --ignore-vuln PYSEC-2025-183 \
+    > "${OUT_DIR}/pip-audit.txt" 2>&1
 
 echo "[2/4] build artifacts"
 # Reproducible builds: pin every embedded timestamp to the commit time
