@@ -242,6 +242,7 @@ tests_dir = [
     "packages/provide-uterm-platform/tests/pty/test_connector_child.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_codec.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_coverage.py",
+    "packages/provide-uterm/tests/terminal/test_control_channel_mutmut.py",
     "packages/provide-uterm/tests/test_control_channel_builders.py",
     "packages/provide-uterm/tests/test_control_channel_ordering.py",
     "packages/provide-uterm/tests/test_control_channel_patterns.py",
