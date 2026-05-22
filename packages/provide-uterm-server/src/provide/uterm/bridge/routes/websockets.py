@@ -338,6 +338,10 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
         try:
             _browser_bucket = TokenBucket(hub.browser_rate_limit_per_sec)
+            # Separate budget for non-input control frames. See
+            # ``browser_control_rate_limit_per_sec`` in TermHub for the
+            # threat-model rationale.
+            _browser_control_bucket = TokenBucket(hub.browser_control_rate_limit_per_sec)
             while True:
                 try:
                     raw = await asyncio.wait_for(websocket.receive_text(), timeout=hub.ws_idle_timeout_s)
@@ -363,6 +367,11 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         with suppress(Exception):
                             await websocket.send_text(encode_control(make_error_frame("rate_limited")))
                             logger.debug("ws_browser_rate_limited_sent worker_id=%s", worker_id)
+                        continue
+                    if mtype is not None and mtype != "input" and not _browser_control_bucket.allow():
+                        logger.warning("ws_browser_control_rate_limited worker_id=%s mtype=%s", worker_id, mtype)
+                        with suppress(Exception):
+                            await websocket.send_text(encode_control(make_error_frame("rate_limited")))
                         continue
 
                     # Resume handled here (not in browser_handlers) because it can
