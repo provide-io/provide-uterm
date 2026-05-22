@@ -94,6 +94,15 @@ def test_load_server_config_resolves_relative_recording_path(tmp_path: Path) -> 
     assert config.recording.directory == (tmp_path / "logs").resolve()
 
 
+def test_checked_in_docker_config_fails_closed_until_configured() -> None:
+    repo_root = Path(__file__).resolve().parents[4]
+    config = load_server_config(repo_root / "docker" / "server.toml")
+
+    assert config.server.host == "0.0.0.0"
+    with pytest.raises(ValueError, match="placeholder"):
+        create_server_app(config, api_only=True)
+
+
 def test_load_server_config_parses_ephemeral_and_max_sessions(tmp_path: Path) -> None:
     cfg_path = tmp_path / "server.toml"
     cfg_path.write_text(

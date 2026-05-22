@@ -80,6 +80,27 @@ export const _RECONNECT_ANIM_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴",
 export const _DLE = "\x10";
 export const _STX = "\x02";
 const _CONTROL_LEN_RE = /^[0-9a-fA-F]{8}$/;
+const _TEXT_ENCODER = new TextEncoder();
+
+function utf8ByteLength(value: string): number {
+  return _TEXT_ENCODER.encode(value).byteLength;
+}
+
+function utf8PayloadEnd(raw: string, start: number, payloadBytes: number): number | null {
+  let byteCount = 0;
+  let cursor = start;
+  while (cursor < raw.length && byteCount < payloadBytes) {
+    const codePoint = raw.codePointAt(cursor);
+    if (codePoint === undefined) break;
+    const char = String.fromCodePoint(codePoint);
+    byteCount += utf8ByteLength(char);
+    cursor += char.length;
+    if (byteCount > payloadBytes) {
+      throw new Error("invalid control payload length");
+    }
+  }
+  return byteCount === payloadBytes ? cursor : null;
+}
 
 // ── Encode helpers ────────────────────────────────────────────────────────────
 
@@ -91,7 +112,7 @@ export function encodeDataFrame(data: unknown): string {
 
 export function encodeControlFrame(payload: Record<string, unknown>): string {
   const json = JSON.stringify(payload);
-  return `${_DLE}${_STX}${json.length.toString(16).padStart(8, "0")}:${json}`;
+  return `${_DLE}${_STX}${utf8ByteLength(json).toString(16).padStart(8, "0")}:${json}`;
 }
 
 export function encodeWsFrame(payload: Record<string, unknown>): string {
@@ -160,8 +181,8 @@ export class ControlChannelDecoder {
         throw new Error("control payload too large");
       }
       const payloadStart = cursor + 11;
-      const payloadEnd = payloadStart + payloadLength;
-      if (payloadEnd > this._buffer.length) {
+      const payloadEnd = utf8PayloadEnd(this._buffer, payloadStart, payloadLength);
+      if (payloadEnd === null) {
         break;
       }
       let parsed: unknown;

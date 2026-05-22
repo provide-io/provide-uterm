@@ -19,6 +19,12 @@ function makeControlFrame(payload: Record<string, unknown>): string {
   return `${_DLE}${_STX}${json.length.toString(16).padStart(8, "0")}:${json}`;
 }
 
+function makeUtf8ControlFrame(payload: Record<string, unknown>): string {
+  const json = JSON.stringify(payload);
+  const byteLength = new TextEncoder().encode(json).byteLength;
+  return `${_DLE}${_STX}${byteLength.toString(16).padStart(8, "0")}:${json}`;
+}
+
 // ── encodeDataFrame ───────────────────────────────────────────────────────────
 
 describe("encodeDataFrame", () => {
@@ -60,6 +66,13 @@ describe("encodeControlFrame", () => {
     const result = encodeControlFrame({ type: "hello" });
     const length = Number.parseInt(result.slice(2, 10), 16);
     expect(length).toBe(json.length);
+  });
+
+  it("lengths non-BMP Unicode payloads in UTF-8 bytes", () => {
+    const json = JSON.stringify({ type: "hello", text: "👋" });
+    const result = encodeControlFrame({ type: "hello", text: "👋" });
+    const length = Number.parseInt(result.slice(2, 10), 16);
+    expect(length).toBe(new TextEncoder().encode(json).byteLength);
   });
 
   it("has colon separator after length", () => {
@@ -175,6 +188,22 @@ describe("ControlChannelDecoder", () => {
       const frames = dec.feed(frame);
       expect(frames).toHaveLength(1);
       expect(frames[0]).toEqual({ type: "control", control: { type: "hello", worker_id: "w1" } });
+    });
+
+    it("decodes non-BMP Unicode payloads using the UTF-8 byte length header", () => {
+      const dec = new ControlChannelDecoder();
+      const frame = makeUtf8ControlFrame({ type: "hello", text: "👋" });
+      const frames = dec.feed(frame);
+      expect(frames).toEqual([{ type: "control", control: { type: "hello", text: "👋" } }]);
+    });
+
+    it("enforces max control payload size in UTF-8 bytes", () => {
+      const json = JSON.stringify({ text: "👋" });
+      const byteLength = new TextEncoder().encode(json).byteLength;
+      const frame = `${_DLE}${_STX}${byteLength.toString(16).padStart(8, "0")}:${json}`;
+      const dec = new ControlChannelDecoder(byteLength - 1);
+
+      expect(() => dec.feed(frame)).toThrow("control payload too large");
     });
 
     it("emits data frame before control frame in mixed input", () => {

@@ -31,6 +31,13 @@ def test_encode_control_builds_prefixed_ascii_frame() -> None:
     assert '"type":"hello"' in encoded
 
 
+def test_encode_control_lengths_raw_unicode_payload_in_utf8_bytes() -> None:
+    encoded = encode_control({"type": "hello", "text": "👋"})
+    payload = encoded[11:]
+    assert "👋" in payload
+    assert int(encoded[2:10], 16) == len(payload.encode("utf-8"))
+
+
 def test_decoder_returns_raw_passthrough_data() -> None:
     decoder = ControlChannelDecoder()
     assert decoder.feed("hello world") == [DataChunk("hello world")]
@@ -40,6 +47,13 @@ def test_decoder_returns_control_frame() -> None:
     decoder = ControlChannelDecoder()
     decoded = decoder.feed(encode_control({"type": "snapshot_req"}))
     assert decoded == [ControlChunk({"type": "snapshot_req"})]
+
+
+def test_decoder_reads_utf8_byte_length_for_non_bmp_payload() -> None:
+    decoder = ControlChannelDecoder()
+    payload = '{"type":"hello","text":"👋"}'
+    raw = f"{DLE}{STX}{len(payload.encode('utf-8')):08x}:{payload}"
+    assert decoder.feed(raw) == [ControlChunk({"type": "hello", "text": "👋"})]
 
 
 def test_decoder_handles_back_to_back_frames() -> None:

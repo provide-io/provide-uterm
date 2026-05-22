@@ -2,8 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Default Docker config: dev auth (no JWT), one shell session pre-started.
-# Mount a custom TOML at /config/server.toml to override.
+# Default Docker config: production-shaped JWT auth with deliberate
+# placeholders. The server rejects these values at startup so the image fails
+# closed until a real /config/server.toml is mounted.
 #
 
 [server]
@@ -13,10 +14,19 @@ public_base_url = "http://localhost:27780"
 title = "provide-uterm (Docker)"
 
 [auth]
-# Dev mode: no JWT required. Accepts X-Uterm-Principal header or anonymous.
-mode = "dev"
-principal_header = "x-uterm-principal"
-role_header = "x-uterm-role"
+# Replace this whole section for deployment. Do not expose dev/header auth
+# without the guardrails documented in scripts/uterm-server.example.toml.
+mode = "jwt"
+require_jwt_in_production = true
+jwt_issuer = "provide-uterm"
+jwt_audience = "provide-uterm-server"
+jwt_public_key_pem = """
+-----BEGIN PUBLIC KEY-----
+REPLACE_WITH_REAL_PUBLIC_KEY
+-----END PUBLIC KEY-----
+"""
+jwt_algorithms = ["RS256"]
+worker_bearer_token = "REPLACE_WITH_RUNTIME_WORKER_JWT"
 
 [ui]
 app_path = "/app"

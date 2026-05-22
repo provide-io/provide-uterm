@@ -79,15 +79,23 @@ def create_webhook_router() -> APIRouter:
         url = payload.get("url")
         if not url or not isinstance(url, str):
             raise HTTPException(status_code=422, detail="url is required")
+        manager = _webhook_manager(request)
+        try:
+            url = manager.validate_url(url)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         event_types = payload.get("event_types")
         if event_types is not None and not isinstance(event_types, list):
             raise HTTPException(status_code=422, detail="event_types must be a list")
 
         pattern = payload.get("pattern")
+        try:
+            pattern = manager.validate_pattern(pattern)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         secret = payload.get("secret")
 
-        manager = _webhook_manager(request)
         event_bus = getattr(request.app.state.uterm_hub, "event_bus", None)
         cfg = await manager.register(
             session_id,

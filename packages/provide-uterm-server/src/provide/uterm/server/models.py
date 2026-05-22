@@ -29,6 +29,7 @@ from provide.uterm.server.config_schema import (
     TunnelConfig,
     UiConfig,
     UtermServerConfig,
+    WebhooksConfig,
 )
 
 # Alias for backward compatibility if needed, though we should transition to UtermServerConfig.
@@ -63,6 +64,7 @@ __all__ = [
     "UtermServerConfig",
     "ValidationError",
     "Visibility",
+    "WebhooksConfig",
 ]
 
 
@@ -94,6 +96,7 @@ ServerModel: TypeAlias = (
     | ProfileStoreConfig
     | SecurityConfig
     | TunnelConfig
+    | WebhooksConfig
     | PamConfig
     | ServerBindConfig
     | SessionDefinition

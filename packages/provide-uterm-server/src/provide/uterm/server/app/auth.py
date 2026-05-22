@@ -15,6 +15,61 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+_PLACEHOLDER_AUTH_VALUES = {
+    "key",
+    "token",
+    "secret",
+    "secret123",
+    "dummy-token",
+    "dummy-secret",
+    "worker-token",
+    "worker-secret",
+    "jwt-secret",
+    "jwt-secret-key",
+}
+
+_PLACEHOLDER_AUTH_MARKERS = (
+    "change-me",
+    "changeme",
+    "placeholder",
+    "replace-me",
+    "replace_with",
+    "replace-with",
+)
+
+
+def _is_loopback_host(host: str) -> bool:
+    return str(host).strip().lower() in _LOOPBACK_HOSTS
+
+
+def _is_placeholder_auth_value(value: str | None) -> bool:
+    text = str(value or "").strip().lower()
+    if not text:
+        return False
+    if text in _PLACEHOLDER_AUTH_VALUES:
+        return True
+    return any(marker in text for marker in _PLACEHOLDER_AUTH_MARKERS)
+
+
+def _validate_no_placeholder_auth_values(config: ServerConfig, mode: str) -> None:
+    production_like = config.auth.require_jwt_in_production or not _is_loopback_host(config.server.host)
+    if not production_like:
+        return
+
+    if _is_placeholder_auth_value(config.auth.worker_bearer_token):
+        raise ValueError(
+            f"auth.worker_bearer_token uses a known placeholder value when auth.mode='{mode}'. "
+            "Set a high-entropy runtime token."
+        )
+
+    if mode == "jwt" and _is_placeholder_auth_value(config.auth.jwt_public_key_pem):
+        raise ValueError(
+            "auth.jwt_public_key_pem uses a known placeholder value when auth.mode='jwt'. "
+            "Set a real JWT public key or HS256 shared secret."
+        )
+
 
 def _validate_auth_config(config: ServerConfig) -> None:
     mode = str(config.auth.mode).strip().lower()
@@ -26,7 +81,7 @@ def _validate_auth_config(config: ServerConfig) -> None:
             )
 
         host = str(config.server.host).strip().lower()
-        if host not in {"127.0.0.1", "localhost", "::1"}:
+        if not _is_loopback_host(host):
             raise RuntimeError(
                 f"auth.mode='{mode}' is only permitted when server.host is a loopback address "
                 f"(127.0.0.1, localhost, or ::1). Got: {host}"
@@ -54,6 +109,7 @@ def _validate_auth_config(config: ServerConfig) -> None:
     # All authenticated modes (jwt, header, …) require a worker bearer token.
     if not config.auth.worker_bearer_token:
         raise ValueError(f"auth.worker_bearer_token is required when auth.mode='{mode}'")
+    _validate_no_placeholder_auth_values(config, mode)
     if mode != "jwt":
         return
     if not config.auth.jwt_algorithms:

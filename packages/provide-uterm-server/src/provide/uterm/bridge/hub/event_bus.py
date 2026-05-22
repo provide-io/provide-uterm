@@ -43,6 +43,9 @@ from provide.telemetry import get_logger
 
 logger = get_logger(__name__)
 
+_DEFAULT_MAX_PATTERN_LENGTH = 512
+_DEFAULT_MAX_MATCH_INPUT_CHARS = 8192
+
 
 @dataclass
 class _Subscription:
@@ -69,9 +72,18 @@ class EventBus:
             slow consumers at the cost of more memory.
     """
 
-    def __init__(self, max_queue_depth: int = 500, max_subscribers_per_worker: int = 100) -> None:
+    def __init__(
+        self,
+        max_queue_depth: int = 500,
+        max_subscribers_per_worker: int = 100,
+        *,
+        max_pattern_length: int = _DEFAULT_MAX_PATTERN_LENGTH,
+        max_match_input_chars: int = _DEFAULT_MAX_MATCH_INPUT_CHARS,
+    ) -> None:
         self._max_queue_depth = max(1, int(max_queue_depth))
         self._max_subscribers_per_worker = max(1, int(max_subscribers_per_worker))
+        self._max_pattern_length = max(1, int(max_pattern_length))
+        self._max_match_input_chars = max(1, int(max_match_input_chars))
         # worker_id -> list of active subscriptions
         self._subs: dict[str, list[_Subscription]] = {}
 
@@ -100,6 +112,9 @@ class EventBus:
             return
         if sub.pattern is not None:
             screen = event.get("data", {}).get("screen", "")
+            if not isinstance(screen, str):
+                screen = str(screen)
+            screen = screen[: self._max_match_input_chars]
             if not sub.pattern.search(screen):
                 return
         item: dict[str, Any] = {"worker_id": worker_id, **event}
@@ -186,7 +201,7 @@ class EventBus:
             raise RuntimeError(
                 f"EventBus: max subscribers ({self._max_subscribers_per_worker}) reached for worker {worker_id!r}"
             )
-        compiled = _compile_pattern(pattern)
+        compiled = _compile_pattern(pattern, max_pattern_length=self._max_pattern_length)
         sub = _Subscription(
             sub_id=uuid.uuid4().hex,
             worker_id=worker_id,
@@ -220,10 +235,83 @@ class EventBus:
         return len(self._subs.get(worker_id, []))
 
 
-def _compile_pattern(pattern: str | None) -> re.Pattern[str] | None:
+def _compile_pattern(
+    pattern: str | None,
+    *,
+    max_pattern_length: int = _DEFAULT_MAX_PATTERN_LENGTH,
+) -> re.Pattern[str] | None:
     if pattern is None:
         return None
+    if len(pattern) > max(1, int(max_pattern_length)):
+        raise ValueError(f"watch pattern is too long: {len(pattern)} > {max_pattern_length}")
+    _validate_pattern_safety(pattern)
     try:
         return re.compile(pattern)
     except re.error as exc:
         raise ValueError(f"invalid watch pattern regex: {exc}") from exc
+
+
+def _validate_pattern_safety(pattern: str) -> None:
+    group_stack: list[bool] = []
+    previous_kind = ""
+    last_closed_group_had_quantifier = False
+    escaped = False
+    in_class = False
+    i = 0
+    while i < len(pattern):
+        char = pattern[i]
+        if escaped:
+            escaped = False
+            previous_kind = "literal"
+            i += 1
+            continue
+        if char == "\\":
+            escaped = True
+            i += 1
+            continue
+        if in_class:
+            if char == "]":
+                in_class = False
+                previous_kind = "literal"
+            i += 1
+            continue
+        if char == "[":
+            in_class = True
+            i += 1
+            continue
+        if char == "(":
+            group_stack.append(False)
+            previous_kind = ""
+            last_closed_group_had_quantifier = False
+            i += 1
+            continue
+        if char == ")" and group_stack:
+            last_closed_group_had_quantifier = group_stack.pop()
+            previous_kind = "group"
+            i += 1
+            continue
+        if char in "+*" or (char == "{" and _looks_like_counted_quantifier(pattern, i)):
+            if previous_kind == "group" and last_closed_group_had_quantifier:
+                raise ValueError("unsafe watch pattern: nested quantified groups are not allowed")
+            if group_stack:
+                group_stack[-1] = True
+            previous_kind = "quantifier"
+            if char == "{":
+                i = pattern.find("}", i) + 1
+            else:
+                i += 1
+            continue
+        previous_kind = "literal"
+        last_closed_group_had_quantifier = False
+        i += 1
+
+
+def _looks_like_counted_quantifier(pattern: str, start: int) -> bool:
+    end = pattern.find("}", start + 1)
+    if end == -1:
+        return False
+    body = pattern[start + 1 : end]
+    if not body:
+        return False
+    left, sep, right = body.partition(",")
+    return left.isdigit() and (not sep or right == "" or right.isdigit())

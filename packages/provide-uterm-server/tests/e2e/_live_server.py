@@ -45,6 +45,7 @@ async def live_server_with_bus(
         {
             "server": {"host": "127.0.0.1", "port": 0},
             "auth": {"mode": "dev"},
+            "webhooks": {"allow_loopback_destinations": True},
             "sessions": sessions,
         }
     )

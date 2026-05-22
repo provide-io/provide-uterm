@@ -60,9 +60,9 @@ class TestRequireJwtInProduction:
             auth=AuthConfig(
                 mode="jwt",
                 require_jwt_in_production=True,
-                jwt_public_key_pem="key",
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
                 jwt_algorithms=["HS256"],
-                worker_bearer_token="token",
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
             ),
         )
         _validate_auth_config(config)
@@ -73,7 +73,7 @@ class TestRequireJwtInProduction:
                 mode="header",
                 require_jwt_in_production=True,
                 header_mode_acknowledged=True,
-                worker_bearer_token="token",
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
             ),
         )
         _validate_auth_config(config)
@@ -103,6 +103,77 @@ class TestRequireJwtInProduction:
             auth=AuthConfig(mode="none", require_jwt_in_production=True),
         )
         with pytest.raises(RuntimeError, match="auth.mode='none'"):
+            _validate_auth_config(config)
+
+
+class TestPlaceholderCredentialGuardrails:
+    """Production-like auth configs must not accept known placeholder credentials."""
+
+    def test_jwt_mode_rejects_placeholder_key_and_worker_token_when_flag_set(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="key",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="token",
+            )
+        )
+
+        with pytest.raises(ValueError, match="placeholder"):
+            _validate_auth_config(config)
+
+    def test_jwt_mode_rejects_placeholder_credentials_on_non_loopback_bind(self) -> None:
+        config = ServerConfig(
+            server=ServerBindConfig(host="0.0.0.0"),
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_public_key_pem="REPLACE_WITH_REAL_PUBLIC_KEY",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="REPLACE_WITH_RUNTIME_WORKER_JWT",
+            ),
+        )
+
+        with pytest.raises(ValueError, match="placeholder"):
+            _validate_auth_config(config)
+
+    def test_real_hs256_test_secrets_are_allowed_when_flag_set(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+
+        _validate_auth_config(config)
+
+    def test_header_mode_rejects_placeholder_worker_token_after_acknowledgement(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="header",
+                require_jwt_in_production=True,
+                header_mode_acknowledged=True,
+                worker_bearer_token="token",
+            )
+        )
+
+        with pytest.raises(ValueError, match="placeholder"):
+            _validate_auth_config(config)
+
+    def test_header_mode_still_requires_acknowledgement_before_worker_token_validation(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="header",
+                require_jwt_in_production=True,
+                header_mode_acknowledged=False,
+                worker_bearer_token="token",
+            )
+        )
+
+        with pytest.raises(ValueError, match="header_mode_acknowledged"):
             _validate_auth_config(config)
 
 

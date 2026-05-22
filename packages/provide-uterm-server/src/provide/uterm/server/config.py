@@ -24,6 +24,7 @@ _TABLE_SECTIONS = frozenset(
         "profiles",
         "security",
         "tunnel",
+        "webhooks",
         "pam",
         "control_plane",
     }

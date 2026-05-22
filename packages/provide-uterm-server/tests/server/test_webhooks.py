@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
 from provide.uterm.bridge.hub import EventBus, TermHub
 from provide.uterm.server.webhooks import WebhookConfig, WebhookManager
@@ -26,6 +27,10 @@ from provide.uterm.server.webhooks import WebhookConfig, WebhookManager
 
 def _make_event(event_type: str = "snapshot", screen: str = "$ test") -> dict[str, Any]:
     return {"type": event_type, "seq": 1, "ts": time.time(), "data": {"screen": screen}}
+
+
+def _make_manager(resolved_ips: tuple[str, ...] = ("93.184.216.34",)) -> WebhookManager:
+    return WebhookManager(resolver=lambda _hostname: resolved_ips)
 
 
 async def _make_bus_with_worker(session_id: str = "s1") -> tuple[EventBus, TermHub]:
@@ -41,7 +46,7 @@ async def _make_bus_with_worker(session_id: str = "s1") -> tuple[EventBus, TermH
 
 
 async def test_register_returns_config() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     cfg = await manager.register("s1", "https://example.com/hook")
     assert isinstance(cfg, WebhookConfig)
     assert cfg.session_id == "s1"
@@ -53,7 +58,7 @@ async def test_register_returns_config() -> None:
 
 
 async def test_register_with_all_options() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     cfg = await manager.register(
         "s1",
         "https://example.com/hook",
@@ -68,7 +73,7 @@ async def test_register_with_all_options() -> None:
 
 
 async def test_unregister_returns_true_when_found() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     cfg = await manager.register("s1", "https://example.com/hook")
     result = await manager.unregister(cfg.webhook_id)
     assert result is True
@@ -77,7 +82,7 @@ async def test_unregister_returns_true_when_found() -> None:
 
 async def test_unregister_when_task_already_done() -> None:
     """Unregister after the delivery task has already completed (no-op branch)."""
-    manager = WebhookManager()
+    manager = _make_manager()
     # Register without event_bus → task exits immediately
     cfg = await manager.register("s1", "https://example.com/hook", event_bus=None)
     task = manager._tasks[cfg.webhook_id]
@@ -89,13 +94,13 @@ async def test_unregister_when_task_already_done() -> None:
 
 
 async def test_unregister_returns_false_when_not_found() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     result = await manager.unregister("nonexistent")
     assert result is False
 
 
 async def test_list_webhooks_filters_by_session() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     cfg1 = await manager.register("s1", "https://example.com/a")
     cfg2 = await manager.register("s1", "https://example.com/b")
     await manager.register("s2", "https://example.com/c")
@@ -108,7 +113,7 @@ async def test_list_webhooks_filters_by_session() -> None:
 
 
 async def test_get_webhook() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     cfg = await manager.register("s1", "https://example.com/hook")
     assert manager.get_webhook(cfg.webhook_id) is cfg
     assert manager.get_webhook("nonexistent") is None
@@ -116,7 +121,7 @@ async def test_get_webhook() -> None:
 
 
 async def test_shutdown_clears_registry() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     await manager.register("s1", "https://example.com/hook")
     await manager.shutdown()
     assert manager.list_webhooks("s1") == []
@@ -128,7 +133,7 @@ async def test_shutdown_clears_registry() -> None:
 
 
 async def test_delivery_loop_no_event_bus_exits_immediately() -> None:
-    manager = WebhookManager()
+    manager = _make_manager()
     cfg = await manager.register("s1", "https://example.com/hook", event_bus=None)
     # Task should complete quickly since event_bus is None
     task = manager._tasks[cfg.webhook_id]
@@ -144,7 +149,7 @@ async def test_delivery_loop_no_event_bus_exits_immediately() -> None:
 
 async def test_deliver_posts_to_url() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     received: list[dict[str, Any]] = []
 
@@ -177,7 +182,7 @@ async def test_deliver_posts_to_url() -> None:
 
 async def test_deliver_adds_hmac_signature() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     captured_headers: list[dict[str, str]] = []
 
@@ -202,7 +207,7 @@ async def test_deliver_adds_hmac_signature() -> None:
 
 async def test_deliver_no_signature_when_no_secret() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     captured_headers: list[dict[str, str]] = []
 
@@ -226,7 +231,7 @@ async def test_deliver_no_signature_when_no_secret() -> None:
 async def test_hmac_signature_is_correct() -> None:
     """Verify the HMAC signature can be independently verified."""
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     captured: list[tuple[bytes, str]] = []  # (body, signature)
 
@@ -260,7 +265,7 @@ async def test_hmac_signature_is_correct() -> None:
 
 async def test_deliver_retries_on_5xx() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     call_count = 0
 
@@ -289,7 +294,7 @@ async def test_deliver_retries_on_5xx() -> None:
 
 async def test_deliver_gives_up_after_max_retries() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     call_count = 0
 
@@ -317,7 +322,7 @@ async def test_deliver_gives_up_after_max_retries() -> None:
 
 async def test_deliver_retries_on_network_error() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     call_count = 0
 
@@ -344,13 +349,69 @@ async def test_deliver_retries_on_network_error() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Delivery — SSRF guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "blocked_ip",
+    [
+        "10.0.0.1",
+        "127.0.0.1",
+        "169.254.169.254",
+        "100.100.100.200",
+        "224.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "fe80::1",
+    ],
+)
+async def test_deliver_rejects_dns_names_resolving_to_blocked_addresses(blocked_ip: str) -> None:
+    manager = _make_manager((blocked_ip,))
+    cfg = WebhookConfig(
+        webhook_id="wh1",
+        session_id="s1",
+        url="https://webhook.example/hook",
+        event_types=None,
+        pattern=None,
+        secret=None,
+    )
+
+    post = AsyncMock()
+    with patch("httpx.AsyncClient.post", new=post):
+        await manager._deliver(cfg, _make_event())
+
+    post.assert_not_awaited()
+
+
+async def test_deliver_allows_dns_names_resolving_to_public_addresses() -> None:
+    manager = _make_manager(("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"))
+    cfg = WebhookConfig(
+        webhook_id="wh1",
+        session_id="s1",
+        url="https://webhook.example/hook",
+        event_types=None,
+        pattern=None,
+        secret=None,
+    )
+    resp = MagicMock()
+    resp.is_success = True
+
+    post = AsyncMock(return_value=resp)
+    with patch("httpx.AsyncClient.post", new=post):
+        await manager._deliver(cfg, _make_event())
+
+    post.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
 # event_types filter
 # ---------------------------------------------------------------------------
 
 
 async def test_event_types_filter_drops_unmatched() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     received_types: list[str] = []
 
@@ -383,7 +444,7 @@ async def test_event_types_filter_drops_unmatched() -> None:
 
 async def test_pattern_filter_drops_non_matching() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     received_screens: list[str] = []
 
@@ -423,7 +484,7 @@ async def test_pattern_filter_drops_non_matching() -> None:
 
 async def test_delivery_loop_stops_on_worker_disconnect() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     call_count = 0
 
@@ -454,7 +515,7 @@ async def test_delivery_loop_stops_on_worker_disconnect() -> None:
 
 async def test_shutdown_cancels_delivery_tasks() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     cfg = await manager.register("s1", "https://example.com/hook", event_bus=bus)
     task = manager._tasks[cfg.webhook_id]
@@ -472,7 +533,7 @@ async def test_shutdown_cancels_delivery_tasks() -> None:
 
 async def test_multiple_webhooks_both_receive_events() -> None:
     bus, hub = await _make_bus_with_worker("s1")
-    manager = WebhookManager()
+    manager = _make_manager()
 
     received_a: list[dict[str, Any]] = []
     received_b: list[dict[str, Any]] = []

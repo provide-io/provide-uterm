@@ -24,7 +24,7 @@ from provide.uterm.bridge.identity import Principal
 from provide.uterm.server.api_keys import ApiKeyStore
 from provide.uterm.server.app.auth import _validate_auth_config
 from provide.uterm.server.app.connectors import _register_builtin_connectors
-from provide.uterm.server.app.control_plane import _build_control_plane
+from provide.uterm.server.app.control_plane import _build_control_plane, _build_durability_capabilities
 from provide.uterm.server.app.hub_authz import build_require_hub_route_authz
 from provide.uterm.server.app.middleware import (
     install_cors_security_telemetry,
@@ -95,6 +95,8 @@ def create_server_app(
     if not api_only and not _api_only_env:
         _app_pkg._validate_frontend_assets()
 
+    durability_capabilities = _build_durability_capabilities(config).as_dict()
+
     if config.control_plane.backend == "memory":
         logger.warning(
             "standalone_server_durability=process-local: the FastAPI reference server keeps live control-plane state "
@@ -104,8 +106,9 @@ def create_server_app(
         )
     else:
         logger.info(
-            "standalone_server_durability=sqlite: control-plane state (sessions, tokens, approvals, leases) is "
-            "persisted to %s. Tunnel tokens, share state, and webhook registrations remain in-process memory.",
+            "standalone_server_durability=sqlite: shared control-plane stores (sessions, resume tokens, approvals, "
+            "leases) are persisted to %s. Tunnel tokens, webhook registrations, fan-out groups, and live runtime state "
+            "remain process-local; see /api/durability/capabilities.",
             config.control_plane.database_url,
         )
 
@@ -355,7 +358,7 @@ def create_server_app(
     from provide.uterm.bridge.fanout import FanOutController, InMemoryFanOutStore
 
     hub.fan_out_controller = FanOutController(hub=hub, store=InMemoryFanOutStore())  # type: ignore[attr-defined]
-    webhook_manager = WebhookManager()
+    webhook_manager = WebhookManager(allow_loopback_destinations=config.webhooks.allow_loopback_destinations)
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     from provide.uterm.bridge.annotation._detector import PatternDetector
     from provide.uterm.recording import InMemoryRecordingStore, LocalFileRecordingStore, NullRecordingStore
@@ -550,10 +553,15 @@ def create_server_app(
     app.state.uterm_webhooks = webhook_manager
     app.state.uterm_profile_store = profile_store
     app.state.uterm_control_plane = control_plane
+    app.state.uterm_durability_capabilities = durability_capabilities
     app.state.uterm_tunnel_tokens = tunnel_tokens
     app.state.uterm_api_key_store = api_key_store
     app.state.uterm_idp = idp
     app.state.uterm_startup_time = time.time()
+
+    @app.get("/api/durability/capabilities")
+    async def durability_capabilities_endpoint() -> dict[str, object]:
+        return cast("dict[str, object]", app.state.uterm_durability_capabilities)
 
     install_request_logging_middleware(app, inc_metric=_inc_metric)
     install_routers(

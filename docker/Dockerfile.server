@@ -7,10 +7,11 @@
 # Build (from repo root):
 #   docker build -f docker/Dockerfile.server -t provide-uterm-server .
 #
-# Run (dev mode, no pre-configured sessions):
+# Run (fails closed until configured):
 #   docker run --rm -p 27780:27780 provide-uterm-server
 #
-# Run with a custom config:
+# The bundled /config/server.toml intentionally contains rejected auth
+# placeholders so the image fails closed until configured. Mount a real config:
 #   docker run --rm -p 27780:27780 \
 #     -v /path/to/my.toml:/config/server.toml:ro \
 #     provide-uterm-server
@@ -55,8 +56,8 @@ COPY packages/provide-uterm-server/ packages/provide-uterm-server/
 # Install the server with all extras
 RUN uv pip install --system "./packages/provide-uterm[emulator]" "./packages/provide-uterm-server[all]"
 
-# Default dev config: no sessions, no JWT, open access.
-# Override via: -v /path/to/config.toml:/config/server.toml:ro
+# Default config is fail-closed: JWT/header secrets are placeholders rejected
+# by the server. Override via: -v /path/to/config.toml:/config/server.toml:ro
 COPY docker/server.toml /config/server.toml
 
 EXPOSE 27780

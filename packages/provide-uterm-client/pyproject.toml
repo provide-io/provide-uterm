@@ -82,5 +82,8 @@ ignore = [
 "tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
 
 [tool.mypy]
-python_version = "0.4.0"
+python_version = "3.11"
 strict = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["src"]

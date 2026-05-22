@@ -10,6 +10,8 @@ The FastAPI backend is the reference self-hosted deployment for provide-uterm, b
 
 That posture is acceptable for a single active instance. It is not safe to treat the FastAPI backend as a durable or active-active control plane behind a load balancer, because restart or failover can drop in-flight state and split ownership decisions across processes.
 
+SQLite-backed control-plane storage narrows this risk but does not remove it. The SQLite backend persists the shared control-plane stores it implements, such as resume tokens, approval records, lease records, and control-plane session records. It does not make the FastAPI process HA-safe: tunnel tokens/share state, webhook registrations, fan-out groups, live session arbitration, and session-registry runtime state are still process-local.
+
 ## Current Behavior
 
 The repo already documents the intended operating model in `README.md`:
@@ -19,13 +21,17 @@ The repo already documents the intended operating model in `README.md`:
 - The supported operating mode is a single active instance.
 - Cloudflare Workers + Durable Objects is the durability/HA option when the deployment needs multi-node persistence.
 
-In practice, the FastAPI backend is currently a reference implementation with ephemeral control-plane state. It can serve production traffic, but only if the deployment topology preserves one active process for the control plane.
+In practice, the FastAPI backend is currently a reference implementation with either fully in-memory control-plane state or partial SQLite-backed durability. It can serve production traffic, but only if the deployment topology preserves one active process for the FastAPI control plane.
+
+The server exposes `GET /api/durability/capabilities` so operators can inspect the active backend and the state categories that remain process-local.
 
 ## Decision
 
 Keep FastAPI as a reference / single-active-instance control plane.
 
 Do not invest in HA semantics for the FastAPI backend at this layer. If a deployment needs durable session arbitration, failover-safe approvals, or multi-node control state, route that deployment to the Cloudflare Workers + Durable Objects backend instead.
+
+SQLite mode must not be presented as full HA durability. It is partial durability for the shared control-plane stores only.
 
 ## Options Considered
 
@@ -78,6 +84,7 @@ The FastAPI backend should remain the reference implementation and single-active
 
 - Deployment guidance must say: run one active FastAPI control-plane instance, or use Cloudflare for HA.
 - Health checks and orchestration should avoid active-active load balancing for FastAPI control state.
+- `GET /api/durability/capabilities` should be used during deployment validation to confirm which state remains process-local.
 - Any future HA work on FastAPI must be treated as a separate architectural decision, not as an implicit backend enhancement.
 - Tests should continue to assume that FastAPI state can disappear on restart unless a specific store is configured for a narrower feature.
 

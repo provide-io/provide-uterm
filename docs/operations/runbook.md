@@ -18,7 +18,11 @@ This runbook is for incident triage of the hosted terminal server.
 
 1. Confirm service health:
    - `GET /api/health`
-2. Pull request counters:
+2. Confirm durability posture:
+   - `GET /api/durability/capabilities`
+   - If `ha_safe` is `false`, verify the deployment has only one active FastAPI control-plane instance.
+   - In sqlite mode, treat `tunnel_tokens`, `webhook_registrations`, and `fanout_groups` in `process_local_state` as restart/failover-lost state.
+3. Pull request counters:
    - `GET /api/metrics`
    - Focus counters:
      - `hijack_conflicts_total`
@@ -51,6 +55,13 @@ This runbook is for incident triage of the hosted terminal server.
 1. Run `scripts/failure_injection.py` against staging.
 2. Compare reconnect p95/p99 against SLO targets.
 3. If p99 exceeds target, pause promotion and triage connector lifecycle regressions.
+
+### Unexpected token, webhook, or fan-out loss after restart
+
+1. Check `GET /api/durability/capabilities`.
+2. If the lost state appears in `process_local_state`, this is expected for the FastAPI backend after restart or failover.
+3. Keep the FastAPI deployment single-active. Do not add active-active replicas behind a load balancer to recover this state.
+4. For HA durability of these state categories, move the deployment to the durable backend rather than relying on sqlite mode alone.
 
 ## Rollback trigger
 
