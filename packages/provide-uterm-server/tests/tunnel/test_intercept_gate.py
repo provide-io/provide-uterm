@@ -252,6 +252,86 @@ class TestParseActionMessage:
         assert parse_action_message({"action": "modify", "body_b64": 999})["body"] is None
 
 
+class TestParseActionMessageHeaderDenylist:
+    """Operator-supplied headers MUST be sanitized against the denylist
+    before reaching the upstream proxy. See ``_DENYLISTED_HEADERS`` in
+    ``intercept.py`` for the threat model behind each entry.
+    """
+
+    def test_authorization_header_dropped(self) -> None:
+        r = parse_action_message({"action": "modify", "headers": {"Authorization": "Bearer attacker"}})
+        assert r["headers"] == {}
+
+    def test_authorization_dropped_case_insensitive(self) -> None:
+        r = parse_action_message({"action": "modify", "headers": {"AUTHORIZATION": "Bearer attacker"}})
+        assert r["headers"] == {}
+
+    def test_host_header_dropped(self) -> None:
+        r = parse_action_message({"action": "modify", "headers": {"Host": "attacker.example"}})
+        assert r["headers"] == {}
+
+    def test_content_length_dropped(self) -> None:
+        # httpx computes Content-Length from the body. Operator-reflected
+        # values enable request smuggling against the upstream.
+        r = parse_action_message({"action": "modify", "headers": {"Content-Length": "9999"}})
+        assert r["headers"] == {}
+
+    def test_transfer_encoding_dropped(self) -> None:
+        r = parse_action_message({"action": "modify", "headers": {"Transfer-Encoding": "chunked"}})
+        assert r["headers"] == {}
+
+    def test_xforwarded_family_dropped(self) -> None:
+        r = parse_action_message(
+            {
+                "action": "modify",
+                "headers": {
+                    "X-Forwarded-For": "127.0.0.1",
+                    "X-Forwarded-Host": "trusted.example",
+                    "X-Forwarded-Proto": "https",
+                    "X-Real-IP": "127.0.0.1",
+                    "Forwarded": "for=127.0.0.1",
+                },
+            }
+        )
+        assert r["headers"] == {}
+
+    def test_cookie_dropped(self) -> None:
+        r = parse_action_message({"action": "modify", "headers": {"Cookie": "session=victim"}})
+        assert r["headers"] == {}
+
+    def test_hop_by_hop_dropped(self) -> None:
+        r = parse_action_message(
+            {
+                "action": "modify",
+                "headers": {
+                    "Connection": "close",
+                    "Keep-Alive": "timeout=5",
+                    "TE": "trailers",
+                    "Trailer": "X-Trace",
+                    "Upgrade": "websocket",
+                    "Proxy-Authorization": "Basic xxx",
+                    "Proxy-Authenticate": "Basic",
+                },
+            }
+        )
+        assert r["headers"] == {}
+
+    def test_safe_headers_pass_through(self) -> None:
+        r = parse_action_message(
+            {"action": "modify", "headers": {"Content-Type": "application/json", "X-Trace-Id": "abc"}}
+        )
+        assert r["headers"] == {"Content-Type": "application/json", "X-Trace-Id": "abc"}
+
+    def test_mixed_safe_and_denylisted(self) -> None:
+        r = parse_action_message(
+            {
+                "action": "modify",
+                "headers": {"Authorization": "Bearer x", "X-Trace-Id": "abc", "Host": "evil"},
+            }
+        )
+        assert r["headers"] == {"X-Trace-Id": "abc"}
+
+
 # ---------------------------------------------------------------------------
 # DefaultDecision
 # ---------------------------------------------------------------------------

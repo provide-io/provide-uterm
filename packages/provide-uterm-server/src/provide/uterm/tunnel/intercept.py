@@ -13,6 +13,62 @@ from typing import Any, TypedDict
 
 logger = logging.getLogger(__name__)
 
+# Headers that an operator-controlled browser MUST NOT be allowed to inject
+# into the forwarded request. These split into three categories:
+#
+#   - Hop-by-hop (RFC 7230 §6.1): connection-scoped, must not be proxied.
+#   - Length / framing: reflecting client-controlled values enables HTTP
+#     request smuggling against downstream servers. httpx computes
+#     Content-Length from the body anyway.
+#   - Identity / authority: forwarding these lets the operator impersonate
+#     the original requester or hijack downstream authentication, which is
+#     the threat the interceptor itself was meant to mitigate.
+#
+# Names are lowercased for case-insensitive matching.
+_DENYLISTED_HEADERS: frozenset[str] = frozenset(
+    {
+        # Hop-by-hop
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+        # Framing / smuggling
+        "content-length",
+        # Identity / authority
+        "host",
+        "authorization",
+        "cookie",
+        "forwarded",
+        "x-forwarded-for",
+        "x-forwarded-host",
+        "x-forwarded-proto",
+        "x-real-ip",
+    }
+)
+
+
+def _sanitize_headers(raw: dict[str, str]) -> dict[str, str]:
+    """Strip denylisted headers from an operator-supplied header dict.
+
+    Returns a new dict; the original is not mutated. Logs the names of any
+    headers that were dropped so the operator can see why their modify
+    decision didn't take effect verbatim.
+    """
+    cleaned: dict[str, str] = {}
+    dropped: list[str] = []
+    for key, value in raw.items():
+        if key.lower() in _DENYLISTED_HEADERS:
+            dropped.append(key)
+            continue
+        cleaned[key] = value
+    if dropped:
+        logger.warning("intercept_headers_denylisted dropped=%s", sorted(dropped))
+    return cleaned
+
 
 class InterceptDecision(TypedDict):
     """Browser's decision for a paused request."""
@@ -27,7 +83,12 @@ def _default_decision(action: str) -> InterceptDecision:
 
 
 def parse_action_message(msg: dict[str, Any]) -> InterceptDecision:
-    """Parse an http_action message from the browser into an InterceptDecision."""
+    """Parse an http_action message from the browser into an InterceptDecision.
+
+    Browser-supplied headers are sanitized against ``_DENYLISTED_HEADERS``
+    before reaching the upstream proxy. See the module-level comment for
+    why each entry is dropped.
+    """
     action = str(msg.get("action", "forward"))
     if action not in ("forward", "drop", "modify"):
         action = "forward"
@@ -36,7 +97,7 @@ def parse_action_message(msg: dict[str, Any]) -> InterceptDecision:
     if action == "modify":
         raw_headers = msg.get("headers")
         if isinstance(raw_headers, dict):
-            headers = {str(k): str(v) for k, v in raw_headers.items()}
+            headers = _sanitize_headers({str(k): str(v) for k, v in raw_headers.items()})
         body_b64 = msg.get("body_b64")
         if isinstance(body_b64, str):
             try:
