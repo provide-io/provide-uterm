@@ -53,8 +53,16 @@ jobs:
       - run: uv run python scripts/check_event_literals.py
       - run: uv run ruff format --check packages/provide-uterm/src packages/provide-uterm/tests scripts
       - run: uv run ruff check packages/provide-uterm/src packages/provide-uterm/tests scripts
-      - run: uv run mypy packages/provide-uterm/src/
-      - run: uv run ty check packages/provide-uterm/src/
+      # Strict mypy on the core package — must stay clean (gate).
+      - run: ci/typecheck.sh mypy
+      # Informational mypy on the other workspace src/ trees. Logs annotations
+      # via ::warning:: but never fails CI until the trees reach 100% clean.
+      - name: mypy (soft mode, other packages)
+        run: ci/typecheck.sh mypy-soft
+      # Informational ty (Astral) across all packages. Known cross-file
+      # resolution gaps mean we don't fail CI on its output yet.
+      - name: ty (informational)
+        run: ci/typecheck.sh ty
       - run: uv run bandit -r packages/provide-uterm/src/ -ll
       - run: uv run xenon --max-absolute D --max-modules D --max-average A packages/provide-uterm/src/
       - run: uv run vulture packages/provide-uterm/src/ packages/provide-uterm/tests/ --ignore-names "since,password,kw,exc_type,tb,interval_s,pubkey_blob,username"
@@ -170,18 +178,11 @@ jobs:
         with:
           python-version: "3.11"
       - run: uv sync --group dev
+      # Resolve --changed-only base ref from the trigger event and run the mutation gate.
       - name: Run mutation gate (changed-only)
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100 --changed-only --base-ref "origin/${{ github.base_ref }}"
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100 --changed-only --base-ref "${{ github.event.before }}"
-          elif [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100 --changed-only --base-ref "HEAD~1"
-          else
-            uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 1 --min-mutation-score 100
-          fi
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: ci/prepare_mutation_args.sh
 
   compliance:
     runs-on: ubuntu-latest
