@@ -112,3 +112,55 @@ def test_finish_rejects_truncated_payload() -> None:
     decoder.feed(encoded[:-1])
     with pytest.raises(ControlChannelProtocolError, match="truncated control frame"):
         decoder.finish()
+
+
+def test_decoder_rejects_deeply_nested_payload() -> None:
+    """Payloads nested deeper than ``max_frame_depth`` are rejected before
+    callers can walk them. Default depth is 32; we test with a tight
+    custom limit so the test stays cheap."""
+    decoder = ControlChannelDecoder(max_frame_depth=4)
+    # Build {"type": {"a": {"a": {"a": {"a": "bomb"}}}}} — depth 5.
+    payload: dict[str, object] = {"a": "bomb"}
+    for _ in range(4):
+        payload = {"a": payload}
+    payload = {"type": payload}
+    with pytest.raises(ControlChannelProtocolError, match="nests deeper than 4"):
+        decoder.feed(encode_control(payload))
+
+
+def test_decoder_rejects_deeply_nested_list_payload() -> None:
+    """List nesting counts too: ``{"type": [[[[[...]]]]]}`` is also rejected."""
+    decoder = ControlChannelDecoder(max_frame_depth=3)
+    nested: object = "leaf"
+    for _ in range(5):
+        nested = [nested]
+    with pytest.raises(ControlChannelProtocolError, match="nests deeper than 3"):
+        decoder.feed(encode_control({"type": nested}))
+
+
+def test_decoder_accepts_payloads_at_depth_limit() -> None:
+    decoder = ControlChannelDecoder(max_frame_depth=3)
+    # Depth 3: top-level dict (1) → "annotations" dict (2) → "items" list (3).
+    payload = {"type": "hello", "annotations": {"items": ["a", "b"]}}
+    events = decoder.feed(encode_control(payload))
+    assert len(events) == 1
+
+
+def test_decoder_default_depth_allows_typical_payloads() -> None:
+    decoder = ControlChannelDecoder()
+    # Flat hello frame should pass with plenty of headroom.
+    events = decoder.feed(encode_control({"type": "worker_hello", "worker_id": "w1", "role": "operator"}))
+    assert len(events) == 1
+
+
+def test_decoder_depth_limit_clamps_to_minimum() -> None:
+    """max_frame_depth=0 (or negative) is clamped to 1 — frames are always
+    at least one dict deep."""
+    decoder = ControlChannelDecoder(max_frame_depth=0)
+    # A flat dict is depth 1 — must still parse.
+    events = decoder.feed(encode_control({"type": "hello"}))
+    assert len(events) == 1
+    # But depth-2 nesting should now be rejected.
+    decoder2 = ControlChannelDecoder(max_frame_depth=0)
+    with pytest.raises(ControlChannelProtocolError, match="nests deeper than 1"):
+        decoder2.feed(encode_control({"type": {"nested": "value"}}))
