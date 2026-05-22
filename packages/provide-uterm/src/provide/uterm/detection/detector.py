@@ -26,6 +26,18 @@ logger = logging.getLogger(__name__)
 _DEFAULT_PROMPT_REGION_TAIL_LINES = 12
 
 
+class DetectorPatternCompileError(ValueError):
+    """Raised in ``strict=True`` mode when a pattern fails to compile.
+
+    The non-strict default merely logs failures and continues with the
+    surviving patterns — useful for "soft" environments where a broken
+    rule shouldn't take the whole detector offline. Production deploys
+    that load curated rules should pass ``strict=True`` so a typo in a
+    rules file is caught at startup instead of silently degrading
+    detection.
+    """
+
+
 class PromptDetector:
     """Intelligent prompt detection with cursor-awareness."""
 
@@ -34,15 +46,24 @@ class PromptDetector:
         patterns: list[dict[str, Any]],
         *,
         normalizer: Callable[[str], str] | None = None,
+        strict: bool = False,
     ) -> None:
         """Initialize prompt detector.
 
         Args:
-            patterns: List of prompt pattern dictionaries from JSON
-            normalizer: Optional callback to normalize prompt region text for fingerprinting
+            patterns: List of prompt pattern dictionaries from JSON.
+            normalizer: Optional callback to normalize prompt region text
+                for fingerprinting.
+            strict: When ``True``, any pattern that fails to compile (bad
+                regex syntax, missing required keys) raises
+                :class:`DetectorPatternCompileError` instead of silently
+                being skipped. Use this in production where a malformed
+                rule should be loud, not silently degrade coverage.
         """
         self._normalizer = normalizer
         self._patterns = patterns
+        self._strict = bool(strict)
+        self._compile_failures: list[dict[str, Any]] = []
         self._compiled_all = self._compile_patterns()
         # Optimization only: patterns that *don't* require cursor-at-end.
         # IMPORTANT: do not treat cursor_at_end as authoritative; if the heuristic is wrong
@@ -60,6 +81,16 @@ class PromptDetector:
         """Return the number of compiled patterns."""
         return len(self._patterns)
 
+    @property
+    def compile_failures(self) -> tuple[dict[str, Any], ...]:
+        """Return immutable view of pattern compile failures.
+
+        Each entry is ``{"id": str, "regex": str | None, "error": str}``.
+        In ``strict=True`` mode this tuple is always empty (the
+        constructor would have raised before returning).
+        """
+        return tuple(self._compile_failures)
+
     def _compile_patterns(self) -> list[tuple[re.Pattern[str], dict[str, Any]]]:
         """Compile regex patterns for efficient matching.
 
@@ -67,7 +98,7 @@ class PromptDetector:
             List of (compiled_regex, pattern_dict) tuples
         """
         compiled = []
-        failed_patterns = []
+        failed_patterns: list[dict[str, Any]] = []
 
         logger.info("pattern_compile_start count=%d", len(self._patterns))
 
@@ -115,6 +146,12 @@ class PromptDetector:
                 len(failed_patterns),
                 [{"id": p["id"], "error": p.get("error", "unknown error")} for p in failed_patterns],
             )
+            self._compile_failures = failed_patterns
+            if self._strict:
+                summary = ", ".join(f"{p['id']}: {p.get('error', '?')}" for p in failed_patterns)
+                raise DetectorPatternCompileError(
+                    f"{len(failed_patterns)} pattern(s) failed to compile in strict mode: {summary}"
+                )
 
         return compiled
 
