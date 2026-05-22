@@ -47,6 +47,13 @@ _HEADER_BYTES = 11  # DLE STX + 8 hex digits + ':'
 _MAX_CONTROL_PAYLOAD_BYTES = 1_048_576
 _DEFAULT_BUFFER_BYTES = 10_485_760
 _HEX_DIGITS = frozenset(hexdigits)
+# Maximum JSON nesting depth in a control frame. The 1 MB frame size limit
+# bounds the *size* of a hostile payload, but a deeply nested structure
+# like `[[[…]]]` of depth ~500 fits in well under 1 MB and would burn
+# stack/CPU on every consumer that walks the decoded object. 32 is well
+# above any legitimate control-frame shape (hello frames are flat dicts,
+# the deepest field — annotations — is two layers).
+_MAX_CONTROL_FRAME_DEPTH = 32
 
 
 class ControlChannelProtocolError(ValueError):
@@ -89,6 +96,28 @@ def encode_control(payload: Mapping[str, Any]) -> str:
     return f"{DLE}{STX}{len(serialized.encode('utf-8')):08x}:{serialized}"
 
 
+def _check_json_depth(value: Any, *, max_depth: int) -> None:
+    """Raise ``ControlChannelProtocolError`` if ``value`` nests deeper than ``max_depth``.
+
+    Walks the decoded JSON structure iteratively (no Python recursion) so a
+    pathological payload cannot crash this check itself. Strings and
+    primitive leaves count as depth-0; dicts and lists each add 1.
+    """
+    stack: list[tuple[Any, int]] = [(value, 1)]
+    while stack:
+        node, depth = stack.pop()
+        if depth > max_depth:
+            raise ControlChannelProtocolError(f"control payload nests deeper than {max_depth}")
+        if isinstance(node, dict):
+            for child in node.values():
+                if isinstance(child, (dict, list)):
+                    stack.append((child, depth + 1))
+        elif isinstance(node, list):
+            for child in node:
+                if isinstance(child, (dict, list)):
+                    stack.append((child, depth + 1))
+
+
 class ControlChannelDecoder:
     """Incrementally decode the inline control channel."""
 
@@ -97,10 +126,12 @@ class ControlChannelDecoder:
         *,
         max_control_payload_bytes: int = _MAX_CONTROL_PAYLOAD_BYTES,
         max_buffer_bytes: int = _DEFAULT_BUFFER_BYTES,
+        max_frame_depth: int = _MAX_CONTROL_FRAME_DEPTH,
         on_error: Callable[[str], None] | None = None,
     ) -> None:
         self._max_control_payload_bytes = max(1, int(max_control_payload_bytes))
         self._max_buffer_bytes = max(1, int(max_buffer_bytes))
+        self._max_frame_depth = max(1, int(max_frame_depth))
         self._buffer = ""
         self._buffer_parts: list[str] = []
         self._on_error = on_error
@@ -154,6 +185,12 @@ class ControlChannelDecoder:
             raise self._report_error("invalid control json") from exc
         if not isinstance(payload, dict):
             raise self._report_error("control payload must be an object")
+        try:
+            _check_json_depth(payload, max_depth=self._max_frame_depth)
+        except ControlChannelProtocolError as exc:
+            if self._on_error:
+                self._on_error("control_channel_protocol_error")
+            raise self._report_error(str(exc)) from exc
         return payload
 
     def _payload_end_for_utf8_length(self, buf: str, start: int, payload_bytes: int) -> int | None:
