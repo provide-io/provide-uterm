@@ -100,8 +100,15 @@ async def live_hub() -> AsyncGenerator[tuple[TermHub, str], None]:
 
     The server runs as an asyncio task inside the test's event loop so that
     fixtures and tests share the same loop (important for asyncio.Lock sanity).
+
+    Rate limits are raised well above production defaults so stress tests
+    (hijack acquire/release loops, fan-out traffic) measure correctness
+    under load, not the rate-limit gate.
     """
-    hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
+    hub = TermHub(
+        resolve_browser_role=lambda _ws, _worker_id: "admin",
+        browser_control_rate_limit_per_sec=1000,
+    )
     app = FastAPI()
     app.include_router(hub.create_router())
 
@@ -143,7 +150,10 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
     """
     from starlette.staticfiles import StaticFiles
 
-    hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "admin")
+    hub = TermHub(
+        resolve_browser_role=lambda _ws, _worker_id: "admin",
+        browser_control_rate_limit_per_sec=1000,
+    )
     app = FastAPI()
     app.include_router(hub.create_router())
 
