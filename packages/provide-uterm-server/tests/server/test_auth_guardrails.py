@@ -177,6 +177,86 @@ class TestPlaceholderCredentialGuardrails:
             _validate_auth_config(config)
 
 
+class TestLowEntropyCredentialGuardrails:
+    """Production-like auth configs must reject short bearer tokens / HMAC secrets.
+
+    These are stricter than the placeholder list — a 'short but non-keyword'
+    string like 'abc12345' would slip past the placeholder check but fail
+    the 32-char minimum.
+    """
+
+    def test_short_worker_bearer_token_rejected(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="abc12345",  # 8 chars
+            )
+        )
+        with pytest.raises(ValueError, match="32 characters"):
+            _validate_auth_config(config)
+
+    def test_short_hmac_secret_rejected(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="abc123",  # 6 chars, not a known placeholder
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        with pytest.raises(ValueError, match="HS256"):
+            _validate_auth_config(config)
+
+    def test_pem_public_key_passes_entropy_check(self) -> None:
+        """PEM-encoded asymmetric keys are long by construction; the
+        HMAC-secret entropy check must not fire on them."""
+        pem = "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----"
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem=pem,
+                jwt_algorithms=["RS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        _validate_auth_config(config)
+
+    def test_short_hmac_secret_skipped_when_algorithm_is_asymmetric(self) -> None:
+        """A short string under RS256 isn't an HMAC secret — the entropy
+        check shouldn't fire (the caller is expected to provide a PEM)."""
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="short-key-content",
+                jwt_algorithms=["RS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        # Does not raise — entropy check is HS*-specific.
+        _validate_auth_config(config)
+
+    def test_loopback_skips_entropy_check(self) -> None:
+        """Backward compatibility: weak credentials on loopback are still
+        permitted (production_like is false there)."""
+        config = ServerConfig(
+            server=ServerBindConfig(host="127.0.0.1"),
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=False,
+                jwt_public_key_pem="abc123",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="abc12345",
+            ),
+        )
+        _validate_auth_config(config)
+
+
 # ---------------------------------------------------------------------------
 # X-Auth-Mode response header
 # ---------------------------------------------------------------------------

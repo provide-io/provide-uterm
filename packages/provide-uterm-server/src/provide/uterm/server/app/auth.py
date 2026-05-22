@@ -39,6 +39,22 @@ _PLACEHOLDER_AUTH_MARKERS = (
     "replace-with",
 )
 
+# Minimum string length for a production-like bearer token or HMAC shared
+# secret. 32 chars is the lowest floor that survives all common encodings
+# while still corresponding to ≥128 bits of entropy:
+#   * raw 32-byte binary token (256 bits)
+#   * 16-byte hex-encoded token (128 bits)
+#   * 24-byte base64-encoded token (~192 bits)
+# RFC 8725 §3.5 recommends ≥256 bits for HS256 keys; the check guards the
+# common deployment mistake of "I'll use 'secret' temporarily", not the
+# malicious-but-knowledgeable operator.
+_MIN_BEARER_TOKEN_CHARS = 32
+
+# Heuristic for "this string is an HMAC shared secret, not a PEM public
+# key": PEM blobs always start with the standard armour marker. An HS256
+# secret can be any other shape (raw bytes / hex / base64 / urlsafe).
+_PEM_PREFIX = "-----BEGIN"
+
 
 def _is_loopback_host(host: str) -> bool:
     return str(host).strip().lower() in _LOOPBACK_HOSTS
@@ -53,6 +69,30 @@ def _is_placeholder_auth_value(value: str | None) -> bool:
     return any(marker in text for marker in _PLACEHOLDER_AUTH_MARKERS)
 
 
+def _is_low_entropy_bearer(value: str | None) -> bool:
+    """True if ``value`` is suspiciously weak for a production bearer token.
+
+    Checks raw character length only — base64 / hex / raw bytes all admit
+    a uniform ≥32-char floor that maps to ≥128 bits of attacker work.
+    """
+    text = str(value or "")
+    return 0 < len(text) < _MIN_BEARER_TOKEN_CHARS
+
+
+def _is_low_entropy_hmac_secret(value: str | None, algorithms: tuple[str, ...] | list[str]) -> bool:
+    """True iff ``value`` is meant as an HMAC shared secret and is too short.
+
+    Returns False for PEM-encoded public keys (which are long by
+    construction) or when no HMAC algorithm is configured.
+    """
+    text = str(value or "").strip()
+    if not text or text.startswith(_PEM_PREFIX):
+        return False
+    if not any(str(a).strip().upper().startswith("HS") for a in algorithms):
+        return False
+    return len(text) < _MIN_BEARER_TOKEN_CHARS
+
+
 def _validate_no_placeholder_auth_values(config: ServerConfig, mode: str) -> None:
     production_like = config.auth.require_jwt_in_production or not _is_loopback_host(config.server.host)
     if not production_like:
@@ -63,11 +103,23 @@ def _validate_no_placeholder_auth_values(config: ServerConfig, mode: str) -> Non
             f"auth.worker_bearer_token uses a known placeholder value when auth.mode='{mode}'. "
             "Set a high-entropy runtime token."
         )
+    if _is_low_entropy_bearer(config.auth.worker_bearer_token):
+        raise ValueError(
+            f"auth.worker_bearer_token is shorter than {_MIN_BEARER_TOKEN_CHARS} characters when "
+            f"auth.mode='{mode}' on a non-loopback host. Use at least 32 chars of high-entropy "
+            "material (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`)."
+        )
 
     if mode == "jwt" and _is_placeholder_auth_value(config.auth.jwt_public_key_pem):
         raise ValueError(
             "auth.jwt_public_key_pem uses a known placeholder value when auth.mode='jwt'. "
             "Set a real JWT public key or HS256 shared secret."
+        )
+    if mode == "jwt" and _is_low_entropy_hmac_secret(config.auth.jwt_public_key_pem, config.auth.jwt_algorithms):
+        raise ValueError(
+            f"auth.jwt_public_key_pem is an HMAC shared secret shorter than {_MIN_BEARER_TOKEN_CHARS} "
+            "characters. RFC 8725 §3.5 requires HS256 keys ≥256 bits — use a longer secret or switch "
+            "to an asymmetric algorithm (RS256/ES256)."
         )
 
 
