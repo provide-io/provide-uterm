@@ -267,11 +267,13 @@ def test_tunnel_share_token_allows_read_only_session_api() -> None:
         )
     ]
     app = create_server_app(cfg)
+    from provide.uterm.tunnel.token_hash import hash_token
+
     app.state.uterm_tunnel_tokens = {
         "tunnel-api-view": {
-            "share_token": "share-token-123",
-            "control_token": "control-token-123",
-            "worker_token": "worker-token-123",
+            "share_token_hash": hash_token("share-token-123"),
+            "control_token_hash": hash_token("control-token-123"),
+            "worker_token_hash": hash_token("worker-token-123"),
         }
     }
     with TestClient(app) as client:
@@ -300,11 +302,13 @@ def test_tunnel_control_token_allows_session_mutation_api() -> None:
         )
     ]
     app = create_server_app(cfg)
+    from provide.uterm.tunnel.token_hash import hash_token
+
     app.state.uterm_tunnel_tokens = {
         "tunnel-api-control": {
-            "share_token": "share-token-123",
-            "control_token": "control-token-123",
-            "worker_token": "worker-token-123",
+            "share_token_hash": hash_token("share-token-123"),
+            "control_token_hash": hash_token("control-token-123"),
+            "worker_token_hash": hash_token("worker-token-123"),
         }
     }
     with TestClient(app) as client:
