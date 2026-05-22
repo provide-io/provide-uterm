@@ -6,7 +6,11 @@
 import { useEffect, useRef, useCallback } from "react";
 import { ControlFrameDecoder } from "../../utils/controlFrames";
 import { useInspectStore } from "../../stores/inspectStore";
-import type { HttpRequestEntry, HttpResponseEntry } from "../../api/types";
+import {
+  parseHttpRequestEntry,
+  parseHttpResponseEntry,
+  ValidationError,
+} from "../../api/validators";
 
 function getShareToken(): string | null {
   const params = new URLSearchParams(window.location.search);
@@ -42,12 +46,20 @@ export function useInspectWs(sessionId: string) {
       for (const frame of controlDecoder.feed(event.data)) {
         if (frame._channel !== "http") continue;
         const type = frame.type as string;
-        if (type === "http_req") {
-          addRequest(frame as unknown as HttpRequestEntry);
-        } else if (type === "http_res") {
-          addResponse(frame as unknown as HttpResponseEntry);
-        } else if (type === "http_intercept_state") {
-          syncInterceptState(frame as never);
+        try {
+          if (type === "http_req") {
+            addRequest(parseHttpRequestEntry(frame));
+          } else if (type === "http_res") {
+            addResponse(parseHttpResponseEntry(frame));
+          } else if (type === "http_intercept_state") {
+            syncInterceptState(frame as never);
+          }
+        } catch (err) {
+          if (err instanceof ValidationError) {
+            console.warn(`[inspect-ws] rejected ${type} frame: ${err.message}`);
+          } else {
+            throw err;
+          }
         }
       }
     });

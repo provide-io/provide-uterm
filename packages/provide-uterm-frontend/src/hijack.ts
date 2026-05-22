@@ -25,21 +25,26 @@ import {
   type ResolvedConfig,
   type XTerminal,
 } from "./hijack-codec.js";
+import {
+  approvalElementClass,
+  buildApprovalModalHtml,
+  buildApprovalStatusBarHtml,
+  computeRemainingSeconds,
+} from "./hijack-approval.js";
+import {
+  buildHijackToolbarHtml,
+  escapeHijackHtml,
+  injectHijackCss,
+  MOBILE_KEYS,
+} from "./hijack-ui.js";
 
 // ── Module-level guards ───────────────────────────────────────────────────────
-let _hijackCssInjected = false;
 let _hijackInstanceCount = 0;
 // Resolve CSS base URL via import.meta.url (works for ES modules; document.currentScript is null for modules)
 const _hijackCssBase = new URL("./", import.meta.url).href;
 
-// ── CSS injection ─────────────────────────────────────────────────────────────
 function _injectHijackCSS(): void {
-  if (_hijackCssInjected) return;
-  _hijackCssInjected = true;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = `${_hijackCssBase}hijack.css`;
-  document.head.appendChild(link);
+  injectHijackCss(_hijackCssBase);
 }
 
 // ── ProvideHijack class ─────────────────────────────────────────────────────────
@@ -180,9 +185,7 @@ export class ProvideHijack {
 
   /** Escape HTML special characters to prevent XSS when interpolating into innerHTML. */
   private _escHtml(s: unknown): string {
-    const d = document.createElement("div");
-    d.textContent = String(s);
-    return d.innerHTML;
+    return escapeHijackHtml(s);
   }
 
   private _saveResumeToken(token: string): void {
@@ -257,48 +260,16 @@ export class ProvideHijack {
   // ── DOM Construction ────────────────────────────────────────────────────────
 
   private _buildDOM(): void {
-    const p = (id: string) => `h-${this._uid}-${id}`; // ID prefix helper
     const workerId = this._config.workerId ?? "";
     const title = this._config.title ?? (workerId ? workerId : "Terminal");
-    const showAnalysis = this._config.showAnalysis;
 
     const root = document.createElement("div");
     root.className = "provide-hijack";
-    root.innerHTML = `
-      <div class="hijack-toolbar">
-        <span class="hijack-title">${this._escHtml(title)}</span>
-        <span class="hijack-status">
-          <span class="hijack-status-dot" id="${p("dot")}"></span>
-          <span id="${p("statustext")}">Connecting…</span>
-        </span>
-        <div class="hijack-controls">
-          <button class="hbtn primary" id="${p("hijack")}" disabled title="Take exclusive control">Hijack</button>
-          <button class="hbtn" id="${p("step")}" disabled title="Send one step, then pause">Step</button>
-          <button class="hbtn danger" id="${p("release")}" disabled title="Release hijack control">Release</button>
-          <button class="hbtn" id="${p("resync")}" disabled title="Request full screen snapshot">⟳ Resync</button>
-          <button class="hbtn" id="${p("analyze")}" disabled title="AI-readable screen description">Analyze</button>
-          <button class="hbtn" id="${p("kbdtoggle")}" title="Toggle mobile key toolbar">⌨</button>
-        </div>
-        <span class="hijack-prompt" id="${p("prompt")}" title="Current prompt ID"></span>
-      </div>
-      <div class="hijack-terminal" id="${p("terminal")}"></div>
-      <div class="hijack-input-row" id="${p("inputrow")}">
-        <input class="hijack-input-field" id="${p("inputfield")}"
-          placeholder="Send keys… (Enter to send, e.g. \\r for Return)"
-          autocomplete="off" spellcheck="false">
-        <button class="hijack-input-send" id="${p("inputsend")}">Send</button>
-      </div>
-      <div class="mobile-keys" id="${p("mobilekeys")}"></div>
-      ${
-        showAnalysis
-          ? `
-      <details class="hijack-analysis" id="${p("analysis")}">
-        <summary>Analysis</summary>
-        <pre id="${p("analysistext")}"></pre>
-      </details>`
-          : ""
-      }
-    `;
+    root.innerHTML = buildHijackToolbarHtml({
+      uid: this._uid,
+      title,
+      showAnalysis: this._config.showAnalysis,
+    });
 
     this._root = root;
     this._container.appendChild(root);
@@ -602,18 +573,7 @@ export class ProvideHijack {
   private _buildMobileKeys(): void {
     const container = this._q("mobilekeys");
     if (!container) return;
-    const keys: Array<{ label: string; data: string }> = [
-      { label: "ESC", data: "\x1b" },
-      { label: "↑", data: "\x1b[A" },
-      { label: "↓", data: "\x1b[B" },
-      { label: "→", data: "\x1b[C" },
-      { label: "←", data: "\x1b[D" },
-      { label: "Tab", data: "\t" },
-      { label: "^C", data: "\x03" },
-      { label: "^D", data: "\x04" },
-      { label: "^Z", data: "\x1a" },
-    ];
-    for (const { label, data } of keys) {
+    for (const { label, data } of MOBILE_KEYS) {
       const btn = document.createElement("button");
       btn.className = "mkey";
       btn.textContent = label;
@@ -797,37 +757,12 @@ export class ProvideHijack {
     const mode = this._getEffectiveUxMode();
     const el = document.createElement("div");
     this._approvalElement = el;
-
-    if (mode === "modal") {
-      el.className = "hijack-approval-modal";
-      el.innerHTML = `
-        <div class="hijack-approval-card">
-          <div class="hijack-approval-title">⚠️ APPROVAL REQUIRED</div>
-          <div class="hijack-approval-body">
-            Your command is being held for administrative review.
-            <div class="hijack-approval-command">${this._escHtml(this._pendingApproval.command)}</div>
-            <div class="hijack-approval-timer">Expires in <span id="h-${this._uid}-approval-timer">--</span>s...</div>
-          </div>
-          ${
-            this._config.role === "admin"
-              ? `
-          <div class="hijack-approval-actions">
-            <button class="hijack-btn hijack-btn-approve" id="h-${this._uid}-approve">Approve</button>
-            <button class="hijack-btn hijack-btn-reject" id="h-${this._uid}-reject">Reject</button>
-          </div>`
-              : ""
-          }
-        </div>
-      `;
-    } else {
-      el.className = "hijack-approval-statusbar";
-      el.innerHTML = `
-        <div class="hijack-approval-status">
-          <span class="hijack-approval-spinner">⏳</span>
-          PAUSED: Command pending approval (<span id="h-${this._uid}-approval-timer">--</span>s)
-        </div>
-      `;
-    }
+    el.className = approvalElementClass(mode);
+    const isAdmin = this._config.role === "admin";
+    el.innerHTML =
+      mode === "modal"
+        ? buildApprovalModalHtml({ uid: this._uid, command: this._pendingApproval.command, isAdmin })
+        : buildApprovalStatusBarHtml({ uid: this._uid });
 
     this._root.appendChild(el);
     this._startApprovalTimer();
@@ -852,7 +787,7 @@ export class ProvideHijack {
   private _startApprovalTimer(): void {
     const update = () => {
       if (!this._pendingApproval) return;
-      const remaining = Math.max(0, Math.round(this._pendingApproval.expiresAt - Date.now() / 1000));
+      const remaining = computeRemainingSeconds(this._pendingApproval.expiresAt);
       const el = this._q("approval-timer");
       if (el) el.textContent = String(remaining);
       if (remaining <= 0) this._hideApprovalUI();
