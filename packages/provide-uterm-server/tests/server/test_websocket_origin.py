@@ -76,12 +76,25 @@ def test_missing_origin_header_is_allowed_by_default() -> None:
         assert ws.receive_text() == "echo:hi"
 
 
-def test_empty_allowlist_means_no_enforcement() -> None:
+def test_empty_allowlist_rejects_browser_origins() -> None:
+    """Default-deny posture: empty allowlist + present Origin header → 4403.
+
+    This is a behaviour flip from earlier releases where empty allowlist
+    was a no-op. Operators who want any-origin access must explicitly
+    set ``allowed_origins = ["*"]``.
+    """
     app = _build_app(())
-    with (
-        TestClient(app) as client,
-        client.websocket_connect("/ws", headers={"origin": "https://anywhere.example"}) as ws,
-    ):
+    with TestClient(app) as client, pytest.raises(WebSocketDisconnect) as excinfo:
+        with client.websocket_connect("/ws", headers={"origin": "https://anywhere.example"}):
+            pass
+    assert excinfo.value.code == 4403
+
+
+def test_empty_allowlist_still_allows_non_browser_clients() -> None:
+    """No Origin header → non-browser client → always allowed (auth is
+    handled by JWT / identity frames downstream)."""
+    app = _build_app(())
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
         ws.send_text("hi")
         assert ws.receive_text() == "echo:hi"
 
