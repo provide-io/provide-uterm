@@ -225,6 +225,31 @@ def test_compile_pattern_invalid_raises() -> None:
         _compile_pattern(r"[invalid")
 
 
+def test_compile_pattern_rejects_patterns_over_configured_length() -> None:
+    with pytest.raises(ValueError, match="watch pattern is too long"):
+        _compile_pattern("a" * 9, max_pattern_length=8)
+
+
+def test_compile_pattern_rejects_nested_quantifier_patterns() -> None:
+    with pytest.raises(ValueError, match="unsafe watch pattern"):
+        _compile_pattern(r"(a+)+$")
+
+
+async def test_watch_rejects_patterns_over_configured_length() -> None:
+    bus = EventBus(max_pattern_length=8)
+    with pytest.raises(ValueError, match="watch pattern is too long"):
+        async with bus.watch("w1", pattern="a" * 9):
+            pass
+
+
+async def test_pattern_filter_bounds_screen_text_before_matching() -> None:
+    bus = EventBus(max_match_input_chars=8)
+    event = {"seq": 1, "ts": 1.0, "type": "snapshot", "data": {"screen": "abcdefghZ"}}
+    async with bus.watch("w1", pattern="Z") as sub:
+        bus._enqueue("w1", event)
+    assert sub.queue.empty()
+
+
 # ---------------------------------------------------------------------------
 # watch: multiple workers isolated
 # ---------------------------------------------------------------------------

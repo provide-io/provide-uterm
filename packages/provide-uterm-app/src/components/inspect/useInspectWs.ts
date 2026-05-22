@@ -4,7 +4,7 @@
 //
 
 import { useEffect, useRef, useCallback } from "react";
-import { decodeControlFrames } from "../../utils/controlFrames";
+import { ControlFrameDecoder } from "../../utils/controlFrames";
 import { useInspectStore } from "../../stores/inspectStore";
 import type { HttpRequestEntry, HttpResponseEntry } from "../../api/types";
 
@@ -31,6 +31,7 @@ export function useInspectWs(sessionId: string) {
     if (shareToken) wsUrl += `?token=${encodeURIComponent(shareToken)}`;
 
     const ws = new WebSocket(wsUrl);
+    const controlDecoder = new ControlFrameDecoder();
     wsRef.current = ws;
 
     ws.addEventListener("open", () => setWsStatus("connected"));
@@ -38,7 +39,7 @@ export function useInspectWs(sessionId: string) {
 
     ws.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
-      for (const frame of decodeControlFrames(event.data)) {
+      for (const frame of controlDecoder.feed(event.data)) {
         if (frame._channel !== "http") continue;
         const type = frame.type as string;
         if (type === "http_req") {

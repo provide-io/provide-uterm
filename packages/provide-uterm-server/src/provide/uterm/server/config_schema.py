@@ -153,6 +153,12 @@ class TunnelConfig(ServerBaseModel):
         return value
 
 
+class WebhooksConfig(ServerBaseModel):
+    """Webhook delivery safety settings."""
+
+    allow_loopback_destinations: bool = False
+
+
 class ProfileStoreConfig(ServerBaseModel):
     """File-backed profile store settings."""
 
@@ -326,6 +332,7 @@ class UtermServerConfig(ServerBaseModel):
     profiles: ProfileStoreConfig = Field(default_factory=ProfileStoreConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     tunnel: TunnelConfig = Field(default_factory=TunnelConfig)
+    webhooks: WebhooksConfig = Field(default_factory=WebhooksConfig)
     pam: PamConfig = Field(default_factory=PamConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     sessions: list[SessionDefinition] = Field(

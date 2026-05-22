@@ -2,7 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Inline control channel framing for mixed terminal data and control messages."""
+"""Inline control channel framing for mixed terminal data and control messages.
+
+Control frame headers store the UTF-8 byte length of the JSON payload, not the
+Python character count. ASCII payloads therefore keep their historical wire
+shape while raw Unicode payloads interoperate with browser runtimes.
+"""
 
 from __future__ import annotations
 
@@ -23,13 +28,13 @@ except ImportError:
         import ujson  # type: ignore[import-untyped]  # ty:ignore[unresolved-import]
 
         def _json_dumps(obj: Any) -> str:
-            return cast("str", ujson.dumps(obj))
+            return cast("str", ujson.dumps(obj, ensure_ascii=False))
 
         _json_loads = ujson.loads
     except ImportError:
 
         def _json_dumps(obj: Any) -> str:
-            return json.dumps(obj, ensure_ascii=True, separators=(",", ":"))
+            return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
         _json_loads = json.loads
 
@@ -79,7 +84,7 @@ def encode_data(data: str) -> str:
 def encode_control(payload: Mapping[str, Any]) -> str:
     """Encode a control payload for the inline stream."""
     serialized = _json_dumps(dict(payload))
-    return f"{DLE}{STX}{len(serialized):08x}:{serialized}"
+    return f"{DLE}{STX}{len(serialized.encode('utf-8')):08x}:{serialized}"
 
 
 class ControlChannelDecoder:
@@ -108,7 +113,7 @@ class ControlChannelDecoder:
         if not isinstance(chunk, str):
             raise TypeError(f"control channel chunks must be str, got {type(chunk).__name__!r}")
         self._buffer_parts.append(chunk)
-        total = sum(len(p) for p in self._buffer_parts)
+        total = sum(len(p.encode("utf-8")) for p in self._buffer_parts)
         if total > self._max_buffer_bytes:
             self._buffer_parts.clear()
             self._buffer = ""
@@ -149,6 +154,24 @@ class ControlChannelDecoder:
             raise self._report_error("control payload must be an object")
         return payload
 
+    def _payload_end_for_utf8_length(self, buf: str, start: int, payload_bytes: int) -> int | None:
+        """Return the character index ending a UTF-8 byte-length payload.
+
+        Returns None when the current buffer does not yet contain enough bytes.
+        Raises when the declared byte length splits a Unicode code point, which
+        cannot become valid by appending more text to this str buffer.
+        """
+        byte_count = 0
+        idx = start
+        while idx < len(buf) and byte_count < payload_bytes:
+            byte_count += len(buf[idx].encode("utf-8"))
+            idx += 1
+            if byte_count > payload_bytes:
+                raise self._report_error("invalid control payload length")
+        if byte_count < payload_bytes:
+            return None
+        return idx
+
     def _try_parse_frame(self, buf: str, idx: int, buf_len: int, *, final: bool) -> tuple[ControlChunk, int] | None:
         """Parse a control frame at buf[idx]. Returns (chunk, frame_end) or None if incomplete.
 
@@ -167,12 +190,13 @@ class ControlChannelDecoder:
         # Bounding check: frames > 1MB are rejected immediately before allocation
         if payload_bytes > 1_048_576 or payload_bytes > self._max_control_payload_bytes:
             raise self._report_error("control payload too large")
-        frame_end = idx + _HEADER_BYTES + payload_bytes
-        if buf_len < frame_end:
+        payload_start = idx + _HEADER_BYTES
+        frame_end = self._payload_end_for_utf8_length(buf, payload_start, payload_bytes)
+        if frame_end is None:
             if final:
                 raise self._report_error("truncated control frame")
             return None
-        payload_raw = buf[idx + _HEADER_BYTES : frame_end]
+        payload_raw = buf[payload_start:frame_end]
         return ControlChunk(self._parse_frame_payload(payload_raw)), frame_end
 
     @staticmethod
