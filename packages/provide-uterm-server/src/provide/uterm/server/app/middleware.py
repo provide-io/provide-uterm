@@ -81,19 +81,21 @@ class WebSocketOriginMiddleware:
 
     Behaviour:
 
-    - If ``allowed_origins`` is empty, the middleware is a no-op (kept
-      for backward compatibility with deployments that haven't set the
-      allowlist yet).
-    - If ``allowed_origins`` is set and the WS request has no ``Origin``
-      header at all (non-browser clients — Python ``websockets``,
-      ``wscat``, server-to-server) the connection is allowed. The
+    - Non-browser clients (no ``Origin`` header — Python ``websockets``,
+      ``wscat``, server-to-server) are always passed through. The
       whole-stack threat model assumes those clients are authenticated
-      via JWT or other means.
-    - If ``allowed_origins`` is set and the WS request has an ``Origin``
-      that doesn't match any entry (exact, lowercased), close the
-      handshake with HTTP 403 before any application code runs.
-    - The literal entry ``"*"`` is honoured as "anything goes" so
-      operators who explicitly opt out of origin gating can do so.
+      via JWT or other identity frames, which is a separate concern.
+    - If a browser sends an ``Origin`` header, it must match an entry in
+      ``allowed_origins`` (exact, lowercased) — otherwise the handshake
+      is closed with HTTP 4403 before any application code runs.
+    - **Empty** ``allowed_origins`` means *deny all browser origins*.
+      This is the secure default: if the operator has not explicitly
+      enumerated origins, no browser tab on any host is allowed to open
+      a WebSocket. (Before 2026-05-22 this was a no-op; the flip is a
+      deliberate posture change — see ``.provide/design`` notes.)
+    - The literal entry ``"*"`` is the explicit operator opt-out
+      ("anything goes") for dev/test deployments that want any-origin
+      access.
 
     HTTP requests are passed through untouched — :class:`CORSMiddleware`
     handles those.
@@ -108,7 +110,7 @@ class WebSocketOriginMiddleware:
         self._wildcard: bool = "*" in self._allowed
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "websocket" or not self._allowed or self._wildcard:
+        if scope["type"] != "websocket" or self._wildcard:
             await self._app(scope, receive, send)
             return
 
