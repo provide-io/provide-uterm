@@ -47,35 +47,38 @@ class _OwnershipMixin:
 
     @staticmethod
     def _compute_lease_expirations(st: Any, now: float) -> tuple[bool, bool]:
-        r"""Return \`\`(browser_expired, rest_expired)\`\` without mutating state.
+        r"""Return ``(browser_expired, rest_expired)`` without mutating state.
 
-        *browser_expired* is True when the dashboard WS owner lease has lapsed.
-        *rest_expired* is True when the REST hijack session lease has lapsed.
+        Thin wrapper over :class:`HijackLease.expire` for callers that
+        only want to *peek* at expiry status. Swap field order for
+        backward compatibility with the prior (browser, rest) tuple
+        signature used across this module.
         """
-        rest_expired = st.hijack_session is not None and st.hijack_session.lease_expires_at <= now
-        browser_expired = (
-            st.hijack_owner is not None and st.hijack_owner_expires_at is not None and st.hijack_owner_expires_at <= now
-        )
+        lease = st.lease  # type: ignore[attr-defined]
+        rest_expired = lease.session is not None and lease.session.lease_expires_at <= now
+        browser_expired = lease.ws is not None and lease.ws_expires_at is not None and lease.ws_expires_at <= now
         return browser_expired, rest_expired
 
     async def _expire_leases_under_lock(self, worker_id: str, now: float) -> tuple[bool, bool, bool] | None:
-        """Expire stale leases under lock; returns (rest_expired, dashboard_expired, should_resume) or None."""
+        """Expire stale leases under lock; returns (rest_expired, dashboard_expired, should_resume) or None.
+
+        Delegates the per-slot expiry to :class:`HijackLease.expire`, then
+        writes the resulting view back onto the state via
+        :meth:`WorkerTermState.apply_lease`. ``should_resume`` is True
+        when at least one slot expired *and* both slots are now idle —
+        the signal a downstream caller uses to broadcast a resume frame.
+        """
         async with self._lock:
             st = self._workers.get(worker_id)
             if st is None:
                 return None
-            if st.hijack_session is None and st.hijack_owner is None:
+            lease = st.lease
+            if lease.is_idle:
                 return None
-            browser_expired, rest_expired = self._compute_lease_expirations(st, now)
-            dashboard_expired = browser_expired
-            if rest_expired:
-                st.hijack_session = None
-            if dashboard_expired:
-                st.hijack_owner = None
-                st.hijack_owner_expires_at = None
-            should_resume = (
-                (rest_expired or dashboard_expired) and st.hijack_owner is None and st.hijack_session is None
-            )
+            rest_expired, dashboard_expired = lease.expire(now)
+            if rest_expired or dashboard_expired:
+                st.apply_lease(lease)
+            should_resume = (rest_expired or dashboard_expired) and lease.is_idle
         return rest_expired, dashboard_expired, should_resume
 
     async def _recheck_and_resume(self, worker_id: str, now: float) -> None:
