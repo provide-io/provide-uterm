@@ -52,8 +52,85 @@ VALID_ROLES = frozenset({"viewer", "operator", "admin"})
 
 
 @dataclass
+class HijackLease:
+    """View object for the three hijack fields on :class:`WorkerTermState`.
+
+    Hijack ownership has two independent paths into the same lease slot:
+
+    1. **Dashboard WS lease.** A browser holds an active hijack via its
+       WebSocket. Tracked by ``ws`` + ``ws_expires_at`` (monotonic time).
+       Refreshed by :meth:`touch_hijack_owner`; released when the browser
+       disconnects, asks to release, or the lease expires.
+
+    2. **REST session lease.** A non-browser client (CLI, an automation
+       script, MCP) holds a hijack via the REST API. Tracked by
+       ``session`` (a :class:`HijackSession`). Refreshed by the heartbeat
+       endpoint; released on explicit release or lease expiry.
+
+    Only ONE path is active per worker at any time. The dispatch order
+    in :class:`~provide.uterm.bridge.hub.hub.HubApprovalFlowMixin` is:
+
+        ``ws lease > REST lease > input_mode``
+
+    so a fresh dashboard hijack supersedes a stale REST one. The
+    invariant is enforced by the hub's ``_lock`` ; callers should treat
+    the fields below as **read-only outside the lock**.
+
+    This is a *view* — it borrows the three slots from a ``WorkerTermState``
+    rather than owning them, so existing direct-field consumers keep
+    working during migration. Methods take ``now`` explicitly to keep
+    them deterministic in tests.
+    """
+
+    ws: WebSocket | None = None
+    ws_expires_at: float | None = None
+    session: HijackSession | None = None
+
+    @property
+    def is_idle(self) -> bool:
+        return self.ws is None and self.session is None
+
+    def is_dashboard_active(self, now: float) -> bool:
+        if self.ws is None or self.ws_expires_at is None:
+            return False
+        return self.ws_expires_at > now
+
+    def is_rest_active(self, now: float) -> bool:
+        if self.session is None:
+            return False
+        return self.session.lease_expires_at > now
+
+    def is_active(self, now: float) -> bool:
+        return self.is_dashboard_active(now) or self.is_rest_active(now)
+
+    def expire(self, now: float) -> tuple[bool, bool]:
+        """Clear expired sub-leases. Returns ``(rest_expired, dash_expired)``.
+
+        A sub-lease is considered expired when its expiry timestamp is in
+        the past *and* the slot is occupied. Idle slots return False —
+        clearing nothing isn't an "expiry" event for telemetry.
+        """
+        rest_expired = self.session is not None and self.session.lease_expires_at <= now
+        dash_expired = self.ws is not None and self.ws_expires_at is not None and self.ws_expires_at <= now
+        if rest_expired:
+            self.session = None
+        if dash_expired:
+            self.ws = None
+            self.ws_expires_at = None
+        return rest_expired, dash_expired
+
+
+@dataclass
 class WorkerTermState:
-    """Per-worker connection state held by :class:`~provide.uterm.bridge.hub.TermHub`."""
+    """Per-worker connection state held by :class:`~provide.uterm.bridge.hub.TermHub`.
+
+    Hijack-ownership fields (``hijack_owner``, ``hijack_owner_expires_at``,
+    ``hijack_session``) are kept as direct attributes for backward
+    compatibility with existing consumers in
+    :mod:`provide.uterm.bridge.hub`. New code should prefer the
+    :attr:`lease` view, which provides state-machine semantics via
+    :class:`HijackLease` and is documented as a unit.
+    """
 
     worker_ws: WebSocket | None = None
     browsers: dict[WebSocket, str] = field(default_factory=dict)  # ws → role
@@ -66,6 +143,27 @@ class WorkerTermState:
     event_seq: int = 0
     min_event_seq: int = 0
     last_activity_at: float = field(default_factory=time.monotonic)
+
+    @property
+    def lease(self) -> HijackLease:
+        """Construct a :class:`HijackLease` view over this state's hijack fields.
+
+        The returned lease is a fresh object each call — mutations to the
+        returned ``HijackLease`` do NOT propagate back into the underlying
+        state. Use ``apply_lease`` to write changes back. Read-only
+        callers (predicates, expiry checks) can use it directly.
+        """
+        return HijackLease(
+            ws=self.hijack_owner,
+            ws_expires_at=self.hijack_owner_expires_at,
+            session=self.hijack_session,
+        )
+
+    def apply_lease(self, lease: HijackLease) -> None:
+        """Write ``lease``'s view back onto this state's hijack fields."""
+        self.hijack_owner = lease.ws
+        self.hijack_owner_expires_at = lease.ws_expires_at
+        self.hijack_session = lease.session
 
 
 # ---------------------------------------------------------------------------
