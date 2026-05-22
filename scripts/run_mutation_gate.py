@@ -109,13 +109,12 @@ def _half_cpu_count() -> int:
 
 
 def _resolve_to_mutmut_path(path: str) -> str | None:
-    """Translate a git-diff path to the path mutmut uses (usually src/-prefixed).
+    """Translate a git-diff path to the path mutmut uses.
 
-    mutmut reads paths_to_mutate as given in pyproject.toml.  In this repo,
-    `src/` at the root is a symlink tree that mirrors every package's source,
-    so mutmut uses paths like `src/provide/uterm/pty/connector.py`.  Git
-    diff returns the real file path, e.g.
-    `packages/provide-uterm-platform/src/provide/uterm/pty/connector.py`.
+    mutmut records function hits by import module name, so this repo keeps
+    mutation targets on the root ``src/`` symlink tree. Git diff returns real
+    package paths, so this inode-based lookup maps changed files back to the
+    configured mutmut path without hard-coding package prefixes.
 
     Strategy: walk paths_to_mutate from the root pyproject.toml and return the
     first entry whose resolved inode matches the changed file's inode, so we
@@ -156,6 +155,25 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
     # Fallback: return original path (the original always works if mutmut is run
     # from the package root where the path_to_mutate resides)
     return path
+
+
+def _prepend_mutant_source_roots(env: dict[str, str], existing_pythonpath: str | None) -> None:
+    root_paths = (
+        "mutants/src",
+        "mutants/packages/provide-uterm/src",
+        "mutants/packages/provide-uterm-platform/src",
+        "mutants/packages/provide-uterm-server/src",
+        "mutants/packages/provide-uterm-client/src",
+        "mutants/packages/provide-uterm-cloudflare/src",
+    )
+    for path in root_paths:
+        Path(path).mkdir(parents=True, exist_ok=True)
+    source_roots = [str(Path(path).resolve()) for path in root_paths]
+    pythonpath_parts = [*source_roots]
+    if existing_pythonpath:
+        pythonpath_parts.append(existing_pythonpath)
+    if pythonpath_parts:
+        env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
 
 
 def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ...]) -> list[str]:
@@ -215,6 +233,8 @@ def run_mutation_gate(
     stats_path = Path("mutants/mutmut-cicd-stats.json")
     last_stats: dict[str, int] = {}
     mutation_env = dict(os.environ)
+    existing_pythonpath = mutation_env.get("PYTHONPATH")
+    _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
 
     # mutmut reads paths_to_mutate from the ROOT pyproject.toml (not mutants/).
     # When --changed-only narrows the targets, rewrite the root config temporarily.
@@ -226,6 +246,7 @@ def run_mutation_gate(
         if mutants_dir.exists():
             shutil.rmtree(mutants_dir)
         _seed_mutants_config(paths_to_mutate=paths_to_mutate)
+        _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
 
         # Also rewrite the root pyproject.toml so mutmut sees the narrowed targets
         if paths_to_mutate and root_original is not None:
