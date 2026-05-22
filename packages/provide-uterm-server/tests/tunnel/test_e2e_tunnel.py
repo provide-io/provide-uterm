@@ -144,9 +144,13 @@ class TestE2ETunnelTokenAPIs:
         assert "share_url" in new_data
         assert "expires_at" in new_data
 
-        # Old token should not be in the token map
+        # The stored hash must match the freshly-rotated worker_token.
+        from provide.uterm.tunnel.token_hash import verify_token
+
         token_map = e2e_client.app.state.uterm_tunnel_tokens  # type: ignore[union-attr]
-        assert token_map[tid]["worker_token"] == new_data["worker_token"]
+        assert verify_token(new_data["worker_token"], str(token_map[tid]["worker_token_hash"]))
+        # And the old plain token must not match the new hash.
+        assert not verify_token(old_worker, str(token_map[tid]["worker_token_hash"]))
 
     def test_rotate_nonexistent_returns_404(self, e2e_client: TestClient) -> None:
         resp = e2e_client.post("/api/tunnels/nonexistent/tokens/rotate")
@@ -164,9 +168,13 @@ class TestShortShareUrl:
     """Test /s/{id} short share URL redirect."""
 
     def test_short_url_redirects(self, e2e_client: TestClient) -> None:
+        # The hub stores only token hashes; the plain share_token is
+        # returned exactly once in the create response. Tests must capture
+        # it from there — see ``tunnel/token_hash.py``.
         resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
         tid = resp.json()["tunnel_id"]
-        share_token = e2e_client.app.state.uterm_tunnel_tokens[tid]["share_token"]  # type: ignore[union-attr]
+        share_url = resp.json()["share_url"]
+        share_token = share_url.split("token=", 1)[1]
 
         redirect = e2e_client.get(f"/s/{tid}?token={share_token}", follow_redirects=False)
         assert redirect.status_code == 302
@@ -185,7 +193,7 @@ class TestShortShareUrl:
     def test_short_url_follows_redirect(self, e2e_client: TestClient) -> None:
         resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
         tid = resp.json()["tunnel_id"]
-        share_token = e2e_client.app.state.uterm_tunnel_tokens[tid]["share_token"]  # type: ignore[union-attr]
+        share_token = resp.json()["share_url"].split("token=", 1)[1]
 
         final = e2e_client.get(f"/s/{tid}?token={share_token}", follow_redirects=True)
         assert final.status_code == 200

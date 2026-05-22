@@ -59,6 +59,11 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: Annotated[str, Path(pattern=r"^[\w\-]+$")],
     ) -> None:
         # Auth: accept worker_bearer_token OR per-session tunnel tokens.
+        # Per-session tokens are stored as BLAKE2b hashes; verify_token
+        # compares the caller-supplied plain against the stored hash in
+        # constant time. See ``tunnel/token_hash.py`` for the rationale.
+        from provide.uterm.tunnel.token_hash import verify_token
+
         auth_header = websocket.headers.get("authorization", "")
         provided = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
         worker_token = hub.worker_token()
@@ -66,13 +71,13 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
         tunnel_tokens = cast(
             "dict[str, dict[str, str]]", getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
         )
-        session_token = str(tunnel_tokens.get(worker_id, {}).get("worker_token", ""))
+        session_token_hash = str(tunnel_tokens.get(worker_id, {}).get("worker_token_hash", ""))
         valid = False
         if worker_token is not None and secrets.compare_digest(provided, worker_token):
             valid = True
-        if session_token and secrets.compare_digest(provided, session_token):
+        if session_token_hash and verify_token(provided, session_token_hash):
             valid = True
-        if (worker_token is not None or session_token) and not valid:
+        if (worker_token is not None or session_token_hash) and not valid:
             await websocket.accept()
             await websocket.close(code=1008, reason="authentication required")
             return
