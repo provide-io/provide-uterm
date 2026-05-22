@@ -40,6 +40,11 @@ from provide.uterm.io import PromptWaiter
 class TestControlChannelBoundaries:
     """Targets the < vs <= boundary mutations in the decoder."""
 
+    @staticmethod
+    def _payload_with_encoded_size(size: int) -> dict[str, str]:
+        fixed_json_bytes = len(b'{"k":""}')
+        return {"k": "x" * (size - fixed_json_bytes)}
+
     def test_feed_overflow_strictly_greater_than(self) -> None:
         """``if total > max_buffer_bytes`` must be strict, not >=.
 
@@ -88,12 +93,11 @@ class TestControlChannelBoundaries:
         Targets: control_channel.ControlChannelDecoder._try_parse_frame__mutmut_29
         """
         d = ControlChannelDecoder(max_control_payload_bytes=10**9)
-        # Build a control frame with payload exactly 1_048_576 bytes —
-        # under the original (>) this is accepted; under the mutant (>=) rejected.
-        payload = {"k": "x" * (1_048_576 - 10)}  # ~ at the limit
+        # Build a control frame with payload exactly 1_048_576 bytes. Under
+        # the original (>) this is accepted; under the mutant (>=) rejected.
+        payload = self._payload_with_encoded_size(1_048_576)
         frame = encode_control(payload)
-        # Encoded total is > 1MB; we only care that the payload-size guard
-        # uses strict ``>`` against 1_048_576.
+        assert int(frame[2:10], 16) == 1_048_576
         events = d.feed(frame)
         assert any(isinstance(e, ControlChunk) for e in events)
 
@@ -102,12 +106,12 @@ class TestControlChannelBoundaries:
 
         Targets: control_channel.ControlChannelDecoder._try_parse_frame__mutmut_31
         """
-        # max_control_payload_bytes=200 -> payload of exactly 200 bytes
-        # must be accepted (strict >); under the mutant it would be rejected.
+        # max_control_payload_bytes=200 -> payload of exactly 200 bytes must
+        # be accepted (strict >); under the mutant it would be rejected.
         d = ControlChannelDecoder(max_control_payload_bytes=200)
-        # Build a tiny dict that serialises to exactly 200 bytes is fragile;
-        # instead test the smaller-than case explicitly.
-        d.feed(encode_control({"k": "v"}))  # well under 200
+        exact = encode_control(self._payload_with_encoded_size(200))
+        assert int(exact[2:10], 16) == 200
+        d.feed(exact)
         # Then feed a payload that exceeds the limit.
         big = {"k": "y" * 500}
         with pytest.raises(ControlChannelProtocolError, match="too large"):

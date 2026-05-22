@@ -14,6 +14,8 @@ from __future__ import annotations
 import pytest
 
 from provide.uterm.control_channel import (
+    DLE,
+    STX,
     ControlChannelDecoder,
     ControlChannelProtocolError,
     ControlChunk,
@@ -142,6 +144,14 @@ class TestFeed:
         # After a successful feed with no unconsumed data, _buffer_parts is empty.
         assert d._buffer_parts == []
 
+    def test_feed_protocol_error_clears_state_exactly(self) -> None:
+        d = ControlChannelDecoder()
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(f"{DLE}x")
+        assert str(exc_info.value) == "invalid control prefix"
+        assert d._buffer == ""
+        assert d._buffer_parts == []
+
 
 # ---------------------------------------------------------------------------
 # finish: truncated frame detection + final-flag propagation
@@ -160,7 +170,7 @@ class TestFinish:
         d.feed("\x10\x02")
         with pytest.raises(ControlChannelProtocolError) as exc:
             d.finish()
-        assert "truncated" in str(exc.value)
+        assert str(exc.value) == "truncated control frame"
 
     def test_finish_resets_state_on_protocol_error(self) -> None:
         d = ControlChannelDecoder()
@@ -179,6 +189,89 @@ class TestFinish:
         # finish() with empty buffer must succeed.
         assert d.finish() == []
         assert any(isinstance(e, DataChunk) for e in events)
+
+    def test_finish_residual_buffer_clears_state_exactly(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        d = ControlChannelDecoder()
+        d._buffer = "leftover"
+        d._buffer_parts = ["leftover"]
+        monkeypatch.setattr(d, "_drain", lambda *, final: [])
+
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.finish()
+
+        assert str(exc_info.value) == "truncated control frame"
+        assert d._buffer == ""
+        assert d._buffer_parts == []
+
+
+class TestProtocolErrorMessages:
+    def test_invalid_json_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        raw = f"{DLE}{STX}00000008:not-json"
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(raw)
+        assert str(exc_info.value) == "invalid control json"
+
+    def test_non_object_payload_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        raw = f"{DLE}{STX}00000002:[]"
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(raw)
+        assert str(exc_info.value) == "control payload must be an object"
+
+    def test_invalid_utf8_length_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        payload = '{"emoji":"😀"}'
+        declared_bytes = payload.encode("utf-8").index("😀".encode()) + 1
+        raw = f"{DLE}{STX}{declared_bytes:08x}:{payload}"
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(raw)
+        assert str(exc_info.value) == "invalid control payload length"
+
+    def test_incomplete_header_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        d.feed(f"{DLE}{STX}0000")
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.finish()
+        assert str(exc_info.value) == "truncated control frame"
+
+    def test_invalid_header_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(f"{DLE}{STX}zzzzzzzz:{{}}")
+        assert str(exc_info.value) == "invalid control header"
+
+    def test_payload_too_large_message_is_exact(self) -> None:
+        d = ControlChannelDecoder(max_control_payload_bytes=5)
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(encode_control({"k": "v"}))
+        assert str(exc_info.value) == "control payload too large"
+
+    def test_incomplete_payload_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        d.feed(f"{DLE}{STX}00000008:{{")
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.finish()
+        assert str(exc_info.value) == "truncated control frame"
+
+    def test_trailing_dle_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        d.feed(DLE)
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.finish()
+        assert str(exc_info.value) == "truncated control frame"
+
+    def test_invalid_prefix_message_is_exact(self) -> None:
+        d = ControlChannelDecoder()
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(f"{DLE}x")
+        assert str(exc_info.value) == "invalid control prefix"
+
+    def test_empty_control_payload_uses_invalid_json_error(self) -> None:
+        d = ControlChannelDecoder()
+        with pytest.raises(ControlChannelProtocolError) as exc_info:
+            d.feed(f"{DLE}{STX}00000000:")
+        assert str(exc_info.value) == "invalid control json"
 
 
 # ---------------------------------------------------------------------------
