@@ -460,7 +460,7 @@ class TestTokenTransportEnforcement:
         client = TestClient(app)
         tunnel = _create_tunnel(client)
         tid = tunnel["tunnel_id"]
-        share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        share_tok = tunnel["share_url"].split("token=", 1)[1]
         # Simulate a follow-on request: cookie only, no query param.
         resp = TestClient(app).get(
             f"/app/session/{tid}",
@@ -476,7 +476,7 @@ class TestTokenTransportEnforcement:
         client = TestClient(app)
         tunnel = _create_tunnel(client)
         tid = tunnel["tunnel_id"]
-        share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        share_tok = tunnel["share_url"].split("token=", 1)[1]
         resp = TestClient(app).get(f"/app/session/{tid}?token={share_tok}")
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
@@ -488,7 +488,7 @@ class TestTokenTransportEnforcement:
         client = TestClient(app)
         tunnel = _create_tunnel(client)
         tid = tunnel["tunnel_id"]
-        share_tok = app.state.uterm_tunnel_tokens[tid]["share_token"]
+        share_tok = tunnel["share_url"].split("token=", 1)[1]
         resp = TestClient(app).get(f"/app/session/{tid}?token={share_tok}")
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" not in cookies.get("uterm_principal", "")

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import re
 import secrets
 import time
@@ -54,6 +55,35 @@ logger = get_logger(__name__)
 # Delay between FastAPI startup completing and the auto-start session loop
 # beginning.  Gives the event loop time to finish route/middleware init.
 _AUTO_START_DELAY_S = 0.15
+
+# Environment variables that almost-always indicate a multi-replica
+# orchestrator. Their presence alone doesn't *prove* multi-replica
+# operation (a single-replica k8s deployment also sets KUBERNETES_*),
+# but it raises the question loudly enough that the startup banner
+# should escalate when control-plane durability is process-local.
+_MULTI_REPLICA_ENV_HINTS: tuple[tuple[str, str], ...] = (
+    ("KUBERNETES_SERVICE_HOST", "Kubernetes"),
+    ("K_SERVICE", "Cloud Run"),
+    ("WEBSITE_INSTANCE_ID", "Azure App Service"),
+    ("ECS_CONTAINER_METADATA_URI", "AWS ECS"),
+    ("ECS_CONTAINER_METADATA_URI_V4", "AWS ECS"),
+    ("FLY_APP_NAME", "Fly.io"),
+)
+
+
+def _detect_multi_replica_environment() -> set[str]:
+    """Return a set of orchestrator names detected from process env.
+
+    Returns an empty set in environments that look single-replica
+    (bare-metal, single docker container, single VM, dev workstation).
+    """
+    found: set[str] = set()
+    for env_var, label in _MULTI_REPLICA_ENV_HINTS:
+        if os.environ.get(env_var):
+            found.add(label)
+    return found
+
+
 _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)(?:/.*)?$"),
     # ``inspect`` is included so HTTP-tunnel share tokens reach the inspector
@@ -104,6 +134,21 @@ def create_server_app(
             "session arbitration state). It is not HA or persistent across restart/failover; run it as a single active "
             "instance or use a durable backend for multi-node deployment."
         )
+        # Escalate when common multi-replica orchestrators are detected.
+        # Process-local control-plane state diverges across replicas: a
+        # share token issued on pod A won't validate on pod B, an approval
+        # decision on pod A is invisible to pod B, etc. Operators routinely
+        # miss this until users hit it in prod, so emit a load-bearing
+        # ERROR when the environment looks multi-replica.
+        _replica_hints = _detect_multi_replica_environment()
+        if _replica_hints:
+            logger.error(
+                "standalone_server_durability=process-local in a multi-replica environment (%s). "
+                "Tunnel tokens, approvals, webhook registrations, and live runtime state are NOT replicated; "
+                "share/control URLs issued on one replica will NOT authenticate against another. "
+                "Pin to a single replica or move to a durable backend (control_plane.backend=sqlite/postgres).",
+                ", ".join(sorted(_replica_hints)),
+            )
     else:
         logger.info(
             "standalone_server_durability=sqlite: shared control-plane stores (sessions, resume tokens, approvals, "
@@ -208,9 +253,13 @@ def create_server_app(
                     "tunnel_token_ip_mismatch session_id=%s issued=%s actual=%s", session_id, issued_ip, client_ip
                 )
                 return None
-        # Match token type.
+        # Match token type. The stored values are BLAKE2b digests, so we
+        # compare the hash of the caller-supplied token against the stored
+        # hash in constant time — see ``tunnel/token_hash.py``.
+        from provide.uterm.tunnel.token_hash import verify_token
+
         source_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
-        if secrets.compare_digest(str(provided), str(token_state.get("control_token", ""))):
+        if verify_token(str(provided), str(token_state.get("control_token_hash", ""))):
             connection.state.uterm_share_token = str(provided)
             connection.state.uterm_share_role = "operator"
             logger.info("tunnel_token_validated session_id=%s token_type=control source_ip=%s", session_id, source_ip)
@@ -219,7 +268,7 @@ def create_server_app(
                 roles=frozenset({"admin"}),
                 scopes=frozenset({"*"}),
             )
-        if secrets.compare_digest(str(provided), str(token_state.get("share_token", ""))):
+        if verify_token(str(provided), str(token_state.get("share_token_hash", ""))):
             connection.state.uterm_share_token = str(provided)
             connection.state.uterm_share_role = "viewer"
             logger.info("tunnel_token_validated session_id=%s token_type=share source_ip=%s", session_id, source_ip)

@@ -31,6 +31,7 @@ from provide.uterm.server.routes._helpers import (
     set_span_attrs,
     source_ip,
 )
+from provide.uterm.tunnel.token_hash import hash_token
 
 
 def create_tunnels_router() -> APIRouter:
@@ -174,11 +175,15 @@ def create_tunnels_router() -> APIRouter:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
         # Mirrored in cloudflare/api/_tunnel_api.py -- keep both in sync.
+        # The hub holds BLAKE2b digests, not the raw tokens — a memory
+        # disclosure on the server can no longer leak the bearer values.
+        # The plain tokens leave this scope only via the JSON response
+        # below and never again return to the hub's in-process state.
         share_page = "inspect" if tunnel_type == "http" else "session"
         tunnel_tokens[tunnel_id] = {
-            "worker_token": worker_token,
-            "share_token": share_token,
-            "control_token": control_token,
+            "worker_token_hash": hash_token(worker_token),
+            "share_token_hash": hash_token(share_token),
+            "control_token_hash": hash_token(control_token),
             "created_at": now,
             "expires_at": expires_at,
             "issued_ip": src_ip if tunnel_cfg.ip_binding else None,
@@ -267,9 +272,9 @@ def create_tunnels_router() -> APIRouter:
         tunnel_type_r = str(old.get("tunnel_type", "terminal"))
         share_page_r = "inspect" if tunnel_type_r == "http" else "session"
         tunnel_tokens[tunnel_id] = {
-            "worker_token": worker_token,
-            "share_token": share_token,
-            "control_token": control_token,
+            "worker_token_hash": hash_token(worker_token),
+            "share_token_hash": hash_token(share_token),
+            "control_token_hash": hash_token(control_token),
             "created_at": now,
             "expires_at": now + ttl_s,
             "issued_ip": src_ip if cfg.tunnel.ip_binding else None,
