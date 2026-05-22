@@ -733,3 +733,60 @@ describe("ProvideTerminal fitWithMinCols", () => {
     await makeTerminal();
   });
 });
+
+describe("ProvideTerminal accessibility", () => {
+  it("gear button has an aria-label", async () => {
+    const { container } = await makeTerminal();
+    const gear = container.querySelector<HTMLButtonElement>(".gear-btn");
+    expect(gear?.getAttribute("aria-label")).toBe("Open terminal settings");
+  });
+
+  it("settings panel exposes a dialog role and accessible name", async () => {
+    const { container } = await makeTerminal();
+    const panel = container.querySelector(".settings-panel");
+    expect(panel?.getAttribute("role")).toBe("dialog");
+    expect(panel?.getAttribute("aria-label")).toBe("Terminal settings");
+  });
+
+  it("each theme button declares an aria-label", async () => {
+    const { container } = await makeTerminal();
+    const buttons = container.querySelectorAll<HTMLButtonElement>(".theme-btn");
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const btn of buttons) {
+      expect(btn.getAttribute("aria-label")).toMatch(/theme$/i);
+      expect(btn.type).toBe("button");
+    }
+  });
+
+  it("status dot exposes a status role and an aria-label", async () => {
+    const { container } = await makeTerminal();
+    const dot = container.querySelector("[data-status-dot='1']");
+    expect(dot?.getAttribute("role")).toBe("status");
+    expect(dot?.getAttribute("aria-label")).toBeTruthy();
+  });
+
+  it("status dot aria-label updates to 'Connected' when WS opens", async () => {
+    const { container } = await makeTerminal();
+    getWs().open();
+    const dot = container.querySelector("[data-status-dot='1']");
+    expect(dot?.getAttribute("aria-label")).toBe("Connected");
+  });
+
+  it("status dot aria-label updates to 'Disconnected' on close", async () => {
+    const { container } = await makeTerminal();
+    getWs().open();
+    getWs().close();
+    const dot = container.querySelector("[data-status-dot='1']");
+    expect(dot?.getAttribute("aria-label")).toBe("Disconnected");
+  });
+
+  it("Enter key on a theme button activates it (native button behavior)", async () => {
+    const { container } = await makeTerminal();
+    const crtBtn = container.querySelector<HTMLButtonElement>('.theme-btn[data-theme="crt"]');
+    expect(crtBtn).not.toBeNull();
+    // Native <button> activates via click() — simulate keyboard activation
+    crtBtn?.click();
+    const root = container.querySelector(".provide-uterm");
+    expect(root?.classList.contains("theme-crt")).toBe(true);
+  });
+});

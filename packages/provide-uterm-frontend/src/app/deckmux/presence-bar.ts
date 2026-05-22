@@ -57,11 +57,15 @@ export class DeckMuxPresenceBar {
 
     const togglesRow = document.createElement("div");
     togglesRow.className = "dm-toggles";
+    togglesRow.setAttribute("role", "toolbar");
+    togglesRow.setAttribute("aria-label", "Presence display options");
 
     const namesBtn = document.createElement("button");
+    namesBtn.type = "button";
     namesBtn.className = "dm-toggle-btn";
     namesBtn.textContent = "Names";
     namesBtn.setAttribute("aria-pressed", "false");
+    namesBtn.setAttribute("aria-label", "Toggle participant names");
     namesBtn.addEventListener("click", () => {
       this._namesVisible = !this._namesVisible;
       namesBtn.setAttribute("aria-pressed", String(this._namesVisible));
@@ -71,9 +75,11 @@ export class DeckMuxPresenceBar {
     });
 
     const cursorsBtn = document.createElement("button");
+    cursorsBtn.type = "button";
     cursorsBtn.className = "dm-toggle-btn dm-toggle-btn--active";
     cursorsBtn.textContent = "Cursors";
     cursorsBtn.setAttribute("aria-pressed", "true");
+    cursorsBtn.setAttribute("aria-label", "Toggle participant cursors");
     cursorsBtn.addEventListener("click", () => {
       this._cursorsVisible = !this._cursorsVisible;
       cursorsBtn.setAttribute("aria-pressed", String(this._cursorsVisible));
@@ -82,9 +88,11 @@ export class DeckMuxPresenceBar {
     });
 
     const dimsBtn = document.createElement("button");
+    dimsBtn.type = "button";
     dimsBtn.className = "dm-toggle-btn dm-toggle-btn--active";
     dimsBtn.textContent = "Dims";
     dimsBtn.setAttribute("aria-pressed", "true");
+    dimsBtn.setAttribute("aria-label", "Toggle participant viewport dimensions");
     dimsBtn.addEventListener("click", () => {
       this._ghostBoxVisible = !this._ghostBoxVisible;
       dimsBtn.setAttribute("aria-pressed", String(this._ghostBoxVisible));
