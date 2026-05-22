@@ -95,6 +95,13 @@ class TermHub(
         max_ws_message_bytes: int = 1_048_576,
         max_input_chars: int = 10_000,
         browser_rate_limit_per_sec: float = 30,
+        # Non-input control frames (hijack_request, presence_update, resume,
+        # queued_input, control_request) are budgeted separately from input
+        # keystrokes. The cap is intentionally smaller — a legitimate UI
+        # emits at most a few control frames per second; higher rates are a
+        # client-side bug or an abuse attempt. The budget protects the hub
+        # from a hostile browser flooding hijack_requests or presence_updates.
+        browser_control_rate_limit_per_sec: float = 10,
         rest_acquire_rate_limit_per_sec: float = 5,
         rest_send_rate_limit_per_sec: float = 20,
         worker_token: str | None = None,
@@ -123,6 +130,7 @@ class TermHub(
         self.max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self.max_input_chars = max(100, int(max_input_chars))
         self.browser_rate_limit_per_sec = float(browser_rate_limit_per_sec)
+        self.browser_control_rate_limit_per_sec = max(0.1, float(browser_control_rate_limit_per_sec))
         self._rest_acquire_rate = max(0.1, float(rest_acquire_rate_limit_per_sec))
         self._rest_send_rate = max(0.1, float(rest_send_rate_limit_per_sec))
         self._rest_acquire_bucket = TokenBucket(self._rest_acquire_rate)

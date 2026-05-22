@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -256,3 +257,71 @@ class TestCustomLimits:
     def test_min_input_chars_clamped(self) -> None:
         hub = TermHub(max_input_chars=10)
         assert hub.max_input_chars == 100  # minimum is 100
+
+    def test_browser_control_rate_limit_default(self) -> None:
+        hub = TermHub(resolve_browser_role=lambda _ws, _worker_id: "operator")
+        assert hub.browser_control_rate_limit_per_sec == 10.0
+
+    def test_browser_control_rate_limit_custom(self) -> None:
+        hub = TermHub(
+            browser_control_rate_limit_per_sec=4.5,
+            resolve_browser_role=lambda _ws, _worker_id: "operator",
+        )
+        assert hub.browser_control_rate_limit_per_sec == 4.5
+
+    def test_browser_control_rate_limit_clamped(self) -> None:
+        """Negative/zero rates would mean 'never refill'; clamp to a positive floor."""
+        hub = TermHub(
+            browser_control_rate_limit_per_sec=0.0,
+            resolve_browser_role=lambda _ws, _worker_id: "operator",
+        )
+        assert hub.browser_control_rate_limit_per_sec == pytest.approx(0.1)
+
+
+class TestBrowserControlRateLimit:
+    """Non-input control frames have their own (lower) budget so a hostile
+    browser can't flood the hub with hijack_requests / presence_update
+    bursts even when the input bucket is sized large for legitimate typing.
+    """
+
+    def test_control_frame_flood_logs_rate_limited(self, caplog: pytest.LogCaptureFixture) -> None:
+        # Tight control budget; input budget left generous so this test
+        # exercises only the control path.
+        app, hub = _make_app(
+            browser_rate_limit_per_sec=200,
+            browser_control_rate_limit_per_sec=2,
+        )
+
+        caplog.set_level("WARNING", logger="provide.uterm.bridge.routes.websockets")
+        with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
+            _read_worker_snapshot_req(worker)
+            resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})
+            assert resp.status_code == 200
+
+            with connect_test_ws(client, "/ws/browser/w1/term") as browser:
+                _read_initial_browser(browser)
+                # Burst through the bucket — at the rate of 2/sec with burst=2,
+                # the 3rd-5th should trip the rate limit and emit the warning.
+                for i in range(5):
+                    browser.send_json({"type": "presence_update", "seq": i})
+                # Send a quick input to flush the worker's read loop and give
+                # the server time to process the burst.
+                browser.send_json({"type": "input", "data": "x"})
+                for _ in range(10):
+                    msg = worker.receive_json()
+                    if msg.get("type") == "input" and msg.get("data") == "x":
+                        break
+
+        rate_limit_msgs = [r for r in caplog.records if "ws_browser_control_rate_limited" in r.getMessage()]
+        assert rate_limit_msgs, "expected at least one ws_browser_control_rate_limited warning"
+
+    def test_control_budget_independent_of_input_budget(self) -> None:
+        """A starved input bucket must not also starve control frames, and
+        vice versa. Verify by configuration."""
+        hub = TermHub(
+            browser_rate_limit_per_sec=1,
+            browser_control_rate_limit_per_sec=50,
+            resolve_browser_role=lambda _ws, _worker_id: "operator",
+        )
+        assert hub.browser_rate_limit_per_sec == 1.0
+        assert hub.browser_control_rate_limit_per_sec == 50.0
