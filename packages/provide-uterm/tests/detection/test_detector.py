@@ -4,6 +4,8 @@
 #
 from __future__ import annotations
 
+import pytest
+
 from provide.uterm.detection.detector import PromptDetector
 from provide.uterm.detection.input_type import auto_detect_input_type
 
@@ -144,6 +146,72 @@ def test_compile_patterns_all_bad_returns_empty() -> None:
     patterns = [{"id": "bad1", "regex": r"[bad"}, {"id": "bad2", "regex": r"(unclosed"}]
     d = PromptDetector(patterns)
     assert len(d._compiled_all) == 0
+
+
+# ---------------------------------------------------------------------------
+# Strict mode: pattern compile failures must surface, not silently degrade
+# ---------------------------------------------------------------------------
+
+
+def test_compile_failures_counter_is_exposed() -> None:
+    """``compile_failures`` lets operators see what was skipped without
+    grepping logs."""
+    from provide.uterm.detection.detector import PromptDetector
+
+    patterns = [
+        {"id": "bad.pattern", "regex": r"[invalid("},
+        {"id": "missing.regex"},
+        {"id": "good.pattern", "regex": r"Enter your name:"},
+    ]
+    d = PromptDetector(patterns)
+    failures = d.compile_failures
+    assert len(failures) == 2
+    ids = {f["id"] for f in failures}
+    assert ids == {"bad.pattern", "missing.regex"}
+
+
+def test_compile_failures_empty_when_all_good() -> None:
+    from provide.uterm.detection.detector import PromptDetector
+
+    d = PromptDetector([{"id": "good", "regex": r"Hello"}])
+    assert d.compile_failures == ()
+
+
+def test_strict_mode_raises_on_bad_regex() -> None:
+    from provide.uterm.detection.detector import DetectorPatternCompileError, PromptDetector
+
+    with pytest.raises(DetectorPatternCompileError, match="bad.pattern"):
+        PromptDetector([{"id": "bad.pattern", "regex": r"[invalid("}], strict=True)
+
+
+def test_strict_mode_raises_on_missing_regex_key() -> None:
+    from provide.uterm.detection.detector import DetectorPatternCompileError, PromptDetector
+
+    with pytest.raises(DetectorPatternCompileError, match="missing.regex"):
+        PromptDetector([{"id": "missing.regex"}], strict=True)
+
+
+def test_strict_mode_accepts_all_good_patterns() -> None:
+    from provide.uterm.detection.detector import PromptDetector
+
+    d = PromptDetector(
+        [{"id": "good.pattern", "regex": r"Enter your name:"}],
+        strict=True,
+    )
+    assert d.pattern_count == 1
+    assert d.compile_failures == ()
+
+
+def test_strict_mode_error_message_includes_count() -> None:
+    from provide.uterm.detection.detector import DetectorPatternCompileError, PromptDetector
+
+    patterns = [
+        {"id": "a", "regex": r"[bad"},
+        {"id": "b", "regex": r"(unclosed"},
+        {"id": "c", "regex": r"\1invalidbackref"},
+    ]
+    with pytest.raises(DetectorPatternCompileError, match="3 pattern\\(s\\) failed"):
+        PromptDetector(patterns, strict=True)
 
 
 # ---------------------------------------------------------------------------
