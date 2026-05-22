@@ -143,13 +143,15 @@ def test_tunnel_share_token_allows_session_page_without_jwt() -> None:
     """Valid share_token in query param grants access; the token itself is NOT
     embedded in the returned HTML (security: no JS-readable capability token).
     """
+    from provide.uterm.tunnel.token_hash import hash_token
+
     token = "share-token-123"
     app = _jwt_app_public_session("tok-sess-share")
     app.state.uterm_tunnel_tokens = {
         "tok-sess-share": {
-            "share_token": token,
-            "control_token": "control-token-123",
-            "worker_token": "worker-token-123",
+            "share_token_hash": hash_token(token),
+            "control_token_hash": hash_token("control-token-123"),
+            "worker_token_hash": hash_token("worker-token-123"),
         }
     }
     with TestClient(app) as c:
@@ -165,13 +167,15 @@ def test_tunnel_control_token_allows_operator_page_without_jwt() -> None:
     """Valid control_token in query param grants operator role; the token
     itself is NOT embedded in the returned HTML.
     """
+    from provide.uterm.tunnel.token_hash import hash_token
+
     token = "control-token-123"
     app = _jwt_app_public_session("tok-sess-control")
     app.state.uterm_tunnel_tokens = {
         "tok-sess-control": {
-            "share_token": "share-token-123",
-            "control_token": token,
-            "worker_token": "worker-token-123",
+            "share_token_hash": hash_token("share-token-123"),
+            "control_token_hash": hash_token(token),
+            "worker_token_hash": hash_token("worker-token-123"),
         }
     }
     with TestClient(app) as c:
@@ -189,13 +193,15 @@ def test_tunnel_share_token_allows_inspect_page_without_jwt() -> None:
     _SHARE_SESSION_PATTERNS regex, so the CLI-printed share URL (which
     points at the inspector for http-tunnels) would 401 on a valid token.
     """
+    from provide.uterm.tunnel.token_hash import hash_token
+
     token = "inspect-share-token"
     app = _jwt_app_public_session("tok-sess-inspect")
     app.state.uterm_tunnel_tokens = {
         "tok-sess-inspect": {
-            "share_token": token,
-            "control_token": "ct",
-            "worker_token": "wt",
+            "share_token_hash": hash_token(token),
+            "control_token_hash": hash_token("ct"),
+            "worker_token_hash": hash_token("wt"),
         }
     }
     with TestClient(app) as c:
@@ -210,13 +216,15 @@ def test_tunnel_share_token_sets_httponly_cookie() -> None:
     This is what allows the WebSocket upgrade to authenticate via cookie
     instead of a JS-readable query-param token embedded in the DOM.
     """
+    from provide.uterm.tunnel.token_hash import hash_token
+
     token = "share-token-cookie-xyz"
     app = _jwt_app_public_session("cookie-sess")
     app.state.uterm_tunnel_tokens = {
         "cookie-sess": {
-            "share_token": token,
-            "control_token": "ct",
-            "worker_token": "wt",
+            "share_token_hash": hash_token(token),
+            "control_token_hash": hash_token("ct"),
+            "worker_token_hash": hash_token("wt"),
         }
     }
     with TestClient(app) as c:
