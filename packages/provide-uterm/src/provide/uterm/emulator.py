@@ -34,6 +34,16 @@ class TerminalEmulator:
         cols: Terminal width in columns (default 80).
         rows: Terminal height in rows (default 25).
         term: Terminal type string (default ``"ANSI"``).
+
+    Memory / scrollback bounds:
+        Backed by ``pyte.Screen``, which is **bounded**: only the visible
+        viewport (``cols * rows`` cells) is retained. Scrolling overwrites
+        rather than buffering. There is no off-screen scrollback in this
+        layer — applications that need history must record the raw byte
+        stream separately (see :mod:`provide.uterm.replay`). This means
+        ``get_snapshot`` and ``ansi_screen`` always allocate O(cols*rows),
+        independent of session age. ``resize`` is also O(cols*rows): pyte
+        re-flows the buffer, clipping rows that no longer fit.
     """
 
     def __init__(self, cols: int = 80, rows: int = 25, term: str = "ANSI") -> None:
@@ -55,6 +65,13 @@ class TerminalEmulator:
         self._dirty = True
 
     def _is_cursor_at_end(self) -> bool:
+        # ``len(line) - 2`` slack is a deliberate heuristic, not an off-by-one:
+        # BBS-style prompts often leave 1-2 trailing spaces after the input
+        # caret (e.g. ``> `` or ``> _``), and detection rules need to treat
+        # those as "still at the prompt" rather than "user has typed". A
+        # tighter check (``>= len(line)``) misclassified TradeWars 2002 and
+        # Major BBS prompts as not-at-end during the 2026-04 detector
+        # rewrite; widen-back to 2 chars restored the prior pass rate.
         cursor_x = self._screen.cursor.x
         cursor_y = self._screen.cursor.y
         lines = self._screen.display
