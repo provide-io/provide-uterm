@@ -76,18 +76,30 @@ def test_missing_origin_header_is_allowed_by_default() -> None:
         assert ws.receive_text() == "echo:hi"
 
 
-def test_empty_allowlist_rejects_browser_origins() -> None:
-    """Default-deny posture: empty allowlist + present Origin header → 4403.
+def test_empty_allowlist_rejects_cross_origin_browser() -> None:
+    """Default-deny posture: empty allowlist + cross-origin Origin → 4403.
 
     This is a behaviour flip from earlier releases where empty allowlist
-    was a no-op. Operators who want any-origin access must explicitly
-    set ``allowed_origins = ["*"]``.
+    was a no-op. Operators who want cross-origin access must explicitly
+    set ``allowed_origins = [...]`` or ``["*"]``.
     """
     app = _build_app(())
     with TestClient(app) as client, pytest.raises(WebSocketDisconnect) as excinfo:
+        # Override the testclient's default same-origin Host with a value
+        # that doesn't match the Origin (testclient uses ``Host: testserver``).
         with client.websocket_connect("/ws", headers={"origin": "https://anywhere.example"}):
             pass
     assert excinfo.value.code == 4403
+
+
+def test_empty_allowlist_allows_same_origin_browser() -> None:
+    """Same-origin browser connections must always pass through, even on
+    an empty allowlist. The threat is *cross*-origin WS hijack, not
+    self-served pages opening their own backend's socket."""
+    app = _build_app(())
+    with TestClient(app) as client, client.websocket_connect("/ws", headers={"origin": "http://testserver"}) as ws:
+        ws.send_text("hi")
+        assert ws.receive_text() == "echo:hi"
 
 
 def test_empty_allowlist_still_allows_non_browser_clients() -> None:
@@ -95,6 +107,14 @@ def test_empty_allowlist_still_allows_non_browser_clients() -> None:
     handled by JWT / identity frames downstream)."""
     app = _build_app(())
     with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        ws.send_text("hi")
+        assert ws.receive_text() == "echo:hi"
+
+
+def test_same_origin_passes_even_with_explicit_allowlist() -> None:
+    """Same-origin should pass regardless of what's in the explicit list."""
+    app = _build_app(("https://something-else.example",))
+    with TestClient(app) as client, client.websocket_connect("/ws", headers={"origin": "http://testserver"}) as ws:
         ws.send_text("hi")
         assert ws.receive_text() == "echo:hi"
 
