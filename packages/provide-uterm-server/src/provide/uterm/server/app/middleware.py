@@ -85,14 +85,23 @@ class WebSocketOriginMiddleware:
       ``wscat``, server-to-server) are always passed through. The
       whole-stack threat model assumes those clients are authenticated
       via JWT or other identity frames, which is a separate concern.
-    - If a browser sends an ``Origin`` header, it must match an entry in
-      ``allowed_origins`` (exact, lowercased) — otherwise the handshake
-      is closed with HTTP 4403 before any application code runs.
-    - **Empty** ``allowed_origins`` means *deny all browser origins*.
-      This is the secure default: if the operator has not explicitly
-      enumerated origins, no browser tab on any host is allowed to open
-      a WebSocket. (Before 2026-05-22 this was a no-op; the flip is a
-      deliberate posture change — see ``.provide/design`` notes.)
+    - **Same-origin** requests (Origin scheme://host:port matches the
+      request's own Host) are always passed through. The threat model
+      for this middleware is *cross*-origin WS hijack; same-origin is
+      universally safe (the page and the server are already coupled by
+      origin policy on every other surface). This means single-host
+      deployments and the bundled demos work without an explicit
+      ``allowed_origins`` list.
+    - If a browser sends a *cross-origin* ``Origin`` header, it must
+      match an entry in ``allowed_origins`` (exact, lowercased) —
+      otherwise the handshake is closed with HTTP 4403 before any
+      application code runs.
+    - **Empty** ``allowed_origins`` means *deny all cross-origin browser
+      requests*. Same-origin still passes (see above). This is the
+      secure default for the cross-origin threat: if the operator has
+      not enumerated *other* origins, none are accepted. (Before
+      2026-05-22 this was a no-op; the flip is a deliberate posture
+      change — see ``.provide/design`` notes.)
     - The literal entry ``"*"`` is the explicit operator opt-out
       ("anything goes") for dev/test deployments that want any-origin
       access.
@@ -109,18 +118,46 @@ class WebSocketOriginMiddleware:
         self._allowed: set[str] = {o.rstrip("/").lower() for o in allowed_origins}
         self._wildcard: bool = "*" in self._allowed
 
+    @staticmethod
+    def _expected_same_origin(scope: Scope, host_header: str) -> str:
+        """Return the canonical Origin form for ``host_header`` under this scope.
+
+        ASGI WS scope reports scheme=ws/wss. Browsers send Origin with the
+        HTTP equivalent (http/https), so map the scheme accordingly before
+        comparing. The Host header may carry the port (which we preserve)
+        or not (which we leave as-is — the Origin will be normalised the
+        same way at lookup).
+        """
+        scheme = "https" if scope.get("scheme") == "wss" else "http"
+        return f"{scheme}://{host_header.rstrip('/').lower()}"
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "websocket" or self._wildcard:
             await self._app(scope, receive, send)
             return
 
         origin: str | None = None
+        host_header: str | None = None
         for name, value in scope.get("headers", ()):
             if name == b"origin":
                 origin = value.decode("latin-1").rstrip("/").lower()
-                break
+            elif name == b"host":
+                host_header = value.decode("latin-1").strip()
 
-        if origin is None or origin in self._allowed:
+        if origin is None:
+            # Non-browser client; auth lives elsewhere.
+            await self._app(scope, receive, send)
+            return
+
+        # Same-origin is always permitted. The threat this middleware
+        # exists to mitigate is *cross*-origin hijack of authenticated
+        # sessions; if Origin matches the server's own host the request
+        # came from a page the operator already trusts to load.
+        if host_header and origin == self._expected_same_origin(scope, host_header):
+            await self._app(scope, receive, send)
+            return
+
+        if origin in self._allowed:
             await self._app(scope, receive, send)
             return
 
