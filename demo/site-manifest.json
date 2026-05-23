@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-23T21:05:31Z",
+  "generated_at": "2026-05-23T22:29:41Z",
   "demos": [
     {
       "id": "annotation",
@@ -27,8 +27,10 @@
       "description": "9-person production incident response with DeckMux collaborative presence",
       "duration_seconds": 12.0,
       "highlight_start_s": 100.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
+        "video": "deckmux/composite_trim.mp4",
+        "poster": "deckmux/poster.png",
         "cast": "deckmux/terminal.cast",
         "composite": "deckmux/composite.mp4",
         "screenshots": [
@@ -66,8 +68,10 @@
       "description": "Broadcast a config command to 9 sessions simultaneously, show per-node output",
       "duration_seconds": 8.0,
       "highlight_start_s": 13.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
+        "video": "fanout/grid_trim.mp4",
+        "poster": "fanout/poster.png",
         "cast": "fanout/terminal.cast",
         "screenshots": [
           "fanout/screenshots/grid-01-before.png",
@@ -82,8 +86,10 @@
       "description": "Spawn 9 fleet shell workers, register with the External Management Tier, broadcast a deploy command",
       "duration_seconds": 8.0,
       "highlight_start_s": 13.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
+        "video": "fleet/grid_trim.mp4",
+        "poster": "fleet/poster.png",
         "cast": "fleet/terminal.cast",
         "screenshots": [
           "fleet/screenshots/grid-01-before.png",
@@ -98,8 +104,10 @@
       "description": "Viewer connects read-only, operator takes exclusive control, admin force-reclaims",
       "duration_seconds": 8.0,
       "highlight_start_s": 6.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
+        "video": "hijack/operator_trim.mp4",
+        "poster": "hijack/poster.png",
         "cast": "hijack/terminal.cast",
         "screenshots": [
           "hijack/screenshots/operator-01-initial.png",
@@ -259,14 +267,23 @@
     {
       "id": "tunnel",
       "title": "Tunnel Sharing",
-      "subtitle": "Share sessions via secure URL",
-      "description": "Session served through local CF Worker (wrangler dev --local), showing the CF path",
+      "subtitle": "Share URL is read-only, control URL grants operator role",
+      "description": "Share a terminal session via bearer-token URLs (uterm share)",
       "duration_seconds": 6.0,
-      "highlight_start_s": 3.0,
-      "format": "cast",
+      "highlight_start_s": 2.0,
+      "format": "mp4",
       "artifacts": {
+        "video": "tunnel/control_trim.mp4",
+        "poster": "tunnel/poster.png",
         "cast": "tunnel/terminal.cast",
-        "screenshots": []
+        "screenshots": [
+          "tunnel/screenshots/control-01-operator-initial.png",
+          "tunnel/screenshots/control-02-worker-frames-visible.png",
+          "tunnel/screenshots/control-03-stream-progressing.png",
+          "tunnel/screenshots/share-01-viewer-initial.png",
+          "tunnel/screenshots/share-02-worker-frames-visible.png",
+          "tunnel/screenshots/share-03-stream-progressing.png"
+        ]
       }
     }
   ]
