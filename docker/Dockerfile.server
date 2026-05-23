@@ -22,7 +22,7 @@
 # Sessions:  http://localhost:27780/api/sessions
 #
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Keeps Python from buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
