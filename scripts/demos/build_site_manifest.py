@@ -72,23 +72,38 @@ def _load_meta(feature: str) -> dict[str, Any]:
         "duration_seconds": float(_attr("HIGHLIGHT_DURATION_S", 0.0)),
         "highlight_start_s": float(_attr("HIGHLIGHT_START_S", 0.0)),
         "format": _attr("SITE_FORMAT", "mp4"),
+        "primary_video": _attr("PRIMARY_VIDEO", "browser_trim.mp4"),
     }
 
 
-def _probe_artifacts(feature_dir: Path) -> dict[str, Any]:
+def _probe_artifacts(feature_dir: Path, primary_video: str = "browser_trim.mp4") -> dict[str, Any]:
     """Inspect a ``demo/<feature>/`` directory and report available artifacts.
 
     Paths are relative to ``BASE_OUT`` so the manifest stays portable across
     machines (the consumer joins with its own ``UTERM_DIR`` root).
+
+    ``primary_video`` overrides the default ``browser_trim.mp4`` filename
+    that single-browser recorders produce — multi-browser demos
+    (hijack/deckmux/fleet/fanout) write under names like
+    ``operator_trim.mp4`` or ``composite_trim.mp4`` and declare that via
+    their recorder module's ``PRIMARY_VIDEO`` constant.
     """
     artifacts: dict[str, Any] = {}
     relative = feature_dir.name
 
-    video = feature_dir / "browser_trim.mp4"
+    video = feature_dir / primary_video
     if not video.is_file():
         # Fall back to the un-trimmed primary recording when the trim step
-        # hasn't been run yet. The consumer site can still ship it.
-        video = feature_dir / "browser.mp4"
+        # hasn't been run yet. The consumer site can still ship it. The
+        # naming convention is ``<base>_trim.mp4`` ⇄ ``<base>.mp4``.
+        untrimmed_name = primary_video.replace("_trim.mp4", ".mp4")
+        video = feature_dir / untrimmed_name
+    if not video.is_file():
+        # Last-ditch fallback: a recorder may have changed naming without
+        # updating PRIMARY_VIDEO — search for any *_trim.mp4 in the dir.
+        trims = sorted(feature_dir.glob("*_trim.mp4"))
+        if trims:
+            video = trims[0]
     if video.is_file():
         artifacts["video"] = f"{relative}/{video.name}"
 
@@ -115,11 +130,11 @@ def _probe_artifacts(feature_dir: Path) -> dict[str, Any]:
     return artifacts
 
 
-def _maybe_make_poster(feature_dir: Path) -> Path | None:
+def _maybe_make_poster(feature_dir: Path, primary_video: str = "browser_trim.mp4") -> Path | None:
     """If a highlight mp4 is present and no poster exists, render one and return its path."""
-    mp4 = feature_dir / "browser_trim.mp4"
+    mp4 = feature_dir / primary_video
     if not mp4.is_file():
-        mp4 = feature_dir / "browser.mp4"
+        mp4 = feature_dir / primary_video.replace("_trim.mp4", ".mp4")
     if not mp4.is_file():
         return None
 
@@ -144,14 +159,15 @@ def build_manifest(*, generate_posters: bool = False) -> dict[str, Any]:
             continue
 
         meta = _load_meta(feature)
+        primary_video = meta.pop("primary_video", "browser_trim.mp4")
 
         if generate_posters and meta["format"] == "mp4":
             try:
-                _maybe_make_poster(feature_dir)
+                _maybe_make_poster(feature_dir, primary_video)
             except (RuntimeError, FileNotFoundError) as exc:
                 log.warning("poster for %s skipped: %s", feature, exc)
 
-        meta["artifacts"] = _probe_artifacts(feature_dir)
+        meta["artifacts"] = _probe_artifacts(feature_dir, primary_video)
 
         # Graceful downgrade: when an mp4-format demo's video failed to record
         # but the asciinema cast made it, surface the cast on the site rather

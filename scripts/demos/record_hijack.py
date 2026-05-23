@@ -44,6 +44,9 @@ TITLE = "Session Hijack"
 SUBTITLE = "Operator takes control, viewer watches"
 HIGHLIGHT_START_S: float = 6.0
 HIGHLIGHT_DURATION_S: float = 8.0
+# Multi-browser demo: this recorder produces operator-side and viewer-side
+# videos. The operator clip is the canonical highlight for the site catalog.
+PRIMARY_VIDEO: str = "operator_trim.mp4"
 
 
 async def run_terminal_demo() -> None:
