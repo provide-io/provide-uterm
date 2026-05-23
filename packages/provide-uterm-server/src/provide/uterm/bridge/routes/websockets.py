@@ -25,7 +25,13 @@ except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for hijack routes: pip install 'provide-uterm[websocket]'") from _e
 
 
-from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
+from provide.uterm.bridge.contracts import (
+    CURRENT_PROTOCOL_VERSION,
+    MAX_PROTOCOL_VERSION,
+    MIN_PROTOCOL_VERSION,
+    PREFERRED_PROTOCOL_VERSION,
+    negotiate_protocol_version,
+)
 from provide.uterm.bridge.frames import (
     coerce_worker_status_frame,
     make_analysis_frame,
@@ -153,22 +159,59 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         continue
                     if mtype == "worker_hello":
                         _hello_mode = msg.get("input_mode")
-                        _protocol_v = _safe_int(msg.get("protocol_version"), 0) if "protocol_version" in msg else None
-                        if _hello_mode in ("hijack", "open"):
-                            if _protocol_v is not None:
-                                logger.info("worker_hello_protocol worker_id=%s version=%d", worker_id, _protocol_v)
-                                if _protocol_v < 1:
-                                    logger.warning(
-                                        "worker_hello_legacy_protocol worker_id=%s version=%d", worker_id, _protocol_v
+                        # Protocol range negotiation. Workers may send either
+                        # the legacy ``protocol_version`` field (single int)
+                        # or the new ``protocol`` object ``{min, max, preferred}``.
+                        # Absent fields default to ``{min=1, max=1}`` — preserves
+                        # behaviour for old clients that never advertised.
+                        _proto_block = msg.get("protocol")
+                        if isinstance(_proto_block, dict):
+                            _client_min = _safe_int(_proto_block.get("min"), MIN_PROTOCOL_VERSION, min_val=1)
+                            _client_max = _safe_int(_proto_block.get("max"), MAX_PROTOCOL_VERSION, min_val=1)
+                        elif "protocol_version" in msg:
+                            _legacy_v = _safe_int(msg.get("protocol_version"), 0)
+                            _client_min = _legacy_v if _legacy_v >= 1 else 1
+                            _client_max = _client_min
+                        else:
+                            _client_min = 1
+                            _client_max = 1
+                        _selected = negotiate_protocol_version(_client_min, _client_max)
+                        if _selected is None:
+                            # No overlap → close 1002. Send a structured
+                            # error frame first so the worker can surface
+                            # a meaningful disconnect reason.
+                            logger.warning(
+                                "worker_hello_protocol_mismatch worker_id=%s client=[%d,%d] server=[%d,%d]",
+                                worker_id,
+                                _client_min,
+                                _client_max,
+                                MIN_PROTOCOL_VERSION,
+                                MAX_PROTOCOL_VERSION,
+                            )
+                            with suppress(Exception):
+                                await websocket.send_text(
+                                    encode_control(
+                                        {
+                                            "type": "error",
+                                            "reason": "protocol_mismatch",
+                                            "client_min": _client_min,
+                                            "client_max": _client_max,
+                                            "server_min": MIN_PROTOCOL_VERSION,
+                                            "server_max": MAX_PROTOCOL_VERSION,
+                                        }
                                     )
-                            mode_applied = await hub.set_worker_hello_mode(worker_id, _hello_mode)
+                                )
+                                await websocket.close(code=1002, reason="protocol_mismatch")
+                            break
+                        if _hello_mode in ("hijack", "open"):
+                            mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, _selected)
                             if mode_applied:
                                 await hub.broadcast_hijack_state(worker_id)
                             logger.info(
-                                "worker_hello worker_id=%s input_mode=%s protocol=%s applied=%s",
+                                "worker_hello worker_id=%s input_mode=%s protocol_selected=%d applied=%s",
                                 worker_id,
                                 _hello_mode,
-                                _protocol_v,
+                                _selected,
                                 mode_applied,
                             )
                         elif _hello_mode is not None:
@@ -315,6 +358,14 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             "resume_supported": hub.resume_store is not None,
             "resume_token": _resume_token,
             "protocol_version": CURRENT_PROTOCOL_VERSION,
+            # Range advertisement for client-side negotiation. Browsers
+            # currently don't echo back, so this is informational; the
+            # field exists so future browser versions can read it.
+            "protocol": {
+                "selected": PREFERRED_PROTOCOL_VERSION,
+                "server_min": MIN_PROTOCOL_VERSION,
+                "server_max": MAX_PROTOCOL_VERSION,
+            },
         }
         if hasattr(hub, "deckmux_on_browser_connect"):
             _hello_kwargs["presence_enabled"] = True

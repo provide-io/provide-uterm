@@ -71,7 +71,9 @@ class TelnetSessionConnector(SessionConnector):
         }
 
     def _hello(self) -> dict[str, Any]:
-        return {"type": "worker_hello", "input_mode": self._input_mode, "ts": time.time()}
+        from provide.uterm.shell.terminal._output import worker_hello as _worker_hello
+
+        return _worker_hello(self._input_mode)
 
     async def start(self) -> None:
         await self._transport.connect(self._host, self._port)

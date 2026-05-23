@@ -177,11 +177,13 @@ class _ConnectionMixin:
             return st is not None and st.worker_ws is ws
 
     async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
-        r"""Process a \`\`worker_hello\`\` message: set input_mode and log protocol.
+        r"""Process a \`\`worker_hello\`\` message: set input_mode and persist protocol version.
 
         Returns \`\`True\`\` if the mode was applied, \`\`False\`\` if the worker is no
         longer registered or if switching to \`\`"open"\`\` while a hijack lease is
-        active (mode change is blocked in that case).
+        active (mode change is blocked in that case). When ``protocol_version`` is
+        provided, it is recorded on the :class:`WorkerTermState` so downstream
+        feature gates can query it via ``worker.protocol_version``.
         """
         if protocol_version is not None:
             logger.info("worker_hello_protocol worker_id=%s version=%d", worker_id, protocol_version)
@@ -199,6 +201,8 @@ class _ConnectionMixin:
                 )
                 return False
             st.input_mode = mode
+            if protocol_version is not None:
+                st.protocol_version = protocol_version
         return True
 
     async def update_last_snapshot(self, worker_id: str, snapshot: dict[str, Any]) -> None:

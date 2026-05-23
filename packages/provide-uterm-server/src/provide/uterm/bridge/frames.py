@@ -98,6 +98,10 @@ class HelloFrame(TypedDict, total=False):
     resume_token: str | None
     resumed: bool
     protocol_version: int
+    # Range-negotiation handshake. Server hello sets
+    # ``protocol={"selected": N, "server_min": MIN, "server_max": MAX}``.
+    # Worker hello sets ``protocol={"min": ..., "max": ..., "preferred": ...}``.
+    protocol: dict[str, int]
 
 
 def make_error_frame(message: str) -> ErrorFrame:

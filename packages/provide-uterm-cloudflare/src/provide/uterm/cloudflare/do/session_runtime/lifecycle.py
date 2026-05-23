@@ -18,7 +18,12 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Any, cast
 
-from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
+from provide.uterm.bridge.contracts import (
+    CURRENT_PROTOCOL_VERSION,
+    MAX_PROTOCOL_VERSION,
+    MIN_PROTOCOL_VERSION,
+    PREFERRED_PROTOCOL_VERSION,
+)
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.api.ws_routes import handle_socket_message
@@ -103,6 +108,11 @@ class _LifecycleMixin:
                         "resume_token": _open_resume_token,
                         "presence_enabled": bool(self.meta.get("presence")),  # type: ignore[attr-defined]
                         "protocol_version": CURRENT_PROTOCOL_VERSION,
+                        "protocol": {
+                            "selected": PREFERRED_PROTOCOL_VERSION,
+                            "server_min": MIN_PROTOCOL_VERSION,
+                            "server_max": MAX_PROTOCOL_VERSION,
+                        },
                         "ts": time.time(),
                     },
                 )
