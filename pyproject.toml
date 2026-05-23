@@ -50,7 +50,7 @@ dev = [
     "pyyaml>=6.0",
     "xenon>=0.9.3",
     "fastmcp>=3.3.1",
-    "pytest-textual-snapshot>=1.0.0",
+    "pytest-textual-snapshot>=1.1.0",
     "respx>=0.23.1",
 ]
 
