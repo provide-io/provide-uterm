@@ -26,6 +26,7 @@ DEMO_MODULES = [
     "record_mcp",
     "record_hijack",
     "record_deckmux",
+    "record_demo_grid",
     "record_fleet",
     "record_fanout",
 ]
