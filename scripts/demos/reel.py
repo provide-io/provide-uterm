@@ -57,7 +57,13 @@ def record_reel(base_out: Path = BASE_OUT, *, force: bool = False) -> Path | Non
         start_s: float = mod.HIGHLIGHT_START_S
         duration_s: float = mod.HIGHLIGHT_DURATION_S
         feat_dir = base_out / feature
-        primary_key = _PRIMARY_KEY.get(mod_name, "mp4")
+        # Default key resolves to ``browser_trim.mp4`` / ``browser.mp4`` —
+        # the filenames every single-browser recorder produces. The earlier
+        # default of ``"mp4"`` mapped to a literal ``mp4_trim.mp4`` lookup
+        # that never matched any real file, so the cached-highlight branch
+        # silently never hit and every single-browser demo got re-recorded
+        # on every reel rebuild.
+        primary_key = _PRIMARY_KEY.get(mod_name, "browser_mp4")
 
         # Check for existing highlight or primary mp4
         existing_highlight = feat_dir / f"{primary_key.replace('_mp4', '')}_trim.mp4"
