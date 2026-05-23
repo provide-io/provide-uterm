@@ -143,6 +143,10 @@ class WorkerTermState:
     event_seq: int = 0
     min_event_seq: int = 0
     last_activity_at: float = field(default_factory=time.monotonic)
+    # Negotiated protocol version (set after worker_hello). ``None`` until
+    # the handshake completes; thereafter the agreed-upon version. See
+    # :func:`provide.uterm.bridge.contracts.negotiate_protocol_version`.
+    protocol_version: int | None = None
 
     @property
     def lease(self) -> HijackLease:

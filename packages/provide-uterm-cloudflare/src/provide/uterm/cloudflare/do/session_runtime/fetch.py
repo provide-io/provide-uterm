@@ -21,7 +21,12 @@ from urllib.parse import urlparse
 
 from provide.telemetry import get_tracer
 
-from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
+from provide.uterm.bridge.contracts import (
+    CURRENT_PROTOCOL_VERSION,
+    MAX_PROTOCOL_VERSION,
+    MIN_PROTOCOL_VERSION,
+    PREFERRED_PROTOCOL_VERSION,
+)
 from provide.uterm.control_channel import encode_control
 
 if TYPE_CHECKING:
@@ -230,6 +235,11 @@ class _FetchMixin:
                                 "resume_token": resume_token,
                                 "presence_enabled": bool(self.meta.get("presence")),  # type: ignore[attr-defined]
                                 "protocol_version": CURRENT_PROTOCOL_VERSION,
+                                "protocol": {
+                                    "selected": PREFERRED_PROTOCOL_VERSION,
+                                    "server_min": MIN_PROTOCOL_VERSION,
+                                    "server_max": MAX_PROTOCOL_VERSION,
+                                },
                                 "ts": time.time(),
                             }
                         )

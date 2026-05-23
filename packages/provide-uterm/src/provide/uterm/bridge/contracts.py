@@ -21,7 +21,41 @@ SessionLifecycle = Literal["stopped", "starting", "running", "error"]
 InputMode = Literal["hijack", "open"]
 Visibility = Literal["public", "operator", "private"]
 
-CURRENT_PROTOCOL_VERSION = 1
+# Protocol version range carried in the hello-frame handshake.
+#
+# Peers advertise ``{"min": MIN, "max": MAX, "preferred": PREFERRED}`` in
+# their hello frame. The server intersects the client range against
+# its own and picks the highest mutually-supported version, or closes
+# the WebSocket with code 1002 + an error frame if there's no overlap.
+#
+# Lockstep is preserved while only one version exists (min == max == 1).
+# When a new protocol version lands, bump MAX_PROTOCOL_VERSION first,
+# leave MIN at the oldest still-supported version, and set PREFERRED to
+# whatever the server should actively pick during negotiation. See
+# ``.provide/design/protocol-version-handshake.md``.
+MIN_PROTOCOL_VERSION = 1
+MAX_PROTOCOL_VERSION = 1
+PREFERRED_PROTOCOL_VERSION = 1
+
+# Backward-compatible alias for existing callers that just want "the
+# current version" (typically for stamping outbound frames). New code
+# should reference the range fields above.
+CURRENT_PROTOCOL_VERSION = PREFERRED_PROTOCOL_VERSION
+
+
+def negotiate_protocol_version(client_min: int, client_max: int) -> int | None:
+    """Return the version both sides should use, or None on no overlap.
+
+    The chosen version is the highest of ``[server_min..server_max]
+    intersect [client_min..client_max]``. ``None`` means the handshake
+    must fail and the caller should close 1002.
+    """
+    lo = max(int(client_min), MIN_PROTOCOL_VERSION)
+    hi = min(int(client_max), MAX_PROTOCOL_VERSION)
+    if lo > hi:
+        return None
+    return hi
+
 
 # ---------------------------------------------------------------------------
 # REST API Response Contracts
@@ -207,3 +241,15 @@ class Frame(TypedDict, total=False):
     mode: str  # worker_hello: input_mode value ("hijack" or "open")
     token: str
     protocol_version: int
+    # Hello-frame range negotiation. Senders include ``protocol``; the
+    # server reply additionally sets ``protocol.selected`` to the picked
+    # version after intersection. See negotiate_protocol_version().
+    protocol: dict[str, int]
+    # Error frames emitted on protocol-mismatch close (code 1002) carry
+    # ``reason="protocol_mismatch"`` plus the offending min/max pair so
+    # the client can surface a useful disconnect message.
+    reason: str
+    client_min: int
+    client_max: int
+    server_min: int
+    server_max: int

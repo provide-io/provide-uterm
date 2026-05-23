@@ -19,7 +19,13 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Any, cast
 
-from provide.uterm.bridge.contracts import CURRENT_PROTOCOL_VERSION
+from provide.uterm.bridge.contracts import (
+    CURRENT_PROTOCOL_VERSION,
+    MAX_PROTOCOL_VERSION,
+    MIN_PROTOCOL_VERSION,
+    PREFERRED_PROTOCOL_VERSION,
+    negotiate_protocol_version,
+)
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.cf_types import CFWebSocket
@@ -61,12 +67,61 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
                 runtime.store.save_snapshot(runtime.worker_id, runtime.last_snapshot)
             elif frame_type == "worker_hello":
                 mode = frame.get("mode")
-                protocol_v = frame.get("protocol_version")
+                # Protocol range negotiation. Accept the new {min,max,preferred}
+                # block or the legacy single int; missing fields default to v1.
+                _proto_block = frame.get("protocol")
+                if isinstance(_proto_block, dict):
+                    _client_min = int(_proto_block.get("min", MIN_PROTOCOL_VERSION))
+                    _client_max = int(_proto_block.get("max", MAX_PROTOCOL_VERSION))
+                elif "protocol_version" in frame:
+                    _legacy_v = int(frame.get("protocol_version") or 0)
+                    _client_min = _legacy_v if _legacy_v >= 1 else 1
+                    _client_max = _client_min
+                else:
+                    _client_min = 1
+                    _client_max = 1
+                _selected = negotiate_protocol_version(_client_min, _client_max)
+                if _selected is None:
+                    logger.warning(
+                        "worker_hello_protocol_mismatch worker_id=%s client=[%d,%d] server=[%d,%d]",
+                        runtime.worker_id,
+                        _client_min,
+                        _client_max,
+                        MIN_PROTOCOL_VERSION,
+                        MAX_PROTOCOL_VERSION,
+                    )
+                    # Close the worker WS with the same error contract as the
+                    # FastAPI server. CF Workers WebSocket close API only takes
+                    # code + reason — the structured frame goes through
+                    # broadcast first, then we close.
+                    try:
+                        await runtime.broadcast_worker_frame(
+                            {
+                                "type": "error",
+                                "reason": "protocol_mismatch",
+                                "client_min": _client_min,
+                                "client_max": _client_max,
+                                "server_min": MIN_PROTOCOL_VERSION,
+                                "server_max": MAX_PROTOCOL_VERSION,
+                            }
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        ws.close(1002, "protocol_mismatch")
+                    except Exception:
+                        pass
+                    return
                 if mode in {"hijack", "open"} and (mode != "open" or runtime.hijack.session is None):
                     # Block open mode while a hijack lease is active (mirrors FastAPI set_worker_hello_mode).
                     runtime.input_mode = mode
                     runtime.store.save_input_mode(runtime.worker_id, mode)
-                    logger.info("worker_hello worker_id=%s mode=%s protocol=%s", runtime.worker_id, mode, protocol_v)
+                    logger.info(
+                        "worker_hello worker_id=%s mode=%s protocol_selected=%d",
+                        runtime.worker_id,
+                        mode,
+                        _selected,
+                    )
             elif frame_type == "analysis":
                 formatted = str(frame.get("formatted", ""))
                 if formatted:
@@ -219,6 +274,11 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
             "resume_token": new_token,
             "resumed": True,
             "protocol_version": CURRENT_PROTOCOL_VERSION,
+            "protocol": {
+                "selected": PREFERRED_PROTOCOL_VERSION,
+                "server_min": MIN_PROTOCOL_VERSION,
+                "server_max": MAX_PROTOCOL_VERSION,
+            },
             "ts": time.time(),
         },
     )
