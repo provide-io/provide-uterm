@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-17T20:39:47Z",
+  "generated_at": "2026-05-23T21:05:31Z",
   "demos": [
     {
       "id": "annotation",
@@ -50,7 +50,14 @@
       "duration_seconds": 8.0,
       "highlight_start_s": 2.0,
       "format": "mp4",
-      "artifacts": {}
+      "artifacts": {
+        "video": "demo_grid/browser_trim.mp4",
+        "poster": "demo_grid/poster.png",
+        "screenshots": [
+          "demo_grid/screenshots/01-grid-animations.png",
+          "demo_grid/screenshots/02-grid-spinning.png"
+        ]
+      }
     },
     {
       "id": "fanout",
