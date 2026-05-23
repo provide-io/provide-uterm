@@ -13,6 +13,8 @@ import uuid
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
+from provide.uterm.tunnel.token_hash import hash_token, verify_token
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -60,6 +62,10 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
     owner = getattr(principal, "subject_id", None) if principal is not None else None
     visibility = "private" if owner is not None else "public"
 
+    # Tokens are stored as BLAKE2b digests; the plain values leave this
+    # function only in the response below. KV storage is at-rest-encrypted
+    # but disclosure of a KV dump (debugging, leaked credentials, mis-issued
+    # access) would otherwise expose every active bearer in plaintext.
     entry = {
         "session_id": tunnel_id,
         "display_name": display_name,
@@ -78,9 +84,9 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
         "last_error": None,
         "hijacked": False,
         "tunnel_type": tunnel_type,
-        "worker_token": worker_token,
-        "share_token": share_token,
-        "control_token": control_token,
+        "worker_token_hash": hash_token(worker_token),
+        "share_token_hash": hash_token(share_token),
+        "control_token_hash": hash_token(control_token),
         "issued_ip": str(getattr(request, "headers", {}).get("CF-Connecting-IP") or ""),
         "share_page": "inspect" if tunnel_type == "http" else "session",
     }
@@ -143,9 +149,9 @@ async def handle_tunnel_revoke_tokens(
         return json_response({"error": "corrupt entry"}, status=500)
     if not _principal_can_manage_tunnel(principal, entry):
         return json_response({"error": "forbidden"}, status=403)
-    entry["worker_token"] = None
-    entry["share_token"] = None
-    entry["control_token"] = None
+    entry["worker_token_hash"] = None
+    entry["share_token_hash"] = None
+    entry["control_token_hash"] = None
     entry["revoked"] = True
     await kv.put(f"session:{tunnel_id}", json.dumps(entry))
     return json_response({"ok": True, "session_id": tunnel_id})
@@ -181,9 +187,9 @@ async def handle_tunnel_rotate_tokens(
     new_control = secrets.token_urlsafe(32)
     expires_at = time.time() + ttl_s
 
-    entry["worker_token"] = new_worker
-    entry["share_token"] = new_share
-    entry["control_token"] = new_control
+    entry["worker_token_hash"] = hash_token(new_worker)
+    entry["share_token_hash"] = hash_token(new_share)
+    entry["control_token_hash"] = hash_token(new_control)
     entry["expires_at"] = expires_at
     entry.pop("revoked", None)  # rotation re-enables a revoked tunnel
     tunnel_type = str(entry.get("tunnel_type") or "terminal")
@@ -231,8 +237,8 @@ async def resolve_share_context(
     if session.get("revoked"):
         return None
 
-    share_tok = session.get("share_token")
-    control_tok = session.get("control_token")
+    share_tok_hash = session.get("share_token_hash") or ""
+    control_tok_hash = session.get("control_token_hash") or ""
 
     # Effective transport mode and IP-binding from config (defaults: both / off).
     transport = "both"
@@ -268,11 +274,11 @@ async def resolve_share_context(
     if isinstance(expires_at, (int, float)) and time.time() > float(expires_at):
         return None
 
-    # Timing-safe comparison — prevents brute-force via response timing.
+    # Constant-time hash compare; tokens are stored as BLAKE2b digests.
     role: str | None = None
-    if control_tok and provided and secrets.compare_digest(str(provided), str(control_tok)):
+    if provided and verify_token(str(provided), str(control_tok_hash)):
         role = "operator"
-    elif share_tok and provided and secrets.compare_digest(str(provided), str(share_tok)):
+    elif provided and verify_token(str(provided), str(share_tok_hash)):
         role = "viewer"
 
     if role is None:

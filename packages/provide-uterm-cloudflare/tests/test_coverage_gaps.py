@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import provide.uterm.cloudflare.cf_types  # noqa: F401
+from provide.uterm.tunnel.token_hash import hash_token
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -95,7 +96,7 @@ class TestTunnelApiGaps:
 
         kv = AsyncMock()
         kv.get = AsyncMock(
-            return_value=_json.dumps({"share_token": "tok"}),
+            return_value=_json.dumps({"share_token_hash": hash_token("tok")}),
         )
         env = SimpleNamespace(SESSION_REGISTRY=kv)
 
@@ -121,7 +122,7 @@ class TestTunnelApiGaps:
 
         kv = AsyncMock()
         kv.get = AsyncMock(
-            return_value=_json.dumps({"share_token": "tok"}),
+            return_value=_json.dumps({"share_token_hash": hash_token("tok")}),
         )
         env = SimpleNamespace(SESSION_REGISTRY=kv)
         req = _req("/app/session/test-id")  # no token in URL
@@ -197,8 +198,8 @@ class TestSessionRuntimeGaps:
     def test_share_role_no_token_returns_none(self) -> None:
         """Lines 124-144: no token in URL or cookies → None."""
         rt = self._make_runtime()
-        rt._share_token = "secret-share"
-        rt._control_token = "secret-ctrl"
+        rt._share_token_hash = hash_token("secret-share")
+        rt._control_token_hash = hash_token("secret-ctrl")
         req = SimpleNamespace(
             url="https://x/app/session/gap-test",
             headers=SimpleNamespace(get=lambda k, d=None: d),
@@ -208,8 +209,8 @@ class TestSessionRuntimeGaps:
     def test_share_role_wrong_token_returns_none(self) -> None:
         """Line 144: token provided but doesn't match either."""
         rt = self._make_runtime()
-        rt._share_token = "real-share"
-        rt._control_token = "real-ctrl"
+        rt._share_token_hash = hash_token("real-share")
+        rt._control_token_hash = hash_token("real-ctrl")
         req = SimpleNamespace(
             url="https://x/app/session/gap-test?token=wrong-tok",
             headers=SimpleNamespace(get=lambda k, d=None: d),
@@ -219,8 +220,8 @@ class TestSessionRuntimeGaps:
     def test_share_role_from_cookie(self) -> None:
         """Lines 135-137: token from cookie matches share token."""
         rt = self._make_runtime()
-        rt._share_token = "cookie-tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("cookie-tok")
+        rt._control_token_hash = None
         req = SimpleNamespace(
             url="https://x/app/session/gap-test",
             headers=SimpleNamespace(
@@ -232,8 +233,8 @@ class TestSessionRuntimeGaps:
     def test_share_role_url_parse_error(self) -> None:
         """Lines 124-125: broken URL triggers exception → returns None."""
         rt = self._make_runtime()
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
 
         class _BadUrl:
             def __str__(self) -> str:
@@ -248,8 +249,8 @@ class TestSessionRuntimeGaps:
     def test_share_role_cookie_exception(self) -> None:
         """Lines 136-137: SimpleCookie exception silently caught."""
         rt = self._make_runtime()
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
         req = SimpleNamespace(
             url="https://x/app/session/gap-test",  # no token in URL
             headers=SimpleNamespace(
@@ -284,7 +285,7 @@ class TestSessionRuntimeGaps:
             WORKER_BEARER_TOKEN="global-bearer",
         )
         rt = SessionRuntime(ctx, env)
-        rt._tunnel_worker_token = "tunnel-secret"
+        rt._tunnel_worker_token_hash = hash_token("tunnel-secret")
 
         # WS upgrade request with tunnel worker token (not global bearer)
         headers: dict[str, str] = {
@@ -332,8 +333,8 @@ class TestSessionRuntimeGaps:
         )
         env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_TOKEN_TRANSPORT="cookie")
         rt = SessionRuntime(ctx, env)
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
         req = SimpleNamespace(
             url="https://x/app/session/rt-test?token=tok",
             headers=SimpleNamespace(get=lambda k, d=None: d),
@@ -356,8 +357,8 @@ class TestSessionRuntimeGaps:
         )
         env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_TOKEN_TRANSPORT="query")
         rt = SessionRuntime(ctx, env)
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
         req = SimpleNamespace(
             url="https://x/app/session/rt-test2",
             headers=SimpleNamespace(get=lambda k, d=None: "uterm_tunnel_rt-test2=tok" if k == "cookie" else d),
@@ -380,8 +381,8 @@ class TestSessionRuntimeGaps:
         )
         env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
         rt = SessionRuntime(ctx, env)
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
         rt._issued_ip = "1.2.3.4"
         req = SimpleNamespace(
             url="https://x/app/session/rt-test3?token=tok",
@@ -405,8 +406,8 @@ class TestSessionRuntimeGaps:
         )
         env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
         rt = SessionRuntime(ctx, env)
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
         rt._issued_ip = "1.2.3.4"
         req = SimpleNamespace(
             url="https://x/app/session/rt-test4?token=tok",
@@ -448,8 +449,8 @@ class TestSessionRuntimeGaps:
         )
         env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
         rt = SessionRuntime(ctx, env)
-        rt._share_token = "tok"
-        rt._control_token = None
+        rt._share_token_hash = hash_token("tok")
+        rt._control_token_hash = None
         rt._issued_ip = "1.2.3.4"
 
         class _BadHeaders:
