@@ -1,19 +1,33 @@
 # Mutmut survivor triage
 
-**Snapshot:** 2026-05-20 after the high-ROI killer pass (60.69% → 70.19% →
-71.25%).
+**Snapshot:** 2026-05-22 after the comprehensive-review hardening pass.
 
-Two attack waves landed this work cycle:
+Three attack waves landed:
 
 1. **Surgical-killer pass (2026-05-19).** Killed 161 mutants, dropping
    survivors from ~408 to 247. Kill rate 60.69% → 70.19%.
 2. **High-ROI batch (2026-05-19, evening).** Targeted the 20 highest-ROI
-   survivors identified by this document (comparison-boundary flips, numeric
-   literals, `b64decode(validate=True)` drops, `str.split` limits,
-   `continue`/`break`, negative-vs-positive slice signs) via
+   survivors identified by this document via
    `packages/provide-uterm/tests/test_high_roi_mutmut.py`. Killed 11/20.
-   Kill rate 70.19% → 71.25%. Approximately **236 survivors** remain plus
-   the 255 `no_tests` on `recording.py`.
+   Kill rate 70.19% → 71.25%.
+3. **Comprehensive-review hardening (2026-05-22).** Sweep against the
+   review diff (`run_mutation_gate.py --changed-only --base-ref c2229bf`)
+   surfaced 137 survivors + 197 no_tests across 16 changed files.
+   Triage:
+   * 1 substantive new survivor — `_check_json_depth` list-branch
+     `depth + 1 → depth + 2` — killed by
+     `test_decoder_list_depth_increment_is_one_not_two`.
+   * 3 control_channel `_parse_frame_payload` survivors fall in the
+     "internal log-format string renames" EQUIV category (existing
+     policy: cosmetic, do not test).
+   * 1 detector `__init__` `strict: bool = False → True` survivor is
+     trampoline-masked (existing EQUIV category — outer wrapper
+     captures the original default).
+   * 130 detector survivors are pre-existing whole-file mutants
+     unrelated to the strict-mode addition (`_detect_in_text`,
+     `prompt_fingerprint`, `reload_patterns`, `_run_two_pass_detection`,
+     `_compile_patterns` log/dict-key mutants). Carried over from the
+     previous snapshot; tracked in the EQUIV / UNKNOWN buckets below.
 
 The bucket counts and category analysis below were computed against the
 247-survivor snapshot from after step 1. Step 2 removed ~11 from the `TEST`
