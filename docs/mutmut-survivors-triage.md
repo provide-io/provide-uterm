@@ -1,8 +1,8 @@
 # Mutmut survivor triage
 
-**Snapshot:** 2026-05-22 after the comprehensive-review hardening pass.
+**Snapshot:** 2026-05-23 after the protocol-handshake wave.
 
-Three attack waves landed:
+Four attack waves landed:
 
 1. **Surgical-killer pass (2026-05-19).** Killed 161 mutants, dropping
    survivors from ~408 to 247. Kill rate 60.69% → 70.19%.
@@ -28,6 +28,39 @@ Three attack waves landed:
      `prompt_fingerprint`, `reload_patterns`, `_run_two_pass_detection`,
      `_compile_patterns` log/dict-key mutants). Carried over from the
      previous snapshot; tracked in the EQUIV / UNKNOWN buckets below.
+4. **Protocol handshake + CF token hashing (2026-05-23).** Sweep against
+   the diff `d58e62e..HEAD` (CF parity `89f3cd8` + handshake `91bdda7`).
+   Result: 40 mutants found but **0 killed / 0 survived / 0 no_tests** —
+   the gate's test discovery didn't bind to any covering test.
+
+   Root cause: `[tool.mutmut].paths_to_mutate` in `pyproject.toml`
+   currently lists only `src/provide/uterm/{pty/connector,control_channel,
+   control_channel_builders,control_channel_patterns,auth,detection/
+   detector,detection/engine,io,recording}.py`. None of the files
+   touched in this wave are in that list — `bridge/contracts.py`,
+   `bridge/frames.py`, `bridge/hub/connections.py`, `bridge/models.py`,
+   `bridge/routes/websockets.py`, the connectors, the CF tunnel API,
+   and the CF DO are all uncovered by the mutmut gate.
+
+   **Recommendation for maintainer:** decide whether to expand
+   `paths_to_mutate` to include the bridge / connector / CF surfaces.
+   Adding them will materially increase mutmut wall-clock but will
+   also catch boundary-style bugs in the protocol-negotiation logic,
+   the hijack lease state machine, the tunnel-token hashing, and the
+   intercept header denylist — all of which are security-relevant.
+   The minimum useful additions (highest-leverage first) are:
+
+   - `packages/provide-uterm/src/provide/uterm/bridge/contracts.py`
+     (the `negotiate_protocol_version` boundary)
+   - `packages/provide-uterm-server/src/provide/uterm/bridge/models.py`
+     (the new `HijackLease.expire` boundary)
+   - `packages/provide-uterm-server/src/provide/uterm/tunnel/token_hash.py`
+     (the constant-time compare)
+   - `packages/provide-uterm-server/src/provide/uterm/tunnel/intercept.py`
+     (the header denylist)
+
+   No survivors to triage in this wave; treat the gate as informational
+   for these paths until the config catches up.
 
 The bucket counts and category analysis below were computed against the
 247-survivor snapshot from after step 1. Step 2 removed ~11 from the `TEST`
