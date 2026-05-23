@@ -11,6 +11,7 @@ from provide.uterm.cloudflare.api.http_routes import route_http
 from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 from provide.uterm.cloudflare.entry import Default
 from provide.uterm.cloudflare.state.store import SqliteStateStore
+from provide.uterm.tunnel.token_hash import hash_token
 
 
 def _make_default(env_attrs: dict[str, object] | None = None) -> Default:
@@ -94,8 +95,8 @@ async def test_share_token_is_not_exposed_in_html_bootstrap() -> None:
         get=AsyncMock(
             return_value=json.dumps(
                 {
-                    "share_token": "share-token-123",
-                    "control_token": "control-token-123",
+                    "share_token_hash": hash_token("share-token-123"),
+                    "control_token_hash": hash_token("control-token-123"),
                 }
             )
         )

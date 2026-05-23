@@ -38,6 +38,10 @@ def _kv_entry(
     expires_at: float | None = None,
     **extra: Any,
 ) -> str:
+    # Storage matches the production schema (hashed). Callers still pass
+    # the plain tokens as fixture inputs — we hash them here on the way in.
+    from provide.uterm.tunnel.token_hash import hash_token
+
     entry: dict[str, Any] = {
         "session_id": tunnel_id,
         "display_name": tunnel_id,
@@ -45,9 +49,9 @@ def _kv_entry(
         "connector_type": "tunnel:terminal",
         "lifecycle_state": "waiting",
         "input_mode": "open",
-        "share_token": share_token,
-        "control_token": control_token,
-        "worker_token": worker_token,
+        "share_token_hash": hash_token(share_token),
+        "control_token_hash": hash_token(control_token),
+        "worker_token_hash": hash_token(worker_token),
         "tags": [],
         "visibility": "public",
         "owner": None,
@@ -328,7 +332,11 @@ class TestEnsureMetaTunnelToken:
         rt.worker_id = "tunnel-tok-test"
 
         await rt._ensure_meta()
-        assert rt._tunnel_worker_token == "secret-worker-token"
+        # The DO holds a digest, not the plain token; verify via the helper.
+        from provide.uterm.tunnel.token_hash import verify_token
+
+        assert rt._tunnel_worker_token_hash is not None
+        assert verify_token("secret-worker-token", rt._tunnel_worker_token_hash)
 
     @pytest.mark.asyncio
     async def test_worker_token_none_when_absent(self) -> None:
@@ -354,7 +362,7 @@ class TestEnsureMetaTunnelToken:
         rt.worker_id = "tunnel-no-tok"
 
         await rt._ensure_meta()
-        assert rt._tunnel_worker_token is None
+        assert rt._tunnel_worker_token_hash is None
 
 
 # ---------------------------------------------------------------------------

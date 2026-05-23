@@ -20,6 +20,7 @@ from provide.uterm.cloudflare.api.tunnel_routes import (
     handle_tunnel_message,
     is_tunnel_message,
 )
+from provide.uterm.tunnel.token_hash import hash_token, verify_token
 
 
 class _MockRuntime:
@@ -190,7 +191,9 @@ class TestTunnelApi:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         kv = MagicMock()
-        kv.get = AsyncMock(return_value=json.dumps({"share_token": "abc", "control_token": "def"}))
+        kv.get = AsyncMock(
+            return_value=json.dumps({"share_token_hash": hash_token("abc"), "control_token_hash": hash_token("def")})
+        )
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
@@ -204,7 +207,9 @@ class TestTunnelApi:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         kv = MagicMock()
-        kv.get = AsyncMock(return_value=json.dumps({"share_token": "abc", "control_token": "def"}))
+        kv.get = AsyncMock(
+            return_value=json.dumps({"share_token_hash": hash_token("abc"), "control_token_hash": hash_token("def")})
+        )
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
@@ -218,7 +223,9 @@ class TestTunnelApi:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         kv = MagicMock()
-        kv.get = AsyncMock(return_value=json.dumps({"share_token": "abc", "control_token": "def"}))
+        kv.get = AsyncMock(
+            return_value=json.dumps({"share_token_hash": hash_token("abc"), "control_token_hash": hash_token("def")})
+        )
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
@@ -249,9 +256,9 @@ class TestTunnelRevokeTokens:
 
         entry = {
             "session_id": "tunnel-abc",
-            "worker_token": "w1",
-            "share_token": "s1",
-            "control_token": "c1",
+            "worker_token_hash": hash_token("w1"),
+            "share_token_hash": hash_token("s1"),
+            "control_token_hash": hash_token("c1"),
         }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(entry))
@@ -267,9 +274,9 @@ class TestTunnelRevokeTokens:
         assert body["session_id"] == "tunnel-abc"
         kv.put.assert_called_once()
         stored = json.loads(kv.put.call_args[0][1])
-        assert stored["worker_token"] is None
-        assert stored["share_token"] is None
-        assert stored["control_token"] is None
+        assert stored["worker_token_hash"] is None
+        assert stored["share_token_hash"] is None
+        assert stored["control_token_hash"] is None
 
     @pytest.mark.asyncio
     async def test_revoke_nonexistent_tunnel(self) -> None:
@@ -315,9 +322,9 @@ class TestTunnelRotateTokens:
 
         entry = {
             "session_id": "tunnel-abc",
-            "worker_token": "old_w",
-            "share_token": "old_s",
-            "control_token": "old_c",
+            "worker_token_hash": hash_token("old_w"),
+            "share_token_hash": hash_token("old_s"),
+            "control_token_hash": hash_token("old_c"),
             "expires_at": time.time() + 100,
         }
         kv = MagicMock()
@@ -339,9 +346,12 @@ class TestTunnelRotateTokens:
         assert body["ws_endpoint"] == "/tunnel/tunnel-abc"
         kv.put.assert_called_once()
         stored = json.loads(kv.put.call_args[0][1])
-        assert stored["worker_token"] == body["worker_token"]
-        assert stored["share_token"] is not None
-        assert stored["control_token"] is not None
+        # Storage is hash-only: the rotated plain token from the response
+        # must verify against the stored hash, and the old plain must not.
+        assert verify_token(body["worker_token"], stored["worker_token_hash"])
+        assert not verify_token("old_w", stored["worker_token_hash"])
+        assert stored["share_token_hash"] is not None
+        assert stored["control_token_hash"] is not None
 
     @pytest.mark.asyncio
     async def test_rotate_nonexistent_tunnel(self) -> None:
@@ -436,7 +446,12 @@ class TestTunnelAuthz:
         """Bob cannot revoke Alice's tunnel."""
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
 
-        entry = {"session_id": "tunnel-abc", "owner": "alice", "share_token": "s", "control_token": "c"}
+        entry = {
+            "session_id": "tunnel-abc",
+            "owner": "alice",
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(entry))
         kv.put = AsyncMock()
@@ -451,7 +466,12 @@ class TestTunnelAuthz:
     async def test_revoke_owner_allowed(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
 
-        entry = {"session_id": "tunnel-abc", "owner": "alice", "share_token": "s", "control_token": "c"}
+        entry = {
+            "session_id": "tunnel-abc",
+            "owner": "alice",
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(entry))
         kv.put = AsyncMock()
@@ -466,7 +486,12 @@ class TestTunnelAuthz:
         """An admin principal can revoke any tunnel."""
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
 
-        entry = {"session_id": "tunnel-abc", "owner": "alice", "share_token": "s", "control_token": "c"}
+        entry = {
+            "session_id": "tunnel-abc",
+            "owner": "alice",
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(entry))
         kv.put = AsyncMock()
@@ -483,9 +508,9 @@ class TestTunnelAuthz:
         entry = {
             "session_id": "tunnel-abc",
             "owner": "alice",
-            "worker_token": "w",
-            "share_token": "s",
-            "control_token": "c",
+            "worker_token_hash": hash_token("w"),
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
             "expires_at": time.time() + 100,
         }
         kv = MagicMock()
@@ -508,9 +533,9 @@ class TestTunnelAuthz:
         entry = {
             "session_id": "tunnel-abc",
             "owner": "alice",
-            "worker_token": "w",
-            "share_token": "s",
-            "control_token": "c",
+            "worker_token_hash": hash_token("w"),
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
             "expires_at": time.time() + 100,
         }
         kv = MagicMock()
@@ -571,9 +596,9 @@ class TestTunnelSharePageKind:
         entry = {
             "session_id": "tunnel-abc",
             "tunnel_type": "http",
-            "worker_token": "w",
-            "share_token": "s",
-            "control_token": "c",
+            "worker_token_hash": hash_token("w"),
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
             "expires_at": time.time() + 100,
         }
         kv = MagicMock()
@@ -596,7 +621,7 @@ class TestTunnelRevocationBlocksAccess:
     async def test_revoked_tunnel_returns_none_with_no_token(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
-        session = {"share_token": None, "control_token": None, "revoked": True}
+        session = {"share_token_hash": None, "control_token_hash": None, "revoked": True}
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(session))
         env = MagicMock()
@@ -611,7 +636,11 @@ class TestTunnelRevocationBlocksAccess:
     async def test_revoke_sets_revoked_flag_in_kv(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnel_revoke_tokens
 
-        entry = {"session_id": "tunnel-abc", "share_token": "s", "control_token": "c"}
+        entry = {
+            "session_id": "tunnel-abc",
+            "share_token_hash": hash_token("s"),
+            "control_token_hash": hash_token("c"),
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(entry))
         kv.put = AsyncMock()
@@ -627,7 +656,11 @@ class TestTunnelRevocationBlocksAccess:
         """Even presenting a valid share_token on a revoked entry returns None."""
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
-        session = {"share_token": "valid-tok", "control_token": "ctrl", "revoked": True}
+        session = {
+            "share_token_hash": hash_token("valid-tok"),
+            "control_token_hash": hash_token("ctrl"),
+            "revoked": True,
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(session))
         env = MagicMock()
@@ -646,7 +679,11 @@ class TestTunnelTokenTransportEnforcement:
     async def test_cookie_only_mode_rejects_query_token(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
-        session = {"share_token": "tok", "control_token": "ctrl", "expires_at": time.time() + 3600}
+        session = {
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
+            "expires_at": time.time() + 3600,
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(session))
         env = MagicMock()
@@ -663,7 +700,11 @@ class TestTunnelTokenTransportEnforcement:
     async def test_cookie_only_mode_accepts_cookie_token(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
-        session = {"share_token": "tok", "control_token": "ctrl", "expires_at": time.time() + 3600}
+        session = {
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
+            "expires_at": time.time() + 3600,
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(session))
         env = MagicMock()
@@ -682,7 +723,11 @@ class TestTunnelTokenTransportEnforcement:
     async def test_query_only_mode_rejects_cookie_token(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
-        session = {"share_token": "tok", "control_token": "ctrl", "expires_at": time.time() + 3600}
+        session = {
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
+            "expires_at": time.time() + 3600,
+        }
         kv = MagicMock()
         kv.get = AsyncMock(return_value=json.dumps(session))
         env = MagicMock()
@@ -707,8 +752,8 @@ class TestTunnelIpBinding:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         session = {
-            "share_token": "tok",
-            "control_token": "ctrl",
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
             "issued_ip": "1.2.3.4",
             "expires_at": time.time() + 3600,
         }
@@ -729,8 +774,8 @@ class TestTunnelIpBinding:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         session = {
-            "share_token": "tok",
-            "control_token": "ctrl",
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
             "issued_ip": "1.2.3.4",
             "expires_at": time.time() + 3600,
         }
@@ -752,8 +797,8 @@ class TestTunnelIpBinding:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         session = {
-            "share_token": "tok",
-            "control_token": "ctrl",
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
             "issued_ip": "",
             "expires_at": time.time() + 3600,
         }
@@ -775,8 +820,8 @@ class TestTunnelIpBinding:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         session = {
-            "share_token": "tok",
-            "control_token": "ctrl",
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("ctrl"),
             "issued_ip": "1.2.3.4",
             "expires_at": time.time() + 3600,
         }

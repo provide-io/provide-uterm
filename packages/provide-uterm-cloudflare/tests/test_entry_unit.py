@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 from provide.uterm.cloudflare.cf_types import Response
 from provide.uterm.cloudflare.entry import Default
 from provide.uterm.cloudflare.entry.registry import _extract_worker_id
+from provide.uterm.tunnel.token_hash import hash_token
 
 # ---------------------------------------------------------------------------
 # _extract_worker_id
@@ -203,8 +204,8 @@ async def test_default_fetch_share_page_keeps_token_out_of_bootstrap() -> None:
         get=AsyncMock(
             return_value=_json.dumps(
                 {
-                    "share_token": "shared-tok",
-                    "control_token": "ctrl-tok",
+                    "share_token_hash": hash_token("shared-tok"),
+                    "control_token_hash": hash_token("ctrl-tok"),
                     "expires_at": __import__("time").time() + 3600,
                 }
             )
@@ -230,7 +231,11 @@ async def test_default_fetch_share_page_keeps_token_out_of_bootstrap() -> None:
 
 async def test_default_fetch_share_route() -> None:
     """Shared tunnel links under /s/{id} redirect to /app/session/{id}."""
-    kv = SimpleNamespace(get=AsyncMock(return_value=json.dumps({"share_token": "abc", "control_token": "def"})))
+    kv = SimpleNamespace(
+        get=AsyncMock(
+            return_value=json.dumps({"share_token_hash": hash_token("abc"), "control_token_hash": hash_token("def")})
+        )
+    )
     d = _make_default({"SESSION_REGISTRY": kv})
     req = SimpleNamespace(url="https://x/s/test-123?token=abc", headers=SimpleNamespace(get=lambda *_a, **_k: None))
     resp = await d.fetch(req)
@@ -563,8 +568,8 @@ async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
     import json as _json
 
     session = {
-        "share_token": "shared-tok",
-        "control_token": "ctrl-tok",
+        "share_token_hash": hash_token("shared-tok"),
+        "control_token_hash": hash_token("ctrl-tok"),
         "expires_at": __import__("time").time() + 3600,
     }
     kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
@@ -584,8 +589,8 @@ async def test_replay_page_with_valid_share_token_gets_replay_kind() -> None:
     import json as _json
 
     session = {
-        "share_token": "replay-tok",
-        "control_token": "ctrl-tok",
+        "share_token_hash": hash_token("replay-tok"),
+        "control_token_hash": hash_token("ctrl-tok"),
         "expires_at": __import__("time").time() + 3600,
     }
     kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))

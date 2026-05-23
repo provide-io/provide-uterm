@@ -111,10 +111,13 @@ class _FetchMixin:
                 if token and secrets.compare_digest(token, self.config.worker_bearer_token):  # type: ignore[attr-defined]
                     valid_worker_token = True
                     auth_type = "global_bearer"
+                # Constant-time hash compare against the stored BLAKE2b digest.
+                from provide.uterm.tunnel.token_hash import verify_token
+
                 if (
                     token
-                    and self._tunnel_worker_token  # type: ignore[attr-defined]
-                    and secrets.compare_digest(token, self._tunnel_worker_token)  # type: ignore[attr-defined]
+                    and self._tunnel_worker_token_hash  # type: ignore[attr-defined]
+                    and verify_token(token, self._tunnel_worker_token_hash)  # type: ignore[attr-defined]
                 ):
                     valid_worker_token = True
                     auth_type = "tunnel_session"

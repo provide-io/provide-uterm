@@ -82,9 +82,13 @@ class SessionRuntime(
             "owner": None,
         }
         self._meta_loaded: bool = False
-        self._tunnel_worker_token: str | None = None
-        self._share_token: str | None = None
-        self._control_token: str | None = None
+        # BLAKE2b digests of the tunnel-issued bearer tokens. The plain
+        # values exist only in the JSON response of the create/rotate API;
+        # the DO never sees them in cleartext. See provide.uterm.tunnel.
+        # token_hash for the verify_token helper used at auth sites.
+        self._tunnel_worker_token_hash: str | None = None
+        self._share_token_hash: str | None = None
+        self._control_token_hash: str | None = None
         self._issued_ip: str | None = None
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
@@ -122,9 +126,9 @@ class SessionRuntime(
                     "visibility": data.get("visibility") or "public",
                     "owner": data.get("owner"),
                 }
-                self._tunnel_worker_token = str(data.get("worker_token") or "") or None
-                self._share_token = str(data.get("share_token") or "") or None
-                self._control_token = str(data.get("control_token") or "") or None
+                self._tunnel_worker_token_hash = str(data.get("worker_token_hash") or "") or None
+                self._share_token_hash = str(data.get("share_token_hash") or "") or None
+                self._control_token_hash = str(data.get("control_token_hash") or "") or None
                 self._issued_ip = str(data.get("issued_ip") or "") or None
         except Exception:
             logger.debug("_ensure_meta kv read failed for %s", self.worker_id)

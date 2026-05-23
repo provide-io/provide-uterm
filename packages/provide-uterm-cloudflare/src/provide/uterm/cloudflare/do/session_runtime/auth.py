@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import logging
-import secrets
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlparse
 
@@ -77,10 +76,13 @@ class _AuthMixin:
         if not token:
             return None
 
+        # Constant-time hash compare; the DO holds digests, not plain tokens.
+        from provide.uterm.tunnel.token_hash import verify_token
+
         role: str | None = None
-        if self._control_token and secrets.compare_digest(token, self._control_token):  # type: ignore[attr-defined]
+        if self._control_token_hash and verify_token(token, self._control_token_hash):  # type: ignore[attr-defined]
             role = "admin"
-        elif self._share_token and secrets.compare_digest(token, self._share_token):  # type: ignore[attr-defined]
+        elif self._share_token_hash and verify_token(token, self._share_token_hash):  # type: ignore[attr-defined]
             role = "viewer"
 
         if role is None:
