@@ -153,6 +153,23 @@ def test_decoder_default_depth_allows_typical_payloads() -> None:
     assert len(events) == 1
 
 
+def test_decoder_list_depth_increment_is_one_not_two() -> None:
+    """Kills mutmut: ``stack.append((child, depth + 1))`` → ``depth + 2``
+    in the list branch of ``_check_json_depth``. A depth-4 list inside
+    ``max_frame_depth=5`` must parse cleanly under the correct
+    increment (depths recorded: 2,3,4,5 → max 5, no trip); under the
+    +2 mutant the same input records depths 3,5,7,9 and falsely trips
+    at 7 > 5.
+    """
+    decoder = ControlChannelDecoder(max_frame_depth=5)
+    nested: object = "leaf"
+    for _ in range(4):
+        nested = [nested]
+    payload = {"type": nested}
+    events = decoder.feed(encode_control(payload))
+    assert len(events) == 1
+
+
 def test_decoder_depth_limit_clamps_to_minimum() -> None:
     """max_frame_depth=0 (or negative) is clamped to 1 — frames are always
     at least one dict deep."""
