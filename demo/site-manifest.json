@@ -1,0 +1,266 @@
+{
+  "generated_at": "2026-05-17T20:39:47Z",
+  "demos": [
+    {
+      "id": "annotation",
+      "title": "Annotations",
+      "subtitle": "Label sessions with metadata",
+      "description": "Agent self-annotation and automatic detection of 20 security/lifecycle patterns",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "mp4",
+      "artifacts": {
+        "video": "annotation/browser_trim.mp4",
+        "poster": "annotation/poster.png",
+        "cast": "annotation/terminal.cast",
+        "screenshots": [
+          "annotation/screenshots/01-session-with-annotations.png",
+          "annotation/screenshots/02-operator-view.png",
+          "annotation/screenshots/03-annotation-entries.png"
+        ]
+      }
+    },
+    {
+      "id": "deckmux",
+      "title": "DeckMux Presence",
+      "subtitle": "9 engineers debug a production incident together",
+      "description": "9-person production incident response with DeckMux collaborative presence",
+      "duration_seconds": 12.0,
+      "highlight_start_s": 100.0,
+      "format": "cast",
+      "artifacts": {
+        "cast": "deckmux/terminal.cast",
+        "composite": "deckmux/composite.mp4",
+        "screenshots": [
+          "deckmux/screenshots/act1-operator-investigating.png",
+          "deckmux/screenshots/act2-full-team.png",
+          "deckmux/screenshots/act3-investigation.png",
+          "deckmux/screenshots/act4-brandon-fix.png",
+          "deckmux/screenshots/act4-kal-verified.png",
+          "deckmux/screenshots/act5-kyle-left.png",
+          "deckmux/screenshots/act5-resolved.png"
+        ]
+      }
+    },
+    {
+      "id": "demo_grid",
+      "title": "Terminal Grid",
+      "subtitle": "9 live terminals in a 3x3 grid",
+      "description": "9-terminal grid \u2014 ANSI render animations running simultaneously",
+      "duration_seconds": 8.0,
+      "highlight_start_s": 2.0,
+      "format": "mp4",
+      "artifacts": {}
+    },
+    {
+      "id": "fanout",
+      "title": "Fan-out Broadcast",
+      "subtitle": "Send commands to 9 sessions simultaneously",
+      "description": "Broadcast a config command to 9 sessions simultaneously, show per-node output",
+      "duration_seconds": 8.0,
+      "highlight_start_s": 13.0,
+      "format": "cast",
+      "artifacts": {
+        "cast": "fanout/terminal.cast",
+        "screenshots": [
+          "fanout/screenshots/grid-01-before.png",
+          "fanout/screenshots/grid-02-after.png"
+        ]
+      }
+    },
+    {
+      "id": "fleet",
+      "title": "Fleet Management",
+      "subtitle": "Broadcast deploy to 9 workers simultaneously",
+      "description": "Spawn 9 fleet shell workers, register with the External Management Tier, broadcast a deploy command",
+      "duration_seconds": 8.0,
+      "highlight_start_s": 13.0,
+      "format": "cast",
+      "artifacts": {
+        "cast": "fleet/terminal.cast",
+        "screenshots": [
+          "fleet/screenshots/grid-01-before.png",
+          "fleet/screenshots/grid-02-after.png"
+        ]
+      }
+    },
+    {
+      "id": "hijack",
+      "title": "Session Hijack",
+      "subtitle": "Operator takes control, viewer watches",
+      "description": "Viewer connects read-only, operator takes exclusive control, admin force-reclaims",
+      "duration_seconds": 8.0,
+      "highlight_start_s": 6.0,
+      "format": "cast",
+      "artifacts": {
+        "cast": "hijack/terminal.cast",
+        "screenshots": [
+          "hijack/screenshots/operator-01-initial.png",
+          "hijack/screenshots/operator-02-hijacked-and-typed.png",
+          "hijack/screenshots/operator-03-result.png",
+          "hijack/screenshots/viewer-01-initial.png",
+          "hijack/screenshots/viewer-02-sees-operator-output.png"
+        ]
+      }
+    },
+    {
+      "id": "http_inspect",
+      "title": "HTTP Inspection",
+      "subtitle": "Intercept and inspect HTTP traffic",
+      "description": "Proxy HTTP traffic through uterm inspect tunnel, inspect requests/responses in browser",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "mp4",
+      "artifacts": {
+        "video": "http_inspect/browser_trim.mp4",
+        "poster": "http_inspect/poster.png",
+        "cast": "http_inspect/terminal.cast",
+        "screenshots": [
+          "http_inspect/screenshots/01-session-terminal.png",
+          "http_inspect/screenshots/02-tunnels-list.png",
+          "http_inspect/screenshots/03-dashboard.png"
+        ]
+      }
+    },
+    {
+      "id": "mcp",
+      "title": "MCP Integration",
+      "subtitle": "AI tools for terminal sessions",
+      "description": "21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "mp4",
+      "artifacts": {
+        "video": "mcp/browser_trim.mp4",
+        "poster": "mcp/poster.png",
+        "cast": "mcp/terminal.cast",
+        "screenshots": [
+          "mcp/screenshots/01-session-mcp.png",
+          "mcp/screenshots/02-api-health.png",
+          "mcp/screenshots/03-sessions-list.png"
+        ]
+      }
+    },
+    {
+      "id": "pty",
+      "title": "PTY Sessions",
+      "subtitle": "Live terminal over a local PTY",
+      "description": "Spawn a local PTY session, run commands, show resize and snapshot",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "cast",
+      "artifacts": {
+        "video": "pty/browser_trim.mp4",
+        "cast": "pty/terminal.cast",
+        "screenshots": [
+          "pty/screenshots/01-pty-session.png",
+          "pty/screenshots/02-pty-operator.png"
+        ]
+      }
+    },
+    {
+      "id": "recording",
+      "title": "Session Recording",
+      "subtitle": "Record terminal sessions to file",
+      "description": "Enable session recording, produce terminal activity, download JSONL recording file",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "mp4",
+      "artifacts": {
+        "video": "recording/browser_trim.mp4",
+        "poster": "recording/poster.png",
+        "cast": "recording/terminal.cast",
+        "screenshots": [
+          "recording/screenshots/01-session-active.png",
+          "recording/screenshots/02-replay-loaded.png",
+          "recording/screenshots/03-replay-playing.png"
+        ]
+      }
+    },
+    {
+      "id": "replay",
+      "title": "Session Replay",
+      "subtitle": "Scrub and replay recorded sessions",
+      "description": "Record 10 seconds of terminal activity then scrub through replay in the browser",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "mp4",
+      "artifacts": {
+        "video": "replay/browser_trim.mp4",
+        "poster": "replay/poster.png",
+        "cast": "replay/terminal.cast",
+        "screenshots": [
+          "replay/screenshots/01-replay-player.png",
+          "replay/screenshots/02-replay-scrubbing.png",
+          "replay/screenshots/03-live-session.png"
+        ]
+      }
+    },
+    {
+      "id": "shell_render",
+      "title": "Shell Rendering",
+      "subtitle": "ANSI truecolor art from any image URL",
+      "description": "Send an image URL to the shell render command, get ANSI truecolor art back",
+      "duration_seconds": 8.0,
+      "highlight_start_s": 3.0,
+      "format": "cast",
+      "artifacts": {
+        "video": "shell_render/browser_trim.mp4",
+        "cast": "shell_render/terminal.cast",
+        "screenshots": [
+          "shell_render/screenshots/01-rainbow-render.png",
+          "shell_render/screenshots/02-animated-render.png",
+          "shell_render/screenshots/03-cat-render.png",
+          "shell_render/screenshots/04-giphy-render.png"
+        ]
+      }
+    },
+    {
+      "id": "ssh",
+      "title": "SSH Connector",
+      "subtitle": "Connect to remote hosts over SSH",
+      "description": "Connect a session to an SSH host, run commands, show live output",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "cast",
+      "artifacts": {
+        "video": "ssh/browser_trim.mp4",
+        "cast": "ssh/terminal.cast",
+        "screenshots": [
+          "ssh/screenshots/01-ssh-terminal.png",
+          "ssh/screenshots/02-ssh-operator.png"
+        ]
+      }
+    },
+    {
+      "id": "telnet",
+      "title": "Telnet Connector",
+      "subtitle": "Legacy telnet session management",
+      "description": "Connect a session to a local telnet server, show negotiation and live output",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "cast",
+      "artifacts": {
+        "video": "telnet/browser_trim.mp4",
+        "cast": "telnet/terminal.cast",
+        "screenshots": [
+          "telnet/screenshots/01-telnet-terminal.png",
+          "telnet/screenshots/02-telnet-operator.png"
+        ]
+      }
+    },
+    {
+      "id": "tunnel",
+      "title": "Tunnel Sharing",
+      "subtitle": "Share sessions via secure URL",
+      "description": "Session served through local CF Worker (wrangler dev --local), showing the CF path",
+      "duration_seconds": 6.0,
+      "highlight_start_s": 3.0,
+      "format": "cast",
+      "artifacts": {
+        "cast": "tunnel/terminal.cast",
+        "screenshots": []
+      }
+    }
+  ]
+}

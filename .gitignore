@@ -68,6 +68,7 @@ demo/**/*.cast
 demo/**/*.mp4
 demo/**/*.webm
 demo/**/screenshots/
-demo/site-manifest.json
+# Note: demo/site-manifest.json is *tracked* so site-uterm-io's deploy can read it.
+# It only contains metadata + relative paths (no binaries) — see scripts/demos/build_site_manifest.py.
 artifacts/
 .worktrees/
