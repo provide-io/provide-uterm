@@ -49,6 +49,9 @@ TITLE = "DeckMux Presence"
 SUBTITLE = "9 engineers debug a production incident together"
 HIGHLIGHT_START_S: float = 100.0  # Act 4 handoff region
 HIGHLIGHT_DURATION_S: float = 12.0
+# Multi-browser demo: each engineer's perspective is recorded separately
+# and stitched into composite.mp4. The composite is the catalog video.
+PRIMARY_VIDEO: str = "composite_trim.mp4"
 
 # ---------------------------------------------------------------------------
 # Cast

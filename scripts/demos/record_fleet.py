@@ -41,6 +41,9 @@ TITLE = "Fleet Management"
 SUBTITLE = "Broadcast deploy to 9 workers simultaneously"
 HIGHLIGHT_START_S: float = 13.0
 HIGHLIGHT_DURATION_S: float = 8.0
+# Multi-browser demo: 9 fleet workers each record separately; grid.mp4 is
+# the composited 3x3 view used as the catalog video.
+PRIMARY_VIDEO: str = "grid_trim.mp4"
 
 SESSION_IDS = [f"fleet-{i}" for i in range(9)]
 
