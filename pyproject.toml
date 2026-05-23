@@ -25,7 +25,7 @@ dev = [
     "hypothesis>=6.151.9",
     "memray>=1.0; sys_platform != 'win32'",
     "mutmut>=3.5.0",
-    "Pillow>=10.0",
+    "Pillow>=12.2.0",
     "mypy>=2.1.0",
     "pip-audit>=2.7.0",
     "pip-licenses>=5.5.5",
