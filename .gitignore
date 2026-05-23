@@ -68,7 +68,15 @@ demo/**/*.cast
 demo/**/*.mp4
 demo/**/*.webm
 demo/**/screenshots/
-# Note: demo/site-manifest.json is *tracked* so site-uterm-io's deploy can read it.
-# It only contains metadata + relative paths (no binaries) — see scripts/demos/build_site_manifest.py.
+# Tracked exceptions: just the files site-uterm-io's deploy actually needs
+# (browser_trim.mp4 / poster.png / terminal.cast / screenshots/*.png). Total ~6 MB
+# across 15 demos; intermediate build artifacts (raw recordings, per-frame mp4s,
+# webms) stay ignored. The manifest at demo/site-manifest.json enumerates
+# exactly what gets synced — see scripts/demos/build_site_manifest.py.
+!demo/**/browser_trim.mp4
+!demo/**/terminal.cast
+!demo/**/poster.png
+!demo/**/screenshots/
+!demo/**/screenshots/*.png
 artifacts/
 .worktrees/
