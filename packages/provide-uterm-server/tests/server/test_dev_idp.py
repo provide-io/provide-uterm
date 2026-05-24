@@ -108,10 +108,7 @@ def test_read_dev_token_missing_returns_none(tmp_path) -> None:
 def test_validate_auth_config_dev_token_on_loopback(tmp_path, monkeypatch) -> None:
     """dev_token mode passes validation on loopback; runs full setup."""
     # Steer the file write away from ~/.cache so the test doesn't pollute.
-    monkeypatch.setattr(
-        "provide.uterm.server.dev_idp.DEFAULT_DEV_TOKEN_PATH",
-        tmp_path / "dev_token",
-    )
+    monkeypatch.setenv("UTERM_DEV_TOKEN_PATH", str(tmp_path / "dev_token"))
     config = ServerConfig(
         auth=AuthConfig(mode="dev_token"),
         server=ServerBindConfig(host="127.0.0.1"),
@@ -123,10 +120,7 @@ def test_validate_auth_config_dev_token_on_loopback(tmp_path, monkeypatch) -> No
 
 
 def test_validate_auth_config_dev_token_blocked_on_non_loopback(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(
-        "provide.uterm.server.dev_idp.DEFAULT_DEV_TOKEN_PATH",
-        tmp_path / "dev_token",
-    )
+    monkeypatch.setenv("UTERM_DEV_TOKEN_PATH", str(tmp_path / "dev_token"))
     config = ServerConfig(
         auth=AuthConfig(mode="dev_token"),
         server=ServerBindConfig(host="0.0.0.0"),

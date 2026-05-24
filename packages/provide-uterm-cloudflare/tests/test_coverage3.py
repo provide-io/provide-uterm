@@ -130,7 +130,7 @@ async def test_decode_jwt_dev_mode_returns_dev_principal() -> None:
 
 
 async def test_decode_jwt_none_mode_returns_dev_principal() -> None:
-    config = JwtConfig(mode="none", public_key_pem="any")
+    config = JwtConfig(mode="dev", public_key_pem="any")
     principal = await decode_jwt("ignored-token", config)
     assert principal.subject_id == "dev"
 

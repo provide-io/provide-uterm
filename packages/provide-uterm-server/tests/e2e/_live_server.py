@@ -44,7 +44,11 @@ async def live_server_with_bus(
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "webhooks": {"allow_loopback_destinations": True},
             "sessions": sessions,
         }

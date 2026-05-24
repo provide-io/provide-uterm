@@ -262,7 +262,9 @@ def test_pages_use_state_principal_not_double_resolved(monkeypatch: pytest.Monke
     monkeypatch.setattr(pages_module, "resolve_http_principal", _spy)
 
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     with TestClient(app) as client:
         r = client.get(config.ui.app_path + "/")

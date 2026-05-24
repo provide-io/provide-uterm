@@ -20,7 +20,9 @@ from provide.uterm.server.models import TunnelConfig
 def _make_app(**config_overrides: Any) -> tuple[Any, Any]:
     """Create a test app with dev auth and no auto-start sessions."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.sessions = []
     for key, value in config_overrides.items():
         setattr(config, key, value)

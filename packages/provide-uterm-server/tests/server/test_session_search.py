@@ -22,7 +22,9 @@ from provide.uterm.server.registry import SessionRegistry
 
 def _client(**config_overrides: Any) -> TestClient:
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     for key, val in config_overrides.items():
         setattr(config, key, val)
     app = create_server_app(config)

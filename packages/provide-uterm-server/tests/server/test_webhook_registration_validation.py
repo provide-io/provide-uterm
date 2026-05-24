@@ -20,7 +20,11 @@ def client() -> TestClient:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "s1",
@@ -100,7 +104,11 @@ def test_register_webhook_allows_loopback_when_explicitly_configured() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "webhooks": {"allow_loopback_destinations": True},
             "sessions": [
                 {

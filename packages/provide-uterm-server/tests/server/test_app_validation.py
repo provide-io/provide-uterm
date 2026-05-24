@@ -19,40 +19,6 @@ from provide.uterm.server.models import AuthConfig, ServerConfig
 _FRONTEND_BUILT = importlib.resources.files("provide.uterm.server").joinpath("frontend/hijack.html").is_file()
 
 
-class TestValidateAuthConfigDevMode:
-    """Test dev/none mode validation."""
-
-    def test_dev_mode_logs_warning_and_returns(self) -> None:
-        """Mode='dev' should log warning but return (not raise)."""
-        config = ServerConfig(auth=AuthConfig(mode="dev"))
-        # Should not raise
-        _validate_auth_config(config)
-
-    def test_none_mode_logs_warning_and_returns(self) -> None:
-        """Mode='none' should log warning but return (not raise)."""
-        config = ServerConfig(auth=AuthConfig(mode="none"))
-        # Should not raise
-        _validate_auth_config(config)
-
-    def test_mode_case_insensitive_dev(self) -> None:
-        """Mode is lowercased before comparison."""
-        config = ServerConfig(auth=AuthConfig(mode="DEV"))
-        # Should not raise
-        _validate_auth_config(config)
-
-    def test_mode_case_insensitive_none(self) -> None:
-        """Mode is lowercased before comparison."""
-        config = ServerConfig(auth=AuthConfig(mode="NONE"))
-        # Should not raise
-        _validate_auth_config(config)
-
-    def test_mode_with_whitespace_stripped(self) -> None:
-        """Mode whitespace is stripped."""
-        config = ServerConfig(auth=AuthConfig(mode="  dev  "))
-        # Should not raise
-        _validate_auth_config(config)
-
-
 class TestValidateAuthConfigHeaderMode:
     """Test header mode validation."""
 
@@ -255,7 +221,7 @@ class TestCreateServerAppApiOnly:
         from provide.uterm.server.app import create_server_app
         from provide.uterm.server.models import AuthConfig, ServerConfig
 
-        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        config = ServerConfig(auth=AuthConfig(mode="dev_token"))
         with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config, api_only=True)
         mock_validate.assert_not_called()
@@ -268,7 +234,7 @@ class TestCreateServerAppApiOnly:
         from provide.uterm.server.models import AuthConfig, ServerConfig
 
         monkeypatch.setenv("UTERM_API_ONLY", "1")
-        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        config = ServerConfig(auth=AuthConfig(mode="dev_token"))
         with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config)
         mock_validate.assert_not_called()
@@ -280,7 +246,7 @@ class TestCreateServerAppApiOnly:
         from provide.uterm.server.app import create_server_app
         from provide.uterm.server.models import AuthConfig, ServerConfig
 
-        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        config = ServerConfig(auth=AuthConfig(mode="dev_token"))
         with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config)
         mock_validate.assert_called_once()
@@ -293,7 +259,7 @@ class TestCreateServerAppApiOnly:
         from provide.uterm.server.models import AuthConfig, ServerConfig
 
         monkeypatch.setenv("UTERM_API_ONLY", "0")
-        config = ServerConfig(auth=AuthConfig(mode="dev"))
+        config = ServerConfig(auth=AuthConfig(mode="dev_token"))
         with patch("provide.uterm.server.app._validate_frontend_assets") as mock_validate:
             create_server_app(config)
         mock_validate.assert_called_once()
@@ -494,18 +460,6 @@ class TestValidateAuthConfigMutationKilling:
         # Whitespace is not stripped in models, so this is technically "present"
         # but let's document the behavior
         _validate_auth_config(config)  # This will pass (whitespace key is truthy)
-
-    def test_validate_auth_config_mode_in_set_exact(self) -> None:
-        """Mode check must use set membership, and early return from non-jwt modes."""
-        # "dev" and "none" modes should early return without error
-        for mode_val in ["dev", "none"]:
-            config = ServerConfig(auth=AuthConfig(mode=mode_val, worker_bearer_token="token"))
-            _validate_auth_config(config)
-
-        # Mode not in {none, dev, header, jwt} gets past early returns but doesn't validate JWT
-        # (validation is only if mode == "jwt")
-        config_unknown = ServerConfig(auth=AuthConfig(mode="unknown", worker_bearer_token="token"))
-        _validate_auth_config(config_unknown)  # Should not raise
 
     def test_validate_auth_config_jwt_check_continues_after_header(self) -> None:
         """JWT mode check must continue after header check (not early return)."""

@@ -319,12 +319,15 @@ def test_create_server_app_rejects_none_jwt_algorithm() -> None:
 def test_page_route_returns_403_for_private_session_viewer() -> None:
     """A viewer-role principal must receive 403 on a private-visibility session page."""
     config = default_server_config()
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.sessions[0].visibility = "private"
     app = create_server_app(config)
     with TestClient(app) as client:
         r = client.get(
             f"{config.ui.app_path}/session/provide-shell",
-            headers={"x-uterm-role": "viewer"},
+            headers={"x-uterm-principal": "viewer-user", "x-uterm-role": "viewer"},
         )
         assert r.status_code == 403
 

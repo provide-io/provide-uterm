@@ -42,7 +42,11 @@ async def _live_server_with_recording(
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "recording": {
                     "enabled_by_default": True,
                     "directory": tmpdir,

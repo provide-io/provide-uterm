@@ -16,7 +16,9 @@ from provide.uterm.server import create_server_app, default_server_config
 
 def _make_app() -> TestClient:
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     return TestClient(create_server_app(cfg))
 
 
@@ -50,7 +52,9 @@ def test_annotate_nonexistent_session() -> None:
 def test_annotate_no_active_runtime_returns_404() -> None:
     """Annotating a session that exists in registry but has no runtime yet returns 404."""
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     # Add a never-started session
     from provide.uterm.server.models import SessionDefinition
 
@@ -75,7 +79,9 @@ def test_annotation_appears_in_recording_entries() -> None:
     """Annotating a session with recording enabled stores the event in the recording."""
     with tempfile.TemporaryDirectory() as tmpdir:
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         cfg.recording.enabled_by_default = True
         cfg.recording.directory = Path(tmpdir)  # type: ignore[assignment]
 

@@ -64,7 +64,7 @@ class TestDurabilityStartupWarning:
     def test_memory_backend_emits_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING, logger="provide.uterm.server.app.factory")
         config = ServerConfig(
-            auth=AuthConfig(mode="none"),
+            auth=AuthConfig(mode="dev_token"),
             control_plane=ControlPlaneConfig(backend="memory"),
         )
         create_server_app(config, api_only=True)
@@ -77,7 +77,7 @@ class TestDurabilityStartupWarning:
         monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
         caplog.set_level(logging.ERROR, logger="provide.uterm.server.app.factory")
         config = ServerConfig(
-            auth=AuthConfig(mode="none"),
+            auth=AuthConfig(mode="dev_token"),
             control_plane=ControlPlaneConfig(backend="memory"),
         )
         create_server_app(config, api_only=True)
@@ -89,7 +89,7 @@ class TestDurabilityStartupWarning:
     def test_memory_backend_single_replica_no_error(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.ERROR, logger="provide.uterm.server.app.factory")
         config = ServerConfig(
-            auth=AuthConfig(mode="none"),
+            auth=AuthConfig(mode="dev_token"),
             control_plane=ControlPlaneConfig(backend="memory"),
         )
         create_server_app(config, api_only=True)

@@ -118,7 +118,11 @@ def _make_fastapi_client():
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0, "public_base_url": "http://127.0.0.1:1"},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "w1",

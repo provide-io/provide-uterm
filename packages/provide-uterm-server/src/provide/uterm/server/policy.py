@@ -24,6 +24,4 @@ class SessionPolicyResolver:
     authz: AuthorizationService = field(default_factory=AuthorizationService)
 
     async def role_for(self, principal: Principal, session: SessionDefinition) -> str:
-        if self.auth.mode in {"none", "dev"} and not principal.roles:
-            return "admin"
         return await self.authz.resolve_browser_role(principal, session)

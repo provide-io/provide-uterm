@@ -18,7 +18,9 @@ from provide.uterm.server import create_server_app, default_server_config
 @pytest.fixture()
 def app_client(tmp_path: Path) -> TestClient:
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.profiles.directory = tmp_path / "profiles"
     app = create_server_app(config)
     return TestClient(app)
@@ -103,7 +105,7 @@ def test_create_profile_returns_profile(app_client: TestClient) -> None:
     assert data["connector_type"] == "ssh"
     assert data["host"] == "prod.example.com"
     assert "profile_id" in data
-    assert data["owner"] == "local-dev"  # dev mode principal
+    assert data["owner"] == "admin"  # dev mode principal
 
 
 def test_create_profile_viewer_role_returns_403(viewer_client: TestClient) -> None:
@@ -168,7 +170,7 @@ def test_connect_from_profile_creates_session(app_client: TestClient) -> None:
     data = r.json()
     assert "session_id" in data
     assert "url" in data
-    assert data["owner"] == "local-dev"  # connecting principal owns the session
+    assert data["owner"] == "admin"  # connecting principal owns the session
 
 
 def test_connect_from_profile_unknown_id_returns_404(app_client: TestClient) -> None:

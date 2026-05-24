@@ -20,7 +20,9 @@ def test_approval_ux_e2e(page: Page):
             return PolicyDecision(action="allow")
 
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.server.port = 0  # random
 
     # We use a custom Hub with the hold policy

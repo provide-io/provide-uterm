@@ -19,7 +19,11 @@ def _make_app(sessions: list | None = None) -> TestClient:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": sessions
             or [
                 {
@@ -92,7 +96,11 @@ def test_register_webhook_403_viewer_private_session() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "private",
@@ -192,7 +200,11 @@ def test_list_webhooks_403_insufficient_privileges() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "private",
@@ -250,7 +262,11 @@ def test_unregister_webhook_404_session_mismatch() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {"session_id": "s1", "display_name": "S1", "connector_type": "shell", "auto_start": False},
                 {"session_id": "s2", "display_name": "S2", "connector_type": "shell", "auto_start": False},
@@ -281,7 +297,11 @@ def test_unregister_webhook_403_insufficient_privileges() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "private",

@@ -18,26 +18,11 @@ from provide.uterm.recording import LocalFileRecordingStore
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.auth import Principal
 from provide.uterm.server.connectors import TelnetSessionConnector, build_connector
-from provide.uterm.server.models import RecordingConfig, SessionDefinition
-from provide.uterm.server.policy import SessionPolicyResolver
+from provide.uterm.server.models import RecordingConfig
 from provide.uterm.server.registry import SessionRegistry
 
 if TYPE_CHECKING:
     pass
-
-
-# ---------------------------------------------------------------------------
-# policy.py:29 — role_for returns "admin" in dev mode with no principal roles
-# ---------------------------------------------------------------------------
-
-
-async def test_role_for_dev_mode_no_roles_returns_admin() -> None:
-    cfg = default_server_config()
-    assert cfg.auth.mode == "dev"
-    policy = SessionPolicyResolver(cfg.auth)
-    principal = Principal(subject_id="user1", roles=frozenset())
-    session = SessionDefinition(session_id="s", display_name="s", connector_type="shell")
-    assert await policy.role_for(principal, session) == "admin"
 
 
 # ---------------------------------------------------------------------------
@@ -101,28 +86,28 @@ def test_validate_auth_config_header_mode_passes() -> None:
 
 # ---------------------------------------------------------------------------
 # app.py:154 — _resolve_browser_role falls back to resolve_ws_principal
-#              when ws.state has no uterm_principal
-# app.py:157 — returns "admin" in dev mode when session is None
+#              when ws.state has no uterm_principal — defaults to viewer for
+#              unknown sessions now that dev/none auth modes are gone.
 # ---------------------------------------------------------------------------
 
 
-async def test_resolve_browser_role_no_principal_dev_mode() -> None:
+async def test_resolve_browser_role_no_principal_unknown_session_returns_viewer() -> None:
     """_resolve_browser_role resolves principal when ws.state lacks uterm_principal."""
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(cfg)
     hub = app.state.uterm_hub
 
-    # Build a minimal WebSocket-like object with no uterm_principal on state
     mock_ws = SimpleNamespace(
-        state=SimpleNamespace(),  # no uterm_principal attribute
+        state=SimpleNamespace(),
         headers={},
         cookies={},
         scope={"type": "websocket", "headers": []},
     )
-    # In dev mode with no session defined, should return "admin" (line 157)
     role = await hub._resolve_browser_role(mock_ws, "nonexistent-worker")
-    assert role == "admin"
+    assert role == "viewer"
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +120,9 @@ async def test_resolve_browser_role_raises_on_access_denied() -> None:
     from fastapi import WebSocketException
 
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(cfg)
     hub = app.state.uterm_hub
     registry = app.state.uterm_registry
@@ -171,7 +158,9 @@ async def test_resolve_browser_role_raises_on_access_denied() -> None:
 def test_5xx_metric_incremented_on_500_response() -> None:
     """Middleware increments http_requests_5xx_total when a route returns 500."""
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(cfg)
 
     @app.get("/test-500-response")

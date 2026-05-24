@@ -120,7 +120,11 @@ async def _live_server_cm(sessions: list[dict[str, Any]]) -> Any:
                 "port": uterm_port,
                 "public_base_url": f"http://127.0.0.1:{uterm_port}",
             },
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": sessions,
         }
     )

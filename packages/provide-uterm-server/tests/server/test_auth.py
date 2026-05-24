@@ -330,22 +330,6 @@ class TestPrincipalFromHeaderAuth:
 
 
 class TestResolvePrincipal:
-    def test_dev_mode_returns_admin_scopes(self) -> None:
-        from provide.uterm.server.auth import _resolve_principal
-        from provide.uterm.server.models import AuthConfig
-
-        auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
-        p = _resolve_principal({}, {}, auth, None)
-        assert "admin" in p.roles
-
-    def test_none_mode_returns_admin_scopes(self) -> None:
-        from provide.uterm.server.auth import _resolve_principal
-        from provide.uterm.server.models import AuthConfig
-
-        auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
-        p = _resolve_principal({}, {}, auth, None)
-        assert "admin" in p.roles
-
     def test_header_mode_uses_header_auth(self) -> None:
         from provide.uterm.server.auth import _resolve_principal
         from provide.uterm.server.models import AuthConfig
@@ -359,7 +343,7 @@ class TestResolvePrincipal:
         from provide.uterm.server.auth import _resolve_principal
         from provide.uterm.server.models import AuthConfig
 
-        auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
+        auth = AuthConfig(mode="header", worker_bearer_token=_make_token())
         auth.mode = "mystery_mode"  # type: ignore[assignment]
         with pytest.raises(ValueError, match="unknown auth mode"):
             _resolve_principal({}, {}, auth, None)

@@ -73,7 +73,9 @@ def ushell_server() -> Any:
 
     base_url = f"http://127.0.0.1:{port}"
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.server.host = "127.0.0.1"
     config.server.port = port
     config.server.public_base_url = base_url

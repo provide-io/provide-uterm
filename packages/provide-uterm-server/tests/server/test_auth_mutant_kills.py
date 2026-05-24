@@ -56,9 +56,10 @@ def _header_auth_config():  # type: ignore[return]
 
 
 def _dev_auth_config():  # type: ignore[return]
+    """Auth config for tests that need a header-driven principal flow."""
     from provide.uterm.server.models import AuthConfig
 
-    return AuthConfig(mode="dev", worker_bearer_token=_make_token())
+    return AuthConfig(mode="header", worker_bearer_token=_make_token())
 
 
 # ---------------------------------------------------------------------------
@@ -205,73 +206,6 @@ class TestPrincipalFromHeaderAuthMutations:
             {"x-uterm-principal": "carol", "x-uterm-role": "admin"}, {}, _header_auth_config()
         )
         assert "admin" in p.roles
-
-
-# ---------------------------------------------------------------------------
-# _principal_from_local_mode mutations
-# ---------------------------------------------------------------------------
-
-
-class TestPrincipalFromLocalModeMutations:
-    def test_fallback_principal_is_local_dev(self) -> None:
-        """mut_9/10: fallback changed to 'XXlocal-devXX' or 'LOCAL-DEV'."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode({}, {}, _dev_auth_config())
-        assert p.subject_id == "local-dev"
-
-    def test_cookie_value_used_when_no_header(self) -> None:
-        """mut_2/6: 'and' instead of 'or'; cookie key set to None."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        # No header, but cookie present — should use cookie value
-        p = _principal_from_local_mode({}, {"uterm_principal": "cookieuser"}, _dev_auth_config())
-        assert p.subject_id == "cookieuser"
-
-    def test_cookie_not_used_when_header_present(self) -> None:
-        """Verify header takes precedence over cookie."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode(
-            {"x-uterm-principal": "header_user"}, {"uterm_principal": "cookie_user"}, _dev_auth_config()
-        )
-        assert p.subject_id == "header_user"
-
-    def test_missing_role_defaults_to_admin(self) -> None:
-        """mut_15/17/18: role_header default changed — missing role falls back to admin in dev/local mode."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode({}, {}, _dev_auth_config())
-        # No role header → falls back to admin (dev mode default)
-        assert "admin" in p.roles
-
-    def test_operator_role_accepted_in_local_mode(self) -> None:
-        """mut_24/25: 'operator' removed/uppercased from valid set."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode({"x-uterm-role": "operator"}, {}, _dev_auth_config())
-        assert "operator" in p.roles
-
-    def test_admin_role_accepted_in_local_mode(self) -> None:
-        """mut_26/27: 'admin' removed/uppercased from valid set."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode({"x-uterm-role": "admin"}, {}, _dev_auth_config())
-        assert "admin" in p.roles
-
-    def test_unknown_role_falls_back_to_admin_in_local_mode(self) -> None:
-        """Confirm fallback role is 'admin' (not 'viewer') in local/dev mode."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode({"x-uterm-role": "badactor"}, {}, _dev_auth_config())
-        assert "admin" in p.roles
-
-    def test_scopes_is_star_set(self) -> None:
-        """Local mode grants '*' scope."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-
-        p = _principal_from_local_mode({}, {}, _dev_auth_config())
-        assert "*" in p.scopes
 
 
 # ---------------------------------------------------------------------------

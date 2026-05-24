@@ -140,7 +140,9 @@ class TestApiKeyAuthIntegration:
     def api_key_client(self) -> tuple[TestClient, str]:
         """Create app with API keys enabled in dev mode, return (client, raw_key)."""
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.auth.api_keys_enabled = True
         app = create_server_app(config)
         store = app.state.uterm_api_key_store
@@ -166,7 +168,9 @@ class TestApiKeyAuthIntegration:
 
     def test_no_api_key_header_uses_normal_auth(self) -> None:
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.auth.api_keys_enabled = True
         app = create_server_app(config)
         client = TestClient(app)
@@ -175,7 +179,9 @@ class TestApiKeyAuthIntegration:
 
     def test_api_keys_disabled_ignores_header(self) -> None:
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.auth.api_keys_enabled = False
         app = create_server_app(config)
         store = app.state.uterm_api_key_store
@@ -200,7 +206,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("admin-key")
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "admin" in principal.roles
@@ -211,7 +217,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("admin-key", scopes=frozenset({"admin"}))
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "admin" in principal.roles
@@ -222,7 +228,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("op-key", scopes=frozenset({"operator"}))
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert "operator" in principal.roles
@@ -242,7 +248,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("read-key", scopes=frozenset({"session.read"}))
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert principal.roles == frozenset({"admin"})
@@ -259,7 +265,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("creator-key", scopes=frozenset({"session.control.create"}))
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         authz = AuthorizationService()
@@ -275,7 +281,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("viewer-key", scopes=frozenset({"viewer"}))
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert principal.roles == frozenset({"viewer"})
@@ -288,7 +294,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.auth import _principal_from_api_key
         from provide.uterm.server.models import AuthConfig
 
-        auth = AuthConfig(api_keys_enabled=False, mode="dev")
+        auth = AuthConfig(api_keys_enabled=False, mode="dev_token")
         result = _principal_from_api_key({"x-api-key": "some-key"}, auth, None)
         assert result is None
 
@@ -297,7 +303,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         result = _principal_from_api_key({"x-api-key": ""}, auth, store)
         assert result is None
 
@@ -305,7 +311,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.auth import _principal_from_api_key
         from provide.uterm.server.models import AuthConfig
 
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         result = _principal_from_api_key({"x-api-key": "some-key"}, auth, None)
         assert result is None
 
@@ -317,7 +323,7 @@ class TestApiKeyPrincipalRoles:
         store_a = ApiKeyStore()
         store_b = ApiKeyStore()
         raw_key_a, _ = store_a.create("app-a-key")
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         # Key from store_a validates under store_a
         assert _principal_from_api_key({"x-api-key": raw_key_a}, auth, store_a) is not None
         # ...but NOT under store_b
@@ -329,7 +335,7 @@ class TestApiKeyPrincipalRoles:
 
         store = ApiKeyStore()
         store.create("real-key")
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         result = _principal_from_api_key({"x-api-key": "wrong-key"}, auth, store)
         assert result is None
 
@@ -345,7 +351,9 @@ class TestApiKeyRoutes:
     @pytest.fixture()
     def admin_client(self) -> TestClient:
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.auth.api_keys_enabled = True
         app = create_server_app(config)
         return TestClient(app)
@@ -353,7 +361,9 @@ class TestApiKeyRoutes:
     @pytest.fixture()
     def disabled_client(self) -> TestClient:
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.auth.api_keys_enabled = False
         app = create_server_app(config)
         return TestClient(app)
@@ -497,7 +507,7 @@ class TestApiKeyRoutes:
 
         store = ApiKeyStore()
         raw_key, _record = store.create("scoped", scopes=frozenset({"session.read", "session.write"}))
-        auth = AuthConfig(api_keys_enabled=True, mode="dev")
+        auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
         assert principal.scopes == frozenset({"session.read", "session.write"})

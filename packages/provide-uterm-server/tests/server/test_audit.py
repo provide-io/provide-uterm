@@ -104,7 +104,9 @@ def jwt_client() -> TestClient:
 @pytest.fixture()
 def dev_client() -> TestClient:
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     return TestClient(app)
 
@@ -121,7 +123,7 @@ def test_session_create_emits_audit(dev_client: TestClient) -> None:
         calls = [c for c in mock.call_args_list if c[0][0] == "session.create"]
         assert len(calls) == 1
         kw = calls[0][1]
-        assert kw["principal"] == "local-dev"
+        assert kw["principal"] == "admin"
         assert kw["session_id"].startswith("connect-")
 
 
