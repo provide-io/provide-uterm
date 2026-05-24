@@ -125,11 +125,29 @@ def _validate_no_placeholder_auth_values(config: ServerConfig, mode: str) -> Non
 
 def _validate_auth_config(config: ServerConfig) -> None:
     mode = str(config.auth.mode).strip().lower()
+    if mode == "dev_token":
+        # Stub-IdP path: mints an HS256 key + JWT at startup, writes the
+        # token to a 0600 file, and rewrites config.auth so the regular
+        # JWT validator runs. Auth code paths collapse to one — no
+        # X-Principal/X-Role bypass exists in this mode. This is the
+        # safe replacement for ``dev``/``none``; those legacy modes
+        # remain available below until tests migrate.
+        from provide.uterm.server.dev_idp import setup_dev_idp
+
+        host = str(config.server.host).strip().lower()
+        if not _is_loopback_host(host):
+            raise RuntimeError(
+                "auth.mode='dev_token' is only permitted when server.host is a loopback address "
+                f"(127.0.0.1, localhost, or ::1). Got: {host}"
+            )
+        setup_dev_idp(config.auth)
+        # setup_dev_idp mutated mode → "jwt"; fall through to jwt validation.
+        mode = str(config.auth.mode).strip().lower()
     if mode in {"none", "dev"}:
         if config.auth.require_jwt_in_production:
             raise RuntimeError(
                 f"auth.mode='{mode}' is not allowed when auth.require_jwt_in_production=true. "
-                "Set auth.mode='jwt' or disable require_jwt_in_production."
+                "Set auth.mode='jwt' or 'dev_token', or disable require_jwt_in_production."
             )
 
         host = str(config.server.host).strip().lower()
@@ -143,7 +161,8 @@ def _validate_auth_config(config: ServerConfig) -> None:
         # via the X-Principal/X-Role headers.  Never expose this mode publicly.
         logger.warning(
             "auth_mode=%s: authentication is disabled — any caller can claim any identity. "
-            "Do NOT expose this server on a public network in this mode.",
+            "Do NOT expose this server on a public network in this mode. "
+            "Use auth.mode='dev_token' instead — same single-knob ergonomics with auto-issued JWT.",
             mode,
         )
         return
