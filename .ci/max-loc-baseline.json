@@ -9,7 +9,7 @@
     "packages/provide-uterm-cloudflare/tests/test_session_runtime_unit.py": 604,
     "packages/provide-uterm-cloudflare/tests/test_tunnel_routes.py": 843,
     "packages/provide-uterm-cloudflare/tests/test_webhooks.py": 585,
-    "packages/provide-uterm-cloudflare/tests/test_ws_routes.py": 510,
+    "packages/provide-uterm-cloudflare/tests/test_ws_routes.py": 605,
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py": 792,
     "packages/provide-uterm/tests/detection/test_detector.py": 569,
     "packages/provide-uterm/tests/e2e/test_fanout_docker_ssh.py": 611,
