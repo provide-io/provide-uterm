@@ -109,15 +109,15 @@ class ProvideTerminal {
         const root = document.createElement("div");
         root.className = "provide-uterm";
         root.innerHTML = `
-      <button class="gear-btn" id="gearBtn-${this.uid}" title="Settings">${gearSvg}</button>
+      <button type="button" class="gear-btn" id="gearBtn-${this.uid}" title="Settings" aria-label="Open terminal settings">${gearSvg}</button>
       <div class="settings-overlay" id="settingsOverlay-${this.uid}"></div>
-      <div class="settings-panel" id="settingsPanel-${this.uid}">
+      <div class="settings-panel" id="settingsPanel-${this.uid}" role="dialog" aria-label="Terminal settings">
         <h3>Theme</h3>
-        <div class="theme-options">
-          <button class="theme-btn" data-theme="code">Code</button>
-          <button class="theme-btn" data-theme="crt">CRT</button>
-          <button class="theme-btn" data-theme="bbs">BBS/DOS</button>
-          <button class="theme-btn" data-theme="glass">Glass</button>
+        <div class="theme-options" role="group" aria-label="Theme">
+          <button type="button" class="theme-btn" data-theme="code" aria-label="Code theme">Code</button>
+          <button type="button" class="theme-btn" data-theme="crt" aria-label="CRT theme">CRT</button>
+          <button type="button" class="theme-btn" data-theme="bbs" aria-label="BBS/DOS theme">BBS/DOS</button>
+          <button type="button" class="theme-btn" data-theme="glass" aria-label="Glass theme">Glass</button>
         </div>
         <h3>Terminal Size</h3>
         <div class="setting-row">
@@ -184,7 +184,7 @@ class ProvideTerminal {
         <div class="frame-header">
           <span class="frame-header-title">${title}</span>
           <div class="frame-status">
-            <span class="status-dot" data-status-dot="1"></span>
+            <span class="status-dot" data-status-dot="1" role="status" aria-label="Connecting"></span>
             <span data-status-text="1">Connecting...</span>
           </div>
         </div>
@@ -196,7 +196,7 @@ class ProvideTerminal {
           <span>ANSI Terminal</span>
           <div class="frame-statusbar-right">
             <div class="frame-status">
-              <span class="status-dot" data-status-dot="1"></span>
+              <span class="status-dot" data-status-dot="1" role="status" aria-label="Connecting"></span>
               <span data-status-text="1">Connecting...</span>
             </div>
             <span data-connection-info="1">${this.settings.cols}×${this.settings.rows}</span>
@@ -206,7 +206,7 @@ class ProvideTerminal {
           <span class="frame-label">${label}</span>
           <div style="display:flex;align-items:center;gap:10px;">
             <div class="frame-status">
-              <span class="status-dot" data-status-dot="1"></span>
+              <span class="status-dot" data-status-dot="1" role="status" aria-label="Connecting"></span>
               <span data-status-text="1">Connecting...</span>
             </div>
             <div class="led" data-led-indicator="1"></div>
@@ -225,6 +225,7 @@ class ProvideTerminal {
         const statusText = connected ? "Connected" : "Disconnected";
         this.root?.querySelectorAll("[data-status-dot='1']").forEach((dot) => {
             dot.className = `status-dot${connected ? " connected" : ""}`;
+            dot.setAttribute("aria-label", statusText);
         });
         this.root?.querySelectorAll("[data-led-indicator='1']").forEach((led) => {
             led.classList.toggle("on", connected);
