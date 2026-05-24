@@ -116,6 +116,37 @@ def test_parse_worker_hello_with_invalid_protocol_version_silently_ignored() -> 
     assert "protocol_version" not in frame
 
 
+def test_parse_worker_hello_with_protocol_block_dict() -> None:
+    """worker_hello with a ``protocol: {min, max, preferred}`` block: parsed and coerced to ints."""
+    frame = parse_frame(frame_json("worker_hello", input_mode="open", protocol={"min": 1, "max": 2, "preferred": 2}))
+    assert frame.get("protocol") == {"min": 1, "max": 2, "preferred": 2}
+
+
+def test_parse_worker_hello_protocol_block_drops_non_numeric_values() -> None:
+    """Non-numeric fields inside the protocol block are dropped, not raised."""
+    frame = parse_frame(
+        frame_json(
+            "worker_hello",
+            input_mode="open",
+            protocol={"min": 1, "max": "not-a-number", "preferred": None},
+        )
+    )
+    # ``min`` survives, ``max`` and ``preferred`` are dropped silently.
+    assert frame.get("protocol") == {"min": 1}
+
+
+def test_parse_worker_hello_protocol_block_all_invalid_omits_field() -> None:
+    """If every protocol-block entry fails coercion, the field is left off the normalized frame."""
+    frame = parse_frame(frame_json("worker_hello", input_mode="open", protocol={"min": "x", "max": "y"}))
+    assert "protocol" not in frame
+
+
+def test_parse_worker_hello_protocol_non_dict_ignored() -> None:
+    """A non-dict ``protocol`` value is silently dropped (defensive against malformed clients)."""
+    frame = parse_frame(frame_json("worker_hello", input_mode="open", protocol="bogus"))
+    assert "protocol" not in frame
+
+
 def test_parse_passthrough_frames() -> None:
     """Lines 192-204: snapshot_req/error/heartbeat/ping/hijack_request etc. pass through."""
     for frame_type in (
