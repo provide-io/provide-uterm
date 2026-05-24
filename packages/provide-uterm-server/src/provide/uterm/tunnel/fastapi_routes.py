@@ -84,6 +84,11 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
 
         await websocket.accept()
         prev_was_hijacked = await hub.register_worker(worker_id, websocket)
+        # Mark this WorkerTermState as tunnel-backed so hub.send_worker
+        # routes browser input as raw bytes to the worker's PTY (via
+        # `uterm share`'s bridge loop) instead of the DLE-framed JSON
+        # envelope the regular ``/ws/worker/{id}/term`` workers expect.
+        await hub.set_worker_tunnel_flag(worker_id, True)
         registry = getattr(getattr(app, "state", object()), "uterm_registry", None)
         if registry is not None:
             await registry.set_tunnel_connected(worker_id, True)
