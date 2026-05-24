@@ -227,7 +227,14 @@ class HubMessagingMixin:
             )
 
     async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
-        """Send *msg* to the worker WebSocket; returns False if no worker is connected."""
+        """Send *msg* to the worker WebSocket; returns False if no worker is connected.
+
+        Tunnel workers (``is_tunnel_worker=True``) use a different wire
+        format: ``input`` messages are sent as raw bytes (the worker
+        writes them straight to its PTY), other message types are
+        dropped because the worker's bridge loop has no JSON-envelope
+        handling.
+        """
         from provide.uterm.bridge.hub.core import _encode_worker_frame
 
         if source and msg.get("type") == "input":
@@ -238,7 +245,19 @@ class HubMessagingMixin:
             if st is None or st.worker_ws is None:
                 return False
             ws = st.worker_ws
+            is_tunnel = st.is_tunnel_worker
         try:
+            if is_tunnel:
+                # Tunnel wire format: hub → worker is raw bytes for input,
+                # nothing for control. Matches the existing ``uterm share``
+                # bridge loop which writes every received byte to PTY.
+                if msg.get("type") != "input":
+                    return True
+                data = msg.get("data")
+                if not isinstance(data, str):
+                    return True
+                await ws.send_bytes(data.encode("utf-8"))
+                return True
             await ws.send_text(_encode_worker_frame(msg))
             return True
         except Exception as exc:

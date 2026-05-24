@@ -176,6 +176,20 @@ class _ConnectionMixin:
             st = self._workers.get(worker_id)
             return st is not None and st.worker_ws is ws
 
+    async def set_worker_tunnel_flag(self, worker_id: str, value: bool) -> None:
+        """Mark whether ``worker_id``'s worker WS uses the tunnel wire format.
+
+        See :class:`WorkerTermState.is_tunnel_worker` for the semantics
+        (raw bytes for input, no DLE-framed JSON envelope). Called by
+        :mod:`provide.uterm.tunnel.fastapi_routes` right after
+        ``register_worker`` so :meth:`send_worker` can route outbound
+        messages with the correct codec.
+        """
+        async with self._lock:
+            st = self._workers.get(worker_id)
+            if st is not None:
+                st.is_tunnel_worker = value
+
     async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
         r"""Process a \`\`worker_hello\`\` message: set input_mode and persist protocol version.
 
