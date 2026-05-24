@@ -8,15 +8,15 @@ can see at a glance who's looking at what. Control is handed off from the first
 responder to the DBA to run the fix, then to the SRE to verify. Toast notifications
 announce each handoff. Typing indicators pulse. People leave as the incident wraps up.
 
-**Cast:** Tim (principal, operator), Kal (SRE), Chris (backend dev), Brandon (DBA),
-Kyle (security), Logan (devops), Heidi (eng manager, viewer), Heather (QA),
-Sentinel (monitoring bot, viewer).
+**Cast:** Tanuki Tim (principal, operator), Bear Brody (SRE), Crane Cara (backend dev),
+Falcon Finn (DBA), Lynx Liam (security), Wolf Willa (devops), Heron Hugo (eng manager,
+viewer), Marten Mira (QA), Sentinel (monitoring bot, viewer).
 
 **What you'll see:**
 - Presence bar filling from 1 to 9 avatars as the team joins
 - Edge indicator bars spreading across the minimap as people scroll to different
   parts of the scrollback
-- Control transfer toasts ("Control transferred to Brandon") with owner glow moving
+- Control transfer toasts ("Control transferred to Falcon Finn") with owner glow moving
   between avatars
 - Typing indicators pulsing when the active operator types
 - Avatars disappearing as people disconnect during resolution
@@ -25,15 +25,15 @@ Sentinel (monitoring bot, viewer).
 
 | File | Description |
 |------|-------------|
-| [composite.mp4](composite.mp4) | 3-column split: Tim \| Brandon \| Heidi |
+| [composite.mp4](composite.mp4) | 3-column split: Tanuki Tim \| Falcon Finn \| Heron Hugo |
 | [composite_trim.mp4](composite_trim.mp4) | Highlight clip (handoff moment) |
-| [operator.mp4](operator.mp4) | Operator perspective (operator, hero) |
-| [brandon.mp4](brandon.mp4) | Brandon's perspective (DBA, receives handoff) |
-| [heidi.mp4](heidi.mp4) | Heidi's perspective (eng manager, viewer) |
-| [kal.mp4](kal.mp4) | Kal's perspective (SRE, verifies fix) |
-| [chris.mp4](chris.mp4) | Chris's perspective (backend dev) |
-| [kyle.mp4](kyle.mp4) | Kyle's perspective (security) |
-| [logan.mp4](logan.mp4) | Logan's perspective (devops) |
-| [heather.mp4](heather.mp4) | Heather's perspective (QA) |
+| [operator.mp4](operator.mp4) | Tanuki Tim's perspective (operator, hero) |
+| [falcon_finn.mp4](falcon_finn.mp4) | Falcon Finn's perspective (DBA, receives handoff) |
+| [heron_hugo.mp4](heron_hugo.mp4) | Heron Hugo's perspective (eng manager, viewer) |
+| [bear_brody.mp4](bear_brody.mp4) | Bear Brody's perspective (SRE, verifies fix) |
+| [crane_cara.mp4](crane_cara.mp4) | Crane Cara's perspective (backend dev) |
+| [lynx_liam.mp4](lynx_liam.mp4) | Lynx Liam's perspective (security) |
+| [wolf_willa.mp4](wolf_willa.mp4) | Wolf Willa's perspective (devops) |
+| [marten_mira.mp4](marten_mira.mp4) | Marten Mira's perspective (QA) |
 | [sentinel.mp4](sentinel.mp4) | Sentinel's perspective (monitoring bot) |
 | [terminal.cast](terminal.cast) | Terminal session (asciinema) |
