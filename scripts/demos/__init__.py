@@ -36,7 +36,7 @@ from scripts.demos.output import (
     out_dir,
     warn,
 )
-from scripts.demos.server import BrowserStep, free_port, start_server, stop_server
+from scripts.demos.server import BrowserStep, dev_bearer_headers, free_port, start_server, stop_server
 
 __all__ = [
     "BASE_OUT",
@@ -49,6 +49,7 @@ __all__ = [
     "clean_terminal_output",
     "click_hijack",
     "concat_clips",
+    "dev_bearer_headers",
     "fanout_send",
     "fanout_send_results",
     "ffmpeg_to_mp4",
