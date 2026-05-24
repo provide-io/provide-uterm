@@ -78,9 +78,11 @@ demo/**/screenshots/
 !demo/**/poster.png
 !demo/**/screenshots/
 !demo/**/screenshots/*.png
-# Top-level hero reel — site-uterm-io's hero element references it
-# via /demo-assets/_hero/reel.mp4; sync_uterm_demos.py copies it there
-# at build time, so it must be present in the checked-out provide-uterm tree.
+# Top-level hero reel + its pre-baked first-frame poster.
+# site-uterm-io's hero element references both via /demo-assets/_hero/;
+# sync_uterm_demos.py copies them at build time. The poster is committed
+# pre-baked so the deploy runner doesn't need ffmpeg.
 !demo/reel.mp4
+!demo/reel-poster.png
 artifacts/
 .worktrees/
