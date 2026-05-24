@@ -233,7 +233,8 @@ class LocalIdentityProvider(IdentityProvider):
             or self._cookie_value(cookies, self.auth.principal_cookie)
             or "anonymous"
         )
-        role = str(headers.get(self.auth.role_header, "")).strip().lower()
+        role_raw = headers.get(self.auth.role_header) or self._cookie_value(cookies, self.auth.role_cookie) or ""
+        role = str(role_raw).strip().lower()
         roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"viewer"})
         return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
 

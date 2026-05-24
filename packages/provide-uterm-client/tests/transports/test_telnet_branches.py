@@ -188,6 +188,44 @@ class TestTelnetNegotiateBranches:
             await server.wait_closed()
 
 
+class TestParseTelnetBufferFinal:
+    """Cover the `final=True` truncation branches in _parse_telnet_buffer."""
+
+    def test_final_lone_trailing_iac_emitted_as_literal(self) -> None:
+        # Buffer ends with a lone IAC byte; with final=True it must be emitted
+        # rather than buffered (lines 112-115).
+        payload, events, consumed = TelnetTransport._parse_telnet_buffer(
+            bytes([ord("A"), IAC]), final=True
+        )
+        assert payload == bytes([ord("A"), IAC])
+        assert events == []
+        assert consumed == 2
+
+    def test_final_truncated_negotiation_emitted_as_literal(self) -> None:
+        # IAC DO with no option byte; final=True flushes the partial bytes as
+        # literal data (lines 121-125).
+        from provide.uterm.transports.telnet import DO
+
+        payload, events, consumed = TelnetTransport._parse_telnet_buffer(
+            bytes([ord("A"), IAC, DO]), final=True
+        )
+        assert payload == bytes([ord("A"), IAC, DO])
+        assert events == []
+        assert consumed == 3
+
+    def test_final_truncated_subneg_emitted_as_literal(self) -> None:
+        # IAC SB with no IAC SE terminator; final=True flushes the partial
+        # subnegotiation as literal data (lines 135-139).
+        from provide.uterm.transports.telnet import SB
+
+        payload, events, consumed = TelnetTransport._parse_telnet_buffer(
+            bytes([ord("A"), IAC, SB, 24, ord("h"), ord("i")]), final=True
+        )
+        assert payload == bytes([ord("A"), IAC, SB, 24, ord("h"), ord("i")])
+        assert events == []
+        assert consumed == 6
+
+
 class TestConsumeRxBufferZeroConsumed:
     def test_incomplete_iac_does_not_modify_buffer(self) -> None:
         """Line 248->250: consumed=0 when buffer starts with incomplete IAC → buffer unchanged."""

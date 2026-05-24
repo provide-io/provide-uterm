@@ -42,6 +42,7 @@ class AuthConfig(ServerBaseModel):
     principal_header: str = "x-uterm-principal"
     role_header: str = "x-uterm-role"
     principal_cookie: str = "uterm_principal"
+    role_cookie: str = "uterm_role"
     surface_cookie: str = "uterm_surface"
     token_cookie: str = "uterm_token"  # noqa: S105
     jwt_issuer: str = "provide-uterm"

@@ -233,3 +233,21 @@ class TestWorkerControl:
 # (TestEntityPrefix, TestCustomHeaders, TestClientLifecycle, TestFullLifecycle,
 #  TestSendGuards, TestSessionAPI, TestNonJsonResponse, TestEdgeCases,
 #  TestTransportErrors moved to test_hijack_client_2.py)
+
+
+class TestSanitize:
+    """Unit tests for the `_sanitize` helper that scrubs log payloads."""
+
+    def test_long_list_truncated_to_first_10(self) -> None:
+        from provide.uterm.client.hijack import _sanitize
+
+        result = _sanitize(list(range(25)))
+        assert result == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, "..."]
+
+    def test_long_string_truncated_with_ellipsis(self) -> None:
+        from provide.uterm.client.hijack import _sanitize
+
+        result = _sanitize("a" * 600)
+        assert result == ("a" * 500) + "..."
+        assert len(result) == 503
+
