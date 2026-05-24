@@ -135,7 +135,14 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 try:
                     events = decoder.feed(raw)
                 except ControlChannelProtocolError as exc:
-                    logger.warning("ws_worker_bad_stream worker_id=%s: %s", worker_id, exc)
+                    preview = raw[:256]
+                    logger.warning(
+                        "ws_worker_bad_stream worker_id=%s: %s raw_len=%d preview=%r",
+                        worker_id,
+                        exc,
+                        len(raw),
+                        preview,
+                    )
                     with suppress(Exception):
                         await websocket.close(code=1003, reason=str(exc))
                         logger.debug("ws_worker_closed_protocol_error worker_id=%s", worker_id)

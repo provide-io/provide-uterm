@@ -18,9 +18,12 @@ import jwt
 import pytest
 import uvicorn
 import websockets
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk, DataChunk, encode_control, encode_data
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_frame
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -216,3 +219,159 @@ class TestReferenceServerJwtE2E:
             hijack_state = await _wait_for_hijack_state(admin_ws, expected=True)
             assert hijack_state is not None
             assert hijack_state["hijacked"] is True
+
+    async def test_tunnel_route_accepts_tunnel_worker_token_in_jwt_mode(self) -> None:
+        """A valid tunnel worker token should connect to /tunnel/{id} even in JWT mode."""
+        config = default_server_config()
+        config.auth.mode = "jwt"
+        config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
+        config.auth.jwt_algorithms = ["HS256"]
+        config.auth.worker_bearer_token = _mint_token("runtime-worker", ["admin"])
+        config.server.host = "127.0.0.1"
+        config.server.port = 0
+
+        app = create_server_app(config)
+        admin_headers = _auth_headers("jwt-admin", ["admin"])
+        with TestClient(app) as client:
+            created = client.post("/api/tunnels", headers=admin_headers, json={"tunnel_type": "terminal"})
+            assert created.status_code == 200
+            tunnel = created.json()
+            token = tunnel["worker_token"]
+            tunnel_id = tunnel["tunnel_id"]
+            ws_endpoint = f"/tunnel/{tunnel_id}"
+
+            with client.websocket_connect(ws_endpoint, headers={"Authorization": f"Bearer {token}"}) as ws:
+                ws.send_bytes(encode_frame(CHANNEL_DATA, b"hello from jwt worker"))
+
+    async def test_tunnel_route_accepts_global_worker_token_in_jwt_mode(self) -> None:
+        """Global runtime worker token should still authenticate /tunnel/{id} in JWT mode."""
+        config = default_server_config()
+        config.auth.mode = "jwt"
+        config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
+        config.auth.jwt_algorithms = ["HS256"]
+        global_worker_token = _mint_token("runtime-worker", ["admin"])
+        config.auth.worker_bearer_token = global_worker_token
+        config.server.host = "127.0.0.1"
+        config.server.port = 0
+
+        app = create_server_app(config)
+        admin_headers = _auth_headers("jwt-admin", ["admin"])
+        with TestClient(app) as client:
+            created = client.post("/api/tunnels", headers=admin_headers, json={"tunnel_type": "terminal"})
+            assert created.status_code == 200
+            tunnel_id = created.json()["tunnel_id"]
+            ws_endpoint = f"/tunnel/{tunnel_id}"
+
+            with client.websocket_connect(
+                ws_endpoint,
+                headers={"Authorization": f"Bearer {global_worker_token}"},
+            ) as ws:
+                ws.send_bytes(encode_frame(CHANNEL_DATA, b"hello with global worker token"))
+
+    async def test_tunnel_route_rejects_bad_token_in_jwt_mode(self) -> None:
+        """A tunnel endpoint should reject incorrect worker tokens in JWT mode."""
+        config = default_server_config()
+        config.auth.mode = "jwt"
+        config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
+        config.auth.jwt_algorithms = ["HS256"]
+        config.auth.worker_bearer_token = _mint_token("runtime-worker", ["admin"])
+        config.server.host = "127.0.0.1"
+        config.server.port = 0
+
+        app = create_server_app(config)
+        admin_headers = _auth_headers("jwt-admin", ["admin"])
+        with TestClient(app) as client:
+            created = client.post("/api/tunnels", headers=admin_headers, json={"tunnel_type": "terminal"})
+            assert created.status_code == 200
+            tunnel_id = created.json()["tunnel_id"]
+            ws_endpoint = f"/tunnel/{tunnel_id}"
+
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect(
+                    ws_endpoint,
+                    headers={"Authorization": "Bearer definitely-wrong-token"},
+                ):
+                    pass
+
+    async def test_tunnel_route_rejects_expired_tunnel_worker_token_in_jwt_mode(self) -> None:
+        """Expired per-session tunnel worker tokens should not authenticate /tunnel/{id}."""
+        config = default_server_config()
+        config.auth.mode = "jwt"
+        config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
+        config.auth.jwt_algorithms = ["HS256"]
+        config.auth.worker_bearer_token = _mint_token("runtime-worker", ["admin"])
+        config.server.host = "127.0.0.1"
+        config.server.port = 0
+
+        app = create_server_app(config)
+        admin_headers = _auth_headers("jwt-admin", ["admin"])
+        with TestClient(app) as client:
+            created = client.post("/api/tunnels", headers=admin_headers, json={"tunnel_type": "terminal"})
+            assert created.status_code == 200
+            tunnel = created.json()
+            token = tunnel["worker_token"]
+            tunnel_id = tunnel["tunnel_id"]
+            ws_endpoint = f"/tunnel/{tunnel_id}"
+
+            client.app.state.uterm_tunnel_tokens[tunnel_id]["expires_at"] = time.time() - 1
+
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect(
+                    ws_endpoint,
+                    headers={"Authorization": f"Bearer {token}"},
+                ):
+                    pass
+
+    async def test_tunnel_route_rejects_worker_token_with_ip_binding_mismatch(self) -> None:
+        """IP-bound tunnel workers should be rejected if the source IP changes."""
+        config = default_server_config()
+        config.auth.mode = "jwt"
+        config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
+        config.auth.jwt_algorithms = ["HS256"]
+        config.auth.worker_bearer_token = _mint_token("runtime-worker", ["admin"])
+        config.tunnel.ip_binding = True
+        config.server.host = "127.0.0.1"
+        config.server.port = 0
+
+        app = create_server_app(config)
+        admin_headers = _auth_headers("jwt-admin", ["admin"])
+        with TestClient(app) as client:
+            created = client.post("/api/tunnels", headers=admin_headers, json={"tunnel_type": "terminal"})
+            assert created.status_code == 200
+            tunnel = created.json()
+            token = tunnel["worker_token"]
+            tunnel_id = tunnel["tunnel_id"]
+            ws_endpoint = f"/tunnel/{tunnel_id}"
+
+            client.app.state.uterm_tunnel_tokens[tunnel_id]["issued_ip"] = "198.51.100.1"
+
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect(
+                    ws_endpoint,
+                    headers={"Authorization": f"Bearer {token}"},
+                ):
+                    pass
+
+    async def test_tunnel_route_rejects_when_tunnel_token_store_is_corrupt(self) -> None:
+        """A non-dict tunnel token store should be treated as missing worker token data."""
+        config = default_server_config()
+        config.auth.mode = "jwt"
+        config.auth.jwt_public_key_pem = _TEST_SIGNING_KEY
+        config.auth.jwt_algorithms = ["HS256"]
+        config.auth.worker_bearer_token = _mint_token("runtime-worker", ["admin"])
+        config.server.host = "127.0.0.1"
+        config.server.port = 0
+
+        app = create_server_app(config)
+        admin_headers = _auth_headers("jwt-admin", ["admin"])
+        with TestClient(app) as client:
+            created = client.post("/api/tunnels", headers=admin_headers, json={"tunnel_type": "terminal"})
+            assert created.status_code == 200
+            tunnel_id = created.json()["tunnel_id"]
+            ws_endpoint = f"/tunnel/{tunnel_id}"
+
+            client.app.state.uterm_tunnel_tokens = {"__poison": object()}
+
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect(ws_endpoint, headers={"Authorization": "Bearer no-match"}):
+                    pass

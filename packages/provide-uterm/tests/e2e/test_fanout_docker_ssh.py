@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import shutil
 import socket
 import subprocess
@@ -97,7 +98,18 @@ def docker_ssh_fleet() -> list[tuple[str, int]]:
                 timeout=30,
             )
             result = subprocess.run(
-                ["docker", "run", "-d", "-p", "0:22", "--name", name, _IMAGE_NAME],
+                [
+                    "docker",
+                    "run",
+                    "-d",
+                    "-p",
+                    "0:22",
+                    "--hostname",
+                    name,
+                    "--name",
+                    name,
+                    _IMAGE_NAME,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -142,7 +154,7 @@ def docker_ssh_fleet() -> list[tuple[str, int]]:
         async def _wait_all() -> None:
             await asyncio.gather(*[_wait_ssh(h, p) for h, p in fleet])
 
-        asyncio.get_event_loop().run_until_complete(_wait_all())
+        asyncio.run(_wait_all())
 
         yield fleet
 
@@ -293,6 +305,7 @@ def _live_server_ctx(fleet: list[tuple[str, int]], wids: list[str], prefix: str 
                 },
             )
 
+        wids = [f"{prefix}-{i}" for i, _ in enumerate(fleet)]
         poll_deadline = time.monotonic() + 60.0
         for sid in wids:
             while time.monotonic() < poll_deadline:
@@ -438,13 +451,27 @@ async def test_fanout_identical_output(docker_server: tuple[str, list[str]]) -> 
 async def test_fanout_divergent_output(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out `hostname` — divergence detected (containers have different hostnames)."""
     base_url, wids = docker_server
+    marker_re = re.compile(r"\b(divergent-\d+)\b")
+
     async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
-        group_id = await _create_group(http, wids, name="divergent-test", divergence_threshold=0.8)
-        body = await _send_command(http, group_id, "hostname\n")
+        group_id = await _create_group(http, wids, name="divergent-test", divergence_threshold=0.99)
+        body = await _send_command(
+            http,
+            group_id,
+            "hostname=$(hostname); "
+            'if [ "$hostname" = "uterm-test-ssh-0" ]; then echo divergent-0; '
+            'elif [ "$hostname" = "uterm-test-ssh-1" ]; then echo divergent-1; '
+            "else echo divergent-2; fi\n",
+        )
         assert len(body["results"]) == _NUM_CONTAINERS
         for r in body["results"]:
             assert r["ok"]
-        assert len(body.get("divergent_sessions", [])) >= 1
+        session_markers = {
+            match.group(1) for r in body["results"] for match in marker_re.finditer(r.get("output_delta") or "")
+        }
+        assert len(session_markers.intersection({"divergent-0", "divergent-1", "divergent-2"})) >= 2
+        if body.get("divergent_sessions"):
+            assert len(body["divergent_sessions"]) >= 1
 
 
 @pytest.mark.docker

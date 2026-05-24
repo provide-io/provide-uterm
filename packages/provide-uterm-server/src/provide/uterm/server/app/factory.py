@@ -280,11 +280,77 @@ def create_server_app(
         logger.info("tunnel_token_validation_failed session_id=%s source_ip=%s", session_id, source_ip)
         return None
 
+    def _resolve_tunnel_ws_worker_principal(connection: HTTPConnection) -> Principal | None:
+        path = str(connection.scope.get("path", ""))
+        if not path.startswith("/tunnel/"):
+            return None
+        worker_id = path.removeprefix("/tunnel/")
+        if not worker_id:
+            return None
+
+        provided = extract_bearer_token(connection.headers)
+        if not provided:
+            return None
+
+        # Tunnel workers in JWT mode should still be able to authenticate with
+        # the raw global worker token.  This keeps CLI/runtime behaviour
+        # aligned with /ws/worker/ auth before JWT resolution is attempted.
+        if config.auth.worker_bearer_token is not None and secrets.compare_digest(
+            provided,
+            config.auth.worker_bearer_token,
+        ):
+            connection.state.uterm_worker_token = provided
+            return Principal(subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+
+        app = connection.scope.get("app")
+        token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
+        token_state = token_map.get(worker_id) if isinstance(token_map, dict) else None
+        if not isinstance(token_state, dict):
+            return None
+
+        # Check expiry.
+        expires_at = token_state.get("expires_at")
+        if isinstance(expires_at, (int, float)) and time.time() > float(expires_at):
+            logger.info("tunnel_token_expired session_id=%s", worker_id)
+            return None
+
+        # Check IP binding.
+        if config.tunnel.ip_binding:
+            issued_ip = token_state.get("issued_ip")
+            client_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
+            if issued_ip and issued_ip != client_ip:
+                logger.info(
+                    "tunnel_token_ip_mismatch session_id=%s issued=%s actual=%s", worker_id, issued_ip, client_ip
+                )
+                return None
+
+        # Match token type (stored as BLAKE2b digest).
+        from provide.uterm.tunnel.token_hash import verify_token
+
+        source_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
+        if verify_token(str(provided), str(token_state.get("worker_token_hash", ""))):
+            connection.state.uterm_worker_token = str(provided)
+            logger.info("tunnel_worker_token_validated session_id=%s source_ip=%s", worker_id, source_ip)
+            return Principal(subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+
+        logger.info("tunnel_worker_token_validation_failed session_id=%s source_ip=%s", worker_id, source_ip)
+        return None
+
     async def _require_authenticated(connection: HTTPConnection) -> None:
         share_principal = _resolve_tunnel_share_principal(connection)
         if share_principal is not None:
             connection.state.uterm_principal = share_principal
             return
+
+        # In JWT mode, tunnel workers authenticate with tunnel tokens before
+        # falling through to JWT principal resolution.  Without this bypass,
+        # per-session /tunnel/{id} tokens would be rejected as anonymous.
+        if connection.scope.get("type") == "websocket":
+            worker_principal = _resolve_tunnel_ws_worker_principal(connection)
+            if worker_principal is not None:
+                connection.state.uterm_principal = worker_principal
+                return
+
         # Workers authenticate with a raw bearer token, not a JWT.  Check it
         # before JWT resolution so a valid worker token is never mis-rejected as
         # anonymous when auth.mode='jwt'.
