@@ -123,6 +123,33 @@ def _dev_auth_headers_or_empty() -> dict[str, str]:
         return {}
 
 
+def _dev_auth_cookies_or_empty(base_url: str) -> list[dict[str, object]]:
+    """Build a list of cookies that authenticate page-driven fetches/WebSockets.
+
+    ``_dev_auth_headers_or_empty`` only covers navigation requests. WebSocket
+    connections opened from inside the page (e.g. ``new ProvideHijack(...)``
+    constructing ``new WebSocket("/ws/browser/...")``) don't carry custom
+    HTTP headers — browsers don't allow it. They *do* carry cookies. The
+    server's auth resolver reads the ``uterm_token`` cookie via the same
+    JWT validation codepath, so dropping the bearer into that cookie gives
+    the WS handshake a credential it can verify.
+    """
+    headers = _dev_auth_headers_or_empty()
+    bearer = headers.get("Authorization", "")
+    token = bearer.removeprefix("Bearer ").strip() if bearer.startswith("Bearer ") else ""
+    if not token:
+        return []
+    # Playwright requires either ``url`` *or* ``domain`` — not both. Use the
+    # url form so domain + path + secure are inferred from base_url.
+    return [
+        {
+            "name": "uterm_token",
+            "value": token,
+            "url": base_url,
+        }
+    ]
+
+
 def record_perspective(
     name: str,
     base_url: str,
@@ -147,6 +174,9 @@ def record_perspective(
                 record_video_size={"width": 1280, "height": 720},
                 extra_http_headers=_dev_auth_headers_or_empty(),
             )
+            _auth_cookies = _dev_auth_cookies_or_empty(base_url)
+            if _auth_cookies:
+                ctx.add_cookies(_auth_cookies)  # type: ignore[arg-type]
             page = ctx.new_page()
             _run_steps(page, resolved, shots_dir)
             ctx.close()
@@ -190,6 +220,9 @@ def record_perspective_with_background(
                 record_video_size={"width": 1280, "height": 720},
                 extra_http_headers=_dev_auth_headers_or_empty(),
             )
+            _auth_cookies = _dev_auth_cookies_or_empty(base_url)
+            if _auth_cookies:
+                ctx.add_cookies(_auth_cookies)  # type: ignore[arg-type]
             page = ctx.new_page()
             _run_steps(page, resolved, shots_dir)
             ctx.close()
