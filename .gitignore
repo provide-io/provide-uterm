@@ -68,6 +68,8 @@ demo/**/*.cast
 demo/**/*.mp4
 demo/**/*.webm
 demo/**/screenshots/
+# Repo-local demo recordings generated during manual runs and should not be tracked.
+demo/recordings/
 # Tracked exceptions: just the files site-uterm-io's deploy actually needs
 # (browser_trim.mp4 / poster.png / terminal.cast / screenshots/*.png). Total ~6 MB
 # across 15 demos; intermediate build artifacts (raw recordings, per-frame mp4s,
