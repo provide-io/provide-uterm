@@ -325,7 +325,7 @@ class UtermServerConfig(ServerBaseModel):
     """Top-level application config for the standalone server."""
 
     server: ServerBindConfig = Field(default_factory=ServerBindConfig)
-    auth: AuthConfig = Field(default_factory=lambda: AuthConfig(mode="dev"))
+    auth: AuthConfig = Field(default_factory=lambda: AuthConfig(mode="dev_token"))
     control_plane: ControlPlaneConfig = Field(default_factory=ControlPlaneConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     recording: RecordingConfig = Field(default_factory=RecordingConfig)

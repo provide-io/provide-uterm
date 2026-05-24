@@ -48,10 +48,13 @@ def _drain_until(ws: Any, msg_type: str, *, max_reads: int = 20) -> dict[str, An
     raise AssertionError(f"never received {msg_type!r}")
 
 
-def _make_app(auth_mode: str = "none", **tunnel_kwargs: Any) -> tuple[ServerConfig, Any]:
+def _make_app(auth_mode: str = "header", **tunnel_kwargs: Any) -> tuple[ServerConfig, Any]:
     """Create a server app with no auth and no pre-configured sessions."""
     cfg = default_server_config()
     cfg.auth.mode = auth_mode
+    if auth_mode == "header":
+        cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     cfg.sessions = []  # no default sessions
     if tunnel_kwargs:
         cfg.tunnel = TunnelConfig(**tunnel_kwargs)

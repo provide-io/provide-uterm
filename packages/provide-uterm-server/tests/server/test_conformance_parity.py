@@ -14,7 +14,9 @@ from provide.uterm.server.models import SessionDefinition
 
 def _make_client() -> TestClient:
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     cfg.sessions = [
         SessionDefinition(
             session_id="share-sess",

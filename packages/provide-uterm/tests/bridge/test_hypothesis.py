@@ -222,7 +222,11 @@ class TestRESTFuzz:
                 if resp.status_code == 200:
                     data = resp.json()
                     assert data["owner"] == owner
-                    assert 1 <= (data["lease_expires_at"] - time.time()) <= 14400 + 5
+                    # Server set lease_expires_at = now() + lease; a few ms may
+                    # have elapsed between the server's clock read and ours, so
+                    # for lease=1 the delta can be slightly under 1. Allow a
+                    # 100ms grace at the lower bound.
+                    assert 0.9 <= (data["lease_expires_at"] - time.time()) <= 14400 + 5
             else:
                 # Out of range — pydantic rejects
                 assert resp.status_code == 422

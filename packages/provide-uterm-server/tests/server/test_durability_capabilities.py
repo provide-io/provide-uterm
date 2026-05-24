@@ -13,7 +13,9 @@ from provide.uterm.server import create_server_app, default_server_config
 
 def test_sqlite_mode_reports_process_local_tunnel_webhook_and_fanout_state(tmp_path) -> None:
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.sessions = []
     config.control_plane.backend = "sqlite"
     config.control_plane.database_url = str(tmp_path / "control-plane.db")

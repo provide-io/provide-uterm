@@ -24,7 +24,9 @@ from provide.uterm.server import create_server_app, default_server_config
 def app_client() -> TestClient:
     """TestClient with dev auth and the default shell session."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     return TestClient(app)
 
@@ -518,7 +520,9 @@ def test_session_delete_revokes_tunnel_tokens() -> None:
 def test_recording_download_no_config_on_app_state(app_client: TestClient, sid: str) -> None:
     """Recording download returns 404 when uterm_config is absent from app state."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     del app.state.uterm_config  # type: ignore[attr-defined]
 

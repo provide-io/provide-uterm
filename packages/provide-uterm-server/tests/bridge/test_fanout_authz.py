@@ -15,7 +15,9 @@ from provide.uterm.server import create_server_app, default_server_config
 
 def _make_app() -> Any:
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     cfg.sessions = []
     return create_server_app(cfg)
 

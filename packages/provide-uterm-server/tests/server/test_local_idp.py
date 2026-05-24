@@ -9,7 +9,7 @@ from provide.uterm.server.models import AuthConfig
 
 
 def test_local_idp_instantiation():
-    auth = AuthConfig(mode="none")
+    auth = AuthConfig(mode="jwt")
     idp = LocalIdentityProvider(auth)
     assert idp.auth == auth
 

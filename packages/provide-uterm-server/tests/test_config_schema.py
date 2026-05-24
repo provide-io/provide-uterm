@@ -29,6 +29,6 @@ def test_config_strict_validation():
 def test_default_config():
     config = UtermServerConfig()
     # Check default overrides from Task 1
-    assert config.auth.mode == "dev"
+    assert config.auth.mode == "dev_token"
     assert len(config.sessions) == 1
     assert config.sessions[0].session_id == "provide-shell"

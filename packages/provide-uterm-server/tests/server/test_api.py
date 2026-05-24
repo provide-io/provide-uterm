@@ -46,7 +46,9 @@ def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
 def app_client() -> TestClient:
     """TestClient with dev auth and the default shell session."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.recording.directory = Path(tempfile.mkdtemp())
     app = create_server_app(config)
     return TestClient(app)
@@ -115,7 +117,9 @@ def test_healthz_no_auth_required() -> None:
 def test_health_no_auth_required() -> None:
     """``/api/health`` must be reachable without authentication."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     # Wipe auth state to prove health doesn't depend on it
     with TestClient(app) as client:
@@ -155,7 +159,9 @@ def test_metrics_returns_dict(app_client: TestClient) -> None:
 def test_metrics_non_dict_state_handled() -> None:
     """If app.state.uterm_metrics is not a dict, endpoint returns empty metrics."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     app.state.uterm_metrics = "broken"  # type: ignore[assignment]
     with TestClient(app) as client:
@@ -172,7 +178,9 @@ def test_metrics_prometheus(app_client: TestClient) -> None:
 
 def test_metrics_prometheus_non_dict_state() -> None:
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     app.state.uterm_metrics = 42  # type: ignore[assignment]
     with TestClient(app) as client:
@@ -473,7 +481,9 @@ def test_recording_download_no_file(app_client: TestClient, sid: str) -> None:
 def test_recording_download_path_traversal_rejected(app_client: TestClient) -> None:
     """A recording path outside the configured directory must be rejected."""
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     with tempfile.TemporaryDirectory() as tmpdir:
         config.recording.directory = Path(tmpdir)  # type: ignore[union-attr]
         app = create_server_app(config)

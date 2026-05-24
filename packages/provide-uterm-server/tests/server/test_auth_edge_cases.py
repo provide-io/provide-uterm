@@ -161,43 +161,15 @@ class TestAuthEdgeCases:
         )
         assert p.subject_id == "header-user"
 
-    def test_principal_from_local_mode_defaults_to_admin(self) -> None:
-        """Local mode defaults to admin role, not viewer."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-        from provide.uterm.server.models import AuthConfig
-
-        auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
-        p = _principal_from_local_mode({}, {}, auth)
-        assert "admin" in p.roles
-        assert "*" in p.scopes
-
-    def test_principal_from_local_mode_invalid_role_defaults_admin(self) -> None:
-        """Local mode with invalid role defaults to admin."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-        from provide.uterm.server.models import AuthConfig
-
-        auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
-        p = _principal_from_local_mode({"x-uterm-role": "superuser"}, {}, auth)
-        assert "admin" in p.roles
-
-    def test_principal_from_local_mode_valid_role_overrides_default(self) -> None:
-        """Local mode with valid role uses that role."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-        from provide.uterm.server.models import AuthConfig
-
-        auth = AuthConfig(mode="none", worker_bearer_token=_make_token())
-        p = _principal_from_local_mode({"x-uterm-role": "viewer"}, {}, auth)
-        assert p.roles == frozenset({"viewer"})
-
     def test_resolve_principal_mode_case_insensitive(self) -> None:
         """Mode matching is case-insensitive."""
         from provide.uterm.server.auth import _resolve_principal
         from provide.uterm.server.models import AuthConfig
 
-        auth = AuthConfig(mode="dev", worker_bearer_token=_make_token())
-        # This test verifies the mode is lowercased in the function
+        auth = AuthConfig(mode="JWT", worker_bearer_token=_make_token())
+        # No token supplied; jwt mode → anonymous principal.
         p = _resolve_principal({}, {}, auth, None)
-        assert "admin" in p.roles
+        assert p.subject_id == "anonymous"
 
     def test_resolve_principal_jwt_token_from_bearer_preferred(self) -> None:
         """JWT mode prefers bearer token over cookie."""
@@ -311,16 +283,6 @@ class TestAuthMutationKilling:
             assert valid_role in p.roles
             assert len(p.roles) == 1
 
-    def test_principal_from_local_mode_scopes_always_has_asterisk(self) -> None:
-        """Local mode ALWAYS includes * scope."""
-        from provide.uterm.server.auth import _principal_from_local_mode
-        from provide.uterm.server.models import AuthConfig
-
-        auth = AuthConfig(mode="none", worker_bearer_token="token")
-        p = _principal_from_local_mode({}, {}, auth)
-        assert "*" in p.scopes
-        assert len(p.scopes) == 1
-
     def test_resolve_principal_mode_not_just_checked_lowercase(self) -> None:
         """Mode is checked after lowercasing."""
         from provide.uterm.server.auth import _resolve_principal
@@ -396,16 +358,15 @@ class TestAuthMutationKilling:
         assert extract_bearer_token({"authorization": "Basic dXNlcjpwYXNz"}) is None
         assert extract_bearer_token({"authorization": "Digest username=user"}) is None
 
-    def test_resolve_principal_mode_set_membership_exact(self) -> None:
-        """Mode check uses set membership {none, dev}, not just substring."""
+    def test_resolve_principal_unknown_mode_raises(self) -> None:
+        """Unknown modes (including the now-removed 'dev' and 'none') raise."""
         from provide.uterm.server.auth import _resolve_principal
         from provide.uterm.server.models import AuthConfig
 
-        # "none" mode → admin, "dev" mode → admin
-        for mode_val in ["none", "dev"]:
-            auth = AuthConfig(mode=mode_val, worker_bearer_token="token")
-            p = _resolve_principal({}, {}, auth, None)
-            assert "admin" in p.roles
+        for mode_val in ["none", "dev", "mystery"]:
+            auth = AuthConfig(mode=mode_val, worker_bearer_token="token")  # type: ignore[arg-type]
+            with pytest.raises(ValueError, match="unknown auth mode"):
+                _resolve_principal({}, {}, auth, None)
 
     def test_principal_from_jwt_token_subject_strip_required(self) -> None:
         """JWT subject extraction must strip whitespace."""

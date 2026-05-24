@@ -39,7 +39,9 @@ def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
 @pytest.fixture()
 def app_client() -> TestClient:
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     # Drop the auto-start demo session. ``TestKeyErrorPaths`` below patches
     # ``registry.start_session`` to raise KeyError, and a still-in-flight
     # background ``auto_start_sessions`` for the demo session would surface
@@ -193,7 +195,7 @@ class TestKeyErrorPaths:
     def test_set_mode_key_error_returns_404(self, app_client: TestClient) -> None:
         app_client.post(
             "/api/sessions",
-            json={"session_id": "race-mode", "connector_type": "shell", "owner": "local-dev"},
+            json={"session_id": "race-mode", "connector_type": "shell", "owner": "admin"},
         )
         with self._patch_registry(app_client, "set_mode"):
             r = app_client.post("/api/sessions/race-mode/mode", json={"input_mode": "open"})
@@ -202,7 +204,7 @@ class TestKeyErrorPaths:
     def test_clear_session_key_error_returns_404(self, app_client: TestClient) -> None:
         app_client.post(
             "/api/sessions",
-            json={"session_id": "race-clear", "connector_type": "shell", "owner": "local-dev"},
+            json={"session_id": "race-clear", "connector_type": "shell", "owner": "admin"},
         )
         with self._patch_registry(app_client, "clear_session"):
             r = app_client.post("/api/sessions/race-clear/clear")
@@ -235,7 +237,7 @@ class TestKeyErrorPaths:
     def test_patch_session_key_error_returns_404(self, app_client: TestClient) -> None:
         app_client.post(
             "/api/sessions",
-            json={"session_id": "race-patch", "connector_type": "shell", "owner": "local-dev"},
+            json={"session_id": "race-patch", "connector_type": "shell", "owner": "admin"},
         )
         with self._patch_registry(app_client, "update_session"):
             r = app_client.patch("/api/sessions/race-patch", json={"display_name": "x"})
@@ -251,7 +253,7 @@ class TestPatchValidationError:
     def test_patch_invalid_input_mode_returns_422(self, app_client: TestClient) -> None:
         app_client.post(
             "/api/sessions",
-            json={"session_id": "patch-v", "connector_type": "shell", "owner": "local-dev"},
+            json={"session_id": "patch-v", "connector_type": "shell", "owner": "admin"},
         )
         r = app_client.patch("/api/sessions/patch-v", json={"input_mode": "superuser"})
         assert r.status_code == 422
@@ -259,7 +261,7 @@ class TestPatchValidationError:
     def test_patch_invalid_visibility_returns_422(self, app_client: TestClient) -> None:
         app_client.post(
             "/api/sessions",
-            json={"session_id": "patch-vis", "connector_type": "shell", "owner": "local-dev"},
+            json={"session_id": "patch-vis", "connector_type": "shell", "owner": "admin"},
         )
         r = app_client.patch("/api/sessions/patch-vis", json={"visibility": "uterm-test-secret-32-byte-minimum-key"})
         assert r.status_code == 422
@@ -416,7 +418,9 @@ class TestValidateAuthConfig:
 class TestCorsMiddleware:
     def test_cors_enabled_with_allowed_origins(self) -> None:
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         cfg.server.allowed_origins = ["https://example.com"]
         app = create_server_app(cfg)
         # CORS middleware should be present (starlette Middleware objects expose .cls)
@@ -435,7 +439,9 @@ class TestMetrics5xx:
         # Inject a route that raises to trigger the exception middleware
 
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         app = create_server_app(cfg)
 
         @app.get("/test-error")

@@ -32,8 +32,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Default location for the auto-issued dev token. Lives under the user's
-# cache directory so it survives sessions but is never committed.
+# cache directory so it survives sessions but is never committed. Tests
+# and other isolated environments should set the ``UTERM_DEV_TOKEN_PATH``
+# env var to redirect — :func:`_resolved_token_path` reads it at call
+# time so monkeypatching the env via pytest fixtures works.
 DEFAULT_DEV_TOKEN_PATH: Path = Path.home() / ".cache" / "uterm" / "dev_token"
+
+
+def _resolved_token_path(explicit: Path | None) -> Path:
+    """Resolve the dev-token path with caller-precedence → env → default."""
+    if explicit is not None:
+        return explicit
+    env = os.environ.get("UTERM_DEV_TOKEN_PATH")
+    if env:
+        return Path(env)
+    return DEFAULT_DEV_TOKEN_PATH
+
 
 # Lifetime of the auto-issued token. Long enough to survive a workday of
 # interactive use; short enough that an exfiltrated file goes stale quickly.
@@ -94,14 +108,14 @@ def setup_dev_idp(
         algorithm="HS256",
     )
 
-    path = token_path or DEFAULT_DEV_TOKEN_PATH
+    path = _resolved_token_path(token_path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.write_text(token)
     # On macOS / Linux Path.write_text doesn't set mode; chmod explicitly.
     # Windows ignores POSIX modes; the .cache directory ACL is the only
     # guard there. Same posture as the existing tunnel-token file flows.
     try:
-        os.chmod(path, 0o600)
+        path.chmod(0o600)
     except OSError:  # pragma: no cover — best-effort on non-POSIX
         pass
 
@@ -121,7 +135,7 @@ def read_dev_token(token_path: Path | None = None) -> str | None:
     CLI tools and out-of-process clients use this to pick up a token
     that the server's ``setup_dev_idp`` minted at startup.
     """
-    path = token_path or DEFAULT_DEV_TOKEN_PATH
+    path = _resolved_token_path(token_path)
     try:
         return path.read_text().strip() or None
     except OSError:

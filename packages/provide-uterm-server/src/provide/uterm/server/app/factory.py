@@ -307,14 +307,14 @@ def create_server_app(
             # same ``Request``/``WebSocket`` Starlette built).
             principal = await resolve_ws_principal(cast("WebSocket", connection), config.auth)
             connection.state.uterm_principal = principal
-            if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
+            if principal.subject_id == "anonymous":
                 _inc_metric("auth_failures_ws_total")
                 logger.info("authn_denied surface=websocket")
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="authentication required")
             return
         principal = await resolve_http_principal(cast("Request", connection), config.auth)
         connection.state.uterm_principal = principal
-        if config.auth.mode not in {"none", "dev"} and principal.subject_id == "anonymous":
+        if principal.subject_id == "anonymous":
             _inc_metric("auth_failures_http_total")
             logger.info("authn_denied surface=http")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
@@ -338,7 +338,15 @@ def create_server_app(
             principal = await resolve_ws_principal(ws, config.auth)
         session = await registry.get_definition(worker_id) if registry is not None else None
         if session is None:
-            return "admin" if config.auth.mode in {"none", "dev"} else "viewer"
+            # No registered SessionDefinition (worker connected ad-hoc). Honor
+            # the principal's role claim — admins/operators keep their role,
+            # everyone else falls back to viewer.
+            roles = principal.roles
+            if "admin" in roles:
+                return "admin"
+            if "operator" in roles:
+                return "operator"
+            return "viewer"
         if not await authz.can_read_session(principal, session):
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return await policy.role_for(principal, session)

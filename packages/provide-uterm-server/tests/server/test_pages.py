@@ -58,7 +58,9 @@ def _jwt_app_with_operator_session(session_id: str):  # type: ignore[return]
 
 def _make_app_with_session(visibility: str = "public"):  # type: ignore[return]
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     cfg.sessions = [
         SessionDefinition(
             session_id="test-sess",
@@ -242,7 +244,9 @@ def test_cdn_sri_emitted_when_configured() -> None:
     from provide.uterm.server import create_server_app, default_server_config
 
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.ui.xterm_cdn_integrity = "sha384-xtermhash"
     config.ui.fitaddon_cdn_integrity = "sha384-fitaddonhash"
     app = create_server_app(config)
@@ -259,7 +263,9 @@ def test_cdn_sri_omitted_by_default() -> None:
     from provide.uterm.server import create_server_app, default_server_config
 
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     with TestClient(app) as c:
         r = c.get("/app/")
@@ -355,6 +361,7 @@ def test_jwt_page_no_bearer_does_not_set_token_cookie() -> None:
     app = _jwt_app_public_session("tok-sess2")
     # Seed the token_cookie directly so the page auth succeeds without Bearer
     with TestClient(app) as c:
+        c.headers.pop("Authorization", None)
         c.cookies.set("uterm_token", token)
         r = c.get("/app/session/tok-sess2")
     assert r.status_code == 200
@@ -443,6 +450,7 @@ def test_jwt_token_cookie_enables_subsequent_api_call() -> None:
     token = _make_token(sub="user1", roles=["admin"])
     app = _jwt_app_public_session("flow-sess")
     with TestClient(app) as c:
+        c.headers.pop("Authorization", None)
         # Step 1: page request with Bearer header
         r1 = c.get("/app/", headers={"Authorization": f"Bearer {token}"})
         assert r1.status_code == 200

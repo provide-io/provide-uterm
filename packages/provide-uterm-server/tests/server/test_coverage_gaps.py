@@ -702,7 +702,9 @@ class TestPagesInspectView:
 
     def _make_app_with_session(self, visibility: str = "public") -> Any:
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         cfg.sessions = [
             SessionDefinition(
                 session_id="test-sess",
@@ -823,7 +825,9 @@ class TestApiGaps:
 
     def _admin_client(self) -> TestClient:
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         app = create_server_app(cfg)
         return TestClient(app)
 
@@ -916,7 +920,9 @@ class TestApiGaps:
     def test_bulk_delete_with_stopped_at_too_recent(self) -> None:
         """Line 176->178: older_than_s filter skips sessions stopped too recently."""
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         app = create_server_app(cfg)
 
         with TestClient(app) as client:
@@ -1006,7 +1012,9 @@ class TestApiGaps:
         import time
 
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         app = create_server_app(cfg)
 
         with TestClient(app) as client:

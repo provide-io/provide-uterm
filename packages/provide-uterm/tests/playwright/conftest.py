@@ -49,6 +49,24 @@ def pytest_collection_modifyitems(items: list) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Auto-auth: attach admin header-mode credentials to every browser context.
+# Reference fixtures run the server in `header` auth mode for tests; without
+# these headers every page navigation is 401.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args: dict) -> dict:
+    return {
+        **browser_context_args,
+        "extra_http_headers": {
+            "X-Uterm-Principal": "admin",
+            "X-Uterm-Role": "admin",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # CDN URLs
 # ---------------------------------------------------------------------------
 

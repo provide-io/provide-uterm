@@ -193,7 +193,17 @@ async def test_stream_route_404_unknown_session() -> None:
 
     from provide.uterm.server.app import create_server_app
 
-    cfg = config_from_mapping({"server": {"host": "127.0.0.1", "port": 8780}, "auth": {"mode": "dev"}, "sessions": []})
+    cfg = config_from_mapping(
+        {
+            "server": {"host": "127.0.0.1", "port": 8780},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
+            "sessions": [],
+        }
+    )
     app = create_server_app(cfg)
 
     with TestClient(app) as client:
@@ -212,7 +222,11 @@ async def test_stream_route_403_insufficient_privileges() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {"session_id": "s1", "display_name": "S1", "connector_type": "shell", "visibility": "private"}
             ],
@@ -244,7 +258,11 @@ async def test_stream_route_no_bus_returns_empty_stream() -> None:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 8780},
-            "auth": {"mode": "dev"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [{"session_id": "s1", "display_name": "S1", "connector_type": "shell", "auto_start": False}],
         }
     )

@@ -62,11 +62,9 @@ def _resolve_headers(config: SecurityConfig) -> list[tuple[str, str]]:
 class SecurityHeadersMiddleware:
     """Raw ASGI middleware that injects security headers on HTTP responses."""
 
-    def __init__(self, app: Any, config: SecurityConfig, auth_mode: str | None = None) -> None:
+    def __init__(self, app: Any, config: SecurityConfig) -> None:
         self.app = app
         self._headers = _resolve_headers(config)
-        if auth_mode is not None and auth_mode in {"dev", "none"}:
-            self._headers = [*self._headers, ("X-Auth-Mode", auth_mode)]
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope["type"] != "http":

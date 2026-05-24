@@ -143,29 +143,6 @@ def _validate_auth_config(config: ServerConfig) -> None:
         setup_dev_idp(config.auth)
         # setup_dev_idp mutated mode → "jwt"; fall through to jwt validation.
         mode = str(config.auth.mode).strip().lower()
-    if mode in {"none", "dev"}:
-        if config.auth.require_jwt_in_production:
-            raise RuntimeError(
-                f"auth.mode='{mode}' is not allowed when auth.require_jwt_in_production=true. "
-                "Set auth.mode='jwt' or 'dev_token', or disable require_jwt_in_production."
-            )
-
-        host = str(config.server.host).strip().lower()
-        if not _is_loopback_host(host):
-            raise RuntimeError(
-                f"auth.mode='{mode}' is only permitted when server.host is a loopback address "
-                f"(127.0.0.1, localhost, or ::1). Got: {host}"
-            )
-
-        # Warn loudly — in dev/none mode any request can spoof any principal
-        # via the X-Principal/X-Role headers.  Never expose this mode publicly.
-        logger.warning(
-            "auth_mode=%s: authentication is disabled — any caller can claim any identity. "
-            "Do NOT expose this server on a public network in this mode. "
-            "Use auth.mode='dev_token' instead — same single-knob ergonomics with auto-issued JWT.",
-            mode,
-        )
-        return
     if mode == "header":
         if not config.auth.header_mode_acknowledged:
             raise ValueError(

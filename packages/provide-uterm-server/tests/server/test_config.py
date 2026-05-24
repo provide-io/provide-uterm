@@ -22,7 +22,7 @@ def test_default_server_config_has_demo_session() -> None:
     config = default_server_config()
 
     assert config.server.public_base_url == "http://127.0.0.1:8780"
-    assert config.auth.mode == "dev"
+    assert config.auth.mode == "dev_token"
     assert config.control_plane.backend == "memory"
     assert config.control_plane.database_url is None
     assert len(config.sessions) == 1
@@ -250,11 +250,11 @@ def test_config_from_mapping_rejects_invalid_visibility() -> None:
 
 def test_partial_auth_override_preserves_default_server_config_auth_mode() -> None:
     # Regression: replacing merged["auth"] with the raw user dict discarded
-    # default_server_config().auth.mode == "dev", falling back to AuthConfig's
-    # class default "jwt".
+    # default_server_config().auth.mode == "dev_token", falling back to
+    # AuthConfig's class default "jwt".
     config = config_from_mapping({"auth": {"principal_header": "x-user"}})
 
-    assert config.auth.mode == "dev"
+    assert config.auth.mode == "dev_token"
     assert config.auth.principal_header == "x-user"
 
 

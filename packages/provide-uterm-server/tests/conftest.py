@@ -73,6 +73,139 @@ def load_example_server_module() -> Any:
     return module
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _redirect_dev_token_path(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Keep auto-issued dev tokens out of ~/.cache during tests.
+
+    setup_dev_idp() writes a JWT to ``UTERM_DEV_TOKEN_PATH`` (default
+    ``~/.cache/uterm/dev_token``). With the default mode now being
+    ``dev_token``, every create_server_app() call would either pollute
+    the user's home dir or race with parallel test workers. Redirecting
+    via env var gives each test session its own location.
+    """
+    path = tmp_path_factory.mktemp("dev_token") / "dev_token"
+    _os.environ["UTERM_DEV_TOKEN_PATH"] = str(path)
+
+
+def _install_testclient_dev_token_autoauth() -> None:
+    """Auto-attach the dev-token bearer to every TestClient instance.
+
+    Tests build apps via ``create_server_app(default_server_config())``,
+    which mints a JWT through ``setup_dev_idp`` and writes it to
+    ``UTERM_DEV_TOKEN_PATH``. Without this patch every test would have to
+    read the file and inject ``Authorization: Bearer ...`` itself.
+
+    Tests that exercise the unauthenticated codepath (e.g. token-missing
+    coverage in ``test_auth*``) clear the header explicitly:
+    ``client.headers.pop("Authorization", None)``.
+    """
+    from starlette.testclient import TestClient as _TestClient
+
+    if getattr(_TestClient, "_uterm_devtoken_patched", False):
+        return
+
+    _original_init = _TestClient.__init__
+
+    def _patched_init(self: _TestClient, *args: Any, **kwargs: Any) -> None:
+        _original_init(self, *args, **kwargs)
+        token_path_str = _os.environ.get("UTERM_DEV_TOKEN_PATH")
+        if not token_path_str:
+            return
+        token_path = Path(token_path_str)
+        try:
+            token = token_path.read_text().strip()
+        except OSError:
+            return
+        if token and "Authorization" not in self.headers:
+            self.headers["Authorization"] = f"Bearer {token}"
+
+    _TestClient.__init__ = _patched_init  # type: ignore[method-assign]
+    _TestClient._uterm_devtoken_patched = True  # type: ignore[attr-defined]
+
+
+_install_testclient_dev_token_autoauth()
+
+
+def _install_httpx_dev_principal_autoauth() -> None:
+    """Auto-attach admin header-mode credentials to test-only httpx clients.
+
+    The live-server fixtures (``reference_server``, ``live_reference_server``)
+    run in ``header`` auth mode for tests, where principal/role come from
+    ``X-Uterm-Principal``/``X-Uterm-Role`` headers. Without this patch every
+    test would have to attach them by hand.
+
+    Per-request headers override the defaults, so tests that want to
+    exercise unauthenticated or non-admin paths still can by passing their
+    own ``X-Uterm-Principal``/``X-Uterm-Role`` explicitly.
+    """
+    import httpx
+
+    if getattr(httpx.Client, "_uterm_devprincipal_patched", False):
+        return
+
+    _defaults = {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
+
+    def _patch(cls: type) -> None:
+        _orig_init = cls.__init__
+
+        def _patched_init(self: Any, *args: Any, **kwargs: Any) -> None:
+            _orig_init(self, *args, **kwargs)
+            for header, value in _defaults.items():
+                if header not in self.headers:
+                    self.headers[header] = value
+
+        cls.__init__ = _patched_init  # type: ignore[method-assign]
+        cls._uterm_devprincipal_patched = True  # type: ignore[attr-defined]
+
+    _patch(httpx.Client)
+    _patch(httpx.AsyncClient)
+
+
+_install_httpx_dev_principal_autoauth()
+
+
+def _install_websockets_dev_principal_autoauth() -> None:
+    """Auto-attach admin header-mode credentials to websockets test clients.
+
+    Sibling to the httpx patch above. Tests connect to the live header-mode
+    reference server via :func:`websockets.connect`, which doesn't share
+    httpx's default-headers mechanism. Per-call ``additional_headers``
+    overrides win, so unauthenticated/non-admin paths can still be tested
+    by passing explicit headers.
+    """
+    import websockets as _websockets
+    import websockets.asyncio.client as _ws_client
+
+    if getattr(_ws_client.connect, "_uterm_devprincipal_patched", False):
+        return
+
+    _defaults = {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
+    _worker_bearer = "Bearer test-bearer-token-32-chars-long-x"
+    _orig = _ws_client.connect
+
+    def _patched_connect(*args: Any, **kwargs: Any) -> Any:
+        # First positional arg or `uri=` kwarg is the websocket URL.
+        uri = args[0] if args else kwargs.get("uri", "")
+        provided = kwargs.get("additional_headers") or {}
+        merged = dict(_defaults)
+        # Worker WS uses bearer auth (worker_bearer_token), not X-Uterm-*.
+        if isinstance(uri, str) and "/ws/worker/" in uri:
+            merged["Authorization"] = _worker_bearer
+        if isinstance(provided, dict):
+            merged.update(provided)
+        else:
+            merged.update(dict(provided))
+        kwargs["additional_headers"] = merged
+        return _orig(*args, **kwargs)
+
+    _patched_connect._uterm_devprincipal_patched = True  # type: ignore[attr-defined]
+    _ws_client.connect = _patched_connect  # type: ignore[assignment]
+    _websockets.connect = _patched_connect  # type: ignore[assignment]
+
+
+_install_websockets_dev_principal_autoauth()
+
+
 @pytest.fixture()
 def free_port() -> int:
     """Return a free TCP port on localhost."""
@@ -231,7 +364,9 @@ def reference_server() -> Generator[str, None, None]:
 
     base_url = f"http://127.0.0.1:{port}"
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.server.host = "127.0.0.1"
     config.server.port = port
     config.server.public_base_url = base_url

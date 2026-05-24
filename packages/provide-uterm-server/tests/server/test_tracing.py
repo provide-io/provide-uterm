@@ -79,7 +79,9 @@ def _capturing_tracer():  # type: ignore[no-untyped-def]
 @pytest.fixture()
 def app_client() -> TestClient:
     config = default_server_config()
-    config.auth.mode = "dev"
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     app = create_server_app(config)
     return TestClient(app)
 
@@ -189,9 +191,15 @@ def test_create_tunnel_creates_span(app_client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
+_WORKER_BEARER = {"Authorization": "Bearer test-bearer-token-32-chars-long-x"}
+
+
 def test_ws_worker_connection_creates_span(app_client: TestClient) -> None:
     """Worker WS connection should produce uterm.ws.worker.connect span."""
-    with _capturing_tracer() as ct, app_client.websocket_connect("/ws/worker/trace-ws-1/term") as ws:
+    with (
+        _capturing_tracer() as ct,
+        app_client.websocket_connect("/ws/worker/trace-ws-1/term", headers=_WORKER_BEARER) as ws,
+    ):
         ws.send_text('{"type":"worker_hello","input_mode":"open"}')
     assert "uterm.ws.worker.connect" in ct.span_names()
     span = ct.spans_named("uterm.ws.worker.connect")[0]
@@ -201,7 +209,10 @@ def test_ws_worker_connection_creates_span(app_client: TestClient) -> None:
 
 def test_ws_worker_disconnect_creates_span(app_client: TestClient) -> None:
     """Worker WS disconnect should produce uterm.ws.worker.disconnect span."""
-    with _capturing_tracer() as ct, app_client.websocket_connect("/ws/worker/trace-ws-disc/term") as ws:
+    with (
+        _capturing_tracer() as ct,
+        app_client.websocket_connect("/ws/worker/trace-ws-disc/term", headers=_WORKER_BEARER) as ws,
+    ):
         ws.send_text('{"type":"worker_hello"}')
     assert "uterm.ws.worker.disconnect" in ct.span_names()
 

@@ -31,7 +31,9 @@ from provide.uterm.server.models import SessionDefinition
 def _make_app(sessions: list[dict[str, Any]] | None = None) -> object:
     """Create a server app in dev mode with optional session definitions."""
     cfg = default_server_config()
-    cfg.auth.mode = "dev"
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     if sessions is not None:
         cfg.sessions = [SessionDefinition(**s) for s in sessions]  # type: ignore[arg-type]
     return create_server_app(cfg, api_only=True)
@@ -184,7 +186,7 @@ class TestSseStreamEventsSuccess:
         from starlette.requests import Request as StarletteRequest
 
         class _FakePrincipal:
-            subject_id = "dev-user"
+            subject_id = "admin"
 
         class _SetPrincipal(BaseHTTPMiddleware):
             async def dispatch(self, request: StarletteRequest, call_next: object) -> object:
@@ -332,7 +334,9 @@ class TestAnnotateMissingLabel:
     def test_annotate_session_missing_label_returns_400(self) -> None:
         """POST /api/sessions/{id}/annotate with no label field returns 400."""
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         cfg.sessions = [
             SessionDefinition(
                 session_id="provide-shell",
@@ -354,7 +358,9 @@ class TestAnnotateMissingLabel:
     def test_annotate_session_empty_label_returns_400(self) -> None:
         """POST /api/sessions/{id}/annotate with an empty-string label returns 400."""
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         with TestClient(create_server_app(cfg, api_only=True)) as client:
             client.post("/api/sessions/provide-shell/connect")
             resp = client.post(
@@ -376,7 +382,9 @@ class TestAnnotateInvalidSeverity:
     def test_annotate_session_invalid_severity_returns_400(self) -> None:
         """POST /api/sessions/{id}/annotate with an invalid severity returns 400."""
         cfg = default_server_config()
-        cfg.auth.mode = "dev"
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         with TestClient(create_server_app(cfg, api_only=True)) as client:
             client.post("/api/sessions/provide-shell/connect")
             resp = client.post(

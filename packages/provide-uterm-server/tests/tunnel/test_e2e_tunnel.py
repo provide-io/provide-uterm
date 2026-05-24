@@ -26,7 +26,13 @@ from provide.uterm.tunnel.protocol import CHANNEL_DATA, encode_control, encode_f
 
 @pytest.fixture
 def e2e_client() -> TestClient:
-    config = ServerConfig(auth={"mode": "none"})
+    config = ServerConfig(
+        auth={
+            "mode": "header",
+            "header_mode_acknowledged": True,
+            "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+        }
+    )
     app = create_server_app(config)
     return TestClient(app)
 

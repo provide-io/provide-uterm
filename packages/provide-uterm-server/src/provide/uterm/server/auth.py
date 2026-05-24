@@ -82,14 +82,6 @@ def _principal_from_header_auth(
     return _provider(auth)._principal_from_header_auth(headers, cookies)
 
 
-def _principal_from_local_mode(
-    headers: Any,
-    cookies: dict[str, str],
-    auth: AuthConfig,
-) -> Principal:
-    return _provider(auth)._principal_from_local_mode(headers, cookies)
-
-
 def _anonymous_principal() -> Principal:
     return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
 
@@ -144,8 +136,6 @@ class LocalIdentityProvider(IdentityProvider):
             return api_key_principal
 
         mode = str(self.auth.mode).strip().lower()
-        if mode in {"none", "dev"}:
-            return self._principal_from_local_mode(headers, cookies)
         if mode == "header":
             return self._principal_from_header_auth(headers, cookies)
         if mode != "jwt":
@@ -246,17 +236,6 @@ class LocalIdentityProvider(IdentityProvider):
         role = str(headers.get(self.auth.role_header, "")).strip().lower()
         roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"viewer"})
         return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
-
-    def _principal_from_local_mode(self, headers: Any, cookies: Any) -> Principal:
-        principal = (
-            headers.get(self.auth.principal_header)
-            or self._cookie_value(cookies, self.auth.principal_cookie)
-            or "local-dev"
-        )
-        role = str(headers.get(self.auth.role_header, "")).strip().lower()
-        roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"admin"})
-        display_name = str(headers.get("x-display-name", "")).strip() or None
-        return Principal(subject_id=str(principal), roles=roles, scopes=frozenset({"*"}), display_name=display_name)
 
     def _principal_from_api_key(self, headers: Any) -> Principal | None:
         if not self.auth.api_keys_enabled:

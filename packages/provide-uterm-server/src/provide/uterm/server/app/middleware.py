@@ -200,5 +200,5 @@ def install_cors_security_telemetry(app: FastAPI, *, config: ServerConfig) -> No
     # is empty, and a real gate when the operator has set it.
     app.add_middleware(WebSocketOriginMiddleware, allowed_origins=tuple(config.server.allowed_origins))
 
-    app.add_middleware(SecurityHeadersMiddleware, config=config.security, auth_mode=config.auth.mode)
+    app.add_middleware(SecurityHeadersMiddleware, config=config.security)
     app.add_middleware(TelemetryMiddleware)

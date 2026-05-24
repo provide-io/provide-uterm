@@ -26,7 +26,9 @@ class TestOnResumeCallback:
 
     def _make_app(self):
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.sessions = []  # no auto-start — keeps tests deterministic
         return create_server_app(config)
 
@@ -137,7 +139,9 @@ class TestOnResumeCallback:
     def test_create_server_app_bootstraps_sqlite_control_plane(self, tmp_path) -> None:
         db_path = tmp_path / "control-plane.db"
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.sessions = []
         config.control_plane.backend = "sqlite"
         config.control_plane.database_url = str(db_path)
@@ -158,7 +162,9 @@ class TestOnResumeCallback:
     def test_on_resume_allows_resume_with_sqlite_control_plane(self, tmp_path) -> None:
         db_path = tmp_path / "resume.db"
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.sessions = []
         config.control_plane.backend = "sqlite"
         config.control_plane.database_url = str(db_path)
@@ -184,7 +190,9 @@ class TestOnResumeCallback:
     def test_sqlite_resume_persists_and_revokes_tokens_in_database(self, tmp_path) -> None:
         db_path = tmp_path / "resume-proof.db"
         config = default_server_config()
-        config.auth.mode = "dev"
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
         config.sessions = []
         config.control_plane.backend = "sqlite"
         config.control_plane.database_url = str(db_path)
