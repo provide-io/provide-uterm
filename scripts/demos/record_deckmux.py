@@ -60,17 +60,17 @@ PRIMARY_VIDEO: str = "composite_trim.mp4"
 
 _CAST: list[dict[str, str]] = [
     {"name": "operator", "display": "Tanuki Tim", "role": "operator"},
-    {"name": "kal", "display": "Bear Brody", "role": "operator"},
-    {"name": "chris", "display": "Crane Cara", "role": "operator"},
-    {"name": "brandon", "display": "Falcon Finn", "role": "operator"},
-    {"name": "kyle", "display": "Lynx Liam", "role": "operator"},
-    {"name": "logan", "display": "Wolf Willa", "role": "operator"},
-    {"name": "heidi", "display": "Heron Hugo", "role": "viewer"},
-    {"name": "heather", "display": "Marten Mira", "role": "operator"},
+    {"name": "bear_brody", "display": "Bear Brody", "role": "operator"},
+    {"name": "crane_cara", "display": "Crane Cara", "role": "operator"},
+    {"name": "falcon_finn", "display": "Falcon Finn", "role": "operator"},
+    {"name": "lynx_liam", "display": "Lynx Liam", "role": "operator"},
+    {"name": "wolf_willa", "display": "Wolf Willa", "role": "operator"},
+    {"name": "heron_hugo", "display": "Heron Hugo", "role": "viewer"},
+    {"name": "marten_mira", "display": "Marten Mira", "role": "operator"},
     {"name": "sentinel", "display": "Sentinel", "role": "viewer"},
 ]
 
-_HERO_NAMES = ["operator", "brandon", "heidi"]
+_HERO_NAMES = ["operator", "falcon_finn", "heron_hugo"]
 
 # ---------------------------------------------------------------------------
 # Fake incident data
@@ -238,13 +238,13 @@ def _type_from_self(text: str, wait_s: float = 1.0):
 
 # What each user types when they join the incident channel
 _JOIN_MESSAGES: dict[str, str | None] = {
-    "kal": "echo '[Bear Brody] SRE on-call — joining, checking logs'",
-    "chris": "echo '[Crane Cara] Backend — pulling up app traces'",
-    "brandon": "echo '[Falcon Finn] DBA — standby, will check connection pool'",
-    "kyle": "echo '[Lynx Liam] Security — auditing commands'",
-    "logan": "echo '[Wolf Willa] DevOps — looking at container health'",
-    "heidi": None,  # eng manager watches, doesn't type
-    "heather": "echo '[Marten Mira] QA — checking error reports'",
+    "bear_brody": "echo '[Bear Brody] SRE on-call — joining, checking logs'",
+    "crane_cara": "echo '[Crane Cara] Backend — pulling up app traces'",
+    "falcon_finn": "echo '[Falcon Finn] DBA — standby, will check connection pool'",
+    "lynx_liam": "echo '[Lynx Liam] Security — auditing commands'",
+    "wolf_willa": "echo '[Wolf Willa] DevOps — looking at container health'",
+    "heron_hugo": None,  # eng manager watches, doesn't type
+    "marten_mira": "echo '[Marten Mira] QA — checking error reports'",
     "sentinel": None,  # bot doesn't type
 }
 
@@ -368,7 +368,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # --- ACT 2: Team assembles (steps ~9-20) ---
     # Each user joins at a staggered point.
     # After joining, they wait for the presence bar to show enough users.
-    join_order = ["kal", "chris", "brandon", "kyle", "logan", "heidi", "heather", "sentinel"]
+    join_order = ["bear_brody", "crane_cara", "falcon_finn", "lynx_liam", "wolf_willa", "heron_hugo", "marten_mira", "sentinel"]
     join_steps_per_user: dict[str, list[BrowserStep]] = {}
     for idx, uname in enumerate(join_order):
         pre_pad: list[BrowserStep] = [(None, 0.0, None)] * idx  # stagger
@@ -429,13 +429,13 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         return steps
 
     act3_users: dict[str, list[BrowserStep]] = {
-        "kal": _act3_for(0, 60),  # scrolls to syslog errors
-        "chris": _act3_for(1, 120),  # scrolls to raw syslog
-        "brandon": _act3_for(None, 0),  # stays near bottom (DBA reading pg_stat)  # type: ignore[arg-type]
-        "kyle": _act3_for(2, 30),  # scrolls to audit curl output
-        "logan": _act3_for(1, 90),  # scrolls to ps aux
-        "heidi": _act3_for(None, 0),  # viewer, doesn't scroll  # type: ignore[arg-type]
-        "heather": _act3_for(2, 50),  # QA checking docker logs
+        "bear_brody": _act3_for(0, 60),  # scrolls to syslog errors
+        "crane_cara": _act3_for(1, 120),  # scrolls to raw syslog
+        "falcon_finn": _act3_for(None, 0),  # stays near bottom (DBA reading pg_stat)  # type: ignore[arg-type]
+        "lynx_liam": _act3_for(2, 30),  # scrolls to audit curl output
+        "wolf_willa": _act3_for(1, 90),  # scrolls to ps aux
+        "heron_hugo": _act3_for(None, 0),  # viewer, doesn't scroll  # type: ignore[arg-type]
+        "marten_mira": _act3_for(2, 50),  # QA checking docker logs
         "sentinel": _act3_for(None, 0),  # bot, doesn't scroll  # type: ignore[arg-type]
     }
 
@@ -468,11 +468,11 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     ]
     # Wait while Falcon Finn types (one step per Falcon Finn command)
     act4_tim.extend((None, 1.5, None) for _ in brandon_fix_cmds)
-    act4_tim.append((None, 1.0, "act4-brandon-fix.png"))  # screenshot
+    act4_tim.append((None, 1.0, "act4-falcon_finn-fix.png"))  # screenshot
     act4_tim.append((_send_cmd("echo '[Tanuki Tim] Falcon Finn done — Bear Brody, can you verify?'\r"), 1.5, None))
     # Wait while Bear Brody verifies
     act4_tim.extend((None, 1.5, None) for _ in kal_verify_cmds)
-    act4_tim.append((None, 1.0, "act4-kal-verified.png"))  # screenshot
+    act4_tim.append((None, 1.0, "act4-bear_brody-verified.png"))  # screenshot
     act4_tim.append((_send_cmd("echo '[Tanuki Tim] Fix confirmed — taking back control'\r"), 1.0, None))
 
     act4_len = len(act4_tim)
@@ -501,7 +501,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         (_send_cmd("echo '=== INCIDENT RESOLVED ==='\r"), 0.8, None),  # 0
         (_send_cmd("echo 'fix: terminated 47 stuck connections, pool recovered'\r"), 1.0, None),  # 1
         (None, 3.0, None),  # 2: pause before departures
-        (None, 3.0, "act5-kyle-left.png"),  # 3: Lynx Liam disconnects
+        (None, 3.0, "act5-lynx_liam-left.png"),  # 3: Lynx Liam disconnects
         (None, 3.0, None),  # 4: Wolf Willa disconnects
         (None, 3.0, None),  # 5: Marten Mira disconnects
         (None, 3.0, None),  # 6: Crane Cara disconnects
@@ -521,13 +521,13 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         return steps
 
     act5_users: dict[str, list[BrowserStep]] = {
-        "kal": [(None, 0.3, None)] * act5_len,  # stays
-        "chris": _act5_depart(6),  # departs late
-        "brandon": [(None, 0.3, None)] * act5_len,  # stays
-        "kyle": _act5_depart(3),  # departs first
-        "logan": _act5_depart(4),  # departs second
-        "heidi": [(None, 0.3, None)] * act5_len,  # stays (viewer)
-        "heather": _act5_depart(5),  # departs third
+        "bear_brody": [(None, 0.3, None)] * act5_len,  # stays
+        "crane_cara": _act5_depart(6),  # departs late
+        "falcon_finn": [(None, 0.3, None)] * act5_len,  # stays
+        "lynx_liam": _act5_depart(3),  # departs first
+        "wolf_willa": _act5_depart(4),  # departs second
+        "heron_hugo": [(None, 0.3, None)] * act5_len,  # stays (viewer)
+        "marten_mira": _act5_depart(5),  # departs third
         "sentinel": [(None, 0.3, None)] * act5_len,  # stays (bot)
     }
 
@@ -543,9 +543,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         steps.extend(act1_pad)  # Act 1: not yet joined
         steps.extend(join_steps_per_user[uname])  # Act 2: join + settle
         steps.extend(act3_users.get(uname, [(None, 0.3, None)] * act3_len))  # Act 3
-        if uname == "kal":
+        if uname == "bear_brody":
             steps.extend(act4_kal)  # Act 4: Bear Brody verifies from his browser
-        elif uname == "brandon":
+        elif uname == "falcon_finn":
             steps.extend(act4_brandon)  # Act 4: Falcon Finn types fix from his browser
         else:
             steps.extend(act4_pad)  # Act 4: watching
