@@ -39,6 +39,30 @@ def _encode_runtime_frame(msg: dict[str, Any]) -> str:
     return encode_control(msg)
 
 
+# Outcome of one ``_run_one_attempt`` failure — drives whether the outer
+# loop retries with backoff, gives up immediately, or treats the attempt
+# as successful (cancelled).
+RunOutcome = Literal["cancelled", "permanent", "retry"]
+
+
+def _classify_run_error(exc: BaseException) -> RunOutcome:
+    """Classify an exception from ``_run_one_attempt`` for retry policy.
+
+    - ``cancelled`` — caller initiated shutdown; break the loop cleanly.
+    - ``permanent`` — ``ValueError`` (config error) or HTTP 4xx auth/path
+      failure. No backoff will recover; break.
+    - ``retry`` — everything else; sleep on backoff and try again.
+    """
+    if isinstance(exc, asyncio.CancelledError):
+        return "cancelled"
+    if isinstance(exc, ValueError):
+        return "permanent"
+    status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+    if status in (401, 403, 404):
+        return "permanent"
+    return "retry"
+
+
 async def _cancel_and_wait(tasks: set[asyncio.Task[object]]) -> None:
     for task in tasks:
         task.cancel()
@@ -399,39 +423,42 @@ class HostedSessionRuntime:
                     # Reset backoff only after a session completes normally,
                     # not on bare TCP connect — prevents tight loops on auth errors.
                     attempt = 0
-            except asyncio.CancelledError:
-                break
-            except ValueError as exc:
-                # Permanent configuration error (e.g. unsupported connector_type,
-                # missing known_hosts) — retrying will never succeed.
-                self._state = "error"
-                self._connected = False
-                self._last_error = str(exc)
-                logger.error(
-                    "hosted_session_runtime_permanent_failure session_id=%s error=%s",
-                    self.definition.session_id,
-                    exc,
-                )
-                await self._log_event("runtime_error", {"error": str(exc), "permanent": True})
-                break
             except Exception as exc:
+                outcome = _classify_run_error(exc)
+                if outcome == "cancelled":
+                    break
                 self._state = "error"
                 self._connected = False
                 self._last_error = str(exc)
+                if outcome == "permanent":
+                    if isinstance(exc, ValueError):
+                        logger.error(
+                            "hosted_session_runtime_permanent_failure session_id=%s error=%s",
+                            self.definition.session_id,
+                            exc,
+                        )
+                        await self._log_event("runtime_error", {"error": str(exc), "permanent": True})
+                    else:
+                        # Permanent HTTP failure (401/403/404). Log the warning
+                        # event first so observers see what failed, then the
+                        # error line that explains the stop decision.
+                        logger.warning(
+                            "hosted_session_runtime_failed session_id=%s error=%s",
+                            self.definition.session_id,
+                            exc,
+                        )
+                        await self._log_event("runtime_error", {"error": str(exc)})
+                        _status = getattr(exc, "status_code", None) or getattr(
+                            getattr(exc, "response", None), "status_code", None
+                        )
+                        logger.error(
+                            "hosted_session_runtime_permanent_http_error session_id=%s status=%s — stopping",
+                            self.definition.session_id,
+                            _status,
+                        )
+                    break
                 logger.warning("hosted_session_runtime_failed session_id=%s error=%s", self.definition.session_id, exc)
                 await self._log_event("runtime_error", {"error": str(exc)})
-                # Permanent HTTP failures (auth rejected, wrong endpoint) will
-                # never resolve on their own — stop retrying immediately.
-                _status = getattr(exc, "status_code", None) or getattr(
-                    getattr(exc, "response", None), "status_code", None
-                )
-                if _status in (401, 403, 404):
-                    logger.error(
-                        "hosted_session_runtime_permanent_http_error session_id=%s status=%s — stopping",
-                        self.definition.session_id,
-                        _status,
-                    )
-                    break
                 delay = backoff_s[min(attempt, len(backoff_s) - 1)]
                 attempt += 1
                 await asyncio.sleep(delay)
