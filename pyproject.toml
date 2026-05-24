@@ -224,6 +224,18 @@ paths_to_mutate = [
     # Bridge protocol negotiation — boundary-heavy, security-relevant.
     # Covered by tests/test_protocol_negotiation.py.
     "src/provide/uterm/bridge/contracts.py",
+    # Server-package paths. Use the full ``packages/.../src/...`` prefix
+    # because these files don't appear in the workspace-root ``src/`` namespace
+    # merge (only provide-uterm contributes there). The matching test files
+    # are added to ``tests_dir`` below — without that the gate finds the
+    # mutants but binds to zero tests and reports them all as ``no_tests``.
+    #
+    # HijackLease.expire boundary + lease arithmetic.
+    "packages/provide-uterm-server/src/provide/uterm/bridge/models.py",
+    # Tunnel token hashing — constant-time compare, security-critical.
+    "packages/provide-uterm-server/src/provide/uterm/tunnel/token_hash.py",
+    # HTTP intercept header denylist + gating policy.
+    "packages/provide-uterm-server/src/provide/uterm/tunnel/intercept.py",
 ]
 tests_dir = [
     "packages/provide-uterm/tests/shell/test_shell_render.py",
@@ -276,6 +288,13 @@ tests_dir = [
     "packages/provide-uterm/tests/terminal/test_io.py",
     # Covers bridge/contracts.py negotiate_protocol_version + worker_hello emitter.
     "packages/provide-uterm/tests/test_protocol_negotiation.py",
+    # Server-package coverage — matches the server-package paths_to_mutate
+    # entries above. Without these the gate finds the mutants but binds
+    # to zero tests and reports them all as ``no_tests``.
+    "packages/provide-uterm-server/tests/bridge/test_hijack_lease.py",
+    "packages/provide-uterm-server/tests/tunnel/test_token_hash.py",
+    "packages/provide-uterm-server/tests/tunnel/test_token_hash_hypothesis.py",
+    "packages/provide-uterm-server/tests/tunnel/test_intercept_gate.py",
 ]
 also_copy = [
     "src",
@@ -283,6 +302,12 @@ also_copy = [
     "packages/provide-uterm/tests",
     "packages/provide-uterm-platform/src",
     "packages/provide-uterm-platform/tests/pty",
+    # Server-package source + tests for the bridge/tunnel mutants added
+    # to paths_to_mutate. ``mutants/`` needs both copied alongside so the
+    # mutated source resolves and the test discovery finds the suites.
+    "packages/provide-uterm-server/src",
+    "packages/provide-uterm-server/tests/bridge",
+    "packages/provide-uterm-server/tests/tunnel",
     "conftest.py",
 ]
 pytest_add_cli_args = [
