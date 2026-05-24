@@ -17,14 +17,26 @@ from pathlib import Path
 
 
 def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
-    """Record a terminal demo via asciinema. Returns output path or None."""
+    """Record a terminal demo via asciinema. Returns output path or None.
+
+    The captured cast contains only what the demo script writes to *stdout*
+    (the intentional ``banner()`` / ``info()`` / ``ok()`` narration plus the
+    actual terminal output). Stderr is redirected to a sibling ``.stderr``
+    log file so the cast doesn't fill with provide-telemetry bootstrap
+    warnings, asyncio "Using selector: KqueueSelector" lines, websockets
+    handshake debug ("> GET /ws/worker/..."), and raw control-frame hex.
+    The .stderr file is kept on disk for diagnosis if the recording fails.
+    """
     try:
         script_path = Path(script_path).resolve()
         repo_root = script_path.parents[2]
         env = dict(os.environ)
         existing_pythonpath = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = str(repo_root) if not existing_pythonpath else f"{repo_root}:{existing_pythonpath}"
-        cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))} --run-demo"
+        stderr_log = out_path.with_suffix(out_path.suffix + ".stderr")
+        cmd = (
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(script_path))} --run-demo 2>{shlex.quote(str(stderr_log))}"
+        )
         subprocess.run(
             [
                 "asciinema",
