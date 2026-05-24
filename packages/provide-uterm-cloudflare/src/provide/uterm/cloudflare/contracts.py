@@ -108,6 +108,20 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
         mode = value.get("input_mode")
         if mode in {"hijack", "open"}:
             normalized["mode"] = mode
+        # Protocol range block ({min, max[, preferred]}) — preferred negotiation path.
+        # Coerce min/max to ints so ws_routes can compare numerically.
+        proto = value.get("protocol")
+        if isinstance(proto, dict):
+            block: dict[str, int] = {}
+            for key in ("min", "max", "preferred"):
+                if key in proto:
+                    try:
+                        block[key] = int(proto[key])
+                    except (ValueError, TypeError):
+                        pass
+            if block:
+                normalized["protocol"] = block
+        # Legacy single-int field for older workers — kept for compat.
         if "protocol_version" in value:
             try:
                 normalized["protocol_version"] = int(value["protocol_version"])

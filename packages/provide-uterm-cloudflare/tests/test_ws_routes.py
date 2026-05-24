@@ -73,7 +73,11 @@ class _Runtime:
 
 
 class _Ws:
-    pass
+    def __init__(self) -> None:
+        self.closed: tuple[int, str] | None = None
+
+    def close(self, code: int, reason: str) -> None:
+        self.closed = (code, reason)
 
 
 def _raw(frame_type: str, **kwargs) -> str:
@@ -161,6 +165,97 @@ async def test_worker_hello_invalid_mode_ignored() -> None:
     await handle_socket_message(runtime, ws, _raw("worker_hello", input_mode="bogus"), is_worker=True)
     assert runtime.input_mode == "hijack"
     assert not runtime._input_modes_saved
+
+
+async def test_worker_hello_with_protocol_block_dict() -> None:
+    """worker_hello with a ``protocol: {min, max}`` block: parsed and accepted."""
+    runtime = _Runtime(input_mode="open")
+    ws = _Ws()
+    await handle_socket_message(
+        runtime,
+        ws,
+        _raw("worker_hello", input_mode="hijack", protocol={"min": 1, "max": 1}),
+        is_worker=True,
+    )
+    assert runtime.input_mode == "hijack"
+    assert ws.closed is None  # negotiated successfully
+
+
+async def test_worker_hello_with_legacy_protocol_version() -> None:
+    """worker_hello with legacy ``protocol_version`` int: parsed and accepted."""
+    runtime = _Runtime(input_mode="open")
+    ws = _Ws()
+    await handle_socket_message(
+        runtime,
+        ws,
+        _raw("worker_hello", input_mode="hijack", protocol_version=1),
+        is_worker=True,
+    )
+    assert runtime.input_mode == "hijack"
+    assert ws.closed is None
+
+
+async def test_worker_hello_protocol_mismatch_closes_socket() -> None:
+    """worker_hello with a protocol range above the server's max: broadcasts error frame and closes."""
+    runtime = _Runtime(input_mode="open")
+    ws = _Ws()
+    # Server MAX is 1; ask for [99, 99] so negotiation returns None.
+    await handle_socket_message(
+        runtime,
+        ws,
+        _raw("worker_hello", input_mode="hijack", protocol={"min": 99, "max": 99}),
+        is_worker=True,
+    )
+    # The error frame must have been broadcast before the close.
+    assert runtime._broadcast, "expected protocol_mismatch error frame"
+    err = runtime._broadcast[-1]
+    assert err["type"] == "error"
+    assert err["reason"] == "protocol_mismatch"
+    assert err["client_min"] == 99
+    assert err["client_max"] == 99
+    # The websocket must have been closed with the protocol-error code.
+    assert ws.closed == (1002, "protocol_mismatch")
+    # input_mode must not have been touched (we returned before applying it).
+    assert runtime.input_mode == "open"
+
+
+async def test_worker_hello_protocol_mismatch_survives_broadcast_failure() -> None:
+    """Mismatch path: broadcast raising must not bubble — close still attempted."""
+    runtime = _Runtime(input_mode="open")
+
+    async def _boom(_frame: object) -> None:
+        raise RuntimeError("broadcast failed")
+
+    runtime.broadcast_worker_frame = _boom  # type: ignore[assignment]
+    ws = _Ws()
+    await handle_socket_message(
+        runtime,
+        ws,
+        _raw("worker_hello", input_mode="hijack", protocol={"min": 99, "max": 99}),
+        is_worker=True,
+    )
+    # Close should still have happened despite the broadcast failure.
+    assert ws.closed == (1002, "protocol_mismatch")
+
+
+async def test_worker_hello_protocol_mismatch_survives_close_failure() -> None:
+    """Mismatch path: ws.close raising must not bubble out of handle_socket_message."""
+    runtime = _Runtime(input_mode="open")
+    ws = _Ws()
+
+    def _boom(_code: int, _reason: str) -> None:
+        raise RuntimeError("close failed")
+
+    ws.close = _boom  # type: ignore[method-assign]
+    # Should return cleanly even though close raised.
+    await handle_socket_message(
+        runtime,
+        ws,
+        _raw("worker_hello", input_mode="hijack", protocol={"min": 99, "max": 99}),
+        is_worker=True,
+    )
+    # Broadcast still fired before the failing close.
+    assert any(b.get("type") == "error" and b.get("reason") == "protocol_mismatch" for b in runtime._broadcast)
 
 
 async def test_worker_non_special_frame_broadcasts() -> None:
