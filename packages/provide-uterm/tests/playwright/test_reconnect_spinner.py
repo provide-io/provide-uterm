@@ -94,8 +94,17 @@ def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
             f"{_MOCK_TERMINAL_JS}"
             "<script type='module'>"
             "import { ProvideHijack } from '/ui/hijack.js';"
-            "window._widget = new ProvideHijack(document.getElementById('app'),"
+            "import { startReconnectAnim, stopReconnectAnim } from '/ui/hijack-websocket.js';"
+            "const w = new ProvideHijack(document.getElementById('app'),"
             f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
+            "window._widget = w;"
+            "/* Test-only hooks. The reconnect-anim entry points moved from "
+            "ProvideHijack methods to free functions over HijackState in "
+            "60094ad; expose them here instead of poking widget privates. */ "
+            "window.__hijackTestHooks = {"
+            "  startReconnectAnim: () => startReconnectAnim(w._state),"
+            "  stopReconnectAnim: () => stopReconnectAnim(w._state),"
+            "};"
             "</script>"
             "</body></html>"
         )
@@ -136,7 +145,7 @@ def _navigate(page: Page, base_url: str, worker_id: str) -> None:
 def _wait_ws_open(page: Page, timeout: float = 5000) -> None:
     """Wait until the widget's WS is in OPEN state (readyState === 1)."""
     page.wait_for_function(
-        "window._widget._ws !== null && window._widget._ws.readyState === 1",
+        "window._widget._state.ws !== null && window._widget._state.ws.readyState === 1",
         timeout=timeout,
     )
 
@@ -160,7 +169,7 @@ def _fire_key(page: Page) -> None:
 
 def _force_close_ws(page: Page) -> None:
     """Close the browser-side WS socket so the widget enters reconnect mode."""
-    page.evaluate("if (window._widget._ws) window._widget._ws.close()")
+    page.evaluate("if (window._widget._state.ws) window._widget._state.ws.close()")
 
 
 # ---------------------------------------------------------------------------
@@ -184,12 +193,12 @@ class TestNudgeReconnect:
         _force_close_ws(page)
         _wait_reconnecting(page)
 
-        has_timer_before = page.evaluate("window._widget._reconnectTimer !== null")
+        has_timer_before = page.evaluate("window._widget._state.reconnectTimer !== null")
         assert has_timer_before, "reconnect timer must be set while in backoff"
 
         _fire_key(page)
 
-        timer_after = page.evaluate("window._widget._reconnectTimer")
+        timer_after = page.evaluate("window._widget._state.reconnectTimer")
         assert timer_after is None, "_nudgeReconnect must clear the backoff timer"
 
     @pytest.mark.playwright
@@ -232,7 +241,7 @@ class TestSpinnerAnim:
         page.evaluate("window._termWrites.length = 0")
 
         # Start the spinner directly (no nudge — avoids immediate reconnect race)
-        page.evaluate("window._widget._startReconnectAnim()")
+        page.evaluate("window.__hijackTestHooks.startReconnectAnim()")
 
         # Wait for at least two frames (interval is 80 ms → expect frames within 250 ms)
         page.wait_for_function(
@@ -241,7 +250,7 @@ class TestSpinnerAnim:
         )
 
         # Stop the animation so later tests start clean
-        page.evaluate("window._widget._stopReconnectAnim()")
+        page.evaluate("window.__hijackTestHooks.stopReconnectAnim()")
 
         writes = page.evaluate("window._termWrites")
         frame_writes = [w for w in writes if len(w) > 0 and ord(w[0]) == 27 and "\x1b[2;36m" in w]
@@ -269,20 +278,20 @@ class TestSpinnerAnim:
         _init_term(page)
 
         # Start the spinner and wait for at least one frame
-        page.evaluate("window._widget._startReconnectAnim()")
+        page.evaluate("window.__hijackTestHooks.startReconnectAnim()")
         page.wait_for_function(
             "window._termWrites.some(w => w.charCodeAt(0) === 27 && w.includes('\\x1b[2;36m'))",
             timeout=500,
         )
 
-        assert page.evaluate("window._widget._reconnectAnimTimer !== null"), (
+        assert page.evaluate("window._widget._state.reconnectAnimTimer !== null"), (
             "_reconnectAnimTimer must be non-null while running"
         )
 
         page.evaluate("window._termWrites.length = 0")
-        page.evaluate("window._widget._stopReconnectAnim()")
+        page.evaluate("window.__hijackTestHooks.stopReconnectAnim()")
 
-        anim_timer = page.evaluate("window._widget._reconnectAnimTimer")
+        anim_timer = page.evaluate("window._widget._state.reconnectAnimTimer")
         assert anim_timer is None, "_reconnectAnimTimer must be null after stop"
 
         writes = page.evaluate("window._termWrites")
@@ -317,7 +326,7 @@ class TestSpinnerAnim:
         # evaluate returns — still, same-call guarantees the read happens first).
         timer_set_during_keypress = page.evaluate("""() => {
           if (window._onDataCb) window._onDataCb('a');
-          return window._widget._reconnectAnimTimer !== null;
+          return window._widget._state.reconnectAnimTimer !== null;
         }""")
         assert timer_set_during_keypress, "_startReconnectAnim must set _reconnectAnimTimer immediately on keypress"
 
@@ -326,9 +335,9 @@ class TestSpinnerAnim:
 
         # Give onopen a tick to call _stopReconnectAnim
         page.wait_for_function(
-            "window._widget._reconnectAnimTimer === null",
+            "window._widget._state.reconnectAnimTimer === null",
             timeout=1000,
         )
-        assert page.evaluate("window._widget._reconnectAnimTimer") is None, (
+        assert page.evaluate("window._widget._state.reconnectAnimTimer") is None, (
             "_reconnectAnimTimer must be cleared after WS reconnects"
         )
