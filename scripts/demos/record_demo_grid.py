@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -94,15 +95,22 @@ _XTERM_CDN = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
 _FITADDON_CDN = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
 
 
-def _build_grid_html(session_ids: list[str], cols: int, rows: int) -> str:
+def _build_grid_html(session_ids: list[str], cols: int, rows: int, auth_token: str = "") -> str:
     """Build the full 9-terminal grid HTML including hijack.js script tags.
 
     Uses root-relative URLs so the page works when served from the terminal
     server via page.route() — keeping the correct origin for WebSocket construction.
     xterm.js is loaded as a UMD global (window.Terminal) from CDN before hijack.js.
+
+    ``auth_token`` is embedded into each ProvideHijack widget's ``authToken``
+    config; hijack-websocket.ts appends it as ``?token=...`` to the WS URL so
+    the server's JWT validator accepts the browser connection. Without this,
+    every ProvideHijack WS hits the JWT validator with no credential and the
+    page renders 9 empty cells.
     """
     cells_html = "\n  ".join(f'<div class="cell" id="cell-{i}"></div>' for i in range(cols * rows))
     sessions_json = str(session_ids).replace("'", '"')
+    auth_json = json.dumps(auth_token)
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -147,9 +155,10 @@ def _build_grid_html(session_ids: list[str], cols: int, rows: int) -> str:
 <script type="module">
   import {{ ProvideHijack }} from '/_terminal/hijack.js';
   const sessions = {sessions_json};
+  const authToken = {auth_json};
   const cells = document.querySelectorAll('.cell');
   sessions.forEach(function(sid, i) {{
-    new ProvideHijack(cells[i], {{ workerId: sid }});
+    new ProvideHijack(cells[i], {{ workerId: sid, authToken: authToken }});
   }});
 </script>
 </body>
@@ -207,7 +216,11 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     # Build full grid HTML — served via page.route() at /demo-grid so the page
     # keeps the correct server origin and WebSocket construction uses location.host.
-    grid_html = _build_grid_html(GRID_SESSION_IDS, _COLS, _ROWS)
+    # Extract the raw JWT from the bearer header so it can be embedded in the
+    # grid page. ProvideHijack passes it to the WS handshake as ``?token=...``.
+    _bearer = dev_bearer_headers().get("Authorization", "")
+    _grid_auth_token = _bearer.removeprefix("Bearer ").strip()
+    grid_html = _build_grid_html(GRID_SESSION_IDS, _COLS, _ROWS, _grid_auth_token)
     grid_html_bytes = grid_html.encode()
 
     def _register_grid_route(page: object) -> None:
