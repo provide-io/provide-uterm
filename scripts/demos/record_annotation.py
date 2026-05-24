@@ -22,6 +22,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     info,
     kv,
     ok,
@@ -48,7 +49,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # Post basic lifecycle annotations
         info("Posting lifecycle annotations...")
         for label, severity in [("demo_started", "info"), ("deploy_begin", "warning")]:
@@ -120,8 +121,12 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         (lambda p: wait_for_terminal(p), 2.0, "01-session-with-annotations.png"),
         ("/app/operator/provide-shell", 0.5, None),
         (lambda p: wait_for_terminal(p), 2.0, "02-operator-view.png"),
-        # API view showing annotation entries (JSON is OK here — it's showing the annotation data)
-        ("/api/sessions/provide-shell/recording/entries?event=annotation", 1.5, "03-annotation-entries.png"),
+        # Stay on the operator page for the closing beat — the previous
+        # version navigated to ``/api/sessions/.../recording/entries`` which
+        # is the raw JSON API endpoint and rendered as a wall of unstyled
+        # JSON in the captured mp4. The operator view already shows the
+        # annotated session and is the right thing to linger on.
+        (lambda p: wait_for_terminal(p), 1.5, "03-annotation-entries.png"),
     ]
     mp4_path = browser_record(base_url, steps, feat_dir)
     stop_server(server)

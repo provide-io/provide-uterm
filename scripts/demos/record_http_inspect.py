@@ -23,6 +23,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     free_port,
     info,
     kv,
@@ -81,7 +82,7 @@ async def run_terminal_demo() -> None:
 
     base_url, server = start_server()
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # Create an HTTP inspect tunnel
         info("Creating HTTP inspect tunnel via /api/tunnels...")
         r = await client.post(
@@ -134,7 +135,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     try:
         import httpx as _httpx
 
-        with _httpx.Client(base_url=base_url, timeout=30.0) as client:
+        with _httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
             client.post(
                 "/api/tunnels",
                 json={"tunnel_type": "http", "display_name": "demo-inspect", "local_port": target_port},

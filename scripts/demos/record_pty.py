@@ -22,6 +22,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     info,
     kv,
     ok,
@@ -47,7 +48,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     time.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         banner(DESCRIPTION)
 
         # Get the default provide-shell session info

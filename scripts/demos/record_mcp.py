@@ -22,6 +22,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     info,
     kv,
     ok,
@@ -62,7 +63,7 @@ async def run_terminal_demo() -> None:
 
     info("Demonstrating MCP tool calls via HTTP API:")
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # list_sessions
         r = await client.get("/api/sessions")
         r.raise_for_status()

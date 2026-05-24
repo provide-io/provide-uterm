@@ -81,7 +81,10 @@ def open_background_context(
 
     Returns (context, page) — caller must close context when done.
     """
-    ctx = browser.new_context(viewport={"width": 1280, "height": 720})
+    ctx = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        extra_http_headers=_dev_auth_headers_or_empty(),
+    )
     page = ctx.new_page()
     full = base_url + path if path.startswith("/") else path
     page.goto(full)
@@ -103,6 +106,21 @@ def _run_steps(page: Page, steps: list[BrowserStep], shots_dir: Path) -> None:
         if shot_name:
             page.screenshot(path=str(shots_dir / shot_name))
             print(f"  📸 {shot_name}", flush=True)
+
+
+def _dev_auth_headers_or_empty() -> dict[str, str]:
+    """Pull the dev_token bearer header if start_server() set one up, else empty.
+
+    Browser-side ``/app/`` pages now require a JWT after dab4ac2 removed
+    the dev/none auth bypass. Without this header on every page load,
+    playwright captures a 401 page instead of the demo UI.
+    """
+    try:
+        from scripts.demos.server import dev_bearer_headers
+
+        return dev_bearer_headers()
+    except Exception:
+        return {}
 
 
 def record_perspective(
@@ -127,6 +145,7 @@ def record_perspective(
                 viewport={"width": 1280, "height": 720},
                 record_video_dir=str(feature_dir),
                 record_video_size={"width": 1280, "height": 720},
+                extra_http_headers=_dev_auth_headers_or_empty(),
             )
             page = ctx.new_page()
             _run_steps(page, resolved, shots_dir)
@@ -169,6 +188,7 @@ def record_perspective_with_background(
                 viewport={"width": 1280, "height": 720},
                 record_video_dir=str(feature_dir),
                 record_video_size={"width": 1280, "height": 720},
+                extra_http_headers=_dev_auth_headers_or_empty(),
             )
             page = ctx.new_page()
             _run_steps(page, resolved, shots_dir)
