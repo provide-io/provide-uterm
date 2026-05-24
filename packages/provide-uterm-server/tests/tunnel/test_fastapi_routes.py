@@ -25,6 +25,7 @@ from provide.uterm.tunnel.protocol import (
     encode_control,
     encode_frame,
 )
+from provide.uterm.tunnel.token_hash import hash_token
 
 
 @pytest.fixture
@@ -107,7 +108,7 @@ class TestTunnelConnect:
         hub = TermHub(worker_token="global-token")
         app = FastAPI()
         app.include_router(hub.create_router(extra_route_registrars=[_tunnel_registrar]))
-        app.state.uterm_tunnel_tokens = {"test-auth": {"worker_token": "session-token"}}
+        app.state.uterm_tunnel_tokens = {"test-auth": {"worker_token_hash": hash_token("session-token")}}
         app.state.uterm_registry = MagicMock(set_tunnel_connected=AsyncMock())
         tc = TestClient(app)
         with tc.websocket_connect(
