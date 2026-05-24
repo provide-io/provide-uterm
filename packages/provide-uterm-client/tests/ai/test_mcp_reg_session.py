@@ -87,7 +87,7 @@ def _server_app(
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "dev"},
+            "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
             "sessions": sessions,
         }
     )

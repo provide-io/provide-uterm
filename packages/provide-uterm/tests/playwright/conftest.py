@@ -49,21 +49,58 @@ def pytest_collection_modifyitems(items: list) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Auto-auth: attach admin header-mode credentials to every browser context.
-# Reference fixtures run the server in `header` auth mode for tests; without
-# these headers every page navigation is 401.
+# Auto-auth: attach admin header-mode credentials to same-host requests only.
+# The reference-server fixtures run in `header` auth mode for tests; without
+# these headers every page navigation is 401. Adding them globally via
+# ``extra_http_headers`` triggers CORS preflight for cross-origin assets
+# (CDN-hosted xterm.js etc.) and breaks unrelated tests, so we use route
+# interception to add them only for 127.0.0.1 / localhost.
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="session")
-def browser_context_args(browser_context_args: dict) -> dict:
-    return {
-        **browser_context_args,
-        "extra_http_headers": {
-            "X-Uterm-Principal": "admin",
-            "X-Uterm-Role": "admin",
-        },
-    }
+@pytest.fixture(autouse=True)
+def _attach_uterm_auth_headers(page: Page) -> None:
+    def _inject(route: Any) -> None:
+        req = route.request
+        url = req.url
+        if "127.0.0.1" in url or "://localhost" in url:
+            headers = {
+                **req.headers,
+                "X-Uterm-Principal": "admin",
+                "X-Uterm-Role": "admin",
+            }
+            route.continue_(headers=headers)
+        else:
+            route.continue_()
+
+    page.route("**/*", _inject)
+    # WebSocket upgrades bypass page.route(), so we also drop principal/role
+    # cookies. The header-mode auth resolver reads uterm_principal/uterm_role
+    # cookies as a fallback when the headers are missing.
+    page.context.add_cookies(
+        [
+            {
+                "name": "uterm_principal",
+                "value": "admin",
+                "url": "http://127.0.0.1",
+            },
+            {
+                "name": "uterm_role",
+                "value": "admin",
+                "url": "http://127.0.0.1",
+            },
+            {
+                "name": "uterm_principal",
+                "value": "admin",
+                "url": "http://localhost",
+            },
+            {
+                "name": "uterm_role",
+                "value": "admin",
+                "url": "http://localhost",
+            },
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------

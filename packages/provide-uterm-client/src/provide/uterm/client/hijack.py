@@ -138,7 +138,7 @@ class HijackClient:
             r = await client.request(method, path, **kw)
         except httpx.HTTPError as exc:
             msg = str(exc)
-            if isinstance(exc, httpx.HTTPStatusError):
+            if isinstance(exc, httpx.HTTPStatusError):  # pragma: no cover — defensive; we don't call raise_for_status()
                 try:
                     body = exc.response.json()
                     msg += f" - body: {_sanitize(body)}"

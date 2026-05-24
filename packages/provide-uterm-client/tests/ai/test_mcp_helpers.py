@@ -213,6 +213,11 @@ class TestUnescapeKeys:
     def test_unknown_escape_passed_through(self) -> None:
         assert _unescape_keys(r"\z") == "\\z"
 
+    def test_unicode_4_hex_escape(self) -> None:
+        # 6 literal chars: backslash, u, 0, 0, e, 9 → U+00E9 (é).
+        raw = "\\u00e9"
+        assert _unescape_keys(raw) == "é"
+
     def test_trailing_backslash(self) -> None:
         assert _unescape_keys("abc\\") == "abc\\"
 

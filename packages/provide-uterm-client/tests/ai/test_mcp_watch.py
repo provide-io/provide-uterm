@@ -33,7 +33,7 @@ def _make_server_app_with_bus() -> tuple[FastAPI, TermHub, EventBus]:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "dev"},
+            "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
             "sessions": [
                 {
                     "session_id": "s1",
@@ -86,7 +86,7 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -126,7 +126,7 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -154,7 +154,7 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -199,7 +199,7 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -400,7 +400,7 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -421,7 +421,7 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -452,7 +452,7 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -479,7 +479,7 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -538,7 +538,7 @@ class TestSessionSubscribeMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "dev"},
+                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
                 "sessions": [
                     {
                         "session_id": "s1",
