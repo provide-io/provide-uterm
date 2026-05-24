@@ -43,6 +43,37 @@ _E2E_BASE = f"http://127.0.0.1:{_E2E_PORT}"
 _STARTUP_TIMEOUT_S = 90
 
 
+# ---------------------------------------------------------------------------
+# Auto-auth — mirrors packages/provide-uterm-server/tests/conftest.py so the
+# cross-compat tests that hit a FastAPI app in header mode don't 401.
+# ---------------------------------------------------------------------------
+
+
+def _install_testclient_dev_principal_autoauth() -> None:
+    """Attach admin header-mode credentials to every starlette TestClient."""
+    from typing import Any as _Any
+
+    from starlette.testclient import TestClient as _TestClient
+
+    if getattr(_TestClient, "_uterm_devprincipal_patched", False):
+        return
+
+    _defaults = {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
+    _original_init = _TestClient.__init__
+
+    def _patched_init(self: _TestClient, *args: _Any, **kwargs: _Any) -> None:
+        _original_init(self, *args, **kwargs)
+        for header, value in _defaults.items():
+            if header not in self.headers:
+                self.headers[header] = value
+
+    _TestClient.__init__ = _patched_init  # type: ignore[method-assign]
+    _TestClient._uterm_devprincipal_patched = True  # type: ignore[attr-defined]
+
+
+_install_testclient_dev_principal_autoauth()
+
+
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "e2e: mark test as end-to-end (requires pywrangler dev)")
     config.addinivalue_line(
