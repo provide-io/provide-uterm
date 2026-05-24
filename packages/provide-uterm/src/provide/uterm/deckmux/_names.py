@@ -76,6 +76,7 @@ _ANIMALS = [
     "newt",
     "pike",
     "wren",
+    "tanuki",
 ]
 
 _COLORS = [

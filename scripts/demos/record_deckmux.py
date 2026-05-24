@@ -59,14 +59,14 @@ PRIMARY_VIDEO: str = "composite_trim.mp4"
 # ---------------------------------------------------------------------------
 
 _CAST: list[dict[str, str]] = [
-    {"name": "operator", "display": "Tim", "role": "operator"},
-    {"name": "kal", "display": "Kal", "role": "operator"},
-    {"name": "chris", "display": "Chris", "role": "operator"},
-    {"name": "brandon", "display": "Brandon", "role": "operator"},
-    {"name": "kyle", "display": "Kyle", "role": "operator"},
-    {"name": "logan", "display": "Logan", "role": "operator"},
-    {"name": "heidi", "display": "Heidi", "role": "viewer"},
-    {"name": "heather", "display": "Heather", "role": "operator"},
+    {"name": "operator", "display": "Tanuki Tim", "role": "operator"},
+    {"name": "kal", "display": "Bear Brody", "role": "operator"},
+    {"name": "chris", "display": "Crane Cara", "role": "operator"},
+    {"name": "brandon", "display": "Falcon Finn", "role": "operator"},
+    {"name": "kyle", "display": "Lynx Liam", "role": "operator"},
+    {"name": "logan", "display": "Wolf Willa", "role": "operator"},
+    {"name": "heidi", "display": "Heron Hugo", "role": "viewer"},
+    {"name": "heather", "display": "Marten Mira", "role": "operator"},
     {"name": "sentinel", "display": "Sentinel", "role": "viewer"},
 ]
 
@@ -219,7 +219,7 @@ def _navigate_away():
 def _type_from_self(text: str, wait_s: float = 1.0):
     """Return a callable that types into THIS user's own browser input field.
 
-    Unlike ``_send_cmd`` (which always types on Tim's page), this callable
+    Unlike ``_send_cmd`` (which always types on Tanuki Tim's page), this callable
     operates on whichever page the step interleaver passes in — proving that
     different users are actually typing.
     """
@@ -238,13 +238,13 @@ def _type_from_self(text: str, wait_s: float = 1.0):
 
 # What each user types when they join the incident channel
 _JOIN_MESSAGES: dict[str, str | None] = {
-    "kal": "echo '[Kal] SRE on-call — joining, checking logs'",
-    "chris": "echo '[Chris] Backend — pulling up app traces'",
-    "brandon": "echo '[Brandon] DBA — standby, will check connection pool'",
-    "kyle": "echo '[Kyle] Security — auditing commands'",
-    "logan": "echo '[Logan] DevOps — looking at container health'",
+    "kal": "echo '[Bear Brody] SRE on-call — joining, checking logs'",
+    "chris": "echo '[Crane Cara] Backend — pulling up app traces'",
+    "brandon": "echo '[Falcon Finn] DBA — standby, will check connection pool'",
+    "kyle": "echo '[Lynx Liam] Security — auditing commands'",
+    "logan": "echo '[Wolf Willa] DevOps — looking at container health'",
     "heidi": None,  # eng manager watches, doesn't type
-    "heather": "echo '[Heather] QA — checking error reports'",
+    "heather": "echo '[Marten Mira] QA — checking error reports'",
     "sentinel": None,  # bot doesn't type
 }
 
@@ -257,7 +257,7 @@ _JOIN_MESSAGES: dict[str, str | None] = {
 def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     """Record the 9-person production incident response DeckMux demo.
 
-    Produces 9 individual perspective mp4s, 3 hero mp4s (Tim, Brandon, Heidi),
+    Produces 9 individual perspective mp4s, 3 hero mp4s (Tanuki Tim, Falcon Finn, Heron Hugo),
     and a 3-column composite video. The reel highlight comes from the composite.
     """
     feat_dir = out_dir(FEATURE, base_out)
@@ -282,7 +282,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Record terminal demo with asciinema
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
 
-    # Commands are sent by typing into Tim's browser input field (open/shared mode).
+    # Commands are sent by typing into Tanuki Tim's browser input field (open/shared mode).
     # Using the hijack REST API puts browsers into "Hijacked (other)" observer mode
     # which shows a static snapshot instead of live terminal output.
     # The input field (id="h-provide-shell-inputfield") unescapes \\r to \r before
@@ -290,7 +290,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     _tim_page: list[Any] = []  # filled by the first step callable
 
     def _capture_tim_page(page: object) -> None:
-        """Capture Tim's page reference for command sending."""
+        """Capture Tanuki Tim's page reference for command sending."""
         _tim_page.clear()
         _tim_page.append(page)
 
@@ -312,17 +312,17 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Each step is (action, wait_s, screenshot).
     # Total steps: ~55 covering Acts 1-5.
 
-    # --- ACT 1: Tim alone, running diagnostics (steps 0-11) ---
+    # --- ACT 1: Tanuki Tim alone, running diagnostics (steps 0-11) ---
     act1_tim: list[BrowserStep] = [
         (op_url, 1.0, None),  # 0: navigate
         (_wait_term, 1.0, None),  # 1: wait for terminal
         (_capture_tim_page, 0.5, None),  # 2: capture page ref + settle
-        # Tim runs commands — each _cmd call happens between steps via _cmd_step
+        # Tanuki Tim runs commands — each _cmd call happens between steps via _cmd_step
     ]
 
-    # Commands Tim runs during Act 1 (sent via API, interleaved with step waits)
+    # Commands Tanuki Tim runs during Act 1 (sent via API, interleaved with step waits)
     act1_commands = [
-        ("echo '[Tim] On-call paged — investigating db connection alerts'\r", 0.8),
+        ("echo '[Tanuki Tim] On-call paged — investigating db connection alerts'\r", 0.8),
         ("date && hostname\r", 0.8),
         ("cat /tmp/incident/syslog.txt | tail -80\r", 1.2),
         ("grep -n 'ERROR\\|FATAL' /tmp/incident/syslog.txt\r", 1.0),
@@ -331,7 +331,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     ]
 
     def _send_cmd(keys: str, wait_s: float = 0.7):
-        """Return a callable that types a command into Tim's browser input field.
+        """Return a callable that types a command into Tanuki Tim's browser input field.
 
         The hijack widget input field (open mode) unescapes \\\\r to \\r.
         We strip the trailing \\r from the keys arg and append \\\\r so the
@@ -384,7 +384,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             join.append((None, 0.3, None))
         join_steps_per_user[uname] = pre_pad + join
 
-    # Tim during Act 2: waits, then announces
+    # Tanuki Tim during Act 2: waits, then announces
     act2_tim: list[BrowserStep] = [
         (None, 1.0, None),  # wait for first joins
     ]
@@ -397,7 +397,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     act2_tim.append((_send_cmd("echo '--- team assembled, investigating db connection timeouts ---'\r"), 1.0, None))
     act2_tim.append((None, 3.0, None))  # 15s settle (compressed across steps)
 
-    # Pad other users' Act 2 steps to same length as Tim's
+    # Pad other users' Act 2 steps to same length as Tanuki Tim's
     for uname in join_order:
         while len(join_steps_per_user[uname]) < len(act2_tim):
             join_steps_per_user[uname].append((None, 0.3, None))
@@ -410,7 +410,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         ("echo 'root cause: connection pool exhaustion -- 47 idle-in-transaction sessions'\r", 0.8),
     ]
 
-    # Tim sends commands
+    # Tanuki Tim sends commands
     act3_tim: list[BrowserStep] = []
     for keys, wait_s in act3_commands:
         act3_tim.append((_send_cmd(keys, wait_s), 1.5, None))
@@ -440,51 +440,51 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     }
 
     # --- ACT 4: Handoff & fix ---
-    # Brandon types from HIS browser (proving multi-user input).
-    # Kal types from HIS browser when verifying.
-    # Tim only types the handoff announcements.
+    # Falcon Finn types from HIS browser (proving multi-user input).
+    # Bear Brody types from HIS browser when verifying.
+    # Tanuki Tim only types the handoff announcements.
 
-    # Brandon's commands (typed from Brandon's page via _type_from_self)
+    # Falcon Finn's commands (typed from Falcon Finn's page via _type_from_self)
     brandon_fix_cmds = [
-        "echo '[Brandon] Taking over — checking idle connections'",
-        "echo '[Brandon] psql> SELECT count(*) FROM pg_stat_activity WHERE state = idle_in_transaction'",
-        "echo '[Brandon]   count: 47'",
-        "echo '[Brandon] psql> SELECT pg_terminate_backend(pid) ... WHERE query_start < now() - 5min'",
-        "echo '[Brandon]   terminated: 47 connections'",
-        "echo '[Brandon] psql> SELECT count(*) ... idle_in_transaction'",
-        "echo '[Brandon]   count: 0 — pool cleared'",
+        "echo '[Falcon Finn] Taking over — checking idle connections'",
+        "echo '[Falcon Finn] psql> SELECT count(*) FROM pg_stat_activity WHERE state = idle_in_transaction'",
+        "echo '[Falcon Finn]   count: 47'",
+        "echo '[Falcon Finn] psql> SELECT pg_terminate_backend(pid) ... WHERE query_start < now() - 5min'",
+        "echo '[Falcon Finn]   terminated: 47 connections'",
+        "echo '[Falcon Finn] psql> SELECT count(*) ... idle_in_transaction'",
+        "echo '[Falcon Finn]   count: 0 — pool cleared'",
     ]
 
-    # Kal's verification commands (typed from Kal's page)
+    # Bear Brody's verification commands (typed from Bear Brody's page)
     kal_verify_cmds = [
-        "echo '[Kal] Verifying fix — checking health endpoint'",
+        "echo '[Bear Brody] Verifying fix — checking health endpoint'",
         "cat /tmp/incident/health_ok.json",
         "cat /tmp/incident/docker_logs_recovery.txt",
     ]
 
-    # Tim's Act 4 steps: handoff announcements + wait slots aligned with Brandon/Kal
+    # Tanuki Tim's Act 4 steps: handoff announcements + wait slots aligned with Falcon Finn/Bear Brody
     act4_tim: list[BrowserStep] = [
-        (_send_cmd("echo '[Tim] Handing terminal to Brandon (DBA)'\r"), 1.5, None),  # 0
+        (_send_cmd("echo '[Tanuki Tim] Handing terminal to Falcon Finn (DBA)'\r"), 1.5, None),  # 0
     ]
-    # Wait while Brandon types (one step per Brandon command)
+    # Wait while Falcon Finn types (one step per Falcon Finn command)
     act4_tim.extend((None, 1.5, None) for _ in brandon_fix_cmds)
     act4_tim.append((None, 1.0, "act4-brandon-fix.png"))  # screenshot
-    act4_tim.append((_send_cmd("echo '[Tim] Brandon done — Kal, can you verify?'\r"), 1.5, None))
-    # Wait while Kal verifies
+    act4_tim.append((_send_cmd("echo '[Tanuki Tim] Falcon Finn done — Bear Brody, can you verify?'\r"), 1.5, None))
+    # Wait while Bear Brody verifies
     act4_tim.extend((None, 1.5, None) for _ in kal_verify_cmds)
     act4_tim.append((None, 1.0, "act4-kal-verified.png"))  # screenshot
-    act4_tim.append((_send_cmd("echo '[Tim] Fix confirmed — taking back control'\r"), 1.0, None))
+    act4_tim.append((_send_cmd("echo '[Tanuki Tim] Fix confirmed — taking back control'\r"), 1.0, None))
 
     act4_len = len(act4_tim)
 
-    # Brandon's Act 4: types his fix commands from his own browser
-    act4_brandon: list[BrowserStep] = [(None, 1.5, None)]  # step 0: wait for Tim's handoff msg
+    # Falcon Finn's Act 4: types his fix commands from his own browser
+    act4_brandon: list[BrowserStep] = [(None, 1.5, None)]  # step 0: wait for Tanuki Tim's handoff msg
     act4_brandon.extend((_type_from_self(cmd, wait_s=1.0), 0.3, None) for cmd in brandon_fix_cmds)
     while len(act4_brandon) < act4_len:
         act4_brandon.append((None, 0.3, None))
 
-    # Kal's Act 4: scrolls to bottom then types verification from his own browser
-    kal_verify_start = len(brandon_fix_cmds) + 3  # after Brandon screenshot + Tim's handoff
+    # Bear Brody's Act 4: scrolls to bottom then types verification from his own browser
+    kal_verify_start = len(brandon_fix_cmds) + 3  # after Falcon Finn screenshot + Tanuki Tim's handoff
     act4_kal: list[BrowserStep] = []
     for i in range(act4_len):
         if i == kal_verify_start - 1:
@@ -501,10 +501,10 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         (_send_cmd("echo '=== INCIDENT RESOLVED ==='\r"), 0.8, None),  # 0
         (_send_cmd("echo 'fix: terminated 47 stuck connections, pool recovered'\r"), 1.0, None),  # 1
         (None, 3.0, None),  # 2: pause before departures
-        (None, 3.0, "act5-kyle-left.png"),  # 3: Kyle disconnects
-        (None, 3.0, None),  # 4: Logan disconnects
-        (None, 3.0, None),  # 5: Heather disconnects
-        (None, 3.0, None),  # 6: Chris disconnects
+        (None, 3.0, "act5-kyle-left.png"),  # 3: Lynx Liam disconnects
+        (None, 3.0, None),  # 4: Wolf Willa disconnects
+        (None, 3.0, None),  # 5: Marten Mira disconnects
+        (None, 3.0, None),  # 6: Crane Cara disconnects
         (None, 3.0, "act5-resolved.png"),  # 7: final — 5 remain
     ]
 
@@ -534,7 +534,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # --- Assemble full step sequences per perspective ---
     all_steps: dict[str, list[BrowserStep]] = {}
 
-    # Tim's full sequence
+    # Tanuki Tim's full sequence
     all_steps["operator"] = act1_tim + act2_tim + act3_tim + act4_tim + act5_tim
 
     # Other users: padding during Act 1, join during Act 2, act during 3-5
@@ -544,9 +544,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         steps.extend(join_steps_per_user[uname])  # Act 2: join + settle
         steps.extend(act3_users.get(uname, [(None, 0.3, None)] * act3_len))  # Act 3
         if uname == "kal":
-            steps.extend(act4_kal)  # Act 4: Kal verifies from his browser
+            steps.extend(act4_kal)  # Act 4: Bear Brody verifies from his browser
         elif uname == "brandon":
-            steps.extend(act4_brandon)  # Act 4: Brandon types fix from his browser
+            steps.extend(act4_brandon)  # Act 4: Falcon Finn types fix from his browser
         else:
             steps.extend(act4_pad)  # Act 4: watching
         steps.extend(act5_users.get(uname, [(None, 0.3, None)] * act5_len))  # Act 5

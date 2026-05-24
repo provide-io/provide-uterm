@@ -54,13 +54,13 @@ def test_generate_name_different_ids() -> None:
 
 
 def test_generate_name_all_combos_valid() -> None:
-    """All 1024 combos (32x32) produce title-cased two-word names."""
+    """All adjective x animal combos produce unique title-cased two-word names."""
     seen = set()
     for adj in _ADJECTIVES:
         for animal in _ANIMALS:
             name = f"{adj.title()} {animal.title()}"
             seen.add(name)
-    assert len(seen) == 32 * 32
+    assert len(seen) == len(_ADJECTIVES) * len(_ANIMALS)
 
 
 def test_generate_name_uses_adjectives_and_animals() -> None:
