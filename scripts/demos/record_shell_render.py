@@ -40,7 +40,7 @@ TITLE = "Shell Rendering"
 SUBTITLE = "ANSI truecolor art from any image URL"
 HIGHLIGHT_START_S: float = 3.0
 HIGHLIGHT_DURATION_S: float = 8.0
-SITE_FORMAT = "cast"
+SITE_FORMAT = "mp4"
 
 
 def _make_rainbow_png(width: int = 160, height: int = 60) -> bytes:

@@ -43,7 +43,7 @@ TITLE = "Telnet Connector"
 SUBTITLE = "Legacy telnet session management"
 HIGHLIGHT_START_S: float = 3.0
 HIGHLIGHT_DURATION_S: float = 6.0
-SITE_FORMAT = "cast"
+SITE_FORMAT = "mp4"
 
 
 async def _telnet_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

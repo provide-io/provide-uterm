@@ -44,7 +44,7 @@ TITLE = "SSH Connector"
 SUBTITLE = "Connect to remote hosts over SSH"
 HIGHLIGHT_START_S: float = 3.0
 HIGHLIGHT_DURATION_S: float = 6.0
-SITE_FORMAT = "cast"
+SITE_FORMAT = "mp4"
 
 
 async def _handle_shell(process: asyncssh.SSHServerProcess) -> None:  # type: ignore[type-arg]
