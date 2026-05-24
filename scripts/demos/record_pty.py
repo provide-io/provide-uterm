@@ -39,7 +39,7 @@ TITLE = "PTY Sessions"
 SUBTITLE = "Live terminal over a local PTY"
 HIGHLIGHT_START_S: float = 3.0
 HIGHLIGHT_DURATION_S: float = 6.0
-SITE_FORMAT = "cast"
+SITE_FORMAT = "mp4"
 
 
 async def run_terminal_demo() -> None:

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-23T23:31:20Z",
+  "generated_at": "2026-05-24T04:06:39Z",
   "demos": [
     {
       "id": "annotation",
@@ -163,9 +163,10 @@
       "description": "Spawn a local PTY session, run commands, show resize and snapshot",
       "duration_seconds": 6.0,
       "highlight_start_s": 3.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
         "video": "pty/browser_trim.mp4",
+        "poster": "pty/poster.png",
         "cast": "pty/terminal.cast",
         "screenshots": [
           "pty/screenshots/01-pty-session.png",
@@ -218,9 +219,10 @@
       "description": "Send an image URL to the shell render command, get ANSI truecolor art back",
       "duration_seconds": 8.0,
       "highlight_start_s": 3.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
         "video": "shell_render/browser_trim.mp4",
+        "poster": "shell_render/poster.png",
         "cast": "shell_render/terminal.cast",
         "screenshots": [
           "shell_render/screenshots/01-rainbow-render.png",
@@ -237,9 +239,10 @@
       "description": "Connect a session to an SSH host, run commands, show live output",
       "duration_seconds": 6.0,
       "highlight_start_s": 3.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
         "video": "ssh/browser_trim.mp4",
+        "poster": "ssh/poster.png",
         "cast": "ssh/terminal.cast",
         "screenshots": [
           "ssh/screenshots/01-ssh-terminal.png",
@@ -254,9 +257,10 @@
       "description": "Connect a session to a local telnet server, show negotiation and live output",
       "duration_seconds": 6.0,
       "highlight_start_s": 3.0,
-      "format": "cast",
+      "format": "mp4",
       "artifacts": {
         "video": "telnet/browser_trim.mp4",
+        "poster": "telnet/poster.png",
         "cast": "telnet/terminal.cast",
         "screenshots": [
           "telnet/screenshots/01-telnet-terminal.png",
