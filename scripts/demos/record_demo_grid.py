@@ -19,6 +19,7 @@ from scripts.demos import (
     BASE_OUT,
     BrowserStep,
     browser_record,
+    dev_bearer_headers,
     free_port,
     out_dir,
     start_server,
@@ -183,7 +184,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     try:
         import httpx as _httpx
 
-        with _httpx.Client(base_url=base_url, timeout=15.0) as http:
+        with _httpx.Client(base_url=base_url, timeout=15.0, headers=dev_bearer_headers()) as http:
             for attempt in range(3):
                 for sid in GRID_SESSION_IDS:
                     if sid in hijack_ids:
@@ -239,7 +240,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         """Send looping GIF render to all 9 terminals via hijack endpoints."""
         import httpx as _h
 
-        with _h.Client(base_url=base_url, timeout=10.0) as http:
+        with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             for sid, hid in hijack_ids.items():
                 http.post(f"/worker/{sid}/hijack/{hid}/send", json={"keys": f"render --loop {gif_url}\r"})
 
@@ -261,7 +262,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     try:
         import httpx as _h
 
-        with _h.Client(base_url=base_url, timeout=10.0) as http:
+        with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             for sid, hid in hijack_ids.items():
                 http.post(f"/worker/{sid}/hijack/{hid}/release")
     except Exception:

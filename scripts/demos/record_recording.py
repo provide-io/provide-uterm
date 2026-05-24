@@ -22,6 +22,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     info,
     kv,
     ok,
@@ -47,7 +48,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     time.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         banner(DESCRIPTION)
 
         # Check recording status
@@ -129,7 +130,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Acquire a single hijack lease for the whole recording sequence
     hijack_id = ""
     try:
-        with _httpx.Client(base_url=base_url, timeout=15.0) as http:
+        with _httpx.Client(base_url=base_url, timeout=15.0, headers=dev_bearer_headers()) as http:
             http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
             r = http.post(
                 "/worker/provide-shell/hijack/acquire",
@@ -145,7 +146,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         if not hijack_id:
             return
         try:
-            with _httpx.Client(base_url=base_url, timeout=10.0) as http:
+            with _httpx.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
                 http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": keys})
                 time.sleep(wait_s)
                 # Calling this endpoint sends snapshot_req → worker responds with screen state
@@ -168,7 +169,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Release hijack
     if hijack_id:
         try:
-            with _httpx.Client(base_url=base_url, timeout=10.0) as http:
+            with _httpx.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
                 http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")
                 http.patch("/api/sessions/provide-shell", json={"input_mode": "open"})
         except Exception:

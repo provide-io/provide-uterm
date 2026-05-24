@@ -23,6 +23,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     free_port,
     info,
     kv,
@@ -76,7 +77,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     await asyncio.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         banner(DESCRIPTION)
 
         info(f"Starting inline telnet server on 127.0.0.1:{telnet_port}...")
@@ -151,7 +152,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             base_url, srv = start_server()
             holders["base_url"] = base_url
             holders["srv"] = srv
-            with httpx.Client(base_url=base_url, timeout=30.0) as http:
+            with httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
                 http.post(
                     "/api/sessions",
                     json={

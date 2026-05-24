@@ -24,6 +24,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     free_port,
     info,
     ok,
@@ -38,8 +39,8 @@ FEATURE = "shell_render"
 DESCRIPTION = "Send an image URL to the shell render command, get ANSI truecolor art back"
 TITLE = "Shell Rendering"
 SUBTITLE = "ANSI truecolor art from any image URL"
-HIGHLIGHT_START_S: float = 3.0
-HIGHLIGHT_DURATION_S: float = 8.0
+HIGHLIGHT_START_S: float = 0.8
+HIGHLIGHT_DURATION_S: float = 20.0
 SITE_FORMAT = "mp4"
 
 
@@ -193,7 +194,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as http:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         info("Starting image server (rainbow PNG + animated GIFs)...")
         ok(f"  PNG: {png_url}")
         ok(f"  GIF: {gif_url}")
@@ -290,7 +291,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     try:
         import httpx as _httpx
 
-        with _httpx.Client(base_url=base_url, timeout=10.0) as http:
+        with _httpx.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
             r = http.post(
                 "/worker/provide-shell/hijack/acquire",
@@ -359,7 +360,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             return
         import httpx as _h
 
-        with _h.Client(base_url=base_url, timeout=10.0) as http:
+        with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render {png_url}\r"})
 
     def _send_animated(page: object) -> None:
@@ -367,7 +368,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             return
         import httpx as _h
 
-        with _h.Client(base_url=base_url, timeout=10.0) as http:
+        with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {gif_url}\r"})
 
     def _send_cat(page: object) -> None:
@@ -375,7 +376,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             return
         import httpx as _h
 
-        with _h.Client(base_url=base_url, timeout=10.0) as http:
+        with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {cat_gif_url}\r"})
 
     def _send_remote_gif(page: object) -> None:
@@ -383,7 +384,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             return
         import httpx as _h
 
-        with _h.Client(base_url=base_url, timeout=10.0) as http:
+        with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
             http.post(
                 f"/worker/provide-shell/hijack/{hijack_id}/send", json={"keys": f"render --loop {remote_gif_url}\r"}
             )
@@ -410,7 +411,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         try:
             import httpx as _h
 
-            with _h.Client(base_url=base_url, timeout=10.0) as http:
+            with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
                 http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")
         except Exception:
             pass

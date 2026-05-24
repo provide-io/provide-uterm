@@ -22,6 +22,7 @@ from scripts.demos import (
     asciinema_record,
     banner,
     browser_record,
+    dev_bearer_headers,
     info,
     kv,
     ok,
@@ -48,7 +49,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # Post 10 annotations to generate recording activity
         info("Posting 10 timeline annotations (step_00..step_09)...")
         for i in range(10):
@@ -107,7 +108,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     try:
         import httpx as _httpx
 
-        with _httpx.Client(base_url=base_url, timeout=30.0) as client:
+        with _httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
             for i in range(5):
                 client.post(
                     "/api/sessions/provide-shell/annotate",

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-24T04:06:39Z",
+  "generated_at": "2026-05-24T07:48:57Z",
   "demos": [
     {
       "id": "annotation",
@@ -217,8 +217,8 @@
       "title": "Shell Rendering",
       "subtitle": "ANSI truecolor art from any image URL",
       "description": "Send an image URL to the shell render command, get ANSI truecolor art back",
-      "duration_seconds": 8.0,
-      "highlight_start_s": 3.0,
+      "duration_seconds": 20.0,
+      "highlight_start_s": 0.8,
       "format": "mp4",
       "artifacts": {
         "video": "shell_render/browser_trim.mp4",
