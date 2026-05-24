@@ -1,8 +1,8 @@
 # Mutmut survivor triage
 
-**Snapshot:** 2026-05-23 after the protocol-handshake wave.
+**Snapshot:** 2026-05-23 after the detector long-tail sweep.
 
-Four attack waves landed:
+Five attack waves landed:
 
 1. **Surgical-killer pass (2026-05-19).** Killed 161 mutants, dropping
    survivors from ~408 to 247. Kill rate 60.69% → 70.19%.
@@ -69,6 +69,79 @@ Four attack waves landed:
    path, or (b) a script-side mechanism to point Python at the mutants/
    tree exclusively (e.g. via a per-test virtualenv that doesn't have
    the editable installs). Both are non-trivial.
+5. **Detector long-tail sweep (2026-05-23).** Targeted the ~130
+   pre-existing detector.py survivors carried over since wave 1.
+   Result: **90 killed**, dropping detector survivors 133 → 43 and the
+   absolute gate from 211 → 121 (kill rate 73.18% → 78.35%).
+
+   Kills landed via
+   `packages/provide-uterm/tests/detection/test_detector_survivors.py`
+   across these groups (numbers are mutmut ids on detector.py):
+
+   * **compile_failures shape (~12 kills).** `regex`/`error`/`id` dict
+     keys + get-call defaults in the `failed_patterns` entries that
+     `PromptDetector.compile_failures` exposes. Killed via direct
+     assertions on the returned tuple.
+   * **strict-mode error summary (~6 kills).** The
+     `DetectorPatternCompileError` summary string format and separator.
+     Mutants `145/148/150/152/153` killed via exact exception-text
+     assertions.
+   * **Compile-time logger arg defaults (~14 kills).** The
+     `pattern.get("id", "unknown")` default on the success-path debug
+     log, failed-path error log, and KeyError-path log. Plus the
+     `str(e) → None / str(None)` 4th-arg mutations. Killed by feeding
+     patterns missing the `id` key and asserting on
+     `pattern_id=unknown` / `missing_key=` in caplog.
+   * **prompt_fingerprint observability (~9 kills).** `cursor` x/y
+     defaults with non-`or 0`-collapsing values, trailing flag default,
+     and the `tail_lines` kwarg pass-through. Killed via direct format
+     inspection of the returned `"{hash}:{cae}:{trail}:{cx}:{cy}"`
+     string.
+   * **_detect_in_text cursor-miss PromptMatch defaults (~9 kills).**
+     `pattern.get("input_type", "multi_key")` and
+     `pattern.get("eol_pattern", r"[\r\n]+")` defaults flow into the
+     fallback match. Killed by exercising the cursor-miss-fallback
+     path with patterns that both supply explicit values AND omit them.
+   * **detect_prompt_with_diagnostics snapshot/log payload (~10 kills).**
+     `screen` non-empty fallback (`"XXXX"` mutants 9/10), `cursor_at_end`
+     default (13/15/18), `has_trailing_space=True` default (26), region/no-match
+     log args (46/47/85/96/112), kwarg-passthrough `regex_matched_but_failed`
+     in success + fallback returns (76/93), and dict-key renames in the
+     failures-log payload (102/103/106/107).
+   * **_run_two_pass_detection match-success log args (~3 kills).** The
+     matched-region (19) and matched-full (40/41) log arg substitutions.
+   * **reload_patterns + add_pattern legacy attr (~5 kills).** The
+     `expect_cursor_at_end` filter key/defaults (6/7/9/11/12) and the
+     `self._compiled = self._compiled_all` legacy-attr restoration (13
+     for both methods). Killed via direct attribute introspection on
+     `_compiled_no_cursor_end_req` and `_compiled`.
+
+   **The remaining 43 detector survivors are all EQUIV** per the
+   categories enumerated in the EQUIV section below. Specifically:
+   - 1 trampoline-default-arg (`strict=False → True`)
+   - 17 XX-wrapped / case-folded log message strings
+   - 6 `failed_patterns` regex / log-regex defaults unreachable on the
+     re.error branch (key always present)
+   - 7 `p.get("error", ...)` defaults unreachable in failure log and
+     strict-summary (key always present in entries)
+   - 8 `prompt_fingerprint` mutations equivalent under `or 0` /
+     codec normalization
+   - 2 `_run_two_pass_detection` region-pass `cursor_miss_candidates`
+     kwarg unobservable (compiled_fast filter excludes the only
+     patterns that would append to the list)
+   - 2 `detect_prompt_with_diagnostics` `screen` `or ""` collapse
+   - 2 `detect_prompt_with_diagnostics` `has_trailing_space` None →
+     `bool(None)` is False, same as default False
+   - 1 `detect_prompt_with_diagnostics` `bool(None)` unreachable
+     in natural data flow (candidate list non-empty implies
+     `cursor_at_end=False`)
+   - 1 `detect_prompt_with_diagnostics` `match=None` kwarg drop on
+     PromptDetectionDiagnostics (match defaults to None on the model)
+
+   None of these are worth killing — they require either testing the
+   exact log/error string verbatim (brittle), inventing pattern dicts
+   that can't be produced by the real pipeline, or contorting the data
+   flow to reach unreachable branches.
 
 The bucket counts and category analysis below were computed against the
 247-survivor snapshot from after step 1. Step 2 removed ~11 from the `TEST`
@@ -194,3 +267,19 @@ If you want to push absolute score higher in a future session:
 The CI mutmut gate runs `--changed-only` and stays at 100% as long as no
 PR adds a new mutant the PR's own tests don't kill. This document is
 about the *absolute* score, which is informational only.
+
+## Absolute-score snapshot (post-wave-5)
+
+- Total mutants: 1741
+- Killed: 1364 (78.35%)
+- Survived: 121
+- No-tests: 255 (recording / session_logger harness gap — unchanged)
+- Timeout: 1
+- detector.py specifically: 43 survivors (all EQUIV per the analysis
+  above); started at 133.
+
+Remaining non-detector survivors (~78) live in `control_channel`,
+`control_channel_builders`, `auth`, `engine`, and `io`. Most are in the
+EQUIV / cosmetic-rename family per the bucket counts above; a small
+number could still be killed with surgical assertions but are not
+high-ROI.
