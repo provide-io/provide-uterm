@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
+import os
 import socket
+import tempfile
 import threading
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
@@ -17,6 +20,29 @@ from provide.uterm.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
+
+# Per-process token path. Set by start_server() so multiple recorder
+# invocations don't fight over ~/.cache/uterm/dev_token (and so the
+# recorder doesn't pollute the user's real cache).
+_DEV_TOKEN_PATH: Path | None = None
+
+
+def dev_bearer_headers() -> dict[str, str]:
+    """Return ``{"Authorization": "Bearer <token>"}`` for the server start_server() set up.
+
+    Reads the JWT setup_dev_idp() wrote during ``start_server()``. Raises
+    if called before ``start_server()`` or if the token file is missing —
+    that means the demo's HTTP calls would have hit a 401, so failing
+    loudly is better than producing a recording of error responses.
+    """
+    if _DEV_TOKEN_PATH is None or not _DEV_TOKEN_PATH.is_file():
+        raise RuntimeError(
+            "dev_bearer_headers() called before start_server() or token file missing — "
+            "did the recorder forget to call start_server() first?"
+        )
+    token = _DEV_TOKEN_PATH.read_text(encoding="utf-8").strip()
+    return {"Authorization": f"Bearer {token}"}
+
 
 # BrowserStep: (url_path | callable(page) | None, wait_seconds, screenshot_name | None)
 BrowserStep = tuple[str | Callable[["Page"], None] | None, float, str | None]
@@ -48,7 +74,18 @@ def start_server(
     p = port or free_port()
     base_url = f"http://127.0.0.1:{p}"
     config = default_server_config()
-    config.auth.mode = "dev"
+    # Point dev_idp at a per-recorder tmp file so concurrent recordings
+    # don't fight over the same token path, and so we don't pollute the
+    # user's real ~/.cache/uterm/dev_token. Stash the resolved path in a
+    # module-level so dev_bearer_headers() can read it.
+    global _DEV_TOKEN_PATH
+    _DEV_TOKEN_PATH = Path(tempfile.mkdtemp(prefix="uterm-demo-")) / "dev_token"
+    os.environ["UTERM_DEV_TOKEN_PATH"] = str(_DEV_TOKEN_PATH)
+    # dev_token: setup_dev_idp() mints an HS256 JWT, writes it to that
+    # file, and rewrites config.auth.mode -> "jwt" so the regular JWT
+    # validator handles every request. Replaces the unsafe ``dev`` mode
+    # (removed in dab4ac2) which used to grant admin without authn.
+    config.auth.mode = "dev_token"
     config.server.host = "127.0.0.1"
     config.server.port = p
     config.server.public_base_url = base_url

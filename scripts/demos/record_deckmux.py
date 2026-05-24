@@ -25,6 +25,7 @@ from scripts.demos import (
     BASE_OUT,
     BrowserStep,
     asciinema_record,
+    dev_bearer_headers,
     hstack_clips,
     out_dir,
     record_simultaneous_perspectives,
@@ -603,7 +604,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as http:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         info("Fetching session info...")
         r = await http.get("/api/sessions/provide-shell")
         r.raise_for_status()

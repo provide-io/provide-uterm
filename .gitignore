@@ -84,5 +84,8 @@ demo/**/screenshots/
 # pre-baked so the deploy runner doesn't need ffmpeg.
 !demo/reel.mp4
 !demo/reel-poster.png
+# Recorder sideband log — asciinema_record redirects the script's stderr
+# here so the cast itself is noise-free. Useful for diagnostics, not for git.
+demo/**/*.cast.stderr
 artifacts/
 .worktrees/
