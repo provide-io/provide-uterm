@@ -78,5 +78,9 @@ demo/**/screenshots/
 !demo/**/poster.png
 !demo/**/screenshots/
 !demo/**/screenshots/*.png
+# Top-level hero reel — site-uterm-io's hero element references it
+# via /demo-assets/_hero/reel.mp4; sync_uterm_demos.py copies it there
+# at build time, so it must be present in the checked-out provide-uterm tree.
+!demo/reel.mp4
 artifacts/
 .worktrees/
