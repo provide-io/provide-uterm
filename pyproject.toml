@@ -221,6 +221,9 @@ paths_to_mutate = [
     "src/provide/uterm/detection/engine.py",
     "src/provide/uterm/io.py",
     "src/provide/uterm/recording.py",
+    # Bridge protocol negotiation — boundary-heavy, security-relevant.
+    # Covered by tests/test_protocol_negotiation.py.
+    "src/provide/uterm/bridge/contracts.py",
 ]
 tests_dir = [
     "packages/provide-uterm/tests/shell/test_shell_render.py",
@@ -271,6 +274,8 @@ tests_dir = [
     "packages/provide-uterm/tests/test_io_mutmut.py",
     "packages/provide-uterm/tests/test_high_roi_mutmut.py",
     "packages/provide-uterm/tests/terminal/test_io.py",
+    # Covers bridge/contracts.py negotiate_protocol_version + worker_hello emitter.
+    "packages/provide-uterm/tests/test_protocol_negotiation.py",
 ]
 also_copy = [
     "src",

@@ -42,25 +42,33 @@ Four attack waves landed:
    `bridge/routes/websockets.py`, the connectors, the CF tunnel API,
    and the CF DO are all uncovered by the mutmut gate.
 
-   **Recommendation for maintainer:** decide whether to expand
-   `paths_to_mutate` to include the bridge / connector / CF surfaces.
-   Adding them will materially increase mutmut wall-clock but will
-   also catch boundary-style bugs in the protocol-negotiation logic,
-   the hijack lease state machine, the tunnel-token hashing, and the
-   intercept header denylist — all of which are security-relevant.
-   The minimum useful additions (highest-leverage first) are:
+   **Status (2026-05-23):** `bridge/contracts.py` added to
+   `paths_to_mutate`. The negotiate_protocol_version boundary is now
+   covered by `test_protocol_negotiation.py` and verified to kill all
+   13 mutants the gate produced. The other three recommended
+   additions (server-side bridge/models, tunnel/token_hash,
+   tunnel/intercept) were attempted but **blocked by a cross-package
+   namespace collision**:
 
-   - `packages/provide-uterm/src/provide/uterm/bridge/contracts.py`
-     (the `negotiate_protocol_version` boundary)
-   - `packages/provide-uterm-server/src/provide/uterm/bridge/models.py`
-     (the new `HijackLease.expire` boundary)
-   - `packages/provide-uterm-server/src/provide/uterm/tunnel/token_hash.py`
-     (the constant-time compare)
-   - `packages/provide-uterm-server/src/provide/uterm/tunnel/intercept.py`
-     (the header denylist)
+   - mutmut runs tests with `mutants/packages/<pkg>/src` prepended to
+     PYTHONPATH, expecting them to win against the uv-installed
+     editable links.
+   - But `provide.uterm` is a namespace package across multiple
+     workspace members. uv's editable install registers each
+     package's src tree as a real path, and Python's namespace-package
+     resolution merges them — the installed paths can resolve before
+     the mutants/ paths even with PYTHONPATH prepended.
+   - Result: server tests imported `provide.uterm.server.bridge.models`
+     from the editable install (un-mutated), not from
+     `mutants/packages/provide-uterm-server/src/...`. mutmut's
+     coverage map registered 0 of the mutated lines as test-covered;
+     all 624 mutations reported `no_tests`.
 
-   No survivors to triage in this wave; treat the gate as informational
-   for these paths until the config catches up.
+   Server-side mutation coverage would need either (a) a `src/`-style
+   symlink trick per package to give mutmut a single canonical import
+   path, or (b) a script-side mechanism to point Python at the mutants/
+   tree exclusively (e.g. via a per-test virtualenv that doesn't have
+   the editable installs). Both are non-trivial.
 
 The bucket counts and category analysis below were computed against the
 247-survivor snapshot from after step 1. Step 2 removed ~11 from the `TEST`
