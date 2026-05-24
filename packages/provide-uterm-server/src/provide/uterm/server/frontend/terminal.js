@@ -1,45 +1,38 @@
-"use strict";
 //
 // SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-const DEFAULTS = {
-    theme: "code",
-    cols: 80,
-    rows: 25,
-    fontSize: 14,
-    pageBg: "#0a0a0a",
-    termBg: "#0a0a0a",
-    scanlines: true,
-    vignette: true,
-    glow: false,
-    storageKey: "provide-uterm-settings",
-    title: null,
-};
-const THEME_DEFAULTS = {
-    crt: { scanlines: true, vignette: true, glow: false },
-    bbs: { scanlines: false, vignette: false, glow: false },
-    glass: { scanlines: false, vignette: false, glow: true },
-    code: { scanlines: false, vignette: false, glow: false },
-};
+/**
+ * ProvideTerminal — embeddable xterm.js widget with persistent settings,
+ * theme picker, and auto-reconnecting WebSocket. The settings model and theme
+ * palette live in sibling modules; this file owns DOM construction, the WS
+ * lifecycle, and the public class registered on window.
+ */
+import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, } from "./terminal-settings.js";
+import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, } from "./terminal-themes.js";
 let cssInjected = false;
 let instanceCount = 0;
-const scriptEl = typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement
-    ? document.currentScript
-    : null;
+function resolveCssHref() {
+    // import.meta.url resolves the module location for ES modules; fall back
+    // to a relative path when the host environment does not provide it (some
+    // test runners hand back a non-URL string under jsdom).
+    try {
+        return new URL("./terminal.css", import.meta.url).href;
+    }
+    catch {
+        return "terminal.css";
+    }
+}
 function injectCss() {
     if (cssInjected)
         return;
     cssInjected = true;
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = scriptEl?.src ? `${scriptEl.src.replace(/[^/]*$/, "")}terminal.css` : "terminal.css";
+    link.href = resolveCssHref();
     document.head.appendChild(link);
 }
-function asThemeName(value) {
-    return value === "bbs" || value === "glass" || value === "crt" ? value : "code";
-}
-class ProvideTerminal {
+export class ProvideTerminal {
     constructor(container, config = {}) {
         this.term = null;
         this.fitAddon = null;
@@ -55,7 +48,7 @@ class ProvideTerminal {
         this.uid = ++instanceCount;
         injectCss();
         this.buildDom();
-        this.loadSettings();
+        this.settings = loadSettings(this.config);
         this.bindSettingsEvents();
         this.createTerminal();
         this.connect();
@@ -105,59 +98,10 @@ class ProvideTerminal {
         return node;
     }
     buildDom() {
-        const gearSvg = '<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/></svg>';
         const root = document.createElement("div");
         root.className = "provide-uterm";
         root.innerHTML = `
-      <button type="button" class="gear-btn" id="gearBtn-${this.uid}" title="Settings" aria-label="Open terminal settings">${gearSvg}</button>
-      <div class="settings-overlay" id="settingsOverlay-${this.uid}"></div>
-      <div class="settings-panel" id="settingsPanel-${this.uid}" role="dialog" aria-label="Terminal settings">
-        <h3>Theme</h3>
-        <div class="theme-options" role="group" aria-label="Theme">
-          <button type="button" class="theme-btn" data-theme="code" aria-label="Code theme">Code</button>
-          <button type="button" class="theme-btn" data-theme="crt" aria-label="CRT theme">CRT</button>
-          <button type="button" class="theme-btn" data-theme="bbs" aria-label="BBS/DOS theme">BBS/DOS</button>
-          <button type="button" class="theme-btn" data-theme="glass" aria-label="Glass theme">Glass</button>
-        </div>
-        <h3>Terminal Size</h3>
-        <div class="setting-row">
-          <label>Columns</label>
-          <input type="range" id="setCols-${this.uid}" min="80" max="120" value="80">
-          <span class="val" id="valCols-${this.uid}">80</span>
-        </div>
-        <div class="setting-row">
-          <label>Rows</label>
-          <input type="range" id="setRows-${this.uid}" min="25" max="40" value="25">
-          <span class="val" id="valRows-${this.uid}">25</span>
-        </div>
-        <div class="setting-row">
-          <label>Font Size</label>
-          <input type="range" id="setFontSize-${this.uid}" min="11" max="18" value="14">
-          <span class="val" id="valFontSize-${this.uid}">14px</span>
-        </div>
-        <h3>Colors</h3>
-        <div class="setting-row">
-          <label>Page Background</label>
-          <input type="color" id="setPageBg-${this.uid}" value="#0a0a0a">
-        </div>
-        <div class="setting-row">
-          <label>Terminal Background</label>
-          <input type="color" id="setTermBg-${this.uid}" value="#0a0a0a">
-        </div>
-        <h3>Effects</h3>
-        <div class="setting-row">
-          <label>Scanlines</label>
-          <input type="checkbox" id="fxScanlines-${this.uid}">
-        </div>
-        <div class="setting-row">
-          <label>Vignette</label>
-          <input type="checkbox" id="fxVignette-${this.uid}">
-        </div>
-        <div class="setting-row">
-          <label>Glow</label>
-          <input type="checkbox" id="fxGlow-${this.uid}">
-        </div>
-      </div>
+      ${buildSettingsPanelHtml(this.uid)}
       <div class="page-wrapper" id="pageWrapper-${this.uid}">
         <div class="frame-root" id="frameRoot-${this.uid}"></div>
         <div class="loading" id="loadingScreen-${this.uid}">
@@ -284,48 +228,6 @@ class ProvideTerminal {
         };
         ws.onerror = () => ws.close();
     }
-    loadSettings() {
-        const key = this.config.storageKey;
-        const base = { ...DEFAULTS, ...this.config, theme: asThemeName(this.config.theme) };
-        try {
-            const raw = localStorage.getItem(key);
-            if (!raw) {
-                this.settings = base;
-                return;
-            }
-            const parsed = JSON.parse(raw);
-            this.settings = {
-                ...base,
-                ...parsed,
-                theme: asThemeName(parsed.theme ?? base.theme),
-            };
-        }
-        catch {
-            this.settings = base;
-        }
-    }
-    saveSettings() {
-        localStorage.setItem(this.config.storageKey, JSON.stringify(this.settings));
-    }
-    applyThemeClasses() {
-        if (this.root === null)
-            return;
-        this.root.classList.remove("theme-crt", "theme-bbs", "theme-glass", "theme-code", "fx-scanlines", "fx-vignette", "fx-glow");
-        this.root.classList.add(`theme-${this.settings.theme}`);
-        if (this.settings.scanlines)
-            this.root.classList.add("fx-scanlines");
-        if (this.settings.vignette)
-            this.root.classList.add("fx-vignette");
-        if (this.settings.glow)
-            this.root.classList.add("fx-glow");
-    }
-    applyColors() {
-        if (this.root === null)
-            return;
-        this.root.style.setProperty("--bg-page", this.settings.pageBg);
-        this.root.style.setProperty("--bg-terminal", this.settings.termBg);
-        this.root.style.background = this.settings.pageBg;
-    }
     applySettingsToUi() {
         if (this.root === null)
             return;
@@ -347,10 +249,12 @@ class ProvideTerminal {
         this.q("fxGlow").checked = this.settings.glow;
     }
     applyRuntimeSettings() {
-        this.applyThemeClasses();
-        this.applyColors();
+        if (this.root !== null) {
+            applyThemeClasses(this.root, this.settings.theme, this.settings);
+            applyColors(this.root, this.settings.pageBg, this.settings.termBg);
+        }
         this.applySettingsToUi();
-        this.saveSettings();
+        saveSettings(this.settings);
         if (this.term !== null) {
             this.term.options.fontSize = this.settings.fontSize;
             this.term.options.theme = {
@@ -450,8 +354,10 @@ class ProvideTerminal {
         }
         const frameRoot = this.q("frameRoot");
         frameRoot.innerHTML = this.buildFrame();
-        this.applyThemeClasses();
-        this.applyColors();
+        if (this.root !== null) {
+            applyThemeClasses(this.root, this.settings.theme, this.settings);
+            applyColors(this.root, this.settings.pageBg, this.settings.termBg);
+        }
         this.term = new window.Terminal({
             theme: {
                 background: this.settings.termBg,
