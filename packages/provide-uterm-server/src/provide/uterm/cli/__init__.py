@@ -125,8 +125,9 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
             '</head><body><div id="app"></div>'
             f'<script src="{XTERM_CDN_DEFAULT}/lib/xterm.js"></script>'
             f'<script src="{FITADDON_CDN_DEFAULT}/lib/addon-fit.js"></script>'
-            '<script src="/static/terminal.js"></script>'
-            "<script>"
+            '<script type="module" src="/static/terminal.js"></script>'
+            '<script type="module">'
+            "import '/static/terminal.js';"
             "new window.ProvideTerminal(document.getElementById('app'),"
             f"{{wsUrl:'{ws_path}',title:'{safe_title}'}});"
             "</script></body></html>"
