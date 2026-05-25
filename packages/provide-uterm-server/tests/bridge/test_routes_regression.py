@@ -183,6 +183,44 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
     assert resume_msgs, "compensating resume must be sent on CancelledError after pause"
 
 
+def test_acquire_compensating_resume_swallows_send_worker_failure(caplog) -> None:
+    """If the compensating ``send_worker`` itself raises (worker socket already
+    closed, runtime error, cancellation), the finally block must log a warning
+    and not propagate — otherwise we'd both fail the original request AND
+    re-raise from the cleanup path, hiding the real error.
+
+    Exercises rest.py:231-232 (the except branch of the compensating resume).
+    """
+    import asyncio as _asyncio
+    import logging
+    from unittest.mock import patch
+
+    app, hub = make_app()
+    mock_ws = AsyncMock()
+    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+
+    async def _append_event_raises(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("simulated commit-time failure")
+
+    async def _send_worker_raises(*args: object, **kwargs: object) -> bool:
+        raise _asyncio.CancelledError
+
+    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.routes.rest")
+    with (
+        patch.object(hub, "append_event", side_effect=_append_event_raises),
+        patch.object(hub, "send_worker", side_effect=_send_worker_raises),
+        TestClient(app, raise_server_exceptions=False) as client,
+    ):
+        r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
+
+    # The original failure surfaces as a 500; the compensating-resume failure
+    # is logged but swallowed.
+    assert r.status_code == 500
+    assert any(
+        "hijack_acquire_compensating_resume_failed" in rec.getMessage() for rec in caplog.records
+    ), "compensating-resume failure must be logged via the rest router warning"
+
+
 def test_acquire_no_compensating_resume_on_success() -> None:
     """Round-7 fix 1: a successful acquire must NOT send an extra compensating resume."""
     app, hub = make_app()
