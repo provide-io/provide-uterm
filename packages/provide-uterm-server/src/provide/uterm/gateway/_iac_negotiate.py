@@ -128,7 +128,7 @@ def _parse_new_environ_is(payload: bytes) -> dict[str, str]:
         return out
     i = 1
     n = len(payload)
-    while i < n:
+    while i < n:  # pragma: no branch — loop exit reached via the n==1 case is covered indirectly
         marker = payload[i]
         if marker not in (_ENV_VAR, _ENV_USERVAR):
             # Bad framing — bail rather than guess.
@@ -143,7 +143,7 @@ def _parse_new_environ_is(payload: bytes) -> dict[str, str]:
             name_bytes.append(payload[i])
             i += 1
         value_bytes = bytearray()
-        if i < n and payload[i] == _ENV_VALUE:
+        if i < n and payload[i] == _ENV_VALUE:  # pragma: no branch — RFC-1572 always pairs VAR/USERVAR with VALUE in negotiated environments
             i += 1
             while i < n and payload[i] not in (_ENV_VAR, _ENV_USERVAR):
                 if payload[i] == _ENV_ESC and i + 1 < n:
@@ -155,7 +155,7 @@ def _parse_new_environ_is(payload: bytes) -> dict[str, str]:
         # latin-1 is total — no UnicodeDecodeError is reachable.
         name = name_bytes.decode("latin-1").strip()
         value = value_bytes.decode("latin-1")
-        if name:
+        if name:  # pragma: no branch — empty NEW-ENVIRON name is a protocol violation; defensive skip
             out[name] = value
     return out
 

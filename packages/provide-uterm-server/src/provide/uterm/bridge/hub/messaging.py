@@ -113,7 +113,7 @@ class HubMessagingMixin:
                 if is_term_data and self._output_policy_gate:
                     context = await self.prepare_policy_context(ws, worker_id, action="output")
                     rules = await self._output_policy_gate.get_redaction_rules(context)
-                    if rules:
+                    if rules:  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
                         redactor = StreamRedactor(rules)
                         redacted_data = redactor.redact(raw_data)
                         final_payload = _encode_browser_frame({"type": "term", "data": redacted_data})

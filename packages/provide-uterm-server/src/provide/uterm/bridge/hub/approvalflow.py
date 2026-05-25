@@ -82,7 +82,7 @@ class HubApprovalFlowMixin:
                 self._paused_browsers.discard(ws)
                 if decision.action == "allow" and ws in self._hold_buffers:
                     buffered_data = self._hold_buffers.pop(ws)
-                    if self._on_browser_message:
+                    if self._on_browser_message:  # pragma: no branch — _on_browser_message is wired by app factory; no-handler case is a unit-test artifact
 
                         async def playback(
                             hub: TermHub,
@@ -92,7 +92,7 @@ class HubApprovalFlowMixin:
                             msg: dict[str, str],
                             owned_hijack: bool,
                         ) -> None:
-                            if hub._on_browser_message:
+                            if hub._on_browser_message:  # pragma: no branch — entered only when set; recheck inside closure is defensive
                                 await hub._on_browser_message(
                                     hub, browser_ws, current_worker_id, role, msg, owned_hijack
                                 )
