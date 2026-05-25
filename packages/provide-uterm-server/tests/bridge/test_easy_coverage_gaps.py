@@ -563,3 +563,102 @@ async def test_resolve_host_returns_addresses() -> None:
     addrs = await _resolve_host("localhost")
     # At least one of the loopback addresses must be in the result.
     assert any(a.startswith("127.") or a == "::1" for a in addrs)
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/event_bus.py — small parser / filter gaps
+# ---------------------------------------------------------------------------
+
+
+async def test_event_bus_filters_non_string_screen_via_coercion() -> None:
+    """event_bus.py:115-116 — pattern filter coerces non-string screen to str."""
+    import asyncio as _asyncio
+    import re as _re
+
+    from provide.uterm.bridge.hub.event_bus import EventBus, _Subscription
+
+    bus = EventBus()
+    queue: _asyncio.Queue = _asyncio.Queue()
+    sub = _Subscription(sub_id="s1", worker_id="w1", queue=queue, event_types=None, pattern=_re.compile(r"123"))
+    # screen is a list (non-str); the filter must coerce via str(...) and match.
+    bus._deliver(sub, "w1", {"type": "snapshot", "data": {"screen": ["123 found"]}, "seq": 1})
+    assert queue.qsize() == 1
+
+
+def test_event_bus_pattern_safety_char_class_and_counted_quantifier() -> None:
+    """event_bus.py:274-275, 300, 310-317 — pattern safety walks [...] and {N,M}."""
+    from provide.uterm.bridge.hub.event_bus import _compile_pattern
+
+    # Character class — exercises in_class branch (274-275)
+    assert _compile_pattern("[abc]+def") is not None
+    # Counted quantifier `{2}` — exercises 300 + _looks_like_counted_quantifier (310-317)
+    assert _compile_pattern("a{2}") is not None
+    # Counted quantifier `{2,5}` — comma branch
+    assert _compile_pattern("a{2,5}") is not None
+    # Counted quantifier with empty upper `{2,}` — comma branch with empty right
+    assert _compile_pattern("a{2,}") is not None
+    # `{not_a_number}` — body is not all digits; treated as literal, returns False
+    assert _compile_pattern("a{abc}") is not None
+    # `{` with no matching `}` — returns False, treated as literal
+    assert _compile_pattern("a{") is not None
+    # `{}` empty body — returns False
+    assert _compile_pattern("a{}") is not None
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/state.py — small property + role-mapping gaps
+# ---------------------------------------------------------------------------
+
+
+def test_state_event_bus_setter_assigns_value() -> None:
+    """state.py:54 — event_bus.setter writes through to _event_bus."""
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.hub.event_bus import EventBus
+
+    hub = TermHub()
+    bus = EventBus()
+    hub.event_bus = bus
+    assert hub._event_bus is bus
+    hub.event_bus = None
+    assert hub._event_bus is None
+
+
+async def test_state_prepare_policy_context_role_resolution() -> None:
+    """state.py:188-194, 218-225 — claims-driven role mapping (delegate_roles=False)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.identity import Principal
+
+    # delegate_roles=False: claims-driven role mapping.
+    hub = TermHub(delegate_roles=False)
+    ws = AsyncMock()
+
+    # admin claim -> admin role
+    ws.state = MagicMock(uterm_principal=Principal(subject_id="a", roles=frozenset(), claims={"admin": True}))
+    ctx = await hub.prepare_policy_context(ws, "w1", action="test")
+    assert ctx.role == "admin"
+
+    # operator claim -> operator role (covers 220-221)
+    ws.state = MagicMock(uterm_principal=Principal(subject_id="o", roles=frozenset(), claims={"operator": True}))
+    ctx = await hub.prepare_policy_context(ws, "w1", action="test")
+    assert ctx.role == "operator"
+
+    # No claim -> viewer fallback (covers 224 + 194)
+    ws.state = MagicMock(uterm_principal=Principal(subject_id="v", roles=frozenset(), claims={}))
+    ctx = await hub.prepare_policy_context(ws, "w1", action="test")
+    assert ctx.role == "viewer"
+
+
+async def test_state_prepare_policy_context_delegated_roles_empty_falls_back_to_viewer() -> None:
+    """state.py:214 — delegate_roles=True with empty principal.roles -> viewer."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.identity import Principal
+
+    hub = TermHub(delegate_roles=True)
+    ws = AsyncMock()
+    ws.state = MagicMock(uterm_principal=Principal(subject_id="x", roles=frozenset(), claims={}))
+    ctx = await hub.prepare_policy_context(ws, "w1", action="test")
+    assert ctx.role == "viewer"
