@@ -390,3 +390,176 @@ async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -
     with respx.mock(assert_all_called=False) as r:
         r.post("http://hook.test/output").mock(side_effect=httpx.ConnectError("network down"))
         assert await gate.get_redaction_rules(ctx) == []
+
+
+# ---------------------------------------------------------------------------
+# bridge/routes/browser_handlers.py:244-270 — `hold` policy decision branch
+# creates an ApprovalRequest, parks the browser, and notifies all browsers
+# with an approval_pending frame.
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_input_hold_decision_creates_approval_and_notifies_browsers() -> None:
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.bridge.hub.approvals import ApprovalStatus
+    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+
+    class HoldGate:
+        async def intercept_input(self, _data: str, _context: PolicyContext) -> PolicyDecision:
+            return PolicyDecision(action="hold", timeout_s=30)
+
+    hub = TermHub(policy_gate=HoldGate())
+    ws_a = AsyncMock()
+    ws_b = AsyncMock()
+    worker_ws = AsyncMock()
+
+    worker_id = "w1"
+    await hub.register_worker(worker_id, worker_ws)
+    await hub.register_browser(worker_id, ws_a, "admin")
+    await hub.register_browser(worker_id, ws_b, "admin")
+    await hub.try_acquire_ws_hijack(worker_id, ws_a)
+
+    await _handle_input(hub, ws_a, worker_id, {"type": "input", "data": "rm -rf /"})
+
+    # An ApprovalRequest must be in the store, PENDING.
+    pending = [
+        r for r in hub._approval_store._requests.values() if r.status == ApprovalStatus.PENDING
+    ]
+    assert len(pending) == 1
+    assert pending[0].worker_id == worker_id
+    assert pending[0].command == "rm -rf /"
+
+    # The submitter browser must be parked.
+    assert ws_a in hub._paused_browsers
+
+    # All browsers (including the submitter) must have been sent an
+    # approval_pending frame.
+    assert ws_a.send_text.called
+    assert ws_b.send_text.called
+
+    # The frame body must contain the request_id.
+    payload_b = ws_b.send_text.call_args[0][0]
+    assert "approval_pending" in payload_b
+    assert pending[0].id in payload_b
+
+    # Worker must NOT have received the held input.
+    worker_ws.send_text.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/messaging.py:281 — _get_heuristics empty path (no keystrokes yet)
+# ---------------------------------------------------------------------------
+
+
+def test_messaging_get_heuristics_empty_returns_zeros() -> None:
+    from provide.uterm.bridge.hub import TermHub
+
+    hub = TermHub()
+    # Brand-new browser ref the hub has never seen — no timestamps yet.
+    heur = hub._get_heuristics(object())
+    assert heur == {"cps": 0.0, "jitter": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/messaging.py:308-313 — _run_behavioral_audit_loop swallows
+# exceptions from _audit_all_browsers so the loop survives.
+# ---------------------------------------------------------------------------
+
+
+async def test_behavioral_audit_loop_swallows_errors(caplog: pytest.LogCaptureFixture) -> None:
+    import asyncio as _asyncio
+    import logging
+
+    from provide.uterm.bridge.hub import TermHub
+
+    hub = TermHub()
+    hub._behavioral_audit_interval_s = 0.01  # type: ignore[attr-defined]
+
+    async def _boom() -> None:
+        raise RuntimeError("audit blew up")
+
+    hub._audit_all_browsers = _boom  # type: ignore[assignment]
+    caplog.set_level(logging.ERROR, logger="provide.uterm.bridge.hub.messaging")
+
+    task = _asyncio.create_task(hub._run_behavioral_audit_loop())
+    try:
+        # Wait long enough for at least one tick + the swallowed exception.
+        await _asyncio.sleep(0.05)
+    finally:
+        task.cancel()
+        with contextlib_suppress():
+            await task
+    assert any("behavioral_audit_loop_error" in r.getMessage() for r in caplog.records)
+
+
+import contextlib as _contextlib  # noqa: E402
+
+
+def contextlib_suppress():
+    """Tiny shim so _asyncio.CancelledError on task cancellation is swallowed."""
+    return _contextlib.suppress(BaseException)
+
+
+# ---------------------------------------------------------------------------
+# server/webhooks.py:68-69, 74, 78, 81, 100 — URL & pattern validation edges
+# ---------------------------------------------------------------------------
+
+
+def test_validate_webhook_url_rejects_invalid_scheme_and_metadata_host() -> None:
+    from provide.uterm.server.webhooks import validate_webhook_url
+
+    with pytest.raises(ValueError, match="must use http or https"):
+        validate_webhook_url("ftp://example.com/hook")
+    with pytest.raises(ValueError, match="must include a host"):
+        validate_webhook_url("http:///hook")
+    with pytest.raises(ValueError, match="host is not allowed"):
+        validate_webhook_url("http://metadata.google.internal/hook")
+    with pytest.raises(ValueError, match="host is not allowed"):
+        validate_webhook_url("http://localhost/hook")
+    # ``allow_loopback_destinations`` lets localhost through.
+    assert (
+        validate_webhook_url("http://localhost/hook", allow_loopback_destinations=True)
+        == "http://localhost/hook"
+    )
+
+
+def test_validate_webhook_pattern_rejects_non_string_input() -> None:
+    from provide.uterm.server.webhooks import validate_webhook_pattern
+
+    with pytest.raises(ValueError, match="pattern must be a string"):
+        validate_webhook_pattern(123)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# server/webhooks.py:299-300, 311-326, 331-332 — delivery URL allowlist edges
+# ---------------------------------------------------------------------------
+
+
+async def test_delivery_url_allowed_rejects_unparseable_and_disallowed() -> None:
+    from provide.uterm.server.webhooks import _delivery_url_allowed
+
+    async def _no_resolve(_host: str) -> tuple[str, ...]:
+        return ()
+
+    # urlparse only raises on rare malformed brackets; force the rejection
+    # path with a value the validator considers invalid (no host).
+    assert await _delivery_url_allowed("http:///nohost", _no_resolve) is False
+    # Non-http(s) scheme
+    assert await _delivery_url_allowed("ftp://example/", _no_resolve) is False
+    # Resolver raises -> False
+    async def _boom(_host: str) -> tuple[str, ...]:
+        raise OSError("dns down")
+
+    assert await _delivery_url_allowed("http://example/", _boom) is False
+    # Resolver returns no addresses -> False
+    assert await _delivery_url_allowed("http://example/", _no_resolve) is False
+
+
+async def test_resolve_host_returns_addresses() -> None:
+    from provide.uterm.server.webhooks import _resolve_host
+
+    addrs = await _resolve_host("localhost")
+    # At least one of the loopback addresses must be in the result.
+    assert any(a.startswith("127.") or a == "::1" for a in addrs)
