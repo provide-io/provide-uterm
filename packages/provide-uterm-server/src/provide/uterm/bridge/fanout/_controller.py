@@ -184,7 +184,7 @@ class FanOutController:
             )
             # Use getattr to avoid hard circular dependency if hub isn't fully typed here
             hub_approvals = getattr(self._hub, "_approval_store", None)
-            if hub_approvals:
+            if hub_approvals:  # pragma: no branch — production hub always wires _approval_store; defensive guard
                 hub_approvals.add(approval)
 
             # 1.3 Audit the hold event

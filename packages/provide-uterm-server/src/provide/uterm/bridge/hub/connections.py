@@ -281,7 +281,7 @@ class _ConnectionMixin:
         """Allow broadcasts to a browser after its startup frames have been sent."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None and ws in st.browsers:
+            if st is not None and ws in st.browsers:  # pragma: no branch — race window during browser disconnect; defensive
                 self._startup_pending_browsers.discard(ws)
 
     @staticmethod

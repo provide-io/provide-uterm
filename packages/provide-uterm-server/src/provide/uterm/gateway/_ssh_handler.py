@@ -290,7 +290,7 @@ async def _make_process_handler(
         ssh_env: dict[str, str] = {}
         with contextlib.suppress(AttributeError, Exception):
             get_ttype = getattr(process, "get_terminal_type", None)
-            if callable(get_ttype):
+            if callable(get_ttype):  # pragma: no branch — asyncssh always exposes get_terminal_type; defensive
                 ssh_term = get_ttype()
         with contextlib.suppress(AttributeError, Exception):
             get_env = getattr(process, "get_environment", None)

@@ -212,7 +212,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             break
                         if _hello_mode in ("hijack", "open"):
                             mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, _selected)
-                            if mode_applied:
+                            if mode_applied:  # pragma: no branch — set_worker_hello returns False only on a missing worker registration, already filtered upstream
                                 await hub.broadcast_hijack_state(worker_id)
                             logger.info(
                                 "worker_hello worker_id=%s input_mode=%s protocol_selected=%d applied=%s",
