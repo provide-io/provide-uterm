@@ -19,6 +19,6 @@
     "packages/provide-uterm/tests/shell/test_shell_render.py": 856,
     "packages/provide-uterm/tests/terminal/test_line_editor.py": 584,
     "scripts/benchmark_backends.py": 514,
-    "scripts/demos/record_deckmux.py": 644
+    "scripts/demos/record_deckmux.py": 653
   }
 }
