@@ -1034,3 +1034,93 @@ async def test_classify_run_error_classifies_known_categories() -> None:
 
     # Cancellation is the only branch that breaks the runtime's reconnect loop.
     assert _classify_run_error(_asyncio.CancelledError()) == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# server/dev_idp.py:94->97 — setup_dev_idp preserves an existing worker
+# bearer token (False branch of `if not auth.worker_bearer_token`).
+# ---------------------------------------------------------------------------
+
+
+def test_setup_dev_idp_preserves_caller_supplied_bearer(monkeypatch, tmp_path) -> None:
+    from provide.uterm.server.dev_idp import setup_dev_idp
+    from provide.uterm.server.models import AuthConfig
+
+    monkeypatch.setenv("UTERM_DEV_TOKEN_PATH", str(tmp_path / "tok"))
+    auth = AuthConfig(mode="dev_token", worker_bearer_token="caller-supplied-bearer-token-x")
+    setup_dev_idp(auth)
+    assert auth.worker_bearer_token == "caller-supplied-bearer-token-x"
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/semantics.py:85->87, 94->97 — CommandSplitter skips empty segments
+# both mid-command (`;;`) and at the end (`cmd;`).
+# ---------------------------------------------------------------------------
+
+
+def test_command_splitter_skips_empty_segments() -> None:
+    from provide.uterm.bridge.hub.semantics import CommandSplitter
+
+    splitter = CommandSplitter()
+    # Empty mid-segment from `;;`
+    assert splitter.split("a;;b") == ["a", "b"]
+    # Empty trailing segment from `a;`
+    assert splitter.split("a;") == ["a"]
+    # Whitespace-only mid-segment is also empty after strip
+    assert splitter.split("a;   ;b") == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# bridge/fanout/_controller.py:238 — release_approved_command returns None
+# when the group is no longer authorized (e.g. deleted between request and
+# approval).
+# ---------------------------------------------------------------------------
+
+
+async def test_fanout_release_approved_command_returns_none_for_unauthorized_group() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from provide.uterm.bridge.fanout._controller import FanOutController
+
+    ctrl = FanOutController(hub=MagicMock(), fanout_policy_gate=MagicMock())
+    ctrl._pending_approvals["req-y"] = {  # type: ignore[attr-defined]
+        "group_id": "g-gone",
+        "command": "ls",
+        "principal": "user",
+        "quiesce_ms": None,
+        "max_response_ms": None,
+    }
+    # _authorized_group resolves to None when the group is missing/unauthorized.
+    ctrl._authorized_group = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    assert await ctrl.release_approved_command("req-y") is None
+
+
+# ---------------------------------------------------------------------------
+# bridge/routes/browser_handlers.py:289->291 — buffered prefix branch in
+# _handle_input when the chunk completes a buffered command.
+# ---------------------------------------------------------------------------
+
+
+async def test_handle_input_completing_buffered_command_passes_full_string() -> None:
+    """When a prior partial chunk landed in _input_buffers, a completing chunk
+    should be joined with the prefix before the worker sees it."""
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+
+    hub = TermHub()
+    ws = AsyncMock()
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    await hub.register_browser("w1", ws, "admin")
+    await hub.try_acquire_ws_hijack("w1", ws)
+
+    # Send a partial first chunk; no newline so it's buffered.
+    await _handle_input(hub, ws, "w1", {"type": "input", "data": "ec"})
+    # Now the completing chunk; the policy gate sees the joined "echo hi\n".
+    await _handle_input(hub, ws, "w1", {"type": "input", "data": "ho hi\n"})
+    # Verify the worker received "echo hi" data via the second call.
+    sent_payloads = [c.args[0] for c in worker_ws.send_text.await_args_list]
+    joined = "".join(sent_payloads)
+    assert "echo hi" in joined
