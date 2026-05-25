@@ -44,6 +44,21 @@ def dev_bearer_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+# Shared bearer recorders pass to header-mode servers when they need to
+# act as the worker (e.g. tunnel agent). Mirrors the value embedded in
+# start_server(auth_mode="header") below.
+HEADER_MODE_WORKER_BEARER: str = "demo-worker-bearer-token-32chars!"
+
+
+def header_admin_headers() -> dict[str, str]:
+    """Return ``{"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}``.
+
+    For recorders that run the server in ``header`` auth mode (per-context
+    principals via headers — e.g. the multi-persona deckmux demo).
+    """
+    return {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
+
+
 # BrowserStep: (url_path | callable(page) | None, wait_seconds, screenshot_name | None)
 BrowserStep = tuple[str | Callable[["Page"], None] | None, float, str | None]
 
@@ -61,6 +76,7 @@ def start_server(
     sessions: list[dict[str, Any]] | None = None,
     port: int | None = None,
     hub_class: type | None = None,
+    auth_mode: str = "dev_token",
 ) -> tuple[str, Any]:
     """Start a provide-uterm server in a background thread.
 
@@ -68,24 +84,34 @@ def start_server(
     Pass hub_class to enable optional hub mixins (e.g. DeckMuxTermHub).
     Pass sessions to replace the default session list entirely.
     Pass extra_sessions to append additional sessions to the defaults.
+    ``auth_mode`` selects the server auth mode: ``"dev_token"`` (default)
+    uses the stub-IdP JWT path; ``"header"`` is for recorders that need
+    per-Playwright-context principals (e.g. multi-persona deckmux).
     """
     from provide.uterm.server.models import SessionDefinition
 
     p = port or free_port()
     base_url = f"http://127.0.0.1:{p}"
     config = default_server_config()
-    # Point dev_idp at a per-recorder tmp file so concurrent recordings
-    # don't fight over the same token path, and so we don't pollute the
-    # user's real ~/.cache/uterm/dev_token. Stash the resolved path in a
-    # module-level so dev_bearer_headers() can read it.
-    global _DEV_TOKEN_PATH
-    _DEV_TOKEN_PATH = Path(tempfile.mkdtemp(prefix="uterm-demo-")) / "dev_token"
-    os.environ["UTERM_DEV_TOKEN_PATH"] = str(_DEV_TOKEN_PATH)
-    # dev_token: setup_dev_idp() mints an HS256 JWT, writes it to that
-    # file, and rewrites config.auth.mode -> "jwt" so the regular JWT
-    # validator handles every request. Replaces the unsafe ``dev`` mode
-    # (removed in dab4ac2) which used to grant admin without authn.
-    config.auth.mode = "dev_token"
+    if auth_mode == "header":
+        # Header mode lets each Playwright context carry its own
+        # X-Uterm-Principal / X-Uterm-Role and present as a distinct
+        # persona to the deckmux presence machinery. Only safe behind a
+        # reverse proxy in prod; loopback-only here for recording.
+        config.auth.mode = "header"
+        config.auth.header_mode_acknowledged = True
+        config.auth.worker_bearer_token = HEADER_MODE_WORKER_BEARER
+    else:
+        # dev_token: setup_dev_idp() mints an HS256 JWT, writes it to a
+        # per-recorder tmp file, and rewrites config.auth.mode -> "jwt"
+        # so the regular JWT validator handles every request.
+        # Point at a per-recorder tmp file so concurrent recordings don't
+        # fight over the same token path, and so we don't pollute the
+        # user's real ~/.cache/uterm/dev_token.
+        global _DEV_TOKEN_PATH
+        _DEV_TOKEN_PATH = Path(tempfile.mkdtemp(prefix="uterm-demo-")) / "dev_token"
+        os.environ["UTERM_DEV_TOKEN_PATH"] = str(_DEV_TOKEN_PATH)
+        config.auth.mode = "dev_token"
     config.server.host = "127.0.0.1"
     config.server.port = p
     config.server.public_base_url = base_url

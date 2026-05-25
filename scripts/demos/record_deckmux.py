@@ -25,7 +25,7 @@ from scripts.demos import (
     BASE_OUT,
     BrowserStep,
     asciinema_record,
-    dev_bearer_headers,
+    header_admin_headers,
     hstack_clips,
     out_dir,
     record_simultaneous_perspectives,
@@ -263,8 +263,12 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     feat_dir = out_dir(FEATURE, base_out)
     _write_incident_data()
 
+    # Deckmux needs per-context principals so each Playwright tab presents
+    # as a distinct persona to the presence machinery — header mode is the
+    # only auth flow that lets us do that without minting a JWT per persona.
     base_url, server = start_server(
         hub_class=_DeckMuxTermHub,
+        auth_mode="header",
         sessions=[
             {
                 "session_id": "provide-shell",
@@ -552,13 +556,21 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         steps.extend(act5_users.get(uname, [(None, 0.3, None)] * act5_len))  # Act 5
         all_steps[uname] = steps
 
-    # Build context_options with X-Display-Name header per perspective
+    # Each Playwright context presents as a distinct persona via
+    # X-Uterm-Principal / X-Uterm-Role (the server is in header mode for
+    # this demo). X-Display-Name is forwarded for any UI bits that show
+    # the friendly name; the auth resolver itself only reads the two
+    # X-Uterm-* headers.
     ctx_opts: dict[str, dict[str, Any]] = {}
     for member in _CAST:
         ctx_opts[member["name"]] = {
             "extra_http_headers": {
+                # Use the display name as principal so deckmux's initials
+                # generator (first letter of each word) picks up real
+                # initials like "BB" instead of "US" from "user-bear_brody".
+                "X-Uterm-Principal": member["display"],
+                "X-Uterm-Role": member["role"],
                 "X-Display-Name": member["display"],
-                "X-Principal": f"user-{member['name']}",  # unique principal per context
             },
         }
 
@@ -589,6 +601,7 @@ async def run_terminal_demo() -> None:
 
     base_url, server = start_server(
         hub_class=_DeckMuxTermHub,
+        auth_mode="header",
         sessions=[
             {
                 "session_id": "provide-shell",
@@ -604,7 +617,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=header_admin_headers()) as http:
         info("Fetching session info...")
         r = await http.get("/api/sessions/provide-shell")
         r.raise_for_status()
