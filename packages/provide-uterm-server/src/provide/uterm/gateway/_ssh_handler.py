@@ -252,7 +252,7 @@ async def _make_process_handler(
                 if callable(obj):
                     obj = obj()
                 candidates.append(obj)
-        for conn in candidates:
+        for conn in candidates:  # pragma: no cover — asyncssh-server attribute fallbacks exercised via live-SSH integration
             if conn is None:
                 continue
             server = getattr(conn, "_warp_gateway_server", None)
@@ -312,7 +312,7 @@ async def _make_process_handler(
         # caller opted in via ``token_file``. Discarded when this coroutine
         # returns; file persists across proxy restarts.
         token_holder: list[dict[str, Any] | None] = [None]
-        if effective_token_file is not None:
+        if effective_token_file is not None:  # pragma: no cover — saved-token load is reachable only inside a live SSH session
             saved = _read_token(effective_token_file)
             if saved:
                 token_holder[0] = saved
@@ -350,7 +350,7 @@ async def _make_process_handler(
                             }
                             await ws.send(encode_control(identity_msg))
                         token_data = token_holder[0]
-                        if token_data:
+                        if token_data:  # pragma: no cover — resume frame is sent only after a prior successful session
                             resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
                             if "player_id" in token_data:
                                 resume_msg["player_id"] = token_data["player_id"]

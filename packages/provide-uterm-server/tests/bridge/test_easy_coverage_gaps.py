@@ -1101,6 +1101,128 @@ async def test_fanout_release_approved_command_returns_none_for_unauthorized_gro
 # ---------------------------------------------------------------------------
 
 
+def test_gateway_read_token_returns_none_for_malformed_json_dict(tmp_path) -> None:
+    """gateway/_gateway.py:58-59 — JSON parses but result isn't a dict-with-token."""
+    from provide.uterm.gateway._gateway import _read_token
+
+    # Valid JSON, but not a dict -> None
+    p1 = tmp_path / "tok1.json"
+    p1.write_text('["just", "a", "list"]')
+    assert _read_token(p1) is None
+
+    # Dict without "token" -> None
+    p2 = tmp_path / "tok2.json"
+    p2.write_text('{"other": "field"}')
+    assert _read_token(p2) is None
+
+    # Dict with empty token -> None
+    p3 = tmp_path / "tok3.json"
+    p3.write_text('{"token": ""}')
+    assert _read_token(p3) is None
+
+
+def test_gateway_write_token_swallows_oserror(tmp_path, monkeypatch) -> None:
+    """gateway/_gateway.py:155-156 — _write_token's OSError suppression."""
+    from provide.uterm.gateway._gateway import _write_token
+
+    # Force os.chmod to raise; _write_token writes the file then chmods,
+    # suppressing any OSError from chmod (e.g. on a read-only FS).
+    import os
+
+    p = tmp_path / "tok.json"
+    original_chmod = os.chmod
+
+    def _raising_chmod(*args, **kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(os, "chmod", _raising_chmod)
+    try:
+        _write_token(p, "tok-abc", 42)
+    finally:
+        monkeypatch.setattr(os, "chmod", original_chmod)
+    # The file content was written before the chmod failure.
+    assert "tok-abc" in p.read_text()
+
+
+def test_gateway_delete_token_swallows_missing_file(tmp_path) -> None:
+    """gateway/_gateway.py:_delete_token tolerates a missing file."""
+    from provide.uterm.gateway._gateway import _delete_token
+
+    _delete_token(tmp_path / "does-not-exist")  # must not raise
+
+
+async def test_gateway_handle_control_session_token_persists_to_disk(tmp_path) -> None:
+    """gateway/_gateway.py:147-157 — session_token frame writes token + player_id to disk."""
+    from provide.uterm.gateway._gateway import _handle_ws_control_frame
+
+    holder: list[dict | None] = [None]
+    written: list[bytes] = []
+
+    async def _write_fn(b: bytes) -> None:
+        written.append(b)
+
+    token_file = tmp_path / "tok.json"
+    ok = await _handle_ws_control_frame(
+        {"type": "session_token", "token": "tk1", "player_id": 7},
+        holder,
+        _write_fn,
+        token_file=token_file,
+    )
+    assert ok is True
+    assert holder[0] == {"token": "tk1", "player_id": 7}
+    assert "tk1" in token_file.read_text()
+
+
+async def test_gateway_handle_control_resume_ok_emits_session_resumed_message(tmp_path) -> None:
+    """gateway/_gateway.py:158-160 — resume_ok writes [Session resumed] to the client."""
+    from provide.uterm.gateway._gateway import _handle_ws_control_frame
+
+    written: list[bytes] = []
+
+    async def _write_fn(b: bytes) -> None:
+        written.append(b)
+
+    ok = await _handle_ws_control_frame(
+        {"type": "resume_ok"}, [None], _write_fn, token_file=None
+    )
+    assert ok is True
+    assert any(b"[Session resumed]" in b for b in written)
+
+
+async def test_gateway_handle_control_resume_failed_deletes_token_file(tmp_path) -> None:
+    """gateway/_gateway.py:161-165 — resume_failed clears the token holder and deletes the file."""
+    from provide.uterm.gateway._gateway import _handle_ws_control_frame
+
+    async def _write_fn(_b: bytes) -> None:  # pragma: no cover — resume_failed doesn't write
+        pass
+
+    token_file = tmp_path / "tok.json"
+    token_file.write_text('{"token":"stale"}')
+    holder: list[dict | None] = [{"token": "stale"}]
+    ok = await _handle_ws_control_frame(
+        {"type": "resume_failed"}, holder, _write_fn, token_file=token_file
+    )
+    assert ok is True
+    assert holder[0] is None
+    assert not token_file.exists()
+
+
+async def test_gateway_handle_control_unknown_type_returns_false() -> None:
+    """gateway/_gateway.py:166 — unknown control type returns False."""
+    from provide.uterm.gateway._gateway import _handle_ws_control_frame
+
+    async def _write_fn(_b: bytes) -> None:  # pragma: no cover — unknown type doesn't write
+        pass
+
+    assert await _handle_ws_control_frame({"type": "unknown"}, [None], _write_fn) is False
+    # Non-dict data.get -> AttributeError -> False.
+    class _NotADict:
+        def get(self, _key):
+            raise AttributeError
+
+    assert await _handle_ws_control_frame(_NotADict(), [None], _write_fn) is False
+
+
 async def test_handle_input_completing_buffered_command_passes_full_string() -> None:
     """When a prior partial chunk landed in _input_buffers, a completing chunk
     should be joined with the prefix before the worker sees it."""

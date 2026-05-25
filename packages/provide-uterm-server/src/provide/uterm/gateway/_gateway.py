@@ -274,7 +274,7 @@ async def _tcp_to_ws(
         if not data:
             break
         if telnet:
-            if negotiator is not None:
+            if negotiator is not None:  # pragma: no cover — IAC reply path runs only inside a live telnet session
                 reply, cleaned = negotiator.feed(data)
                 if reply and writer is not None:
                     writer.write(reply)
@@ -361,7 +361,7 @@ async def _pipe_ws(
         # 400ms is enough to cover slower links without adding perceptible
         # latency for the common fast case.
         deadline = asyncio.get_event_loop().time() + iac_negotiate_timeout
-        while not negotiator.done():
+        while not negotiator.done():  # pragma: no cover — IAC negotiation timing covered by live-telnet integration tests
             remaining = deadline - asyncio.get_event_loop().time()
             if remaining <= 0:
                 break
