@@ -372,7 +372,16 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # --- ACT 2: Team assembles (steps ~9-20) ---
     # Each user joins at a staggered point.
     # After joining, they wait for the presence bar to show enough users.
-    join_order = ["bear_brody", "crane_cara", "falcon_finn", "lynx_liam", "wolf_willa", "heron_hugo", "marten_mira", "sentinel"]
+    join_order = [
+        "bear_brody",
+        "crane_cara",
+        "falcon_finn",
+        "lynx_liam",
+        "wolf_willa",
+        "heron_hugo",
+        "marten_mira",
+        "sentinel",
+    ]
     join_steps_per_user: dict[str, list[BrowserStep]] = {}
     for idx, uname in enumerate(join_order):
         pre_pad: list[BrowserStep] = [(None, 0.0, None)] * idx  # stagger
