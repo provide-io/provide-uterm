@@ -436,7 +436,18 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             await hub.send_worker(
                 worker_id, {"type": "control", "action": "resume", "owner": hs.owner, "lease_s": 0, "ts": time.time()}
             )
-            hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
+        # Always notify subscribers (e.g. bbsbot SwarmManager's bot.is_hijacked
+        # mirror) that THIS rest hijack is gone, regardless of whether a
+        # ``resume`` worker-frame was sent. ``should_resume`` only gates the
+        # worker-frame because a concurrent dashboard hijack or new REST
+        # acquire wants the worker to stay paused — but our specific REST
+        # lease IS released either way. Pre-fix, ``notify_hijack_changed``
+        # sat inside the ``if should_resume`` block, leaving downstream
+        # mirrors stuck on ``is_hijacked=True``. bbsbot then 409'd the next
+        # ``/swarm/compare/acquire`` with "Worker is already hijacked" even
+        # though the actual hub state had no REST session (caught in
+        # uwarp 2026-05-24 compare-iter wedge cycles).
+        hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
         hub.metric("hijack_releases_total")
         logger.info("rest_release_ok worker_id=%s hijack_id=%s owner=%s", worker_id, hijack_id, hs.owner)
         await hub.append_event(worker_id, "hijack_released", {"hijack_id": hijack_id, "owner": hs.owner})
