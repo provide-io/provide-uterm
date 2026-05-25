@@ -824,3 +824,62 @@ def test_fingerprint_for_key_handles_none_missing_and_exception() -> None:
             return "SHA256:abc"
 
     assert _fingerprint_for_key(_Returns()) == "SHA256:abc"
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/messaging.py:317-346 — _audit_all_browsers calls the behavioral
+# gate per browser and closes the ws when the decision is 'deny'.
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_all_browsers_closes_browser_on_deny() -> None:
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.bridge.hub.ext import BehavioralThresholds, ConnectionHeuristics
+
+    class DenyGate:
+        async def audit_connection(
+            self,
+            _heuristics: ConnectionHeuristics,
+            _context: PolicyContext,
+            _thresholds: BehavioralThresholds,
+        ) -> PolicyDecision:
+            return PolicyDecision(action="deny", reason="too noisy")
+
+    hub = TermHub(behavioral_audit_gate=DenyGate())
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    browser_ws = AsyncMock()
+    await hub.register_browser("w1", browser_ws, "admin")
+
+    await hub._audit_all_browsers()
+    # The browser must have been closed with the policy-violation code.
+    browser_ws.close.assert_awaited_once()
+    kw = browser_ws.close.await_args.kwargs
+    assert kw["reason"] == "too noisy"
+
+
+async def test_audit_all_browsers_leaves_allowed_browsers_open() -> None:
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.bridge.hub.ext import BehavioralThresholds, ConnectionHeuristics
+
+    class AllowGate:
+        async def audit_connection(
+            self,
+            _heuristics: ConnectionHeuristics,
+            _context: PolicyContext,
+            _thresholds: BehavioralThresholds,
+        ) -> PolicyDecision:
+            return PolicyDecision(action="allow")
+
+    hub = TermHub(behavioral_audit_gate=AllowGate())
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    browser_ws = AsyncMock()
+    await hub.register_browser("w1", browser_ws, "admin")
+
+    await hub._audit_all_browsers()
+    browser_ws.close.assert_not_called()
