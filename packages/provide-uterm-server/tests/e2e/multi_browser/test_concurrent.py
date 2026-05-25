@@ -22,6 +22,8 @@ import httpx
 
 from provide.uterm.client import connect_async_ws
 
+from tests.e2e._live_server import wait_for_subscribers
+
 from .conftest import (
     ADMIN_H,
     connect_browser,
@@ -58,7 +60,13 @@ async def test_three_role_browsers_all_receive_snapshot_eventbus_delivers(live_s
                         params={"timeout_ms": 5000, "max_events": 1, "event_types": "snapshot"},
                     )
                 )
-                await asyncio.sleep(0.1)
+                # The poll handler registers its EventBus subscription from
+                # inside the request handler. Wait for the subscription to
+                # show up before firing the worker snapshot — a bare 0.1s
+                # sleep was the historic source of "len(events) == 0" flakes
+                # on slower CI runners (notably Python 3.14, which has
+                # different asyncio scheduling timing).
+                await wait_for_subscribers(hub, "s1", 1)
 
                 await worker.send(json.dumps(snapshot_msg("$ three-browser test")))
 
@@ -102,7 +110,10 @@ async def test_five_browsers_join_leave_eventbus_stable(live_server: Any) -> Non
                     params={"timeout_ms": 10000, "max_events": 3, "event_types": "snapshot"},
                 )
             )
-            await asyncio.sleep(0.1)
+            # Wait for the long-poll's EventBus subscription to register
+            # before opening browsers — see comment in
+            # test_three_role_browsers_all_receive_snapshot_eventbus_delivers.
+            await wait_for_subscribers(hub, "s1", 1)
 
             # Open 5 browsers simultaneously
             browser_cms = [connect_browser(base_url, "s1", role="admin") for _ in range(5)]
