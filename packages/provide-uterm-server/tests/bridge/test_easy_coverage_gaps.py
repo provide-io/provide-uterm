@@ -1000,6 +1000,8 @@ async def test_resume_revoke_unknown_token_pops_creation_time() -> None:
 
 
 async def test_handle_input_notifies_browser_when_send_worker_fails() -> None:
+    """browser_handlers.py:236 — NoOp-gate early-return path emits the
+    Worker-connection-lost error when send_worker returns False."""
     from unittest.mock import AsyncMock, patch
 
     from provide.uterm.bridge.hub import TermHub
@@ -1017,6 +1019,35 @@ async def test_handle_input_notifies_browser_when_send_worker_fails() -> None:
         await _handle_input(hub, ws, "w1", {"type": "input", "data": "hi"})
 
     # Browser must have received an error frame.
+    payload = ws.send_text.await_args.args[0]
+    assert "Worker connection lost" in payload
+
+
+async def test_handle_input_post_split_send_failure_notifies_browser() -> None:
+    """browser_handlers.py:325 — custom (non-NoOp) gate routes through the
+    splitter/per-part path; the trailing send_worker failure must still
+    emit the Worker-connection-lost frame to the browser."""
+    from unittest.mock import AsyncMock, patch
+
+    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+
+    class AllowGate:
+        async def intercept_input(self, _data: str, _ctx: PolicyContext) -> PolicyDecision:
+            return PolicyDecision(action="allow")
+
+    hub = TermHub(policy_gate=AllowGate())
+    ws = AsyncMock()
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    await hub.register_browser("w1", ws, "admin")
+    await hub.try_acquire_ws_hijack("w1", ws)
+
+    with patch.object(hub, "send_worker", AsyncMock(return_value=False)):
+        # Complete chunk (newline) so the buffer flushes and we reach the
+        # post-split send_worker call at line 322.
+        await _handle_input(hub, ws, "w1", {"type": "input", "data": "echo hi\n"})
+
     payload = ws.send_text.await_args.args[0]
     assert "Worker connection lost" in payload
 

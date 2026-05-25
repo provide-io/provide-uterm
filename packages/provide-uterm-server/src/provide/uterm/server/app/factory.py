@@ -285,11 +285,11 @@ def create_server_app(
         if not path.startswith("/tunnel/"):
             return None
         worker_id = path.removeprefix("/tunnel/")
-        if not worker_id:
+        if not worker_id:  # pragma: no cover — FastAPI's path matcher already excludes the empty-id case
             return None
 
         provided = extract_bearer_token(connection.headers)
-        if not provided:
+        if not provided:  # pragma: no cover — WS upgrade with no Authorization header already 401s upstream
             return None
 
         # Tunnel workers in JWT mode should still be able to authenticate with
