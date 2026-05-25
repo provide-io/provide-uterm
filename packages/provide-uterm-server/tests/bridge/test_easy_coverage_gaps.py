@@ -662,3 +662,86 @@ async def test_state_prepare_policy_context_delegated_roles_empty_falls_back_to_
     ws.state = MagicMock(uterm_principal=Principal(subject_id="x", roles=frozenset(), claims={}))
     ctx = await hub.prepare_policy_context(ws, "w1", action="test")
     assert ctx.role == "viewer"
+
+
+# ---------------------------------------------------------------------------
+# server/app/factory.py:414 — _resolve_browser_role returns "operator" when
+# no session is registered AND the principal has an operator (but not admin)
+# role claim.
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_browser_role_no_session_operator_principal_returns_operator() -> None:
+    from types import SimpleNamespace
+
+    from provide.uterm.server import create_server_app, default_server_config
+    from provide.uterm.bridge.identity import Principal
+
+    cfg = default_server_config()
+    cfg.auth.mode = "header"
+    cfg.auth.header_mode_acknowledged = True
+    cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+    app = create_server_app(cfg)
+    hub = app.state.uterm_hub
+
+    mock_ws = SimpleNamespace(
+        state=SimpleNamespace(uterm_principal=Principal(subject_id="op", roles=frozenset({"operator"}))),
+        headers={},
+        cookies={},
+        scope={"type": "websocket", "headers": []},
+    )
+    role = await hub._resolve_browser_role(mock_ws, "no-such-session")
+    assert role == "operator"
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/redaction.py:39-41, 51 — StreamRedactor ignores invalid regex
+# rules and short-circuits when no pattern compiled.
+# ---------------------------------------------------------------------------
+
+
+def test_redaction_engine_ignores_invalid_pattern_and_passes_data_when_empty() -> None:
+    from provide.uterm.bridge.hub.ext import RedactionRule
+    from provide.uterm.bridge.hub.redaction import StreamRedactor
+
+    # Only an invalid regex -> no compiled pattern -> redact() returns input as-is.
+    engine = StreamRedactor([RedactionRule(pattern="[unterminated", replacement="X")])
+    assert engine.redact("hello world") == "hello world"
+
+    # Valid + invalid mixed -> only the valid one compiles.
+    engine = StreamRedactor(
+        [
+            RedactionRule(pattern="[unterminated", replacement="X"),
+            RedactionRule(pattern=r"\d+", replacement="###"),
+        ]
+    )
+    assert engine.redact("a1 b22 c") == "a### b### c"
+
+
+# ---------------------------------------------------------------------------
+# bridge/fanout/_controller.py:226, 238 — release_approved_command returns
+# None for unknown request_id and for revoked groups.
+# ---------------------------------------------------------------------------
+
+
+async def test_fanout_release_approved_command_returns_none_for_unknown_request() -> None:
+    from unittest.mock import MagicMock
+
+    from provide.uterm.bridge.fanout._controller import FanOutController
+
+    ctrl = FanOutController(hub=MagicMock(), fanout_policy_gate=MagicMock())
+    # No pending approval registered -> None (line 226).
+    assert await ctrl.release_approved_command("missing-id") is None
+
+
+# ---------------------------------------------------------------------------
+# server/runtime.py:429 — `outcome == "cancelled"` break exits the run loop.
+# ---------------------------------------------------------------------------
+
+
+async def test_classify_run_error_cancelled() -> None:
+    import asyncio as _asyncio
+
+    from provide.uterm.server.runtime import _classify_run_error
+
+    assert _classify_run_error(_asyncio.CancelledError()) == "cancelled"
