@@ -70,5 +70,5 @@ def main(argv: list[str] | None = None) -> None:
     _cmd_server(args)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover — exercised by `uterm-server` console-script
     main()

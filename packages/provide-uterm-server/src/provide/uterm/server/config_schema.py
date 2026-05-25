@@ -251,7 +251,7 @@ class SessionDefinition(ServerBaseModel):
                 raise ValueError(
                     f"invalid connector_type for {label!r}: {connector_type!r} — must be one of {sorted(known)}"
                 )
-        except ImportError:
+        except ImportError:  # pragma: no cover — server.connectors is always present in this package
             # Fallback for environments where server.connectors isn't available
             pass
         return connector_type
