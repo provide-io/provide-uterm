@@ -158,3 +158,115 @@ def test_ownership_compute_lease_expirations_reports_both_expired() -> None:
     browser_expired, rest_expired = _OwnershipMixin._compute_lease_expirations(state, now)
     assert browser_expired is True
     assert rest_expired is True
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/approvals.py:70 — cleanup_expired awaits an async on_expired
+# callback when the registered handler returns a coroutine.
+# ---------------------------------------------------------------------------
+
+
+async def test_in_memory_approval_store_awaits_async_on_expired() -> None:
+    import time as _time
+
+    from provide.uterm.bridge.hub.approvals import (
+        ApprovalRequest,
+        ApprovalStatus,
+        InMemoryApprovalStore,
+    )
+
+    store = InMemoryApprovalStore()
+    called_with: list[str] = []
+
+    async def _async_on_expired(req_id: str) -> None:
+        called_with.append(req_id)
+
+    store.on_expired = _async_on_expired
+    store.add(
+        ApprovalRequest(
+            id="r1",
+            worker_id="w1",
+            submitter_id="alice",
+            command="ls",
+            status=ApprovalStatus.PENDING,
+            created_at=_time.time() - 100,
+            expires_at=_time.time() - 1,  # already expired
+        ),
+    )
+    await store.cleanup_expired()
+    assert called_with == ["r1"], "async on_expired callback must be awaited"
+    assert store.get("r1").status == ApprovalStatus.TIMEOUT
+
+
+# ---------------------------------------------------------------------------
+# server/routes/approvals.py:44, 59, 73, 76 — error paths in approve/reject:
+# missing principal (401), no-such-request (404), already-resolved (400).
+# ---------------------------------------------------------------------------
+
+
+async def test_approvals_router_error_paths() -> None:
+    import time as _time
+    from unittest.mock import MagicMock
+
+    from fastapi import HTTPException
+
+    from provide.uterm.bridge.hub.approvals import (
+        ApprovalRequest,
+        ApprovalStatus,
+        InMemoryApprovalStore,
+    )
+    from provide.uterm.server.routes.approvals import create_approvals_router
+
+    router = create_approvals_router()
+    approve = next(r for r in router.routes if "/approve" in r.path).endpoint
+    reject = next(r for r in router.routes if "/reject" in r.path).endpoint
+
+    # 401 — missing principal (covers line 44)
+    req_unauth = MagicMock()
+    req_unauth.state.uterm_principal = None
+    with pytest.raises(HTTPException) as exc:
+        await approve("r1", req_unauth)
+    assert exc.value.status_code == 401
+
+    # 404 — request not found (covers line 56)
+    store = InMemoryApprovalStore()
+    hub = MagicMock()
+    hub._approval_store = store
+
+    async def _is_admin(_p: object) -> bool:
+        return True
+
+    authz = MagicMock()
+    authz.is_admin = _is_admin
+
+    req_admin = MagicMock()
+    req_admin.state.uterm_principal = MagicMock()
+    req_admin.app.state.uterm_hub = hub
+    req_admin.app.state.uterm_authz = authz
+
+    with pytest.raises(HTTPException) as exc:
+        await approve("missing", req_admin)
+    assert exc.value.status_code == 404
+
+    # 400 — already-resolved request on approve (covers line 59) and reject (76)
+    already = ApprovalRequest(
+        id="r2",
+        worker_id="w1",
+        submitter_id="alice",
+        command="ls",
+        status=ApprovalStatus.APPROVED,  # already terminal
+        created_at=_time.time(),
+        expires_at=_time.time() + 60,
+    )
+    store.add(already)
+    with pytest.raises(HTTPException) as exc:
+        await approve("r2", req_admin)
+    assert exc.value.status_code == 400
+    with pytest.raises(HTTPException) as exc:
+        await reject("r2", req_admin)
+    assert exc.value.status_code == 400
+
+    # Reject's 404 path (covers line 73)
+    with pytest.raises(HTTPException) as exc:
+        await reject("nope", req_admin)
+    assert exc.value.status_code == 404
