@@ -745,3 +745,82 @@ async def test_classify_run_error_cancelled() -> None:
     from provide.uterm.server.runtime import _classify_run_error
 
     assert _classify_run_error(_asyncio.CancelledError()) == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# gateway/_ssh_handler.py:169-182 — _openssh_blob_for_key handles None,
+# missing methods, raising methods, and str/bytes return types.
+# ---------------------------------------------------------------------------
+
+
+def test_openssh_blob_for_key_handles_all_branches() -> None:
+    from provide.uterm.gateway._ssh_handler import _openssh_blob_for_key
+
+    # None -> empty bytes (line 170)
+    assert _openssh_blob_for_key(None) == b""
+
+    # No matching attribute -> empty bytes
+    assert _openssh_blob_for_key(object()) == b""
+
+    # Attribute exists but not callable -> skipped
+    class _NonCallable:
+        export_public_key = "not-callable"
+
+    assert _openssh_blob_for_key(_NonCallable()) == b""
+
+    # Method raises -> continue to next attr (line 176-177)
+    class _Raises:
+        def export_public_key(self) -> bytes:
+            raise RuntimeError("nope")
+
+        def public_data(self) -> bytes:
+            return b"valid-blob"
+
+    assert _openssh_blob_for_key(_Raises()) == b"valid-blob"
+
+    # str return type -> ASCII-encoded (line 180-181)
+    class _StrReturn:
+        def export_public_key(self) -> str:
+            return "ascii-blob"
+
+    assert _openssh_blob_for_key(_StrReturn()) == b"ascii-blob"
+
+    # Method exists but returns neither str nor bytes -> falls through to next attr
+    class _BadReturnThenValid:
+        def export_public_key(self) -> object:
+            return 12345  # not str/bytes — skip
+
+        def public_data(self) -> bytes:
+            return b"fallback-blob"
+
+    assert _openssh_blob_for_key(_BadReturnThenValid()) == b"fallback-blob"
+
+
+# ---------------------------------------------------------------------------
+# gateway/_ssh_handler.py:187-196 — _fingerprint_for_key handles None,
+# missing get_fingerprint, and exceptions.
+# ---------------------------------------------------------------------------
+
+
+def test_fingerprint_for_key_handles_none_missing_and_exception() -> None:
+    from provide.uterm.gateway._ssh_handler import _fingerprint_for_key
+
+    assert _fingerprint_for_key(None) is None  # line 188
+    assert _fingerprint_for_key(object()) is None  # no get_fingerprint
+    # get_fingerprint exists but isn't callable
+    class _NonCallable:
+        get_fingerprint = "not-callable"
+
+    assert _fingerprint_for_key(_NonCallable()) is None  # line 191
+
+    class _Raises:
+        def get_fingerprint(self, _algo: str) -> str:
+            raise RuntimeError("nope")
+
+    assert _fingerprint_for_key(_Raises()) is None  # lines 195-196
+
+    class _Returns:
+        def get_fingerprint(self, _algo: str) -> str:
+            return "SHA256:abc"
+
+    assert _fingerprint_for_key(_Returns()) == "SHA256:abc"

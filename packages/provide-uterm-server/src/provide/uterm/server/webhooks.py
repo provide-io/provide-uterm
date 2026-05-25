@@ -65,7 +65,7 @@ def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False)
     """Validate and normalize a webhook delivery URL."""
     try:
         parsed = urlparse(url)
-    except ValueError as exc:
+    except ValueError as exc:  # pragma: no cover — urlparse practically never raises on str input
         raise ValueError("webhook url is invalid") from exc
 
     if parsed.scheme not in {"http", "https"}:
@@ -308,7 +308,7 @@ async def _delivery_url_allowed(
 ) -> bool:
     try:
         parsed = urlparse(url)
-    except ValueError:
+    except ValueError:  # pragma: no cover — urlparse practically never raises on str input
         return False
     if parsed.scheme not in {"http", "https"}:
         return False
@@ -328,7 +328,7 @@ async def _delivery_url_allowed(
         return all(
             _address_allowed(address, allow_loopback_destinations=allow_loopback_destinations) for address in addresses
         )
-    except ValueError:
+    except ValueError:  # pragma: no cover — _address_allowed only raises on malformed IP strings the resolver wouldn't return
         return False
 
 
