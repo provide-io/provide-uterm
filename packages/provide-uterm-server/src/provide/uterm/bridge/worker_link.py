@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, runtime_checkable
 
 from provide.telemetry import get_logger
@@ -41,6 +42,12 @@ logger = get_logger(__name__)
 _InvalidURI: type | None = None
 with contextlib.suppress(ImportError):
     from websockets.exceptions import InvalidURI as _InvalidURI
+
+
+# Public type alias for app-specific message handlers registered via
+# TermBridge.register_message_handler.  The handler receives the full
+# parsed control message dict (with a 'type' field).
+MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 def _to_ws_url(manager_url: str, path: str) -> str:
@@ -131,6 +138,29 @@ class TermBridge:
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._attached_session: Any | None = None
+        # App-specific message handlers registered via register_message_handler.
+        # Consulted by _dispatch_control_msg only for message types not handled
+        # by the built-in dispatch table, preserving backward compatibility.
+        self._custom_msg_handlers: dict[str, MessageHandler] = {}
+
+    def register_message_handler(
+        self,
+        message_type: str,
+        handler: MessageHandler,
+    ) -> None:
+        """Register an app-specific WebSocket message handler.
+
+        The handler is invoked when an incoming control-channel message has
+        a 'type' field matching ``message_type`` and the built-in dispatch
+        (pause/resume/step/data/snapshot_req/resize/...) does NOT handle it.
+
+        Re-registering an existing ``message_type`` replaces the prior handler.
+
+        Args:
+            message_type: Value of the message's ``type`` field to match.
+            handler: Async callable invoked with the full message dict.
+        """
+        self._custom_msg_handlers[message_type] = handler
 
     def attach_session(self) -> None:
         """Attach a watcher to the worker's current session to forward terminal output."""
@@ -313,6 +343,23 @@ class TermBridge:
                 await self._request_step()
         elif mtype == "resize":
             await self._set_size(_safe_int(msg.get("cols"), 80, min_val=1), _safe_int(msg.get("rows"), 25, min_val=1))
+        else:
+            # Fall through to app-registered handlers for previously-unknown
+            # message types.  Built-in types take precedence; if no custom
+            # handler is registered, the message is silently ignored, which
+            # matches the pre-registry behavior.
+            handlers: dict[str, MessageHandler] = getattr(self, "_custom_msg_handlers", {})
+            handler = handlers.get(str(mtype) if mtype is not None else "")
+            if handler is not None:
+                try:
+                    await handler(msg)
+                except Exception as exc:
+                    logger.warning(
+                        "term_bridge_custom_handler_error worker_id=%s mtype=%s: %s",
+                        self._worker_id,
+                        mtype,
+                        exc,
+                    )
 
     async def _recv_loop(self, ws: Any) -> None:
         decoder = ControlChannelDecoder(max_control_payload_bytes=self._max_ws_message_bytes)
