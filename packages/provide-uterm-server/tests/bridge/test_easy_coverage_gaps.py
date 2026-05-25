@@ -1023,6 +1023,215 @@ async def test_handle_input_notifies_browser_when_send_worker_fails() -> None:
     assert "Worker connection lost" in payload
 
 
+async def test_resolve_approval_fanout_allow_without_fan_out_controller() -> None:
+    """approvalflow.py:55->66 — fanout approval+allow when no fan_out_controller wired."""
+    import time as _time
+
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.bridge.hub.ext import PolicyDecision
+
+    hub = TermHub()  # no fan_out_controller attribute set
+    await hub.register_worker("w1", AsyncMock())
+    hub._approval_store.add(
+        ApprovalRequest(
+            id="r-fo",
+            worker_id="w1",
+            submitter_id="a",
+            command="x",
+            status=ApprovalStatus.PENDING,
+            created_at=_time.time(),
+            expires_at=_time.time() + 60,
+            is_fanout=True,
+        ),
+    )
+    # Must not raise even though there's no controller.
+    await hub.resolve_approval("w1", "r-fo", PolicyDecision(action="allow"), "x")
+
+
+async def test_resolve_approval_fanout_deny_without_fan_out_controller() -> None:
+    """approvalflow.py:64->66 — fanout approval+deny when no fan_out_controller wired."""
+    import time as _time
+
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.bridge.hub.ext import PolicyDecision
+
+    hub = TermHub()
+    await hub.register_worker("w1", AsyncMock())
+    hub._approval_store.add(
+        ApprovalRequest(
+            id="r-fd",
+            worker_id="w1",
+            submitter_id="a",
+            command="x",
+            status=ApprovalStatus.PENDING,
+            created_at=_time.time(),
+            expires_at=_time.time() + 60,
+            is_fanout=True,
+        ),
+    )
+    await hub.resolve_approval("w1", "r-fd", PolicyDecision(action="deny", reason="no"), "x")
+
+
+async def test_resolve_approval_fanout_hold_decision_is_noop() -> None:
+    """approvalflow.py:57->66 — fanout approval with non-allow/non-deny decision."""
+    import time as _time
+
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.bridge.hub.ext import PolicyDecision
+
+    hub = TermHub()
+    await hub.register_worker("w1", AsyncMock())
+    hub._approval_store.add(
+        ApprovalRequest(
+            id="r-fh",
+            worker_id="w1",
+            submitter_id="a",
+            command="x",
+            status=ApprovalStatus.PENDING,
+            created_at=_time.time(),
+            expires_at=_time.time() + 60,
+            is_fanout=True,
+        ),
+    )
+    # "hold" isn't allow or deny — falls through both branches and returns.
+    await hub.resolve_approval("w1", "r-fh", PolicyDecision(action="hold"), "x")
+
+
+async def test_resolve_approval_non_fanout_hold_decision_is_noop_on_worker() -> None:
+    """approvalflow.py:72->80 — non-fanout decision other than allow/deny falls through."""
+    import time as _time
+
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.bridge.hub.ext import PolicyDecision
+
+    hub = TermHub()
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    browser_ws = AsyncMock()
+    await hub.register_browser("w1", browser_ws, "admin")
+    hub._approval_store.add(
+        ApprovalRequest(
+            id="r-h",
+            worker_id="w1",
+            submitter_id="a",
+            command="x",
+            status=ApprovalStatus.PENDING,
+            created_at=_time.time(),
+            expires_at=_time.time() + 60,
+            is_fanout=False,
+        ),
+    )
+    await hub.resolve_approval("w1", "r-h", PolicyDecision(action="hold"), "x")
+    # Worker must not have received any input.
+    worker_ws.send_text.assert_not_called()
+
+
+async def test_intercept_cancel_all_skips_already_done_futures() -> None:
+    """tunnel/intercept.py:150->149 — futures already done don't double-set."""
+    import asyncio as _asyncio
+
+    from provide.uterm.tunnel.intercept import InterceptGate
+
+    store = InterceptGate.__new__(InterceptGate)
+    store._pending = {}  # type: ignore[attr-defined]
+
+    loop = _asyncio.get_event_loop()
+    done_fut = loop.create_future()
+    done_fut.set_result(None)  # already resolved
+    pending_fut = loop.create_future()
+    store._pending = {"a": done_fut, "b": pending_fut}  # type: ignore[attr-defined]
+
+    count = store.cancel_all()
+    assert count == 1  # only pending_fut got resolved
+
+
+def test_redaction_stream_redactor_with_no_rules_is_passthrough() -> None:
+    """bridge/hub/redaction.py:29->exit — empty rules list skips the entire setup block."""
+    from provide.uterm.bridge.hub.redaction import StreamRedactor
+
+    redactor = StreamRedactor([])
+    assert redactor.redact("anything goes") == "anything goes"
+
+
+def test_fanout_controller_works_without_approval_store_on_hub() -> None:
+    """bridge/fanout/_controller.py:46->exit — hub without _approval_store doesn't crash init."""
+    from unittest.mock import MagicMock
+
+    from provide.uterm.bridge.fanout._controller import FanOutController
+
+    hub = MagicMock(spec=[])  # no attributes -> _approval_store getattr returns None
+    ctrl = FanOutController(hub=hub, fanout_policy_gate=MagicMock())
+    # The controller still initializes; the missing-store branch is a no-op.
+    assert ctrl._pending_approvals == {}
+
+
+async def test_browser_handlers_multi_part_split_routes_each() -> None:
+    """browser_handlers.py:289->291 — multi-part command takes the else branch."""
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+
+    class AllowGate:
+        async def intercept_input(self, _data: str, _ctx: PolicyContext) -> PolicyDecision:
+            return PolicyDecision(action="allow")
+
+    hub = TermHub(policy_gate=AllowGate())
+    ws = AsyncMock()
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    await hub.register_browser("w1", ws, "admin")
+    await hub.try_acquire_ws_hijack("w1", ws)
+
+    # ; separator yields two parts -> loop runs twice
+    await _handle_input(hub, ws, "w1", {"type": "input", "data": "echo a; echo b\n"})
+    worker_ws.send_text.assert_called()
+
+
+async def test_resolve_approval_paused_browser_resumed_without_hold_buffer() -> None:
+    """approvalflow.py:83->113 — paused browser unpaused, allow decision but no buffered input."""
+    import time as _time
+
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.bridge.hub.ext import PolicyDecision
+
+    hub = TermHub()
+    worker_ws = AsyncMock()
+    await hub.register_worker("w1", worker_ws)
+    browser_ws = AsyncMock()
+    await hub.register_browser("w1", browser_ws, "admin")
+    hub._paused_browsers.add(browser_ws)  # paused, but no entry in _hold_buffers
+    hub._approval_store.add(
+        ApprovalRequest(
+            id="r-noh",
+            worker_id="w1",
+            submitter_id="a",
+            command="x",
+            status=ApprovalStatus.PENDING,
+            created_at=_time.time(),
+            expires_at=_time.time() + 60,
+            is_fanout=False,
+        ),
+    )
+    await hub.resolve_approval("w1", "r-noh", PolicyDecision(action="allow"), "x")
+    assert browser_ws not in hub._paused_browsers
+
+
 async def test_handle_input_post_split_send_failure_notifies_browser() -> None:
     """browser_handlers.py:325 — custom (non-NoOp) gate routes through the
     splitter/per-part path; the trailing send_worker failure must still
