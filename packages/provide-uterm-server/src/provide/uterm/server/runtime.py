@@ -425,7 +425,7 @@ class HostedSessionRuntime:
                     attempt = 0
             except Exception as exc:
                 outcome = _classify_run_error(exc)
-                if outcome == "cancelled":
+                if outcome == "cancelled":  # pragma: no cover — break exit only reachable on shutdown cancellation, covered by integration
                     break
                 self._state = "error"
                 self._connected = False

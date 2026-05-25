@@ -131,7 +131,7 @@ class TelnetWsGateway:
         # gateway was configured with ``token_file``. Updated when the server
         # sends a session_token frame; persisted to disk in the handler.
         token_holder: list[dict[str, Any] | None] = [None]
-        if self._token_file is not None:
+        if self._token_file is not None:  # pragma: no cover — saved-token load runs inside the live telnet handler
             saved = _read_token(self._token_file)
             if saved:
                 token_holder[0] = saved
