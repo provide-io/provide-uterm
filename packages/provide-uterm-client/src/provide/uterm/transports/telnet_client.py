@@ -69,25 +69,25 @@ class TelnetClient:
 
     async def read(self, n: int) -> bytes:
         """Read up to *n* bytes from the server."""
-        if self._reader is None:  # pragma: no cover
+        if self._reader is None:
             raise RuntimeError("not connected")
         return await self._reader.read(n)
 
     async def readuntil(self, separator: bytes = b"\n") -> bytes:
         """Read until *separator* is found."""
-        if self._reader is None:  # pragma: no cover
+        if self._reader is None:
             raise RuntimeError("not connected")
         return await self._reader.readuntil(separator)
 
     def write(self, data: bytes) -> None:
         """Write *data* to the server (buffered until :meth:`drain`)."""
-        if self._writer is None:  # pragma: no cover
+        if self._writer is None:
             raise RuntimeError("not connected")
         self._writer.write(data)
 
     async def drain(self) -> None:
         """Flush the write buffer."""
-        if self._writer is None:  # pragma: no cover
+        if self._writer is None:
             raise RuntimeError("not connected")
         await self._writer.drain()
 

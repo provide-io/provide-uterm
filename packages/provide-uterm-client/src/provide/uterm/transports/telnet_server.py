@@ -115,7 +115,11 @@ async def start_telnet_server(
         try:
             writer.write(_build_telnet_handshake())
             await writer.drain()
-        except (ConnectionResetError, BrokenPipeError, OSError):  # pragma: no cover
+        except (
+            ConnectionResetError,
+            BrokenPipeError,
+            OSError,
+        ):  # pragma: no cover - requires peer drop during handshake
             logger.warning("connection lost during handshake addr=%s", addr)
             writer.close()
             return

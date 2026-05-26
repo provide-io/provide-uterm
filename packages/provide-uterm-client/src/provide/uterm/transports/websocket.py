@@ -13,7 +13,7 @@ from __future__ import annotations
 
 try:
     from fastapi import WebSocket, WebSocketDisconnect
-except ImportError as _e:  # pragma: no cover
+except ImportError as _e:  # pragma: no cover - optional dep guard
     raise ImportError("fastapi is required for WebSocket transport: pip install 'provide-uterm[websocket]'") from _e
 
 
