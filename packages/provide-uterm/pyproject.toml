@@ -116,6 +116,7 @@ addopts = [
     "not playwright and not memray and not slow and not docker",
     "--cov=provide.uterm.__init__",
     "--cov=provide.uterm.ansi",
+    "--cov=provide.uterm.bridge.coordinator",
     "--cov=provide.uterm.colors",
     "--cov=provide.uterm.control_channel",
     "--cov=provide.uterm.deckmux",
@@ -142,6 +143,7 @@ addopts = [
 source = [
     "provide.uterm.__init__",
     "provide.uterm.ansi",
+    "provide.uterm.bridge.coordinator",
     "provide.uterm.control_channel",
     "provide.uterm.deckmux",
     "provide.uterm.defaults",
