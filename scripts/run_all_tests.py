@@ -27,6 +27,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("provide-uterm + provide-uterm-cloudflare (root pytest)", ()),
+    ("provide-uterm-annotation", ("packages/provide-uterm-annotation/tests/",)),
     ("provide-uterm-server", ("packages/provide-uterm-server/tests/",)),
     ("provide-uterm-client", ("packages/provide-uterm-client/tests/",)),
     (

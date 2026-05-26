@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from provide.uterm.bridge.annotation._detector import PatternDetector
+from provide.uterm.annotation import PatternDetector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime
 from provide.uterm.session_logger import SessionLogger

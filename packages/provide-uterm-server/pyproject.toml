@@ -21,9 +21,15 @@ server = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=12.0"]
 cli = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0", "textual>=0.50", "httpx>=0.27"]
 tunnel = ["httpx>=0.27", "uvicorn>=0.24", "websockets>=16.0", "fastapi>=0.110"]
 gateway = ["asyncssh>=2.22.0", "websockets>=16.0"]
+# Optional: PatternDetector + built-in rules + annotation models. Lives in the
+# separate provide-uterm-annotation package so deployments that don't need
+# pattern detection can ship a leaner wheel. The factory imports it lazily and
+# raises a friendly RuntimeError if it isn't installed.
+annotation = ["provide-uterm-annotation>=0.4.0"]
 all = [
     "fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=16.0",
     "textual>=0.50", "httpx>=0.27", "asyncssh>=2.22.0",
+    "provide-uterm-annotation>=0.4.0",
 ]
 dev = [
     "pytest>=9.0",
@@ -44,6 +50,7 @@ dev = [
     "Pillow>=10.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
+    "provide-uterm-annotation>=0.4.0",
 ]
 
 [project.scripts]
@@ -161,8 +168,11 @@ python_version = "3.11"
 strict = true
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["src"]
+mypy_path = ["src", "../provide-uterm-annotation/src"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_any_generics = true
+
+[tool.uv.sources]
+provide-uterm-annotation = { workspace = true }

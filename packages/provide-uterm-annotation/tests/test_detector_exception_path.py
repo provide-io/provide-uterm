@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import re
 
-from provide.uterm.bridge.annotation._detector import PatternDetector
-from provide.uterm.bridge.annotation._models import DetectionRule
+from provide.uterm.annotation._detector import PatternDetector
+from provide.uterm.annotation._models import DetectionRule
 
 
 class TestDetectorDescriptionFallback:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.uterm.bridge.annotation._rules import BUILTIN_RULES
+from provide.uterm.annotation._rules import BUILTIN_RULES
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from provide.uterm.bridge.annotation._models import Annotation, AnnotationSpan, DetectionRule
-from provide.uterm.bridge.annotation._rules import BUILTIN_RULES
+from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule
+from provide.uterm.annotation._rules import BUILTIN_RULES
 
 _DESCRIPTION_TRUNCATE = 80
 

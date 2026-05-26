@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from provide.uterm.bridge.annotation import (
+from provide.uterm.annotation import (
     BUILTIN_RULES,
     Annotation,
     AnnotationSpan,

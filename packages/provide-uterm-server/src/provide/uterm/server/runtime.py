@@ -26,7 +26,7 @@ from provide.uterm.session_logger import SessionLogger
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from provide.uterm.bridge.annotation._detector import PatternDetector
+    from provide.uterm.annotation import PatternDetector
     from provide.uterm.bridge.hub import TermHub
     from provide.uterm.recording import RecordingStore
 
@@ -425,7 +425,9 @@ class HostedSessionRuntime:
                     attempt = 0
             except Exception as exc:
                 outcome = _classify_run_error(exc)
-                if outcome == "cancelled":  # pragma: no cover — break exit only reachable on shutdown cancellation, covered by integration
+                if (
+                    outcome == "cancelled"
+                ):  # pragma: no cover — break exit only reachable on shutdown cancellation, covered by integration
                     break
                 self._state = "error"
                 self._connected = False

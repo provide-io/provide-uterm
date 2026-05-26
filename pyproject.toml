@@ -9,6 +9,7 @@ version = "0.4.0"
 requires-python = ">=3.11"
 dependencies = [
     "provide-uterm[emulator,ssh]>=0.4.0",
+    "provide-uterm-annotation>=0.4.0",
     "provide-uterm-server[all]>=0.4.0",
     "provide-uterm-platform[all]>=0.4.0",
     "provide-telemetry>=0.4.4",
@@ -55,9 +56,10 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/provide-uterm", "packages/provide-uterm-cloudflare", "packages/provide-uterm-platform", "packages/provide-uterm-server", "packages/provide-uterm-client"]
+members = ["packages/provide-uterm", "packages/provide-uterm-annotation", "packages/provide-uterm-cloudflare", "packages/provide-uterm-platform", "packages/provide-uterm-server", "packages/provide-uterm-client"]
 [tool.uv.sources]
 provide-uterm = { workspace = true }
+provide-uterm-annotation = { workspace = true }
 provide-uterm-cloudflare = { workspace = true }
 provide-uterm-platform = { workspace = true }
 provide-uterm-server = { workspace = true }
@@ -123,7 +125,7 @@ follow_imports = "normal"
 ignore_missing_imports = false
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-server/src", "packages/provide-uterm-platform/src", "packages/provide-uterm-client/src", "packages/provide-uterm-cloudflare/src"]
+mypy_path = ["packages/provide-uterm/src", "packages/provide-uterm-annotation/src", "packages/provide-uterm-server/src", "packages/provide-uterm-platform/src", "packages/provide-uterm-client/src", "packages/provide-uterm-cloudflare/src"]
 
 [[tool.mypy.overrides]]
 module = ["provide.telemetry", "provide.telemetry.*", "provide.uterm.deckmux", "provide.uterm.deckmux.*", "structlog", "structlog.*"]
