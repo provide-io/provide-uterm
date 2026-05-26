@@ -20,7 +20,6 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.uterm.bridge.hub.approvals import InMemoryApprovalStore
 from provide.uterm.bridge.hub.connection import ConnectionManager
-from provide.uterm.bridge.hub.connections import _ConnectionMixin
 from provide.uterm.bridge.hub.ext import (
     BehavioralAuditGate,
     BehavioralThresholds,
@@ -42,6 +41,7 @@ from provide.uterm.bridge.hub.store import StateStore
 from provide.uterm.control_channel import encode_control, encode_data
 
 if TYPE_CHECKING:
+    from provide.uterm.bridge.contracts import InputMode
     from provide.uterm.bridge.hub.event_bus import EventBus
     from provide.uterm.bridge.hub.ext import PolicyContext
     from provide.uterm.bridge.identity import IdentityProvider
@@ -80,10 +80,7 @@ class BrowserRoleResolutionError(RuntimeError):
     """Raised when a browser-role resolver fails and the WS should be rejected."""
 
 
-class TermHub(
-    HubMessagingMixin,
-    _ConnectionMixin,
-):
+class TermHub(HubMessagingMixin):
     """In-memory registry for terminal WebSocket connections."""
 
     # -- PollingCoordinator delegates (Phase 7b: ex-_PollingMixin) -----------
@@ -309,6 +306,84 @@ class TermHub(
     async def prepare_browser_input(self, worker_id: str, ws: WebSocket) -> bool:
         """Check if ws may send input; extends dashboard lease if ws is owner."""
         return await self.lease.prepare_browser_input(worker_id, ws)
+
+    # -- ConnectionManager / PresenceManager delegates (Phase 7b:
+    #    ex-_ConnectionMixin) -------------------------------------------
+    # ``self.connection_mgr`` (ConnectionManager) owns the worker/browser
+    # register/deregister + REST rate-limit gate paths, and the
+    # ``force_release_hijack`` lifecycle. ``self.presence_mgr``
+    # (PresenceManager) owns the read-only browser presence queries and
+    # the worker-bound presence control frames. The methods below keep
+    # the legacy ``hub.<name>(...)`` call surface intact without an extra
+    # mixin in the MRO. Tests monkey-patch ``request_snapshot`` and
+    # ``force_release_hijack`` on hub instances; instance attributes
+    # shadow class methods so the patches keep working after the move.
+
+    def allow_rest_acquire_for(self, client_id: str) -> bool:
+        """Per-client REST acquire rate limit (also checks the global bucket)."""
+        return self.connection_mgr.allow_rest_acquire_for(client_id)
+
+    def allow_rest_send_for(self, client_id: str) -> bool:
+        """Per-client REST send/step rate limit (also checks the global bucket)."""
+        return self.connection_mgr.allow_rest_send_for(client_id)
+
+    def worker_token(self) -> str | None:
+        """Return the configured worker bearer token (read-only)."""
+        return self.connection_mgr.worker_token()
+
+    async def register_worker(self, worker_id: str, ws: WebSocket) -> bool:
+        """Register *ws* as the active worker for *worker_id*."""
+        return await self.connection_mgr.register_worker(worker_id, ws)
+
+    async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
+        """Return True if *ws* is still the registered worker for *worker_id*."""
+        return await self.connection_mgr.is_active_worker(worker_id, ws)
+
+    async def set_worker_tunnel_flag(self, worker_id: str, value: bool) -> None:
+        """Mark whether ``worker_id``'s worker WS uses the tunnel wire format."""
+        await self.connection_mgr.set_worker_tunnel_flag(worker_id, value)
+
+    async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
+        """Process a ``worker_hello`` message: set input_mode and persist protocol version."""
+        return await self.connection_mgr.set_worker_hello(worker_id, mode, protocol_version)
+
+    async def update_last_snapshot(self, worker_id: str, snapshot: dict[str, Any]) -> None:
+        """Store *snapshot* as the most recent snapshot for *worker_id*."""
+        await self.connection_mgr.update_last_snapshot(worker_id, snapshot)
+
+    async def register_browser(
+        self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
+    ) -> dict[str, Any]:
+        """Register *ws* as a browser for *worker_id* and return initial state."""
+        return await self.connection_mgr.register_browser(worker_id, ws, role, defer_broadcast=defer_broadcast)
+
+    async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
+        """Allow broadcasts to a browser after its startup frames have been sent."""
+        await self.connection_mgr.activate_browser_broadcasts(worker_id, ws)
+
+    async def register_browser_state_snapshot(self, worker_id: str, ws: WebSocket) -> dict[str, Any]:
+        """Return current browser state without re-registering (resume helper)."""
+        return await self.presence_mgr.register_browser_state_snapshot(worker_id, ws)
+
+    async def resolve_role_for_browser(self, ws: WebSocket, worker_id: str) -> str:
+        """Public wrapper around the hub's ``_resolve_role_for_browser`` callback."""
+        return await self.presence_mgr.resolve_role_for_browser(ws, worker_id)
+
+    def can_send_input(self, st: WorkerTermState, ws: WebSocket) -> bool:
+        """Check if *ws* can send input to the worker (open mode or hijack owner)."""
+        return self.presence_mgr.can_send_input(st, ws)
+
+    async def request_snapshot(self, worker_id: str) -> None:
+        """Send a ``snapshot_req`` control frame to the worker (no-op if no worker)."""
+        await self.presence_mgr.request_snapshot(worker_id)
+
+    async def request_analysis(self, worker_id: str) -> None:
+        """Send an ``analyze_req`` control frame to the worker (no-op if no worker)."""
+        await self.presence_mgr.request_analysis(worker_id)
+
+    async def force_release_hijack(self, worker_id: str) -> bool:
+        """Forcibly clear any active hijack for *worker_id* and send a resume frame."""
+        return await self.connection_mgr.force_release_hijack(worker_id)
 
     def __init__(
         self,
