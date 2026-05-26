@@ -117,17 +117,6 @@ async def drain_all(ws: Any, timeout: float = 0.4) -> list[dict[str, Any]]:
     return msgs
 
 
-async def wait_for_event_subscriber(hub: Any, worker_id: str, *, min_count: int = 1, timeout: float = 3.0) -> None:
-    event_bus = hub.event_bus
-    assert event_bus is not None
-    deadline = asyncio.get_running_loop().time() + timeout
-    while asyncio.get_running_loop().time() < deadline:
-        if event_bus.subscriber_count(worker_id) >= min_count:
-            return
-        await asyncio.sleep(0.01)
-    raise AssertionError(f"EventBus subscriber for {worker_id!r} was not registered")
-
-
 @asynccontextmanager
 async def connect_browser(base_url: str, session_id: str, role: str = "admin") -> Any:
     """Connect a browser WS with the given role header."""
