@@ -169,7 +169,13 @@ class TermHub(
         self._policy_gate = policy_gate or NoOpPolicyGate()
         self._input_buffers: dict[WebSocket, str] = {}
         self._hold_buffers: dict[WebSocket, str] = {}
-        self._approval_store = InMemoryApprovalStore()
+        # InMemoryApprovalStore owns pending/resolved approval requests.
+        # The legacy ``_approval_store`` attribute is exposed as a
+        # property+setter shim below so existing mixin code, route
+        # handlers, the FanOutController, and tests can continue to
+        # read/write the store unchanged while the phased refactor
+        # migrates call sites to ``self.approval_store``.
+        self.approval_store = InMemoryApprovalStore()
         self._paused_browsers: set[WebSocket] = set()
         self._on_browser_message: (
             Callable[[TermHub, WebSocket, str, str, dict[str, Any], bool], Awaitable[bool]] | None
@@ -258,6 +264,23 @@ class TermHub(
     def identity_provider(self) -> IdentityProvider | None:
         """Public accessor for the configured identity provider."""
         return self._identity_provider
+
+    @property
+    def _approval_store(self) -> InMemoryApprovalStore:
+        """Back-compat alias for :attr:`approval_store`.
+
+        Mixin code, route handlers, the FanOutController, and several
+        tests still reference ``self._approval_store`` directly; this
+        property forwards to the canonical attribute so the Phase 3
+        extraction is non-functional. New code should prefer
+        :attr:`approval_store`.
+        """
+        return self.approval_store
+
+    @_approval_store.setter
+    def _approval_store(self, store: InMemoryApprovalStore) -> None:
+        """Replace the approval store wholesale (back-compat for tests)."""
+        self.approval_store = store
 
     async def set_worker_hello_mode(self, worker_id: str, mode: str) -> bool:
         """Backward-compatible wrapper for worker hello mode handling."""
