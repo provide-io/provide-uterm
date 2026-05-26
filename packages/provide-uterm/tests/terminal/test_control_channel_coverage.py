@@ -173,3 +173,194 @@ class TestDecoderEdgeCases:
         # After overflow, buffer is cleared — next feed starts fresh
         events = decoder.feed("ok")
         assert any(hasattr(e, "data") for e in events) or events == []
+
+
+class TestCheckJsonDepthListBranch:
+    """Cover branches in ``_check_json_depth``.
+
+    The walker has two relevant branches off the dict/list dispatch:
+    - ``isinstance(node, list)`` taken → for loop runs (115 true edge).
+    - ``isinstance(node, list)`` not taken → fall through to next iteration
+      of ``while stack:`` at line 107 (the 115->107 branch).
+    """
+
+    def test_list_of_primitives_does_not_extend_stack(self) -> None:
+        """A list containing only primitive leaves enters the list branch
+        but adds nothing to the depth stack — exercising the list arm."""
+        from provide.uterm.control_channel import _check_json_depth
+
+        # Top-level dict (depth 1) holds a list of primitives.
+        # When the list is popped at depth 2, the list branch runs but
+        # no child is a dict/list, so the for loop exits without pushing
+        # anything onto the stack, and control returns to ``while stack:``.
+        _check_json_depth({"items": [1, "two", 3.0, True, None]}, max_depth=8)
+
+    def test_primitive_leaf_falls_through_dict_and_list_branches(self) -> None:
+        """A non-dict, non-list value at the top of the stack must skip
+        both the dict and list branches, returning to the while loop —
+        covering the 115->107 fall-through branch.
+        """
+        from provide.uterm.control_channel import _check_json_depth
+
+        # A bare string is neither dict nor list — neither branch runs and
+        # the while loop iterates once before the stack drains.
+        _check_json_depth("just-a-leaf", max_depth=4)
+        _check_json_depth(42, max_depth=4)
+
+
+class TestDepthErrorWithOnErrorCallback:
+    """Cover line 192: ``self._on_error(...)`` fires when depth check fails
+    AND an ``on_error`` callback was provided."""
+
+    def test_depth_violation_invokes_on_error_callback(self) -> None:
+        """Covers line 192: on_error is invoked from _parse_frame_payload
+        when _check_json_depth raises."""
+        # Re-import locally — other tests in this file reload the module,
+        # which can detach the top-level ControlChannelProtocolError binding
+        # from the runtime class used by the decoder.
+        from provide.uterm import control_channel as cc
+
+        errors: list[str] = []
+        decoder = cc.ControlChannelDecoder(max_frame_depth=2, on_error=errors.append)
+        # depth-3 payload: {"a": {"b": {"c": "leaf"}}}
+        payload: dict[str, object] = {"c": "leaf"}
+        for k in ("b", "a"):
+            payload = {k: payload}
+        with pytest.raises(cc.ControlChannelProtocolError, match="nests deeper than 2"):
+            decoder.feed(cc.encode_control(payload))
+        # on_error fires twice: once inside the depth try-block (line 192),
+        # once via _report_error wrapping the protocol error.
+        assert errors.count("control_channel_protocol_error") >= 1
+
+
+class TestOptionalJsonImplementations:
+    """Cover the orjson/ujson optional-dep branches in control_channel.
+
+    Neither orjson nor ujson is required by provide-uterm, so by default
+    the json fallback is exercised. To cover the orjson and ujson
+    implementations honestly we reload the module with fake modules
+    inserted into ``sys.modules``.
+    """
+
+    def test_orjson_branch_reloads_and_roundtrips(self) -> None:
+        """Covers lines 22-25: orjson _json_dumps body and _json_loads bind."""
+        import importlib
+        import sys
+        import types
+
+        fake = types.ModuleType("orjson")
+
+        def fake_dumps(obj: object) -> bytes:
+            import json as _json
+
+            return _json.dumps(obj).encode("utf-8")
+
+        def fake_loads(s: str | bytes) -> object:
+            import json as _json
+
+            if isinstance(s, (bytes, bytearray)):
+                s = s.decode("utf-8")
+            return _json.loads(s)
+
+        fake.dumps = fake_dumps  # type: ignore[attr-defined]
+        fake.loads = fake_loads  # type: ignore[attr-defined]
+
+        original_orjson = sys.modules.get("orjson")
+        original_module = sys.modules["provide.uterm.control_channel"]
+        # importlib.reload() mutates the module *in place*, replacing all of
+        # its attributes (classes included). Other test files captured the
+        # ORIGINAL ``ControlChannelProtocolError`` class via top-level
+        # ``from ... import`` and will fail ``pytest.raises(...)`` against a
+        # post-reload exception that is a different class. Snapshot every
+        # attribute now so the finally-clause can put them back atomically.
+        original_attrs = dict(original_module.__dict__)
+        sys.modules["orjson"] = fake
+        try:
+            cc = importlib.reload(original_module)
+            # _json_dumps now goes through the orjson branch (line 23).
+            out = cc.encode_control({"type": "hello"})
+            # _json_loads is orjson.loads (line 25).
+            decoder = cc.ControlChannelDecoder()
+            events = decoder.feed(out)
+            assert events == [cc.ControlChunk({"type": "hello"})]
+        finally:
+            if original_orjson is None:
+                sys.modules.pop("orjson", None)
+            else:
+                sys.modules["orjson"] = original_orjson
+            # Restore every original attribute on the module object in place
+            # so other test files' captured class bindings remain valid.
+            for key in list(original_module.__dict__):
+                if key not in original_attrs:
+                    delattr(original_module, key)
+            for key, value in original_attrs.items():
+                setattr(original_module, key, value)
+
+    def test_ujson_branch_reloads_and_roundtrips(self) -> None:
+        """Covers lines 30-33: ujson _json_dumps body and _json_loads bind.
+
+        We block orjson and provide a fake ujson, forcing the
+        ``except ImportError`` → inner ``try import ujson`` path.
+        """
+        import builtins
+        import importlib
+        import sys
+        import types
+
+        fake_ujson = types.ModuleType("ujson")
+
+        def fake_dumps(obj: object, ensure_ascii: bool = True) -> str:
+            import json as _json
+
+            return _json.dumps(obj, ensure_ascii=ensure_ascii)
+
+        def fake_loads(s: str | bytes) -> object:
+            import json as _json
+
+            if isinstance(s, (bytes, bytearray)):
+                s = s.decode("utf-8")
+            return _json.loads(s)
+
+        fake_ujson.dumps = fake_dumps  # type: ignore[attr-defined]
+        fake_ujson.loads = fake_loads  # type: ignore[attr-defined]
+
+        original_orjson = sys.modules.get("orjson")
+        original_ujson = sys.modules.get("ujson")
+        original_module = sys.modules["provide.uterm.control_channel"]
+        # See note in test_orjson_branch_reloads_and_roundtrips — snapshot every
+        # module attribute so the finally-clause can put them back atomically.
+        original_attrs = dict(original_module.__dict__)
+        # Ensure orjson is unimportable so the ujson branch runs.
+        sys.modules["ujson"] = fake_ujson
+        sys.modules.pop("orjson", None)
+        real_import = builtins.__import__
+
+        def blocked_import(name: str, *args: object, **kwargs: object) -> object:
+            if name == "orjson":
+                raise ImportError("blocked for test")
+            return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+        builtins.__import__ = blocked_import  # type: ignore[assignment]
+        try:
+            cc = importlib.reload(original_module)
+            out = cc.encode_control({"type": "hello"})
+            decoder = cc.ControlChannelDecoder()
+            events = decoder.feed(out)
+            assert events == [cc.ControlChunk({"type": "hello"})]
+        finally:
+            builtins.__import__ = real_import  # type: ignore[assignment]
+            if original_orjson is None:
+                sys.modules.pop("orjson", None)
+            else:
+                sys.modules["orjson"] = original_orjson
+            if original_ujson is None:
+                sys.modules.pop("ujson", None)
+            else:
+                sys.modules["ujson"] = original_ujson
+            # Restore every original attribute on the module object in place
+            # so other test files' captured class bindings remain valid.
+            for key in list(original_module.__dict__):
+                if key not in original_attrs:
+                    delattr(original_module, key)
+            for key, value in original_attrs.items():
+                setattr(original_module, key, value)
