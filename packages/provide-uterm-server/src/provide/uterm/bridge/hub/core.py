@@ -18,7 +18,6 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for TermHub: pip install 'provide-uterm[websocket]'") from _e
 
-from provide.uterm.bridge.hub.approvalflow import HubApprovalFlowMixin
 from provide.uterm.bridge.hub.approvals import InMemoryApprovalStore
 from provide.uterm.bridge.hub.connection import ConnectionManager
 from provide.uterm.bridge.hub.connections import _ConnectionMixin
@@ -28,6 +27,7 @@ from provide.uterm.bridge.hub.ext import (
     NoOpBehavioralAuditGate,
     NoOpPolicyGate,
     OutputPolicyGate,
+    PolicyDecision,
     PolicyGate,
 )
 from provide.uterm.bridge.hub.lease import HijackLeaseManager
@@ -82,7 +82,6 @@ class BrowserRoleResolutionError(RuntimeError):
 
 
 class TermHub(
-    HubApprovalFlowMixin,
     HubMessagingMixin,
     HubStateMixin,
     _HijackOwnershipMixin,
@@ -354,3 +353,92 @@ class TermHub(
         if mode not in ("hijack", "open"):
             raise ValueError(f"invalid input mode: {mode!r}")
         return await self.set_worker_hello(worker_id, mode)  # type: ignore[arg-type]
+
+    # -- Approval flow (Phase 7b: ex-HubApprovalFlowMixin) ------------------
+    # The orchestration logic that surrounds the approval-store CRUD
+    # surface (worker resume, browser rejection notice, paused-browser
+    # playback, approval_resolved control-frame fanout) lives directly on
+    # TermHub now. The mixin held no patched methods; moving it on shrinks
+    # the MRO by one parent without affecting the public call surface.
+
+    async def resolve_approval(
+        self,
+        worker_id: str,
+        request_id: str,
+        decision: PolicyDecision,
+        command: str,
+    ) -> None:
+        """Resolve a pending approval and resume the worker if approved."""
+        req = self.approval_store.get(request_id)
+        if req and getattr(req, "is_fanout", False):
+            if decision.action == "allow":
+                fo_ctrl = getattr(self, "fan_out_controller", None)
+                if fo_ctrl:
+                    await fo_ctrl.release_approved_command(request_id)
+            elif decision.action == "deny":
+                logger.info(
+                    "fanout_approval_rejected request_id=%s group_id=%s",
+                    request_id,
+                    getattr(req, "group_id", "unknown"),
+                )
+                fo_ctrl = getattr(self, "fan_out_controller", None)
+                if fo_ctrl:
+                    await asyncio.to_thread(fo_ctrl._on_approval_expired, request_id)
+            return
+
+        st = await self._get(worker_id)
+
+        if decision.action == "allow":
+            await self.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()})
+        elif decision.action == "deny":
+            msg = f"\\r\\x1b[31m[REJECTED] Command '{command.strip()}' blocked by Admin.\\x1b[0m"
+            if decision.reason:
+                msg += f" \\x1b[33mReason: {decision.reason}\\x1b[0m"
+            msg += "\\r"
+            for ws in list(st.browsers.keys()):
+                await ws.send_text(encode_data(msg))
+
+        for ws in list(st.browsers.keys()):
+            if ws in self._paused_browsers:
+                self._paused_browsers.discard(ws)
+                if decision.action == "allow" and ws in self._hold_buffers:
+                    buffered_data = self._hold_buffers.pop(ws)
+                    if self._on_browser_message:  # pragma: no branch — _on_browser_message is wired by app factory; no-handler case is a unit-test artifact
+
+                        async def playback(
+                            hub: TermHub,
+                            browser_ws: WebSocket,
+                            current_worker_id: str,
+                            role: str,
+                            msg: dict[str, str],
+                            owned_hijack: bool,
+                        ) -> None:
+                            if (
+                                hub._on_browser_message
+                            ):  # pragma: no branch — entered only when set; recheck inside closure is defensive
+                                await hub._on_browser_message(
+                                    hub, browser_ws, current_worker_id, role, msg, owned_hijack
+                                )
+
+                        task = asyncio.create_task(
+                            playback(
+                                self,
+                                ws,
+                                worker_id,
+                                st.browsers.get(ws, "viewer"),
+                                {"type": "input", "data": buffered_data},
+                                False,
+                            )
+                        )
+                        self._background_tasks.add(task)
+                        task.add_done_callback(self._background_tasks.discard)
+
+            await ws.send_text(
+                _encode_browser_frame(
+                    {
+                        "type": "approval_resolved",
+                        "outcome": "approved" if decision.action == "allow" else "rejected",
+                        "request_id": request_id,
+                    }
+                )
+            )
