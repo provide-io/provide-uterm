@@ -347,3 +347,87 @@ async def test_reader_loop_not_connected_exits() -> None:
     # Run the reader loop directly — should exit immediately
     await session._reader_loop()
     # No crash, no data processed
+
+
+# ---------------------------------------------------------------------------
+# ansi_screen — delegates to emulator (line 157)
+# ---------------------------------------------------------------------------
+
+
+async def test_ansi_screen_delegates_to_emulator() -> None:
+    """Covers line 157: TelnetSession.ansi_screen delegates to emulator."""
+    session = TelnetSession("localhost", 23)
+    emu = _mock_emulator()
+    emu.ansi_screen.return_value = "\x1b[31mred\x1b[0m"
+    session._emulator = emu
+    out = session.ansi_screen()
+    emu.ansi_screen.assert_called_once()
+    assert out == "\x1b[31mred\x1b[0m"
+
+
+# ---------------------------------------------------------------------------
+# add_watch — watcher registration and reader-loop fan-out (lines 245-246, 258-260)
+# ---------------------------------------------------------------------------
+
+
+def test_add_watch_appends_callback() -> None:
+    """Covers lines 245-246: add_watch stores the callback in _watchers."""
+    session = TelnetSession("localhost", 23)
+
+    def cb(_state: dict, _raw: bytes) -> None:
+        return None
+
+    session.add_watch(cb, interval_s=0.5)  # interval_s is reserved/ignored
+    assert cb in session._watchers
+
+
+async def test_reader_loop_fans_out_to_watchers() -> None:
+    """Covers lines 257-260: reader loop calls each watcher with raw bytes
+    before the emulator consumes them."""
+    session = TelnetSession("localhost", 23)
+    transport = _mock_transport()
+    transport.receive = AsyncMock(side_effect=[b"chunk-A", b"chunk-B", ConnectionResetError("done")])
+    session._transport = transport
+    session._emulator = _mock_emulator()
+
+    received: list[bytes] = []
+
+    def watcher(_state: dict[str, object], raw: bytes) -> None:
+        received.append(raw)
+
+    session.add_watch(watcher)
+
+    await session.connect()
+    await asyncio.sleep(0.2)
+    await session.close()
+
+    assert b"chunk-A" in received
+    assert b"chunk-B" in received
+
+
+async def test_reader_loop_swallows_watcher_exceptions() -> None:
+    """Covers the contextlib.suppress branch around the watcher call (line 259):
+    a misbehaving watcher must not break the reader loop."""
+    session = TelnetSession("localhost", 23)
+    transport = _mock_transport()
+    transport.receive = AsyncMock(side_effect=[b"data-1", b"data-2", ConnectionResetError("done")])
+    session._transport = transport
+    emu = _mock_emulator()
+    session._emulator = emu
+
+    calls = 0
+
+    def bad_watcher(_state: dict[str, object], _raw: bytes) -> None:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("watcher boom")
+
+    session.add_watch(bad_watcher)
+
+    await session.connect()
+    await asyncio.sleep(0.2)
+    await session.close()
+
+    # Emulator still received data despite watcher exceptions.
+    assert emu.process.call_count >= 1
+    assert calls >= 1
