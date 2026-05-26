@@ -321,7 +321,9 @@ class TestDisconnectWorkerCloseException:
             st.browsers[browser_ws] = "operator"
 
         mock_logger = MagicMock()
-        with patch("provide.uterm.bridge.hub.core.logger", mock_logger):
+        # Log emits from ConnectionManager.disconnect_worker after the
+        # Phase 7b collapse moved the body off the hub.
+        with patch("provide.uterm.bridge.hub.connection.logger", mock_logger):
             await hub.disconnect_worker("w1")
 
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]

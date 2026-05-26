@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Awaitable, Callable, Coroutine
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
@@ -194,16 +194,12 @@ class TermHub:
     # ``self.lease`` (HijackLeaseManager) owns the hijack state machine.
     # The pure-forward methods below keep the legacy ``hub.<name>(...)``
     # call surface intact without an extra mixin in the MRO. Tests
-    # monkey-patch ``_recheck_and_resume`` and ``cleanup_expired_hijack``
-    # on hub instances; instance attributes shadow class methods so the
-    # patches keep working after the move.
-    #
-    # ``cleanup_expired_hijack`` keeps its inline orchestration body
-    # (rather than forwarding straight to the lease service) so mutation
-    # tests that patch ``hub._recheck_and_resume`` still see the call go
-    # through ``self._recheck_and_resume``. ``get_rest_session`` routes
-    # the expiry sweep through ``self.cleanup_expired_hijack`` for the
-    # same reason.
+    # monkey-patch ``_recheck_and_resume``, ``append_event``,
+    # ``broadcast_hijack_state`` and ``prune_if_idle`` on hub instances
+    # to kill mutations in :meth:`HijackLeaseManager.cleanup_expired`;
+    # those patches still intercept because the lease service dispatches
+    # those hooks through ``self._hub.<method>``, which lands on the
+    # hub-level pure delegators (and therefore on the patched names).
 
     @staticmethod
     def _compute_lease_expirations(st: Any, now: float) -> tuple[bool, bool]:
@@ -220,28 +216,7 @@ class TermHub:
 
     async def cleanup_expired_hijack(self, worker_id: str) -> bool:
         """Expire stale REST/dashboard leases; emit resume if fully released."""
-        from provide.uterm.bridge.hub.ext import EVENT_HIJACK_EXPIRED
-        from provide.uterm.bridge.hub.lease import logger as _lease_logger
-
-        now = time.monotonic()
-        result = await self._expire_leases_under_lock(worker_id, now)
-        if result is None:
-            return False
-        rest_expired, dashboard_expired, should_resume = result
-        if not rest_expired and not dashboard_expired:
-            return False
-        self.metric("hijack_lease_expiries_total")
-        if should_resume:
-            await self._recheck_and_resume(worker_id, now)
-        if rest_expired:
-            await self.append_event(worker_id, "hijack_lease_expired")
-            _lease_logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="rest")
-        if dashboard_expired:
-            await self.append_event(worker_id, "hijack_owner_expired")
-            _lease_logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="dashboard")
-        await self.broadcast_hijack_state(worker_id)
-        await self.prune_if_idle(worker_id)
-        return True
+        return await self.lease.cleanup_expired(worker_id)
 
     async def get_rest_session(self, worker_id: str, hijack_id: str) -> HijackSession | None:
         """Return the active REST session for *hijack_id* or None."""
@@ -403,11 +378,18 @@ class TermHub:
     # set_input_mode / append_event / get_idle_candidates / etc.; instance
     # attributes shadow class methods so those patches keep working.
     #
-    # ``disconnect_worker`` and ``_run_behavioral_audit_loop`` keep their
-    # inline implementations so the test-only monkey-patch pattern on
-    # ``broadcast_hijack_state`` / ``prune_if_idle`` / ``notify_hijack_changed``
-    # / ``_audit_all_browsers`` keeps intercepting via ``self.<name>``.
-    # The exception loggers stay on this module for the same reason.
+    # ``disconnect_worker`` and ``_run_behavioral_audit_loop`` were
+    # collapsed to pure delegators in the Phase 7b final pass. Their
+    # orchestration bodies now live on :class:`ConnectionManager` and
+    # :class:`MessageRouter` respectively; the inter-step hooks
+    # (``broadcast`` / ``broadcast_hijack_state`` / ``prune_if_idle`` /
+    # ``notify_hijack_changed`` / ``_audit_all_browsers``) dispatch via
+    # ``self._hub.<method>`` so existing tests that patch those names on
+    # the hub instance still intercept through the hub-level delegators.
+    # The exception logger for ``disconnect_worker.close()`` now lives in
+    # ``connection.py`` and for the audit loop in ``router.py``; tests
+    # that intercept the log via ``patch('...core.logger')`` were
+    # updated to target the new module-level loggers.
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it."""
@@ -435,31 +417,7 @@ class TermHub:
 
     async def disconnect_worker(self, worker_id: str) -> bool:
         """Programmatically disconnect the worker WS. Returns True if a worker was connected."""
-        from provide.uterm.bridge.frames import make_worker_disconnected_frame
-
-        ws: WebSocket | None = None
-        async with self._lock:
-            st = self.registry.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False
-            ws = st.worker_ws
-            st.worker_ws = None
-            was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
-            st.hijack_session = None
-            st.hijack_owner = None
-            st.hijack_owner_expires_at = None
-        try:
-            await ws.close()
-        except Exception as exc:
-            logger.debug("disconnect_worker close error worker_id=%s: %s", worker_id, exc)
-        await self.broadcast(worker_id, cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)))
-        if was_hijacked:
-            self.notify_hijack_changed(worker_id, enabled=False, owner=None)
-            await self.broadcast_hijack_state(worker_id)
-        if self._event_bus is not None:
-            self._event_bus.close_worker(worker_id)
-        await self.prune_if_idle(worker_id)
-        return True
+        return await self.connection_mgr.disconnect_worker(worker_id)
 
     async def prune_if_idle(self, worker_id: str) -> None:
         """Remove worker state when no connections or leases remain."""
@@ -537,12 +495,7 @@ class TermHub:
 
     async def _run_behavioral_audit_loop(self) -> None:
         """Periodically audit active connections for behavioral anomalies."""
-        while True:
-            await asyncio.sleep(self._behavioral_audit_interval_s)
-            try:
-                await self._audit_all_browsers()
-            except Exception:
-                logger.exception("behavioral_audit_loop_error")
+        await self.router.run_behavioral_audit_loop()
 
     @property
     def _keystroke_timestamps(self) -> dict[Any, deque[float]]:
