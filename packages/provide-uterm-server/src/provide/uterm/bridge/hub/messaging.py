@@ -250,12 +250,15 @@ class HubMessagingMixin:
     # -- MRO-cooperative methods (stay on the mixin) ---------------------
 
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
-        """Clear heuristic state and call parent cleanup."""
+        """Clear heuristic state and call into the connection manager."""
         self.router.forget_browser(ws)
         self._input_buffers.pop(ws, None)
         self._hold_buffers.pop(ws, None)
-        # cooperative MRO super-call — defined on a sibling mixin.
-        return await super().cleanup_browser_disconnect(worker_id, ws, owned_hijack)  # type: ignore[misc, no-any-return]
+        # Phase 7b: ex-_ConnectionMixin.cleanup_browser_disconnect forwarded
+        # to self.connection_mgr.cleanup_browser_disconnect; the connection
+        # mixin is gone so call the service directly.
+        hub = cast("TermHub", self)
+        return await hub.connection_mgr.cleanup_browser_disconnect(worker_id, ws, owned_hijack)
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
         """Clear input buffers for dead browsers and call into the lease manager."""
@@ -271,9 +274,11 @@ class HubMessagingMixin:
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
         """Deregister the worker WS and notify the EventBus on disconnect."""
-        # cooperative MRO super-call — defined on a sibling mixin.
-        should_broadcast, was_hijacked = await super().deregister_worker(worker_id, ws)  # type: ignore[misc]
+        # Phase 7b: ex-_ConnectionMixin.deregister_worker forwarded to
+        # self.connection_mgr.deregister_worker; the connection mixin is
+        # gone so call the service directly.
         hub = cast("TermHub", self)
+        should_broadcast, was_hijacked = await hub.connection_mgr.deregister_worker(worker_id, ws)
         if should_broadcast and hub._event_bus is not None:
             hub._event_bus.close_worker(worker_id)
         return should_broadcast, was_hijacked
