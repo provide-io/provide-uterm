@@ -47,7 +47,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger, get_tracer
 from provide.uterm.bridge.hub.ext import (
@@ -360,6 +360,55 @@ class ConnectionManager:
             }
 
     # -- Hijack-clearing lifecycle --------------------------------------
+
+    async def disconnect_worker(self, worker_id: str) -> bool:
+        """Programmatically disconnect the worker WS. Returns ``True`` if a worker was connected.
+
+        Inter-step hooks (``broadcast``, ``notify_hijack_changed``,
+        ``broadcast_hijack_state``, ``prune_if_idle``) are dispatched via
+        ``self._hub.<method>`` so existing mutation-killing tests which
+        patch the hub-level names continue to intercept them after the
+        orchestration moved into the service. The hub-level methods are
+        pure one-line delegators back to their owning services, so the
+        cycle terminates on the second hop.
+        """
+        from provide.uterm.bridge.frames import make_worker_disconnected_frame
+
+        hub = self._hub
+        ws: WebSocket | None = None
+        async with hub._lock:
+            st = hub.registry.get(worker_id)
+            if st is None or st.worker_ws is None:
+                return False
+            ws = st.worker_ws
+            st.worker_ws = None
+            was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
+            st.hijack_session = None
+            st.hijack_owner = None
+            st.hijack_owner_expires_at = None
+        try:
+            await ws.close()
+        except Exception as exc:
+            logger.debug("disconnect_worker close error worker_id=%s: %s", worker_id, exc)
+        await hub.broadcast(worker_id, cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)))
+        if was_hijacked:
+            hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
+            await hub.broadcast_hijack_state(worker_id)
+        if hub._event_bus is not None:
+            self._event_bus_close(worker_id)
+        await hub.prune_if_idle(worker_id)
+        return True
+
+    def _event_bus_close(self, worker_id: str) -> None:
+        """Indirect close so the EventBus reference is read on the hub each call.
+
+        Tests substitute ``hub._event_bus`` after construction; reading
+        through the back-reference keeps that pattern working without
+        plumbing a setter through this service.
+        """
+        bus = self._hub._event_bus
+        if bus is not None:  # pragma: no branch
+            bus.close_worker(worker_id)
 
     async def force_release_hijack(self, worker_id: str) -> bool:
         """Forcibly clear any active hijack for *worker_id* and send a resume control frame.

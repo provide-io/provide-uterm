@@ -36,6 +36,8 @@ class _FakeHub:
         self.events: list[tuple[str, str]] = []
         self.metrics: list[str] = []
         self.prune_calls: list[str] = []
+        self.recheck_calls: list[tuple[str, float]] = []
+        self._mgr: HijackLeaseManager | None = None
 
     def is_hijacked(self, st: WorkerTermState) -> bool:
         return self.is_dashboard_hijack_active(st) or self.has_valid_rest_lease(st)
@@ -71,6 +73,15 @@ class _FakeHub:
     async def prune_if_idle(self, worker_id: str) -> None:
         self.prune_calls.append(worker_id)
 
+    async def _recheck_and_resume(self, worker_id: str, now: float) -> None:
+        # Forward to the real manager so existing test expectations (worker
+        # ``send_worker`` resume frame, ``notify_hijack_changed`` callback)
+        # are still satisfied; the manager itself records all side effects
+        # on this fake hub via its other callbacks.
+        self.recheck_calls.append((worker_id, now))
+        if self._mgr is not None:
+            await self._mgr._recheck_and_resume(worker_id, now)
+
 
 def _make_state(worker_id: str = "w1") -> WorkerTermState:
     """Create a registered worker state with a live worker_ws."""
@@ -92,6 +103,7 @@ def _make_manager(
         dashboard_hijack_lease_s=dashboard_hijack_lease_s,
         hub=hub,
     )
+    hub._mgr = mgr
     return mgr, registry, hub, lock
 
 

@@ -69,6 +69,7 @@ class _LeaseHubCallbacks(Protocol):
         self, worker_id: str, event_type: str, data: dict[str, Any] | None = None
     ) -> dict[str, Any]: ...
     async def prune_if_idle(self, worker_id: str) -> None: ...
+    async def _recheck_and_resume(self, worker_id: str, now: float) -> None: ...
 
 
 class HijackLeaseManager:
@@ -157,7 +158,17 @@ class HijackLeaseManager:
         self._hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
 
     async def cleanup_expired(self, worker_id: str) -> bool:
-        """Expire any stale REST or dashboard leases; emit resume on full release."""
+        """Expire any stale REST or dashboard leases; emit resume on full release.
+
+        Inter-step hooks (``_recheck_and_resume``, ``append_event``,
+        ``broadcast_hijack_state``, ``prune_if_idle``, ``metric``) are
+        dispatched via ``self._hub.<method>`` rather than directly so that
+        mutation-killing tests which patch the hub-level names (e.g.
+        ``hub._recheck_and_resume``, ``hub.append_event``) continue to
+        intercept the calls after the orchestration moved into the
+        service. The hub-level shims forward back to this manager, so the
+        cycle terminates on the second hop.
+        """
         now = time.monotonic()
         result = await self._expire_leases_under_lock(worker_id, now)
         if result is None:
@@ -167,7 +178,7 @@ class HijackLeaseManager:
             return False
         self._hub.metric("hijack_lease_expiries_total")
         if should_resume:
-            await self._recheck_and_resume(worker_id, now)
+            await self._hub._recheck_and_resume(worker_id, now)
         if rest_expired:
             await self._hub.append_event(worker_id, "hijack_lease_expired")
             logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="rest")

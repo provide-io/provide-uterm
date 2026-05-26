@@ -310,13 +310,25 @@ class MessageRouter:
         """Drop heuristic state for a disconnected browser."""
         self._keystroke_timestamps.pop(ws, None)
 
-    # NOTE: ``run_behavioral_audit_loop`` is intentionally NOT defined
-    # here. The loop body lives on
-    # :meth:`HubMessagingMixin._run_behavioral_audit_loop` so that
-    # ``self._audit_all_browsers()`` resolves to the hub method —
-    # which lets tests monkey-patch the hub instance to inject faults
-    # into the loop. The loop also logs from the messaging-module
-    # logger so existing caplog filters keep working.
+    async def run_behavioral_audit_loop(self) -> None:
+        """Periodically audit active connections for behavioral anomalies.
+
+        ``self._hub._audit_all_browsers`` is invoked rather than the local
+        method so existing tests that patch ``hub._audit_all_browsers``
+        (e.g. to raise an exception and exercise the exception logger)
+        keep intercepting. The hub-level shim forwards to
+        :meth:`audit_all_browsers` here, so the cycle terminates on the
+        second hop.
+        """
+        import asyncio
+
+        hub = self._hub
+        while True:
+            await asyncio.sleep(hub._behavioral_audit_interval_s)
+            try:
+                await hub._audit_all_browsers()
+            except Exception:
+                logger.exception("behavioral_audit_loop_error")
 
     async def audit_all_browsers(self) -> None:
         """Iterate all active browsers and evaluate behavioral heuristics."""
