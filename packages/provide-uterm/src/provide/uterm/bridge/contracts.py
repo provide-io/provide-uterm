@@ -200,6 +200,14 @@ class RecordingEntry(TypedDict):
 # ---------------------------------------------------------------------------
 # WebSocket Protocol Frames
 # ---------------------------------------------------------------------------
+#
+# The canonical wire-format schema lives in ``provide.uterm.bridge.schemas``
+# as Pydantic v2 models — that's the single source of truth that drives the
+# TypeScript frontend codegen. The ``FrameType`` Literal and ``Frame`` TypedDict
+# below are retained as a lightweight typing aid for legacy callers (notably
+# ``provide-uterm-cloudflare/contracts.py``) and for callers that just want a
+# string-literal narrowing. New code should construct frames via the Pydantic
+# models in ``schemas.py`` and dump them with ``model_dump()``.
 
 FrameType = Literal[
     "snapshot_req",
