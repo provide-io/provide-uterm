@@ -62,8 +62,15 @@ def _make_token(sub: str = "user") -> str:
 # ---------------------------------------------------------------------------
 
 
-async def test_resolve_principal_cf_access_client_id_bypasses_jwt() -> None:
-    """Any CF-Access-Client-Id header (even without .access) bypasses JWT in DO."""
+async def test_resolve_principal_cf_access_client_id_without_suffix_rejected() -> None:
+    """Finding #1: a CF-Access-Client-Id without the ``.access`` suffix must NOT bypass JWT.
+
+    Before the fix this path used ``len(cf_client_id) > 0`` so any non-empty
+    string passed by the caller (no real CF Access validation upstream) was
+    accepted as service-token auth.  Sibling files use ``.endswith(".access")``;
+    this path is brought into line so a plain ``CF-Access-Client-Id: x`` request
+    falls through to normal JWT validation (and fails when no token is present).
+    """
     rt = _make_runtime(mode="jwt")
 
     def _get(k, default=None):
@@ -74,7 +81,9 @@ async def test_resolve_principal_cf_access_client_id_bypasses_jwt() -> None:
     req = SimpleNamespace(url="https://x/ws/worker/test/term", headers=SimpleNamespace(get=_get))
     principal, error = await rt._resolve_principal(req)
     assert principal is None
-    assert error is None
+    # No JWT token → falls through to 401, NOT silently authorised.
+    assert error is not None
+    assert error.status == 401
 
 
 async def test_resolve_principal_cf_access_client_id_with_access_suffix() -> None:
