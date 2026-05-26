@@ -15,7 +15,6 @@ import logging
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # bridge/hub/core.py:180 — set_worker_hello_mode rejects invalid input mode
 # ---------------------------------------------------------------------------
@@ -42,7 +41,8 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
 
     hub = TermHub()
     hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
-    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.hub.connections")
+    # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
+    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
     assert any("worker_hello_legacy_protocol" in r.getMessage() for r in caplog.records), (
         "set_worker_hello with protocol_version<1 must log worker_hello_legacy_protocol warning"
@@ -78,7 +78,7 @@ def test_connectors_module_getattr_unknown_raises() -> None:
 
 
 async def test_noop_discovery_provider_announce_is_noop() -> None:
-    from provide.uterm.server.discovery import NoOpDiscoveryProvider, NodeStatus
+    from provide.uterm.server.discovery import NodeStatus, NoOpDiscoveryProvider
 
     provider = NoOpDiscoveryProvider()
     status = NodeStatus(node_id="n1", active_sessions=0, worker_count=0, timestamp=0.0)
@@ -98,7 +98,7 @@ def test_validate_auth_config_rejects_placeholder_jwt_public_key() -> None:
     # Placeholder check only runs in "production-like" mode (non-loopback
     # host or require_jwt_in_production=True); 127.0.0.1 would short-circuit.
     config = ServerConfig(
-        server=ServerBindConfig(host="0.0.0.0"),  # noqa: S104 — non-loopback to trip prod-mode validation
+        server=ServerBindConfig(host="0.0.0.0"),
         auth=AuthConfig(
             mode="jwt",
             jwt_public_key_pem="changeme",  # known placeholder marker
@@ -424,9 +424,7 @@ async def test_handle_input_hold_decision_creates_approval_and_notifies_browsers
     await _handle_input(hub, ws_a, worker_id, {"type": "input", "data": "rm -rf /"})
 
     # An ApprovalRequest must be in the store, PENDING.
-    pending = [
-        r for r in hub._approval_store._requests.values() if r.status == ApprovalStatus.PENDING
-    ]
+    pending = [r for r in hub._approval_store._requests.values() if r.status == ApprovalStatus.PENDING]
     assert len(pending) == 1
     assert pending[0].worker_id == worker_id
     assert pending[0].command == "rm -rf /"
@@ -494,7 +492,7 @@ async def test_behavioral_audit_loop_swallows_errors(caplog: pytest.LogCaptureFi
     assert any("behavioral_audit_loop_error" in r.getMessage() for r in caplog.records)
 
 
-import contextlib as _contextlib  # noqa: E402
+import contextlib as _contextlib
 
 
 def contextlib_suppress():
@@ -519,10 +517,7 @@ def test_validate_webhook_url_rejects_invalid_scheme_and_metadata_host() -> None
     with pytest.raises(ValueError, match="host is not allowed"):
         validate_webhook_url("http://localhost/hook")
     # ``allow_loopback_destinations`` lets localhost through.
-    assert (
-        validate_webhook_url("http://localhost/hook", allow_loopback_destinations=True)
-        == "http://localhost/hook"
-    )
+    assert validate_webhook_url("http://localhost/hook", allow_loopback_destinations=True) == "http://localhost/hook"
 
 
 def test_validate_webhook_pattern_rejects_non_string_input() -> None:
@@ -548,6 +543,7 @@ async def test_delivery_url_allowed_rejects_unparseable_and_disallowed() -> None
     assert await _delivery_url_allowed("http:///nohost", _no_resolve) is False
     # Non-http(s) scheme
     assert await _delivery_url_allowed("ftp://example/", _no_resolve) is False
+
     # Resolver raises -> False
     async def _boom(_host: str) -> tuple[str, ...]:
         raise OSError("dns down")
@@ -674,8 +670,8 @@ async def test_state_prepare_policy_context_delegated_roles_empty_falls_back_to_
 async def test_resolve_browser_role_no_session_operator_principal_returns_operator() -> None:
     from types import SimpleNamespace
 
-    from provide.uterm.server import create_server_app, default_server_config
     from provide.uterm.bridge.identity import Principal
+    from provide.uterm.server import create_server_app, default_server_config
 
     cfg = default_server_config()
     cfg.auth.mode = "header"
@@ -807,6 +803,7 @@ def test_fingerprint_for_key_handles_none_missing_and_exception() -> None:
 
     assert _fingerprint_for_key(None) is None  # line 188
     assert _fingerprint_for_key(object()) is None  # no get_fingerprint
+
     # get_fingerprint exists but isn't callable
     class _NonCallable:
         get_fingerprint = "not-callable"
@@ -1026,7 +1023,6 @@ async def test_handle_input_notifies_browser_when_send_worker_fails() -> None:
 async def test_resolve_approval_fanout_allow_without_fan_out_controller() -> None:
     """approvalflow.py:55->66 — fanout approval+allow when no fan_out_controller wired."""
     import time as _time
-
     from unittest.mock import AsyncMock
 
     from provide.uterm.bridge.hub import TermHub
@@ -1054,7 +1050,6 @@ async def test_resolve_approval_fanout_allow_without_fan_out_controller() -> Non
 async def test_resolve_approval_fanout_deny_without_fan_out_controller() -> None:
     """approvalflow.py:64->66 — fanout approval+deny when no fan_out_controller wired."""
     import time as _time
-
     from unittest.mock import AsyncMock
 
     from provide.uterm.bridge.hub import TermHub
@@ -1081,7 +1076,6 @@ async def test_resolve_approval_fanout_deny_without_fan_out_controller() -> None
 async def test_resolve_approval_fanout_hold_decision_is_noop() -> None:
     """approvalflow.py:57->66 — fanout approval with non-allow/non-deny decision."""
     import time as _time
-
     from unittest.mock import AsyncMock
 
     from provide.uterm.bridge.hub import TermHub
@@ -1109,7 +1103,6 @@ async def test_resolve_approval_fanout_hold_decision_is_noop() -> None:
 async def test_resolve_approval_non_fanout_hold_decision_is_noop_on_worker() -> None:
     """approvalflow.py:72->80 — non-fanout decision other than allow/deny falls through."""
     import time as _time
-
     from unittest.mock import AsyncMock
 
     from provide.uterm.bridge.hub import TermHub
@@ -1203,7 +1196,6 @@ async def test_browser_handlers_multi_part_split_routes_each() -> None:
 async def test_resolve_approval_paused_browser_resumed_without_hold_buffer() -> None:
     """approvalflow.py:83->113 — paused browser unpaused, allow decision but no buffered input."""
     import time as _time
-
     from unittest.mock import AsyncMock
 
     from provide.uterm.bridge.hub import TermHub
@@ -1363,11 +1355,11 @@ def test_gateway_read_token_returns_none_for_malformed_json_dict(tmp_path) -> No
 
 def test_gateway_write_token_swallows_oserror(tmp_path, monkeypatch) -> None:
     """gateway/_gateway.py:155-156 — _write_token's OSError suppression."""
-    from provide.uterm.gateway._gateway import _write_token
-
     # Force os.chmod to raise; _write_token writes the file then chmods,
     # suppressing any OSError from chmod (e.g. on a read-only FS).
     import os
+
+    from provide.uterm.gateway._gateway import _write_token
 
     p = tmp_path / "tok.json"
     original_chmod = os.chmod
@@ -1422,9 +1414,7 @@ async def test_gateway_handle_control_resume_ok_emits_session_resumed_message(tm
     async def _write_fn(b: bytes) -> None:
         written.append(b)
 
-    ok = await _handle_ws_control_frame(
-        {"type": "resume_ok"}, [None], _write_fn, token_file=None
-    )
+    ok = await _handle_ws_control_frame({"type": "resume_ok"}, [None], _write_fn, token_file=None)
     assert ok is True
     assert any(b"[Session resumed]" in b for b in written)
 
@@ -1439,9 +1429,7 @@ async def test_gateway_handle_control_resume_failed_deletes_token_file(tmp_path)
     token_file = tmp_path / "tok.json"
     token_file.write_text('{"token":"stale"}')
     holder: list[dict | None] = [{"token": "stale"}]
-    ok = await _handle_ws_control_frame(
-        {"type": "resume_failed"}, holder, _write_fn, token_file=token_file
-    )
+    ok = await _handle_ws_control_frame({"type": "resume_failed"}, holder, _write_fn, token_file=token_file)
     assert ok is True
     assert holder[0] is None
     assert not token_file.exists()
@@ -1455,6 +1443,7 @@ async def test_gateway_handle_control_unknown_type_returns_false() -> None:
         pass
 
     assert await _handle_ws_control_frame({"type": "unknown"}, [None], _write_fn) is False
+
     # Non-dict data.get -> AttributeError -> False.
     class _NotADict:
         def get(self, _key):

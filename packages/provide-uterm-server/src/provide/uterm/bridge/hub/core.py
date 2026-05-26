@@ -20,6 +20,7 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.uterm.bridge.hub.approvalflow import HubApprovalFlowMixin
 from provide.uterm.bridge.hub.approvals import InMemoryApprovalStore
+from provide.uterm.bridge.hub.connection import ConnectionManager
 from provide.uterm.bridge.hub.connections import _ConnectionMixin
 from provide.uterm.bridge.hub.ext import (
     BehavioralAuditGate,
@@ -34,6 +35,7 @@ from provide.uterm.bridge.hub.limiter import RateLimiter
 from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
 from provide.uterm.bridge.hub.polling import _PollingMixin
+from provide.uterm.bridge.hub.presence import PresenceManager
 from provide.uterm.bridge.hub.registry import WorkerRegistry
 from provide.uterm.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.uterm.bridge.hub.router import MessageRouter
@@ -193,6 +195,19 @@ class TermHub(
         # hub for cross-mixin calls (``is_hijacked``,
         # ``prepare_policy_context`` etc.).
         self.router = MessageRouter(self)
+        # ConnectionManager owns worker/browser register/deregister,
+        # rate-limit gate plumbing and the ``force_release_hijack``
+        # lifecycle path; PresenceManager owns the read-only browser
+        # presence queries (``can_send_input``, role resolution,
+        # browser-state snapshot) and worker-bound presence control
+        # frames (``request_snapshot`` / ``request_analysis``). Both are
+        # back-referenced via the hub for cross-cutting calls
+        # (``is_hijacked``, ``send_worker``, ``broadcast_hijack_state``,
+        # ``notify_hijack_changed``, ``_resolve_role_for_browser``).
+        # ``_ConnectionMixin`` is now a thin facade forwarding to these
+        # services — see :mod:`provide.uterm.bridge.hub.connections`.
+        self.connection_mgr = ConnectionManager(self)
+        self.presence_mgr = PresenceManager(self)
 
         if not isinstance(self._behavioral_audit_gate, NoOpBehavioralAuditGate):
             audit_task = asyncio.create_task(self._run_behavioral_audit_loop())
