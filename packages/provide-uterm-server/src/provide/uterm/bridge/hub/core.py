@@ -34,7 +34,6 @@ from provide.uterm.bridge.hub.lease import HijackLeaseManager
 from provide.uterm.bridge.hub.limiter import RateLimiter
 from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
-from provide.uterm.bridge.hub.polling import _PollingMixin
 from provide.uterm.bridge.hub.polling_service import PollingCoordinator
 from provide.uterm.bridge.hub.presence import PresenceManager
 from provide.uterm.bridge.hub.registry import WorkerRegistry
@@ -86,11 +85,41 @@ class TermHub(
     HubApprovalFlowMixin,
     HubMessagingMixin,
     HubStateMixin,
-    _PollingMixin,
     _HijackOwnershipMixin,
     _ConnectionMixin,
 ):
     """In-memory registry for terminal WebSocket connections."""
+
+    # -- PollingCoordinator delegates (Phase 7b: ex-_PollingMixin) -----------
+    # The coordinator owns the actual implementation; ``hub.polling`` is
+    # the canonical handle. These class-level pass-throughs keep the
+    # legacy ``hub.<name>(...)`` call surface intact without an extra
+    # mixin in the MRO. ``snapshot_matches`` is exposed as a
+    # ``staticmethod`` so ``TermHub.snapshot_matches(...)`` keeps working.
+
+    snapshot_matches = staticmethod(PollingCoordinator.snapshot_matches)
+
+    async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
+        """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""
+        return await self.polling.wait_for_snapshot(worker_id, timeout_ms)
+
+    async def wait_for_guard(
+        self,
+        worker_id: str,
+        *,
+        expect_prompt_id: str | None,
+        expect_regex: str | None,
+        timeout_ms: int,
+        poll_interval_ms: int,
+    ) -> tuple[bool, dict[str, Any] | None, str | None]:
+        """Poll until the snapshot satisfies prompt-id/regex guards or *timeout_ms* elapses."""
+        return await self.polling.wait_for_guard(
+            worker_id,
+            expect_prompt_id=expect_prompt_id,
+            expect_regex=expect_regex,
+            timeout_ms=timeout_ms,
+            poll_interval_ms=poll_interval_ms,
+        )
 
     def __init__(
         self,
