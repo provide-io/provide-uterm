@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Validates the CF Worker python_modules vendor tree. The Worker needs both
-# the external `provide.shell` package AND the internal `provide.uterm.shell`
-# submodule vendored. A missing tree indicates `pywrangler sync` wasn't run.
+# Validates the CF Worker python_modules vendor tree. The Worker needs:
+#   - external `provide.shell` package
+#   - internal `provide.uterm.shell` submodule
+#   - `provide.uterm.bridge` (HijackCoordinator + frame schemas live there
+#     and are imported by cloudflare/bridge/hijack.py)
+# A missing tree indicates `pywrangler sync` wasn't run.
 set -euo pipefail
 
 VENDOR=packages/provide-uterm-cloudflare/python_modules
@@ -16,7 +19,7 @@ if [ ! -d "$VENDOR" ] || [ -z "$(find "$VENDOR" -mindepth 2 -name '*.py' -print 
     exit 0
 fi
 
-for sub in "provide/shell" "provide/uterm/shell"; do
+for sub in "provide/shell" "provide/uterm/shell" "provide/uterm/bridge"; do
     path="$VENDOR/$sub"
     if [ ! -d "$path" ]; then
         if [ "$STRICT" != "1" ]; then
