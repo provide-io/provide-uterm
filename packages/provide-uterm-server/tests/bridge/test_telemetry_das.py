@@ -40,7 +40,7 @@ async def test_hijack_lifecycle_telemetry() -> None:
     await hub.register_worker(worker_id, worker_ws)
     await hub.register_browser(worker_id, ws, "admin")
 
-    with patch("provide.uterm.bridge.hub.ownership.logger") as mock_logger:
+    with patch("provide.uterm.bridge.hub.lease.logger") as mock_logger:
         # Acquire hijack
         from unittest.mock import ANY
 

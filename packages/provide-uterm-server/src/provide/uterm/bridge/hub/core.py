@@ -29,6 +29,7 @@ from provide.uterm.bridge.hub.ext import (
     OutputPolicyGate,
     PolicyGate,
 )
+from provide.uterm.bridge.hub.lease import HijackLeaseManager
 from provide.uterm.bridge.hub.limiter import RateLimiter
 from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
@@ -132,7 +133,16 @@ class TermHub(
         self._resolve_browser_role = resolve_browser_role
         self.on_worker_empty: WorkerEmptyCallback | None = on_worker_empty
         self._worker_token = worker_token
-        self._dashboard_hijack_lease_s = max(1, min(int(dashboard_hijack_lease_s), 600))
+        # HijackLeaseManager owns the hijack state machine; legacy
+        # ``_dashboard_hijack_lease_s`` is exposed via a property shim
+        # below so existing mixin and test code that reads it as an
+        # attribute keeps working.
+        self.lease = HijackLeaseManager(
+            registry=self.registry,
+            lock=self._lock,
+            dashboard_hijack_lease_s=int(dashboard_hijack_lease_s),
+            hub=self,
+        )
         self.max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self.max_input_chars = max(100, int(max_input_chars))
         self.browser_rate_limit_per_sec = float(browser_rate_limit_per_sec)
@@ -230,6 +240,19 @@ class TermHub(
     @_rest_send_per_client.setter
     def _rest_send_per_client(self, value: dict[str, TokenBucket]) -> None:
         self.limiter.rest_send_per_client = value
+
+    # -- HijackLeaseManager back-compat shim ----------------------------
+    # ``_dashboard_hijack_lease_s`` is still read as a plain attribute by
+    # :class:`HubMessagingMixin.try_reclaim_hijack` and by tests; forward
+    # to :attr:`lease` so the service owns the canonical value.
+
+    @property
+    def _dashboard_hijack_lease_s(self) -> int:
+        return self.lease.dashboard_hijack_lease_s
+
+    @_dashboard_hijack_lease_s.setter
+    def _dashboard_hijack_lease_s(self, value: int) -> None:
+        self.lease.dashboard_hijack_lease_s = value
 
     @property
     def identity_provider(self) -> IdentityProvider | None:
