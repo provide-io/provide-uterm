@@ -479,7 +479,7 @@ async def test_behavioral_audit_loop_swallows_errors(caplog: pytest.LogCaptureFi
         raise RuntimeError("audit blew up")
 
     hub._audit_all_browsers = _boom  # type: ignore[assignment]
-    caplog.set_level(logging.ERROR, logger="provide.uterm.bridge.hub.messaging")
+    caplog.set_level(logging.ERROR, logger="provide.uterm.bridge.hub.core")
 
     task = _asyncio.create_task(hub._run_behavioral_audit_loop())
     try:
