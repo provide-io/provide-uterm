@@ -220,9 +220,9 @@ class TestSendNawsMutationKilling:
             srv.close()
             await srv.wait_closed()
 
-        # cols=255: wh=0, wl=255
+        # cols=255: wh=0, wl=255 (=0xFF, must be IAC-doubled per RFC 1073)
         # rows=50: hh=0, hl=50
-        naws = bytes([IAC, SB, OPT_NAWS, 0, 255, 0, 50, IAC, SE])
+        naws = bytes([IAC, SB, OPT_NAWS, 0, 255, 255, 0, 50, IAC, SE])
         assert naws in received
 
     async def test_naws_bit_operations_for_rows_255(self):
@@ -251,8 +251,74 @@ class TestSendNawsMutationKilling:
             srv.close()
             await srv.wait_closed()
 
-        naws = bytes([IAC, SB, OPT_NAWS, 0, 80, 0, 255, IAC, SE])
+        # rows=255: hl=255 (=0xFF) must be IAC-doubled per RFC 1073
+        naws = bytes([IAC, SB, OPT_NAWS, 0, 80, 0, 255, 255, IAC, SE])
         assert naws in received
+
+
+# ---------------------------------------------------------------------------
+# Finding #16 — IAC escaping in NAWS / generic subnegotiation (RFC 855/1073)
+# ---------------------------------------------------------------------------
+
+
+class TestIacEscapingInSubnegotiation:
+    def test_escape_iac_helper_doubles_ff(self) -> None:
+        assert TelnetTransport._escape_iac(b"") == b""
+        assert TelnetTransport._escape_iac(b"\x00\xff\x01") == b"\x00\xff\xff\x01"
+        assert TelnetTransport._escape_iac(b"\xff\xff") == b"\xff\xff\xff\xff"
+        assert TelnetTransport._escape_iac(b"hello") == b"hello"
+
+    async def _capture_writes(self, action) -> bytes:
+        received = bytearray()
+        done = asyncio.Event()
+
+        async def handler(reader, writer):
+            while True:
+                chunk = await reader.read(512)
+                if not chunk:
+                    break
+                received.extend(chunk)
+            writer.close()
+            done.set()
+
+        srv = await asyncio.start_server(handler, "127.0.0.1", 0)
+        port = srv.sockets[0].getsockname()[1]
+        try:
+            t = TelnetTransport()
+            await t.connect("127.0.0.1", port)
+            await action(t)
+            await t.disconnect()
+            await asyncio.wait_for(done.wait(), timeout=2.0)
+        finally:
+            srv.close()
+            await srv.wait_closed()
+        return bytes(received)
+
+    async def test_naws_normal_size_unchanged(self) -> None:
+        wire = await self._capture_writes(lambda t: t.set_size(80, 24))
+        # No 0xFF inside the payload → unchanged framing.
+        naws = bytes([IAC, SB, OPT_NAWS, 0, 80, 0, 24, IAC, SE])
+        assert naws in wire
+
+    async def test_naws_cols_65535_escapes_both_bytes(self) -> None:
+        wire = await self._capture_writes(lambda t: t.set_size(65535, 24))
+        # cols=0xFFFF → both wh and wl are 0xFF and must each be doubled.
+        naws = bytes([IAC, SB, OPT_NAWS, 0xFF, 0xFF, 0xFF, 0xFF, 0, 24, IAC, SE])
+        assert naws in wire
+
+    async def test_naws_rows_65535_escapes_both_bytes(self) -> None:
+        wire = await self._capture_writes(lambda t: t.set_size(80, 65535))
+        # rows=0xFFFF → both hh and hl are 0xFF and must each be doubled.
+        naws = bytes([IAC, SB, OPT_NAWS, 0, 80, 0xFF, 0xFF, 0xFF, 0xFF, IAC, SE])
+        assert naws in wire
+
+    async def test_send_subnegotiation_escapes_payload(self) -> None:
+        async def _emit(t):
+            await t._send_subnegotiation(b"\x01\xff\x02\xff\x03")
+
+        wire = await self._capture_writes(_emit)
+        expected = bytes([IAC, SB, 0x01, 0xFF, 0xFF, 0x02, 0xFF, 0xFF, 0x03, IAC, SE])
+        assert expected in wire
 
 
 # ---------------------------------------------------------------------------
