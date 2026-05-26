@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from fastapi import WebSocket
 
+    from provide.uterm.bridge.hub.approvals import InMemoryApprovalStore
     from provide.uterm.bridge.hub.core import TermHub
     from provide.uterm.bridge.hub.ext import PolicyDecision
 
@@ -29,9 +30,15 @@ class HubApprovalFlowMixin:
     underscore-prefixed attributes below are *type-only* declarations
     that describe what the composing class must initialise; see the
     same pattern on ``HubMessagingMixin`` and ``HubStateMixin``.
+
+    Approval-request storage lives on the composing hub as
+    :attr:`TermHub.approval_store` (an :class:`InMemoryApprovalStore`);
+    this mixin holds the orchestration policy — worker resume, browser
+    rejection notice, paused-browser playback, and approval-resolved
+    control-frame fanout — that surrounds the store's CRUD surface.
     """
 
-    _approval_store: Any
+    approval_store: InMemoryApprovalStore
     _background_tasks: set[Any]
     _hold_buffers: dict[Any, str]
     _paused_browsers: set[Any]
@@ -48,7 +55,7 @@ class HubApprovalFlowMixin:
         """Resolve a pending approval and resume the worker if approved."""
         from provide.uterm.bridge.hub.core import _encode_browser_frame
 
-        req = self._approval_store.get(request_id)
+        req = self.approval_store.get(request_id)
         if req and getattr(req, "is_fanout", False):
             if decision.action == "allow":
                 fo_ctrl = getattr(self, "fan_out_controller", None)
@@ -92,7 +99,9 @@ class HubApprovalFlowMixin:
                             msg: dict[str, str],
                             owned_hijack: bool,
                         ) -> None:
-                            if hub._on_browser_message:  # pragma: no branch — entered only when set; recheck inside closure is defensive
+                            if (
+                                hub._on_browser_message
+                            ):  # pragma: no branch — entered only when set; recheck inside closure is defensive
                                 await hub._on_browser_message(
                                     hub, browser_ws, current_worker_id, role, msg, owned_hijack
                                 )
