@@ -26,6 +26,7 @@ import pytest
 from fastmcp import FastMCP
 
 from provide.uterm.ai.auth import (
+    _PRINCIPAL_STATE_KEY,
     AuthorizationContext,
     AuthorizationDenied,
     McpPrincipal,
@@ -470,6 +471,32 @@ class TestAuthorizedDecorator:
         assert result["error"] == "authorization_denied"
         assert result["tool"] == "session_create"
         assert result["required_role"] == "admin"
+
+    async def test_decorator_uses_request_scoped_principal(self) -> None:
+        auth_ctx = AuthorizationContext(default_principal=_principal("viewer", subject="default"))
+        body = AsyncMock(return_value={"success": True, "via": "body"})
+        req_ctx = AsyncMock()
+        req_ctx.get_state = AsyncMock(return_value=_principal("admin", subject="scoped"))
+
+        decorated = authorized("session_create", auth_ctx)(body)
+        result = await decorated(ctx=req_ctx)
+
+        assert result == {"success": True, "via": "body"}
+        body.assert_awaited_once()
+        req_ctx.get_state.assert_awaited_once_with(_PRINCIPAL_STATE_KEY)
+
+    async def test_decorator_denies_when_request_scoped_principal_low_privilege(self) -> None:
+        auth_ctx = AuthorizationContext(default_principal=_principal("admin", subject="default"))
+        body = AsyncMock(return_value={"success": True, "via": "body"})
+        req_ctx = AsyncMock()
+        req_ctx.get_state = AsyncMock(return_value=_principal("viewer", subject="scoped"))
+
+        decorated = authorized("session_create", auth_ctx)(body)
+        result = await decorated(ctx=req_ctx)
+
+        body.assert_not_awaited()
+        assert result["error"] == "authorization_denied"
+        assert result["principal"] == "scoped"
 
 
 class TestAuthorizationDeniedShape:

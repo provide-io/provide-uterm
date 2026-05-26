@@ -26,7 +26,7 @@ The columns map to:
 | SBOM signing | ❌ | We sign wheels and sdist; the SBOM itself isn't signed. Easy add: `cosign sign-blob sbom.json` in the governance script. |
 | SLSA provenance attestation | ❌ | Listed as "planned" in `docs/release-governance.md`. Slsa-github-generator action would emit level-3 attestation. |
 | Lockfile poisoning / dependency confusion | ⚠ | `uv` uses PyPI by default; private packages aren't published yet. When they are, set an index priority policy in `pyproject.toml` (`tool.uv.sources`) and audit the resolver output. |
-| Renovate / Dependabot weekly bumps | ❌ | Not configured. Without it, dep updates only land when a human notices. |
+| Renovate / Dependabot weekly bumps | ✅ | Configured in `.github/dependabot.yml` for pip, npm workspaces, and GitHub Actions on a weekly cadence. |
 | Typosquatting protection | ⚠ | First-time dep introduction has no review gate. Recommendation: pre-commit hook running `pip-audit --strict` against the proposed lockfile. |
 
 ## 2. Code-level static analysis
@@ -38,7 +38,7 @@ The columns map to:
 | mypy strict | ⚠ | Clean on `provide-uterm`. ~186 pre-existing errors on `provide-uterm-server` (mostly missing `__all__` exports, untyped async wrappers, deprecated `Any` returns). Tracked in `RELEASE_READINESS.md`. |
 | ty (additional type checker) | ✅ | Clean after the `setattr`/`cast` fixes in `provide.uterm.ai.auth`. |
 | Mutation testing (mutmut) | ⚠ | 87.50% kill rate on `auth.py` after this RC pass (up from 70.65%). 23 survivors remain; need `mutmut show <id>` inspection. |
-| Semgrep / CodeQL / Sonar | ❌ | None of the deep-SAST scanners are wired up. Worth adding `github/codeql-action` for the Python tree. |
+| Semgrep / CodeQL / Sonar | ✅ | CodeQL is wired in `.github/workflows/codeql.yml` for Python + JavaScript/TypeScript with the `security-and-quality` query pack. |
 | Secret detection (detect-secrets) | ⚠ | `detect-secrets` is in dev deps but the pre-commit hook isn't enforcing on every commit. Confirm `.pre-commit-config.yaml` has the hook. |
 | Hardcoded credential audit | ✅ | `bandit -ll` clean; no high-confidence findings. |
 | `nosec` / `# noqa` annotation hygiene | ✅ | All orphan annotations resolved at the source. |
@@ -70,7 +70,7 @@ The columns map to:
 | Referrer-Policy | ✅ | `strict-origin-when-cross-origin`. |
 | Permissions-Policy | ✅ | camera / mic / geolocation denied. |
 | CORS allowlist | ⚠ | Confirm: are cross-origin browser clients in scope? If yes, document the allowlist; if no, ensure CORS is closed by default. |
-| WebSocket origin validation | ⚠ | The hub accepts WS connections from any origin today. For non-localhost deployments, add an `--allowed-origins` flag and reject mismatches at the 101 upgrade. |
+| WebSocket origin validation | ✅ | `WebSocketOriginMiddleware` enforces same-origin by default and denies cross-origin browser upgrades unless explicitly allowed. |
 | Subresource Integrity (SRI) on CDN assets | ✅ | `tests/test_frontend_sri.py` verifies. |
 | TLS cert pinning | ❌ | Not implemented. Standard PKI is enough for most deployments; opt-in pinning could be a future feature. |
 
@@ -85,7 +85,7 @@ The columns map to:
 | Resource limits (memory, file descriptors) | ⚠ | The server has memory baseline calibration; per-session memory caps aren't enforced via `setrlimit`. |
 | LD_PRELOAD capture security | ⚠ | The platform-tier `LD_PRELOAD` integration captures stdout/stderr; verify it can't be turned into an exfil channel by a compromised worker. |
 | Docker base image (Dockerfile.server) | ⚠ | Currently uses `python:3.11-slim`. Distroless or `gcr.io/distroless/python3-debian12` would shrink attack surface. |
-| Container image scanning | ❌ | No Trivy/Grype scan in CI. Easy add with `aquasecurity/trivy-action`. |
+| Container image scanning | ✅ | Trivy image scan + SARIF upload + HIGH/CRITICAL gate in `.github/workflows/container-scan.yml`. |
 
 ## 6. Recording, audit, replay
 
@@ -104,7 +104,7 @@ The columns map to:
 
 | Item | Current | Note |
 |---|:---:|---|
-| `SECURITY.md` at repo root | ❌ | **Most important missing item.** Should list the disclosure channel, expected response time, coordinated-disclosure timeline, and whether GHSA private advisories are accepted. |
+| `SECURITY.md` at repo root | ✅ | Present at repo root with disclosure channels, response timeline, coordinated disclosure, and scope. |
 | Private vulnerability reporting via GitHub | ⚠ | Enable "Private vulnerability reporting" in the repo settings once the canonical repo is public. |
 | CVE process | ⚠ | Pick a CNA (GitHub is one) and document who requests CVEs. |
 | Coordinated disclosure timeline | ❌ | Common policy: 90-day max before public disclosure. Document. |
@@ -134,7 +134,7 @@ The columns map to:
 | OIDC for cloud auth | ✅ | Sigstore uses GHA OIDC; if you ever push to AWS/GCP/Azure from CI, prefer OIDC over long-lived secrets. |
 | Branch protection on main / rc/** | ⚠ | Currently `actions-test` repo is a test fork; the canonical repo should require PR + green CI + signed commits on main. |
 | Required reviewers on rc/** | ⚠ | Promote rc/** to be a protected branch with code-owner approval. |
-| GHA workflow pinning by SHA | ⚠ | Workflows pin major versions (`@v4`, `@v8.1.0`). For supply-chain hardening, pin by full SHA (Dependabot can keep them current). |
+| GHA workflow pinning by SHA | ✅ | Workflows pin third-party actions by full commit SHA. Dependabot keeps action updates current. |
 | Restricted GitHub Actions allowlist | ⚠ | Org-level: limit which third-party actions can run. |
 | Self-hosted runners | — | Not in scope; using GitHub-hosted. |
 
@@ -153,10 +153,10 @@ The columns map to:
 
 If you can only do five things before GA:
 
-1. **Add `SECURITY.md`** with disclosure channel + 90-day timeline. Zero-cost, highest signal.
-2. **Enable Dependabot or Renovate** weekly. Closes the dependency-update gap.
-3. **Strict WebSocket origin validation** with an `--allowed-origins` flag. Closes the easiest XSS-vector misuse of a stale browser tab.
-4. **Default redaction ruleset** for AWS keys / GitHub tokens / JWTs in the recording pipeline. Most likely real-world incident.
-5. **Container image scanning** (Trivy) on the Dockerfile.server build. Catches CVEs in the base image and OS deps before deploy.
+1. **Wire default redaction rules into the recording pipeline by default** (or an explicit secure mode) so secrets are not persisted in plaintext.
+2. **Add signed SBOM artifacts** (cosign on SBOM) alongside existing wheel/sdist signing.
+3. **Ship SLSA provenance attestations** for release artifacts.
+4. **Document production branch protections** for the canonical repo (`main` and `rc/**`) and enforce them.
+5. **Codify SLOs/runbooks** from existing perf/load artifacts in a dedicated operations doc.
 
 After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`) and SBOM signing — both shipped — and codifying the SLO doc. The two heaviest remaining items (tamper-evident audit log and worker-process seccomp confinement) have been moved to the `provide-terminal-monetization` repository as enterprise-tier specs; see the table rows above for the file paths.

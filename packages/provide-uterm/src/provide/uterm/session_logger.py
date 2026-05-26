@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from provide.uterm.recording import RecordingStore
 
 
@@ -36,6 +38,7 @@ class SessionLogger:
         max_bytes: int = 0,
         *,
         control_channel_mode: Literal["exclude", "wire"] = "exclude",
+        redactor: Callable[[str], str] | None = None,
         flush_interval_s: float = 5.0,
         batch_size: int = 100,
     ) -> None:
@@ -118,6 +121,7 @@ class SessionLogger:
         self._context: dict[str, str] = {}
         self._max_bytes = max_bytes  # 0 = unlimited
         self._control_channel_mode = control_channel_mode
+        self._redactor = redactor
         self._bytes_written = 0
         self._quota_warned = False
         self._batch_size = batch_size
@@ -164,6 +168,7 @@ class SessionLogger:
 
     async def log_send(self, keys: str) -> None:
         """Log sent keystrokes."""
+        keys = self._redact_text(keys)
         payload = keys.encode("cp437", errors="replace")
         await self._write_event("send", {"keys": keys, "bytes_b64": base64.b64encode(payload).decode("ascii")})
 
@@ -181,10 +186,13 @@ class SessionLogger:
 
     async def log_screen(self, snapshot: dict[str, Any], raw: bytes) -> None:
         """Log a screen snapshot with raw bytes."""
+        redacted_snapshot = self._redact_snapshot(snapshot)
+        raw_text = self._redact_text(raw.decode("cp437", errors="replace"))
+        raw_bytes = raw_text.encode("cp437", errors="replace")
         data = {
-            **snapshot,
-            "raw": raw.decode("cp437", errors="replace"),
-            "raw_bytes_b64": base64.b64encode(raw).decode("ascii"),
+            **redacted_snapshot,
+            "raw": raw_text,
+            "raw_bytes_b64": base64.b64encode(raw_bytes).decode("ascii"),
         }
         await self._write_event("read", data)
 
@@ -196,6 +204,7 @@ class SessionLogger:
         """Log a raw wire chunk when wire-mode recording is enabled."""
         if self._control_channel_mode != "wire":
             return
+        text = self._redact_text(text)
         payload = text.encode("utf-8")
         await self._write_event(
             f"wire_{direction}",
@@ -259,3 +268,20 @@ class SessionLogger:
         while True:
             await asyncio.sleep(self._flush_interval)
             await self._flush_buffer()
+
+    def _redact_text(self, value: str) -> str:
+        if self._redactor is None:
+            return value
+        return self._redactor(value)
+
+    def _redact_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        return {k: self._redact_value(v) for k, v in snapshot.items()}
+
+    def _redact_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return self._redact_text(value)
+        if isinstance(value, list):
+            return [self._redact_value(item) for item in value]
+        if isinstance(value, dict):
+            return {k: self._redact_value(v) for k, v in value.items()}
+        return value

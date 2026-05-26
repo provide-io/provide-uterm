@@ -110,6 +110,7 @@ class RecordingConfig(ServerBaseModel):
     directory: Path = Path(".uterm-recordings")
     max_bytes: int = 0  # 0 = unlimited
     control_channel_mode: Literal["exclude", "wire"] = "exclude"
+    redact_sensitive: bool = True
 
     store_type: Literal["local", "memory", "null", "webhook"] = "local"
     webhook_url: str | None = None

@@ -266,5 +266,53 @@ class TestStartConnectorRecording:
 
         await rt._stop_connector()
 
+    async def test_recording_redactor_enabled_passed_to_logger(self, tmp_path: Path) -> None:
+        session = SessionDefinition(
+            session_id="redaction-on",
+            display_name="Redaction On",
+            connector_type="shell",
+            recording_enabled=True,
+            auto_start=False,
+        )
+        recording = RecordingConfig(enabled_by_default=True, directory=tmp_path, redact_sensitive=True)
+        rt = HostedSessionRuntime(session, public_base_url="http://localhost:9999", recording=recording)
+
+        connector = _make_connector()
+        with (
+            patch("provide.uterm.server.runtime.build_connector", return_value=connector),
+            patch("provide.uterm.server.runtime.SessionLogger") as session_logger_cls,
+        ):
+            logger_instance = AsyncMock()
+            session_logger_cls.return_value = logger_instance
+            await rt._start_connector()
+
+        assert session_logger_cls.call_args is not None
+        redactor = session_logger_cls.call_args.kwargs.get("redactor")
+        assert callable(redactor)
+        assert redactor("password=secret123") != "password=secret123"
+
+    async def test_recording_redactor_disabled_passed_as_none(self, tmp_path: Path) -> None:
+        session = SessionDefinition(
+            session_id="redaction-off",
+            display_name="Redaction Off",
+            connector_type="shell",
+            recording_enabled=True,
+            auto_start=False,
+        )
+        recording = RecordingConfig(enabled_by_default=True, directory=tmp_path, redact_sensitive=False)
+        rt = HostedSessionRuntime(session, public_base_url="http://localhost:9999", recording=recording)
+
+        connector = _make_connector()
+        with (
+            patch("provide.uterm.server.runtime.build_connector", return_value=connector),
+            patch("provide.uterm.server.runtime.SessionLogger") as session_logger_cls,
+        ):
+            logger_instance = AsyncMock()
+            session_logger_cls.return_value = logger_instance
+            await rt._start_connector()
+
+        assert session_logger_cls.call_args is not None
+        assert session_logger_cls.call_args.kwargs.get("redactor") is None
+
 
 # (_bridge_session and _run tests moved to test_runtime_2.py)

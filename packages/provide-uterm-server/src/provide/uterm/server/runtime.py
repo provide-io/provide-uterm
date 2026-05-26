@@ -12,6 +12,8 @@ import time
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from provide.telemetry import get_logger
+from provide.uterm.bridge.hub.redaction import StreamRedactor
+from provide.uterm.bridge.hub.redaction_defaults import default_rules
 from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
@@ -24,6 +26,7 @@ from provide.uterm.server.models import RecordingConfig, SessionDefinition, Sess
 from provide.uterm.session_logger import SessionLogger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from provide.uterm.annotation import PatternDetector
@@ -37,6 +40,13 @@ def _encode_runtime_frame(msg: dict[str, Any]) -> str:
     if str(msg.get("type") or "") == "term":
         return encode_data(str(msg.get("data") or ""))
     return encode_control(msg)
+
+
+def _build_recording_redactor(enabled: bool) -> Callable[[str], str] | None:
+    if not enabled:
+        return None
+    redactor = StreamRedactor(default_rules())
+    return redactor.redact
 
 
 # Outcome of one ``_run_one_attempt`` failure — drives whether the outer
@@ -240,6 +250,7 @@ class HostedSessionRuntime:
                 self._recording_store,
                 max_bytes=self._recording_cfg.max_bytes,
                 control_channel_mode=self._recording_cfg.control_channel_mode,
+                redactor=_build_recording_redactor(self._recording_cfg.redact_sensitive),
             )
             await self._logger.start(self.definition.session_id)
             self._recording_path = await self._recording_store.get_path(self.definition.session_id)

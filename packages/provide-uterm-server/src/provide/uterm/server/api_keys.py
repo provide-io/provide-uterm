@@ -19,7 +19,7 @@ class ApiKey:
     key_id: str  # First 16 hex chars of key hash
     key_hash: str  # SHA-256 hex digest of the full key
     name: str  # Human-readable label
-    scopes: frozenset[str] = frozenset()  # Allowed scopes (empty = all)
+    scopes: frozenset[str] = frozenset()  # Route validation should enforce non-empty role scopes
     created_at: float = field(default_factory=time.time)
     expires_at: float | None = None  # None = never expires
     last_used_at: float | None = None

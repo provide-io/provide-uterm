@@ -56,7 +56,7 @@ sequenceDiagram
 A sophisticated normalization engine that handles legacy "dialects" (BBS pipe codes, tilde codes, TWGS brace tokens) and upgrades them to modern 256-color or TrueColor. It ensures that output from older systems is rendered with high fidelity in modern browsers.
 
 ### TermHub (`hub/core.py`)
-The central orchestration engine in the server package. It uses a mixin-based architecture to manage:
+The central orchestration engine in the server package. It uses a service-composition architecture to manage:
 - **State Management**: Tracking active workers and browsers.
 - **Messaging**: Routing data between participants.
 - **Hijack Ownership**: Managing exclusive control leases for terminal input.

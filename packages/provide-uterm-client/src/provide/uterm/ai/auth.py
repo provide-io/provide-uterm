@@ -173,17 +173,22 @@ class AuthorizationContext:
 def authorized(tool_name: str, auth_ctx: AuthorizationContext) -> Callable[[F], F]:
     """Return a decorator that gates *tool_name* on its required role.
 
-    Principal resolution falls back to ``auth_ctx.default_principal`` for
-    every call.  The decorator preserves the wrapped function's signature
-    via :func:`functools.wraps` so that fastmcp can introspect parameter
-    types as if no decoration were applied.
+    Principal resolution prefers request-scoped context (when the tool
+    signature includes a ``fastmcp.Context`` parameter) and falls back to
+    ``auth_ctx.default_principal``. The decorator preserves the wrapped
+    function's signature via :func:`functools.wraps` so that fastmcp can
+    introspect parameter types as if no decoration were applied.
     """
     minimum = required_role(tool_name)
 
     def _decorator(fn: F) -> F:
         @wraps(fn)
         async def _wrapper(*args: Any, **kwargs: Any) -> Any:
-            principal = auth_ctx.default_principal
+            ctx = kwargs.get("ctx")
+            principal = await resolve_principal(
+                cast("_ContextLike | None", ctx),
+                default=auth_ctx.default_principal,
+            )
             if not principal.has_at_least(minimum):
                 err = AuthorizationDenied(tool=tool_name, principal=principal, required=minimum)
                 return deny_payload(err)

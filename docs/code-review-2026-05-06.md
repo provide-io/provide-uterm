@@ -2,6 +2,10 @@
 
 _Reviewed 2026-05-06 against commit `b5c6a73` on `main`._
 
+> Historical snapshot: this report references pre-refactor architecture terms
+> and file paths that have since changed. Use it for historical context, not as
+> current architecture/source-of-truth documentation.
+
 ## Context
 
 `provide-uterm` is a terminal session platform: it brokers PTY/SSH/telnet/local-shell sessions across browsers and remote workers, with hijack-leasing for viewer/operator/admin roles, recording, MCP/AI integration, and a Cloudflare Worker + Durable Object backend that mirrors the FastAPI hub. Monorepo with 7 packages (uv workspace + npm workspaces). Quality bar set at 100% branch coverage + 100% mutation kill rate, ruff/mypy strict/ty/bandit/xenon/vulture in pre-commit.

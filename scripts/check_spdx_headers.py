@@ -34,6 +34,7 @@ def main() -> int:
         action="append",
         default=[
             "**/__init__.py",
+            "**/.worktrees/**",
             "**/.venv-workers/**",
             "packages/provide-uterm-cloudflare/**",
             "scripts/*.py",
