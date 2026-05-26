@@ -149,10 +149,24 @@ def _validate_auth_config(config: ServerConfig) -> None:
                 "auth.mode='header' requires auth.header_mode_acknowledged=true. "
                 "This mode trusts X-Principal/X-Role from all callers — only safe behind a reverse proxy."
             )
+        # Finding #4: header-mode auth lets any caller claim any role via
+        # X-Uterm-Role.  On a non-loopback bind, that's an authentication
+        # bypass unless the operator has explicitly listed the trusted proxy
+        # source IPs.  Refuse to start in that configuration.
+        bind_host = str(config.server.host).strip().lower()
+        trusted_proxy_ips = list(getattr(config.auth, "trusted_proxy_ips", ()) or [])
+        if not _is_loopback_host(bind_host) and not trusted_proxy_ips:
+            raise ValueError(
+                f"auth.mode='header' on a non-loopback bind ({bind_host!r}) requires "
+                "auth.trusted_proxy_ips to be set to the source IP(s) of the trusted "
+                "reverse proxy/load balancer.  Without an IP allowlist, any caller "
+                "that can reach the listener can claim any role via X-Uterm-Role."
+            )
         logger.warning(
-            "auth_mode=header: trusting X-Principal/X-Role headers from all callers. "
+            "auth_mode=header: trusting X-Principal/X-Role headers from %s. "
             "This mode MUST run behind a reverse proxy that sets these headers. "
             "Direct exposure allows any client to claim any identity.",
+            f"trusted proxy IPs {sorted(trusted_proxy_ips)}" if trusted_proxy_ips else "all callers",
         )
     # All authenticated modes (jwt, header, …) require a worker bearer token.
     if not config.auth.worker_bearer_token:

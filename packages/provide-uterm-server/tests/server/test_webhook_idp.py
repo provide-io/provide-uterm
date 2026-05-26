@@ -42,6 +42,7 @@ async def test_webhook_idp_resolve_success():
 @pytest.mark.asyncio
 @respx.mock
 async def test_webhook_idp_resolve_error():
+    """Finding #7: default failure mode is ``deny`` → None (was: viewer)."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url)
 
@@ -52,13 +53,13 @@ async def test_webhook_idp_resolve_error():
         cookies = {}
 
     principal = await idp.resolve_principal(MockConnection())
-    assert principal.subject_id == "anonymous"
-    assert "viewer" in principal.roles
+    assert principal is None
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_webhook_idp_resolve_timeout():
+    """Finding #7: default failure mode is ``deny`` → None on timeout."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, timeout_s=0.1)
 
@@ -69,4 +70,23 @@ async def test_webhook_idp_resolve_timeout():
         cookies = {}
 
     principal = await idp.resolve_principal(MockConnection())
+    assert principal is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_resolve_error_viewer_on_failure():
+    """Finding #7: ``on_failure='viewer'`` preserves legacy fail-open."""
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url, on_failure="viewer")
+
+    respx.post(url).mock(return_value=httpx.Response(500))
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal is not None
     assert principal.subject_id == "anonymous"
+    assert "viewer" in principal.roles

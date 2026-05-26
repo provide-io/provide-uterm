@@ -33,6 +33,26 @@ from provide.uterm.server.routes._helpers import (
 )
 from provide.uterm.tunnel.token_hash import hash_token
 
+# Finding #12: keys masked before connector_config is persisted on the session
+# record / written to audit logs.  These match the connector schemas that
+# carry secrets (telnet/ssh password, ssh passphrase, generic ``token`` and
+# ``secret`` fields).  The connector still receives the plaintext via a
+# transient variable; only the persisted record is scrubbed.
+_SENSITIVE_CONFIG_KEYS = frozenset({"password", "passphrase", "secret", "token"})
+_SCRUB_SENTINEL = "***"  # sentinel placeholder, not a credential
+
+
+def _scrub_sensitive(config: dict[str, Any]) -> dict[str, Any]:
+    """Return a shallow copy of *config* with sensitive values masked.
+
+    Used before passing connector config into ``registry.create_session`` and
+    before any audit-log emission so plaintext credentials never end up in the
+    persisted session record or the audit trail.  The masking is a sentinel
+    (``"***"``) rather than removal so downstream consumers can still see that
+    a credential WAS supplied (useful for shape-checking in the UI).
+    """
+    return {k: (_SCRUB_SENTINEL if k in _SENSITIVE_CONFIG_KEYS else v) for k, v in config.items()}
+
 
 def create_tunnels_router() -> APIRouter:
     """Build a router for quick-connect and tunnel endpoints."""
@@ -64,11 +84,18 @@ def create_tunnels_router() -> APIRouter:
             "ephemeral",
         }
         connector_config = {k: v for k, v in payload.items() if k not in _top_level}
+        # Finding #12: scrub password/passphrase/secret/token BEFORE the config
+        # is persisted onto the session record or any audit log.  Previously
+        # the plaintext password flowed through ``registry.create_session``
+        # into the session definition, then leaked back out via the response
+        # body (``model_dump(session)``) and the in-process session listing
+        # endpoint.  See ``_scrub_sensitive`` at module top.
+        scrubbed_config = _scrub_sensitive(connector_config)
         session_payload: dict[str, Any] = {
             "session_id": session_id,
             "display_name": display_name,
             "connector_type": connector_type,
-            "connector_config": connector_config,
+            "connector_config": scrubbed_config,
             "input_mode": input_mode,
             "tags": tags,
             "auto_start": True,
@@ -98,6 +125,8 @@ def create_tunnels_router() -> APIRouter:
             principal=p.subject_id,
             session_id=session_id,
             source_ip=source_ip(request),
+            # Connector_type only — never include the raw payload here, even
+            # masked.  Audit downstreams may persist this verbatim.
             detail={"connector_type": connector_type, "ephemeral": True},
         )
         cfg = request.app.state.uterm_config

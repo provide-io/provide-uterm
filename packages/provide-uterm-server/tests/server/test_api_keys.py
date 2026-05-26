@@ -200,16 +200,18 @@ class TestApiKeyAuthIntegration:
 class TestApiKeyPrincipalRoles:
     """Test role mapping from API key scopes."""
 
-    def test_empty_scopes_gets_admin(self) -> None:
+    def test_empty_scopes_rejected(self) -> None:
+        """Finding #3: a key minted with no scope must be rejected (was: admin)."""
         from provide.uterm.server.auth import _principal_from_api_key
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("admin-key")
+        raw_key, _record = store.create("admin-key")  # no scopes
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
-        assert principal is not None
-        assert "admin" in principal.roles
+        # An empty-scope key used to silently authenticate as admin; now it is
+        # treated as an unknown key and rejected.
+        assert principal is None
 
     def test_admin_scope_gets_admin(self) -> None:
         from provide.uterm.server.auth import _principal_from_api_key
@@ -233,45 +235,34 @@ class TestApiKeyPrincipalRoles:
         assert principal is not None
         assert "operator" in principal.roles
 
-    async def test_capability_scope_gets_admin_role_narrowed_by_scope(self) -> None:
-        """Capability-only scopes give admin role; scopes narrow via AuthorizationService.
+    def test_unknown_capability_scope_rejected(self) -> None:
+        """Finding #3: capability-only / unrecognised scopes are rejected.
 
-        This replaces the prior "other_scope_gets_viewer" behavior, which was a
-        regression: scope {"session.read"} mapped to viewer role, and scope-narrowing
-        then intersected viewer caps with {"session.read"} — correct — but
-        scope {"session.control.create"} mapped to viewer whose role caps did not
-        include create, yielding an empty capability set.
+        Previously a key minted with ``scopes={"session.read"}`` (or any
+        non-role scope, including typos like ``"administrator"``) silently
+        authenticated as admin with the scope used as a capability allowlist.
+        Now: only ``admin``/``operator``/``viewer`` scopes are accepted; any
+        other scope-only key is treated as unknown.
         """
         from provide.uterm.server.auth import _principal_from_api_key
-        from provide.uterm.server.authorization import AuthorizationService
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
         raw_key, _record = store.create("read-key", scopes=frozenset({"session.read"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
-        assert principal is not None
-        assert principal.roles == frozenset({"admin"})
-        authz = AuthorizationService()
-        # Scope list is the sole gate — only session.read is granted.
-        assert await authz.has_capability(principal, "session.read") is True
-        assert await authz.has_capability(principal, "session.control.delete") is False
+        assert principal is None
 
-    async def test_capability_scope_create_grants_create_not_delete(self) -> None:
-        """Scope {session.control.create} → can create, cannot delete."""
+    def test_typo_scope_rejected(self) -> None:
+        """Finding #3: a typo in the scope name no longer grants admin."""
         from provide.uterm.server.auth import _principal_from_api_key
-        from provide.uterm.server.authorization import AuthorizationService
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("creator-key", scopes=frozenset({"session.control.create"}))
+        raw_key, _record = store.create("typo-key", scopes=frozenset({"administrator"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
-        assert principal is not None
-        authz = AuthorizationService()
-        assert await authz.has_capability(principal, "session.control.create") is True
-        assert await authz.has_capability(principal, "session.control.delete") is False
-        assert await authz.has_capability(principal, "session.read") is False
+        assert principal is None
 
     async def test_viewer_role_marker_gets_viewer_role(self) -> None:
         """Scope {viewer} is a role marker — gives viewer role with unrestricted scope."""
@@ -322,7 +313,8 @@ class TestApiKeyPrincipalRoles:
 
         store_a = ApiKeyStore()
         store_b = ApiKeyStore()
-        raw_key_a, _ = store_a.create("app-a-key")
+        # Finding #3: a key must have a recognised role scope to authenticate.
+        raw_key_a, _ = store_a.create("app-a-key", scopes=frozenset({"admin"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         # Key from store_a validates under store_a
         assert _principal_from_api_key({"x-api-key": raw_key_a}, auth, store_a) is not None
@@ -501,16 +493,25 @@ class TestApiKeyRoutes:
 
     # Scoped keys: principal has correct scopes
 
-    def test_scoped_key_principal_has_scopes(self) -> None:
+    def test_scoped_key_with_role_marker_has_unrestricted_scope(self) -> None:
+        """Finding #3: a recognised role scope grants role + ``*`` scope.
+
+        The prior test asserted that a key with capability-style scopes
+        (``session.read``, ``session.write``) would authenticate.  That path
+        was the same one that silently granted admin to keys with any
+        unrecognised scope.  Now: only ``admin``/``operator``/``viewer``
+        scopes authenticate, and they grant ``*`` scope (unrestricted).
+        """
         from provide.uterm.server.auth import _principal_from_api_key
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        raw_key, _record = store.create("scoped", scopes=frozenset({"session.read", "session.write"}))
+        raw_key, _record = store.create("scoped", scopes=frozenset({"operator"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         principal = _principal_from_api_key({"x-api-key": raw_key}, auth, store)
         assert principal is not None
-        assert principal.scopes == frozenset({"session.read", "session.write"})
+        assert principal.roles == frozenset({"operator"})
+        assert principal.scopes == frozenset({"*"})
 
     def test_create_key_scopes_non_list_ignored(self, admin_client: TestClient) -> None:
         resp = admin_client.post("/api/keys", json={"name": "bad-scopes", "scopes": "not-a-list"})
