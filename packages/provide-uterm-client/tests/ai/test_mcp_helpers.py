@@ -275,6 +275,7 @@ class TestCLI:
             "http://localhost:8780",
             entity_prefix="/worker",
             headers=None,
+            default_role="operator",
         )
         mock_app.run.assert_called_once_with(transport="stdio")
 
@@ -301,6 +302,7 @@ class TestCLI:
             "http://x",
             entity_prefix="/bot",
             headers={"Auth": "Bearer t"},
+            default_role="operator",
         )
         mock_app.run.assert_called_once_with(transport="stdio")
 

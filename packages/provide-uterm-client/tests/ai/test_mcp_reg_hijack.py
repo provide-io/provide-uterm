@@ -59,7 +59,9 @@ def _add_worker_with_snapshot(
 
 
 def _mcp_for(app: FastAPI) -> FastMCP:
-    return create_mcp_app("http://test", transport=ASGITransport(app=app))
+    # Tests in this file exercise hijack tools that need admin; after Finding #2
+    # the default dropped to operator so we opt in explicitly here.
+    return create_mcp_app("http://test", transport=ASGITransport(app=app), default_role="admin")
 
 
 async def _call(

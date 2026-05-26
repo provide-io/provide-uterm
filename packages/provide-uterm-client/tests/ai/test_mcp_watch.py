@@ -33,7 +33,11 @@ def _make_server_app_with_bus() -> tuple[FastAPI, TermHub, EventBus]:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "s1",
@@ -86,7 +90,11 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -126,7 +134,11 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -154,7 +166,11 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -199,7 +215,11 @@ class TestSessionWatchMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -400,7 +420,11 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -421,7 +445,11 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -452,7 +480,11 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -479,7 +511,11 @@ class TestWatchEndpoint:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -538,7 +574,11 @@ class TestSessionSubscribeMcpTool:
         cfg = config_from_mapping(
             {
                 "server": {"host": "127.0.0.1", "port": 0},
-                "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+                "auth": {
+                    "mode": "header",
+                    "header_mode_acknowledged": True,
+                    "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+                },
                 "sessions": [
                     {
                         "session_id": "s1",
@@ -607,6 +647,47 @@ class TestSessionSubscribeMcpTool:
             data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": r"\$ "})
 
         assert data["matched_pattern"] is False
+
+    async def test_subscribe_matched_pattern_false_when_events_dont_match(self) -> None:
+        """Finding #11: events arrived but none of them match the pattern → False.
+
+        Regression: the prior implementation reported True whenever any event
+        arrived, regardless of whether its screen text matched the pattern.
+        This matters on the registry fallback path (no EventBus) which does
+        not pre-filter events server-side.
+        """
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        events = [
+            {"type": "snapshot", "data": {"screen": "running..."}},
+            {"type": "input_send", "data": {"keys": "ls\n"}},
+        ]
+        with patch(
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(return_value=(True, {"events": events, "dropped_count": 0, "timed_out": True})),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": r"\$ "})
+
+        assert data["matched_pattern"] is False
+
+    async def test_subscribe_matched_pattern_true_when_one_event_matches(self) -> None:
+        """A single matching snapshot among many non-matching events fires the flag."""
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        events = [
+            {"type": "snapshot", "data": {"screen": "loading"}},
+            {"type": "snapshot", "data": {"screen": "user@host:~$ "}},
+            {"type": "snapshot", "data": {"screen": "also non-matching"}},
+        ]
+        with patch(
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(return_value=(True, {"events": events, "dropped_count": 0, "timed_out": False})),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": r"\$ "})
+
+        assert data["matched_pattern"] is True
 
     async def test_subscribe_clamps_duration_min(self) -> None:
         app = self._make_app()

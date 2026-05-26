@@ -289,11 +289,97 @@ class TestPrincipalResolution:
         #  it is constructed without error.)
         assert app is not None
 
-    def test_default_principal_falls_back_to_admin_for_local(self) -> None:
-        # No headers, no explicit principal — local stdio mode defaults to
-        # admin so existing CLI workflows continue to function.
-        app = create_mcp_app("http://test")
-        assert app is not None
+    def test_default_principal_falls_back_to_operator_for_local(self) -> None:
+        # Finding #2: no headers, no explicit principal → operator (NOT admin).
+        # An MCP server is typically launched over stdio by an LLM with no
+        # explicit caller identity; granting admin by default would let any
+        # model invoke destructive tools without operator opt-in.
+        from unittest.mock import patch
+
+        from provide.uterm.ai.server import create_mcp_app as _create
+
+        captured: dict[str, object] = {}
+
+        class _StubMCP:
+            def __init__(self, *a, **kw):
+                pass
+
+            def tool(self):
+                def _decorator(fn):
+                    return fn
+
+                return _decorator
+
+        def _capture_auth_ctx(*, default_principal):
+            captured["principal"] = default_principal
+            return type("X", (), {"default_principal": default_principal})()
+
+        with (
+            patch("provide.uterm.ai.server.FastMCP", _StubMCP),
+            patch("provide.uterm.ai.server.AuthorizationContext", _capture_auth_ctx),
+        ):
+            _create("http://test")
+        principal = captured["principal"]
+        assert principal.roles == frozenset({"operator"}), "default role must be operator, not admin (Finding #2)"
+
+    def test_default_role_admin_opt_in(self) -> None:
+        # Operators that need admin must opt in explicitly.
+        from unittest.mock import patch
+
+        from provide.uterm.ai.server import create_mcp_app as _create
+
+        captured: dict[str, object] = {}
+
+        class _StubMCP:
+            def __init__(self, *a, **kw):
+                pass
+
+            def tool(self):
+                def _decorator(fn):
+                    return fn
+
+                return _decorator
+
+        def _capture_auth_ctx(*, default_principal):
+            captured["principal"] = default_principal
+            return type("X", (), {"default_principal": default_principal})()
+
+        with (
+            patch("provide.uterm.ai.server.FastMCP", _StubMCP),
+            patch("provide.uterm.ai.server.AuthorizationContext", _capture_auth_ctx),
+        ):
+            _create("http://test", default_role="admin")
+        assert captured["principal"].roles == frozenset({"admin"})
+
+    def test_default_role_invalid_rejected(self) -> None:
+        import pytest
+
+        with pytest.raises(ValueError, match="default_role must be one of"):
+            create_mcp_app("http://test", default_role="root")
+
+    def test_cli_role_flag_default_operator(self) -> None:
+        # ``uterm-mcp`` must pass --role through to create_mcp_app, defaulting
+        # to "operator" so the LLM is not silently admin.
+        from unittest.mock import patch
+
+        from provide.uterm.ai.cli import main as cli_main
+
+        with patch("provide.uterm.ai.server.create_mcp_app") as mock_create:
+            mock_create.return_value.run = lambda **_kw: None
+            cli_main(["--url", "http://test"])
+        kwargs = mock_create.call_args.kwargs
+        assert kwargs["default_role"] == "operator"
+
+    def test_cli_role_flag_admin_opt_in(self) -> None:
+        from unittest.mock import patch
+
+        from provide.uterm.ai.cli import main as cli_main
+
+        with patch("provide.uterm.ai.server.create_mcp_app") as mock_create:
+            mock_create.return_value.run = lambda **_kw: None
+            cli_main(["--url", "http://test", "--role", "admin"])
+        kwargs = mock_create.call_args.kwargs
+        assert kwargs["default_role"] == "admin"
 
     async def test_resolve_principal_with_no_ctx_returns_default(self) -> None:
         default = _principal("operator")

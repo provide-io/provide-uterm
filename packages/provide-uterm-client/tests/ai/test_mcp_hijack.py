@@ -41,7 +41,13 @@ def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
 
 
 def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
-    """Return a FastMCP app backed by ASGI transport to *app*."""
+    """Return a FastMCP app backed by ASGI transport to *app*.
+
+    These tests exercise hijack/worker-control tools that require admin role,
+    so the test factory explicitly opts in via ``default_role="admin"``.  The
+    Finding #2 fix lowered the unspecified default to ``operator``.
+    """
+    kwargs.setdefault("default_role", "admin")
     return create_mcp_app(
         "http://test",
         transport=ASGITransport(app=app),
