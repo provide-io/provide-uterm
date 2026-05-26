@@ -266,12 +266,26 @@ class AgentProcessManager:
                     self.manager.agents[agent_id].started_at = time.time()
                     self.manager.agents[agent_id].stopped_at = None
                 else:
+                    # ``last_update_time`` defaults to 0.0 on the model
+                    # (see manager/models.py). Without seeding it here the
+                    # heartbeat monitor (_monitor.py:_handle_heartbeat_timeouts)
+                    # sees ``now - 0.0`` on its very first tick and immediately
+                    # marks the just-spawned agent as crashed against the 60s
+                    # timeout, before the worker can register its first
+                    # heartbeat. Reproduces deterministically when the agent
+                    # dict entry was removed (e.g. via ``DELETE /agent/{id}``)
+                    # between kill and respawn; with a leftover entry the
+                    # ``if agent_id in self.manager.agents`` branch above
+                    # would otherwise have set this correctly. Seed to
+                    # ``time.time()`` to match the update-branch behavior and
+                    # give the worker a full heartbeat window to phone home.
                     self.manager.agents[agent_id] = self.manager._agent_status_class(
                         agent_id=agent_id,
                         pid=process.pid,
                         config=config_path,
                         state="running",
                         started_at=time.time(),
+                        last_update_time=time.time(),
                     )
                 self.manager.processes[agent_id] = process
 
