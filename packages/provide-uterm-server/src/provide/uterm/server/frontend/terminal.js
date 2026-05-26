@@ -8,6 +8,7 @@
  * palette live in sibling modules; this file owns DOM construction, the WS
  * lifecycle, and the public class registered on window.
  */
+import { ControlChannelDecoder } from "./hijack-codec.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, } from "./terminal-themes.js";
 let cssInjected = false;
@@ -43,6 +44,7 @@ export class ProvideTerminal {
         this.root = null;
         this.resizeObserver = null;
         this.reconnectTimer = null;
+        this.wsDecoder = new ControlChannelDecoder();
         this.container = container;
         this.config = { ...DEFAULTS, ...config };
         this.uid = ++instanceCount;
@@ -205,6 +207,7 @@ export class ProvideTerminal {
         this.ws?.close();
         const ws = new WebSocket(this.resolveWsUrl());
         this.ws = ws;
+        this.wsDecoder.reset();
         ws.onopen = () => {
             if (this.ws !== ws)
                 return;
@@ -215,7 +218,24 @@ export class ProvideTerminal {
             const payload = typeof event.data === "string" ? event.data : "";
             if (!payload || this.term === null)
                 return;
-            this.term.write(payload);
+            // Decode the inline control-channel framing so the user never sees raw
+            // JSON control frames mixed into terminal output. Control chunks are
+            // discarded here — ProvideTerminal has no hijack UI to surface them.
+            let frames;
+            try {
+                frames = this.wsDecoder.feed(payload);
+            }
+            catch {
+                // Stream is corrupt; reset decoder and fall back to writing the raw
+                // payload so users don't get stuck on a blank screen.
+                this.wsDecoder.reset();
+                this.term.write(payload);
+                return;
+            }
+            for (const frame of frames) {
+                if (frame.type === "data")
+                    this.term.write(frame.data);
+            }
         };
         ws.onclose = () => {
             if (this.ws !== ws)

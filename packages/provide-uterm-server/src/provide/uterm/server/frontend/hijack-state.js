@@ -21,6 +21,14 @@ export class HijackState {
         this.hijackStepSupported = true;
         this.restHijackId = null;
         this.resumeToken = null;
+        /**
+         * Server-confirmed role from the `hello` frame, or null until received.
+         * Preferred over `config.role` (constructor input) for UX decisions, since
+         * the server is authoritative on the actual role the connection holds.
+         */
+        this.serverRole = null;
+        /** One-shot guard so the wss+token audit warning only fires once per state. */
+        this._wssTokenWarned = false;
         this.config = config;
         this.workerId = workerId;
         this.wsDecoder = wsDecoder;
