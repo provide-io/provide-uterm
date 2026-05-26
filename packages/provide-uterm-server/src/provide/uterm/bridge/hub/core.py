@@ -36,6 +36,7 @@ from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
 from provide.uterm.bridge.hub.polling import _PollingMixin
 from provide.uterm.bridge.hub.registry import WorkerRegistry
 from provide.uterm.bridge.hub.resume import ResumeSession, ResumeTokenStore
+from provide.uterm.bridge.hub.router import MessageRouter
 from provide.uterm.bridge.hub.state import HubStateMixin
 from provide.uterm.control_channel import encode_control, encode_data
 
@@ -165,7 +166,6 @@ class TermHub(
         self._background_tasks: set[asyncio.Task[Any]] = set()
         self._event_bus = event_bus
         self.ws_idle_timeout_s = max(10.0, float(ws_idle_timeout_s))
-        self._keystroke_timestamps: dict[Any, Any] = {}
         self._policy_gate = policy_gate or NoOpPolicyGate()
         self._input_buffers: dict[WebSocket, str] = {}
         self._hold_buffers: dict[WebSocket, str] = {}
@@ -186,6 +186,13 @@ class TermHub(
         self._behavioral_audit_gate = behavioral_audit_gate or NoOpBehavioralAuditGate()
         self._behavioral_thresholds = behavioral_thresholds or BehavioralThresholds()
         self._behavioral_audit_interval_s = max(1.0, float(behavioral_audit_interval_s))
+        # MessageRouter owns the broadcast / send_worker hot path plus
+        # the behavioral-heuristics ring buffer; ``HubMessagingMixin``
+        # is now a thin facade forwarding to this service. The router
+        # is constructed last because it holds a back-reference to the
+        # hub for cross-mixin calls (``is_hijacked``,
+        # ``prepare_policy_context`` etc.).
+        self.router = MessageRouter(self)
 
         if not isinstance(self._behavioral_audit_gate, NoOpBehavioralAuditGate):
             audit_task = asyncio.create_task(self._run_behavioral_audit_loop())
