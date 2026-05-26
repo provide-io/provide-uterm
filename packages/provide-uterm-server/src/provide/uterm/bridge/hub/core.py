@@ -2,7 +2,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""TermHub: in-memory registry for terminal WebSocket connections."""
+"""TermHub: in-memory registry for terminal WebSocket connections.
+
+TermHub composes nine service classes — registry, limiter, approval_store,
+lease, router, connection_mgr, presence_mgr, state, polling — and exposes
+their methods as ``hub.<method>(...)`` for back-compat. See the package
+docstring at :mod:`provide.uterm.bridge.hub` for the full service map.
+"""
 
 from __future__ import annotations
 

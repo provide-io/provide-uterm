@@ -82,6 +82,12 @@ docker compose -f docker/docker-compose.yml up
 
 **Lazy-loading module interface**: `provide/uterm/__init__.py` uses `__getattr__` to defer imports, avoiding hard dependencies.
 
+### Hub services
+
+As of refactor #16 Phase 7, `TermHub` (`bridge/hub/core.py`) has zero mixin parents and composes nine service classes — `registry` (`WorkerRegistry`), `limiter` (`RateLimiter`), `approval_store` (`InMemoryApprovalStore`), `lease` (`HijackLeaseManager`), `router` (`MessageRouter`), `connection_mgr` (`ConnectionManager`), `presence_mgr` (`PresenceManager`), `state` (`StateStore`), `polling` (`PollingCoordinator`). Every legacy `hub.<method>(...)` call site still works: methods live directly on `TermHub` and forward to the appropriate service.
+
+The full service map (with one-line descriptions of each) is in the docstring of `packages/provide-uterm-server/src/provide/uterm/bridge/hub/__init__.py`. New code should prefer `hub.<service>.<method>(...)` rather than the legacy facade methods.
+
 ## Testing
 
 - **100% branch+line coverage** enforced (`--cov-fail-under=100`)
