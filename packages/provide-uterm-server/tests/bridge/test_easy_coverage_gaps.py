@@ -141,7 +141,7 @@ def test_ownership_compute_lease_expirations_reports_both_expired() -> None:
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub.ownership import _OwnershipMixin
+    from provide.uterm.bridge.hub.core import TermHub
     from provide.uterm.bridge.models import HijackSession, WorkerTermState
 
     now = _time.monotonic()
@@ -155,7 +155,7 @@ def test_ownership_compute_lease_expirations_reports_both_expired() -> None:
     )
     state.hijack_owner = AsyncMock()
     state.hijack_owner_expires_at = now - 1  # browser expired
-    browser_expired, rest_expired = _OwnershipMixin._compute_lease_expirations(state, now)
+    browser_expired, rest_expired = TermHub._compute_lease_expirations(state, now)
     assert browser_expired is True
     assert rest_expired is True
 

@@ -258,13 +258,16 @@ class HubMessagingMixin:
         return await super().cleanup_browser_disconnect(worker_id, ws, owned_hijack)  # type: ignore[misc, no-any-return]
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
-        """Clear input buffers for dead browsers and call parent cleanup."""
+        """Clear input buffers for dead browsers and call into the lease manager."""
         for ws in dead:
             self._input_buffers.pop(ws, None)
             self._hold_buffers.pop(ws, None)
             self._startup_pending_browsers.discard(ws)
-        # cooperative MRO super-call — defined on a sibling mixin.
-        return await super().remove_dead_browsers(worker_id, dead)  # type: ignore[misc, no-any-return]
+        # Phase 7b: ex-_OwnershipMixin.remove_dead_browsers forwarded to
+        # ``self.lease.remove_dead_browsers``; the ownership mixin is gone
+        # so call the lease service directly. The behaviour is identical.
+        hub = cast("TermHub", self)
+        return await hub.lease.remove_dead_browsers(worker_id, dead)
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
         """Deregister the worker WS and notify the EventBus on disconnect."""
