@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Awaitable, Callable, Coroutine
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
 
@@ -31,7 +31,6 @@ from provide.uterm.bridge.hub.ext import (
 )
 from provide.uterm.bridge.hub.lease import HijackLeaseManager
 from provide.uterm.bridge.hub.limiter import RateLimiter
-from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.polling_service import PollingCoordinator
 from provide.uterm.bridge.hub.presence import PresenceManager
 from provide.uterm.bridge.hub.registry import WorkerRegistry
@@ -41,7 +40,12 @@ from provide.uterm.bridge.hub.store import StateStore
 from provide.uterm.control_channel import encode_control, encode_data
 
 if TYPE_CHECKING:
+    from collections import deque
+
+    from fastapi import APIRouter
+
     from provide.uterm.bridge.contracts import InputMode
+    from provide.uterm.bridge.frames import HijackStateFrame
     from provide.uterm.bridge.hub.event_bus import EventBus
     from provide.uterm.bridge.hub.ext import PolicyContext
     from provide.uterm.bridge.identity import IdentityProvider
@@ -80,7 +84,7 @@ class BrowserRoleResolutionError(RuntimeError):
     """Raised when a browser-role resolver fails and the WS should be rejected."""
 
 
-class TermHub(HubMessagingMixin):
+class TermHub:
     """In-memory registry for terminal WebSocket connections."""
 
     # -- PollingCoordinator delegates (Phase 7b: ex-_PollingMixin) -----------
@@ -384,6 +388,201 @@ class TermHub(HubMessagingMixin):
     async def force_release_hijack(self, worker_id: str) -> bool:
         """Forcibly clear any active hijack for *worker_id* and send a resume frame."""
         return await self.connection_mgr.force_release_hijack(worker_id)
+
+    # -- MessageRouter delegates (Phase 7b: ex-HubMessagingMixin) -----------
+    # ``self.router`` (MessageRouter) owns the broadcast / send_worker hot
+    # path plus the behavioral-heuristics ring buffer. The methods below
+    # keep the legacy ``hub.<name>(...)`` call surface intact. Tests
+    # monkey-patch broadcast / broadcast_hijack_state / send_worker /
+    # set_input_mode / append_event / get_idle_candidates / etc.; instance
+    # attributes shadow class methods so those patches keep working.
+    #
+    # ``disconnect_worker`` and ``_run_behavioral_audit_loop`` keep their
+    # inline implementations so the test-only monkey-patch pattern on
+    # ``broadcast_hijack_state`` / ``prune_if_idle`` / ``notify_hijack_changed``
+    # / ``_audit_all_browsers`` keeps intercepting via ``self.<name>``.
+    # The exception loggers stay on this module for the same reason.
+
+    async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Append a timestamped event to the worker's event ring buffer and return it."""
+        return await self.router.append_event(worker_id, event_type, data)
+
+    async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
+        """Send *msg* to all browser WebSockets registered for *worker_id*."""
+        await self.router.broadcast(worker_id, msg)
+
+    async def broadcast_hijack_state(self, worker_id: str) -> None:
+        """Send a hijack_state message to every browser for *worker_id*."""
+        await self.router.broadcast_hijack_state(worker_id)
+
+    async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
+        """Send *msg* to the worker WebSocket; returns False if no worker is connected."""
+        return await self.router.send_worker(worker_id, msg, source=source)
+
+    async def hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> HijackStateFrame:
+        """Build a hijack_state dict for *ws*, setting owner='me' if *ws* holds the lease."""
+        return await self.router.hijack_state_msg_for(worker_id, ws)
+
+    async def set_input_mode(self, worker_id: str, mode: InputMode) -> tuple[bool, str | None]:
+        """Set input_mode under lock. Rejects if active hijack when switching to "open"."""
+        return await self.router.set_input_mode(worker_id, mode)
+
+    async def disconnect_worker(self, worker_id: str) -> bool:
+        """Programmatically disconnect the worker WS. Returns True if a worker was connected."""
+        from provide.uterm.bridge.frames import make_worker_disconnected_frame
+
+        ws: WebSocket | None = None
+        async with self._lock:
+            st = self.registry.get(worker_id)
+            if st is None or st.worker_ws is None:
+                return False
+            ws = st.worker_ws
+            st.worker_ws = None
+            was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
+            st.hijack_session = None
+            st.hijack_owner = None
+            st.hijack_owner_expires_at = None
+        try:
+            await ws.close()
+        except Exception as exc:
+            logger.debug("disconnect_worker close error worker_id=%s: %s", worker_id, exc)
+        await self.broadcast(worker_id, cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)))
+        if was_hijacked:
+            self.notify_hijack_changed(worker_id, enabled=False, owner=None)
+            await self.broadcast_hijack_state(worker_id)
+        if self._event_bus is not None:
+            self._event_bus.close_worker(worker_id)
+        await self.prune_if_idle(worker_id)
+        return True
+
+    async def prune_if_idle(self, worker_id: str) -> None:
+        """Remove worker state when no connections or leases remain."""
+        await self.router.prune_if_idle(worker_id)
+
+    async def get_idle_candidates(self, timeout_s: float) -> list[tuple[str, float]]:
+        """Return ``(worker_id, last_activity_at)`` for workers idle beyond *timeout_s*."""
+        return await self.router.get_idle_candidates(timeout_s)
+
+    async def set_browser_role(self, worker_id: str, ws: WebSocket, role: str) -> None:
+        """Update the role for *ws* in *worker_id*'s browser set."""
+        await self.router.set_browser_role(worker_id, ws, role)
+
+    async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:
+        """Attempt to acquire hijack ownership for *ws* if the session is unhijacked."""
+        return await self.router.try_reclaim_hijack(worker_id, ws)
+
+    async def get_worker_browser_role(self, worker_id: str, ws: WebSocket) -> str | None:
+        """Return the role assigned to *ws* for *worker_id*, or ``None`` if not found."""
+        return await self.router.get_worker_browser_role(worker_id, ws)
+
+    async def get_last_snapshot(self, worker_id: str) -> dict[str, Any] | None:
+        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered."""
+        return await self.router.get_last_snapshot(worker_id)
+
+    async def browser_count(self, worker_id: str) -> int:
+        """Return the number of browser WebSockets currently connected for *worker_id*."""
+        return await self.router.browser_count(worker_id)
+
+    async def browser_count_total(self) -> int:
+        """Return the total number of browser WebSockets connected across all workers."""
+        return await self.router.browser_count_total()
+
+    async def get_recent_events(self, worker_id: str, limit: int) -> list[dict[str, Any]]:
+        """Return the most recent events for *worker_id* (up to *limit*, clamped to 1-500)."""
+        return await self.router.get_recent_events(worker_id, limit)
+
+    def _record_keystroke(self, source: Any) -> None:
+        """Record the timing of a keystroke from a browser."""
+        self.router.record_keystroke(source)
+
+    def _get_heuristics(self, source: Any) -> dict[str, float]:
+        """Return behavioral metrics for the given browser."""
+        return self.router.get_heuristics(source)
+
+    async def _send_hijack_state_to(
+        self,
+        browsers: list[WebSocket],
+        *,
+        worker_id: str,
+        is_hijacked: bool,
+        is_dashboard: bool,
+        is_rest: bool,
+        hijack_owner: WebSocket | None,
+        input_mode: str,
+        lease_expires_at: float | None,
+        suppress_errors: bool = False,
+    ) -> set[WebSocket]:
+        """Forward to :meth:`MessageRouter.send_hijack_state_to`."""
+        return await self.router.send_hijack_state_to(
+            browsers,
+            worker_id=worker_id,
+            is_hijacked=is_hijacked,
+            is_dashboard=is_dashboard,
+            is_rest=is_rest,
+            hijack_owner=hijack_owner,
+            input_mode=input_mode,
+            lease_expires_at=lease_expires_at,
+            suppress_errors=suppress_errors,
+        )
+
+    async def _audit_all_browsers(self) -> None:
+        """Iterate all active browsers and evaluate behavioral heuristics."""
+        await self.router.audit_all_browsers()
+
+    async def _run_behavioral_audit_loop(self) -> None:
+        """Periodically audit active connections for behavioral anomalies."""
+        while True:
+            await asyncio.sleep(self._behavioral_audit_interval_s)
+            try:
+                await self._audit_all_browsers()
+            except Exception:
+                logger.exception("behavioral_audit_loop_error")
+
+    @property
+    def _keystroke_timestamps(self) -> dict[Any, deque[float]]:
+        """Back-compat view of the router's keystroke ring buffer map."""
+        return self.router.keystroke_timestamps
+
+    async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
+        """Clear heuristic state and call into the connection manager."""
+        self.router.forget_browser(ws)
+        self._input_buffers.pop(ws, None)
+        self._hold_buffers.pop(ws, None)
+        return await self.connection_mgr.cleanup_browser_disconnect(worker_id, ws, owned_hijack)
+
+    async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
+        """Clear input buffers for dead browsers and call into the lease manager."""
+        for ws in dead:
+            self._input_buffers.pop(ws, None)
+            self._hold_buffers.pop(ws, None)
+            self._startup_pending_browsers.discard(ws)
+        return await self.lease.remove_dead_browsers(worker_id, dead)
+
+    async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
+        """Deregister the worker WS and notify the EventBus on disconnect."""
+        should_broadcast, was_hijacked = await self.connection_mgr.deregister_worker(worker_id, ws)
+        if should_broadcast and self._event_bus is not None:
+            self._event_bus.close_worker(worker_id)
+        return should_broadcast, was_hijacked
+
+    @property
+    def resume_store(self) -> ResumeTokenStore | None:
+        """Public accessor for the resume token store."""
+        return self._resume_store
+
+    def create_router(self, *, extra_route_registrars: list[Any] | None = None) -> APIRouter:
+        """Create and return a FastAPI ``APIRouter`` with all terminal routes registered."""
+        from fastapi import APIRouter
+
+        from provide.uterm.bridge.routes.rest import register_rest_routes
+        from provide.uterm.bridge.routes.websockets import register_ws_routes
+
+        router = APIRouter()
+        register_rest_routes(self, router)
+        register_ws_routes(self, router)
+        for registrar in extra_route_registrars or []:
+            registrar(self, router)
+        return router
 
     def __init__(
         self,
