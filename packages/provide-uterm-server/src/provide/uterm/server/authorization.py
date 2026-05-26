@@ -198,6 +198,19 @@ class WebhookAuthorizationProvider:
             pass
         return frozenset()
 
+    async def is_admin(self, principal: Principal) -> bool:
+        """Finding #8: delegate admin-check to the webhook.
+
+        Without this method, ``AuthorizationService.is_admin`` falls back to
+        ``LocalAuthorizationProvider().is_admin`` and consults
+        ``principal.roles`` directly — bypassing the webhook policy.  A
+        webhook-driven deployment that revoked a user's admin role at the
+        policy engine would still have callers pass admin checks because the
+        ``admin`` role string is still in their JWT.  Delegating to the
+        webhook keeps a single source of truth.
+        """
+        return await self._check(principal, "admin")
+
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
         return await self._check(principal, "session.read", session_id=session.session_id)
 

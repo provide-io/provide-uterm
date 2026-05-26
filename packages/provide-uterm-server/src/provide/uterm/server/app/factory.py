@@ -318,7 +318,9 @@ def create_server_app(
         if config.tunnel.ip_binding:
             issued_ip = token_state.get("issued_ip")
             client_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
-            if issued_ip and issued_ip != client_ip:  # pragma: no branch — matching-IP happy-path is covered by tunnel auth tests
+            if (
+                issued_ip and issued_ip != client_ip
+            ):  # pragma: no branch — matching-IP happy-path is covered by tunnel auth tests
                 logger.info(
                     "tunnel_token_ip_mismatch session_id=%s issued=%s actual=%s", worker_id, issued_ip, client_ip
                 )
@@ -439,6 +441,7 @@ def create_server_app(
             url=config.auth.webhook_idp_url,
             secret=config.auth.webhook_idp_secret,
             timeout_s=config.auth.webhook_idp_timeout_s,
+            on_failure=getattr(config.auth, "webhook_idp_on_failure", "deny"),
         )
     else:
         idp = LocalIdentityProvider(config.auth, api_key_store=api_key_store)

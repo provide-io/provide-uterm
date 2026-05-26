@@ -57,12 +57,26 @@ class AuthConfig(ServerBaseModel):
     api_keys_enabled: bool = False
     header_mode_acknowledged: bool = False
     require_jwt_in_production: bool = False
+    # Finding #4: when auth.mode='header', the server trusts X-Uterm-Role from
+    # any caller.  When ``trusted_proxy_ips`` is non-empty, header-mode auth
+    # is only honoured for connections whose source IP appears in the list;
+    # other callers are downgraded to anonymous.  Required for non-loopback
+    # binds (the startup validator rejects header mode on non-loopback hosts
+    # unless this list is set).
+    trusted_proxy_ips: list[str] = Field(default_factory=list)
 
     identity_provider: Literal["local", "webhook"] = "local"
     delegate_roles: bool = True
     webhook_idp_url: str | None = None
     webhook_idp_secret: str | None = None
     webhook_idp_timeout_s: float = 2.0
+    # Finding #7: webhook IdP failure mode.  Before this field, *any* exception
+    # from the webhook (HTTP error, timeout, JSON parse failure, network down)
+    # produced a synthetic ``viewer`` principal — the request silently passed
+    # auth as an anonymous-equivalent viewer.  Default ``deny`` returns None
+    # so the request fails authn (411).  ``viewer`` restores the old fail-open
+    # behaviour for callers who explicitly want it.
+    webhook_idp_on_failure: Literal["deny", "viewer"] = "deny"
 
 
 class UiConfig(ServerBaseModel):

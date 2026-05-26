@@ -137,6 +137,23 @@ class LocalIdentityProvider(IdentityProvider):
 
         mode = str(self.auth.mode).strip().lower()
         if mode == "header":
+            # Finding #4: when trusted_proxy_ips is configured, only callers
+            # from those source IPs may set X-Uterm-Role.  Other callers fall
+            # through to the anonymous principal (same shape as a missing JWT).
+            trusted = list(getattr(self.auth, "trusted_proxy_ips", ()) or [])
+            if trusted:
+                source = self._connection_source_ip(connection)
+                if source not in trusted:
+                    logger.warning(
+                        "header_auth_rejected_untrusted_source source=%s trusted=%s",
+                        source,
+                        sorted(trusted),
+                    )
+                    audit_event(
+                        "auth.failure",
+                        detail={"method": "header", "reason": "untrusted_source", "source_ip": source},
+                    )
+                    return self._anonymous_principal()
             return self._principal_from_header_auth(headers, cookies)
         if mode != "jwt":
             raise ValueError(f"unknown auth mode: {mode!r}")
@@ -153,6 +170,19 @@ class LocalIdentityProvider(IdentityProvider):
 
         audit_event("auth.success", principal=principal.subject_id)
         return principal
+
+    @staticmethod
+    def _connection_source_ip(connection: Any) -> str:
+        """Best-effort source IP for header-auth trust gating.
+
+        Returns the immediate TCP peer (``connection.client.host``) — NEVER
+        ``X-Forwarded-For`` (which the caller controls).  The point of
+        ``trusted_proxy_ips`` is to authenticate the *transport peer*, not
+        any header the peer claims.
+        """
+        client = getattr(connection, "client", None)
+        host = getattr(client, "host", None) if client is not None else None
+        return str(host) if host else ""
 
     def _cookie_value(self, cookies: dict[str, str], key: str) -> str | None:
         value = cookies.get(key)
@@ -251,6 +281,12 @@ class LocalIdentityProvider(IdentityProvider):
             logger.warning("api_key_auth_failed key_id=unknown")
             audit_event("auth.failure", detail={"method": "api_key"})
             return None
+        # Finding #3: explicit scope→role mapping.  Empty scopes OR scopes that
+        # do not contain a recognised role keyword (admin/operator/viewer) used
+        # to fall through to ``roles=admin`` — a key minted without any scope
+        # silently authenticated as admin, and a typo (``"administrator"``) did
+        # the same.  Now: unknown / empty scopes reject the key outright so the
+        # request is treated as unauthenticated.
         roles: frozenset[str]
         scopes: frozenset[str]
         if "admin" in record.scopes:
@@ -262,12 +298,21 @@ class LocalIdentityProvider(IdentityProvider):
         elif "viewer" in record.scopes:
             roles = frozenset({"viewer"})
             scopes = frozenset({"*"})
-        elif record.scopes:
-            roles = frozenset({"admin"})
-            scopes = record.scopes
         else:
-            roles = frozenset({"admin"})
-            scopes = frozenset()
+            logger.warning(
+                "api_key_auth_failed key_id=%s reason=unrecognized_or_empty_scope scopes=%s",
+                record.key_id,
+                sorted(record.scopes),
+            )
+            audit_event(
+                "auth.failure",
+                detail={
+                    "method": "api_key",
+                    "key_id": record.key_id,
+                    "reason": "unrecognized_or_empty_scope",
+                },
+            )
+            return None
         audit_event("auth.success", principal=record.key_id, detail={"method": "api_key"})
         return Principal(
             subject_id=f"apikey:{record.key_id}",
@@ -301,12 +346,25 @@ class _AwaitablePrincipal:
 class WebhookIdentityProvider(IdentityProvider):
     """IdentityProvider that delegates resolution to an external webhook."""
 
-    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):
+    def __init__(
+        self,
+        url: str,
+        secret: str | None = None,
+        timeout_s: float = 2.0,
+        on_failure: str = "deny",
+    ):
         self.url = url
         self.secret = secret
         self.timeout_s = timeout_s
+        # Finding #7: webhook-down behaviour.  ``"deny"`` (the default) returns
+        # ``None`` so the caller falls through to anonymous and the request is
+        # rejected by the auth gate.  ``"viewer"`` preserves the legacy
+        # fail-open behaviour for callers that explicitly want it.
+        if on_failure not in {"deny", "viewer"}:
+            raise ValueError(f"on_failure must be 'deny' or 'viewer'; got {on_failure!r}")
+        self.on_failure = on_failure
 
-    async def resolve_principal(self, connection: Request | WebSocket) -> Principal:
+    async def resolve_principal(self, connection: Request | WebSocket) -> Principal | None:
         headers = dict(getattr(connection, "headers", {}))
         cookies = dict(getattr(connection, "cookies", {}))
 
@@ -336,8 +394,15 @@ class WebhookIdentityProvider(IdentityProvider):
                     display_name=data.get("display_name"),
                 )
         except Exception as exc:
-            logger.warning("webhook_auth_failed url=%s error=%s", self.url, exc)
-            return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+            logger.warning(
+                "webhook_auth_failed url=%s error=%s on_failure=%s",
+                self.url,
+                exc,
+                self.on_failure,
+            )
+            if self.on_failure == "viewer":
+                return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+            return None
 
 
 def _api_key_store_from(connection: object) -> Any:
