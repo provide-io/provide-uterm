@@ -93,7 +93,7 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
         if registry is not None:
             await registry.set_tunnel_connected(worker_id, True)
         logger.info("tunnel_worker_connected worker_id=%s", worker_id)
-        if prev_was_hijacked:  # pragma: no cover — tested via hub unit tests
+        if prev_was_hijacked:
             hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
             await hub.broadcast_hijack_state(worker_id)
         await hub.broadcast(worker_id, cast("dict[str, Any]", make_worker_connected_frame(worker_id)))
@@ -147,7 +147,7 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
             if should_broadcast:
                 hub.metric("ws_disconnect_total")
                 hub.metric("ws_disconnect_worker_total")
-                if was_hijacked:  # pragma: no cover — tested via hub unit tests
+                if was_hijacked:
                     hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
                     await hub.broadcast_hijack_state(worker_id)
                 await hub.broadcast(

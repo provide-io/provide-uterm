@@ -103,7 +103,7 @@ class EventBus:
             targets = list(self._subs.get(worker_id, []))
             for sub in targets:
                 self._deliver(sub, worker_id, event)
-        except Exception as exc:  # pragma: no cover — defensive
+        except Exception as exc:
             logger.warning("event_bus_enqueue_error worker_id=%s error=%s", worker_id, exc)
 
     def _deliver(self, sub: _Subscription, worker_id: str, event: dict[str, Any]) -> None:

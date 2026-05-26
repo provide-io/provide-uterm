@@ -32,6 +32,21 @@ async def test_enqueue_unknown_worker_does_nothing() -> None:
     # No subscribers → no-op, no exception
 
 
+async def test_enqueue_swallows_deliver_exception() -> None:
+    """Defensive catch in ``_enqueue``: ``_deliver`` raising must not propagate to callers."""
+    bus = EventBus()
+    async with bus.watch("w1"):
+
+        def _boom(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("synthetic deliver failure")
+
+        # Replace _deliver with a raiser. _enqueue must catch and log, not raise.
+        # ``setattr`` avoids the mypy ``method-assign`` complaint about replacing
+        # bound methods on instances.
+        object.__setattr__(bus, "_deliver", _boom)
+        bus._enqueue("w1", {"seq": 1, "ts": 1.0, "type": "snapshot", "data": {}})
+
+
 async def test_multiple_subscribers_all_receive() -> None:
     bus = EventBus()
     event = {"seq": 1, "ts": 1.0, "type": "snapshot", "data": {}}
@@ -272,12 +287,48 @@ def test_compile_pattern_rejects_redos_shapes(pattern: str) -> None:
         r"(ab)+",
         # Escaped pipe is a literal, not alternation.
         r"(a\|b)+",
+        # Lookbehind prefix ``(?<=`` — exercises the lookbehind ``<=``/``<!`` prefix-skip branch.
+        r"(?<=foo)bar",
+        # Negative lookbehind ``(?<!``.
+        r"(?<!foo)bar",
+        # Named capture group ``(?P<name>...)`` — exercises the ``P`` prefix-skip branch.
+        r"(?P<word>\w+)",
+        # Named group with unterminated ``>`` is tolerated (``end == -1`` path).
+        # Use a syntactically valid pattern that just doesn't close the named-group
+        # marker on the same character via raw string trickery — re.compile must
+        # still accept it.  ``(?P<a>b)`` works to also touch the ``end != -1`` path.
+        r"(?P<a>b)",
+        # Nested group: outer encloses an inner quantified group + literal so the
+        # inner-quantifier propagation branch (``group_stack[-1][0] = True``) runs
+        # when the inner group closes.
+        r"((a+)b)",
+        # Nested group with alternation propagation (``group_stack[-1][1] = True``).
+        r"((a|b)c)",
+        # Top-level (no enclosing group) alternation — exercises the ``if group_stack``
+        # False branch (334->336) where alternation lives outside any group.
+        r"foo|bar",
+        # Inline-flag group ``(?i...)`` — the prefix character is neither ``<``,
+        # ``P``, nor in ``":=!"`` so the validator falls through to the comment
+        # branch (313->316) without advancing ``i``.
+        r"(?i)abc",
     ],
 )
 def test_compile_pattern_allows_safe_patterns(pattern: str) -> None:
     # Must not raise.
     compiled = _compile_pattern(pattern)
     assert compiled is not None
+
+
+def test_compile_pattern_named_group_without_close_advances_safely() -> None:
+    """``(?P`` without closing ``>``: the validator must not advance ``i`` past EOF.
+
+    Exercises the ``end == -1`` branch in ``_validate_pattern_safety``: the
+    pattern-skip logic for ``(?P<name>`` finds no ``>``, leaves ``i`` alone, and
+    keeps scanning.  ``re.compile`` later rejects the malformed regex; the
+    validator must still complete without crashing first.
+    """
+    with pytest.raises(ValueError, match="invalid watch pattern regex"):
+        _compile_pattern(r"(?P abc")
 
 
 async def test_watch_rejects_patterns_over_configured_length() -> None:
