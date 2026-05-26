@@ -91,7 +91,7 @@ addopts = [
     "--cov=provide.uterm.gateway",
     "--cov-branch",
     "--cov-report=term-missing",
-    "--cov-fail-under=97",
+    "--cov-fail-under=100",
 ]
 
 [tool.coverage.run]
@@ -105,7 +105,7 @@ omit = ["tests/*"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 97
+fail_under = 100
 show_missing = true
 skip_covered = false
 partial_branches = [

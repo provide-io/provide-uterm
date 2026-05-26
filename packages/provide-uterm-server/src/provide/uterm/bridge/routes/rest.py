@@ -245,7 +245,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         lease_s = hub.clamp_lease(request.lease_s)
         now = time.monotonic()
         new_expires = await hub.extend_hijack_lease(worker_id, hijack_id, hs.owner, lease_s, now)
-        if new_expires is None:  # pragma: no cover
+        if new_expires is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         await hub.append_event(worker_id, "hijack_heartbeat", {"hijack_id": hijack_id, "lease_s": lease_s})
         await hub.broadcast_hijack_state(worker_id)
@@ -426,7 +426,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         if hs is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         released, should_resume = await hub.release_rest_hijack(worker_id, hijack_id)
-        if not released:  # pragma: no cover
+        if not released:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
         if should_resume and await hub.check_still_hijacked(worker_id):
             # Re-check under lock: a concurrent hijack_acquire may have written a

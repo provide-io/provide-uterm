@@ -603,6 +603,15 @@ def test_validate_webhook_url_rejects_dns_resolution_failure() -> None:
             wh.validate_webhook_url("https://nx.example.com/hook")
 
 
+def test_validate_webhook_url_rejects_dns_resolution_returning_no_addresses() -> None:
+    """Empty-addresses path: resolver returns ``()`` without raising → ``could not be resolved``."""
+    from provide.uterm.server import webhooks as wh
+
+    with patch.object(wh, "_resolve_hostname_sync", return_value=()):
+        with pytest.raises(ValueError, match="could not be resolved"):
+            wh.validate_webhook_url("https://empty.example.com/hook")
+
+
 def test_validate_webhook_url_accepts_dns_resolving_to_public_ips() -> None:
     from provide.uterm.server import webhooks as wh
 

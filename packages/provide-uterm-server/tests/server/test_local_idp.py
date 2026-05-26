@@ -25,3 +25,22 @@ async def test_local_idp_resolve_anonymous():
 
     principal = await idp.resolve_principal(MockConnection())
     assert principal.subject_id == "anonymous"
+
+
+@pytest.mark.asyncio
+async def test_local_idp_resolve_api_key_principal_short_circuits() -> None:
+    """``resolve_principal_sync`` returns the API-key principal before falling through to mode-based auth."""
+    from provide.uterm.server.api_keys import ApiKeyStore
+
+    store = ApiKeyStore()
+    raw_key, _record = store.create("admin-key", scopes=frozenset({"admin"}))
+    auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
+    idp = LocalIdentityProvider(auth, api_key_store=store)
+
+    class MockConnection:
+        headers = {"x-api-key": raw_key}
+        cookies: dict[str, str] = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal.subject_id != "anonymous"
+    assert "admin" in principal.roles

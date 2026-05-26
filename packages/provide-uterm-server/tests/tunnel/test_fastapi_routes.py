@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -231,6 +231,41 @@ class TestTunnelBranchCoverage:
         with client.websocket_connect("/tunnel/test-unknown-type") as ws:
             ctrl = encode_control({"type": "totally_unknown"})
             ws.send_bytes(ctrl)
+
+    def test_prev_was_hijacked_triggers_notify_on_connect(self, hub: TermHub, app: FastAPI) -> None:
+        """Line 96: ``register_worker`` returning True (prev was hijacked) fires notify + broadcast."""
+        tc = TestClient(app)
+        notified: list[dict[str, Any]] = []
+        original_notify = hub.notify_hijack_changed
+
+        def _capture(wid: str, *, enabled: bool, owner: Any = None) -> None:
+            notified.append({"worker_id": wid, "enabled": enabled, "owner": owner})
+            return original_notify(wid, enabled=enabled, owner=owner)
+
+        object.__setattr__(hub, "notify_hijack_changed", _capture)
+        # Force register_worker to report a previous hijack so the if-True branch
+        # at the connect site runs.  We let the rest of the handshake proceed.
+        with patch.object(hub, "register_worker", new=AsyncMock(return_value=True)):
+            with tc.websocket_connect("/tunnel/test-prev-hijacked") as ws:
+                ws.send_bytes(encode_frame(CHANNEL_DATA, b"x"))
+        assert any(c["worker_id"] == "test-prev-hijacked" and not c["enabled"] for c in notified)
+
+    def test_was_hijacked_on_disconnect_triggers_notify(self, hub: TermHub, app: FastAPI) -> None:
+        """Line 150: ``deregister_worker`` reporting was_hijacked=True fires notify + broadcast."""
+        tc = TestClient(app)
+        notified: list[dict[str, Any]] = []
+        original_notify = hub.notify_hijack_changed
+
+        def _capture(wid: str, *, enabled: bool, owner: Any = None) -> None:
+            notified.append({"worker_id": wid, "enabled": enabled, "owner": owner})
+            return original_notify(wid, enabled=enabled, owner=owner)
+
+        object.__setattr__(hub, "notify_hijack_changed", _capture)
+        with patch.object(hub, "deregister_worker", new=AsyncMock(return_value=(True, True))):
+            with tc.websocket_connect("/tunnel/test-was-hijacked") as ws:
+                ws.send_bytes(encode_frame(CHANNEL_DATA, b"x"))
+        # On disconnect, notify_hijack_changed should have been called.
+        assert any(c["worker_id"] == "test-was-hijacked" and not c["enabled"] for c in notified)
 
 
 class TestTunnelAndBrowserCoexist:

@@ -199,3 +199,61 @@ class TestRestHijackRelease:
 
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
+
+    def test_release_returns_404_when_hub_release_reports_not_released(self) -> None:
+        """``release_rest_hijack`` returning ``(False, _)`` → 404 (TOCTOU lost-race path)."""
+        import asyncio
+
+        hub, app, client = _make_app()
+        now = time.time()
+        hid = "abcdef12-0000-0000-0000-000000000000"
+
+        async def _setup() -> None:
+            async with hub._lock:
+                st = hub._workers.setdefault("w1", WorkerTermState())
+                st.worker_ws = AsyncMock()
+                st.worker_ws.send_text = AsyncMock()
+                st.hijack_session = HijackSession(
+                    hijack_id=hid,
+                    owner="tester",
+                    acquired_at=now,
+                    lease_expires_at=now + 300,
+                    last_heartbeat=now,
+                )
+
+        asyncio.run(_setup())
+
+        with patch.object(hub, "release_rest_hijack", new=AsyncMock(return_value=(False, False))):
+            resp = client.post(f"/worker/w1/hijack/{hid}/release")
+        assert resp.status_code == 404
+        assert "Invalid or expired" in resp.json()["error"]
+
+
+class TestRestHijackHeartbeatExpiredRace:
+    def test_heartbeat_returns_404_when_extend_lease_returns_none(self) -> None:
+        """``extend_hijack_lease`` returning ``None`` → 404 (concurrent expiry between get_rest_session + extend)."""
+        import asyncio
+
+        hub, app, client = _make_app()
+        now = time.time()
+        hid = "abcdef12-0000-0000-0000-000000000001"
+
+        async def _setup() -> None:
+            async with hub._lock:
+                st = hub._workers.setdefault("w1", WorkerTermState())
+                st.worker_ws = AsyncMock()
+                st.worker_ws.send_text = AsyncMock()
+                st.hijack_session = HijackSession(
+                    hijack_id=hid,
+                    owner="tester",
+                    acquired_at=now,
+                    lease_expires_at=now + 300,
+                    last_heartbeat=now,
+                )
+
+        asyncio.run(_setup())
+
+        with patch.object(hub, "extend_hijack_lease", new=AsyncMock(return_value=None)):
+            resp = client.post(f"/worker/w1/hijack/{hid}/heartbeat", json={"lease_s": 30})
+        assert resp.status_code == 404
+        assert "Invalid or expired" in resp.json()["error"]
