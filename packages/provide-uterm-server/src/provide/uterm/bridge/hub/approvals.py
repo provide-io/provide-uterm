@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -35,20 +36,35 @@ class ApprovalRequest:
 
 
 class InMemoryApprovalStore:
+    """In-memory store for approval requests.
+
+    Uses a ``threading.Lock`` to make the check-then-set ``resolve`` and the
+    iteration in ``cleanup_expired`` safe against concurrent mutation. The
+    critical sections are microsecond-scale dictionary operations; taking a
+    threading lock from asyncio code does not block any meaningful work.
+
+    Note: ``get`` is intentionally lock-free since a single dict read is atomic
+    in CPython. Callers MUST NOT iterate the live ``_requests`` dict without
+    holding ``_lock`` themselves.
+    """
+
     def __init__(self) -> None:
         self._requests: dict[str, ApprovalRequest] = {}
+        self._lock = threading.Lock()
         self.on_expired: Callable[[str], Any] | None = None
 
     def add(self, request: ApprovalRequest) -> None:
-        self._requests[request.id] = request
+        with self._lock:
+            self._requests[request.id] = request
 
     def get(self, request_id: str) -> ApprovalRequest | None:
         return self._requests.get(request_id)
 
     def resolve(self, request_id: str, status: ApprovalStatus) -> None:
-        req = self.get(request_id)
-        if req and req.status == ApprovalStatus.PENDING:
-            req.status = status
+        with self._lock:
+            req = self._requests.get(request_id)
+            if req and req.status == ApprovalStatus.PENDING:
+                req.status = status
 
     async def cleanup_expired(self) -> None:
         now = time.time()
@@ -56,13 +72,21 @@ class InMemoryApprovalStore:
         # for more than 1 hour beyond their expiration time.
         PRUNE_TTL = 3600
 
-        for req_id, req in list(self._requests.items()):
-            if req.status == ApprovalStatus.PENDING and req.expires_at < now:
-                req.status = ApprovalStatus.TIMEOUT
-                if self.on_expired:
-                    # Notify subscribers (e.g. FanOutController) to prune state
-                    res = self.on_expired(req.id)
-                    if asyncio.iscoroutine(res):
-                        await res
-            elif req.status != ApprovalStatus.PENDING and (req.expires_at + PRUNE_TTL) < now:
-                del self._requests[req_id]
+        # Hold the lock only while snapshotting + mutating dict state. The
+        # ``on_expired`` callback may be async and is invoked outside the lock
+        # to avoid blocking other threads on user code.
+        expired_ids: list[str] = []
+        with self._lock:
+            for req_id, req in list(self._requests.items()):
+                if req.status == ApprovalStatus.PENDING and req.expires_at < now:
+                    req.status = ApprovalStatus.TIMEOUT
+                    expired_ids.append(req.id)
+                elif req.status != ApprovalStatus.PENDING and (req.expires_at + PRUNE_TTL) < now:
+                    del self._requests[req_id]
+
+        if self.on_expired:
+            for req_id in expired_ids:
+                # Notify subscribers (e.g. FanOutController) to prune state
+                res = self.on_expired(req_id)
+                if asyncio.iscoroutine(res):
+                    await res
