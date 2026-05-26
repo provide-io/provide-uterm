@@ -38,6 +38,11 @@ _PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "packages/provide-uterm-platform/tests/pty/",
             "--ignore=packages/provide-uterm-platform/tests/pty/e2e",
+            # --no-cov: the platform package's pyproject addopts apply --cov to
+            # both provide.uterm.pty *and* provide.uterm.manager with
+            # --cov-fail-under=100. Running pty tests alone can't satisfy the
+            # manager coverage target — manager coverage is enforced separately
+            # by the manager suite above. The CI pty-unit job mirrors this.
             "--no-cov",
             "--timeout=10",
             "-o",
