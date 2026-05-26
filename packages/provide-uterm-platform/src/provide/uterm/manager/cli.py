@@ -37,5 +37,5 @@ def main() -> None:
     asyncio.run(manager.run())
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover - module entrypoint
     main()
