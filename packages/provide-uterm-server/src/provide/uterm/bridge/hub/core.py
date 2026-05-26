@@ -32,6 +32,7 @@ from provide.uterm.bridge.hub.ext import (
 from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
 from provide.uterm.bridge.hub.polling import _PollingMixin
+from provide.uterm.bridge.hub.registry import WorkerRegistry
 from provide.uterm.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.uterm.bridge.hub.state import HubStateMixin
 from provide.uterm.bridge.ratelimit import TokenBucket
@@ -120,7 +121,11 @@ class TermHub(
         behavioral_audit_interval_s: float = 30.0,
     ) -> None:
         self._lock = asyncio.Lock()
-        self._workers: dict[str, WorkerTermState] = {}
+        # WorkerRegistry owns the worker map; the legacy ``_workers``
+        # attribute is exposed as a property below so existing mixin
+        # code can continue to use mapping operations unchanged while
+        # the phased refactor migrates call sites to ``self.registry``.
+        self.registry = WorkerRegistry()
         self._on_hijack_changed = on_hijack_changed
         self._on_metric = on_metric
         self._resolve_browser_role = resolve_browser_role
@@ -166,6 +171,22 @@ class TermHub(
             audit_task = asyncio.create_task(self._run_behavioral_audit_loop())
             self._background_tasks.add(audit_task)
             audit_task.add_done_callback(self._background_tasks.discard)
+
+    @property
+    def _workers(self) -> dict[str, WorkerTermState]:
+        """Back-compat view of the worker map owned by :attr:`registry`.
+
+        Mixins and tests still index/iterate ``self._workers`` directly;
+        this property forwards to the registry's underlying dict so the
+        Phase 1 extraction is non-functional. New code should prefer
+        :attr:`registry` accessors.
+        """
+        return self.registry._workers
+
+    @_workers.setter
+    def _workers(self, value: dict[str, WorkerTermState]) -> None:
+        """Replace the worker map wholesale (back-compat for tests)."""
+        self.registry._workers = value
 
     @property
     def identity_provider(self) -> IdentityProvider | None:
