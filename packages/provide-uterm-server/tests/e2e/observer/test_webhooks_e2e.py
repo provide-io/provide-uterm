@@ -27,7 +27,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 
 from provide.uterm.client import connect_async_ws
-from tests.e2e._live_server import live_server_with_bus
+from tests.e2e._live_server import live_server_with_bus, wait_for_condition
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -211,7 +211,15 @@ async def test_webhook_unregister_stops_delivery(shell_server: Any) -> None:
             await worker.recv()
             await asyncio.sleep(0.1)
             await worker.send(json.dumps(snapshot_msg("$ after unregister")))
-            await asyncio.sleep(0.5)
+            # Probe for an unexpected delivery — fails fast on regression
+            # (any item arriving wakes wait_for_condition immediately) and
+            # waits up to 0.5s on pass.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: not received.empty(),
+                    timeout=0.5,
+                    description="no webhook delivery after unregister",
+                )
 
     # Nothing delivered — queue should be empty
     assert received.empty()
@@ -296,9 +304,9 @@ async def test_webhook_loop_stops_on_worker_disconnect(shell_server: Any) -> Non
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()
             await asyncio.sleep(0.1)
-        # Worker context exits → disconnect sentinel delivered
-
-        # Give delivery loop time to process sentinel
+        # Worker context exits → disconnect sentinel delivered.
+        # No public state to wait on; the upper-bound sleep is the
+        # delivery-loop's chance to consume the sentinel.
         await asyncio.sleep(0.3)
 
         # Now send an event after worker disconnected — nothing delivered
@@ -308,7 +316,14 @@ async def test_webhook_loop_stops_on_worker_disconnect(shell_server: Any) -> Non
                 "wh1",
                 {"type": "snapshot", "seq": 99, "ts": time.time(), "data": {"screen": "$ after"}},
             )
-        await asyncio.sleep(0.3)
+        # Probe for an unexpected delivery — fails fast on regression,
+        # waits up to 0.5s on pass.
+        with contextlib.suppress(TimeoutError):
+            await wait_for_condition(
+                lambda: not received.empty(),
+                timeout=0.5,
+                description="no webhook delivery after worker disconnect",
+            )
 
     assert received.empty()
 
