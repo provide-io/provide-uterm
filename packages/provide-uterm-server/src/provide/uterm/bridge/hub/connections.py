@@ -23,12 +23,21 @@ from provide.uterm.bridge.hub.ext import (
     EVENT_SESSION_DISCONNECTED,
     EVENT_SESSION_REGISTERED,
 )
+from provide.uterm.bridge.hub.limiter import (
+    REST_CLIENT_CACHE_MAX as _REST_CLIENT_CACHE_MAX,
+)
+from provide.uterm.bridge.hub.limiter import (
+    REST_CLIENT_EVICT_COUNT as _REST_CLIENT_EVICT_COUNT,
+)
+from provide.uterm.bridge.hub.limiter import (
+    RateLimiter,
+)
 from provide.uterm.bridge.models import WorkerTermState
 
 if TYPE_CHECKING:
     from provide.uterm.bridge.contracts import InputMode
     from provide.uterm.bridge.hub.resume import ResumeTokenStore
-from provide.uterm.bridge.ratelimit import TokenBucket
+    from provide.uterm.bridge.ratelimit import TokenBucket
 
 logger = get_logger(__name__)
 tracer = get_tracer(__name__)
@@ -46,11 +55,10 @@ async def shutdown_background_tasks(task_set: set[asyncio.Task[Any]]) -> int:
     return sum(1 for r in results if isinstance(r, (asyncio.CancelledError, Exception)))
 
 
-# Maximum number of per-client rate-limit buckets held in memory at once.
-# On overflow the oldest half of entries are evicted (LRU-lite), preserving
-# rate-limit state for recently-active clients while bounding memory growth.
-_REST_CLIENT_CACHE_MAX = 1024
-_REST_CLIENT_EVICT_COUNT = _REST_CLIENT_CACHE_MAX // 2
+# Re-exported from :mod:`provide.uterm.bridge.hub.limiter` so existing
+# call sites that import these from ``connections`` keep working. The
+# canonical definitions live in the limiter module now.
+__all__ = ["_REST_CLIENT_CACHE_MAX", "_REST_CLIENT_EVICT_COUNT"]
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -72,8 +80,7 @@ class _ConnectionMixin:
     _workers: dict[str, WorkerTermState]
     _worker_token: str | None
     _event_deque_maxlen: int
-    _rest_acquire_rate: float
-    _rest_send_rate: float
+    limiter: RateLimiter
     _rest_acquire_bucket: TokenBucket
     _rest_send_bucket: TokenBucket
     _rest_acquire_per_client: dict[str, TokenBucket]
@@ -100,15 +107,11 @@ class _ConnectionMixin:
     def allow_rest_acquire_for(self, client_id: str) -> bool:
         r"""Per-client REST acquire rate limit (also checks the global bucket).
 
-        The per-client dict is capped at \`\`_REST_CLIENT_CACHE_MAX\`\` entries.
-        On overflow the oldest half of entries are evicted so recently-active
-        clients keep their rate-limit state (avoids a full-clear DoS vector).
+        Delegates the bucket composition and LRU-lite eviction to
+        :attr:`limiter`; only the structured-event log on a rejection
+        lives here so the hub keeps a single observability surface.
         """
-        if len(self._rest_acquire_per_client) >= _REST_CLIENT_CACHE_MAX:
-            for k in list(self._rest_acquire_per_client)[:_REST_CLIENT_EVICT_COUNT]:
-                del self._rest_acquire_per_client[k]
-        bucket = self._rest_acquire_per_client.setdefault(client_id, TokenBucket(self._rest_acquire_rate))
-        allowed = bucket.allow() and self._rest_acquire_bucket.allow()
+        allowed = self.limiter.allow_rest_acquire(client_id)
         if not allowed:
             logger.warning(EVENT_RATE_LIMIT_TRIGGERED, client_id=client_id, limit_type="rest_acquire")
         return allowed
@@ -116,14 +119,10 @@ class _ConnectionMixin:
     def allow_rest_send_for(self, client_id: str) -> bool:
         r"""Per-client REST send/step rate limit (also checks the global bucket).
 
-        On overflow the oldest half of entries are evicted (same LRU-lite
-        strategy as :meth:\`allow_rest_acquire_for\`).
+        Delegates the bucket composition and LRU-lite eviction to
+        :attr:`limiter` (same strategy as :meth:`allow_rest_acquire_for`).
         """
-        if len(self._rest_send_per_client) >= _REST_CLIENT_CACHE_MAX:
-            for k in list(self._rest_send_per_client)[:_REST_CLIENT_EVICT_COUNT]:
-                del self._rest_send_per_client[k]
-        bucket = self._rest_send_per_client.setdefault(client_id, TokenBucket(self._rest_send_rate))
-        allowed = bucket.allow() and self._rest_send_bucket.allow()
+        allowed = self.limiter.allow_rest_send(client_id)
         if not allowed:
             logger.warning(EVENT_RATE_LIMIT_TRIGGERED, client_id=client_id, limit_type="rest_send")
         return allowed
@@ -281,7 +280,9 @@ class _ConnectionMixin:
         """Allow broadcasts to a browser after its startup frames have been sent."""
         async with self._lock:
             st = self._workers.get(worker_id)
-            if st is not None and ws in st.browsers:  # pragma: no branch — race window during browser disconnect; defensive
+            if (
+                st is not None and ws in st.browsers
+            ):  # pragma: no branch — race window during browser disconnect; defensive
                 self._startup_pending_browsers.discard(ws)
 
     @staticmethod

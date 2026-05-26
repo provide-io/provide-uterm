@@ -29,19 +29,20 @@ from provide.uterm.bridge.hub.ext import (
     OutputPolicyGate,
     PolicyGate,
 )
+from provide.uterm.bridge.hub.limiter import RateLimiter
 from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
 from provide.uterm.bridge.hub.polling import _PollingMixin
 from provide.uterm.bridge.hub.registry import WorkerRegistry
 from provide.uterm.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.uterm.bridge.hub.state import HubStateMixin
-from provide.uterm.bridge.ratelimit import TokenBucket
 from provide.uterm.control_channel import encode_control, encode_data
 
 if TYPE_CHECKING:
     from provide.uterm.bridge.hub.event_bus import EventBus
     from provide.uterm.bridge.identity import IdentityProvider
     from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.bridge.ratelimit import TokenBucket
 
 logger = get_logger(__name__)
 
@@ -136,12 +137,15 @@ class TermHub(
         self.max_input_chars = max(100, int(max_input_chars))
         self.browser_rate_limit_per_sec = float(browser_rate_limit_per_sec)
         self.browser_control_rate_limit_per_sec = max(0.1, float(browser_control_rate_limit_per_sec))
-        self._rest_acquire_rate = max(0.1, float(rest_acquire_rate_limit_per_sec))
-        self._rest_send_rate = max(0.1, float(rest_send_rate_limit_per_sec))
-        self._rest_acquire_bucket = TokenBucket(self._rest_acquire_rate)
-        self._rest_send_bucket = TokenBucket(self._rest_send_rate)
-        self._rest_acquire_per_client: dict[str, TokenBucket] = {}
-        self._rest_send_per_client: dict[str, TokenBucket] = {}
+        # RateLimiter owns the per-purpose REST token buckets; legacy
+        # ``_rest_*`` attributes are exposed as property shims below so
+        # existing mixin and test code that pokes the buckets directly
+        # continues to work while the phased refactor migrates call
+        # sites to ``self.limiter`` accessors.
+        self.limiter = RateLimiter(
+            rest_acquire_rate=float(rest_acquire_rate_limit_per_sec),
+            rest_send_rate=float(rest_send_rate_limit_per_sec),
+        )
         self._event_deque_maxlen = max(1, int(event_deque_maxlen))
         self._resume_store = resume_store
         self._resume_ttl_s = max(1.0, float(resume_ttl_s))
@@ -187,6 +191,45 @@ class TermHub(
     def _workers(self, value: dict[str, WorkerTermState]) -> None:
         """Replace the worker map wholesale (back-compat for tests)."""
         self.registry._workers = value
+
+    # -- RateLimiter back-compat shims -----------------------------------
+    # These forward the legacy ``_rest_*`` attributes to :attr:`limiter`.
+    # Tests still poke individual buckets directly (force ``_tokens = 0``
+    # to simulate exhaustion, swap in ``MagicMock``s, pre-populate the
+    # per-client dict to exercise eviction); the shims keep that surface
+    # alive while ownership moves into the service.
+
+    @property
+    def _rest_acquire_bucket(self) -> TokenBucket:
+        return self.limiter.rest_acquire_bucket
+
+    @_rest_acquire_bucket.setter
+    def _rest_acquire_bucket(self, bucket: TokenBucket) -> None:
+        self.limiter.rest_acquire_bucket = bucket
+
+    @property
+    def _rest_send_bucket(self) -> TokenBucket:
+        return self.limiter.rest_send_bucket
+
+    @_rest_send_bucket.setter
+    def _rest_send_bucket(self, bucket: TokenBucket) -> None:
+        self.limiter.rest_send_bucket = bucket
+
+    @property
+    def _rest_acquire_per_client(self) -> dict[str, TokenBucket]:
+        return self.limiter.rest_acquire_per_client
+
+    @_rest_acquire_per_client.setter
+    def _rest_acquire_per_client(self, value: dict[str, TokenBucket]) -> None:
+        self.limiter.rest_acquire_per_client = value
+
+    @property
+    def _rest_send_per_client(self) -> dict[str, TokenBucket]:
+        return self.limiter.rest_send_per_client
+
+    @_rest_send_per_client.setter
+    def _rest_send_per_client(self, value: dict[str, TokenBucket]) -> None:
+        self.limiter.rest_send_per_client = value
 
     @property
     def identity_provider(self) -> IdentityProvider | None:
