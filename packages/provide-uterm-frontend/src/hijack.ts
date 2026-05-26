@@ -16,6 +16,7 @@
  *   w.dispose();    // tear down entirely
  */
 
+import type { AnyFrame } from "./generated/frames.js";
 import {
   ControlChannelDecoder,
   type FitAddonInstance,
@@ -329,14 +330,18 @@ export class ProvideHijack {
 
   // ── Message dispatch ──────────────────────────────────────────────────────
 
-  private _handleMessage(msg: Record<string, unknown>): void {
+  private _handleMessage(rawMsg: Record<string, unknown>): void {
+    // Trust the decoder's parsed control payload as conforming to the
+    // generated AnyFrame union — wire format is the single source of truth
+    // (packages/provide-uterm/.../bridge/schemas.py).
+    const msg = rawMsg as AnyFrame;
     const state = this._state;
-    switch (msg.type as string) {
+    switch (msg.type) {
       case "term":
         state.workerOnline = true;
         if (msg.data) {
           try {
-            this._ensureTerm().write(msg.data as string);
+            this._ensureTerm().write(msg.data);
           } catch (_) {}
         }
         break;
@@ -344,15 +349,15 @@ export class ProvideHijack {
       case "snapshot": {
         stopReconnectAnim(state);
         state.workerOnline = true;
-        const promptDetected = msg.prompt_detected as Record<string, unknown> | undefined;
-        const promptId = promptDetected?.prompt_id as string | undefined;
+        const promptDetected = msg.prompt_detected as { prompt_id?: string } | null | undefined;
+        const promptId = promptDetected?.prompt_id;
         this._setPromptId(promptId ?? "");
         try {
           const t = this._ensureTerm();
           // Use ANSI soft reset (DECSTR) + clear screen — preserves scrollback buffer.
           // Avoids t.reset() which destroys scrollback and breaks scroll indicators.
           t.write("[!p[2J[H");
-          t.write(((msg.screen as string | undefined) ?? "").replace(/\n/g, "\r\n"));
+          t.write((msg.screen ?? "").replace(/\n/g, "\r\n"));
         } catch (_) {}
         break;
       }
@@ -360,7 +365,7 @@ export class ProvideHijack {
       case "analysis": {
         const pre = this._q("analysistext");
         if (pre) {
-          pre.textContent = (msg.formatted as string | undefined) ?? "(no analysis)";
+          pre.textContent = msg.formatted ?? "(no analysis)";
           const details = this._q("analysis");
           if (details) (details as HTMLDetailsElement).open = true;
         }
@@ -368,26 +373,23 @@ export class ProvideHijack {
       }
 
       case "hello": {
-        state.canHijack = !!(msg.can_hijack as boolean | undefined);
-        state.hijacked = !!(msg.hijacked as boolean | undefined);
-        state.hijackedByMe = !!(msg.hijacked_by_me as boolean | undefined);
-        state.workerOnline = !!(msg.worker_online as boolean | undefined);
-        const inputMode = msg.input_mode as string | undefined;
-        if (inputMode) state.inputMode = inputMode;
+        state.canHijack = !!msg.can_hijack;
+        state.hijacked = !!msg.hijacked;
+        state.hijackedByMe = !!msg.hijacked_by_me;
+        state.workerOnline = !!msg.worker_online;
+        if (msg.input_mode) state.inputMode = msg.input_mode;
         // Server is authoritative on role; prefer it over the constructor
         // input for UX decisions (approval modal vs statusbar, admin buttons).
-        const helloRole = msg.role as string | undefined;
-        if (helloRole) state.serverRole = helloRole;
-        const caps = msg.capabilities as Record<string, unknown> | undefined;
-        state.hijackControl =
-          (msg.hijack_control as string | undefined) ?? (caps?.hijack_control as string | undefined) ?? "ws";
-        const stepSupported =
-          (msg.hijack_step_supported as boolean | undefined) ?? (caps?.hijack_step_supported as boolean | undefined);
+        if (msg.role) state.serverRole = msg.role;
+        const caps = msg.capabilities;
+        const capsHijackControl = caps?.hijack_control as string | undefined;
+        const capsHijackStep = caps?.hijack_step_supported as boolean | undefined;
+        state.hijackControl = msg.hijack_control ?? capsHijackControl ?? "ws";
+        const stepSupported = msg.hijack_step_supported ?? capsHijackStep;
         state.hijackStepSupported = stepSupported !== false;
-        const resumeToken = msg.resume_token as string | undefined;
-        if (resumeToken) {
-          state.resumeToken = resumeToken;
-          saveResumeToken(state, resumeToken);
+        if (msg.resume_token) {
+          state.resumeToken = msg.resume_token;
+          saveResumeToken(state, msg.resume_token);
         }
         this._updateStatus();
         this._updateButtons();
@@ -406,11 +408,10 @@ export class ProvideHijack {
         break;
 
       case "hijack_state": {
-        state.hijacked = !!(msg.hijacked as boolean | undefined);
-        state.hijackedByMe = (msg.owner as string | undefined) === "me";
+        state.hijacked = msg.hijacked;
+        state.hijackedByMe = msg.owner === "me";
         if (!state.hijackedByMe) state.restHijackId = null;
-        const hsInputMode = msg.input_mode as string | undefined;
-        if (hsInputMode) state.inputMode = hsInputMode;
+        if (msg.input_mode) state.inputMode = msg.input_mode;
         if (state.hijackedByMe) {
           startHeartbeat(state);
         } else {
@@ -436,8 +437,7 @@ export class ProvideHijack {
         break;
 
       case "input_mode_changed": {
-        const changedMode = msg.input_mode as string | undefined;
-        if (changedMode) state.inputMode = changedMode;
+        if (msg.input_mode) state.inputMode = msg.input_mode;
         this._updateStatus();
         this._updateButtons();
         break;
@@ -448,9 +448,9 @@ export class ProvideHijack {
 
       case "approval_pending":
         this._pendingApproval = {
-          id: msg.request_id as string,
-          command: msg.command as string,
-          expiresAt: msg.expires_at as number,
+          id: msg.request_id,
+          command: msg.command,
+          expiresAt: msg.expires_at,
         };
         this._showApprovalUI();
         break;
@@ -461,7 +461,7 @@ export class ProvideHijack {
         break;
 
       case "error": {
-        const message = (msg.message as string | undefined) ?? "unknown";
+        const message = msg.message ?? "unknown";
         if (message === "Buffer overflow — input dropped") {
           this._setStatus("bad", message);
         } else {
@@ -477,7 +477,14 @@ export class ProvideHijack {
       case "presence_update":
       case "presence_leave":
       case "control_transfer":
-        this._config.onPresenceMessage?.(msg);
+        this._config.onPresenceMessage?.(rawMsg);
+        break;
+
+      default:
+        // Frame types that exist in AnyFrame but aren't handled here
+        // (input, snapshot_req, hijack_request/release/step, worker_hello,
+        // heartbeat, ping, pong, resume, status). An exhaustive default
+        // makes adding a new frame type a compile-time decision.
         break;
     }
   }
