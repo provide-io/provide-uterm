@@ -26,6 +26,7 @@ import websockets.server
 from provide.uterm.auth import AuthorizedKeysFileResolver
 from provide.uterm.gateway import SshWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
+from tests.e2e._live_server import wait_for_condition
 
 pytestmark = pytest.mark.asyncio
 
@@ -147,8 +148,14 @@ class TestConcurrentIdentitiesDistinct:
                 _open_session_and_close(ssh_port, alice_key, "alice"),
                 _open_session_and_close(ssh_port, bob_key, "bob"),
             )
-            # Short settle to let WS handler finish recording.
-            await asyncio.sleep(0.2)
+            # Deterministically wait for both identity frames instead of a
+            # fixed-sleep settle.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: len(frames) >= 2,
+                    timeout=5.0,
+                    description="two identity frames on upstream WS",
+                )
         finally:
             ssh_srv.close()
             await ssh_srv.wait_closed()
@@ -216,7 +223,14 @@ class TestFiveConcurrentIdentities:
 
         try:
             await asyncio.gather(*[_open_session_and_close(ssh_port, keys[i], names[i]) for i in range(n)])
-            await asyncio.sleep(0.3)
+            # Deterministically wait for all N identity frames instead of a
+            # fixed-sleep settle.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: len(frames) >= n,
+                    timeout=5.0,
+                    description=f"{n} identity frames on upstream WS",
+                )
         finally:
             ssh_srv.close()
             await ssh_srv.wait_closed()
