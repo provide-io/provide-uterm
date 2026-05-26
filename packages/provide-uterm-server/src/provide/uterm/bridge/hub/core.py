@@ -39,12 +39,12 @@ from provide.uterm.bridge.hub.presence import PresenceManager
 from provide.uterm.bridge.hub.registry import WorkerRegistry
 from provide.uterm.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.uterm.bridge.hub.router import MessageRouter
-from provide.uterm.bridge.hub.state import HubStateMixin
 from provide.uterm.bridge.hub.store import StateStore
 from provide.uterm.control_channel import encode_control, encode_data
 
 if TYPE_CHECKING:
     from provide.uterm.bridge.hub.event_bus import EventBus
+    from provide.uterm.bridge.hub.ext import PolicyContext
     from provide.uterm.bridge.identity import IdentityProvider
     from provide.uterm.bridge.models import WorkerTermState
     from provide.uterm.bridge.ratelimit import TokenBucket
@@ -83,7 +83,6 @@ class BrowserRoleResolutionError(RuntimeError):
 
 class TermHub(
     HubMessagingMixin,
-    HubStateMixin,
     _HijackOwnershipMixin,
     _ConnectionMixin,
 ):
@@ -119,6 +118,72 @@ class TermHub(
             timeout_ms=timeout_ms,
             poll_interval_ms=poll_interval_ms,
         )
+
+    # -- StateStore delegates (Phase 7b: ex-HubStateMixin) -----------------
+    # The store (``self.state``) owns the actual implementation. The
+    # methods below are thin pass-throughs that keep the legacy
+    # ``hub.<name>(...)`` call surface intact without an extra mixin in
+    # the MRO. Tests still monkey-patch ``shutdown`` and
+    # ``notify_hijack_changed`` on hub instances — that pattern keeps
+    # working because instance attributes shadow class methods regardless
+    # of where the method lives in the class hierarchy.
+
+    @property
+    def event_bus(self) -> EventBus | None:
+        """Public accessor for the EventBus instance (None if not configured)."""
+        return self._event_bus
+
+    @event_bus.setter
+    def event_bus(self, value: EventBus | None) -> None:
+        """Backward-compatible setter used by tests and app wiring."""
+        self._event_bus = value
+
+    def _buffer_and_get_command(self, ws: WebSocket, data: str) -> str | None:
+        """Accumulate input for *ws* and return the command if a newline is received."""
+        return self.state.buffer_and_get_command(ws, data)
+
+    async def shutdown(self) -> None:
+        """Cancel all background tasks for graceful shutdown."""
+        await self.state.shutdown()
+
+    async def touch_activity(self, worker_id: str) -> None:
+        """Update the last-activity timestamp for *worker_id*."""
+        await self.state.touch_activity(worker_id)
+
+    def metric(self, name: str, value: int = 1) -> None:
+        """Emit a named metric via the configured on_metric callback."""
+        self.state.metric(name, value)
+
+    # ``staticmethod`` wrappers around the canonical implementations on
+    # :class:`StateStore` so legacy ``hub.clamp_lease(...)`` /
+    # ``TermHub.is_dashboard_hijack_active(st)`` call sites keep working.
+    clamp_lease = staticmethod(StateStore.clamp_lease)
+    has_valid_rest_lease = staticmethod(StateStore.has_valid_rest_lease)
+    is_dashboard_hijack_active = staticmethod(StateStore.is_dashboard_hijack_active)
+
+    def is_hijacked(self, st: WorkerTermState) -> bool:
+        """Return True if *st* is under any active hijack (dashboard WS or REST)."""
+        return self.state.is_hijacked(st)
+
+    async def _get(self, worker_id: str) -> WorkerTermState:
+        """Return the existing :class:`WorkerTermState` for *worker_id* or create one."""
+        return await self.state.get_or_create(worker_id)
+
+    def notify_hijack_changed(self, worker_id: str, *, enabled: bool, owner: str | None = None) -> None:
+        """Fire the on_hijack_changed callback (sync or async) without blocking."""
+        self.state.notify_hijack_changed(worker_id, enabled=enabled, owner=owner)
+
+    async def _resolve_role_for_browser(self, ws: WebSocket, worker_id: str) -> str:
+        """Resolve a browser role via the configured callback; defaults to "viewer"."""
+        return await self.state.resolve_role_for_browser(ws, worker_id)
+
+    async def prepare_policy_context(self, ws: WebSocket, worker_id: str, action: str | None = None) -> PolicyContext:
+        """Create a :class:`PolicyContext` for the given browser WebSocket and worker."""
+        return await self.state.prepare_policy_context(ws, worker_id, action)
+
+    def _map_roles(self, principal: Any) -> frozenset[str]:
+        """Map an identity-provider principal to a frozen set of hub roles."""
+        return self.state._map_roles(principal)
 
     def __init__(
         self,
