@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -88,16 +90,37 @@ def test_register_webhook_rejects_unsafe_regex(client: TestClient, pattern: str)
 
 
 def test_register_webhook_accepts_public_https_url_and_valid_regex(client: TestClient) -> None:
-    resp = client.post(
-        "/api/sessions/s1/webhooks",
-        json={"url": "https://hooks.example.com/uterm", "pattern": r"\$ "},
-        headers=ADMIN_H,
-    )
+    # The DNS-resolution SSRF guard is exercised separately; mock the resolver
+    # so this happy-path test doesn't depend on live DNS being reachable from
+    # the sandbox or returning a stable public IP.
+    with patch(
+        "provide.uterm.server.webhooks._resolve_hostname_sync",
+        return_value=("93.184.216.34",),
+    ):
+        resp = client.post(
+            "/api/sessions/s1/webhooks",
+            json={"url": "https://hooks.example.com/uterm", "pattern": r"\$ "},
+            headers=ADMIN_H,
+        )
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["url"] == "https://hooks.example.com/uterm"
     assert data["pattern"] == r"\$ "
+
+
+def test_register_webhook_rejects_dns_name_resolving_to_metadata_ip(client: TestClient) -> None:
+    """DNS rebinding-style host whose resolution returns 169.254.169.254 must be rejected."""
+    with patch(
+        "provide.uterm.server.webhooks._resolve_hostname_sync",
+        return_value=("169.254.169.254",),
+    ):
+        resp = client.post(
+            "/api/sessions/s1/webhooks",
+            json={"url": "https://attacker.example.com/hook"},
+            headers=ADMIN_H,
+        )
+    assert resp.status_code == 422
 
 
 def test_register_webhook_allows_loopback_when_explicitly_configured() -> None:

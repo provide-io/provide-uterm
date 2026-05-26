@@ -50,6 +50,11 @@ logger = get_logger(__name__)
 _MAX_RETRIES = 3
 _RETRY_DELAYS = (0.5, 1.0, 2.0)
 _DELIVER_TIMEOUT_S = 5.0
+# Maximum consecutive SSRF-guard blocks tolerated before a webhook is
+# automatically unregistered. Re-resolution of a previously-safe hostname can
+# legitimately fail (e.g. DNS rebinding), but persistent failure means the
+# webhook will never succeed and continuing to evaluate it just wastes work.
+_MAX_BLOCKED_DELIVERIES = 3
 Resolver = Callable[[str], Sequence[str] | Awaitable[Sequence[str]]]
 
 _METADATA_IPS = frozenset(
@@ -61,8 +66,34 @@ _METADATA_IPS = frozenset(
 )
 
 
+_REGISTER_DNS_TIMEOUT_S = 2.0
+
+
+def _resolve_hostname_sync(hostname: str) -> tuple[str, ...]:
+    """Resolve *hostname* to IP strings using the blocking stdlib resolver.
+
+    A short global default timeout is applied so a hostile / slow DNS server
+    can't stall webhook registration. Any error is re-raised as ``ValueError``
+    by callers — DNS failures must be treated as "not allowed" rather than
+    "allowed by default".
+    """
+    previous_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(_REGISTER_DNS_TIMEOUT_S)
+    try:
+        infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    finally:
+        socket.setdefaulttimeout(previous_timeout)
+    return tuple({info[4][0] for info in infos})
+
+
 def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False) -> str:
-    """Validate and normalize a webhook delivery URL."""
+    """Validate and normalize a webhook delivery URL.
+
+    For DNS hostnames the resolver is queried with a short timeout and every
+    returned address is checked against the deny list — this blocks DNS
+    rebinding-style SSRF attempts where a name resolves to e.g. the cloud
+    metadata IP. DNS failures are treated as "not allowed".
+    """
     try:
         parsed = urlparse(url)
     except ValueError as exc:  # pragma: no cover — urlparse practically never raises on str input
@@ -84,6 +115,19 @@ def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False)
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
+        # DNS hostname — resolve and ensure every address is safe.
+        try:
+            addresses = _resolve_hostname_sync(hostname)
+        except (OSError, socket.gaierror, socket.herror, TimeoutError) as exc:
+            raise ValueError("webhook url host could not be resolved") from exc
+        if not addresses:
+            raise ValueError("webhook url host could not be resolved") from None
+        for address in addresses:
+            try:
+                if not _address_allowed(address, allow_loopback_destinations=allow_loopback_destinations):
+                    raise ValueError("webhook url host is not allowed")
+            except ValueError as exc:
+                raise ValueError("webhook url host is not allowed") from exc
         return url
 
     if not _address_allowed(str(ip), allow_loopback_destinations=allow_loopback_destinations):
@@ -130,6 +174,12 @@ class WebhookManager:
         self._tasks: dict[str, asyncio.Task[None]] = {}  # webhook_id → task
         self._resolver = resolver if resolver is not None else _resolve_host
         self._allow_loopback_destinations = bool(allow_loopback_destinations)
+        # Per-webhook count of consecutive deliveries blocked by the SSRF
+        # guard. After ``_MAX_BLOCKED_DELIVERIES`` the webhook is auto-
+        # unregistered to avoid burning CPU re-evaluating it forever.
+        self._blocked_counts: dict[str, int] = {}
+        # Strong refs to background unregister tasks so they aren't GC'd mid-flight.
+        self._unregister_tasks: set[asyncio.Task[None]] = set()
 
     def validate_url(self, url: str) -> str:
         return validate_webhook_url(url, allow_loopback_destinations=self._allow_loopback_destinations)
@@ -190,6 +240,7 @@ class WebhookManager:
         cfg = self._webhooks.pop(webhook_id, None)
         if cfg is None:
             return False
+        self._blocked_counts.pop(webhook_id, None)
         task = self._tasks.pop(webhook_id, None)
         if task is not None and not task.done():
             task.cancel()
@@ -214,6 +265,7 @@ class WebhookManager:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
         self._webhooks.clear()
+        self._blocked_counts.clear()
 
     # ------------------------------------------------------------------
     # Delivery internals
@@ -246,12 +298,31 @@ class WebhookManager:
             self._resolver,
             allow_loopback_destinations=self._allow_loopback_destinations,
         ):
+            self._blocked_counts[cfg.webhook_id] = self._blocked_counts.get(cfg.webhook_id, 0) + 1
+            count = self._blocked_counts[cfg.webhook_id]
             logger.warning(
-                "webhook_delivery_blocked webhook_id=%s url=%s reason=unsafe_destination",
+                "webhook_delivery_blocked webhook_id=%s url=%s reason=unsafe_destination count=%d",
                 cfg.webhook_id,
                 cfg.url,
+                count,
             )
+            if count >= _MAX_BLOCKED_DELIVERIES:
+                logger.error(
+                    "webhook_auto_unregistered webhook_id=%s url=%s reason=ssrf_guard_threshold count=%d",
+                    cfg.webhook_id,
+                    cfg.url,
+                    count,
+                )
+                # Schedule unregister in the background so we don't try to
+                # await our own delivery task (which is what calls us).
+                unreg_task = asyncio.create_task(self.unregister(cfg.webhook_id))
+                self._unregister_tasks.add(unreg_task)
+                unreg_task.add_done_callback(self._unregister_tasks.discard)
             return
+        # Successful guard pass — reset the consecutive-block counter so a
+        # webhook that's been intermittently safe-then-unsafe-then-safe isn't
+        # killed by a stale count.
+        self._blocked_counts.pop(cfg.webhook_id, None)
 
         payload = {
             "webhook_id": cfg.webhook_id,
@@ -328,7 +399,9 @@ async def _delivery_url_allowed(
         return all(
             _address_allowed(address, allow_loopback_destinations=allow_loopback_destinations) for address in addresses
         )
-    except ValueError:  # pragma: no cover — _address_allowed only raises on malformed IP strings the resolver wouldn't return
+    except (
+        ValueError
+    ):  # pragma: no cover — _address_allowed only raises on malformed IP strings the resolver wouldn't return
         return False
 
 
@@ -346,4 +419,10 @@ def _address_allowed(address: str, *, allow_loopback_destinations: bool = False)
         return False
     if ip.is_loopback:
         return allow_loopback_destinations
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified)
+    # ``is_reserved`` covers IANA-reserved ranges (Class E, benchmarking
+    # 198.18/15, documentation 198.51.100/24 + 203.0.113/24 on IPv6 — IPv4
+    # documentation ranges are caught by ``is_reserved`` in Python's stdlib
+    # via the IANA special-purpose registry).
+    return not (
+        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved
+    )

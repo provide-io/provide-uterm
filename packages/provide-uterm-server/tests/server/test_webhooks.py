@@ -562,3 +562,140 @@ async def test_multiple_webhooks_both_receive_events() -> None:
     assert len(received_a) >= 1
     assert len(received_b) >= 1
     await manager.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# SSRF guard — DNS resolution at registration time
+# ---------------------------------------------------------------------------
+
+
+def test_validate_webhook_url_rejects_dns_name_resolving_to_metadata_ip() -> None:
+    """A hostname that DNS-resolves to a cloud-metadata IP must be rejected."""
+    from provide.uterm.server import webhooks as wh
+
+    with patch.object(wh, "_resolve_hostname_sync", return_value=("169.254.169.254",)):
+        with pytest.raises(ValueError, match="not allowed"):
+            wh.validate_webhook_url("https://malicious.example.com/hook")
+
+
+def test_validate_webhook_url_rejects_dns_name_resolving_to_private_ip() -> None:
+    from provide.uterm.server import webhooks as wh
+
+    with patch.object(wh, "_resolve_hostname_sync", return_value=("10.0.0.5",)):
+        with pytest.raises(ValueError, match="not allowed"):
+            wh.validate_webhook_url("https://internal.example.com/hook")
+
+
+def test_validate_webhook_url_rejects_when_any_resolved_ip_is_blocked() -> None:
+    """Mixed-result DNS where ANY address is blocked must reject the URL."""
+    from provide.uterm.server import webhooks as wh
+
+    with patch.object(wh, "_resolve_hostname_sync", return_value=("93.184.216.34", "10.0.0.1")):
+        with pytest.raises(ValueError, match="not allowed"):
+            wh.validate_webhook_url("https://mixed.example.com/hook")
+
+
+def test_validate_webhook_url_rejects_dns_resolution_failure() -> None:
+    from provide.uterm.server import webhooks as wh
+
+    with patch.object(wh, "_resolve_hostname_sync", side_effect=OSError("dns timeout")):
+        with pytest.raises(ValueError, match="could not be resolved"):
+            wh.validate_webhook_url("https://nx.example.com/hook")
+
+
+def test_validate_webhook_url_accepts_dns_resolving_to_public_ips() -> None:
+    from provide.uterm.server import webhooks as wh
+
+    with patch.object(wh, "_resolve_hostname_sync", return_value=("93.184.216.34",)):
+        assert wh.validate_webhook_url("https://example.com/hook") == "https://example.com/hook"
+
+
+@pytest.mark.parametrize(
+    "blocked_literal",
+    [
+        # IANA benchmark range 198.18.0.0/15
+        "https://198.18.0.5/hook",
+        "https://198.19.255.1/hook",
+        # IANA documentation ranges
+        "https://203.0.113.5/hook",
+        "https://198.51.100.5/hook",
+        # IANA Class E reserved
+        "https://240.0.0.1/hook",
+    ],
+)
+def test_validate_webhook_url_rejects_reserved_literal_ips(blocked_literal: str) -> None:
+    from provide.uterm.server import webhooks as wh
+
+    with pytest.raises(ValueError, match="not allowed"):
+        wh.validate_webhook_url(blocked_literal)
+
+
+# ---------------------------------------------------------------------------
+# SSRF guard — auto-unregister after repeated delivery blocks
+# ---------------------------------------------------------------------------
+
+
+async def test_repeated_blocked_deliveries_auto_unregister() -> None:
+    """After ``_MAX_BLOCKED_DELIVERIES`` SSRF blocks the webhook is removed."""
+    # Resolver returns a blocked IP so every delivery is refused.
+    manager = WebhookManager(resolver=lambda _h: ("10.0.0.1",))
+    cfg = WebhookConfig(
+        webhook_id="wh-block",
+        session_id="s1",
+        url="https://webhook.example/hook",
+        event_types=None,
+        pattern=None,
+        secret=None,
+    )
+    # Pre-register so unregister can find + remove it.
+    manager._webhooks[cfg.webhook_id] = cfg
+    # Provide a no-op task so unregister doesn't trip on missing entries.
+    fake_task = asyncio.create_task(asyncio.sleep(0))
+    manager._tasks[cfg.webhook_id] = fake_task
+    await fake_task
+
+    post = AsyncMock()
+    with patch("httpx.AsyncClient.post", new=post):
+        for _ in range(3):
+            await manager._deliver(cfg, _make_event())
+        # Allow the scheduled unregister task to run.
+        await asyncio.sleep(0.05)
+
+    # The webhook must no longer be registered.
+    assert manager.get_webhook(cfg.webhook_id) is None
+    assert cfg.webhook_id not in manager._blocked_counts
+    post.assert_not_awaited()
+    await manager.shutdown()
+
+
+async def test_successful_delivery_resets_block_counter() -> None:
+    """A successful (allowed) delivery clears the consecutive-block counter."""
+    # Resolver toggles: first call blocked, second allowed.
+    calls = {"n": 0}
+
+    def _resolver(_h: str) -> tuple[str, ...]:
+        calls["n"] += 1
+        return ("10.0.0.1",) if calls["n"] == 1 else ("93.184.216.34",)
+
+    manager = WebhookManager(resolver=_resolver)
+    cfg = WebhookConfig(
+        webhook_id="wh-reset",
+        session_id="s1",
+        url="https://webhook.example/hook",
+        event_types=None,
+        pattern=None,
+        secret=None,
+    )
+    manager._webhooks[cfg.webhook_id] = cfg
+
+    resp = MagicMock()
+    resp.is_success = True
+    post = AsyncMock(return_value=resp)
+    with patch("httpx.AsyncClient.post", new=post):
+        await manager._deliver(cfg, _make_event())  # blocked → count=1
+        assert manager._blocked_counts[cfg.webhook_id] == 1
+        await manager._deliver(cfg, _make_event())  # allowed → reset
+    assert cfg.webhook_id not in manager._blocked_counts
+    # Webhook still registered after the reset.
+    assert manager.get_webhook(cfg.webhook_id) is cfg
+    await manager.shutdown()
