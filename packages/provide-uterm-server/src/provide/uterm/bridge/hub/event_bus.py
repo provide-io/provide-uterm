@@ -252,13 +252,19 @@ def _compile_pattern(
 
 
 def _validate_pattern_safety(pattern: str) -> None:
-    group_stack: list[bool] = []
+    # Each entry on the stack is [has_inner_quantifier, has_alternation].
+    # ``has_inner_quantifier`` is True once we see ``+``, ``*``, or ``{n,...}``
+    # inside the group. ``has_alternation`` is True once we see an unescaped
+    # ``|`` at this group's depth.
+    group_stack: list[list[bool]] = []
     previous_kind = ""
     last_closed_group_had_quantifier = False
+    last_closed_group_had_alternation = False
     escaped = False
     in_class = False
     i = 0
-    while i < len(pattern):
+    n = len(pattern)
+    while i < n:
         char = pattern[i]
         if escaped:
             escaped = False
@@ -280,21 +286,64 @@ def _validate_pattern_safety(pattern: str) -> None:
             i += 1
             continue
         if char == "(":
-            group_stack.append(False)
+            group_stack.append([False, False])
             previous_kind = ""
             last_closed_group_had_quantifier = False
+            last_closed_group_had_alternation = False
+            # Skip past any group-prefix sequence like ``(?:``, ``(?=``,
+            # ``(?!``, ``(?<=``, ``(?<!``, ``(?P<name>``, etc. The prefix
+            # characters themselves are non-content and should not affect the
+            # alternation/quantifier tracking below.
             i += 1
+            if i < n and pattern[i] == "?":
+                # Advance to the end of the group-prefix metadata. Conservative:
+                # stop at ':' (non-capturing), '=' / '!' (lookarounds), or
+                # past ``(?P<name>``. We stop on the first character that is
+                # part of the group body.
+                i += 1
+                # ``(?<...`` lookbehind: skip the '<' and the '=' or '!' after
+                if i < n and pattern[i] == "<" and i + 1 < n and pattern[i + 1] in "=!":
+                    i += 2
+                # ``(?P<name>``: skip until '>'
+                elif i < n and pattern[i] == "P":
+                    end = pattern.find(">", i)
+                    if end != -1:
+                        i = end + 1
+                # ``(?:``, ``(?=``, ``(?!``: just skip the single marker char
+                elif i < n and pattern[i] in ":=!":
+                    i += 1
+                # else: unknown / inline flag like ``(?i)``; leave i alone
             continue
         if char == ")" and group_stack:
-            last_closed_group_had_quantifier = group_stack.pop()
+            frame = group_stack.pop()
+            last_closed_group_had_quantifier = frame[0]
+            last_closed_group_had_alternation = frame[1]
+            # Propagate inner-quantifier / inner-alternation up so that a
+            # parent group enclosing a quantified-or-alternated subgroup
+            # is itself flagged when later followed by a quantifier
+            # (catches e.g. ``(?=(a+))+`` and ``((a|b))+``).
+            if group_stack:
+                if frame[0]:
+                    group_stack[-1][0] = True
+                if frame[1]:
+                    group_stack[-1][1] = True
             previous_kind = "group"
             i += 1
             continue
-        if char in "+*" or (char == "{" and _looks_like_counted_quantifier(pattern, i)):
-            if previous_kind == "group" and last_closed_group_had_quantifier:
-                raise ValueError("unsafe watch pattern: nested quantified groups are not allowed")
+        if char == "|":
             if group_stack:
-                group_stack[-1] = True
+                group_stack[-1][1] = True
+            previous_kind = "alternation"
+            i += 1
+            continue
+        if char in "+*" or (char == "{" and _looks_like_counted_quantifier(pattern, i)):
+            if previous_kind == "group":
+                if last_closed_group_had_quantifier:
+                    raise ValueError("unsafe watch pattern: nested quantified groups are not allowed")
+                if last_closed_group_had_alternation:
+                    raise ValueError("unsafe watch pattern: quantified groups containing alternation are not allowed")
+            if group_stack:
+                group_stack[-1][0] = True
             previous_kind = "quantifier"
             if char == "{":
                 i = pattern.find("}", i) + 1
@@ -303,6 +352,7 @@ def _validate_pattern_safety(pattern: str) -> None:
             continue
         previous_kind = "literal"
         last_closed_group_had_quantifier = False
+        last_closed_group_had_alternation = False
         i += 1
 
 

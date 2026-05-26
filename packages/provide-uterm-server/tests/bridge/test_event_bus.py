@@ -235,6 +235,51 @@ def test_compile_pattern_rejects_nested_quantifier_patterns() -> None:
         _compile_pattern(r"(a+)+$")
 
 
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        # Alternation inside a quantified group (non-capturing).
+        r"(?:a|aa)+",
+        # Alternation inside a quantified capturing group.
+        r"(a|b)+x",
+        # Lookahead wrapping a quantified subgroup, itself quantified.
+        r"(?=(a+))+",
+        # Counted-quantifier variant of the alternation case.
+        r"(?:a|aa){2,}",
+        # Nested quantified group (regression).
+        r"(a+)+$",
+        # Nested quantified subgroup inside a star-quantified group.
+        r"((a+))*",
+    ],
+)
+def test_compile_pattern_rejects_redos_shapes(pattern: str) -> None:
+    with pytest.raises(ValueError, match="unsafe watch pattern"):
+        _compile_pattern(pattern)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        # Character class with a quantifier is linear-time.
+        r"[abc]+",
+        # Simple literal.
+        r"hello world",
+        # Single non-nested quantified literal.
+        r"a+",
+        # Alternation without a quantifier on the group.
+        r"(a|b)x",
+        # Quantified group with no alternation and no inner quantifier.
+        r"(ab)+",
+        # Escaped pipe is a literal, not alternation.
+        r"(a\|b)+",
+    ],
+)
+def test_compile_pattern_allows_safe_patterns(pattern: str) -> None:
+    # Must not raise.
+    compiled = _compile_pattern(pattern)
+    assert compiled is not None
+
+
 async def test_watch_rejects_patterns_over_configured_length() -> None:
     bus = EventBus(max_pattern_length=8)
     with pytest.raises(ValueError, match="watch pattern is too long"):
