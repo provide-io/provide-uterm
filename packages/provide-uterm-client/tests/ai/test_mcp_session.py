@@ -39,7 +39,13 @@ def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
 
 
 def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
-    """Return a FastMCP app backed by ASGI transport to *app*."""
+    """Return a FastMCP app backed by ASGI transport to *app*.
+
+    Tests in this file exercise worker-control tools requiring admin role
+    (worker_disconnect/worker_input_mode); after Finding #2 the default
+    role dropped to operator so these tests now opt in explicitly.
+    """
+    kwargs.setdefault("default_role", "admin")
     return create_mcp_app(
         "http://test",
         transport=ASGITransport(app=app),
@@ -54,7 +60,11 @@ def _make_server_app() -> FastAPI:
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": [
                 {
                     "session_id": "s1",

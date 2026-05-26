@@ -181,6 +181,7 @@ def create_mcp_app(
     base_url: str,
     *,
     default_principal: McpPrincipal | None = None,
+    default_role: str = "operator",
     **client_kwargs: Any,
 ) -> FastMCP:
     """Create a FastMCP app with all provide-uterm tools.
@@ -194,17 +195,29 @@ def create_mcp_app(
         When ``None``, the principal is inferred from the ``X-Uterm-Principal``
         / ``X-Uterm-Role`` headers in ``client_kwargs["headers"]`` (so legacy
         callers that supplied auth headers continue to work), falling back to
-        an admin principal for stdio/local development.
+        a principal carrying ``default_role`` for stdio/local development.
+    default_role:
+        Role assigned to the fallback ``McpPrincipal`` when no headers/principal
+        are supplied.  Defaults to ``"operator"``; operators that need admin
+        must opt in explicitly (``--role admin`` on the CLI).  Must be one of
+        ``admin``, ``operator``, ``viewer``.
     **client_kwargs:
         Forwarded to :class:`HijackClient` (``entity_prefix``,
         ``headers``, ``timeout``, ``transport``).
     """
+    if default_role not in {"admin", "operator", "viewer"}:
+        raise ValueError(f"default_role must be one of 'admin', 'operator', 'viewer'; got {default_role!r}")
     client = HijackClient(base_url, **client_kwargs)
 
     if default_principal is None:
         default_principal = principal_from_headers(client_kwargs.get("headers")) or McpPrincipal(
             subject_id="local",
-            roles=frozenset({"admin"}),
+            # An MCP server is typically launched over stdio by an LLM with no
+            # explicit caller identity; defaulting to admin would let any model
+            # invoke destructive tools (e.g. session delete, hijack release)
+            # without the operator opting in.  Operators that need admin must
+            # pass ``--role admin`` on the CLI or supply ``X-Uterm-Role: admin``.
+            roles=frozenset({default_role}),
         )
     auth_ctx = AuthorizationContext(default_principal=default_principal)
 
@@ -548,7 +561,26 @@ def create_mcp_app(
             max_events=clamped_max_events,
         )
         # Enrich with matched_pattern so callers know whether the pattern fired.
-        matched = bool(pattern and ok and data.get("events"))
+        # Re-check each event's screen text against the compiled regex rather
+        # than trusting that "events arrived" implies "pattern matched" — the
+        # registry fallback path (no EventBus) does not pre-filter events.
+        matched = False
+        if pattern and ok:
+            try:
+                compiled = re.compile(pattern)
+            except re.error:
+                compiled = None
+            if compiled is not None:
+                for event in data.get("events", []):
+                    if not isinstance(event, dict):
+                        continue
+                    payload = event.get("data") or {}
+                    screen = payload.get("screen", "") if isinstance(payload, dict) else ""
+                    if not isinstance(screen, str):
+                        screen = str(screen)
+                    if compiled.search(screen):
+                        matched = True
+                        break
         result = _ok(ok, data)
         result["matched_pattern"] = matched
         return result

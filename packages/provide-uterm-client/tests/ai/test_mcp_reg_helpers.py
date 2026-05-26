@@ -43,7 +43,9 @@ def _add_worker(hub: TermHub, worker_id: str) -> AsyncMock:
 
 
 def _mcp_for(app: FastAPI) -> FastMCP:
-    return create_mcp_app("http://test", transport=ASGITransport(app=app))
+    # Tests in this file exercise tools requiring admin role; after Finding #2
+    # the default is operator, so opt in explicitly.
+    return create_mcp_app("http://test", transport=ASGITransport(app=app), default_role="admin")
 
 
 async def _call(
@@ -426,6 +428,7 @@ class TestCLIEdgeCases:
             "http://fallback",
             entity_prefix="/worker",
             headers=None,
+            default_role="operator",
         )
 
     def test_build_parser_prog_name(self) -> None:

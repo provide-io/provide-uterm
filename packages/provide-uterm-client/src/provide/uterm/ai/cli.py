@@ -35,6 +35,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Extra header as key:value (repeatable).",
     )
+    # Default role granted to the stdio caller (the LLM) when no explicit
+    # identity headers are supplied.  Operators must opt in to ``admin`` —
+    # see Finding #2 in the security review notes.
+    parser.add_argument(
+        "--role",
+        dest="role",
+        choices=("admin", "operator", "viewer"),
+        default="operator",
+        help="Default role for the stdio caller (default: operator).",
+    )
     return parser
 
 
@@ -54,5 +64,6 @@ def main(argv: list[str] | None = None) -> None:
         args.url,
         entity_prefix=args.entity_prefix,
         headers=headers if headers else None,
+        default_role=args.role,
     )
     app.run(transport="stdio")

@@ -60,7 +60,9 @@ def _add_worker_with_snapshot(
 
 
 def _mcp_for(app: FastAPI) -> FastMCP:
-    return create_mcp_app("http://test", transport=ASGITransport(app=app))
+    # Tests in this file exercise admin-only tools; after Finding #2 the
+    # default dropped to operator so we opt in explicitly here.
+    return create_mcp_app("http://test", transport=ASGITransport(app=app), default_role="admin")
 
 
 def _server_app(
@@ -87,7 +89,11 @@ def _server_app(
     cfg = config_from_mapping(
         {
             "server": {"host": "127.0.0.1", "port": 0},
-            "auth": {"mode": "header", "header_mode_acknowledged": True, "worker_bearer_token": "test-bearer-token-32-chars-long-x"},
+            "auth": {
+                "mode": "header",
+                "header_mode_acknowledged": True,
+                "worker_bearer_token": "test-bearer-token-32-chars-long-x",
+            },
             "sessions": sessions,
         }
     )

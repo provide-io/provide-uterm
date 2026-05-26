@@ -36,7 +36,12 @@ def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
 
 
 def _mcp_for(app: FastAPI, **kwargs: object) -> FastMCP:
-    """Return a FastMCP app backed by ASGI transport to *app*."""
+    """Return a FastMCP app backed by ASGI transport to *app*.
+
+    Tests in this file exercise admin-only hijack tools; after Finding #2
+    the default dropped to operator so we opt in explicitly here.
+    """
+    kwargs.setdefault("default_role", "admin")
     return create_mcp_app(
         "http://test",
         transport=ASGITransport(app=app),
