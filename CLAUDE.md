@@ -107,7 +107,7 @@ Runs on commit: ruff (format+lint), mypy (strict), ty, bandit (security), biome 
 - mypy strict mode enabled
 - External dependency: `provide-telemetry` (sibling repo at `../provide-telemetry`, editable install)
 - Config files: TOML-based server config (see `docker/server.toml`, `scripts/uterm-server.example.toml`)
-- Auth modes: `dev` (no auth, local only) and `jwt` (production)
+- Auth modes: `dev` (no auth, local only), `jwt` (production), `header` (proxy-stripped headers; requires loopback bind or `auth.trusted_proxy_ips` allowlist), `api_key`, `webhook` (delegated IDP; `auth.webhook_idp_on_failure` defaults to `deny`).
 
 ## Frame Schemas (Python ↔ TypeScript)
 
