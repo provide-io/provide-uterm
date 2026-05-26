@@ -486,7 +486,15 @@ def create_server_app(
     hub.fan_out_controller = FanOutController(hub=hub, store=InMemoryFanOutStore())  # type: ignore[attr-defined]
     webhook_manager = WebhookManager(allow_loopback_destinations=config.webhooks.allow_loopback_destinations)
     # Annotation detector scans snapshot/send text for security-relevant patterns.
-    from provide.uterm.bridge.annotation._detector import PatternDetector
+    # Imported lazily — annotation lives in the separate provide-uterm-annotation
+    # package (optional extra "annotation"). If a deployment opts out of installing
+    # it, raise a clear runtime error instead of a bare ImportError.
+    try:
+        from provide.uterm.annotation import PatternDetector
+    except ImportError as exc:  # pragma: no cover - exercised when extra is omitted
+        raise RuntimeError(
+            "annotation support not installed; pip install 'provide-uterm-server[annotation]'",
+        ) from exc
     from provide.uterm.recording import InMemoryRecordingStore, LocalFileRecordingStore, NullRecordingStore
     from provide.uterm.server.discovery import (
         DiscoveryProvider,

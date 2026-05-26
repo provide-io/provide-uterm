@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
     from pathlib import Path
 
-    from provide.uterm.bridge.annotation._detector import PatternDetector
+    from provide.uterm.annotation import PatternDetector
     from provide.uterm.bridge.hub import TermHub
     from provide.uterm.recording import RecordingStore
 

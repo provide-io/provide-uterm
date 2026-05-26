@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from provide.uterm.bridge.annotation._models import DetectionRule
+from provide.uterm.annotation._models import DetectionRule
 
 # All built-in rules apply to both inbound and outbound event streams.
 _BOTH: frozenset[str] = frozenset({"read", "send"})

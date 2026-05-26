@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provide-uterm-annotation"
+dynamic = ["version"]
+description = "Session-annotation models, pattern detector, and built-in rules for provide-uterm"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+dependencies = ["provide-uterm>=0.4.0"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.3",
+    "pytest-cov>=7.0",
+    "pytest-timeout>=2.4.0",
+    "mypy>=1.19",
+    "ruff>=0.15",
+    "bandit>=1.9",
+    "provide-uterm>=0.4.0",
+]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"provide.uterm" = ["py.typed"]
+"provide.uterm.annotation" = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-ra",
+    "--cov=provide.uterm.annotation",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=100",
+]
+
+[tool.coverage.run]
+source = ["provide.uterm.annotation"]
+omit = ["tests/*"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH",
+    "DTZ", "ICN", "ISC", "PERF", "PIE", "RET", "RSE", "TID", "S", "ARG", "RUF",
+]
+# Aligned with the workspace-root ruff config in ../../pyproject.toml.
+ignore = [
+    "E501", "S101", "S104", "S108", "S110", "S112", "S311", "S603", "S607",
+    "S604", "F811", "N806", "N814", "B017", "SIM105", "SIM117", "ARG001",
+    "ARG002", "PTH108", "SIM108", "PERF401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "RUF022"]
+"tests/**/*.py" = ["E402", "B905", "S101", "S105", "S106", "S110", "ARG", "TCH", "RUF003", "RUF012", "RUF015", "RUF043", "RUF059"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["src"]
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.uv.sources]
+provide-uterm = { workspace = true }

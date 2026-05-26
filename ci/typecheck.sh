@@ -24,6 +24,7 @@ STRICT_PACKAGES=(
 )
 
 SOFT_PACKAGES=(
+  "packages/provide-uterm-annotation/src/"
   "packages/provide-uterm-server/src/"
   "packages/provide-uterm-client/src/"
   "packages/provide-uterm-platform/src/"
