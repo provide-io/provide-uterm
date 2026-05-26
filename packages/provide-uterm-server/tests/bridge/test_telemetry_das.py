@@ -21,7 +21,10 @@ async def test_session_registration_telemetry() -> None:
     hub = TermHub()
     ws = AsyncMock()
 
-    with patch("provide.uterm.bridge.hub.connections.logger") as mock_logger:
+    # Phase 6 of refactor #16 moved the registration log into the
+    # ConnectionManager service module; the previous home
+    # (``provide.uterm.bridge.hub.connections``) is now a thin shim.
+    with patch("provide.uterm.bridge.hub.connection.logger") as mock_logger:
         await hub.register_browser("w1", ws, "operator")
 
         # Verify logger.info was called with DAS event
