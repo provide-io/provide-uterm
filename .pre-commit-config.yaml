@@ -14,6 +14,15 @@
 repos:
   - repo: local
     hooks:
+      - id: codegen-frames
+        name: frame schemas in sync (Pydantic → TS)
+        entry: uv run python scripts/codegen_frames.py --check
+        language: system
+        pass_filenames: false
+        always_run: false
+        # Runs whenever the Pydantic source or the generated outputs change.
+        files: ^(packages/provide-uterm/src/provide/uterm/bridge/schemas\.py|packages/provide-uterm-frontend/src/generated/.*|scripts/codegen_frames\.py)$
+
       - id: tsc
         name: TypeScript typecheck
         entry: node_modules/.bin/tsc -p packages/provide-uterm-frontend/tsconfig.json --noEmit

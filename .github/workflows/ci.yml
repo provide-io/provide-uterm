@@ -49,6 +49,10 @@ jobs:
       - run: uv sync --group dev
       - run: uv run playwright install chromium
       - run: uv run python scripts/check_max_loc.py --max-lines 500 --baseline .ci/max-loc-baseline.json
+      # Verify the Pydantic frame schemas match the committed TS codegen
+      # output. Drift means producers and consumers can disagree on the
+      # wire format — fail loudly so the regeneration commit is required.
+      - run: uv run python scripts/codegen_frames.py --check
       - run: uv run python scripts/check_spdx_headers.py
       - run: uv run python scripts/check_event_literals.py
       - run: uv run ruff format --check packages/provide-uterm/src packages/provide-uterm/tests scripts
