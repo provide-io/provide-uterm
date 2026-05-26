@@ -383,6 +383,13 @@ class TelnetTransport:
             await self._send_cmd(DONT, opt)
             self._negotiated["dont"].add(opt)
 
+    @staticmethod
+    def _escape_iac(payload: bytes) -> bytes:
+        """RFC 855/1073: every 0xFF byte inside a subnegotiation payload must
+        be doubled so the receiver does not mis-parse it as an IAC framing byte.
+        """
+        return payload.replace(b"\xff", b"\xff\xff")
+
     async def _send_naws(self, cols: int, rows: int) -> None:
         if not self._writer or self._writer.is_closing():
             return
@@ -390,7 +397,9 @@ class TelnetTransport:
         wl = cols & 0xFF
         hh = (rows >> 8) & 0xFF
         hl = rows & 0xFF
-        self._writer.write(bytes([IAC, SB, OPT_NAWS, wh, wl, hh, hl, IAC, SE]))
+        # Escape 0xFF bytes in the window-size payload only (not the IAC SB/SE framing).
+        size_bytes = self._escape_iac(bytes([wh, wl, hh, hl]))
+        self._writer.write(bytes([IAC, SB, OPT_NAWS]) + size_bytes + bytes([IAC, SE]))
         with contextlib.suppress(ConnectionResetError, BrokenPipeError):
             await self._writer.drain()
 
@@ -401,6 +410,8 @@ class TelnetTransport:
     async def _send_subnegotiation(self, payload: bytes) -> None:
         if not self._writer or self._writer.is_closing():
             return
-        self._writer.write(bytes([IAC, SB]) + payload + bytes([IAC, SE]))
+        # Escape 0xFF bytes in the user payload only (not the IAC SB/SE framing).
+        escaped_payload = self._escape_iac(payload)
+        self._writer.write(bytes([IAC, SB]) + escaped_payload + bytes([IAC, SE]))
         with contextlib.suppress(ConnectionResetError, BrokenPipeError):
             await self._writer.drain()
