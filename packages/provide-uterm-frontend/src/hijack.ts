@@ -374,6 +374,10 @@ export class ProvideHijack {
         state.workerOnline = !!(msg.worker_online as boolean | undefined);
         const inputMode = msg.input_mode as string | undefined;
         if (inputMode) state.inputMode = inputMode;
+        // Server is authoritative on role; prefer it over the constructor
+        // input for UX decisions (approval modal vs statusbar, admin buttons).
+        const helloRole = msg.role as string | undefined;
+        if (helloRole) state.serverRole = helloRole;
         const caps = msg.capabilities as Record<string, unknown> | undefined;
         state.hijackControl =
           (msg.hijack_control as string | undefined) ?? (caps?.hijack_control as string | undefined) ?? "ws";
@@ -480,10 +484,19 @@ export class ProvideHijack {
 
   // ── UI State ──────────────────────────────────────────────────────────────
 
+  /**
+   * Effective role: prefer the server-confirmed `serverRole` (set from the
+   * `hello` frame) over the constructor-input `config.role`. UX decisions
+   * should follow what the server says, not what the caller claimed.
+   */
+  private _effectiveRole(): string | undefined {
+    return this._state.serverRole ?? this._config.role;
+  }
+
   private _getEffectiveUxMode(): "modal" | "statusbar" {
     const mode = this._config.approvalUxMode;
     if (mode === "auto") {
-      return this._config.role === "admin" ? "modal" : "statusbar";
+      return this._effectiveRole() === "admin" ? "modal" : "statusbar";
     }
     return mode;
   }
@@ -496,7 +509,7 @@ export class ProvideHijack {
     const el = document.createElement("div");
     this._approvalElement = el;
     el.className = approvalElementClass(mode);
-    const isAdmin = this._config.role === "admin";
+    const isAdmin = this._effectiveRole() === "admin";
     el.innerHTML =
       mode === "modal"
         ? buildApprovalModalHtml({ uid: this._uid, command: this._pendingApproval.command, isAdmin })
@@ -505,7 +518,7 @@ export class ProvideHijack {
     this._root.appendChild(el);
     this._startApprovalTimer();
 
-    if (this._config.role === "admin") {
+    if (isAdmin) {
       this._q("approve")?.addEventListener("click", () => this._resolveApproval("approve"));
       this._q("reject")?.addEventListener("click", () => this._resolveApproval("reject"));
     }

@@ -790,3 +790,56 @@ describe("ProvideTerminal accessibility", () => {
     expect(root?.classList.contains("theme-crt")).toBe(true);
   });
 });
+
+// Regression test for Finding #14: ProvideTerminal must run incoming WS
+// payloads through ControlChannelDecoder so users on `role=browser` connections
+// don't see raw JSON control frames bleed into terminal output.
+describe("ProvideTerminal control-channel framing", () => {
+  // Build a framed payload: <DLE><STX><8-hex-len>:<json><raw-bytes>
+  function makeFramedPayload(controlJson: string, rawBytes: string): string {
+    const lenHex = new TextEncoder().encode(controlJson).byteLength.toString(16).padStart(8, "0");
+    return `\x10\x02${lenHex}:${controlJson}${rawBytes}`;
+  }
+
+  it("strips control frames from incoming WS payloads and only writes raw bytes to xterm", async () => {
+    await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const xterm = getXterm();
+    // Reset writes from boot sequence
+    xterm.written = [];
+
+    const payload = makeFramedPayload('{"type":"hijack_state","hijacked":true}', "hello terminal");
+    ws.triggerMessage(payload);
+
+    const joined = xterm.written.join("");
+    expect(joined).toBe("hello terminal");
+    expect(joined).not.toContain("hijack_state");
+    expect(joined).not.toContain('"type"');
+  });
+
+  it("writes plain (unframed) payloads through as data frames", async () => {
+    await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const xterm = getXterm();
+    xterm.written = [];
+
+    ws.triggerMessage("plain raw output\r\n");
+    expect(xterm.written.join("")).toBe("plain raw output\r\n");
+  });
+
+  it("falls back to writing the raw payload when the framing stream is corrupt", async () => {
+    await makeTerminal({ wsUrl: "/ws/browser/w/term" });
+    const ws = getWs();
+    ws.open();
+    const xterm = getXterm();
+    xterm.written = [];
+
+    // \x10 followed by an invalid marker (not \x02 and not \x10) raises in feed().
+    ws.triggerMessage("\x10X");
+
+    // The fallback path writes the raw payload so the screen doesn't go blank.
+    expect(xterm.written.join("")).toContain("\x10X");
+  });
+});

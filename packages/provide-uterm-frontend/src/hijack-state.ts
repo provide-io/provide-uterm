@@ -38,6 +38,16 @@ export class HijackState {
   restHijackId: string | null = null;
   resumeToken: string | null = null;
 
+  /**
+   * Server-confirmed role from the `hello` frame, or null until received.
+   * Preferred over `config.role` (constructor input) for UX decisions, since
+   * the server is authoritative on the actual role the connection holds.
+   */
+  serverRole: string | null = null;
+
+  /** One-shot guard so the wss+token audit warning only fires once per state. */
+  _wssTokenWarned = false;
+
   constructor(config: ResolvedConfig, workerId: string, wsDecoder: ControlChannelDecoder) {
     this.config = config;
     this.workerId = workerId;

@@ -911,3 +911,139 @@ describe("hijack.ts branch coverage - rest heartbeat", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
+
+// Regression tests for Finding #18: wss + ?token= surfaces auth in proxy logs.
+// We don't strip the token (HttpOnly cookies aren't readable from JS so we
+// can't reliably detect cookie-based auth), but we emit a console warning so
+// operators can audit production deploys.
+describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
+  it("warns on the console when an authToken is appended to a wss:// URL", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
+    expect(getWs().url).toMatch(/^wss:\/\/.*token=shh-secret/);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("?token=…"));
+    widget.disconnect();
+    warn.mockRestore();
+  });
+
+  it("does NOT warn over ws:// (plain http context)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
+    expect(getWs().url).toMatch(/^ws:\/\/.*token=shh-secret/);
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
+    widget.disconnect();
+    warn.mockRestore();
+  });
+
+  it("does NOT warn when no authToken is configured", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const widget = new ProvideHijack(container, { workerId: "w" });
+    expect(getWs().url).not.toContain("token=");
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
+    widget.disconnect();
+    warn.mockRestore();
+  });
+
+  it("only warns once per state even if the URL is resolved multiple times (reconnects)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh" });
+    // Trigger a reconnect by closing the WS
+    getWs().close();
+    vi.advanceTimersByTime(1200); // past 1s backoff → second connect
+    const tokenWarnings = warn.mock.calls.filter((c) =>
+      String(c[0] ?? "").includes("?token=…"),
+    );
+    expect(tokenWarnings.length).toBe(1);
+    widget.disconnect();
+    warn.mockRestore();
+  });
+});
+
+// Regression test for Finding #19: server-confirmed role from `hello` frame
+// should drive UX decisions (modal vs statusbar, admin-only approve/reject
+// buttons), not the constructor-input role.
+describe("ProvideHijack server-confirmed role (Finding #19)", () => {
+  it("renders admin approval modal with approve/reject buttons after a hello frame upgrades a viewer to admin", () => {
+    const { container } = makeWidget({ role: "viewer", approvalUxMode: "auto" });
+    getWs().open();
+    // Server confirms this connection is actually admin.
+    sendMessage({ type: "hello", role: "admin", worker_online: true });
+    // Now an approval request arrives — UX should choose the admin modal.
+    sendMessage({
+      type: "approval_pending",
+      request_id: "req-1",
+      command: "rm -rf /",
+      expires_at: Date.now() / 1000 + 60,
+    });
+    // Admin modal renders both buttons.
+    expect(q(container, "approve")).toBeTruthy();
+    expect(q(container, "reject")).toBeTruthy();
+    // The container element class should be the modal flavor, not the statusbar.
+    const modal = container.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
+    expect(modal?.classList.contains("hijack-approval-modal")).toBe(true);
+  });
+
+  it("renders the statusbar (non-admin) UX when neither config nor server role is admin", () => {
+    const { container } = makeWidget({ role: "viewer", approvalUxMode: "auto" });
+    getWs().open();
+    sendMessage({ type: "hello", role: "viewer", worker_online: true });
+    sendMessage({
+      type: "approval_pending",
+      request_id: "req-2",
+      command: "ls",
+      expires_at: Date.now() / 1000 + 60,
+    });
+    // No admin approve/reject buttons; statusbar UX is shown.
+    expect(q(container, "approve")).toBeNull();
+    expect(q(container, "reject")).toBeNull();
+  });
+
+  it("falls back to constructor role when hello carries no role field", () => {
+    const { container } = makeWidget({ role: "admin", approvalUxMode: "auto" });
+    getWs().open();
+    // hello with no role field — _effectiveRole() falls back to config.role
+    sendMessage({ type: "hello", worker_online: true });
+    sendMessage({
+      type: "approval_pending",
+      request_id: "req-3",
+      command: "whoami",
+      expires_at: Date.now() / 1000 + 60,
+    });
+    expect(q(container, "approve")).toBeTruthy();
+    expect(q(container, "reject")).toBeTruthy();
+  });
+});
+
+// Regression guard for Finding #5: the snapshot reset must emit a real ANSI
+// sequence (ESC byte + CSI), not the literal bracket text. The grep that
+// prompted the report was misled by the terminal rendering ESC as invisible
+// in the editor — the file already had the ESC bytes; this test pins them in.
+describe("ProvideHijack snapshot reset emits real ESC sequence (Finding #5 guard)", () => {
+  it("writes the soft-reset ESC sequence on snapshot before the screen contents", () => {
+    const { widget } = makeWidget();
+    getWs().open();
+    // The snapshot handler in hijack.ts wraps the terminal init in try/catch;
+    // a mock-Terminal incompatibility would swallow the call silently. Reach
+    // in directly to instantiate a known-good term, then exercise the handler.
+    // biome-ignore lint/suspicious/noExplicitAny: reach into private state for test
+    const widgetAny = widget as any;
+    const term = new MockTerminal();
+    widgetAny._state.term = term;
+    sendMessage({ type: "snapshot", screen: "hello" });
+    // The very first frame after the snapshot handler runs is the reset sequence.
+    expect(term.written[0]).toBe("\x1b[!p\x1b[2J\x1b[H");
+    expect(term.written[1]).toBe("hello");
+  });
+});
