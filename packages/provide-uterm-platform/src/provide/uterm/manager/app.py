@@ -132,7 +132,7 @@ def create_manager_app(
                 await websocket.receive_text()
         except WebSocketDisconnect:
             await manager.unregister_mcp_client(websocket)
-        except Exception as e:  # pragma: no cover
+        except Exception as e:  # pragma: no cover - requires mid-stream WS failure
             logger.exception("mcp_client_websocket_error", error=str(e))
             await manager.unregister_mcp_client(websocket)
 

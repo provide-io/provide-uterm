@@ -171,7 +171,7 @@ class PTYConnector:
         termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
         pid = os.fork()  # nosec B110 — deliberate fork for PTY supervision
-        if pid == 0:  # pragma: no cover
+        if pid == 0:  # pragma: no cover - fork-child path (coverage runs in parent only)
             # ── child ──────────────────────────────────────────────────────
             os.close(master_fd)
             os.setsid()
@@ -189,7 +189,7 @@ class PTYConnector:
 
             argv = [self._command, *self._args]
             os.execve(self._command, argv, env)  # noqa: S606  # nosec B606 — validated absolute path
-            os._exit(127)  # pragma: no cover
+            os._exit(127)  # pragma: no cover - post-execve fallback (unreachable on success)
         else:
             # ── parent ─────────────────────────────────────────────────────
             os.close(slave_fd)
