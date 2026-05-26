@@ -17,6 +17,9 @@
     "fix:frontend": "npm run fix --workspace=packages/provide-uterm-frontend",
     "fix:app": "npm run fix --workspace=packages/provide-uterm-app"
   },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4"
+  },
   "overrides": {
     "vite": "8.0.13"
   },
