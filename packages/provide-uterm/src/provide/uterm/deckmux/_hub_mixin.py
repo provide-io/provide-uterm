@@ -2,35 +2,58 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""DeckMux TermHub mixin — presence routing and control transfer."""
+"""DeckMux TermHub facade — thin shim over :class:`DeckMuxPresence`.
+
+Phase 7 of refactor #16 finishes the TermHub mixin teardown by extracting
+the DeckMux responsibility into :class:`DeckMuxPresence` (in
+``_service.py``). This module remains as a thin facade because:
+
+* The production server's :class:`TermHub` does not mix this in — only
+  custom hubs (and tests) subclass ``DeckMuxMixin``.
+* Server route code (``bridge/routes/websockets.py``) probes hubs via
+  ``hasattr(hub, "deckmux_on_browser_connect")`` and the
+  ``test_websockets_coverage`` suite monkey-patches the same names on
+  hub instances; both paths require the methods to live on the host
+  class.
+* Several deckmux tests read ``hub._presence_stores`` /
+  ``hub._transfer_managers`` and call ``hub._get_presence_store(...)``
+  directly. The facade preserves those attributes by aliasing them to
+  the service's containers (same dict objects, not copies).
+
+The service owns the state and logic; the mixin only forwards. Wire
+format, lock semantics, and the public ``hub.deckmux_*`` API are
+identical to the pre-extraction implementation.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
-    from provide.uterm.deckmux import (
-        PresenceStore,
-        TransferManager,
-        generate_color,
-        generate_name,
-    )
-    from provide.uterm.deckmux._names import generate_initials
-    from provide.uterm.deckmux._protocol import (
-        MSG_CONTROL_REQUEST,
-        MSG_PRESENCE_UPDATE,
-        MSG_QUEUED_INPUT,
-        make_control_transfer,
-        make_presence_leave,
-    )
+    from provide.uterm.deckmux._service import DeckMuxPresence
 
     _HAS_DECKMUX = True
 except ImportError:  # pragma: no cover
     _HAS_DECKMUX = False
 
+if TYPE_CHECKING:
+    from provide.uterm.deckmux._presence import PresenceStore
+    from provide.uterm.deckmux._transfer import TransferManager
+
 
 class DeckMuxMixin:
     """Mixin for TermHub to handle DeckMux presence messages.
+
+    Owns nothing of its own — all state and logic live in the composed
+    :class:`DeckMuxPresence` service stored on ``self.deckmux``. This
+    facade exists so that:
+
+    * Existing call sites can keep using ``hub.deckmux_on_browser_*``
+      and the legacy ``hub._presence_stores`` / ``hub._get_presence_store``
+      patterns.
+    * Tests that monkey-patch ``hub.deckmux_on_browser_connect`` on a
+      hub instance continue to work (instance attributes shadow these
+      method bindings).
 
     Expects the host class to provide:
     - broadcast(worker_id, msg) — send to all browsers
@@ -38,29 +61,41 @@ class DeckMuxMixin:
     - _lock for thread safety
     """
 
+    deckmux: DeckMuxPresence
+
     def _deckmux_init(self) -> None:
-        """Initialise DeckMux state containers. Call from host ``__init__``."""
-        self._presence_stores: dict[str, PresenceStore] = {}
-        self._transfer_managers: dict[str, TransferManager] = {}
+        """Initialise DeckMux state. Call from host ``__init__``.
+
+        Constructs the :class:`DeckMuxPresence` service with a back
+        reference to the host hub. ``hub.broadcast`` is resolved lazily
+        at call time, so the host may assign ``broadcast`` *after*
+        invoking ``_deckmux_init()``.
+        """
+        self.deckmux = DeckMuxPresence(self)
+
+    # -- Backward-compatible container aliases ----------------------------
+    # ``hub._presence_stores`` / ``hub._transfer_managers`` are read
+    # directly by tests (and an e2e ssh test). Expose them as properties
+    # backed by the service's containers — same dict objects, so
+    # mutations via either name stay in sync.
+
+    @property
+    def _presence_stores(self) -> dict[str, PresenceStore]:
+        return self.deckmux.presence_stores
+
+    @property
+    def _transfer_managers(self) -> dict[str, TransferManager]:
+        return self.deckmux.transfer_managers
 
     def _get_presence_store(self, worker_id: str) -> PresenceStore:
-        if worker_id not in self._presence_stores:
-            self._presence_stores[worker_id] = PresenceStore()
-        return self._presence_stores[worker_id]
+        return self.deckmux.get_presence_store(worker_id)
 
     def _get_transfer_manager(
         self,
         worker_id: str,
         config: dict[str, Any] | None = None,
     ) -> TransferManager:
-        if worker_id not in self._transfer_managers:
-            idle_s = (config or {}).get("auto_transfer_idle_s", 30)
-            queue_mode = (config or {}).get("keystroke_queue", "display")
-            self._transfer_managers[worker_id] = TransferManager(
-                auto_transfer_idle_s=idle_s,
-                keystroke_queue_mode=queue_mode,
-            )
-        return self._transfer_managers[worker_id]
+        return self.deckmux.get_transfer_manager(worker_id, config)
 
     async def deckmux_on_browser_connect(
         self,
@@ -70,34 +105,7 @@ class DeckMuxMixin:
         principal: Any = None,
     ) -> dict[str, Any] | None:
         """Called when a browser connects. Returns presence_sync message to send."""
-        store = self._get_presence_store(worker_id)
-
-        # Generate identity
-        user_id = str(id(ws))
-        if principal and hasattr(principal, "subject_id"):
-            name = getattr(principal, "display_name", "") or getattr(principal, "subject_id", "")
-            user_id = getattr(principal, "subject_id", user_id)
-        else:
-            name = generate_name(user_id)
-
-        color = generate_color(user_id, store.taken_colors())
-        initials = generate_initials(name)
-
-        # Prune users with no activity in the last 30 s (stale reconnect debris)
-        store.prune_idle(30.0)
-
-        store.add(user_id, name, color, role, initials)
-
-        # Build sync payload for the joining browser
-        config = {"auto_transfer_idle_s": 30, "keystroke_queue": "display"}
-        result: dict[str, Any] = store.get_sync_payload(config)
-
-        # Broadcast updated sync to all existing browsers so they see the new user.
-        # addUser in the frontend is idempotent — re-joining existing users just updates them.
-        if store.count > 1:
-            await self.broadcast(worker_id, result)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-
-        return result
+        return await self.deckmux.on_browser_connect(worker_id, ws, role, principal=principal)
 
     async def deckmux_on_browser_disconnect(
         self,
@@ -106,14 +114,7 @@ class DeckMuxMixin:
         principal: Any = None,
     ) -> None:
         """Called when a browser disconnects. Broadcasts presence_leave."""
-        store = self._get_presence_store(worker_id)
-        user_id = str(id(ws))
-        if principal and hasattr(principal, "subject_id"):
-            user_id = getattr(principal, "subject_id", user_id)
-        removed = store.remove(user_id)
-        if removed:
-            msg = make_presence_leave(user_id)
-            await self.broadcast(worker_id, msg)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
+        await self.deckmux.on_browser_disconnect(worker_id, ws, principal=principal)
 
     async def deckmux_handle_message(
         self,
@@ -123,69 +124,8 @@ class DeckMuxMixin:
         principal: Any = None,
     ) -> None:
         """Route a DeckMux message from a browser."""
-        msg_type = msg.get("type")
-        store = self._get_presence_store(worker_id)
-        # Resolve user_id the same way as deckmux_on_browser_connect so
-        # the store lookup succeeds (must match the ID used during add()).
-        user_id = str(id(ws))
-        if principal and hasattr(principal, "subject_id"):
-            user_id = getattr(principal, "subject_id", user_id)
-
-        if msg_type == MSG_PRESENCE_UPDATE:
-            fields = {
-                k: msg[k]
-                for k in (
-                    "scroll_line",
-                    "scroll_range",
-                    "total_lines",
-                    "selection",
-                    "pin",
-                    "typing",
-                    "cols",
-                    "rows",
-                )
-                if k in msg
-            }
-            user = store.update(user_id, **fields)
-            if user:
-                # Broadcast to other browsers
-                update_msg = user.to_dict()
-                update_msg["type"] = MSG_PRESENCE_UPDATE
-                await self.broadcast(worker_id, update_msg)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-
-                # Reset auto-transfer warning if owner is active
-                tm = self._get_transfer_manager(worker_id)
-                if user.is_owner and fields.get("typing"):
-                    tm.reset_warning()
-
-        elif msg_type == MSG_QUEUED_INPUT:
-            raw_keys = msg.get("keys", "")
-            tm = self._get_transfer_manager(worker_id)
-            display = tm.queue_keystroke(user_id, raw_keys)
-            # Update user's queued_keys for broadcast
-            store.update(user_id, queued_keys=display)
-            user = store.get(user_id)
-            if user:
-                update_msg = user.to_dict()
-                update_msg["type"] = MSG_PRESENCE_UPDATE
-                await self.broadcast(worker_id, update_msg)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-
-        elif msg_type == MSG_CONTROL_REQUEST:
-            owner = store.get_owner()
-            if owner is None:
-                # No one has control — grant immediately
-                store.set_owner(user_id)
-                tm = self._get_transfer_manager(worker_id)
-                transfer = tm.build_transfer_message("", user_id, "handover")
-                await self.broadcast(worker_id, transfer)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-            elif owner.user_id == user_id:
-                # Requester is already the owner — release control
-                store.clear_owner()
-                transfer = make_control_transfer(user_id, "", "handover")
-                await self.broadcast(worker_id, transfer)  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-            # else: another user owns — ignore the request
+        await self.deckmux.handle_message(worker_id, ws, msg, principal=principal)
 
     def deckmux_cleanup(self, worker_id: str) -> None:
         """Clean up DeckMux state for a session."""
-        self._presence_stores.pop(worker_id, None)
-        self._transfer_managers.pop(worker_id, None)
+        self.deckmux.cleanup(worker_id)
