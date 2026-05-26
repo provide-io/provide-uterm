@@ -122,3 +122,76 @@ class TestSessionLogger:
         for call in mock_store.append_events.call_args_list:
             total_events += len(call[0][1])
         assert total_events == 1
+
+    @pytest.mark.asyncio
+    async def test_log_send_applies_redaction(self, mock_store) -> None:
+        logger = SessionLogger(mock_store, redactor=lambda text: text.replace("password=secret", "password=[REDACTED]"))
+        await logger.start(session_id="red-send")
+        await logger.log_send("login password=secret")
+        await logger.stop()
+
+        found = False
+        for call in mock_store.append_events.call_args_list:
+            events = call[0][1]
+            for evt in events:
+                if evt["event"] == "send":
+                    found = True
+                    assert evt["data"]["keys"] == "login password=[REDACTED]"
+                    assert "secret" not in evt["data"]["keys"]
+        assert found
+
+    @pytest.mark.asyncio
+    async def test_log_screen_applies_redaction_to_snapshot_and_raw(self, mock_store) -> None:
+        logger = SessionLogger(mock_store, redactor=lambda text: text.replace("token=abc123", "token=[REDACTED]"))
+        await logger.start(session_id="red-read")
+        await logger.log_screen({"screen": "token=abc123"}, b"token=abc123")
+        await logger.stop()
+
+        found = False
+        for call in mock_store.append_events.call_args_list:
+            events = call[0][1]
+            for evt in events:
+                if evt["event"] == "read":
+                    found = True
+                    assert evt["data"]["screen"] == "token=[REDACTED]"
+                    assert evt["data"]["raw"] == "token=[REDACTED]"
+                    assert "abc123" not in evt["data"]["raw"]
+        assert found
+
+    @pytest.mark.asyncio
+    async def test_log_wire_applies_redaction(self, mock_store) -> None:
+        logger = SessionLogger(
+            mock_store,
+            control_channel_mode="wire",
+            redactor=lambda text: text.replace("Authorization: Bearer SECRET", "Authorization: Bearer [REDACTED]"),
+        )
+        await logger.start(session_id="red-wire")
+        await logger.log_wire("send", "Authorization: Bearer SECRET")
+        await logger.stop()
+
+        found = False
+        for call in mock_store.append_events.call_args_list:
+            events = call[0][1]
+            for evt in events:
+                if evt["event"] == "wire_send":
+                    found = True
+                    assert evt["data"]["text"] == "Authorization: Bearer [REDACTED]"
+                    assert "SECRET" not in evt["data"]["text"]
+        assert found
+
+    @pytest.mark.asyncio
+    async def test_log_send_masked_still_writes_mask_placeholder(self, mock_store) -> None:
+        logger = SessionLogger(mock_store, redactor=lambda text: text.replace("***", "changed"))
+        await logger.start(session_id="masked")
+        await logger.log_send_masked(byte_count=9)
+        await logger.stop()
+
+        found = False
+        for call in mock_store.append_events.call_args_list:
+            events = call[0][1]
+            for evt in events:
+                if evt["event"] == "send" and evt["data"].get("masked"):
+                    found = True
+                    assert evt["data"]["keys"] == "***"
+                    assert evt["data"]["byte_count"] == 9
+        assert found

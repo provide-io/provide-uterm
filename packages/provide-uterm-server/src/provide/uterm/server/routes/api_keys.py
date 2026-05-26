@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from provide.uterm.server.auth import Principal
     from provide.uterm.server.authorization import AuthorizationService
 
+_ALLOWED_ROLE_SCOPES = frozenset({"viewer", "operator", "admin"})
+
 
 def _principal(request: Request) -> Principal:
     principal = getattr(request.state, "uterm_principal", None)
@@ -52,12 +54,20 @@ def create_api_keys_router() -> APIRouter:
         name = str(payload.get("name", "")).strip()
         if not name:
             raise HTTPException(status_code=422, detail="name is required")
-        scopes_raw = payload.get("scopes", [])
-        scopes = (
-            frozenset(str(s).strip() for s in scopes_raw if str(s).strip())
-            if isinstance(scopes_raw, list)
-            else frozenset()
-        )
+        if "scopes" not in payload:
+            raise HTTPException(status_code=422, detail="scopes is required")
+        scopes_raw = payload.get("scopes")
+        if not isinstance(scopes_raw, list):
+            raise HTTPException(status_code=422, detail="scopes must be a list of role scopes")
+        scopes = frozenset(str(s).strip() for s in scopes_raw if str(s).strip())
+        if not scopes:
+            raise HTTPException(status_code=422, detail="scopes must include at least one role scope")
+        invalid_scopes = sorted(scope for scope in scopes if scope not in _ALLOWED_ROLE_SCOPES)
+        if invalid_scopes:
+            raise HTTPException(
+                status_code=422,
+                detail=("invalid role scopes: " + ", ".join(invalid_scopes) + " (allowed: admin, operator, viewer)"),
+            )
         expires_in_s = payload.get("expires_in_s")
         if expires_in_s is not None:
             expires_in_s = int(expires_in_s)

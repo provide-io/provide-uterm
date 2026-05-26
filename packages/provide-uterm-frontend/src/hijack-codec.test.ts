@@ -25,6 +25,17 @@ function makeUtf8ControlFrame(payload: Record<string, unknown>): string {
   return `${_DLE}${_STX}${byteLength.toString(16).padStart(8, "0")}:${json}`;
 }
 
+function makeDeepObject(depth: number): Record<string, unknown> {
+  let current: Record<string, unknown> = {};
+  const root: Record<string, unknown> = current;
+  for (let idx = 0; idx < depth; idx += 1) {
+    const next: Record<string, unknown> = {};
+    current.nested = next;
+    current = next;
+  }
+  return root;
+}
+
 // ── encodeDataFrame ───────────────────────────────────────────────────────────
 
 describe("encodeDataFrame", () => {
@@ -311,6 +322,19 @@ describe("ControlChannelDecoder", () => {
       const nil = "null";
       const lenHex = nil.length.toString(16).padStart(8, "0");
       expect(() => dec.feed(`${_DLE}${_STX}${lenHex}:${nil}`)).toThrow("control payload must be an object");
+    });
+
+    it("throws when buffered incomplete frame data exceeds max buffer bytes", () => {
+      const dec = new ControlChannelDecoder(1024 * 1024, 32);
+      const partialHeader = `${_DLE}${_STX}00000040:`;
+      dec.feed(partialHeader);
+      expect(() => dec.feed("x".repeat(64))).toThrow("control channel buffer overflow");
+    });
+
+    it("throws when control payload exceeds max nesting depth", () => {
+      const dec = new ControlChannelDecoder(1024 * 1024, 1024 * 1024, 32);
+      const frame = makeUtf8ControlFrame(makeDeepObject(33));
+      expect(() => dec.feed(frame)).toThrow("control payload nests deeper than 32");
     });
   });
 

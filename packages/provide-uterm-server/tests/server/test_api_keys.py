@@ -146,7 +146,7 @@ class TestApiKeyAuthIntegration:
         config.auth.api_keys_enabled = True
         app = create_server_app(config)
         store = app.state.uterm_api_key_store
-        raw_key, _record = store.create("integration-test")
+        raw_key, _record = store.create("integration-test", scopes=frozenset({"admin"}))
         return TestClient(app), raw_key
 
     def test_api_key_authenticates_request(self, api_key_client: tuple[TestClient, str]) -> None:
@@ -185,7 +185,7 @@ class TestApiKeyAuthIntegration:
         config.auth.api_keys_enabled = False
         app = create_server_app(config)
         store = app.state.uterm_api_key_store
-        raw_key, _record = store.create("should-be-ignored")
+        raw_key, _record = store.create("should-be-ignored", scopes=frozenset({"admin"}))
         client = TestClient(app)
         # Falls through to dev auth
         resp = client.get("/api/sessions", headers={"X-API-Key": raw_key})
@@ -326,7 +326,7 @@ class TestApiKeyPrincipalRoles:
         from provide.uterm.server.models import AuthConfig
 
         store = ApiKeyStore()
-        store.create("real-key")
+        store.create("real-key", scopes=frozenset({"admin"}))
         auth = AuthConfig(api_keys_enabled=True, mode="dev_token")
         result = _principal_from_api_key({"x-api-key": "wrong-key"}, auth, store)
         assert result is None
@@ -363,38 +363,58 @@ class TestApiKeyRoutes:
     # POST /api/keys
 
     def test_create_key(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={"name": "my-key"})
+        resp = admin_client.post("/api/keys", json={"name": "my-key", "scopes": ["viewer"]})
         assert resp.status_code == 200
         data = resp.json()
         assert "key" in data
         assert "key_id" in data
         assert data["name"] == "my-key"
-        assert isinstance(data["scopes"], list)
+        assert data["scopes"] == ["viewer"]
 
     def test_create_key_with_scopes(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={"name": "scoped", "scopes": ["read", "write"]})
+        resp = admin_client.post("/api/keys", json={"name": "scoped", "scopes": ["operator", "viewer"]})
         assert resp.status_code == 200
-        assert set(resp.json()["scopes"]) == {"read", "write"}
+        assert set(resp.json()["scopes"]) == {"operator", "viewer"}
 
     def test_create_key_with_expiry(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={"name": "temp", "expires_in_s": 3600})
+        resp = admin_client.post("/api/keys", json={"name": "temp", "scopes": ["admin"], "expires_in_s": 3600})
         assert resp.status_code == 200
         assert resp.json()["expires_at"] is not None
 
     def test_create_key_expiry_too_short(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={"name": "bad", "expires_in_s": 10})
+        resp = admin_client.post("/api/keys", json={"name": "bad", "scopes": ["viewer"], "expires_in_s": 10})
         assert resp.status_code == 422
 
     def test_create_key_no_name(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={"name": ""})
+        resp = admin_client.post("/api/keys", json={"name": "", "scopes": ["viewer"]})
         assert resp.status_code == 422
 
     def test_create_key_missing_name(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={})
+        resp = admin_client.post("/api/keys", json={"scopes": ["viewer"]})
         assert resp.status_code == 422
 
+    def test_create_key_missing_scopes(self, admin_client: TestClient) -> None:
+        resp = admin_client.post("/api/keys", json={"name": "missing-scopes"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "scopes is required"
+
+    def test_create_key_scopes_non_list_rejected(self, admin_client: TestClient) -> None:
+        resp = admin_client.post("/api/keys", json={"name": "bad-scopes", "scopes": "not-a-list"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "scopes must be a list of role scopes"
+
+    def test_create_key_scopes_empty_rejected(self, admin_client: TestClient) -> None:
+        resp = admin_client.post("/api/keys", json={"name": "empty-scopes", "scopes": []})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "scopes must include at least one role scope"
+
+    def test_create_key_scopes_invalid_rejected(self, admin_client: TestClient) -> None:
+        resp = admin_client.post("/api/keys", json={"name": "invalid-scopes", "scopes": ["viewer", "read"]})
+        assert resp.status_code == 422
+        assert "invalid role scopes: read" in resp.json()["detail"]
+
     def test_create_key_disabled(self, disabled_client: TestClient) -> None:
-        resp = disabled_client.post("/api/keys", json={"name": "nope"})
+        resp = disabled_client.post("/api/keys", json={"name": "nope", "scopes": ["viewer"]})
         assert resp.status_code == 403
 
     # GET /api/keys
@@ -405,8 +425,8 @@ class TestApiKeyRoutes:
         assert resp.json() == []
 
     def test_list_keys_after_create(self, admin_client: TestClient) -> None:
-        admin_client.post("/api/keys", json={"name": "first"})
-        admin_client.post("/api/keys", json={"name": "second"})
+        admin_client.post("/api/keys", json={"name": "first", "scopes": ["viewer"]})
+        admin_client.post("/api/keys", json={"name": "second", "scopes": ["operator"]})
         resp = admin_client.get("/api/keys")
         assert resp.status_code == 200
         data = resp.json()
@@ -423,7 +443,7 @@ class TestApiKeyRoutes:
     # DELETE /api/keys/{key_id}
 
     def test_revoke_key(self, admin_client: TestClient) -> None:
-        create_resp = admin_client.post("/api/keys", json={"name": "to-revoke"})
+        create_resp = admin_client.post("/api/keys", json={"name": "to-revoke", "scopes": ["viewer"]})
         key_id = create_resp.json()["key_id"]
         resp = admin_client.delete(f"/api/keys/{key_id}")
         assert resp.status_code == 200
@@ -446,7 +466,7 @@ class TestApiKeyRoutes:
 
     def test_revoked_key_rejected(self, admin_client: TestClient) -> None:
         # Enable api_keys on this client's app
-        create_resp = admin_client.post("/api/keys", json={"name": "revokable"})
+        create_resp = admin_client.post("/api/keys", json={"name": "revokable", "scopes": ["viewer"]})
         raw_key = create_resp.json()["key"]
         key_id = create_resp.json()["key_id"]
         # Verify key works
@@ -486,7 +506,7 @@ class TestApiKeyRoutes:
         client = TestClient(app)
         resp = client.post(
             "/api/keys",
-            json={"name": "nope"},
+            json={"name": "nope", "scopes": ["viewer"]},
             headers={"Authorization": f"Bearer {viewer_token}"},
         )
         assert resp.status_code == 403
@@ -512,8 +532,3 @@ class TestApiKeyRoutes:
         assert principal is not None
         assert principal.roles == frozenset({"operator"})
         assert principal.scopes == frozenset({"*"})
-
-    def test_create_key_scopes_non_list_ignored(self, admin_client: TestClient) -> None:
-        resp = admin_client.post("/api/keys", json={"name": "bad-scopes", "scopes": "not-a-list"})
-        assert resp.status_code == 200
-        assert resp.json()["scopes"] == []

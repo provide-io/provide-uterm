@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from provide.uterm.screen import strip_ansi
 
 from provide.uterm.ai.auth import (
@@ -236,6 +236,7 @@ def create_mcp_app(
         worker_id: str,
         lease_s: int = 90,
         owner: str = "operator",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Acquire a lease-based hijack session for a running worker."""
         ok, data = await client.acquire(worker_id, owner=owner, lease_s=lease_s)
@@ -247,6 +248,7 @@ def create_mcp_app(
         worker_id: str,
         hijack_id: str,
         lease_s: int = 90,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Extend a hijack lease."""
         ok, data = await client.heartbeat(worker_id, hijack_id, lease_s=lease_s)
@@ -263,6 +265,7 @@ def create_mcp_app(
         after_seq: int = 0,
         limit: int = 200,
         tail_lines: int | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Read snapshot or events from an active hijack session.
 
@@ -313,6 +316,7 @@ def create_mcp_app(
         expect_regex: str | None = None,
         timeout_ms: int = 2000,
         poll_interval_ms: int = 120,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Send input to a hijacked worker, optionally guarded by prompt/regex."""
         ok, data = await client.send(
@@ -331,6 +335,7 @@ def create_mcp_app(
     async def hijack_step(
         worker_id: str,
         hijack_id: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Single-step a hijacked worker loop."""
         ok, data = await client.step(worker_id, hijack_id)
@@ -341,6 +346,7 @@ def create_mcp_app(
     async def hijack_release(
         worker_id: str,
         hijack_id: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Release hijack session and resume worker automation."""
         ok, data = await client.release(worker_id, hijack_id)
@@ -350,14 +356,14 @@ def create_mcp_app(
 
     @mcp.tool()
     @authorized("session_list", auth_ctx)
-    async def session_list() -> dict[str, Any]:
+    async def session_list(ctx: Context | None = None) -> dict[str, Any]:
         """List all sessions with status."""
         ok, data = await client.list_sessions()
         return _ok(ok, data)
 
     @mcp.tool()
     @authorized("session_status", auth_ctx)
-    async def session_status(session_id: str) -> dict[str, Any]:
+    async def session_status(session_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get a single session's details."""
         ok, data = await client.get_session(session_id)
         return _ok(ok, data)
@@ -368,6 +374,7 @@ def create_mcp_app(
         session_id: str,
         output: str = "text",
         tail_lines: int | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Get terminal snapshot for a session.
 
@@ -388,14 +395,14 @@ def create_mcp_app(
 
     @mcp.tool()
     @authorized("session_connect", auth_ctx)
-    async def session_connect(session_id: str) -> dict[str, Any]:
+    async def session_connect(session_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Start/connect a session."""
         ok, data = await client.connect_session(session_id)
         return _ok(ok, data)
 
     @mcp.tool()
     @authorized("session_disconnect", auth_ctx)
-    async def session_disconnect(session_id: str) -> dict[str, Any]:
+    async def session_disconnect(session_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Stop/disconnect a session."""
         ok, data = await client.disconnect_session(session_id)
         return _ok(ok, data)
@@ -411,6 +418,7 @@ def create_mcp_app(
         username: str | None = None,
         password: str | None = None,
         input_mode: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create an ephemeral session via quick-connect."""
         # Vet the connector config before any RPC.  ``session_create`` is
@@ -446,7 +454,7 @@ def create_mcp_app(
 
     @mcp.tool()
     @authorized("server_health", auth_ctx)
-    async def server_health() -> dict[str, Any]:
+    async def server_health(ctx: Context | None = None) -> dict[str, Any]:
         """Health check the provide-uterm server."""
         ok, data = await client.health()
         return _ok(ok, data)
@@ -456,6 +464,7 @@ def create_mcp_app(
     async def session_set_mode(
         session_id: str,
         mode: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set session input mode (hijack/open)."""
         ok, data = await client.set_session_mode(session_id, mode)
@@ -466,6 +475,7 @@ def create_mcp_app(
     async def worker_input_mode(
         worker_id: str,
         mode: str,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set worker input mode directly (hijack/open)."""
         ok, data = await client.set_input_mode(worker_id, mode)
@@ -473,7 +483,7 @@ def create_mcp_app(
 
     @mcp.tool()
     @authorized("worker_disconnect", auth_ctx)
-    async def worker_disconnect(worker_id: str) -> dict[str, Any]:
+    async def worker_disconnect(worker_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Disconnect a worker WebSocket."""
         ok, data = await client.disconnect_worker(worker_id)
         return _ok(ok, data)
@@ -488,6 +498,7 @@ def create_mcp_app(
         pattern: str | None = None,
         timeout_s: float = 10.0,
         max_events: int = 50,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Watch a session for events in real time.
 
@@ -525,6 +536,7 @@ def create_mcp_app(
         pattern: str | None = None,
         duration_s: float = 30.0,
         max_events: int = 200,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Long-running session subscription for agent loops.
 
@@ -593,6 +605,7 @@ def create_mcp_app(
         session_ids: list[str],
         name: str = "fleet",
         mode: str = "parallel",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Create a fan-out group to broadcast input to multiple sessions simultaneously."""
         ok, data = await client.post(
@@ -608,6 +621,7 @@ def create_mcp_app(
         data: str,
         quiesce_ms: int = 500,
         max_response_ms: int = 10000,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Broadcast input to all sessions in a fan-out group and return per-session results with divergence detection."""
         ok, result = await client.post(
@@ -625,6 +639,7 @@ def create_mcp_app(
         label: str,
         description: str = "",
         severity: str = "info",
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Add an annotation to a session's recording timeline. Use this to mark important moments."""
         ok, data = await client.post(

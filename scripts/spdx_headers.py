@@ -19,6 +19,7 @@ CANONICAL_BLOCK = (SPDX_OPEN, SPDX_COPYRIGHT, SPDX_LICENSE, SPDX_CLOSE)
 
 EXCLUDED_DIRS = {
     ".git",
+    ".worktrees",
     ".claude",
     ".venv",
     ".mypy_cache",
