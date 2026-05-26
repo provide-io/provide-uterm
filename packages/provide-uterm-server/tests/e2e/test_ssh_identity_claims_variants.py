@@ -34,6 +34,7 @@ import websockets.server
 from provide.uterm.auth import AuthorizedKeysFileResolver
 from provide.uterm.gateway import SshWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
+from tests.e2e._live_server import wait_for_condition
 
 pytestmark = pytest.mark.asyncio
 
@@ -103,8 +104,14 @@ async def _connect_and_capture(
             proc.stdin.write_eof()
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(proc.stdout.read(4096), timeout=2.0)
-            # Give the gateway a beat to emit the identity frame.
-            await asyncio.sleep(0.15)
+            # Deterministically wait for the gateway to emit the identity
+            # frame instead of a fixed sleep.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: any(f.get("type") == "identity" for f in frames),
+                    timeout=3.0,
+                    description="identity frame on upstream WS",
+                )
     finally:
         ssh_srv.close()
         await ssh_srv.wait_closed()

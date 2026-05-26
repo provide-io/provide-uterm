@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Callable
 from typing import Any
 
 import uvicorn
@@ -110,3 +111,25 @@ async def wait_for_subscribers(
     raise TimeoutError(
         f"wait_for_subscribers({worker_id!r}, expected={expected}) timed out after {timeout}s; saw {current}"
     )
+
+
+async def wait_for_condition(
+    predicate: Callable[[], bool],
+    *,
+    timeout: float = 5.0,
+    interval: float = 0.01,
+    description: str = "condition",
+) -> None:
+    """Poll *predicate* until it returns truthy or *timeout* elapses.
+
+    Drop-in replacement for ``await asyncio.sleep(0.2)`` followed by a length
+    assertion on a list that a background task appends to (e.g. SSH/telnet
+    gateway tests waiting for an identity frame to arrive on the upstream WS).
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        if predicate():
+            return
+        await asyncio.sleep(interval)
+    raise TimeoutError(f"wait_for_condition({description}) timed out after {timeout}s")

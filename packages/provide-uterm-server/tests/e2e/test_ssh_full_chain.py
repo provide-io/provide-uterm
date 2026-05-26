@@ -46,6 +46,7 @@ from provide.uterm.deckmux import (
 from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from provide.uterm.gateway import SshWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
+from tests.e2e._live_server import wait_for_condition
 
 pytestmark = pytest.mark.asyncio
 
@@ -174,8 +175,14 @@ class TestFullChain:
                 # for the hub to process it; we don't need stdout echo.
                 with contextlib.suppress(Exception):
                     await asyncio.wait_for(proc.stdout.read(4096), timeout=2.0)
-                # Short settle for deckmux_on_browser_connect to finish.
-                await asyncio.sleep(0.1)
+                # Deterministically wait for deckmux_on_browser_connect to
+                # complete instead of a fixed-sleep settle.
+                with contextlib.suppress(TimeoutError):
+                    await wait_for_condition(
+                        lambda: bool(hub.observed_urls),
+                        timeout=3.0,
+                        description="hub observed WS upgrade",
+                    )
         finally:
             ssh_srv.close()
             await ssh_srv.wait_closed()
