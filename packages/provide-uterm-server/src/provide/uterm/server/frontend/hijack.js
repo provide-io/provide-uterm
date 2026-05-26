@@ -2,18 +2,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-/**
- * ProvideHijack - Embeddable terminal hijack control widget.
- *
- * Connects to the TermHub browser WebSocket endpoint (/ws/browser/{workerId}/term)
- * and provides live terminal viewing plus hijack controls (pause/step/release).
- *
- * Usage:
- *   const w = new ProvideHijack(containerEl, { workerId: 'myworker' });
- *   w.connect();    // called automatically on construction
- *   w.disconnect(); // close WS
- *   w.dispose();    // tear down entirely
- */
 import { ControlChannelDecoder, } from "./hijack-codec.js";
 import { approvalElementClass, buildApprovalModalHtml, buildApprovalStatusBarHtml, computeRemainingSeconds, } from "./hijack-approval.js";
 import { buildHijackToolbarHtml, escapeHijackHtml, injectHijackCss, MOBILE_KEYS, } from "./hijack-ui.js";
@@ -269,7 +257,11 @@ export class ProvideHijack {
         }
     }
     // ── Message dispatch ──────────────────────────────────────────────────────
-    _handleMessage(msg) {
+    _handleMessage(rawMsg) {
+        // Trust the decoder's parsed control payload as conforming to the
+        // generated AnyFrame union — wire format is the single source of truth
+        // (packages/provide-uterm/.../bridge/schemas.py).
+        const msg = rawMsg;
         const state = this._state;
         switch (msg.type) {
             case "term":
@@ -312,18 +304,21 @@ export class ProvideHijack {
                 state.hijacked = !!msg.hijacked;
                 state.hijackedByMe = !!msg.hijacked_by_me;
                 state.workerOnline = !!msg.worker_online;
-                const inputMode = msg.input_mode;
-                if (inputMode)
-                    state.inputMode = inputMode;
+                if (msg.input_mode)
+                    state.inputMode = msg.input_mode;
+                // Server is authoritative on role; prefer it over the constructor
+                // input for UX decisions (approval modal vs statusbar, admin buttons).
+                if (msg.role)
+                    state.serverRole = msg.role;
                 const caps = msg.capabilities;
-                state.hijackControl =
-                    msg.hijack_control ?? caps?.hijack_control ?? "ws";
-                const stepSupported = msg.hijack_step_supported ?? caps?.hijack_step_supported;
+                const capsHijackControl = caps?.hijack_control;
+                const capsHijackStep = caps?.hijack_step_supported;
+                state.hijackControl = msg.hijack_control ?? capsHijackControl ?? "ws";
+                const stepSupported = msg.hijack_step_supported ?? capsHijackStep;
                 state.hijackStepSupported = stepSupported !== false;
-                const resumeToken = msg.resume_token;
-                if (resumeToken) {
-                    state.resumeToken = resumeToken;
-                    saveResumeToken(state, resumeToken);
+                if (msg.resume_token) {
+                    state.resumeToken = msg.resume_token;
+                    saveResumeToken(state, msg.resume_token);
                 }
                 this._updateStatus();
                 this._updateButtons();
@@ -340,13 +335,12 @@ export class ProvideHijack {
                 this._updateButtons();
                 break;
             case "hijack_state": {
-                state.hijacked = !!msg.hijacked;
+                state.hijacked = msg.hijacked;
                 state.hijackedByMe = msg.owner === "me";
                 if (!state.hijackedByMe)
                     state.restHijackId = null;
-                const hsInputMode = msg.input_mode;
-                if (hsInputMode)
-                    state.inputMode = hsInputMode;
+                if (msg.input_mode)
+                    state.inputMode = msg.input_mode;
                 if (state.hijackedByMe) {
                     startHeartbeat(state);
                 }
@@ -371,9 +365,8 @@ export class ProvideHijack {
                 this._updateButtons();
                 break;
             case "input_mode_changed": {
-                const changedMode = msg.input_mode;
-                if (changedMode)
-                    state.inputMode = changedMode;
+                if (msg.input_mode)
+                    state.inputMode = msg.input_mode;
                 this._updateStatus();
                 this._updateButtons();
                 break;
@@ -409,15 +402,29 @@ export class ProvideHijack {
             case "presence_update":
             case "presence_leave":
             case "control_transfer":
-                this._config.onPresenceMessage?.(msg);
+                this._config.onPresenceMessage?.(rawMsg);
+                break;
+            default:
+                // Frame types that exist in AnyFrame but aren't handled here
+                // (input, snapshot_req, hijack_request/release/step, worker_hello,
+                // heartbeat, ping, pong, resume, status). An exhaustive default
+                // makes adding a new frame type a compile-time decision.
                 break;
         }
     }
     // ── UI State ──────────────────────────────────────────────────────────────
+    /**
+     * Effective role: prefer the server-confirmed `serverRole` (set from the
+     * `hello` frame) over the constructor-input `config.role`. UX decisions
+     * should follow what the server says, not what the caller claimed.
+     */
+    _effectiveRole() {
+        return this._state.serverRole ?? this._config.role;
+    }
     _getEffectiveUxMode() {
         const mode = this._config.approvalUxMode;
         if (mode === "auto") {
-            return this._config.role === "admin" ? "modal" : "statusbar";
+            return this._effectiveRole() === "admin" ? "modal" : "statusbar";
         }
         return mode;
     }
@@ -429,14 +436,14 @@ export class ProvideHijack {
         const el = document.createElement("div");
         this._approvalElement = el;
         el.className = approvalElementClass(mode);
-        const isAdmin = this._config.role === "admin";
+        const isAdmin = this._effectiveRole() === "admin";
         el.innerHTML =
             mode === "modal"
                 ? buildApprovalModalHtml({ uid: this._uid, command: this._pendingApproval.command, isAdmin })
                 : buildApprovalStatusBarHtml({ uid: this._uid });
         this._root.appendChild(el);
         this._startApprovalTimer();
-        if (this._config.role === "admin") {
+        if (isAdmin) {
             this._q("approve")?.addEventListener("click", () => this._resolveApproval("approve"));
             this._q("reject")?.addEventListener("click", () => this._resolveApproval("reject"));
         }
