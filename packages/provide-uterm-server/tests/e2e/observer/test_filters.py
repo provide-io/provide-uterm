@@ -148,14 +148,11 @@ async def test_pattern_filter_passes_matching_screen(live_server: Any) -> None:
     ):
         await worker.recv()  # snapshot_req
 
-        # Non-matching snapshot — should be filtered by pattern
+        # Non-matching snapshot (filtered by pattern) immediately followed by
+        # a matching positive-control event. If the pattern filter leaks the
+        # non-matching event will dequeue first and the screen assertion
+        # below will fail.
         await worker.send(json.dumps(snapshot_msg("loading...")))
-        await asyncio.sleep(0.15)
-
-        # Queue must still be empty — non-matching event was dropped by pattern filter
-        assert sub.queue.empty(), "pattern filter let a non-matching event through"
-
-        # Inject a matching event directly via the private _enqueue to verify delivery
         event_bus._enqueue(  # type: ignore[attr-defined]
             "flt1",
             {"type": "snapshot", "worker_id": "flt1", "data": {"screen": "root@host:~$ ", "screen_hash": "p1"}},
