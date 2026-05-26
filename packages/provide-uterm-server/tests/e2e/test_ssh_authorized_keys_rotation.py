@@ -28,6 +28,7 @@ import websockets.server
 from provide.uterm.auth import AuthorizedKeysFileResolver
 from provide.uterm.gateway import SshWsGateway
 from tests.bridge.control_channel_helpers import decode_control_payload
+from tests.e2e._live_server import wait_for_condition
 
 pytestmark = pytest.mark.asyncio
 
@@ -144,8 +145,14 @@ class TestAddedAfterStart:
             connected = await _ssh_connect_pubkey(ssh_port, client_key, username="alice")
             assert connected, "Expected connection to succeed after key was added"
 
-            # Give the gateway time to emit the identity frame.
-            await asyncio.sleep(0.2)
+            # Deterministically wait for the identity frame instead of a
+            # fixed-sleep settle.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: any(c.get("type") == "identity" for c in captured),
+                    timeout=5.0,
+                    description="identity frame after key addition",
+                )
         finally:
             ssh_srv.close()
             await ssh_srv.wait_closed()
@@ -188,7 +195,14 @@ class TestRemovedAfterStart:
             # First attempt — key is in the file → should succeed.
             connected = await _ssh_connect_pubkey(ssh_port, client_key, username="bob")
             assert connected, "Expected first connection to succeed (key registered)"
-            await asyncio.sleep(0.1)
+            # Deterministically wait for the identity frame from the first
+            # (registered) connection instead of a fixed-sleep settle.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: any(c.get("type") == "identity" for c in captured),
+                    timeout=5.0,
+                    description="identity frame on first registered connection",
+                )
 
             identity_frames_before = [c for c in captured if c.get("type") == "identity"]
             assert identity_frames_before, "No identity frame on first (registered) connection"
@@ -243,7 +257,14 @@ class TestModifiedSubject:
         try:
             # First connection — expect old subject.
             await _ssh_connect_pubkey(ssh_port, client_key, username="carol")
-            await asyncio.sleep(0.2)
+            # Deterministically wait for the first identity frame instead of
+            # a fixed-sleep settle.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: any(c.get("type") == "identity" for c in captured),
+                    timeout=5.0,
+                    description="identity frame on first connection",
+                )
 
             frames_before = [c for c in captured if c.get("type") == "identity"]
             assert frames_before, "No identity frame on first connection"
@@ -256,7 +277,14 @@ class TestModifiedSubject:
 
             # Second connection — expect new subject.
             await _ssh_connect_pubkey(ssh_port, client_key, username="carol")
-            await asyncio.sleep(0.2)
+            # Deterministically wait for the second identity frame instead of
+            # a fixed-sleep settle.
+            with contextlib.suppress(TimeoutError):
+                await wait_for_condition(
+                    lambda: sum(1 for c in captured if c.get("type") == "identity") >= 2,
+                    timeout=5.0,
+                    description="second identity frame after subject mutation",
+                )
         finally:
             ssh_srv.close()
             await ssh_srv.wait_closed()
