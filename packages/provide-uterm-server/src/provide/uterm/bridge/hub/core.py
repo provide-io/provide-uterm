@@ -35,11 +35,13 @@ from provide.uterm.bridge.hub.limiter import RateLimiter
 from provide.uterm.bridge.hub.messaging import HubMessagingMixin
 from provide.uterm.bridge.hub.ownership import _HijackOwnershipMixin
 from provide.uterm.bridge.hub.polling import _PollingMixin
+from provide.uterm.bridge.hub.polling_service import PollingCoordinator
 from provide.uterm.bridge.hub.presence import PresenceManager
 from provide.uterm.bridge.hub.registry import WorkerRegistry
 from provide.uterm.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.uterm.bridge.hub.router import MessageRouter
 from provide.uterm.bridge.hub.state import HubStateMixin
+from provide.uterm.bridge.hub.store import StateStore
 from provide.uterm.control_channel import encode_control, encode_data
 
 if TYPE_CHECKING:
@@ -195,6 +197,18 @@ class TermHub(
         # hub for cross-mixin calls (``is_hijacked``,
         # ``prepare_policy_context`` etc.).
         self.router = MessageRouter(self)
+        # StateStore owns the worker-state heartbeat (``touch_activity``),
+        # the per-browser line buffer, the hijack-state predicates, the
+        # metric / on_hijack_changed callback fan-out, and browser-role
+        # resolution + policy-context plumbing. ``HubStateMixin`` is now
+        # a thin facade forwarding to this service — see
+        # :mod:`provide.uterm.bridge.hub.store`.
+        self.state = StateStore(self)
+        # PollingCoordinator owns the snapshot polling helpers
+        # (``snapshot_matches``, ``wait_for_snapshot``, ``wait_for_guard``).
+        # ``_PollingMixin`` is now a thin facade forwarding to this
+        # service — see :mod:`provide.uterm.bridge.hub.polling_service`.
+        self.polling = PollingCoordinator(self)
         # ConnectionManager owns worker/browser register/deregister,
         # rate-limit gate plumbing and the ``force_release_hijack``
         # lifecycle path; PresenceManager owns the read-only browser
