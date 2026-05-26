@@ -91,7 +91,7 @@ The full service map (with one-line descriptions of each) is in the docstring of
 ## Testing
 
 - **100% branch+line coverage** enforced (`--cov-fail-under=100`)
-- **Mutation testing** enforced at 100% kill rate — see `MUTATION_PATTERNS.md` for patterns
+- **Mutation testing** enforced at 100% kill rate on a curated `paths_to_mutate` perimeter (security-critical surfaces + refactor #16 hub services + frame schemas). CI runs `scripts/run_mutation_gate.py --changed-only`, so the gate fires only on the perimeter files actually touched by a PR. See `MUTATION_PATTERNS.md` for patterns and `[tool.mutmut]` in root `pyproject.toml` for the full path list.
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Test markers: `playwright`, `mutant`, `memray`, `slow`, `e2e`, `real_cf`
 - Default testpaths: `packages/provide-uterm/tests`, `packages/provide-uterm-cloudflare/tests`

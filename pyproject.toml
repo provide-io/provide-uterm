@@ -244,6 +244,23 @@ paths_to_mutate = [
     "packages/provide-uterm-server/src/provide/uterm/server/routes/",
     "packages/provide-uterm-server/src/provide/uterm/server/webhooks.py",
     "packages/provide-uterm-server/src/provide/uterm/server/registry.py",
+    # Refactor #16 service classes — state-machine + dispatch logic split
+    # out of the former TermHub mixin pile. High mutation value; tests for
+    # each service live under tests/bridge/hub/test_<name>.py.
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/registry.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/limiter.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/lease.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/router.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/connection.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/presence.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/store.py",
+    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/polling_service.py",
+    # Pydantic frame schemas — single source of truth for wire format.
+    "src/provide/uterm/bridge/schemas.py",
+    # HijackCoordinator (moved to core in #15) — lease state machine.
+    "src/provide/uterm/bridge/coordinator.py",
+    # DeckMux presence service — split out of DeckMuxMixin in #6 follow-up.
+    "src/provide/uterm/deckmux/_service.py",
 ]
 tests_dir = [
     "packages/provide-uterm/tests/shell/test_shell_render.py",
