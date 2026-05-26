@@ -10,6 +10,7 @@
  * lifecycle, and the public class registered on window.
  */
 
+import { ControlChannelDecoder } from "./hijack-codec.js";
 import {
   buildSettingsPanelHtml,
   DEFAULTS,
@@ -115,6 +116,7 @@ export class ProvideTerminal {
   private root: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private reconnectTimer: number | null = null;
+  private readonly wsDecoder = new ControlChannelDecoder();
 
   constructor(container: HTMLElement, config: TerminalConfig = {}) {
     this.container = container;
@@ -288,6 +290,7 @@ export class ProvideTerminal {
     this.ws?.close();
     const ws = new WebSocket(this.resolveWsUrl());
     this.ws = ws;
+    this.wsDecoder.reset();
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.connected = true;
@@ -296,7 +299,22 @@ export class ProvideTerminal {
     ws.onmessage = (event) => {
       const payload = typeof event.data === "string" ? event.data : "";
       if (!payload || this.term === null) return;
-      this.term.write(payload);
+      // Decode the inline control-channel framing so the user never sees raw
+      // JSON control frames mixed into terminal output. Control chunks are
+      // discarded here — ProvideTerminal has no hijack UI to surface them.
+      let frames: ReturnType<ControlChannelDecoder["feed"]>;
+      try {
+        frames = this.wsDecoder.feed(payload);
+      } catch {
+        // Stream is corrupt; reset decoder and fall back to writing the raw
+        // payload so users don't get stuck on a blank screen.
+        this.wsDecoder.reset();
+        this.term.write(payload);
+        return;
+      }
+      for (const frame of frames) {
+        if (frame.type === "data") this.term.write(frame.data);
+      }
     };
     ws.onclose = () => {
       if (this.ws !== ws) return;
