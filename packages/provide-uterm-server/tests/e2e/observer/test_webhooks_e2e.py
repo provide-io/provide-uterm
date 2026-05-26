@@ -167,12 +167,11 @@ async def test_webhook_event_types_filter(shell_server: Any) -> None:
             await worker.recv()  # snapshot_req
             await asyncio.sleep(0.1)
 
-            # snapshot — should be filtered
+            # snapshot — should be filtered. hijack_acquired (injected
+            # immediately after) is the positive control: if the filter
+            # leaks, the snapshot would dequeue first and the type
+            # assertion below would fail.
             await worker.send(json.dumps(snapshot_msg("$ filtered")))
-            await asyncio.sleep(0.2)
-            assert received.empty()
-
-            # inject hijack_acquired directly via event bus
             event_bus = hub.event_bus
             assert event_bus is not None
             event_bus._enqueue(  # type: ignore[attr-defined]
@@ -181,6 +180,10 @@ async def test_webhook_event_types_filter(shell_server: Any) -> None:
             )
 
             payload = await asyncio.wait_for(received.get(), timeout=8.0)
+            # No second delivery should ever arrive — confirm by draining.
+            with contextlib.suppress(TimeoutError):
+                extra = await asyncio.wait_for(received.get(), timeout=0.5)
+                raise AssertionError(f"event_types filter let snapshot through: {extra}")
 
     assert payload["event"]["type"] == "hijack_acquired"
 
