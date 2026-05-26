@@ -135,7 +135,7 @@ class _AuthMixin:
         # header, CF Access already validated it — trust the request.
         try:
             cf_client_id = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[attr-defined]
-            if len(cf_client_id) > 0:
+            if cf_client_id.endswith(".access"):
                 return None, None
         except Exception:
             pass
