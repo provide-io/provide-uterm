@@ -36,13 +36,22 @@ def memray_baseline() -> dict[str, int]:
 
 @pytest.fixture(autouse=True)
 def _save_memray_baseline_updates(request: Any) -> None:
-    """Save baseline updates to baselines.json if MEMRAY_UPDATE_BASELINE is set."""
+    """Save baseline updates to baselines.json if MEMRAY_UPDATE_BASELINE is set.
+
+    Merges new values into the existing baselines.json rather than overwriting
+    it, so updating one baseline does not clobber the others.
+    """
     yield
     # After test completes, save updates if requested
     if os.getenv("MEMRAY_UPDATE_BASELINE") and _baseline_updates:
         baseline_path = Path(__file__).parent / "baselines.json"
+        existing: dict[str, int] = {}
+        if baseline_path.exists():
+            with baseline_path.open() as f:
+                existing = json.load(f)
+        existing.update(_baseline_updates)
         with baseline_path.open("w") as f:
-            json.dump(_baseline_updates, f, indent=2)
+            json.dump(existing, f, indent=2)
 
 
 def assert_allocation_within_threshold(baseline: int | None, current: int, name: str, tolerance: float = 0.15) -> None:
