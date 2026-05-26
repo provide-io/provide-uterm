@@ -2,6 +2,51 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
+"""TermHub package — bridge hub registry plus its composed service classes.
+
+Phase 7 of refactor #16 finished the migration from six "Hub*Mixin"
+parents on :class:`TermHub` to a single class composing nine service
+attributes. Every public ``hub.<method>(...)`` call site is preserved:
+the methods live on :class:`TermHub` directly and forward to the
+appropriate service. The map of services owned by every ``TermHub``
+instance:
+
+* ``hub.registry`` — :class:`WorkerRegistry` (``registry.py``). The
+  worker-id → :class:`WorkerTermState` map; owns ``add``/``get``/
+  ``remove``/``iter_workers``.
+* ``hub.limiter`` — :class:`RateLimiter` (``limiter.py``). The global
+  + per-client REST acquire / send token buckets and the LRU eviction
+  cache.
+* ``hub.approval_store`` — :class:`InMemoryApprovalStore`
+  (``approvals.py``). Pending and resolved approval requests; the
+  approval-flow orchestration lives directly on :class:`TermHub`.
+* ``hub.lease`` — :class:`HijackLeaseManager` (``lease.py``). The
+  hijack lease state machine (REST + dashboard WS), expiry sweeps,
+  resume control frames.
+* ``hub.router`` — :class:`MessageRouter` (``router.py``). The
+  broadcast / send_worker hot path plus the behavioral-heuristics ring
+  buffer.
+* ``hub.connection_mgr`` — :class:`ConnectionManager`
+  (``connection.py``). Worker/browser register/deregister, REST
+  rate-limit gates, force_release_hijack lifecycle.
+* ``hub.presence_mgr`` — :class:`PresenceManager` (``presence.py``).
+  Read-only browser presence queries (``can_send_input``, role
+  resolution) and worker-bound presence control frames
+  (``request_snapshot``, ``request_analysis``).
+* ``hub.state`` — :class:`StateStore` (``store.py``). Worker
+  heartbeats, per-browser input buffer, hijack-state predicates,
+  metric / on_hijack_changed callback fan-out, browser-role resolution,
+  policy-context plumbing.
+* ``hub.polling`` — :class:`PollingCoordinator`
+  (``polling_service.py``). Snapshot polling helpers
+  (``snapshot_matches``, ``wait_for_snapshot``, ``wait_for_guard``).
+
+:class:`TermHub` itself has **no mixin parents** as of Phase 7b. The
+legacy ``connections.py`` module survives only as a back-compat
+re-export shim for ``_REST_CLIENT_CACHE_MAX``,
+``_REST_CLIENT_EVICT_COUNT`` and ``shutdown_background_tasks``.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
