@@ -94,7 +94,7 @@ def required_role(tool: str) -> Role:
     """
     try:
         return TOOL_REQUIRED_ROLES[tool]
-    except KeyError as exc:  # pragma: no cover — defensive
+    except KeyError as exc:
         msg = f"No authorization policy registered for MCP tool {tool!r}"
         raise KeyError(msg) from exc
 

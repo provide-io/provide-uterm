@@ -110,6 +110,11 @@ class TestPolicyTable:
         for tool, role in TOOL_REQUIRED_ROLES.items():
             assert required_role(tool) == role
 
+    def test_required_role_unknown_tool_raises_key_error(self) -> None:
+        """required_role() raises KeyError with the tool name when the tool is unregistered."""
+        with pytest.raises(KeyError, match="No authorization policy registered for MCP tool"):
+            required_role("not_a_real_tool")
+
     def test_role_rank_ordering(self) -> None:
         assert role_rank("admin") > role_rank("operator") > role_rank("viewer")
 

@@ -33,7 +33,7 @@ PublicKeyValidator = Callable[[str, "asyncssh.SSHKey"], bool]
 
 try:
     import asyncssh
-except ImportError as _e:  # pragma: no cover
+except ImportError as _e:  # pragma: no cover - optional dep guard
     raise ImportError("asyncssh is required for SSH transport: pip install 'provide-uterm[ssh]'") from _e
 
 logger = get_logger(__name__)
@@ -345,7 +345,9 @@ async def start_ssh_server(
     make_reader = reader_factory or SSHStreamReader
     make_writer = writer_factory or SSHStreamWriter
 
-    async def _process_factory(process: asyncssh.SSHServerProcess[bytes]) -> None:  # pragma: no cover
+    async def _process_factory(
+        process: asyncssh.SSHServerProcess[bytes],
+    ) -> None:  # pragma: no cover - asyncssh runtime callback (live connection)
         reader = make_reader(process)
         writer = make_writer(process)
         await handler(reader, writer)

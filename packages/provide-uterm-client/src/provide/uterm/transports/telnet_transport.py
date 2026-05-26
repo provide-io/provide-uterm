@@ -206,7 +206,7 @@ class TelnetTransport:
         try:
             self._writer.close()
             await self._writer.wait_closed()
-        except (ConnectionResetError, BrokenPipeError, RuntimeError):  # pragma: no cover
+        except (ConnectionResetError, BrokenPipeError, RuntimeError):
             pass
         finally:
             for t in list(self._tasks):
@@ -234,7 +234,7 @@ class TelnetTransport:
         try:
             self._writer.write(escaped)
             await self._writer.drain()
-        except (ConnectionResetError, BrokenPipeError) as exc:  # pragma: no cover
+        except (ConnectionResetError, BrokenPipeError) as exc:
             await self.disconnect()
             raise ConnectionError("Send failed") from exc
 
@@ -257,11 +257,11 @@ class TelnetTransport:
             chunk = await asyncio.wait_for(self._reader.read(max_bytes), timeout=timeout_ms / 1000)
         except TimeoutError:
             return b""
-        except (ConnectionResetError, BrokenPipeError) as exc:  # pragma: no cover
+        except (ConnectionResetError, BrokenPipeError) as exc:
             await self.disconnect()
             raise ConnectionError("Connection lost") from exc
 
-        if not chunk:  # pragma: no cover
+        if not chunk:
             payload, events = self._consume_rx_buffer(final=True)
             await self.disconnect()
             if payload:
@@ -343,7 +343,7 @@ class TelnetTransport:
                 await self._negotiate_will_response(opt)
             elif cmd == WONT:  # pragma: no branch
                 await self._send_dont(opt)
-        except (ConnectionResetError, BrokenPipeError):  # pragma: no cover
+        except (ConnectionResetError, BrokenPipeError):
             pass
 
     async def _handle_subnegotiation(self, sub: bytes) -> None:

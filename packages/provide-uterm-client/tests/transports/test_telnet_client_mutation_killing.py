@@ -298,3 +298,34 @@ class TestTelnetClientIACHelpers:
         result = c.do(1)
         assert result[0] == IAC
         assert result[1] == DO
+
+
+# ---------------------------------------------------------------------------
+# Not-connected guards — read/readuntil/write/drain raise without connect()
+# ---------------------------------------------------------------------------
+
+
+class TestTelnetClientNotConnectedGuards:
+    async def test_read_raises_when_not_connected(self) -> None:
+        """read() raises RuntimeError when connect() has not been called."""
+        c = TelnetClient("h", 1)
+        with pytest.raises(RuntimeError, match="not connected"):
+            await c.read(1)
+
+    async def test_readuntil_raises_when_not_connected(self) -> None:
+        """readuntil() raises RuntimeError when connect() has not been called."""
+        c = TelnetClient("h", 1)
+        with pytest.raises(RuntimeError, match="not connected"):
+            await c.readuntil()
+
+    def test_write_raises_when_not_connected(self) -> None:
+        """write() raises RuntimeError when connect() has not been called."""
+        c = TelnetClient("h", 1)
+        with pytest.raises(RuntimeError, match="not connected"):
+            c.write(b"data")
+
+    async def test_drain_raises_when_not_connected(self) -> None:
+        """drain() raises RuntimeError when connect() has not been called."""
+        c = TelnetClient("h", 1)
+        with pytest.raises(RuntimeError, match="not connected"):
+            await c.drain()
