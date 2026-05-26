@@ -102,3 +102,25 @@ Runs on commit: ruff (format+lint), mypy (strict), ty, bandit (security), biome 
 - External dependency: `provide-telemetry` (sibling repo at `../provide-telemetry`, editable install)
 - Config files: TOML-based server config (see `docker/server.toml`, `scripts/uterm-server.example.toml`)
 - Auth modes: `dev` (no auth, local only) and `jwt` (production)
+
+## Frame Schemas (Python ↔ TypeScript)
+
+The WebSocket wire-format frame definitions live in **one place**:
+`packages/provide-uterm/src/provide/uterm/bridge/schemas.py`. These are
+Pydantic v2 models behind a discriminated union (`AnyFrame`, key = `type`).
+
+- **Python producers** (e.g. `make_*_frame()` builders in
+  `provide-uterm-server/.../bridge/frames.py`) instantiate the model and
+  call `.model_dump()` — wire bytes match the legacy hand-built dicts.
+- **TypeScript consumers** import from
+  `packages/provide-uterm-frontend/src/generated/frames.ts`, which is
+  generated from the JSON Schema. Both `frames.ts` and
+  `frames.schema.json` are committed and carry an AUTO-GENERATED banner.
+  Hand-editing them is forbidden — the codegen check would fail.
+
+To add a new frame type:
+1. Add the model in `schemas.py` and include it in `AnyFrame`.
+2. Run `uv run python scripts/codegen_frames.py`.
+3. Commit `schemas.py`, `frames.schema.json`, and `frames.ts` together.
+
+Pre-commit + CI run `scripts/codegen_frames.py --check` to catch drift.
