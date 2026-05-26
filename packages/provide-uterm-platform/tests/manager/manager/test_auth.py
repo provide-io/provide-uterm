@@ -189,3 +189,57 @@ class TestSetupAuth:
         with patch.dict(os.environ, {"MY_TOK": "val"}):
             setup_auth(app, env_var="MY_TOK", config=config)
         app.add_middleware.assert_called_once()
+
+
+class TestSetupAuthBindHostGuard:
+    """Token env-var unset must only be tolerated on loopback binds."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self):
+        # Ensure neither var leaks between tests.
+        for var in ("UTERM_MANAGER_API_TOKEN", "UTERM_MANAGER_ALLOW_UNAUTHENTICATED"):
+            os.environ.pop(var, None)
+        yield
+        for var in ("UTERM_MANAGER_API_TOKEN", "UTERM_MANAGER_ALLOW_UNAUTHENTICATED"):
+            os.environ.pop(var, None)
+
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
+    def test_loopback_bind_without_token_warns_and_skips(self, host: str) -> None:
+        app = MagicMock()
+        config = MagicMock()
+        config.host = host
+        config.auth_public_paths = []
+        config.auth_public_prefixes = []
+        setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN", config=config)
+        app.add_middleware.assert_not_called()
+
+    @pytest.mark.parametrize("host", ["0.0.0.0", "0.0.0.1", "10.0.0.5", "192.168.1.10", "example.com"])
+    def test_non_loopback_bind_without_token_raises(self, host: str) -> None:
+        app = MagicMock()
+        config = MagicMock()
+        config.host = host
+        config.auth_public_paths = []
+        config.auth_public_prefixes = []
+        with pytest.raises(RuntimeError, match="Manager API token is required"):
+            setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN", config=config)
+        app.add_middleware.assert_not_called()
+
+    def test_explicit_opt_out_allows_unauthenticated_on_any_host(self) -> None:
+        app = MagicMock()
+        config = MagicMock()
+        config.host = "10.0.0.5"
+        config.auth_public_paths = []
+        config.auth_public_prefixes = []
+        os.environ["UTERM_MANAGER_ALLOW_UNAUTHENTICATED"] = "1"
+        setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN", config=config)
+        app.add_middleware.assert_not_called()
+
+    def test_token_set_installs_middleware_on_non_loopback(self) -> None:
+        app = MagicMock()
+        config = MagicMock()
+        config.host = "0.0.0.0"
+        config.auth_public_paths = []
+        config.auth_public_prefixes = []
+        os.environ["UTERM_MANAGER_API_TOKEN"] = "sekrit"
+        setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN", config=config)
+        app.add_middleware.assert_called_once()

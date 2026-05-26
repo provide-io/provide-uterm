@@ -96,12 +96,66 @@ class TokenAuthMiddleware:
         await self._app(scope, receive, send)
 
 
+# Hosts treated as loopback for the unauthenticated-dev fallback.
+# 0.0.0.0 is intentionally NOT loopback — it binds every interface and would
+# expose an unauthenticated manager. The bandit-flagged sibling in this module
+# is the listening side, not this set.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+_ALLOW_UNAUTH_ENV_VAR = "UTERM_MANAGER_ALLOW_UNAUTHENTICATED"
+
+
+def _is_loopback_bind(host: str | None) -> bool:
+    """Return True if *host* refers to a loopback / local-only bind address."""
+    if not host:
+        return False
+    return host.strip().lower() in _LOOPBACK_HOSTS
+
+
 def setup_auth(app: Any, *, env_var: str = "UTERM_MANAGER_API_TOKEN", config: Any = None) -> None:
-    """Add token auth middleware if the env var is set."""
+    """Add token auth middleware.
+
+    Behaviour when the token env var is unset:
+
+    * If the manager binds to a loopback address (127.0.0.1 / localhost / ::1)
+      the middleware is skipped with a warning — convenient for local dev.
+    * If the bind host is non-loopback the function raises ``RuntimeError`` so
+      an unauthenticated manager never accidentally listens on a routable
+      interface in production.
+    * Setting ``UTERM_MANAGER_ALLOW_UNAUTHENTICATED=1`` is an explicit opt-out
+      that re-enables the old "log warning and skip" behaviour for users who
+      operate the manager in an ephemeral container with its own network
+      policy.
+    """
     token = os.environ.get(env_var, "").strip()
     if not token:
-        logger.warning("api_token_auth_disabled", hint=f"Set {env_var} to enable")
-        return
+        bind_host = getattr(config, "host", None) if config is not None else None
+        allow_unauth = os.environ.get(_ALLOW_UNAUTH_ENV_VAR, "").strip().lower() in {"1", "true", "yes"}
+        if allow_unauth:
+            logger.warning(
+                "api_token_auth_disabled",
+                hint=f"Set {env_var} to enable",
+                reason="explicit_opt_out",
+            )
+            return
+        # When no config (and therefore no bind host) is supplied we can't
+        # tell whether the deployment is loopback or routable. Preserve the
+        # legacy warn-and-skip behaviour so embedders that wire the app
+        # themselves aren't broken; require an explicit, non-loopback bind
+        # to trigger the hard error.
+        if config is None or _is_loopback_bind(bind_host):
+            logger.warning(
+                "api_token_auth_disabled",
+                hint=f"Set {env_var} to enable",
+                reason="loopback_bind" if config is not None else "no_config",
+                bind_host=bind_host,
+            )
+            return
+        raise RuntimeError(
+            f"Manager API token is required when binding to a non-loopback host "
+            f"({bind_host!r}). Set the {env_var} environment variable, bind to "
+            f"127.0.0.1/localhost/::1, or set {_ALLOW_UNAUTH_ENV_VAR}=1 to "
+            f"explicitly run unauthenticated."
+        )
     public_paths: frozenset[str] = frozenset()
     public_prefixes: tuple[str, ...] = ()
     if config is not None:
