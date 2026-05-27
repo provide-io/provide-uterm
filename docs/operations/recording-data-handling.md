@@ -15,11 +15,11 @@ prioritize debuggability over confidentiality.
 - When enabled with the default `LocalFileRecordingStore`, sessions are written
   as **plaintext JSONL** to disk under `recording.directory`
   (default: `.uterm-recordings/`).
-- **PTY input is captured verbatim.** Anything a user types — including
-  passwords typed at an interactive prompt — lands in the recording.
-- **No retention enforcement is applied by the recording store.**
-  `session_retention_s = 0` means "keep indefinitely". Disk-side cleanup is
-  the operator's responsibility.
+- **PTY input/output is recorded.** Default secret-redaction patterns are
+  applied before persistence (`recording.redact_sensitive = true`), but this is
+  best-effort and should not be treated as a complete DLP solution.
+- Local recording file retention can be enforced with `recording.retention_s`
+  (`0` means keep indefinitely).
 - `recording.control_channel_mode = "exclude"` keeps internal control frames
   out of the recording, but it does **not** scrub the data stream.
 
@@ -72,10 +72,8 @@ expected to:
 3. **Communicate the recording posture to users.** Operators must inform end
    users that sessions are being recorded — both as a legal/compliance baseline
    and so users self-redact (e.g., paste secrets via files instead of typing).
-4. **Set retention.** `session_retention_s` defaults to `0` (indefinite); pick
-   a value compatible with the policies above. Out-of-band cleanup of the
-   recording directory is acceptable; the recording store does not delete
-   files itself.
+4. **Set retention.** `recording.retention_s` defaults to `0` (indefinite);
+   pick a value compatible with the policies above.
 
 ## Configuration reference
 
@@ -87,13 +85,15 @@ The recording configuration lives under `recording.*` in
 | `enabled_by_default`         | `false`              | Per-session opt-in if false    |
 | `directory`                  | `.uterm-recordings`  | Plain-text JSONL files written here when `store_type = "local"` |
 | `max_bytes`                  | `0` (unlimited)      | Per-session size cap           |
+| `retention_s`                | `0` (indefinite)     | Local `.jsonl` file TTL for sweep task |
 | `control_channel_mode`       | `"exclude"`          | `"wire"` includes control frames |
+| `redact_sensitive`           | `true`               | Apply default secret redaction patterns before persistence |
 | `store_type`                 | `"local"`            | `local` / `memory` / `null` / `webhook` |
 | `webhook_url`                | unset                | Required when `store_type = "webhook"` |
 
 `session_retention_s` lives at the top level of `UtermServerConfig` and applies
-to session records held in memory; it does not delete recording files from
-disk.
+to stopped session definitions in the in-memory registry; recording file TTL is
+controlled separately by `recording.retention_s`.
 
 ## Future work
 

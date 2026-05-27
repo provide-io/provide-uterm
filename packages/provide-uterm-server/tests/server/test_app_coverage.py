@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
-from provide.uterm.server.models import TunnelConfig
+from provide.uterm.server.models import RecordingConfig, TunnelConfig
 
 
 def _make_app(**config_overrides: Any) -> tuple[Any, Any]:
@@ -27,6 +28,16 @@ def _make_app(**config_overrides: Any) -> tuple[Any, Any]:
     for key, value in config_overrides.items():
         setattr(config, key, value)
     return create_server_app(config), config
+
+
+def _auth_dep(app: Any) -> Any:
+    from fastapi.routing import APIRoute
+
+    for route in app.routes:
+        if isinstance(route, APIRoute) and route.path == "/api/sessions":
+            dependency = route.dependencies[0]
+            return dependency.dependency
+    raise AssertionError("auth dependency not found")
 
 
 async def _run_lifespan_one_tick(app: Any) -> None:
@@ -283,6 +294,77 @@ class TestSweepExpiredSessions:
         await _run_lifespan_one_tick(app)
 
         registry.delete_session.assert_not_awaited()
+
+
+class TestSweepExpiredRecordings:
+    """Cover local recording-file retention sweep behavior."""
+
+    async def test_sweep_recordings_deletes_old_files(self, tmp_path) -> None:
+        rec_dir = tmp_path / "recordings"
+        rec_dir.mkdir()
+        old_file = rec_dir / "old.jsonl"
+        fresh_file = rec_dir / "fresh.jsonl"
+        old_file.write_text("{}\n", encoding="utf-8")
+        fresh_file.write_text("{}\n", encoding="utf-8")
+        now = time.time()
+        # old: 2h ago, fresh: 10s ago
+        old_age = now - 7200
+        fresh_age = now - 10
+        os.utime(old_file, (old_age, old_age))
+        os.utime(fresh_file, (fresh_age, fresh_age))
+
+        app, _config = _make_app(
+            recording=RecordingConfig(
+                enabled_by_default=False,
+                directory=rec_dir,
+                retention_s=3600,
+                store_type="local",
+            )
+        )
+        await _run_lifespan_one_tick(app)
+
+        assert not old_file.exists()
+        assert fresh_file.exists()
+
+    async def test_sweep_recordings_skips_when_retention_zero(self, tmp_path) -> None:
+        rec_dir = tmp_path / "recordings"
+        rec_dir.mkdir()
+        old_file = rec_dir / "old.jsonl"
+        old_file.write_text("{}\n", encoding="utf-8")
+        now = time.time() - 7200
+        os.utime(old_file, (now, now))
+
+        app, _config = _make_app(
+            recording=RecordingConfig(
+                enabled_by_default=False,
+                directory=rec_dir,
+                retention_s=0,
+                store_type="local",
+            )
+        )
+        await _run_lifespan_one_tick(app)
+
+        assert old_file.exists()
+
+    async def test_sweep_recordings_skips_non_local_store(self, tmp_path) -> None:
+        rec_dir = tmp_path / "recordings"
+        rec_dir.mkdir()
+        old_file = rec_dir / "old.jsonl"
+        old_file.write_text("{}\n", encoding="utf-8")
+        now = time.time() - 7200
+        os.utime(old_file, (now, now))
+
+        app, _config = _make_app(
+            recording=RecordingConfig(
+                enabled_by_default=False,
+                directory=rec_dir,
+                retention_s=3600,
+                store_type="memory",
+            )
+        )
+        await _run_lifespan_one_tick(app)
+
+        assert old_file.exists()
 
 
 class TestSweepExpiredTunnelTokens:

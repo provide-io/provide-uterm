@@ -21,7 +21,6 @@ from typing import Any
 import httpx
 
 from provide.uterm.client import connect_async_ws
-
 from tests.e2e._live_server import wait_for_subscribers
 
 from .conftest import (

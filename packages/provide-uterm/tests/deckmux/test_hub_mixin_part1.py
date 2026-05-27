@@ -1,0 +1,419 @@
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+"""Tests for DeckMuxMixin — presence routing and control transfer."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from unittest.mock import AsyncMock
+
+import pytest
+
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
+
+
+class _FakeHub(DeckMuxMixin):
+    """Minimal hub stub that satisfies the mixin's expectations."""
+
+    def __init__(self) -> None:
+        self._deckmux_init()
+        self.broadcast = AsyncMock()
+
+
+@dataclass
+class _FakePrincipal:
+    subject_id: str
+    display_name: str = ""
+
+
+class _FakeWS:
+    """Fake websocket with a stable id for user_id derivation."""
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_browser_connect_sends_sync() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    result = await hub.deckmux_on_browser_connect("w1", ws, "operator")
+    assert result is not None
+    assert result["type"] == "presence_sync"
+    assert len(result["users"]) == 1
+    assert result["users"][0]["role"] == "operator"
+    assert "config" in result
+
+
+@pytest.mark.asyncio
+async def test_browser_disconnect_broadcasts_leave() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "admin")
+    hub.broadcast.reset_mock()
+
+    await hub.deckmux_on_browser_disconnect("w1", ws)
+
+    hub.broadcast.assert_called_once()
+    args = hub.broadcast.call_args
+    assert args[0][0] == "w1"
+    assert args[0][1]["type"] == "presence_leave"
+    assert args[0][1]["user_id"] == str(id(ws))
+
+
+@pytest.mark.asyncio
+async def test_browser_disconnect_no_broadcast_when_not_present() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    # Disconnect without connecting first
+    await hub.deckmux_on_browser_disconnect("w1", ws)
+    hub.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_presence_update_broadcast() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "operator")
+    hub.broadcast.reset_mock()
+
+    msg = {"type": "presence_update", "scroll_line": 42, "typing": True}
+    await hub.deckmux_handle_message("w1", ws, msg)
+
+    hub.broadcast.assert_called_once()
+    broadcast_msg = hub.broadcast.call_args[0][1]
+    assert broadcast_msg["type"] == "presence_update"
+    assert broadcast_msg["scroll_line"] == 42
+    assert broadcast_msg["typing"] is True
+
+
+@pytest.mark.asyncio
+async def test_presence_update_unknown_user_ignored() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    # Don't connect, just send an update
+    msg = {"type": "presence_update", "scroll_line": 1}
+    await hub.deckmux_handle_message("w1", ws, msg)
+    hub.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_deckmux_handle_message_resolves_user_id_from_principal() -> None:
+    """When principal carries subject_id, deckmux_handle_message uses it as
+    the user_id so the presence store lookup matches the id set on connect.
+
+    Regression guard for the branch at _hub_mixin.py:129 where the
+    subject_id-based user_id resolution lives.  Without it, a JWT-auth
+    deployment would fail presence_update lookups (the connect path uses
+    subject_id but handle_message would fall back to id(ws)).
+    """
+    hub = _FakeHub()
+    ws = _FakeWS()
+    principal = _FakePrincipal(subject_id="user-abc", display_name="Alice")
+    await hub.deckmux_on_browser_connect("w1", ws, "operator", principal=principal)
+    hub.broadcast.reset_mock()
+
+    msg = {"type": "presence_update", "scroll_line": 99}
+    await hub.deckmux_handle_message("w1", ws, msg, principal=principal)
+
+    hub.broadcast.assert_called_once()
+    # The broadcast payload should carry the principal's subject_id, proving
+    # the handler resolved user_id via the subject_id branch.
+    broadcast_msg = hub.broadcast.call_args[0][1]
+    assert broadcast_msg["user_id"] == "user-abc"
+
+
+@pytest.mark.asyncio
+async def test_queued_input_buffered() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "viewer")
+    hub.broadcast.reset_mock()
+
+    msg = {"type": "queued_input", "keys": "hello"}
+    await hub.deckmux_handle_message("w1", ws, msg)
+
+    hub.broadcast.assert_called_once()
+    broadcast_msg = hub.broadcast.call_args[0][1]
+    assert broadcast_msg["type"] == "presence_update"
+    assert "hello" in broadcast_msg["queued_keys"]
+
+
+@pytest.mark.asyncio
+async def test_queued_input_unknown_user_ignored() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    msg = {"type": "queued_input", "keys": "x"}
+    await hub.deckmux_handle_message("w1", ws, msg)
+    hub.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_removes_state() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "viewer")
+    # Force transfer manager creation
+    hub._get_transfer_manager("w1")
+    assert "w1" in hub._presence_stores
+    assert "w1" in hub._transfer_managers
+
+    hub.deckmux_cleanup("w1")
+
+    assert "w1" not in hub._presence_stores
+    assert "w1" not in hub._transfer_managers
+
+
+@pytest.mark.asyncio
+async def test_cleanup_idempotent() -> None:
+    hub = _FakeHub()
+    hub.deckmux_cleanup("nonexistent")
+    # Should not raise
+
+
+@pytest.mark.asyncio
+async def test_identity_jwt_user() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    principal = _FakePrincipal(subject_id="user-123", display_name="Alice Smith")
+    result = await hub.deckmux_on_browser_connect("w1", ws, "admin", principal=principal)
+
+    assert result is not None
+    user = result["users"][0]
+    assert user["name"] == "Alice Smith"
+    assert user["user_id"] == "user-123"
+    assert user["initials"] == "AS"
+
+
+@pytest.mark.asyncio
+async def test_identity_jwt_user_no_display_name() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    principal = _FakePrincipal(subject_id="svc-456")
+    result = await hub.deckmux_on_browser_connect("w1", ws, "operator", principal=principal)
+
+    assert result is not None
+    user = result["users"][0]
+    # Falls back to subject_id as name
+    assert user["name"] == "svc-456"
+    assert user["user_id"] == "svc-456"
+
+
+@pytest.mark.asyncio
+async def test_identity_anonymous() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    result = await hub.deckmux_on_browser_connect("w1", ws, "viewer")
+
+    assert result is not None
+    user = result["users"][0]
+    # Anonymous user gets a generated name
+    assert user["name"] != ""
+    assert user["user_id"] == str(id(ws))
+    assert len(user["initials"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_owner_typing_resets_warning() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "admin")
+
+    # Make user the owner
+    store = hub._get_presence_store("w1")
+    user_id = str(id(ws))
+    store.set_owner(user_id)
+
+    tm = hub._get_transfer_manager("w1")
+    tm._warning_sent = True
+
+    msg = {"type": "presence_update", "typing": True}
+    await hub.deckmux_handle_message("w1", ws, msg)
+
+    assert tm._warning_sent is False
+
+
+@pytest.mark.asyncio
+async def test_control_request_grants_when_no_owner() -> None:
+    """control_request grants control immediately when no owner exists."""
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "admin")
+    hub.broadcast.reset_mock()
+
+    await hub.deckmux_handle_message("w1", ws, {"type": "control_request"})
+
+    hub.broadcast.assert_called_once()
+    _, msg = hub.broadcast.call_args[0]
+    assert msg["type"] == "control_transfer"
+    assert msg["to_user_id"] == str(id(ws))
+    assert msg["from_user_id"] == ""
+
+    store = hub._get_presence_store("w1")
+    owner = store.get_owner()
+    assert owner is not None
+    assert owner.user_id == str(id(ws))
+
+
+@pytest.mark.asyncio
+async def test_control_request_releases_when_already_owner() -> None:
+    """control_request releases control when the requester already owns it."""
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "admin")
+    await hub.deckmux_handle_message("w1", ws, {"type": "control_request"})
+    hub.broadcast.reset_mock()
+
+    await hub.deckmux_handle_message("w1", ws, {"type": "control_request"})
+
+    hub.broadcast.assert_called_once()
+    _, msg = hub.broadcast.call_args[0]
+    assert msg["type"] == "control_transfer"
+    assert msg["from_user_id"] == str(id(ws))
+    assert msg["to_user_id"] == ""
+    assert hub._get_presence_store("w1").get_owner() is None
+
+
+@pytest.mark.asyncio
+async def test_control_request_ignored_when_other_owns() -> None:
+    """control_request is silently ignored when another user holds control."""
+    hub = _FakeHub()
+    ws_a = _FakeWS()
+    ws_b = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws_a, "admin")
+    await hub.deckmux_on_browser_connect("w1", ws_b, "admin")
+    await hub.deckmux_handle_message("w1", ws_a, {"type": "control_request"})
+    hub.broadcast.reset_mock()
+
+    await hub.deckmux_handle_message("w1", ws_b, {"type": "control_request"})
+
+    hub.broadcast.assert_not_called()
+    owner = hub._get_presence_store("w1").get_owner()
+    assert owner is not None
+    assert owner.user_id == str(id(ws_a))
+
+
+@pytest.mark.asyncio
+async def test_multiple_browsers_sync() -> None:
+    hub = _FakeHub()
+    ws1 = _FakeWS()
+    ws2 = _FakeWS()
+
+    await hub.deckmux_on_browser_connect("w1", ws1, "admin")
+    result = await hub.deckmux_on_browser_connect("w1", ws2, "viewer")
+
+    assert result is not None
+    assert len(result["users"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_colors_avoid_collision() -> None:
+    hub = _FakeHub()
+    ws1 = _FakeWS()
+    ws2 = _FakeWS()
+
+    r1 = await hub.deckmux_on_browser_connect("w1", ws1, "admin")
+    r2 = await hub.deckmux_on_browser_connect("w1", ws2, "viewer")
+
+    assert r1 is not None
+    assert r2 is not None
+    c1 = r1["users"][0]["color"]
+    c2 = r2["users"][1]["color"]
+    # Colors should differ when possible
+    assert c1 != c2
+
+
+@pytest.mark.asyncio
+async def test_presence_update_cols_rows_broadcast() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "operator")
+    hub.broadcast.reset_mock()
+
+    msg = {"type": "presence_update", "cols": 120, "rows": 40}
+    await hub.deckmux_handle_message("w1", ws, msg)
+
+    hub.broadcast.assert_called_once()
+    broadcast_msg = hub.broadcast.call_args[0][1]
+    assert broadcast_msg["cols"] == 120
+    assert broadcast_msg["rows"] == 40
+
+
+@pytest.mark.asyncio
+async def test_unknown_message_type_ignored() -> None:
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "operator")
+    hub.broadcast.reset_mock()
+
+    await hub.deckmux_handle_message("w1", ws, {"type": "unknown_msg"})
+    hub.broadcast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_connect_prunes_idle_users() -> None:
+    """Stale users (idle > 60 s) are removed before sync is built for new connector."""
+    import time
+
+    hub = _FakeHub()
+    ws_stale = _FakeWS()
+    # Connect a user, then backdate their activity to make them appear idle
+    await hub.deckmux_on_browser_connect("w1", ws_stale, "viewer")
+    store = hub._get_presence_store("w1")
+    stale_id = str(id(ws_stale))
+    store._users[stale_id].last_activity_at = time.time() - 60  # 60 s ago (> 30 s threshold)
+
+    # New user connects — stale user should be pruned from the sync
+    ws_new = _FakeWS()
+    result = await hub.deckmux_on_browser_connect("w1", ws_new, "operator")
+    assert result is not None
+    user_ids = [u["user_id"] for u in result["users"]]
+    assert stale_id not in user_ids
+    assert str(id(ws_new)) in user_ids
+
+
+@pytest.mark.asyncio
+async def test_transfer_manager_config() -> None:
+    hub = _FakeHub()
+    tm = hub._get_transfer_manager("w1", {"auto_transfer_idle_s": 60, "keystroke_queue": "replay"})
+    assert tm._auto_idle_s == 60
+    assert tm.queue_mode == "replay"
+
+    # Calling again returns the same instance
+    tm2 = hub._get_transfer_manager("w1")
+    assert tm2 is tm
+
+
+# ---------------------------------------------------------------------------
+# Mutation killers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_control_grant_transfer_manager_keyed_by_worker_id() -> None:
+    """Transfer manager for control_request grant is stored under worker_id, not None."""
+    hub = _FakeHub()
+    ws = _FakeWS()
+    await hub.deckmux_on_browser_connect("w1", ws, "admin")
+    await hub.deckmux_handle_message("w1", ws, {"type": "control_request"})
+
+    assert "w1" in hub._transfer_managers
+    assert None not in hub._transfer_managers
+
+
+def test_transfer_manager_default_idle_is_30_not_31() -> None:
+    """Default auto_transfer_idle_s is 30, not 31 or None."""
+    hub = _FakeHub()
+    tm = hub._get_transfer_manager("w1")
+    assert tm._auto_idle_s == 30
+
+
+def test_transfer_manager_default_queue_mode_is_display() -> None:
+    """Default keystroke_queue is 'display', not 'DISPLAY', 'XXdisplayXX', or None."""
+    hub = _FakeHub()
+    tm = hub._get_transfer_manager("w1")
+    assert tm.queue_mode == "display"

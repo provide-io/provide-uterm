@@ -46,6 +46,11 @@ class ManagerConfig(BaseModel):
 
     # Worker env-var prefix forwarded to subprocesses.
     worker_env_prefix: str = "UTERM_"
+    # Optional worker process resource limits (0 = disabled).
+    worker_rlimit_nofile_soft: int = 0
+    worker_rlimit_nofile_hard: int = 0
+    worker_rlimit_as_mb: int = 0
+    worker_rlimit_cpu_s: int = 0
 
     # Governance & Policy
     spawn_policy_webhook_url: str = ""

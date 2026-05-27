@@ -252,7 +252,9 @@ async def _make_process_handler(
                 if callable(obj):
                     obj = obj()
                 candidates.append(obj)
-        for conn in candidates:  # pragma: no cover — asyncssh-server attribute fallbacks exercised via live-SSH integration
+        for (
+            conn
+        ) in candidates:  # pragma: no cover — asyncssh-server attribute fallbacks exercised via live-SSH integration
             if conn is None:
                 continue
             server = getattr(conn, "_warp_gateway_server", None)
@@ -312,7 +314,9 @@ async def _make_process_handler(
         # caller opted in via ``token_file``. Discarded when this coroutine
         # returns; file persists across proxy restarts.
         token_holder: list[dict[str, Any] | None] = [None]
-        if effective_token_file is not None:  # pragma: no cover — saved-token load is reachable only inside a live SSH session
+        if (
+            effective_token_file is not None
+        ):  # pragma: no cover — saved-token load is reachable only inside a live SSH session
             saved = _read_token(effective_token_file)
             if saved:
                 token_holder[0] = saved

@@ -294,6 +294,42 @@ class TestProcessTreeHelpers:
         ):
             assert pm._spawn_platform_kwargs() == {"creationflags": 512}
 
+    def test_spawn_platform_kwargs_posix_includes_preexec_when_limits_enabled(self, pm):
+        pm.manager.config.worker_rlimit_nofile_soft = 256
+        with patch.object(process_module.os, "name", "posix"):
+            kwargs = pm._spawn_platform_kwargs()
+        assert kwargs["start_new_session"] is True
+        assert callable(kwargs.get("preexec_fn"))
+
+    def test_build_preexec_rlimit_fn_sets_expected_limits(self, pm):
+        pm.manager.config.worker_rlimit_nofile_soft = 128
+        pm.manager.config.worker_rlimit_nofile_hard = 256
+        pm.manager.config.worker_rlimit_as_mb = 64
+        pm.manager.config.worker_rlimit_cpu_s = 30
+
+        calls: list[tuple[int, tuple[int, int]]] = []
+
+        class _FakeResource:
+            RLIMIT_NOFILE = 7
+            RLIMIT_AS = 9
+            RLIMIT_CPU = 0
+
+            @staticmethod
+            def setrlimit(kind: int, limits: tuple[int, int]) -> None:
+                calls.append((kind, limits))
+
+        with (
+            patch.object(process_module.os, "name", "posix"),
+            patch.dict(sys.modules, {"resource": _FakeResource}),
+        ):
+            fn = pm._build_preexec_rlimit_fn()
+            assert callable(fn)
+            fn()
+
+        assert (7, (128, 256)) in calls
+        assert (9, (64 * 1024 * 1024, 64 * 1024 * 1024)) in calls
+        assert (0, (30, 30)) in calls
+
     @pytest.mark.asyncio
     async def test_stop_process_tree_posix_graceful(self, pm):
         proc = MagicMock(pid=321)

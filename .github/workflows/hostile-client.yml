@@ -1,0 +1,118 @@
+name: "🛡️ Hostile Client Resilience"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * 1"
+  push:
+    branches:
+      - main
+      - "rc/**"
+    paths:
+      - "scripts/hostile_profile.py"
+      - "packages/provide-uterm-server/**"
+      - ".github/workflows/hostile-client.yml"
+  pull_request:
+    branches:
+      - main
+      - "rc/**"
+    paths:
+      - "scripts/hostile_profile.py"
+      - "packages/provide-uterm-server/**"
+      - ".github/workflows/hostile-client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hostile-probes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm run build:frontend
+          uv sync --group dev
+
+      - name: Start server
+        run: |
+          nohup uv run uterm server --host 127.0.0.1 --port 8400 > /tmp/uterm-hostile.log 2>&1 &
+          echo $! > /tmp/uterm-hostile.pid
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8400/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server failed to become healthy"
+          cat /tmp/uterm-hostile.log || true
+          exit 1
+
+      - name: Burst probe
+        run: |
+          uv run python scripts/hostile_profile.py \
+            --base-url http://127.0.0.1:8400 \
+            --worker-id provide-shell \
+            --mode burst \
+            --iterations 200 \
+            --concurrency 40 \
+            --min-success-rate 0.95 \
+            --max-failure-rate 0.05
+
+      - name: Oversized-frame probe
+        run: |
+          uv run python scripts/hostile_profile.py \
+            --base-url http://127.0.0.1:8400 \
+            --worker-id provide-shell \
+            --mode oversized \
+            --iterations 120 \
+            --concurrency 20 \
+            --payload-bytes 2000000 \
+            --min-success-rate 0.90 \
+            --max-failure-rate 0.10
+
+      - name: Slowloris probe
+        run: |
+          uv run python scripts/hostile_profile.py \
+            --base-url http://127.0.0.1:8400 \
+            --mode slowloris \
+            --iterations 80 \
+            --concurrency 10 \
+            --header-bytes-per-chunk 8 \
+            --delay-s 0.2 \
+            --min-success-rate 0.80 \
+            --max-failure-rate 0.20
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: hostile-client-server-log
+          path: /tmp/uterm-hostile.log
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/uterm-hostile.pid ]; then
+            kill "$(cat /tmp/uterm-hostile.pid)" || true
+          fi

@@ -250,4 +250,3 @@ class TestSanitize:
         result = _sanitize("a" * 600)
         assert result == ("a" * 500) + "..."
         assert len(result) == 503
-

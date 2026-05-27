@@ -23,8 +23,8 @@ The columns map to:
 | SBOM (CycloneDX) on every artifact | ✅ | `artifacts/release-governance/sbom.json` regenerated each governance run. |
 | Reproducible build flags | ⚠ | `uv build` is deterministic given a fixed `uv.lock` but timestamps in wheels aren't pinned. Add `SOURCE_DATE_EPOCH` for byte-identical rebuilds. |
 | Wheel signing (Sigstore keyless) | ✅ | `cosign sign-blob` in CI; bundles uploaded as workflow artifacts. Local runs skip-with-notice (no OIDC). |
-| SBOM signing | ❌ | We sign wheels and sdist; the SBOM itself isn't signed. Easy add: `cosign sign-blob sbom.json` in the governance script. |
-| SLSA provenance attestation | ❌ | Listed as "planned" in `docs/release-governance.md`. Slsa-github-generator action would emit level-3 attestation. |
+| SBOM signing | ✅ | `scripts/release_governance_check.sh` signs `sbom.json` and `pip-audit.txt` with `cosign sign-blob` bundles. |
+| SLSA provenance attestation | ✅ | `.github/workflows/release.yml` emits SLSA Level 3 provenance via `slsa-github-generator` and uploads `.intoto.jsonl`. |
 | Lockfile poisoning / dependency confusion | ⚠ | `uv` uses PyPI by default; private packages aren't published yet. When they are, set an index priority policy in `pyproject.toml` (`tool.uv.sources`) and audit the resolver output. |
 | Renovate / Dependabot weekly bumps | ✅ | Configured in `.github/dependabot.yml` for pip, npm workspaces, and GitHub Actions on a weekly cadence. |
 | Typosquatting protection | ⚠ | First-time dep introduction has no review gate. Recommendation: pre-commit hook running `pip-audit --strict` against the proposed lockfile. |
@@ -96,7 +96,7 @@ The columns map to:
 | Credential leak detection in output | ✅ | Bandit rules + redaction patterns in `redaction` module. |
 | Recording PII redaction | ⚠ | Redaction is opt-in via patterns; ship a default ruleset for known secret formats (AWS keys, GitHub tokens, JWTs, etc.). |
 | Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
-| Recording retention policy | ⚠ | No automatic purge today; documented retention is a deployment concern. |
+| Recording retention policy | ⚠ | Local store supports `recording.retention_s` sweep; non-local stores still depend on backend-specific retention controls. |
 | Tamper-evident audit log | 📋 spec'd | Open-source library writes plain audit events through `audit_event()` to whatever sink the operator configures. Enterprise-tier tamper-evidence (hash-chain + optional HMAC + optional ed25519 signing, configurable) is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-tamper-evident-audit-log-design.md`) — ships with an `audit-verify` CLI for post-fact verification. |
 | Immutable storage hooks | ⚠ | Cloudflare DO + SQLite at the edge; on-prem reference server stores locally. |
 
@@ -124,7 +124,7 @@ The columns map to:
 | Health endpoint | ✅ | `/api/health` returns 200 with `{"status": "ok"}`. |
 | Readiness endpoint | ✅ | Distinct from health; reports `ready: true` only when sessions are loaded. |
 | Graceful shutdown | ✅ | Sessions disconnect cleanly on SIGTERM (verified via rollback drill). |
-| Resource exhaustion testing | ❌ | Load profile is happy-path; add a hostile-client probe (slow loris, huge frames). |
+| Resource exhaustion testing | ✅ | Dedicated workflow `.github/workflows/hostile-client.yml` runs burst, oversized-frame, and slow-loris probes with explicit success/failure thresholds and post-probe health checks. |
 
 ## 9. Build / CI hardening
 
