@@ -21,16 +21,29 @@ BAD_STAT_KEYS: Final[tuple[str, ...]] = (
     "no_tests",
     "check_was_interrupted_by_user",
 )
+BAD_MUTANT_STATES: Final[tuple[str, ...]] = (
+    "not checked",
+    "survived",
+    "suspicious",
+    "timeout",
+    "skipped",
+)
 
 CONFIG_FILES: Final[tuple[str, ...]] = (
     "pyproject.toml",
     ".pytest.ini",
     "pytest.ini",
 )
-MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = ("--randomly-dont-reorganize",)
+MUTMUT_INCOMPATIBLE_PYTEST_ARGS: Final[tuple[str, ...]] = (
+    "--randomly-dont-reorganize",
+    "-x",
+)
 DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm/src/provide/uterm/",
     "packages/provide-uterm-platform/src/provide/uterm/pty/",
+    "packages/provide-uterm-platform/src/provide/uterm/manager/",
+    "packages/provide-uterm-server/src/provide/uterm/",
+    "src/provide/uterm/",
 )
 
 
@@ -222,6 +235,22 @@ def _mutation_score(stats: dict[str, int]) -> float:
     return (killed / total) * 100.0
 
 
+def _results_state_counts(python_version: str | None, env: dict[str, str]) -> dict[str, int]:
+    cmd = _uv_mutmut_cmd(python_version, "results", "--all", "true")
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
+    if completed.returncode != 0:
+        raise RuntimeError(f"failed to read mutmut results ({completed.returncode})")
+    counts: dict[str, int] = {}
+    for raw in completed.stdout.splitlines():
+        line = raw.strip()
+        if not line or ":" not in line:
+            continue
+        _name, state = line.rsplit(":", 1)
+        key = state.strip()
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def run_mutation_gate(
     python_version: str | None,
     max_children: int,
@@ -230,7 +259,6 @@ def run_mutation_gate(
     paths_to_mutate: list[str] | None = None,
 ) -> dict[str, int]:
     attempts = retries + 1
-    stats_path = Path("mutants/mutmut-cicd-stats.json")
     last_stats: dict[str, int] = {}
     mutation_env = dict(os.environ)
     existing_pythonpath = mutation_env.get("PYTHONPATH")
@@ -248,8 +276,9 @@ def run_mutation_gate(
         _seed_mutants_config(paths_to_mutate=paths_to_mutate)
         _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
 
-        # Also rewrite the root pyproject.toml so mutmut sees the narrowed targets
-        if paths_to_mutate and root_original is not None:
+        # mutmut reads config from the root pyproject.toml. Normalize it for
+        # mutation runs (strip incompatible pytest args and optionally narrow paths).
+        if root_original is not None:
             _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate, strip_workspace=False)
 
         children = max_children if attempt == 1 else 1
@@ -261,24 +290,30 @@ def run_mutation_gate(
         print("+", " ".join(cmd))
         try:
             mutmut_result = subprocess.run(cmd, check=False, env=mutation_env)
-            # export-cicd-stats must run BEFORE restoring the root pyproject.toml:
-            # mutmut stores meta files under the paths_to_mutate prefix used during
-            # the run; export-cicd-stats re-reads paths_to_mutate to locate them.
-            # Restoring early causes a path mismatch → "No previous mutation data".
-            if mutmut_result.returncode <= 1:
-                _run(_uv_mutmut_cmd(python_version, "export-cicd-stats"), env=mutation_env)
         finally:
             # Restore root pyproject.toml (even on error so we never leave it modified)
             if root_original is not None:
                 root_pyproject.write_text(root_original, encoding="utf-8")
         if mutmut_result.returncode > 1:
             raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
-        last_stats = _read_stats(stats_path)
-        score = _mutation_score(last_stats)
+        state_counts = _results_state_counts(python_version, mutation_env)
+        total = sum(state_counts.values())
+        killed = int(state_counts.get("killed", 0))
+        score = (killed / total * 100.0) if total > 0 else 0.0
+        last_stats = {
+            "total": total,
+            "killed": killed,
+            "survived": int(state_counts.get("survived", 0)),
+            "suspicious": int(state_counts.get("suspicious", 0)),
+            "timeout": int(state_counts.get("timeout", 0)),
+            "skipped": int(state_counts.get("skipped", 0)),
+            "not_checked": int(state_counts.get("not checked", 0)),
+            "bad_total": sum(int(state_counts.get(state, 0)) for state in BAD_MUTANT_STATES),
+        }
         print(f"mutation_score={score:.2f}")
-        print(json.dumps(last_stats, indent=2, sort_keys=True))
+        print(json.dumps(state_counts, indent=2, sort_keys=True))
 
-        if _is_clean(last_stats) and score >= min_mutation_score:
+        if total > 0 and score >= min_mutation_score and last_stats["bad_total"] == 0:
             return last_stats
         if attempt < attempts:
             print("Mutation gate not clean; retrying in single-worker mode.")

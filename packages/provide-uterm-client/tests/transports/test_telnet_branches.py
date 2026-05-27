@@ -194,9 +194,7 @@ class TestParseTelnetBufferFinal:
     def test_final_lone_trailing_iac_emitted_as_literal(self) -> None:
         # Buffer ends with a lone IAC byte; with final=True it must be emitted
         # rather than buffered (lines 112-115).
-        payload, events, consumed = TelnetTransport._parse_telnet_buffer(
-            bytes([ord("A"), IAC]), final=True
-        )
+        payload, events, consumed = TelnetTransport._parse_telnet_buffer(bytes([ord("A"), IAC]), final=True)
         assert payload == bytes([ord("A"), IAC])
         assert events == []
         assert consumed == 2
@@ -206,9 +204,7 @@ class TestParseTelnetBufferFinal:
         # literal data (lines 121-125).
         from provide.uterm.transports.telnet import DO
 
-        payload, events, consumed = TelnetTransport._parse_telnet_buffer(
-            bytes([ord("A"), IAC, DO]), final=True
-        )
+        payload, events, consumed = TelnetTransport._parse_telnet_buffer(bytes([ord("A"), IAC, DO]), final=True)
         assert payload == bytes([ord("A"), IAC, DO])
         assert events == []
         assert consumed == 3

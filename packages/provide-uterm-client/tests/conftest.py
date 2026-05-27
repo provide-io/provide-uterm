@@ -70,8 +70,7 @@ def _install_websockets_dev_principal_autoauth() -> None:
         if isinstance(provided, dict):
             merged.update(provided)
         else:
-            for k, v in provided:
-                merged[k] = v
+            merged.update(dict(provided))
         kwargs["additional_headers"] = merged
         return _orig(*args, **kwargs)
 

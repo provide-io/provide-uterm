@@ -244,6 +244,10 @@ paths_to_mutate = [
     "packages/provide-uterm-server/src/provide/uterm/server/routes/",
     "packages/provide-uterm-server/src/provide/uterm/server/webhooks.py",
     "packages/provide-uterm-server/src/provide/uterm/server/registry.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/config_schema.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/app/factory.py",
+    "packages/provide-uterm-platform/src/provide/uterm/manager/process.py",
+    "packages/provide-uterm-platform/src/provide/uterm/manager/config.py",
     # Refactor #16 service classes — state-machine + dispatch logic split
     # out of the former TermHub mixin pile. High mutation value; tests for
     # each service live under tests/bridge/hub/test_<name>.py.
@@ -320,6 +324,9 @@ tests_dir = [
     "packages/provide-uterm-server/tests/tunnel/test_token_hash.py",
     "packages/provide-uterm-server/tests/tunnel/test_token_hash_hypothesis.py",
     "packages/provide-uterm-server/tests/tunnel/test_intercept_gate.py",
+    "packages/provide-uterm-server/tests/server/test_config.py",
+    "packages/provide-uterm-server/tests/server/test_app_coverage.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process.py",
 ]
 also_copy = [
     "src",
@@ -333,6 +340,8 @@ also_copy = [
     "packages/provide-uterm-server/src",
     "packages/provide-uterm-server/tests/bridge",
     "packages/provide-uterm-server/tests/tunnel",
+    "packages/provide-uterm-server/tests/server",
+    "packages/provide-uterm-platform/tests/manager",
     "conftest.py",
 ]
 pytest_add_cli_args = [

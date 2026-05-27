@@ -143,7 +143,9 @@ def _parse_new_environ_is(payload: bytes) -> dict[str, str]:
             name_bytes.append(payload[i])
             i += 1
         value_bytes = bytearray()
-        if i < n and payload[i] == _ENV_VALUE:  # pragma: no branch — RFC-1572 always pairs VAR/USERVAR with VALUE in negotiated environments
+        if (
+            i < n and payload[i] == _ENV_VALUE
+        ):  # pragma: no branch — RFC-1572 always pairs VAR/USERVAR with VALUE in negotiated environments
             i += 1
             while i < n and payload[i] not in (_ENV_VAR, _ENV_USERVAR):
                 if payload[i] == _ENV_ESC and i + 1 < n:

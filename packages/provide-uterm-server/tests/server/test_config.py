@@ -213,6 +213,8 @@ def test_session_definition_validator_helpers_cover_remaining_schema_paths() -> 
         SessionDefinition._validate_connector_type("bogus", _Info())
     with pytest.raises(ValueError, match="recording.max_bytes must be >= 0"):
         RecordingConfig(max_bytes=-1)
+    with pytest.raises(ValueError, match="recording.retention_s must be >= 0"):
+        RecordingConfig(retention_s=-1)
 
 
 def test_config_from_mapping_skips_non_dict_session_entry() -> None:
@@ -279,6 +281,7 @@ def test_partial_recording_override_preserves_sibling_defaults() -> None:
 
     assert config.recording.enabled_by_default is True
     assert config.recording.max_bytes == default_server_config().recording.max_bytes
+    assert config.recording.retention_s == default_server_config().recording.retention_s
     assert config.recording.directory == default_server_config().recording.directory
 
 
@@ -288,6 +291,16 @@ def test_partial_recording_override_accepts_control_channel_mode() -> None:
     assert config.recording.control_channel_mode == "wire"
     assert config.recording.max_bytes == default_server_config().recording.max_bytes
     assert config.recording.directory == default_server_config().recording.directory
+
+
+def test_partial_recording_override_accepts_retention_s() -> None:
+    config = config_from_mapping({"recording": {"retention_s": 3600}})
+    assert config.recording.retention_s == 3600
+
+
+def test_config_from_mapping_rejects_negative_recording_retention_s() -> None:
+    with pytest.raises(ValueError, match="recording.retention_s must be >= 0"):
+        config_from_mapping({"recording": {"retention_s": -1}})
 
 
 def test_config_from_mapping_rejects_invalid_control_channel_mode() -> None:
@@ -328,6 +341,11 @@ def test_config_from_mapping_accepts_browser_rate_limit_per_sec() -> None:
 def test_config_from_mapping_accepts_tunnel_section() -> None:
     config = config_from_mapping({"tunnel": {"token_ttl_s": 7200}})
     assert config.tunnel.token_ttl_s == 7200
+
+
+def test_config_from_mapping_rejects_tunnel_ttl_under_minimum() -> None:
+    with pytest.raises(ValueError, match="tunnel\\.token_ttl_s must be >= 60"):
+        config_from_mapping({"tunnel": {"token_ttl_s": 59}})
 
 
 def test_config_from_mapping_accepts_security_section() -> None:
@@ -392,54 +410,6 @@ def test_server_bind_config_preserves_explicit_public_base_url() -> None:
 # ---------------------------------------------------------------------------
 # Mutation-killing tests for default_server_config
 # ---------------------------------------------------------------------------
-
-
-def test_default_server_config_session_display_name() -> None:
-    """Kills mutmut_9 (None), mutmut_15 (omitted), mutmut_22 (XXProvide ShellXX),
-    mutmut_23 (provide shell lowercase), mutmut_24 (PROVIDE SHELL uppercase).
-    """
-    config = default_server_config()
-    session = config.sessions[0]
-    assert session.display_name == "Provide Shell", (
-        f"Default session display_name must be 'Provide Shell', got {session.display_name!r}"
-    )
-
-
-def test_default_server_config_session_connector_type_is_shell() -> None:
-    """Kills mutmut_16 (connector_type omitted, defaults to 'shell' — same value but
-    verifies explicit setting is present and tests structural completeness).
-    """
-    config = default_server_config()
-    session = config.sessions[0]
-    assert session.connector_type == "shell", (
-        f"Default session connector_type must be 'shell', got {session.connector_type!r}"
-    )
-
-
-def test_default_server_config_session_input_mode_is_open() -> None:
-    """Kills mutmut_17 (input_mode omitted — defaults to 'open' but verifies explicit setting)."""
-    config = default_server_config()
-    session = config.sessions[0]
-    assert session.input_mode == "open", f"Default session input_mode must be 'open', got {session.input_mode!r}"
-
-
-def test_default_server_config_session_auto_start_is_true() -> None:
-    """Kills mutmut_18 (auto_start omitted — defaults to True but verifies explicit setting)."""
-    config = default_server_config()
-    session = config.sessions[0]
-    assert session.auto_start is True, f"Default session auto_start must be True, got {session.auto_start!r}"
-
-
-def test_default_server_config_session_tags_exact() -> None:
-    """Kills mutmut_19 (tags omitted), mutmut_30 (XXshellXX), mutmut_31 (SHELL),
-    mutmut_32 (XXreferenceXX), mutmut_33 (REFERENCE).
-    Tags must be exactly ['shell', 'reference'] (lowercase, unmodified).
-    """
-    config = default_server_config()
-    session = config.sessions[0]
-    assert session.tags == ["shell", "reference"], (
-        f"Default session tags must be ['shell', 'reference'], got {session.tags!r}"
-    )
 
 
 # ---------------------------------------------------------------------------

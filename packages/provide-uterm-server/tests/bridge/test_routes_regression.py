@@ -216,9 +216,9 @@ def test_acquire_compensating_resume_swallows_send_worker_failure(caplog) -> Non
     # The original failure surfaces as a 500; the compensating-resume failure
     # is logged but swallowed.
     assert r.status_code == 500
-    assert any(
-        "hijack_acquire_compensating_resume_failed" in rec.getMessage() for rec in caplog.records
-    ), "compensating-resume failure must be logged via the rest router warning"
+    assert any("hijack_acquire_compensating_resume_failed" in rec.getMessage() for rec in caplog.records), (
+        "compensating-resume failure must be logged via the rest router warning"
+    )
 
 
 def test_acquire_no_compensating_resume_on_success() -> None:

@@ -109,6 +109,7 @@ class RecordingConfig(ServerBaseModel):
     enabled_by_default: bool = False
     directory: Path = Path(".uterm-recordings")
     max_bytes: int = 0  # 0 = unlimited
+    retention_s: int = 0  # 0 = keep indefinitely
     control_channel_mode: Literal["exclude", "wire"] = "exclude"
     redact_sensitive: bool = True
 
@@ -124,6 +125,13 @@ class RecordingConfig(ServerBaseModel):
     def _validate_max_bytes(cls, value: int) -> int:
         if value < 0:
             raise ValueError(f"recording.max_bytes must be >= 0 (0 = unlimited), got: {value}")
+        return value
+
+    @field_validator("retention_s")
+    @classmethod
+    def _validate_retention_s(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError(f"recording.retention_s must be >= 0 (0 = keep indefinitely), got: {value}")
         return value
 
 
