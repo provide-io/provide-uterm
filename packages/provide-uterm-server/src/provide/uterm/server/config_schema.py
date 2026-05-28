@@ -65,6 +65,10 @@ class AuthConfig(ServerBaseModel):
     # unless this list is set).
     trusted_proxy_ips: list[str] = Field(default_factory=list)
 
+    # Secret used to sign/verify identity control frames from upstream proxies.
+    upstream_proxy_secret: str | None = None
+    require_upstream_proxy_secret: bool = False
+
     identity_provider: Literal["local", "webhook"] = "local"
     delegate_roles: bool = True
     webhook_idp_url: str | None = None
@@ -77,6 +81,12 @@ class AuthConfig(ServerBaseModel):
     # so the request fails authn (411).  ``viewer`` restores the old fail-open
     # behaviour for callers who explicitly want it.
     webhook_idp_on_failure: Literal["deny", "viewer"] = "deny"
+
+    @model_validator(mode="after")
+    def _validate_proxy_secret(self) -> AuthConfig:
+        if self.require_upstream_proxy_secret and not str(self.upstream_proxy_secret or "").strip():
+            raise ValueError("auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True")
+        return self
 
 
 class UiConfig(ServerBaseModel):

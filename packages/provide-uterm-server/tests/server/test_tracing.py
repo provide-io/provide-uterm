@@ -59,6 +59,7 @@ class _CapturingTracer:
 def _capturing_tracer():  # type: ignore[no-untyped-def]
     """Context manager that installs a _CapturingTracer for the duration."""
     import provide.uterm.bridge.routes.websockets as _ws_mod
+    import provide.uterm.bridge.routes.websockets_impl as _ws_impl_mod
     import provide.uterm.server.routes.sessions as _sessions_mod
     import provide.uterm.server.routes.tunnels as _tunnels_mod
 
@@ -67,6 +68,7 @@ def _capturing_tracer():  # type: ignore[no-untyped-def]
         patch.object(_sessions_mod, "get_tracer", return_value=ct),
         patch.object(_tunnels_mod, "get_tracer", return_value=ct),
         patch.object(_ws_mod, "get_tracer", return_value=ct),
+        patch.object(_ws_impl_mod, "get_tracer", return_value=ct),
     ):
         yield ct
 

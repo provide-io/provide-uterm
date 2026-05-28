@@ -130,8 +130,7 @@ def _validate_auth_config(config: ServerConfig) -> None:
         # token to a 0600 file, and rewrites config.auth so the regular
         # JWT validator runs. Auth code paths collapse to one — no
         # X-Principal/X-Role bypass exists in this mode. This is the
-        # safe replacement for ``dev``/``none``; those legacy modes
-        # remain available below until tests migrate.
+        # safe replacement for the removed ``dev``/``none`` modes.
         from provide.uterm.server.dev_idp import setup_dev_idp
 
         host = str(config.server.host).strip().lower()
@@ -143,6 +142,13 @@ def _validate_auth_config(config: ServerConfig) -> None:
         setup_dev_idp(config.auth)
         # setup_dev_idp mutated mode → "jwt"; fall through to jwt validation.
         mode = str(config.auth.mode).strip().lower()
+
+    if mode in {"dev", "none"}:
+        raise ValueError(
+            "AUTH_MODE=dev and 'none' have been removed for security reasons. "
+            "Use 'dev_token' for local development or 'jwt' for production."
+        )
+
     if mode == "header":
         if not config.auth.header_mode_acknowledged:
             raise ValueError(

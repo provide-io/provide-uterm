@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ssl
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
@@ -90,6 +91,9 @@ class TelnetWsGateway:
         token_file: Path | None = None,
         iac_negotiate: bool = True,
         iac_negotiate_timeout: float = 0.4,
+        ws_ssl: ssl.SSLContext | bool | None = None,
+        client_cert: Path | str | None = None,
+        client_key: Path | str | None = None,
     ) -> None:
         _require_websockets()
         self._ws_url = ws_url
@@ -97,6 +101,15 @@ class TelnetWsGateway:
         self._token_file = token_file
         self._iac_negotiate = iac_negotiate
         self._iac_negotiate_timeout = iac_negotiate_timeout
+
+        if client_cert and client_key:
+            if ws_ssl is not None and not isinstance(ws_ssl, bool):
+                raise ValueError("Cannot provide both ws_ssl and client_cert/client_key")
+            context = ssl.create_default_context()
+            context.load_cert_chain(certfile=client_cert, keyfile=client_key)
+            self._ws_ssl = context
+        else:
+            self._ws_ssl = ws_ssl
 
     async def start(
         self,
@@ -145,6 +158,7 @@ class TelnetWsGateway:
                         reader,
                         writer,
                         self._ws_url,
+                        ws_ssl=self._ws_ssl,
                         token_holder=token_holder,
                         color_mode=self._color_mode,
                         telnet=True,

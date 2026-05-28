@@ -7,7 +7,7 @@
 # Build (from repo root):
 #   docker build -f docker/Dockerfile.cf -t provide-uterm-cf .
 #
-# Run (dev mode, AUTH_MODE=dev):
+# Run (local Cloudflare dev mode):
 #   docker run --rm -p 27788:27788 provide-uterm-cf
 #
 # Run with a .dev.vars override:

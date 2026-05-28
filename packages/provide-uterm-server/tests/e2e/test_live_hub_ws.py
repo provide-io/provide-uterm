@@ -76,6 +76,12 @@ async def _drain_until(ws: Any, type_: str, timeout: float = 3.0) -> dict[str, A
     return None
 
 
+async def _drain_for_type(ws: Any, type_: str, *, count: int = 10, timeout: float = 2.0) -> dict[str, Any] | None:
+    """Drain a bounded batch and return the first message with *type_*."""
+    msgs = await _drain(ws, count=count, timeout=timeout)
+    return next((msg for msg in msgs if msg.get("type") == type_), None)
+
+
 # ---------------------------------------------------------------------------
 # Worker connect / disconnect
 # ---------------------------------------------------------------------------
@@ -261,7 +267,7 @@ class TestRestHijackCycle:
                 assert r2.status_code == 200
 
             # _wait_for_guard fires a snapshot_req before sending input; drain until input arrives.
-            inp = await _drain_until(worker, "input")
+            inp = await _drain_for_type(worker, "input")
             assert inp is not None
             assert inp["data"] == "hello\r"
 
@@ -385,7 +391,7 @@ class TestWsHijack:
             await _drain_until(browser, "hijack_state")
 
             await browser.send(json.dumps({"type": "input", "data": "testkey"}))
-            inp = await _drain_until(worker, "input")
+            inp = await _drain_for_type(worker, "input")
             assert inp is not None
             assert inp["data"] == "testkey"
 

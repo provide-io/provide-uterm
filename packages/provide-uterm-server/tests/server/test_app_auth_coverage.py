@@ -137,7 +137,7 @@ class TestAuthDependencyBranches:
             }
         )
         with patch(
-            "provide.uterm.server.app.factory.resolve_ws_principal",
+            "provide.uterm.server.app.factory_impl.resolve_ws_principal",
             AsyncMock(return_value=Principal(subject_id="ok", roles=frozenset({"viewer"}))),
         ):
             await dep(conn)
@@ -158,7 +158,7 @@ class TestAuthDependencyBranches:
             }
         )
         with patch(
-            "provide.uterm.server.app.factory.resolve_http_principal",
+            "provide.uterm.server.app.factory_impl.resolve_http_principal",
             AsyncMock(return_value=Principal(subject_id="ok", roles=frozenset({"viewer"}))),
         ):
             await dep(conn1)
@@ -176,7 +176,7 @@ class TestAuthDependencyBranches:
             }
         )
         with patch(
-            "provide.uterm.server.app.factory.resolve_http_principal",
+            "provide.uterm.server.app.factory_impl.resolve_http_principal",
             AsyncMock(return_value=Principal(subject_id="ok2", roles=frozenset({"viewer"}))),
         ):
             await dep(conn2)
@@ -215,7 +215,7 @@ class TestAuthDependencyBranches:
         )
         with (
             patch(
-                "provide.uterm.server.app.factory.resolve_ws_principal",
+                "provide.uterm.server.app.factory_impl.resolve_ws_principal",
                 AsyncMock(return_value=Principal(subject_id="anonymous", roles=frozenset({"viewer"}))),
             ),
             pytest.raises(WebSocketException),
@@ -262,7 +262,7 @@ class TestFactoryClosures:
         if hasattr(ws.state, "uterm_principal"):
             delattr(ws.state, "uterm_principal")
         with patch(
-            "provide.uterm.server.app.factory.resolve_ws_principal",
+            "provide.uterm.server.app.factory_impl.resolve_ws_principal",
             AsyncMock(return_value=Principal(subject_id="u2", roles=frozenset({"viewer"}))),
         ):
             app.state.uterm_registry.get_definition = AsyncMock(return_value=MagicMock())
@@ -320,7 +320,7 @@ class TestRemainingFactoryCoverage:
             }
         )
         with patch(
-            "provide.uterm.server.app.factory.resolve_ws_principal",
+            "provide.uterm.server.app.factory_impl.resolve_ws_principal",
             AsyncMock(return_value=Principal(subject_id="fallback", roles=frozenset({"viewer"}))),
         ):
             await dep(conn_ipbad)

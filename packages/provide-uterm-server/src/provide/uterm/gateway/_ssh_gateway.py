@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import ssl
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -80,6 +81,9 @@ class SshWsGateway:
         key_resolver: SSHKeyResolver | None = None,
         require_resolver: bool = False,
         ws_ssl: _ssl.SSLContext | bool | None = None,
+        upstream_proxy_secret: str | bytes | None = None,
+        client_cert: Path | str | None = None,
+        client_key: Path | str | None = None,
     ) -> None:
         """Configure a new SSH→WebSocket gateway.
 
@@ -114,7 +118,16 @@ class SshWsGateway:
         self._token_file = token_file
         self._key_resolver = key_resolver
         self._require_resolver = require_resolver
-        self._ws_ssl = ws_ssl
+        self._upstream_proxy_secret = upstream_proxy_secret
+
+        if client_cert and client_key:
+            if ws_ssl is not None and not isinstance(ws_ssl, bool):
+                raise ValueError("Cannot provide both ws_ssl and client_cert/client_key")
+            context = ssl.create_default_context()
+            context.load_cert_chain(certfile=client_cert, keyfile=client_key)
+            self._ws_ssl = context
+        else:
+            self._ws_ssl = ws_ssl
 
     async def start(
         self, host: str = TerminalDefaults.BIND_ALL, port: int = TerminalDefaults.GATEWAY_SSH_PORT
@@ -150,6 +163,7 @@ class SshWsGateway:
             self._color_mode,
             token_file=self._token_file,
             ws_ssl=self._ws_ssl,
+            upstream_proxy_secret=self._upstream_proxy_secret,
         )
 
         return await asyncssh.create_server(

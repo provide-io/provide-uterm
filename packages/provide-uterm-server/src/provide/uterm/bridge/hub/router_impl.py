@@ -278,13 +278,15 @@ class MessageRouter:
                 return True
             await ws.send_text(_encode_worker_frame(msg))
             return True
-        except Exception as exc:
+        except BaseException as exc:
             logger.debug("send_worker_failed worker_id=%s: %s", worker_id, exc)
             async with hub._lock:
                 st2 = hub.registry.get(worker_id)
                 if st2 is not None and st2.worker_ws is ws:  # pragma: no branch
                     st2.worker_ws = None
-            return False
+            if isinstance(exc, Exception):
+                return False
+            raise
 
     # -- Behavioral heuristics ------------------------------------------
 
