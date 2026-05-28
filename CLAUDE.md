@@ -105,7 +105,7 @@ Runs on commit: ruff (format+lint), mypy (strict), ty, bandit (security), biome 
 
 - Python >=3.11, line length 120, ruff lint rules: E/W/F/I/N/UP/B/C4/SIM/TCH/PTH/DTZ/S/ARG/RUF and more
 - mypy strict mode enabled
-- External dependency: `provide-telemetry` (sibling repo at `../provide-telemetry`, editable install)
+- External dependency: `provide-telemetry` is resolved from **PyPI** (root floor `>=0.4.4`; the committed `uv.lock` pins it at the latest published release). There is **no** `[tool.uv.sources]` editable entry for it, so a local sibling checkout at `../provide-telemetry` is NOT picked up automatically. To develop against the sibling, add `provide-telemetry = { path = "../provide-telemetry", editable = true }` under `[tool.uv.sources]` and re-run `uv sync` locally — but do not commit that change or the resulting lock (the path is relative to the workspace root and breaks in git worktrees / CI).
 - Config files: TOML-based server config (see `docker/server.toml`, `scripts/uterm-server.example.toml`)
 - Auth modes: `dev_token` (local-only stub IdP that mints a JWT), `jwt` (production), `header` (proxy-stripped headers; requires loopback bind or `auth.trusted_proxy_ips` allowlist), `api_key`, `webhook` (delegated IDP; `auth.webhook_idp_on_failure` defaults to `deny`). Legacy server-side `dev`/`none` modes are removed.
 
