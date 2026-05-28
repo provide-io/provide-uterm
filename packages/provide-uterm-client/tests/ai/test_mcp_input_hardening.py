@@ -4,8 +4,9 @@
 #
 """Input-hardening tests for the MCP tool surface (Lane A2).
 
-MCP-send: ``hijack_send`` must sanitize keystrokes *after* unescaping so an
-LLM cannot drive a hijacked terminal with arbitrary ANSI/OSC/NUL bytes.
+* MCP-send: ``hijack_send`` must sanitize keystrokes *after* unescaping so an
+  LLM cannot drive a hijacked terminal with arbitrary ANSI/OSC/NUL bytes.
+* MCP-host: ``session_create`` must reject internal / metadata targets.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
@@ -126,3 +128,88 @@ class TestHijackSendSanitization:
         )
         assert data["success"] is True
         assert len(data["sent"].encode("utf-8")) <= 4096
+
+
+# ---------------------------------------------------------------------------
+# MCP-host: validate session_create host
+# ---------------------------------------------------------------------------
+
+
+class TestSessionCreateHostValidation:
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "169.254.169.254",
+            "127.0.0.1",
+            "localhost",
+            "10.0.0.5",
+            "::1",
+            "metadata.google.internal",
+            "fe80::1",
+            "192.168.1.1",
+            "172.16.0.1",
+            "[::1]",
+            "0.0.0.0",
+        ],
+    )
+    def test_validate_rejects_internal_hosts(self, host: str) -> None:
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        rejection = _validate_session_create_config(
+            connector_type="telnet",
+            url=None,
+            port=23,
+            host=host,
+        )
+        assert rejection is not None
+        assert rejection["error"] == "invalid_host"
+
+    def test_validate_allows_public_host(self) -> None:
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        assert (
+            _validate_session_create_config(
+                connector_type="telnet",
+                url=None,
+                port=23,
+                host="example.com",
+            )
+            is None
+        )
+
+    def test_validate_allows_public_ip(self) -> None:
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        assert (
+            _validate_session_create_config(
+                connector_type="telnet",
+                url=None,
+                port=23,
+                host="93.184.216.34",
+            )
+            is None
+        )
+
+    def test_validate_allows_missing_host(self) -> None:
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        assert (
+            _validate_session_create_config(
+                connector_type="shell",
+                url=None,
+                port=None,
+                host=None,
+            )
+            is None
+        )
+
+    async def test_session_create_rejects_internal_host_over_mcp(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        data = await _call(
+            mcp,
+            "session_create",
+            {"connector_type": "telnet", "host": "169.254.169.254", "port": 23},
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_host"
