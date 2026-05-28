@@ -20,9 +20,17 @@ from provide.uterm.cloudflare.entry.security import (
 # ---------------------------------------------------------------------------
 
 
+_VALID_JWT_ENV: dict[str, object] = {
+    "AUTH_MODE": "jwt",
+    "JWT_ALGORITHMS": "HS256",
+    "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+    "WORKER_BEARER_TOKEN": "test-worker-token",
+}
+
+
 def _make_config(**kwargs: object) -> CloudflareConfig:
-    """Build a CloudflareConfig in dev mode with optional overrides."""
-    env: dict[str, object] = {"AUTH_MODE": "dev"}
+    """Build a CloudflareConfig (jwt mode) with optional overrides."""
+    env: dict[str, object] = dict(_VALID_JWT_ENV)
     env.update(kwargs)
     return CloudflareConfig.from_env(SimpleNamespace(**env))
 
@@ -33,7 +41,7 @@ def _make_response(status: int = 200) -> Response:
 
 
 def _make_default(env_attrs: dict | None = None) -> Default:
-    attrs: dict = {"AUTH_MODE": "dev"}
+    attrs: dict = dict(_VALID_JWT_ENV)
     if env_attrs:
         attrs.update(env_attrs)
     return Default(SimpleNamespace(**attrs))
@@ -189,22 +197,19 @@ def test_config_from_env_security_csp_not_set_is_none() -> None:
 
 def test_config_from_env_security_csp_empty_string() -> None:
     """Empty SECURITY_CSP env var is preserved as '' (suppress signal)."""
-    config = CloudflareConfig.from_env(SimpleNamespace(AUTH_MODE="dev", SECURITY_CSP=""))
+    config = _make_config(SECURITY_CSP="")
     assert config.security_csp == ""
 
 
 def test_config_from_env_all_security_overrides() -> None:
-    config = CloudflareConfig.from_env(
-        SimpleNamespace(
-            AUTH_MODE="dev",
-            SECURITY_MODE="strict",
-            SECURITY_CSP="default-src 'none'",
-            SECURITY_HSTS="max-age=0",
-            SECURITY_X_FRAME_OPTIONS="SAMEORIGIN",
-            SECURITY_X_CONTENT_TYPE_OPTIONS="nosniff",
-            SECURITY_REFERRER_POLICY="no-referrer",
-            SECURITY_PERMISSIONS_POLICY="",
-        )
+    config = _make_config(
+        SECURITY_MODE="strict",
+        SECURITY_CSP="default-src 'none'",
+        SECURITY_HSTS="max-age=0",
+        SECURITY_X_FRAME_OPTIONS="SAMEORIGIN",
+        SECURITY_X_CONTENT_TYPE_OPTIONS="nosniff",
+        SECURITY_REFERRER_POLICY="no-referrer",
+        SECURITY_PERMISSIONS_POLICY="",
     )
     assert config.security_mode == "strict"
     assert config.security_csp == "default-src 'none'"

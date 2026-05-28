@@ -92,15 +92,16 @@ class CloudflareConfig:
             return str(val)
 
         environment = _get("ENVIRONMENT", "development")
-        env_lower = environment.strip().lower()
-        is_production = env_lower in {"production", "prod"}
         algorithms_raw = _get("JWT_ALGORITHMS", "RS256")
         algorithms = tuple(part.strip() for part in algorithms_raw.split(",") if part.strip())
         mode = _get("AUTH_MODE", "jwt").strip().lower() or "jwt"
-        if mode not in {"jwt", "dev", "none"}:
-            mode = "jwt"
-        if is_production and mode in {"dev", "none"}:
-            raise ValueError("AUTH_MODE must be 'jwt' in production environments")
+        # dev/none modes are removed: the worker is always internet-facing, so an
+        # open-access mode is an admin bypass regardless of ENVIRONMENT. Matches the
+        # FastAPI server, which dropped server-side dev/none modes.
+        if mode != "jwt":
+            raise ValueError(
+                "AUTH_MODE must be 'jwt' (dev/none modes are removed; the worker is always internet-facing)"
+            )
         limits = LimitsConfig(
             max_ws_message_bytes=max(1024, int(_get("MAX_WS_MESSAGE_BYTES", "1048576"))),
             max_input_chars=max(100, int(_get("MAX_INPUT_CHARS", "10000"))),

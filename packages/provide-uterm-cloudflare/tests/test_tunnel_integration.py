@@ -269,8 +269,16 @@ def _make_ctx(worker_id: str = "tunnel-test") -> SimpleNamespace:
     )
 
 
-def _make_env(mode: str = "dev", **extra: Any) -> SimpleNamespace:
-    return SimpleNamespace(AUTH_MODE=mode, **extra)
+def _make_env(mode: str = "jwt", **extra: Any) -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    base: dict[str, Any] = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": "test-worker-token",
+    }
+    base.update(extra)
+    return SimpleNamespace(**base)
 
 
 class _MockWs:

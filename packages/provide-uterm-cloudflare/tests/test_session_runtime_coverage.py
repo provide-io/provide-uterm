@@ -50,12 +50,24 @@ def _make_ctx(worker_id: str = "test-worker") -> SimpleNamespace:
     )
 
 
-def _make_env(mode: str = "dev") -> SimpleNamespace:
-    return SimpleNamespace(AUTH_MODE=mode)
+def _make_env() -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    return SimpleNamespace(
+        AUTH_MODE="jwt",
+        JWT_ALGORITHMS="HS256",
+        JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+        WORKER_BEARER_TOKEN="test-worker-token",
+    )
 
 
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionRuntime:
-    return SessionRuntime(_make_ctx(worker_id), _make_env(mode))
+    # Override the in-memory mode for tests exercising the legacy open-access branches.
+    # Drop the worker bearer token so worker/raw WS upgrades fall through to normal
+    # auth (matching the old open-access fixture these tests were written against).
+    rt = SessionRuntime(_make_ctx(worker_id), _make_env())
+    rt.config.jwt.mode = mode
+    rt.config.worker_bearer_token = None
+    return rt
 
 
 class _MockWs:

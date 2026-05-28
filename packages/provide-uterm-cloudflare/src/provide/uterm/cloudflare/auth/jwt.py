@@ -267,8 +267,8 @@ async def _verify_pyjwt(token: str, config: JwtConfig) -> dict[str, Any]:
 
 
 async def decode_jwt(token: str, config: JwtConfig) -> Principal:
-    if config.mode in {"none", "dev"}:
-        return Principal(subject_id="dev", roles=("admin",))
+    # No dev/none bypass: every principal must come from a cryptographically
+    # verified token. The worker is always internet-facing.
     if not config.public_key_pem and not config.jwks_url:
         raise JwtValidationError("missing jwt public key")
 

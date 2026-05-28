@@ -37,13 +37,17 @@ def _make_runtime_with_token(token: str | None = None, mode: str = "dev") -> Ses
         getWebSockets=list,
         acceptWebSocket=lambda ws: None,
     )
-    env_kwargs: dict = {"AUTH_MODE": mode}
-    if token is not None:
-        env_kwargs["WORKER_BEARER_TOKEN"] = token
-    if mode == "jwt":
-        env_kwargs["JWT_ALGORITHMS"] = "HS256"
-        env_kwargs["JWT_PUBLIC_KEY_PEM"] = _JWT_KEY
-    return SessionRuntime(ctx, SimpleNamespace(**env_kwargs))
+    # from_env only accepts jwt mode now; always build a valid jwt config, then
+    # override the in-memory mode for tests exercising the legacy open-access branches.
+    env_kwargs: dict = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": _JWT_KEY,
+        "WORKER_BEARER_TOKEN": token if token is not None else "test-worker-token",
+    }
+    rt = SessionRuntime(ctx, SimpleNamespace(**env_kwargs))
+    rt.config.jwt.mode = mode
+    return rt
 
 
 def _viewer_jwt(sub: str = "viewer-user") -> str:
