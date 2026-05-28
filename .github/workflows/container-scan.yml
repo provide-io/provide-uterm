@@ -45,14 +45,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      # Build the server image. We don't push it anywhere from this
-      # workflow; we just scan it.
+      # Build the server image locally (not pushed) so Trivy can scan it
       - name: Build server image
-        run: |
-          docker build \
-            -f docker/Dockerfile.server \
-            -t provide-uterm-server:scan \
-            .
+        run: ci/build_server_image.sh provide-uterm-server:scan
 
       # SARIF report uploaded to GitHub's Security tab so findings have
       # a permanent home and dismissals persist across runs.
