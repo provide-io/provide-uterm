@@ -11,6 +11,9 @@ so the serialised JSON stays lean.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -23,11 +26,24 @@ _LINK_PATTERN_ACTIONS = frozenset({"cmd", "url", "key", "focus"})
 _LINK_PATTERN_OPTIONAL_KEYS = frozenset({"id", "flags", "group", "payload", "hover", "class"})
 
 
+def _canonical_identity_signature_payload(
+    *,
+    version: object,
+    subject: str,
+    fingerprint: str,
+    transport: str,
+    claims: Mapping[str, Any],
+) -> bytes:
+    claims_json = json.dumps(claims, sort_keys=True, separators=(",", ":"))
+    return f"{version}:{subject}:{fingerprint}:{transport}:{claims_json}".encode()
+
+
 def make_identity(
     subject: str,
     claims: Mapping[str, Any] | None = None,
     fingerprint: str = "",
     transport: str = "ssh",
+    secret: str | bytes | None = None,
 ) -> dict[str, Any]:
     """Build an ``identity`` control message.
 
@@ -54,6 +70,19 @@ def make_identity(
     }
     if claims is not None:
         msg["claims"] = dict(claims)
+
+    if secret:
+        secret_bytes = secret if isinstance(secret, bytes) else secret.encode("utf-8")
+        payload = _canonical_identity_signature_payload(
+            version=msg["version"],
+            subject=msg["subject"],
+            fingerprint=msg.get("fingerprint", ""),
+            transport=msg.get("transport", ""),
+            claims=msg.get("claims", {}),
+        )
+        signature = hmac.new(secret_bytes, payload, hashlib.sha256).hexdigest()
+        msg["signature"] = signature
+
     return msg
 
 

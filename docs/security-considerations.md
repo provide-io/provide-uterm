@@ -1,5 +1,9 @@
 # Beyond the test suite: security considerations for v0.4.0
 
+Last verified: 2026-05-25. See
+[`docs/security-audit-2026-05-25.md`](security-audit-2026-05-25.md) for the
+evidence-backed sweep that updated this checklist.
+
 Tests prove behaviour is correct in expected inputs. They don't tell you
 whether the **deployment posture** is correct, whether a **supply-chain
 compromise** would be detected, what an **abusive client** looks like, or
@@ -21,7 +25,7 @@ The columns map to:
 | Dependency vulnerability scan in CI | ✅ | `🛡️ Release Governance` workflow runs `pip-audit` on every push to main/rc; transitive deps audited. |
 | Dependency lock file checked in | ✅ | `uv.lock`; `uv lock --check` runs in `capture_rc_baseline.sh`. |
 | SBOM (CycloneDX) on every artifact | ✅ | `artifacts/release-governance/sbom.json` regenerated each governance run. |
-| Reproducible build flags | ⚠ | `uv build` is deterministic given a fixed `uv.lock` but timestamps in wheels aren't pinned. Add `SOURCE_DATE_EPOCH` for byte-identical rebuilds. |
+| Reproducible build flags | ✅ | `.github/workflows/release.yml` pins `SOURCE_DATE_EPOCH` from the commit timestamp before `uv build`. |
 | Wheel signing (Sigstore keyless) | ✅ | `cosign sign-blob` in CI; bundles uploaded as workflow artifacts. Local runs skip-with-notice (no OIDC). |
 | SBOM signing | ✅ | `scripts/release_governance_check.sh` signs `sbom.json` and `pip-audit.txt` with `cosign sign-blob` bundles. |
 | SLSA provenance attestation | ✅ | `.github/workflows/release.yml` emits SLSA Level 3 provenance via `slsa-github-generator` and uploads `.intoto.jsonl`. |
@@ -39,7 +43,7 @@ The columns map to:
 | ty (additional type checker) | ✅ | Clean after the `setattr`/`cast` fixes in `provide.uterm.ai.auth`. |
 | Mutation testing (mutmut) | ⚠ | 87.50% kill rate on `auth.py` after this RC pass (up from 70.65%). 23 survivors remain; need `mutmut show <id>` inspection. |
 | Semgrep / CodeQL / Sonar | ✅ | CodeQL is wired in `.github/workflows/codeql.yml` for Python + JavaScript/TypeScript with the `security-and-quality` query pack. |
-| Secret detection (detect-secrets) | ⚠ | `detect-secrets` is in dev deps but the pre-commit hook isn't enforcing on every commit. Confirm `.pre-commit-config.yaml` has the hook. |
+| Secret detection (detect-secrets) | ✅ | `.pre-commit-config.yaml` runs `detect-secrets-hook --baseline .secrets.baseline --no-verify`. |
 | Hardcoded credential audit | ✅ | `bandit -ll` clean; no high-confidence findings. |
 | `nosec` / `# noqa` annotation hygiene | ✅ | All orphan annotations resolved at the source. |
 
@@ -55,7 +59,7 @@ The columns map to:
 | Tunnel token rotation | ✅ | In-memory, IP-bound, time-rotated (`docs/feature-roadmap.md`). |
 | Tunnel token in URL params | ⚠ | If tokens ever appear in URLs (vs Authorization header) they leak through Referer / proxy logs. Audit. |
 | Password / kbd-interactive fallback policy | ✅ | `--require-authorized-keys` opt-in rejects unknown pubkeys outright. |
-| Anonymous mode | ⚠ | `--auth dev` mode for local development; ensure it can't be enabled in any production-mode config. |
+| Anonymous mode | ✅ | Server-side `auth.mode="dev"` and `"none"` are removed. Local development uses `dev_token`, which mints a local JWT and still exercises JWT auth. |
 | Command approval workflow (dangerous-command gate) | ✅ | Buffered hold + resume implemented; webhook approval delegated. |
 
 ## 4. Transport security

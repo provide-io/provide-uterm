@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import collections.abc
+    import ssl as _ssl
     from pathlib import Path
 
 from provide.telemetry import get_logger
@@ -338,6 +339,7 @@ async def _pipe_ws(
     token_file: Path | None = None,
     iac_negotiate: bool = False,
     iac_negotiate_timeout: float = 0.4,
+    ws_ssl: _ssl.SSLContext | bool | None = None,
 ) -> None:
     """Open a WebSocket to *ws_url* and bidirectionally pipe with reader/writer.
 
@@ -393,7 +395,11 @@ async def _pipe_ws(
                 colorterm=negotiator.env.get("COLORTERM", ""),
             )
 
-    async with websockets.connect(ws_url) as ws:
+    connect_kwargs: dict[str, object] = {}
+    if ws_ssl is not None:
+        connect_kwargs["ssl"] = ws_ssl
+
+    async with websockets.connect(ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]
         token_data = token_holder[0]
         if token_data:
             resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}

@@ -21,11 +21,17 @@ from provide.uterm.tunnel.protocol import (
     encode_frame,
 )
 
+from . import test_run_inspect_integration_part1 as _part1
 from .test_run_inspect_integration_part1 import (
     TunnelWSServer,
     _free_port,
     _wait_for_port,
 )
+
+target_server = pytest.fixture(_part1.target_server.__wrapped__)
+mock_tunnel_ws = pytest.fixture(_part1.mock_tunnel_ws.__wrapped__)
+inspect_proxy = pytest.fixture(_part1.inspect_proxy.__wrapped__)
+inspect_proxy_intercept = pytest.fixture(_part1.inspect_proxy_intercept.__wrapped__)
 
 # ---------------------------------------------------------------------------
 # Helpers

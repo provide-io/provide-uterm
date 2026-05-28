@@ -82,9 +82,10 @@ Out of scope:
 
 For a comprehensive map of what's already in place and what remains, see
 [`docs/security-considerations.md`](docs/security-considerations.md). The
-short version: deploy behind TLS, use `--auth jwt` not `--auth dev`, run
-with `--require-authorized-keys` if exposing SSH, and route recordings
-through an encrypted-at-rest store if they may contain credentials.
+short version: deploy behind TLS, use `--auth jwt` for production or
+`--auth dev_token` for local development, run with `--require-authorized-keys`
+if exposing SSH, and route recordings through an encrypted-at-rest store if
+they may contain credentials.
 The reference recording module writes plaintext JSONL by design (it's
 the operator-friendly default for the AGPL build); enterprise
 encrypted-storage hooks are spec'd in the sibling

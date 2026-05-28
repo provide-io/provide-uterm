@@ -38,6 +38,9 @@ an independent registry before acting on the ``subject``.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -56,7 +59,9 @@ __all__ = [
 _SUPPORTED_VERSIONS = frozenset({1})
 
 
-def parse_identity_frame(frame: Mapping[str, Any]) -> ResolvedIdentity | None:
+def parse_identity_frame(
+    frame: Mapping[str, Any], expected_secret: str | bytes | None = None
+) -> ResolvedIdentity | None:
     """Extract a :class:`ResolvedIdentity` from a control-channel frame.
 
     Returns ``None`` when:
@@ -84,6 +89,23 @@ def parse_identity_frame(frame: Mapping[str, Any]) -> ResolvedIdentity | None:
     claims: dict[str, Any] = dict(raw_claims) if isinstance(raw_claims, Mapping) else {}
     fingerprint_raw = frame.get("fingerprint", "")
     fingerprint = fingerprint_raw if isinstance(fingerprint_raw, str) else ""
+    if expected_secret:
+        signature = frame.get("signature")
+        if not signature or not isinstance(signature, str):
+            return None
+
+        claims_str = json.dumps(claims, sort_keys=True, separators=(",", ":"))
+        transport = frame.get("transport", "")
+        if not isinstance(transport, str):
+            transport = ""
+
+        canonical = f"{version}:{subject}:{fingerprint}:{transport}:{claims_str}"
+        secret_bytes = expected_secret if isinstance(expected_secret, bytes) else expected_secret.encode("utf-8")
+        expected_sig = hmac.new(secret_bytes, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+
     return ResolvedIdentity(subject=subject, claims=claims, fingerprint=fingerprint)
 
 

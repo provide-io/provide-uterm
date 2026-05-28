@@ -11,7 +11,11 @@ identity control frame emitted by the SSH gateway resolver.
 
 from __future__ import annotations
 
+from hypothesis import given
+from hypothesis import strategies as st
+
 from provide.uterm.auth import ResolvedIdentity
+from provide.uterm.control_channel_builders import make_identity
 from provide.uterm.deckmux import (
     PresenceStore,
     identity_as_principal,
@@ -87,6 +91,70 @@ class TestParseIdentityFrame:
         result = parse_identity_frame(frame)
         assert result is not None
         assert result.fingerprint == ""
+
+    def test_signature_validation_fails_if_secret_required_but_missing(self) -> None:
+        frame = {"type": "identity", "version": 1, "subject": "x"}
+        assert parse_identity_frame(frame, expected_secret="my-secret") is None
+
+    def test_signature_validation_fails_if_signature_invalid(self) -> None:
+        frame = {"type": "identity", "version": 1, "subject": "x", "signature": "bad"}
+        assert parse_identity_frame(frame, expected_secret="my-secret") is None
+
+    def test_signature_validation_succeeds(self) -> None:
+        frame = make_identity(subject="x", secret="my-secret")
+        result = parse_identity_frame(frame, expected_secret="my-secret")
+        assert result is not None
+        assert result.subject == "x"
+
+    @given(
+        subject=st.text(min_size=1, max_size=100),
+        claims=st.one_of(st.none(), st.dictionaries(st.text(min_size=1), st.text(max_size=50))),
+        fingerprint=st.text(max_size=50),
+        transport=st.text(min_size=1, max_size=20),
+        secret=st.text(min_size=1, max_size=50),
+    )
+    def test_fuzz_hmac_signature(
+        self,
+        subject: str,
+        claims: dict[str, str] | None,
+        fingerprint: str,
+        transport: str,
+        secret: str,
+    ) -> None:
+        # Generate signed frame
+        frame = make_identity(
+            subject=subject,
+            claims=claims,
+            fingerprint=fingerprint,
+            transport=transport,
+            secret=secret,
+        )
+        assert "signature" in frame
+
+        # Verify it parses correctly with the correct secret
+        result = parse_identity_frame(frame, expected_secret=secret)
+        assert result is not None
+        assert result.subject == subject
+        if claims:
+            assert result.claims == claims
+        assert result.fingerprint == fingerprint
+
+        # Verify it fails with a wrong secret
+        wrong_secret = secret + "bad"
+        assert parse_identity_frame(frame, expected_secret=wrong_secret) is None
+
+        # Verify tampering with subject fails
+        tampered_frame = dict(frame)
+        tampered_frame["subject"] = subject + "tampered"
+        assert parse_identity_frame(tampered_frame, expected_secret=secret) is None
+
+        # Verify tampering with claims fails (if claims exist)
+        if claims:
+            tampered_frame = dict(frame)
+            tampered_claims = dict(claims)
+            tampered_claims["tampered"] = "yes"
+            tampered_frame["claims"] = tampered_claims
+            assert parse_identity_frame(tampered_frame, expected_secret=secret) is None
 
 
 class TestPresenceFromIdentity:

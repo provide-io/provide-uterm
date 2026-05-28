@@ -94,7 +94,7 @@ async def _run_fake_hub(hub: _FakeDeckMuxHub) -> tuple[Any, int]:
             frame = decode_control_payload(msg)
         except Exception:
             return
-        identity = parse_identity_frame(frame)
+        identity = parse_identity_frame(frame, expected_secret="test-secret")
         if identity is None:
             return
         principal = identity_as_principal(identity)
@@ -150,6 +150,7 @@ class TestFullChain:
         gw = SshWsGateway(
             f"ws://127.0.0.1:{ws_port}/deckmux",
             key_resolver=resolver,
+            upstream_proxy_secret="test-secret",
         )
         ssh_srv = await gw.start("127.0.0.1", 0)
         ssh_port: int = ssh_srv.sockets[0].getsockname()[1]

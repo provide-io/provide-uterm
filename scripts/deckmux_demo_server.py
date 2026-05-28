@@ -67,7 +67,7 @@ def build_app(port: int, ssh_port: int) -> object:
         },
     )
     config = ServerConfig(
-        auth=AuthConfig(mode="dev"),
+        auth=AuthConfig(mode="dev_token"),
         server=ServerBindConfig(host="127.0.0.1", port=port),
         sessions=[definition],
         recording=RecordingConfig(enabled_by_default=False),

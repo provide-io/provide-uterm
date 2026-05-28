@@ -72,6 +72,27 @@ async def test_policy_fails_closed_for_anonymous_in_non_dev_mode() -> None:
     assert role == "viewer"
 
 
+def test_auth_config_requires_proxy_secret() -> None:
+    # Allowed: not required, not provided
+    config = AuthConfig(require_upstream_proxy_secret=False)
+    assert config.require_upstream_proxy_secret is False
+
+    # Allowed: required, provided
+    config2 = AuthConfig(require_upstream_proxy_secret=True, upstream_proxy_secret="secret")
+    assert config2.upstream_proxy_secret == "secret"
+
+    # Error: required, not provided
+    with pytest.raises(
+        ValueError, match="auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True"
+    ):
+        AuthConfig(require_upstream_proxy_secret=True)
+
+    with pytest.raises(
+        ValueError, match="auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True"
+    ):
+        AuthConfig(require_upstream_proxy_secret=True, upstream_proxy_secret="  ")
+
+
 def test_load_server_config_resolves_relative_recording_path(tmp_path: Path) -> None:
     cfg_path = tmp_path / "server.toml"
     cfg_path.write_text(

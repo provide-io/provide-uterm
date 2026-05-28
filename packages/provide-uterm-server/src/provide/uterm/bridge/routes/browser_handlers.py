@@ -42,6 +42,14 @@ else:
 logger = get_logger(__name__)
 
 
+def _is_noop_policy_gate(gate: object) -> bool:
+    """Return True for the default no-op policy gate, including module aliases."""
+    if isinstance(gate, NoOpPolicyGate):
+        return True
+    gate_type = type(gate)
+    return gate_type.__name__ == "NoOpPolicyGate" and gate_type.__module__.endswith(".bridge.hub.ext")
+
+
 async def _handle_snapshot_req(hub: TermHub, ws: WebSocket, worker_id: str) -> None:
     """Handle snapshot_req message type."""
     is_owner = await hub.touch_if_owner(worker_id, ws) is not None
@@ -230,7 +238,7 @@ async def _handle_input(
     gate = hub._policy_gate
     is_complete_chunk = "\r" in data or "\n" in data
 
-    if isinstance(gate, NoOpPolicyGate):
+    if _is_noop_policy_gate(gate):
         ok = await hub.send_worker(worker_id, {"type": "input", "data": data, "ts": time.time()}, source=ws)
         if not ok:
             await ws.send_text(encode_control(make_error_frame("Worker connection lost.")))

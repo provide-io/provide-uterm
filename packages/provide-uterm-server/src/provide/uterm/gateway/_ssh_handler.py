@@ -17,8 +17,11 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import collections.abc
+    import ssl as _ssl
+    from collections.abc import Callable, Coroutine
     from pathlib import Path
+
+    import asyncssh
 
     from provide.uterm.auth import SSHKeyResolver
     from provide.uterm.colors import ColorMode
@@ -26,6 +29,7 @@ if TYPE_CHECKING:
 from provide.telemetry import get_logger
 from provide.uterm.auth import ResolvedIdentity
 from provide.uterm.control_channel import encode_control
+from provide.uterm.control_channel_builders import make_identity
 from provide.uterm.gateway._gateway import (
     _read_token,
     _ssh_to_ws,
@@ -218,9 +222,9 @@ async def _make_process_handler(
     ws_url: str,
     color_mode: ColorMode,
     token_file: Path | None = None,
-    *,
-    ws_ssl: object = None,
-) -> collections.abc.Callable[[object], collections.abc.Coroutine[object, object, None]]:
+    ws_ssl: _ssl.SSLContext | bool | None = None,
+    upstream_proxy_secret: str | bytes | None = None,
+) -> Callable[[asyncssh.SSHServerProcess], Coroutine[Any, Any, None]]:
     """Return an asyncssh process_factory coroutine bound to ws_url/color_mode.
 
     ``ws_ssl`` (optional) is forwarded to :func:`websockets.connect` when the
@@ -344,14 +348,13 @@ async def _make_process_handler(
                         # resolver matched — otherwise the upstream sees no
                         # identity frame and falls back to its own auth.
                         if resolved_identity is not None:
-                            identity_msg: dict[str, object] = {
-                                "type": "identity",
-                                "version": 1,
-                                "subject": resolved_identity.subject,
-                                "claims": dict(resolved_identity.claims),
-                                "fingerprint": resolved_identity.fingerprint,
-                                "transport": "ssh",
-                            }
+                            identity_msg = make_identity(
+                                subject=resolved_identity.subject,
+                                claims=dict(resolved_identity.claims),
+                                fingerprint=resolved_identity.fingerprint,
+                                transport="ssh",
+                                secret=upstream_proxy_secret,
+                            )
                             await ws.send(encode_control(identity_msg))
                         token_data = token_holder[0]
                         if token_data:  # pragma: no cover — resume frame is sent only after a prior successful session
