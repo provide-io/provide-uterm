@@ -14,6 +14,12 @@ from __future__ import annotations
 # code paths cannot drift).
 MAX_KEYSTROKE_BYTES: int = 4096
 
+# Maximum length of a user/LLM-supplied regex pattern. A pure length cap is the
+# pragmatic ReDoS mitigation here; true backtracking-time bounds would require
+# a ``regex``/``re2`` engine, so residual catastrophic-backtracking risk remains
+# for short pathological patterns. The cap removes the cheap amplification path.
+MAX_USER_PATTERN_LEN: int = 512
+
 # Whether MCP-driven session_create may target private/internal hosts. Defaults
 # to deny: an LLM should not be able to pivot to 169.254.169.254, RFC1918, or
 # loopback. Operators that genuinely need internal targets must opt in.

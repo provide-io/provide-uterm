@@ -39,7 +39,11 @@ from provide.uterm.ai.auth import (
     authorized,
     principal_from_headers,
 )
-from provide.uterm.ai.constants import ALLOW_PRIVATE_HOSTS, MAX_KEYSTROKE_BYTES
+from provide.uterm.ai.constants import (
+    ALLOW_PRIVATE_HOSTS,
+    MAX_KEYSTROKE_BYTES,
+    MAX_USER_PATTERN_LEN,
+)
 from provide.uterm.ai.policy import is_allowed_connector
 from provide.uterm.client.hijack import HijackClient
 from provide.uterm.client.mcp_tools import _ok
@@ -85,6 +89,43 @@ def _is_internal_host(host: str) -> bool:
     if ip.is_loopback or ip.is_link_local:
         return True
     return not ALLOW_PRIVATE_HOSTS and (ip.is_private or ip.is_reserved or ip.is_unspecified)
+
+
+def _compile_user_pattern(pattern: str) -> re.Pattern[str]:
+    """Compile an attacker-supplied regex with a length cap (ReDoS mitigation).
+
+    The length cap removes the cheap amplification path; it does not bound
+    catastrophic backtracking for short pathological patterns — true time
+    bounds need a ``regex``/``re2`` engine. Residual risk is documented here.
+    """
+    if len(pattern) > MAX_USER_PATTERN_LEN:
+        msg = f"pattern too long (max {MAX_USER_PATTERN_LEN} chars)"
+        raise ValueError(msg)
+    try:
+        return re.compile(pattern)
+    except re.error as exc:
+        msg = f"invalid pattern: {exc}"
+        raise ValueError(msg) from exc
+
+
+def _reject_bad_pattern(pattern: str | None) -> dict[str, Any] | None:
+    """Validate a user-supplied regex, returning a rejection dict or ``None``.
+
+    ``None`` pattern is allowed (no filter requested). A pattern that is too
+    long or otherwise invalid yields a structured ``invalid_pattern`` error so
+    an LLM cannot trigger ReDoS via an oversized/complex regex.
+    """
+    if pattern is None:
+        return None
+    try:
+        _compile_user_pattern(pattern)
+    except ValueError as exc:
+        return {
+            "success": False,
+            "error": "invalid_pattern",
+            "detail": str(exc),
+        }
+    return None
 
 
 def _trim_tail(screen: str, tail_lines: int | None) -> str:
@@ -330,6 +371,12 @@ def create_mcp_app(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Send input to a hijacked worker, optionally guarded by prompt/regex."""
+        # Cap the attacker-supplied expect_regex length before forwarding it to
+        # the server (which also compiles it). The server must additionally
+        # bound matching time — see the A4 cross-lane request.
+        rejection = _reject_bad_pattern(expect_regex)
+        if rejection is not None:
+            return rejection
         ok, data = await client.send(
             worker_id,
             hijack_id,
@@ -531,6 +578,9 @@ def create_mcp_app(
         max_events:
             Maximum events to collect before returning early.
         """
+        rejection = _reject_bad_pattern(pattern)
+        if rejection is not None:
+            return rejection
         ok, data = await client.watch_session_events(
             session_id,
             event_types=event_types,
@@ -575,6 +625,11 @@ def create_mcp_app(
             Maximum events to collect before returning early (clamped to
             1-500).
         """
+        # Bound the attacker-supplied pattern up front (length cap → ReDoS
+        # mitigation) before any compile/match work happens.
+        rejection = _reject_bad_pattern(pattern)
+        if rejection is not None:
+            return rejection
         clamped_duration_s = min(max(duration_s, 1.0), 120.0)
         clamped_max_events = min(max(max_events, 1), 500)
         ok, data = await client.watch_session_events(
@@ -588,23 +643,20 @@ def create_mcp_app(
         # Re-check each event's screen text against the compiled regex rather
         # than trusting that "events arrived" implies "pattern matched" — the
         # registry fallback path (no EventBus) does not pre-filter events.
+        # The pattern is already validated above, so the compile cannot fail.
         matched = False
         if pattern and ok:
-            try:
-                compiled = re.compile(pattern)
-            except re.error:
-                compiled = None
-            if compiled is not None:
-                for event in data.get("events", []):
-                    if not isinstance(event, dict):
-                        continue
-                    payload = event.get("data") or {}
-                    screen = payload.get("screen", "") if isinstance(payload, dict) else ""
-                    if not isinstance(screen, str):
-                        screen = str(screen)
-                    if compiled.search(screen):
-                        matched = True
-                        break
+            compiled = _compile_user_pattern(pattern)
+            for event in data.get("events", []):
+                if not isinstance(event, dict):
+                    continue
+                payload = event.get("data") or {}
+                screen = payload.get("screen", "") if isinstance(payload, dict) else ""
+                if not isinstance(screen, str):
+                    screen = str(screen)
+                if compiled.search(screen):
+                    matched = True
+                    break
         result = _ok(ok, data)
         result["matched_pattern"] = matched
         return result
