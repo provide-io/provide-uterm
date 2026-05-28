@@ -23,4 +23,7 @@ class MemoryApprovalStore:
         return self._state.approvals.get(approval_id)
 
     async def list_pending(self) -> list[ApprovalRecord]:
-        return [record for record in self._state.approvals.values() if record.state == "pending"]
+        pending = [record for record in self._state.approvals.values() if record.state == "pending"]
+        # Match the sqlite backend's ORDER BY created_at ASC, approval_id ASC
+        # so FIFO consumers see the same order regardless of backend.
+        return sorted(pending, key=lambda record: (record.created_at, record.approval_id))
