@@ -40,6 +40,29 @@ def _req(
     )
 
 
+def _make_dev_default(**extra: object) -> object:
+    """Build a Default configured for the legacy open-access path.
+
+    from_env only accepts jwt mode now, so build a valid jwt config and override
+    the in-memory mode to ``dev`` (reachable only via direct config mutation).
+    """
+    from provide.uterm.cloudflare.config import CloudflareConfig
+    from provide.uterm.cloudflare.entry import Default
+
+    attrs: dict[str, object] = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": "test-worker-token",
+    }
+    attrs.update(extra)
+    env = SimpleNamespace(**attrs)
+    d = Default(env)
+    d._config = CloudflareConfig.from_env(env)
+    d._config.jwt.mode = "dev"
+    return d
+
+
 # ---------------------------------------------------------------------------
 # _tunnel_api.py gaps
 # ---------------------------------------------------------------------------
@@ -50,9 +73,7 @@ class TestEntryDispatchGaps:
 
     async def test_api_tunnels_via_fetch(self) -> None:
         """Line 379: /api/tunnels route matched via _match_api_route."""
-        from provide.uterm.cloudflare.entry import Default
-
-        d = Default(SimpleNamespace(AUTH_MODE="dev"))
+        d = _make_dev_default()
         req = _req("/api/tunnels", method="GET")
         resp = await d.fetch(req)
         assert resp.status in {200, 405}
@@ -73,7 +94,7 @@ class TestEntryDispatchGaps:
         from provide.uterm.cloudflare.entry.handlers import _api_tunnel_revoke
 
         cfg = CloudflareConfig.from_env(
-            SimpleNamespace(AUTH_MODE="dev", JWT_ALGORITHMS="HS256", WORKER_BEARER_TOKEN="t")
+            SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
         )
         req = _req("/api/tunnels/tid/tokens", method="DELETE")
         env = SimpleNamespace(SESSION_REGISTRY=None)
@@ -93,18 +114,14 @@ class TestEntryDispatchGaps:
 
     async def test_share_redirect_without_invite_is_not_found(self) -> None:
         """/s/{id} requires a valid one-time invite or existing cookie."""
-        from provide.uterm.cloudflare.entry import Default
-
-        d = Default(SimpleNamespace(AUTH_MODE="dev"))
+        d = _make_dev_default()
         req = _req("/s/my-session")
         resp = await d.fetch(req)
         assert resp.status == 404
 
     async def test_share_redirect_with_token_query_is_not_found(self) -> None:
         """Bearer query tokens are not accepted by the short-share route."""
-        from provide.uterm.cloudflare.entry import Default
-
-        d = Default(SimpleNamespace(AUTH_MODE="dev"))
+        d = _make_dev_default()
         req = _req("/s/my-session?token=abc123")
         resp = await d.fetch(req)
         assert resp.status == 404
@@ -113,7 +130,6 @@ class TestEntryDispatchGaps:
         """Short-share /s/{id} for an HTTP tunnel must redirect to /app/inspect/."""
         import json
 
-        from provide.uterm.cloudflare.entry import Default
         from provide.uterm.tunnel.token_hash import hash_token
 
         kv = AsyncMock()
@@ -130,7 +146,7 @@ class TestEntryDispatchGaps:
             )
         )
         kv.put = AsyncMock()
-        d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
+        d = _make_dev_default(SESSION_REGISTRY=kv)
         req = _req("/s/my-http-tunnel?invite=invite-tok")
         resp = await d.fetch(req)
         assert resp.status == 302
@@ -140,31 +156,25 @@ class TestEntryDispatchGaps:
 
     async def test_share_redirect_kv_returns_none_is_not_found(self) -> None:
         """Short-share KV returning None is not a valid invite."""
-        from provide.uterm.cloudflare.entry import Default
-
         kv = AsyncMock()
         kv.get = AsyncMock(return_value=None)
-        d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
+        d = _make_dev_default(SESSION_REGISTRY=kv)
         req = _req("/s/missing-tunnel")
         resp = await d.fetch(req)
         assert resp.status == 404
 
     async def test_share_redirect_kv_exception_is_not_found(self) -> None:
         """Short-share KV lookup failure must not expose a guessed app URL."""
-        from provide.uterm.cloudflare.entry import Default
-
         kv = AsyncMock()
         kv.get = AsyncMock(side_effect=RuntimeError("kv unavailable"))
-        d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
+        d = _make_dev_default(SESSION_REGISTRY=kv)
         req = _req("/s/any-tunnel")
         resp = await d.fetch(req)
         assert resp.status == 404
 
     async def test_share_page_with_context(self) -> None:
         """Lines 344-345: SPA response for share page with context."""
-        from provide.uterm.cloudflare.entry import Default
-
-        d = Default(SimpleNamespace(AUTH_MODE="dev"))
+        d = _make_dev_default()
 
         # Mock resolve_share_context to return valid context
         with patch(

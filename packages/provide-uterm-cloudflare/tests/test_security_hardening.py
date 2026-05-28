@@ -201,13 +201,20 @@ def _make_runtime_with_token(token: str | None = None, mode: str = "dev"):
         getWebSockets=list,
         acceptWebSocket=lambda ws: None,
     )
-    env_kwargs: dict = {"AUTH_MODE": mode}
-    if token is not None:
-        env_kwargs["WORKER_BEARER_TOKEN"] = token
-    if mode == "jwt":
-        env_kwargs["JWT_ALGORITHMS"] = "HS256"
-        env_kwargs["JWT_PUBLIC_KEY_PEM"] = "test-secret-key-32-bytes-minimum!"
-    return SessionRuntime(ctx, SimpleNamespace(**env_kwargs))
+    # from_env only accepts jwt mode now; build a valid jwt config, then override
+    # the in-memory mode/bearer token for tests exercising the legacy open-access
+    # branches (reachable only via direct config construction).
+    env_kwargs: dict = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": token if token is not None else "placeholder-token",
+    }
+    rt = SessionRuntime(ctx, SimpleNamespace(**env_kwargs))
+    rt.config.jwt.mode = mode
+    if token is None:
+        rt.config.worker_bearer_token = None
+    return rt
 
 
 def test_config_reads_worker_bearer_token_from_env() -> None:
@@ -215,9 +222,10 @@ def test_config_reads_worker_bearer_token_from_env() -> None:
     assert cfg.worker_bearer_token == "my-secret-token"
 
 
-def test_config_worker_bearer_token_defaults_to_none_in_dev_mode() -> None:
-    cfg = CloudflareConfig.from_env({"AUTH_MODE": "dev"})
-    assert cfg.worker_bearer_token is None
+def test_config_rejects_dev_mode_in_all_environments() -> None:
+    # dev/none modes are removed; from_env must reject them regardless of ENVIRONMENT.
+    with pytest.raises(ValueError, match="AUTH_MODE"):
+        CloudflareConfig.from_env({"AUTH_MODE": "dev"})
 
 
 @pytest.mark.asyncio
@@ -324,13 +332,18 @@ async def test_page_routes_accessible_in_dev_mode() -> None:
     from provide.uterm.cloudflare.entry import Default
 
     env = SimpleNamespace(
-        AUTH_MODE="dev",
+        AUTH_MODE="jwt",
+        JWT_ALGORITHMS="HS256",
+        JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+        WORKER_BEARER_TOKEN="worker-token",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )
     worker = object.__new__(Default)
     worker.env = env
     worker._config = CloudflareConfig.from_env(env)
+    # Simulate the legacy open-access mode (reachable only via direct config mutation).
+    worker._config.jwt.mode = "dev"
     req = _Req("https://example.invalid/app")
     resp = await worker.fetch(req)
     # 200 if terminal.html asset exists, or 404 from serve_asset; either way, NOT 401

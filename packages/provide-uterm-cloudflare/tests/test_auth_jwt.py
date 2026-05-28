@@ -209,3 +209,39 @@ def test_config_jwt_role_map_invalid_json_ignored() -> None:
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_role_map == {}
+
+
+# ---------------------------------------------------------------------------
+# CB-3: dev/none auth bypass must be impossible to configure or invoke.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["dev", "none", "DEV", "None"])
+def test_from_env_rejects_dev_and_none_modes_in_all_environments(mode: str) -> None:
+    """AUTH_MODE=dev/none must raise regardless of ENVIRONMENT (no internet-facing admin bypass)."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    for environment in ("development", "production", "staging"):
+        with pytest.raises(ValueError, match="AUTH_MODE"):
+            CloudflareConfig.from_env(
+                {
+                    "ENVIRONMENT": environment,
+                    "AUTH_MODE": mode,
+                    "JWT_PUBLIC_KEY_PEM": "pem",
+                    "WORKER_BEARER_TOKEN": "t",
+                }
+            )
+
+
+async def test_decode_jwt_has_no_dev_bypass() -> None:
+    """decode_jwt must never mint an admin principal without a verified token."""
+    cfg = JwtConfig(mode="dev", public_key_pem="any")
+    with pytest.raises(JwtValidationError):
+        await decode_jwt("not.a.valid.token", cfg)
+
+
+async def test_decode_jwt_has_no_none_bypass() -> None:
+    """decode_jwt must never mint an admin principal in 'none' mode either."""
+    cfg = JwtConfig(mode="none", public_key_pem="any")
+    with pytest.raises(JwtValidationError):
+        await decode_jwt("not.a.valid.token", cfg)

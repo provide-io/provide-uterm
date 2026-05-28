@@ -34,20 +34,23 @@ def _make_ctx(worker_id: str = "test-worker"):
     )
 
 
-def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
-    env = SimpleNamespace(AUTH_MODE=mode, **extra)
-    if mode == "jwt":
-        env.JWT_ALGORITHMS = "HS256"
-        env.JWT_PUBLIC_KEY_PEM = _KEY
-        if not hasattr(env, "WORKER_BEARER_TOKEN"):
-            env.WORKER_BEARER_TOKEN = "test-worker-token"
+def _make_env(mode: str = "jwt", **extra) -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    env = SimpleNamespace(AUTH_MODE="jwt", **extra)
+    env.JWT_ALGORITHMS = "HS256"
+    env.JWT_PUBLIC_KEY_PEM = _KEY
+    if not hasattr(env, "WORKER_BEARER_TOKEN"):
+        env.WORKER_BEARER_TOKEN = "test-worker-token"
     return env
 
 
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionRuntime:
+    # from_env only accepts jwt mode now; build a valid jwt config, then override
+    # the in-memory mode for tests that exercise the legacy open-access branches.
     ctx = _make_ctx(worker_id)
-    env = _make_env(mode)
-    return SessionRuntime(ctx, env)
+    rt = SessionRuntime(ctx, _make_env("jwt"))
+    rt.config.jwt.mode = mode
+    return rt
 
 
 def _make_token(sub: str = "user", roles: list[str] | None = None) -> str:
@@ -216,13 +219,13 @@ async def test_resolve_signing_key_kid_matches() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_config_invalid_mode_defaults_to_jwt() -> None:
-    """Line 79: AUTH_MODE with unrecognised value → silently defaults to 'jwt'."""
+def test_config_invalid_mode_is_rejected() -> None:
+    """An unrecognised AUTH_MODE is rejected (only 'jwt' is allowed)."""
     from provide.uterm.cloudflare.config import CloudflareConfig
 
     env = SimpleNamespace(AUTH_MODE="invalid_mode", WORKER_BEARER_TOKEN="t")
-    config = CloudflareConfig.from_env(env)
-    assert config.jwt.mode == "jwt"
+    with pytest.raises(ValueError, match="AUTH_MODE"):
+        CloudflareConfig.from_env(env)
 
 
 # ---------------------------------------------------------------------------

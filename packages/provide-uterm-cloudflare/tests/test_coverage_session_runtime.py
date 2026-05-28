@@ -47,9 +47,12 @@ def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev"):
     from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
+    # from_env only accepts jwt mode now; build a valid jwt config, then override
+    # the in-memory mode for tests that exercise the legacy open-access branches.
     ctx = _make_ctx(worker_id)
-    env = _make_env(mode)
-    return SessionRuntime(ctx, env)
+    rt = SessionRuntime(ctx, _make_env("jwt"))
+    rt.config.jwt.mode = mode
+    return rt
 
 
 def _make_token(sub: str = "user") -> str:

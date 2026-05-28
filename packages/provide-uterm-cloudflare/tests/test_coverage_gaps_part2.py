@@ -62,7 +62,13 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "gap-test"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev")
+        # from_env only accepts jwt mode now; build a valid jwt config.
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="test-worker-token",
+        )
         return SessionRuntime(ctx, env)
 
     def test_share_role_no_token_returns_none(self) -> None:
@@ -201,7 +207,13 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "rt-test"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_TOKEN_TRANSPORT="cookie")
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="t",
+            TUNNEL_TOKEN_TRANSPORT="cookie",
+        )
         rt = SessionRuntime(ctx, env)
         rt._share_token_hash = hash_token("tok")
         rt._control_token_hash = None
@@ -225,7 +237,13 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "rt-test2"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_TOKEN_TRANSPORT="query")
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="t",
+            TUNNEL_TOKEN_TRANSPORT="query",
+        )
         rt = SessionRuntime(ctx, env)
         rt._share_token_hash = hash_token("tok")
         rt._control_token_hash = None
@@ -249,7 +267,13 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "rt-test3"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="t",
+            TUNNEL_IP_BINDING="true",
+        )
         rt = SessionRuntime(ctx, env)
         rt._share_token_hash = hash_token("tok")
         rt._control_token_hash = None
@@ -278,7 +302,13 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "rt-test4"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="t",
+            TUNNEL_IP_BINDING="true",
+        )
         rt = SessionRuntime(ctx, env)
         rt._share_token_hash = hash_token("tok")
         rt._control_token_hash = None
@@ -307,7 +337,12 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "rt-ip-test"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev")
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="t",
+        )
         rt = SessionRuntime(ctx, env)
         assert rt._issued_ip is None
 
@@ -325,7 +360,13 @@ class TestSessionRuntimeGaps:
             id=SimpleNamespace(name=lambda: "rt-exc-test"),
             getWebSockets=list,
         )
-        env = SimpleNamespace(AUTH_MODE="dev", TUNNEL_IP_BINDING="true")
+        env = SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+            WORKER_BEARER_TOKEN="t",
+            TUNNEL_IP_BINDING="true",
+        )
         rt = SessionRuntime(ctx, env)
         rt._share_token_hash = hash_token("tok")
         rt._control_token_hash = None

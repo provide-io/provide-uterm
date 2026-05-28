@@ -31,11 +31,31 @@ def test_extract_worker_id_root() -> None:
 
 
 def _make_default(env_attrs: dict | None = None) -> Default:
-    """Create a Default instance with a minimal env."""
-    attrs: dict = {"AUTH_MODE": "dev"}
+    """Create a Default instance configured for the legacy open-access path.
+
+    from_env only accepts jwt mode now, so build a valid jwt config and override
+    the in-memory mode to ``dev`` (reachable only via direct config mutation),
+    preserving the open-access behaviour these tests exercise.
+    """
+    attrs: dict = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": "test-worker-token",
+    }
+    # Callers that explicitly request jwt mode want real enforcement; otherwise the
+    # helper simulates the legacy open-access ("dev") path via direct config mutation.
+    force_dev = not (env_attrs and env_attrs.get("AUTH_MODE") == "jwt")
     if env_attrs:
         attrs.update(env_attrs)
-    return Default(SimpleNamespace(**attrs))
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    env = SimpleNamespace(**attrs)
+    d = Default(env)
+    d._config = CloudflareConfig.from_env(env)
+    if force_dev:
+        d._config.jwt.mode = "dev"
+    return d
 
 
 def _req(path: str) -> SimpleNamespace:
