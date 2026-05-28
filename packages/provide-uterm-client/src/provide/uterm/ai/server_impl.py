@@ -39,52 +39,18 @@ from provide.uterm.ai.auth import (
     authorized,
     principal_from_headers,
 )
+from provide.uterm.ai.constants import MAX_KEYSTROKE_BYTES
 from provide.uterm.ai.policy import is_allowed_connector
 from provide.uterm.client.hijack import HijackClient
 from provide.uterm.client.mcp_tools import _ok
+from provide.uterm.client.sanitizer import prepare_keystrokes, unescape_keys
 
 TOOL_COUNT = 21
 
-
-_SIMPLE_ESCAPES: dict[str, str] = {
-    "n": "\n",
-    "r": "\r",
-    "t": "\t",
-    "e": "\x1b",
-    "0": "\x00",
-    "\\": "\\",
-    "'": "'",
-    '"': '"',
-}
-
-_ESCAPE_PATTERN = re.compile(
-    r"\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|(.))",
-    re.DOTALL,
-)
-
-
-def _unescape_keys(raw: str) -> str:
-    """Translate terminal-relevant escape sequences in *raw* to real characters.
-
-    Recognises ``\\n``, ``\\r``, ``\\t``, ``\\e``, ``\\0``, ``\\\\``, ``\\'``,
-    ``\\"``, ``\\xNN`` and ``\\uNNNN``. Unknown single-letter escapes such as
-    ``\\a``, ``\\b``, ``\\c``, ``\\q`` are left untouched (passed through as
-    the original two-character backslash sequence) so that callers may safely
-    embed literal text without surprise translation.
-    """
-
-    def _replace(match: re.Match[str]) -> str:
-        hex2, hex4, ch = match.groups()
-        if hex2 is not None:
-            return chr(int(hex2, 16))
-        if hex4 is not None:
-            return chr(int(hex4, 16))
-        if ch in _SIMPLE_ESCAPES:
-            return _SIMPLE_ESCAPES[ch]
-        # Unknown escape — preserve the original sequence verbatim.
-        return match.group(0)
-
-    return _ESCAPE_PATTERN.sub(_replace, raw)
+# Backwards-compatible alias: the canonical unescape logic now lives in
+# ``provide.uterm.client.sanitizer`` so both MCP code paths share it, but the
+# original private name remains importable for existing callers/tests.
+_unescape_keys = unescape_keys
 
 
 def _trim_tail(screen: str, tail_lines: int | None) -> str:
@@ -322,7 +288,7 @@ def create_mcp_app(
         ok, data = await client.send(
             worker_id,
             hijack_id,
-            keys=_unescape_keys(keys),
+            keys=prepare_keystrokes(keys, max_bytes=MAX_KEYSTROKE_BYTES),
             expect_prompt_id=expect_prompt_id,
             expect_regex=expect_regex,
             timeout_ms=timeout_ms,

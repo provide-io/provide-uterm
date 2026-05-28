@@ -107,9 +107,9 @@ def hijack_tools(base_url: str, **client_kwargs: Any) -> list[Any]:
         poll_interval_ms: int = 120,
     ) -> dict[str, Any]:
         """Send input to a hijacked worker, optionally guarded by prompt/regex."""
-        from provide.uterm.client.sanitizer import sanitize_keystrokes
+        from provide.uterm.client.sanitizer import prepare_keystrokes
 
-        safe_keys = sanitize_keystrokes(keys)
+        safe_keys = prepare_keystrokes(keys)
         ok, data = await client.send(
             worker_id,
             hijack_id,
