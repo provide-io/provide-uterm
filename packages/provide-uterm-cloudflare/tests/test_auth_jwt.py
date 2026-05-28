@@ -324,3 +324,100 @@ def test_config_jwt_service_token_admin_defaults_false() -> None:
 
     cfg = CloudflareConfig.from_env({"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "pem", "WORKER_BEARER_TOKEN": "t"})
     assert cfg.jwt.jwt_service_token_admin is False
+
+
+# ---------------------------------------------------------------------------
+# ALG: JWT algorithm-confusion startup guard.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "algs",
+    ["RS256,HS256", "HS256", "ES256,HS384", "PS256,HS512"],
+)
+def test_jwt_config_rejects_hs_mixed_with_pem_key(algs: str) -> None:
+    """HMAC algorithms combined with a PEM public key are an algorithm-confusion risk."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    with pytest.raises(ValueError, match="algorithm"):
+        CloudflareConfig.from_env(
+            {
+                "AUTH_MODE": "jwt",
+                "JWT_ALGORITHMS": algs,
+                "JWT_PUBLIC_KEY_PEM": "-----BEGIN PUBLIC KEY-----\nXXXX\n-----END PUBLIC KEY-----",
+                "WORKER_BEARER_TOKEN": "t",
+            }
+        )
+
+
+def test_jwt_config_rejects_hs_mixed_with_jwks_url() -> None:
+    """HMAC algorithms combined with a JWKS URL are an algorithm-confusion risk."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    with pytest.raises(ValueError, match="algorithm"):
+        CloudflareConfig.from_env(
+            {
+                "AUTH_MODE": "jwt",
+                "JWT_ALGORITHMS": "RS256,HS256",
+                "JWT_JWKS_URL": "https://idp.example.com/.well-known/jwks.json",
+                "WORKER_BEARER_TOKEN": "t",
+            }
+        )
+
+
+def test_jwt_config_rejects_hs_combined_with_asymmetric_alg() -> None:
+    """Mixing HMAC and asymmetric algorithms is rejected even without a key present."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    with pytest.raises(ValueError, match="algorithm"):
+        CloudflareConfig.from_env(
+            {
+                "AUTH_MODE": "jwt",
+                "JWT_ALGORITHMS": "RS256,HS256",
+                "JWT_PUBLIC_KEY_PEM": "k",
+                "WORKER_BEARER_TOKEN": "t",
+            }
+        )
+
+
+def test_jwt_config_allows_pure_asymmetric_with_key() -> None:
+    """Asymmetric-only algorithms with a PEM key are fine."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    cfg = CloudflareConfig.from_env(
+        {
+            "AUTH_MODE": "jwt",
+            "JWT_ALGORITHMS": "RS256,ES256",
+            "JWT_PUBLIC_KEY_PEM": "k",
+            "WORKER_BEARER_TOKEN": "t",
+        }
+    )
+    assert cfg.jwt.algorithms == ("RS256", "ES256")
+
+
+def test_jwt_config_allows_hs_without_asymmetric_key() -> None:
+    """HMAC-only algorithms without any asymmetric key/JWKS are allowed.
+
+    (The shared secret is supplied via JWT_PUBLIC_KEY_PEM acting as the HMAC key;
+    the guard only fires when HMAC is mixed with asymmetric algs or a JWKS URL.)
+    """
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    cfg = CloudflareConfig.from_env(
+        {
+            "AUTH_MODE": "jwt",
+            "JWT_ALGORITHMS": "HS256",
+            "JWT_PUBLIC_KEY_PEM": "shared-secret-32-bytes-minimum-key!",
+            "WORKER_BEARER_TOKEN": "t",
+        }
+    )
+    assert cfg.jwt.algorithms == ("HS256",)
+
+
+def test_jwt_config_allows_hs_with_no_key_material() -> None:
+    """HMAC algorithm with neither a PEM key nor a JWKS URL passes the guard."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    cfg = CloudflareConfig.from_env({"AUTH_MODE": "jwt", "JWT_ALGORITHMS": "HS256", "WORKER_BEARER_TOKEN": "t"})
+    assert cfg.jwt.public_key_pem is None
+    assert cfg.jwt.jwks_url is None
