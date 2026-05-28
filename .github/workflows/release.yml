@@ -100,24 +100,10 @@ jobs:
         run: echo "version=$(cat packages/provide-uterm/VERSION)" >> "$GITHUB_OUTPUT"
       # Install from TestPyPI with fallback to PyPI for transitive deps
       - name: Install from TestPyPI (with retries)
-        run: |
-          for i in 1 2 3 4 5; do
-            if pip install \
-                 --index-url https://test.pypi.org/simple/ \
-                 --extra-index-url https://pypi.org/simple/ \
-                 "provide-uterm==${{ steps.ver.outputs.version }}"; then
-              break
-            fi
-            echo "Attempt $i failed — waiting 30s for index propagation…"
-            sleep 30
-          done
-      # Confirm the installed version matches
+        run: ci/install_from_testpypi.sh provide-uterm "${{ steps.ver.outputs.version }}"
+      # Confirm the installed version matches the expected VERSION
       - name: Verify installed version
-        run: |
-          installed=$(pip show provide-uterm | grep '^Version:' | awk '{print $2}')
-          expected="${{ steps.ver.outputs.version }}"
-          echo "Installed: $installed  Expected: $expected"
-          [ "$installed" = "$expected" ]
+        run: ci/verify_installed_version.sh provide-uterm "${{ steps.ver.outputs.version }}"
 
   pypi-terminal:
     name: PyPI · provide-uterm
@@ -215,26 +201,12 @@ jobs:
       - name: Read expected version
         id: ver
         run: echo "version=$(cat packages/provide-uterm-cloudflare/VERSION)" >> "$GITHUB_OUTPUT"
-      # Install from TestPyPI with fallback
+      # Install from TestPyPI with fallback to PyPI for transitive deps
       - name: Install from TestPyPI (with retries)
-        run: |
-          for i in 1 2 3 4 5; do
-            if pip install \
-                 --index-url https://test.pypi.org/simple/ \
-                 --extra-index-url https://pypi.org/simple/ \
-                 "provide-uterm-cloudflare==${{ steps.ver.outputs.version }}"; then
-              break
-            fi
-            echo "Attempt $i failed — waiting 30s for index propagation…"
-            sleep 30
-          done
-      # Confirm the installed version matches
+        run: ci/install_from_testpypi.sh provide-uterm-cloudflare "${{ steps.ver.outputs.version }}"
+      # Confirm the installed version matches the expected VERSION
       - name: Verify installed version
-        run: |
-          installed=$(pip show provide-uterm-cloudflare | grep '^Version:' | awk '{print $2}')
-          expected="${{ steps.ver.outputs.version }}"
-          echo "Installed: $installed  Expected: $expected"
-          [ "$installed" = "$expected" ]
+        run: ci/verify_installed_version.sh provide-uterm-cloudflare "${{ steps.ver.outputs.version }}"
 
   pypi-cloudflare:
     name: PyPI · provide-uterm-cloudflare
