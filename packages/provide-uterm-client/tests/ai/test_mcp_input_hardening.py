@@ -7,6 +7,7 @@
 * MCP-send: ``hijack_send`` must sanitize keystrokes *after* unescaping so an
   LLM cannot drive a hijacked terminal with arbitrary ANSI/OSC/NUL bytes.
 * MCP-host: ``session_create`` must reject internal / metadata targets.
+* MCP-redos: user-supplied match patterns must be length-bounded.
 """
 
 from __future__ import annotations
@@ -213,3 +214,68 @@ class TestSessionCreateHostValidation:
         )
         assert data["success"] is False
         assert data["error"] == "invalid_host"
+
+
+# ---------------------------------------------------------------------------
+# MCP-redos: bound user-supplied regex
+# ---------------------------------------------------------------------------
+
+
+class TestUserPatternBounds:
+    def test_compile_user_pattern_caps_length(self) -> None:
+        from provide.uterm.ai.server_impl import _compile_user_pattern
+
+        with pytest.raises(ValueError, match="pattern"):
+            _compile_user_pattern("x" * 2000)
+
+    def test_compile_user_pattern_rejects_invalid(self) -> None:
+        from provide.uterm.ai.server_impl import _compile_user_pattern
+
+        with pytest.raises(ValueError, match="pattern"):
+            _compile_user_pattern("(")
+
+    def test_compile_user_pattern_accepts_normal(self) -> None:
+        from provide.uterm.ai.server_impl import _compile_user_pattern
+
+        compiled = _compile_user_pattern("foo.*bar")
+        assert compiled.search("xfooXbary") is not None
+
+    async def test_session_subscribe_rejects_oversized_pattern(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        data = await _call(
+            mcp,
+            "session_subscribe",
+            {"session_id": "s1", "pattern": "a" * 2000},
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_pattern"
+
+    async def test_session_watch_rejects_oversized_pattern(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        data = await _call(
+            mcp,
+            "session_watch",
+            {"session_id": "s1", "pattern": "a" * 2000},
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_pattern"
+
+    async def test_hijack_send_rejects_oversized_expect_regex(self) -> None:
+        hub, app = _make_hub_app()
+        _add_worker(hub)
+        mcp = _mcp_for(app)
+        hid = await _acquire(mcp)
+        data = await _call(
+            mcp,
+            "hijack_send",
+            {
+                "worker_id": WID,
+                "hijack_id": hid,
+                "keys": "ls",
+                "expect_regex": "a" * 2000,
+            },
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_pattern"
