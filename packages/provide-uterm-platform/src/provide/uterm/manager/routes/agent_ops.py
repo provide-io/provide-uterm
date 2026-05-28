@@ -207,6 +207,13 @@ async def agent_session_data(agent_id: str, request: Request) -> Any:
 async def register_agent(agent_id: str, data: dict[str, Any], manager: AgentManager = Depends(require_manager)) -> Any:  # noqa: B008
     now = time.time()
     created = agent_id not in manager.agents
+    if created and len(manager.agents) >= manager.max_agents:
+        # Auto-create must honor max_agents so any token holder cannot grow the
+        # agent registry without bound (PLAT-reg).
+        return JSONResponse(
+            {"error": f"Max agents ({manager.max_agents}) reached"},
+            status_code=429,
+        )
     base_payload: dict[str, Any] = {"agent_id": agent_id} if created else manager.agents[agent_id].model_dump()
     try:
         merged = manager._agent_status_class.model_validate(
