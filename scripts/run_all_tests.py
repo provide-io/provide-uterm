@@ -25,17 +25,19 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
-_PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("provide-uterm + provide-uterm-cloudflare (root pytest)", ()),
-    ("provide-uterm-annotation", ("packages/provide-uterm-annotation/tests/",)),
-    ("provide-uterm-server", ("packages/provide-uterm-server/tests/",)),
-    ("provide-uterm-client", ("packages/provide-uterm-client/tests/",)),
+_PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("provide-uterm + provide-uterm-cloudflare (root pytest)", (), ()),
+    ("provide-uterm-annotation", (), ("packages/provide-uterm-annotation/tests/",)),
+    ("provide-uterm-server", (), ("packages/provide-uterm-server/tests/",)),
+    ("provide-uterm-client", (), ("packages/provide-uterm-client/tests/",)),
     (
         "provide-uterm-platform/manager",
+        (),
         ("packages/provide-uterm-platform/tests/manager/",),
     ),
     (
         "provide-uterm-platform/pty (no PAM/root)",
+        ("--package", "provide-uterm-platform", "--extra", "dev"),
         (
             "packages/provide-uterm-platform/tests/pty/",
             "--ignore=packages/provide-uterm-platform/tests/pty/e2e",
@@ -53,16 +55,16 @@ _PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def _run(label: str, args: tuple[str, ...], passthrough: list[str]) -> int:
+def _run(label: str, uv_args: tuple[str, ...], pytest_args: tuple[str, ...], passthrough: list[str]) -> int:
     print(f"\n=== {label} ===", flush=True)
-    cmd = ["uv", "run", "pytest", "-q", *args, *passthrough]
+    cmd = ["uv", "run", *uv_args, "pytest", "-q", *pytest_args, *passthrough]
     return subprocess.call(cmd, cwd=str(_REPO_ROOT))
 
 
 def main() -> int:
     passthrough = sys.argv[1:]
-    for label, args in _PACKAGE_SUITES:
-        rc = _run(label, args, passthrough)
+    for label, uv_args, pytest_args in _PACKAGE_SUITES:
+        rc = _run(label, uv_args, pytest_args, passthrough)
         if rc != 0:
             print(f"FAILED: {label} (exit {rc})", file=sys.stderr)
             return rc
