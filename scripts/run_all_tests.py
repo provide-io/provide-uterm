@@ -4,13 +4,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 
-"""Run every package's test suite in sequence with its own coverage config.
+"""Run workspace test suites in sequence (Python + frontend).
 
-Each workspace package defines its own 100% branch-coverage gate via its
-``pyproject.toml``.  The root ``uv run pytest`` only covers the core and
-Cloudflare packages (the only two in ``[tool.pytest.ini_options].testpaths``);
-this wrapper also exercises server, platform/manager, and platform/pty so
-contributors get a single command that mirrors what CI runs across jobs.
+Each Python workspace package defines its own coverage gate in
+``pyproject.toml``. The root ``uv run pytest`` only covers core + Cloudflare
+(``[tool.pytest.ini_options].testpaths``), so this wrapper also runs the
+remaining Python package suites. It then runs npm workspace typechecks/tests
+for ``provide-uterm-frontend`` and ``provide-uterm-app`` so contributors have
+one command that approximates CI scope across languages.
 
 Exits non-zero on the first package whose tests fail, surfacing the raw pytest
 output for that package. Pass through any extra args to every pytest invocation
@@ -19,13 +20,14 @@ output for that package. Pass through any extra args to every pytest invocation
 
 from __future__ import annotations
 
+import shlex
 import subprocess  # nosec
 import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
-_PACKAGE_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+_PYTEST_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("provide-uterm + provide-uterm-cloudflare (root pytest)", (), ()),
     ("provide-uterm-annotation", (), ("packages/provide-uterm-annotation/tests/",)),
     ("provide-uterm-server", (), ("packages/provide-uterm-server/tests/",)),
@@ -61,10 +63,26 @@ def _run(label: str, uv_args: tuple[str, ...], pytest_args: tuple[str, ...], pas
     return subprocess.call(cmd, cwd=str(_REPO_ROOT))
 
 
+def _run_npm(label: str, command: str) -> int:
+    print(f"\n=== {label} ===", flush=True)
+    cmd = shlex.split(command)
+    return subprocess.call(cmd, cwd=str(_REPO_ROOT))
+
+
 def main() -> int:
     passthrough = sys.argv[1:]
-    for label, uv_args, pytest_args in _PACKAGE_SUITES:
+    for label, uv_args, pytest_args in _PYTEST_SUITES:
         rc = _run(label, uv_args, pytest_args, passthrough)
+        if rc != 0:
+            print(f"FAILED: {label} (exit {rc})", file=sys.stderr)
+            return rc
+    for label, command in (
+        ("provide-uterm-frontend typecheck", "npm run typecheck:frontend"),
+        ("provide-uterm-app typecheck", "npm run typecheck:app"),
+        ("provide-uterm-frontend tests", "npm test --workspace=packages/provide-uterm-frontend"),
+        ("provide-uterm-app tests", "npm test --workspace=packages/provide-uterm-app"),
+    ):
+        rc = _run_npm(label, command)
         if rc != 0:
             print(f"FAILED: {label} (exit {rc})", file=sys.stderr)
             return rc

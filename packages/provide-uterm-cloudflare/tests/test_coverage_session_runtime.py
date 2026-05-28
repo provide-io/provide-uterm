@@ -87,7 +87,7 @@ async def test_resolve_principal_cf_access_client_id_without_suffix_rejected() -
 
 
 async def test_resolve_principal_cf_access_client_id_with_access_suffix() -> None:
-    """CF-Access-Client-Id ending in .access also bypasses JWT in DO."""
+    """CF-Access-Client-Id ending in .access does not bypass JWT in DO."""
     rt = _make_runtime(mode="jwt")
 
     def _get(k, default=None):
@@ -98,7 +98,8 @@ async def test_resolve_principal_cf_access_client_id_with_access_suffix() -> Non
     req = SimpleNamespace(url="https://x/ws/worker/test/term", headers=SimpleNamespace(get=_get))
     principal, error = await rt._resolve_principal(req)
     assert principal is None
-    assert error is None
+    assert error is not None
+    assert error.status == 401
 
 
 async def test_resolve_principal_cf_access_header_exception_falls_through() -> None:
@@ -122,8 +123,8 @@ async def test_resolve_principal_cf_access_header_exception_falls_through() -> N
 # ---------------------------------------------------------------------------
 
 
-async def test_worker_ws_cf_access_bypasses_bearer_token() -> None:
-    """Worker WS with CF-Access-Client-Id .access suffix bypasses bearer token check."""
+async def test_worker_ws_cf_access_header_does_not_bypass_bearer_token() -> None:
+    """Worker WS with CF-Access-Client-Id .access suffix must still require a bearer token."""
     rt = _make_runtime(mode="jwt")
 
     def _get(k, default=None):
@@ -139,13 +140,8 @@ async def test_worker_ws_cf_access_bypasses_bearer_token() -> None:
         headers=SimpleNamespace(get=_get),
     )
 
-    # fetch() will try to create WebSocketPair — mock extract_bearer_or_cookie
-    # so we can verify auth is bypassed (doesn't return 403)
+    # With no bearer token, the request must be rejected before any websocket
+    # machinery (WebSocketPair) is needed.
     with patch("provide.uterm.cloudflare.do.session_runtime.fetch.extract_bearer_or_cookie", return_value=None):
-        try:
-            resp = await rt.fetch(req)
-            assert resp.status != 403
-        except ImportError:
-            # Expected: js.WebSocketPair not available in tests
-            # Auth passed (didn't return 403 early)
-            pass
+        resp = await rt.fetch(req)
+        assert resp.status == 403

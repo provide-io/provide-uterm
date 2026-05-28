@@ -23,21 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 def _has_cf_service_token(request: object) -> bool:
-    """Check if request carries CF Access service token headers.
-
-    When a Service Auth policy matches, CF Access validates the token and
-    forwards the request.  The presence of CF-Access-Client-Id means CF
-    Access already approved the request — the worker can trust it.
-
-    In Pyodide, request.headers is a JS Headers proxy.  .get() may return
-    a JS string or None.  We stringify and check length to be safe.
-    """
+    """Compatibility stub: raw CF Access headers are not trusted for auth."""
     try:
-        headers = request.headers  # type: ignore[attr-defined]
-        for name in ("cf-access-client-id", "CF-Access-Client-Id"):
-            val = str(headers.get(name) or "")
-            if val.endswith(".access"):
-                return True
+        _ = request.headers  # type: ignore[attr-defined]
     except Exception as exc:
         logger.debug("cf_service_token_header_check_failed: %s", exc)
     return False
@@ -46,12 +34,9 @@ def _has_cf_service_token(request: object) -> bool:
 async def _require_jwt(request: object, config: CloudflareConfig) -> Response | None:
     """Return a 401 Response if JWT auth fails, or ``None`` if auth passes.
 
-    Skipped when auth mode is not ``jwt``, or when a CF Access service
-    token is present (already validated by CF Access Service Auth policy).
+    Skipped when auth mode is not ``jwt``.
     """
     if config.jwt.mode != "jwt":
-        return None
-    if _has_cf_service_token(request):
         return None
     token = extract_bearer_or_cookie(request)
     if not token:
@@ -73,10 +58,6 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> ob
     * ``Cf-Access-Authenticated-User-Email`` → synthesized Principal with
       the email as subject_id (role: ``viewer``) — CF Access already
       validated the end-user identity upstream.
-    * ``CF-Access-Client-Id`` (suffix ``.access``) → synthesized Principal
-      with ``service:<client_id>`` as subject_id and ``admin`` role —
-      service tokens are deployed with machine-to-machine intent and
-      don't carry user-level scopes.
     * App JWT bearer/cookie → ``decode_jwt`` (handles public_key_pem AND
       jwks_url via Web Crypto).
 
@@ -98,13 +79,6 @@ async def _decode_jwt_principal(request: object, config: CloudflareConfig) -> ob
 
         principal: object = _Principal(subject_id=email, roles=("viewer",))
         return principal
-    # CF Access service token
-    client_id = _read_header(request, "cf-access-client-id", "CF-Access-Client-Id")
-    if client_id.endswith(".access"):
-        from provide.uterm.cloudflare.auth.jwt import Principal as _Principal
-
-        service_principal: object = _Principal(subject_id=f"service:{client_id}", roles=("admin",))
-        return service_principal
     token = extract_bearer_or_cookie(request)
     if not token:
         return None
@@ -137,7 +111,6 @@ async def _resolve_principal_id(request: object, config: CloudflareConfig) -> st
     Supports every path the auth layer already accepts:
 
     * CF Access authenticated user → ``Cf-Access-Authenticated-User-Email``
-    * CF Access service token      → ``CF-Access-Client-Id`` (suffix ``.access``)
     * App JWT bearer/cookie        → ``decode_jwt`` (handles both
       ``public_key_pem`` AND ``jwks_url``; the previous implementation used
       sync PyJWT with ``public_key_pem`` only, silently degrading every
@@ -152,9 +125,6 @@ async def _resolve_principal_id(request: object, config: CloudflareConfig) -> st
     )
     if email:
         return email
-    client_id = _read_header(request, "cf-access-client-id", "CF-Access-Client-Id")
-    if client_id.endswith(".access"):
-        return f"service:{client_id}"
     token = extract_bearer_or_cookie(request)
     if not token:
         return "anonymous"

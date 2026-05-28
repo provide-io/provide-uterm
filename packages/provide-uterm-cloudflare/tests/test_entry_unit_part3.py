@@ -39,8 +39,8 @@ def test_read_header_skips_individually_raising_names() -> None:
     assert _read_header(req, "cf-access-client-id", "CF-Access-Client-Id") == "svc.access"
 
 
-async def test_resolve_principal_id_cf_access_service_token() -> None:
-    """CF Access service token maps to a ``service:<client_id>`` principal."""
+async def test_resolve_principal_id_cf_access_service_token_header_is_not_trusted() -> None:
+    """Raw CF Access service-token header does not establish principal identity."""
     from provide.uterm.cloudflare.config import CloudflareConfig
     from provide.uterm.cloudflare.entry.auth import _resolve_principal_id
 
@@ -52,7 +52,7 @@ async def test_resolve_principal_id_cf_access_service_token() -> None:
         headers=SimpleNamespace(get=lambda k, d=None: client_id if k.lower() == "cf-access-client-id" else d)
     )
     result = await _resolve_principal_id(req, config)
-    assert result == f"service:{client_id}"
+    assert result == "anonymous"
 
 
 def _make_default(env_attrs: dict | None = None) -> Default:

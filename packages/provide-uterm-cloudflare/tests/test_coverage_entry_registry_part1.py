@@ -154,20 +154,20 @@ def test_spa_response_connect() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _has_cf_service_token (lines 186-204)
+# _has_cf_service_token (header trust disabled)
 # ---------------------------------------------------------------------------
 
 
 def test_has_cf_service_token_with_access_suffix() -> None:
     from provide.uterm.cloudflare.entry.auth import _has_cf_service_token
 
-    assert _has_cf_service_token(SimpleNamespace(headers={"cf-access-client-id": "abc.access"})) is True
+    assert _has_cf_service_token(SimpleNamespace(headers={"cf-access-client-id": "abc.access"})) is False
 
 
 def test_has_cf_service_token_uppercase_header() -> None:
     from provide.uterm.cloudflare.entry.auth import _has_cf_service_token
 
-    assert _has_cf_service_token(SimpleNamespace(headers={"CF-Access-Client-Id": "abc.access"})) is True
+    assert _has_cf_service_token(SimpleNamespace(headers={"CF-Access-Client-Id": "abc.access"})) is False
 
 
 def test_has_cf_service_token_without_access_suffix() -> None:
