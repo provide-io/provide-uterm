@@ -80,7 +80,7 @@ docker compose -f docker/docker-compose.yml up
 
 **Control Channel**: JSON control frames (snapshots, hijack state, presence, analysis) mixed inline with raw terminal bytes in the same WebSocket stream.
 
-**Lazy-loading module interface**: `provide/uterm/__init__.py` uses `__getattr__` to defer imports, avoiding hard dependencies.
+**Module import strategy**: the core `provide/uterm/__init__.py` uses **eager** imports (it re-exports from `ansi`, `auth`, `colors`, `control_channel_*`, etc. at import time). The **lazy** `__getattr__`-based deferral lives in the *client* package (`packages/provide-uterm-client/src/provide/uterm/client/__init__.py`), which defers optional/heavy imports to avoid hard dependencies.
 
 ### Hub services
 
@@ -99,7 +99,9 @@ The full service map (with one-line descriptions of each) is in the docstring of
 
 ## Pre-commit Hooks
 
-Runs on commit: ruff (format+lint), mypy (strict), ty, bandit (security), biome (TS), vitest (frontend), reuse (SPDX headers), codespell. All new files need SPDX headers.
+Runs on **every commit**: `codegen-frames` (Pydantic→TS frame-schema drift check), ruff (format+lint), reuse (SPDX headers), codespell, bandit (security), detect-secrets. All new files need SPDX headers.
+
+Staged as `stages: [manual]` (NOT run on a normal commit — invoke with `pre-commit run --hook-stage manual`): mypy (strict), ty, mypy-platform, and the frontend hooks tsc/biome/vitest. mypy/ty are manual until accumulated type drift is cleaned up; the TS hooks are manual because they need a fresh `npm install` in `packages/provide-uterm-frontend/` first. See the header comment in `.pre-commit-config.yaml` for the rationale.
 
 ## Key Conventions
 
