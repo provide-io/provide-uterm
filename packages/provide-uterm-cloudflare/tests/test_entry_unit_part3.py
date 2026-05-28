@@ -67,8 +67,8 @@ def _make_default(env_attrs: dict | None = None) -> Default:
 # ---------------------------------------------------------------------------
 
 
-async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
-    """F3: /app/inspect/{id}?token=... must render page_kind='inspect', not 'session'."""
+async def test_inspect_page_with_valid_share_cookie_gets_inspect_kind() -> None:
+    """F3: /app/inspect/{id} with a share cookie renders page_kind='inspect'."""
     import json as _json
 
     session = {
@@ -79,8 +79,8 @@ async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
     kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
     d = _make_default({"SESSION_REGISTRY": kv})
     req = SimpleNamespace(
-        url="https://x/app/inspect/tun-abc?token=shared-tok",
-        headers=SimpleNamespace(get=lambda *a, **k: None),
+        url="https://x/app/inspect/tun-abc",
+        headers=SimpleNamespace(get=lambda k, d=None: "uterm_tunnel_tun-abc=shared-tok" if k == "cookie" else d),
     )
     resp = await d.fetch(req)
     assert resp.status == 200
@@ -88,8 +88,8 @@ async def test_inspect_page_with_valid_share_token_gets_inspect_kind() -> None:
     assert bootstrap["page_kind"] == "inspect"
 
 
-async def test_replay_page_with_valid_share_token_gets_replay_kind() -> None:
-    """F3: /app/replay/{id}?token=... must render page_kind='replay'."""
+async def test_replay_page_with_valid_share_cookie_gets_replay_kind() -> None:
+    """F3: /app/replay/{id} with a share cookie renders page_kind='replay'."""
     import json as _json
 
     session = {
@@ -100,8 +100,8 @@ async def test_replay_page_with_valid_share_token_gets_replay_kind() -> None:
     kv = SimpleNamespace(get=AsyncMock(return_value=_json.dumps(session)))
     d = _make_default({"SESSION_REGISTRY": kv})
     req = SimpleNamespace(
-        url="https://x/app/replay/tun-abc?token=replay-tok",
-        headers=SimpleNamespace(get=lambda *a, **k: None),
+        url="https://x/app/replay/tun-abc",
+        headers=SimpleNamespace(get=lambda k, d=None: "uterm_tunnel_tun-abc=replay-tok" if k == "cookie" else d),
     )
     resp = await d.fetch(req)
     assert resp.status == 200

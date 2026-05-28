@@ -58,8 +58,8 @@ class _CapturingTracer:
 @contextmanager
 def _capturing_tracer():  # type: ignore[no-untyped-def]
     """Context manager that installs a _CapturingTracer for the duration."""
-    import provide.uterm.bridge.routes.websockets as _ws_mod
-    import provide.uterm.bridge.routes.websockets_impl as _ws_impl_mod
+    import provide.uterm.server.bridge.routes.websockets as _ws_mod
+    import provide.uterm.server.bridge.routes.websockets_impl as _ws_impl_mod
     import provide.uterm.server.routes.sessions as _sessions_mod
     import provide.uterm.server.routes.tunnels as _tunnels_mod
 

@@ -42,7 +42,7 @@ if not _os.environ.get("MUTANT_UNDER_TEST"):
                 if name == "provide" or name.startswith("provide."):
                     del sys.modules[name]
 
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator

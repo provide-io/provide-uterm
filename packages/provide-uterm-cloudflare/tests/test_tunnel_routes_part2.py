@@ -183,7 +183,7 @@ class TestTunnelAuthz:
 
 
 class TestTunnelSharePageKind:
-    """F3: share_url uses the right page kind (inspect for http, session otherwise)."""
+    """F3: share-page metadata survives the one-time invite URL flow."""
 
     @pytest.mark.asyncio
     async def test_create_http_tunnel_share_url_points_to_inspect(self) -> None:
@@ -200,8 +200,10 @@ class TestTunnelSharePageKind:
 
         resp = await handle_tunnels(request, env)
         body = json.loads(resp.body)
-        assert "/app/inspect/" in body["share_url"]
-        assert "token=" in body["share_url"]
+        assert "/s/" in body["share_url"]
+        assert "invite=" in body["share_url"]
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["share_page"] == "inspect"
 
     @pytest.mark.asyncio
     async def test_create_terminal_tunnel_share_url_points_to_session(self) -> None:
@@ -218,7 +220,10 @@ class TestTunnelSharePageKind:
 
         resp = await handle_tunnels(request, env)
         body = json.loads(resp.body)
-        assert "/app/session/" in body["share_url"]
+        assert "/s/" in body["share_url"]
+        assert "invite=" in body["share_url"]
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["share_page"] == "session"
 
     @pytest.mark.asyncio
     async def test_rotate_http_tunnel_share_url_points_to_inspect(self) -> None:
@@ -242,7 +247,9 @@ class TestTunnelSharePageKind:
 
         resp = await handle_tunnel_rotate_tokens(request, env, "tunnel-abc", ttl_s=3600)
         body = json.loads(resp.body)
-        assert "/app/inspect/tunnel-abc?token=" in body["share_url"]
+        assert "/s/tunnel-abc?invite=" in body["share_url"]
+        stored = json.loads(kv.put.call_args[0][1])
+        assert stored["share_page"] == "inspect"
 
 
 class TestTunnelRevocationBlocksAccess:
@@ -304,7 +311,7 @@ class TestTunnelRevocationBlocksAccess:
 
 
 class TestTunnelTokenTransportEnforcement:
-    """F1: tunnel_token_transport config gates which transport(s) are accepted."""
+    """F1: tunnel_token_transport is legacy; tunnel auth is cookie-only."""
 
     @pytest.mark.asyncio
     async def test_cookie_only_mode_rejects_query_token(self) -> None:
@@ -351,7 +358,7 @@ class TestTunnelTokenTransportEnforcement:
         assert result == ("session", "viewer")
 
     @pytest.mark.asyncio
-    async def test_query_only_mode_rejects_cookie_token(self) -> None:
+    async def test_legacy_query_mode_still_accepts_cookie_token(self) -> None:
         from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
 
         session = {
@@ -372,4 +379,4 @@ class TestTunnelTokenTransportEnforcement:
         config = SimpleNamespace(tunnel_token_transport="query", tunnel_ip_binding=False)
 
         result = await resolve_share_context(request, env, "tunnel-abc", config)
-        assert result is None
+        assert result == ("session", "viewer")

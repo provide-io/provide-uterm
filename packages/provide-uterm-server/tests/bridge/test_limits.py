@@ -10,9 +10,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.ratelimit import TokenBucket
 from provide.uterm.client import connect_test_ws
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.ratelimit import TokenBucket
 
 # ---------------------------------------------------------------------------
 # TokenBucket unit tests
@@ -292,7 +292,7 @@ class TestBrowserControlRateLimit:
             browser_control_rate_limit_per_sec=2,
         )
 
-        caplog.set_level("WARNING", logger="provide.uterm.bridge.routes.websockets")
+        caplog.set_level("WARNING", logger="provide.uterm.server.bridge.routes.websockets")
         with TestClient(app) as client, connect_test_ws(client, "/ws/worker/w1/term") as worker:
             _read_worker_snapshot_req(worker)
             resp = client.post("/worker/w1/input_mode", json={"input_mode": "open"})

@@ -26,7 +26,7 @@ describe("apiJson", () => {
     });
   });
 
-  it("appends the share token to API paths when configured", async () => {
+  it("does not append share tokens to API paths", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ result: "ok" }),
@@ -36,7 +36,7 @@ describe("apiJson", () => {
 
     await apiJson<{ result: string }>("/api/test");
 
-    expect(mockFetch).toHaveBeenCalledWith("/api/test?token=share-abc", {
+    expect(mockFetch).toHaveBeenCalledWith("/api/test", {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });

@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from httpx import ASGITransport
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 from provide.uterm.client.hijack import HijackClient
 

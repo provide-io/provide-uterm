@@ -284,7 +284,7 @@ class TestQuickConnectConflict:
 class TestMaxSessions:
     def test_max_sessions_blocks_create(self) -> None:
         """SessionRegistry enforces max_sessions limit."""
-        from provide.uterm.bridge.hub.core import TermHub
+        from provide.uterm.server.bridge.hub.core import TermHub
         from provide.uterm.server.models import RecordingConfig
         from provide.uterm.server.registry import SessionRegistry
 
@@ -303,7 +303,7 @@ class TestMaxSessions:
 
     def test_max_sessions_none_is_unbounded(self) -> None:
         """max_sessions=None (default) does not limit session creation."""
-        from provide.uterm.bridge.hub.core import TermHub
+        from provide.uterm.server.bridge.hub.core import TermHub
         from provide.uterm.server.models import RecordingConfig
         from provide.uterm.server.registry import SessionRegistry
 

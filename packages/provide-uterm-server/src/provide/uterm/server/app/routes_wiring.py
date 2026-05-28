@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.resources
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs
 
 from fastapi import Depends
 from fastapi import Request as FastAPIRequest
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
     from starlette.requests import HTTPConnection
 
-    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub import TermHub
     from provide.uterm.server.models import ServerConfig
 
 
@@ -40,7 +41,7 @@ def install_routers(
     """Mount the hub, health, api, profiles, approvals, and page routers."""
     # Tunnel routes are passed as extra registrars to avoid a hard import
     # dependency from bridge → tunnel (enables future package extraction).
-    from provide.uterm.bridge.fanout._routes import register_fanout_routes
+    from provide.uterm.server.bridge.fanout._routes import register_fanout_routes
     from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes
 
     app.include_router(
@@ -59,17 +60,46 @@ def install_routers(
 
     @app.get("/s/{session_id}")
     async def short_share_url(request: FastAPIRequest, session_id: str) -> object:
-        """Short share URL: /s/{id}?token=... → redirect to /app/{inspect|session}/{id}?token=..."""
+        """Short share URL: /s/{id}?invite=... → set cookie and redirect cleanly."""
+        from fastapi import HTTPException
         from starlette.responses import RedirectResponse
 
+        from provide.uterm.server.tunnel_invites import (
+            consume_tunnel_invite,
+            tunnel_invite_matches_token_hash,
+        )
+
         tunnel_tokens: dict[str, dict[str, object]] = request.app.state.uterm_tunnel_tokens
+        tunnel_invites: dict[str, dict[str, object]] = request.app.state.uterm_tunnel_invites
         entry = tunnel_tokens.get(session_id, {})
-        page = str(entry.get("share_page", "session"))
-        qs = str(request.url.query)
+        query = parse_qs(str(request.url.query))
+        invite_value = (query.get("invite", [None]) or [None])[0]
+        invite = None
+        if invite_value:
+            invite = consume_tunnel_invite(tunnel_invites, invite_value, session_id=session_id)
+            if invite is None:
+                raise HTTPException(status_code=403, detail="invalid or expired invite")
+            token_hash_key = "control_token_hash" if invite.role == "operator" else "share_token_hash"
+            if not tunnel_invite_matches_token_hash(invite, str(entry.get(token_hash_key, ""))):
+                raise HTTPException(status_code=403, detail="stale invite")
+
+        page = (
+            "operator" if invite is not None and invite.role == "operator" else str(entry.get("share_page", "session"))
+        )
         target = f"{config.ui.app_path}/{page}/{session_id}"
-        if qs:
-            target += f"?{qs}"
-        return RedirectResponse(url=target, status_code=302)
+        response = RedirectResponse(url=target, status_code=302)
+        if invite is not None:
+            secure = (
+                request.url.scheme == "https" or "https" in str(request.headers.get("x-forwarded-proto", "")).lower()
+            )
+            response.set_cookie(
+                key=f"uterm_tunnel_{session_id}",
+                value=invite.tunnel_token,
+                secure=secure if config.tunnel.cookie_secure else False,
+                httponly=True,
+                samesite=config.tunnel.cookie_samesite,
+            )
+        return response
 
 
 def mount_frontend_assets(app: FastAPI, *, config: ServerConfig) -> None:

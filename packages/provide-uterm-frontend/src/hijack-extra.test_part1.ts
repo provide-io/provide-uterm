@@ -912,30 +912,27 @@ describe("hijack.ts branch coverage - rest heartbeat", () => {
   });
 });
 
-// Regression tests for Finding #18: wss + ?token= surfaces auth in proxy logs.
-// We don't strip the token (HttpOnly cookies aren't readable from JS so we
-// can't reliably detect cookie-based auth), but we emit a console warning so
-// operators can audit production deploys.
-describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
-  it("warns on the console when an authToken is appended to a wss:// URL", () => {
+// Regression tests for cookie-only WebSocket auth.
+describe("hijack-websocket.ts cookie-only auth", () => {
+  it("does not append authToken to a wss:// URL", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
-    expect(getWs().url).toMatch(/^wss:\/\/.*token=shh-secret/);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("?token=…"));
+    expect(getWs().url).toBe("wss://secure.example.com/ws/browser/w/term");
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
     warn.mockRestore();
   });
 
-  it("does NOT warn over ws:// (plain http context)", () => {
+  it("does not append authToken to a ws:// URL", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
-    expect(getWs().url).toMatch(/^ws:\/\/.*token=shh-secret/);
+    expect(getWs().url).toBe("ws://localhost/ws/browser/w/term");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
     warn.mockRestore();
@@ -953,7 +950,7 @@ describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
     warn.mockRestore();
   });
 
-  it("only warns once per state even if the URL is resolved multiple times (reconnects)", () => {
+  it("never warns on reconnect because no query token is appended", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
@@ -965,7 +962,8 @@ describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
     const tokenWarnings = warn.mock.calls.filter((c) =>
       String(c[0] ?? "").includes("?token=…"),
     );
-    expect(tokenWarnings.length).toBe(1);
+    expect(tokenWarnings.length).toBe(0);
+    expect(getWs().url).not.toContain("token=");
     widget.disconnect();
     warn.mockRestore();
   });
@@ -1445,30 +1443,27 @@ describe("hijack.ts branch coverage - rest heartbeat", () => {
   });
 });
 
-// Regression tests for Finding #18: wss + ?token= surfaces auth in proxy logs.
-// We don't strip the token (HttpOnly cookies aren't readable from JS so we
-// can't reliably detect cookie-based auth), but we emit a console warning so
-// operators can audit production deploys.
-describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
-  it("warns on the console when an authToken is appended to a wss:// URL", () => {
+// Regression tests for cookie-only WebSocket auth.
+describe("hijack-websocket.ts cookie-only auth", () => {
+  it("does not append authToken to a wss:// URL", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
-    expect(getWs().url).toMatch(/^wss:\/\/.*token=shh-secret/);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("?token=…"));
+    expect(getWs().url).toBe("wss://secure.example.com/ws/browser/w/term");
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
     warn.mockRestore();
   });
 
-  it("does NOT warn over ws:// (plain http context)", () => {
+  it("does not append authToken to a ws:// URL", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
-    expect(getWs().url).toMatch(/^ws:\/\/.*token=shh-secret/);
+    expect(getWs().url).toBe("ws://localhost/ws/browser/w/term");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
     warn.mockRestore();
@@ -1486,7 +1481,7 @@ describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
     warn.mockRestore();
   });
 
-  it("only warns once per state even if the URL is resolved multiple times (reconnects)", () => {
+  it("never warns on reconnect because no query token is appended", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
@@ -1498,7 +1493,8 @@ describe("hijack-websocket.ts wss+token audit warning (Finding #18)", () => {
     const tokenWarnings = warn.mock.calls.filter((c) =>
       String(c[0] ?? "").includes("?token=…"),
     );
-    expect(tokenWarnings.length).toBe(1);
+    expect(tokenWarnings.length).toBe(0);
+    expect(getWs().url).not.toContain("token=");
     widget.disconnect();
     warn.mockRestore();
   });

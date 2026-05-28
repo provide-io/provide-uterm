@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.bridge.hub.core import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub.core import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 @pytest.mark.asyncio

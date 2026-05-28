@@ -36,8 +36,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from provide.uterm.annotation import PatternDetector
-    from provide.uterm.bridge.hub import TermHub
     from provide.uterm.recording import RecordingStore
+    from provide.uterm.server.bridge.hub import TermHub
 
 
 class SessionValidationError(ValueError):

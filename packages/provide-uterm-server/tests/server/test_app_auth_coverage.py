@@ -80,16 +80,16 @@ class TestAuthDependencyBranches:
             await dep(conn)
         assert conn.state.uterm_principal.subject_id == "share:sess1:viewer"
 
-    async def test_share_control_token_sets_operator_principal(self) -> None:
-        app, _ = _make_app(tunnel=TunnelConfig(token_transport="both"))
+    async def test_share_control_cookie_sets_operator_principal(self) -> None:
+        app, _ = _make_app(tunnel=TunnelConfig(token_transport="cookie"))
         app.state.uterm_tunnel_tokens["sess2"] = {"share_token_hash": "x", "control_token_hash": "y"}
         dep = _auth_dep(app)
         conn = HTTPConnection(
             {
                 "type": "http",
                 "path": "/api/sessions/sess2",
-                "headers": [],
-                "query_string": b"token=tok",
+                "headers": [(b"cookie", b"uterm_tunnel_sess2=tok")],
+                "query_string": b"",
                 "app": app,
                 "client": ("testclient", 1234),
                 "state": {},
@@ -121,6 +121,61 @@ class TestAuthDependencyBranches:
         with patch("provide.uterm.tunnel.token_hash.verify_token", return_value=True):
             await dep(conn)
         assert conn.state.uterm_principal.subject_id == "worker"
+
+    async def test_share_cookie_ip_binding_mismatch_falls_back_to_http_auth(self) -> None:
+        from provide.uterm.tunnel.token_hash import hash_token
+
+        app, _ = _make_app(tunnel=TunnelConfig(ip_binding=True, token_transport="cookie"))
+        app.state.uterm_tunnel_tokens["sess-ipbad"] = {
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("control"),
+            "expires_at": time.time() + 3600,
+            "issued_ip": "10.10.10.10",
+        }
+        dep = _auth_dep(app)
+        conn = HTTPConnection(
+            {
+                "type": "http",
+                "path": "/api/sessions/sess-ipbad",
+                "headers": [(b"cookie", b"uterm_tunnel_sess-ipbad=tok")],
+                "query_string": b"",
+                "app": app,
+                "client": ("testclient", 1234),
+                "state": {},
+            }
+        )
+        with patch(
+            "provide.uterm.server.app.factory_impl.resolve_http_principal",
+            AsyncMock(return_value=Principal(subject_id="fallback", roles=frozenset({"viewer"}))),
+        ):
+            await dep(conn)
+        assert conn.state.uterm_principal.subject_id == "fallback"
+
+    async def test_share_cookie_ip_binding_without_issued_ip_allows_token_validation(self) -> None:
+        from provide.uterm.tunnel.token_hash import hash_token
+
+        app, _ = _make_app(tunnel=TunnelConfig(ip_binding=True, token_transport="cookie"))
+        app.state.uterm_tunnel_tokens["sess-ipfree"] = {
+            "share_token_hash": hash_token("tok"),
+            "control_token_hash": hash_token("control"),
+            "expires_at": time.time() + 3600,
+        }
+        dep = _auth_dep(app)
+        conn = HTTPConnection(
+            {
+                "type": "http",
+                "path": "/api/sessions/sess-ipfree",
+                "headers": [(b"cookie", b"uterm_tunnel_sess-ipfree=tok")],
+                "query_string": b"",
+                "app": app,
+                "client": ("testclient", 1234),
+                "state": {},
+            }
+        )
+
+        await dep(conn)
+
+        assert conn.state.uterm_principal.subject_id == "share:sess-ipfree:viewer"
 
     async def test_tunnel_ws_worker_principal_falls_back_to_resolver(self) -> None:
         app, _ = _make_app()

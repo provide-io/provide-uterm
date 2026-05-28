@@ -8,7 +8,7 @@ import pytest
 import respx
 from httpx import Response
 
-from provide.uterm.bridge.hub.ext import (
+from provide.uterm.server.bridge.hub.ext import (
     NoOpPolicyGate,
     PolicyContext,
     PolicyDecision,

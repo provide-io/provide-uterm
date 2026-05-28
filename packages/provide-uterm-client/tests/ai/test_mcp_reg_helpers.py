@@ -18,8 +18,8 @@ import pytest
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 from provide.uterm.ai.server import create_mcp_app
 

@@ -4,7 +4,7 @@
 #
 """Per-path capability gating for /worker/{id}/... REST routes.
 
-The hub's REST router (``provide.uterm.bridge.hub.rest``) intentionally
+The hub's REST router (``provide.uterm.server.bridge.hub.rest``) intentionally
 carries no built-in authz; the protecting layer is this module.  Without it,
 any authenticated principal — including a viewer-role share token — could
 ``POST /worker/{id}/hijack/acquire`` and seize control of a session.

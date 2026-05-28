@@ -26,7 +26,7 @@ def test_app_initializes_webhook_authz() -> None:
 
 
 def test_app_initializes_webhook_policy() -> None:
-    from provide.uterm.bridge.hub.ext import WebhookPolicyGate
+    from provide.uterm.server.bridge.hub.ext import WebhookPolicyGate
 
     config = default_server_config()
     config.governance.policy_webhook_url = "https://fleet.example.com/policy"

@@ -174,25 +174,25 @@ class TestSessionLoggerBranches:
 
 class TestExtractPromptId:
     def test_empty_string_prompt_id_returns_none(self) -> None:
-        from provide.uterm.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": ""}}
         assert extract_prompt_id(snapshot) is None
 
     def test_non_string_prompt_id_returns_none(self) -> None:
-        from provide.uterm.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": 42}}
         assert extract_prompt_id(snapshot) is None
 
     def test_none_prompt_id_returns_none(self) -> None:
-        from provide.uterm.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": None}}
         assert extract_prompt_id(snapshot) is None
 
     def test_valid_prompt_id_returned(self) -> None:
-        from provide.uterm.bridge.rest_helpers import extract_prompt_id
+        from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 
         snapshot = {"prompt_detected": {"prompt_id": "menu_main"}}
         assert extract_prompt_id(snapshot) == "menu_main"
@@ -206,8 +206,8 @@ class TestExtractPromptId:
 class TestWaitForGuardNoNewSnapshot:
     async def test_snap_ts_not_advanced_triggers_request_snapshot(self) -> None:
         """Line 106->109: snap_ts <= last_snap_ts → request_snapshot called again."""
-        from provide.uterm.bridge.hub import TermHub
-        from provide.uterm.bridge.models import WorkerTermState
+        from provide.uterm.server.bridge.hub import TermHub
+        from provide.uterm.server.bridge.models import WorkerTermState
 
         hub = TermHub()
 

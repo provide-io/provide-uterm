@@ -325,17 +325,15 @@ def test_extract_token_from_bearer_header() -> None:
     assert rt._extract_token(req) == "my-token"
 
 
-def test_extract_token_query_param_disabled() -> None:
-    """Lines 124-125: allow_query_token=False → None even with URL param."""
+def test_extract_token_query_param_ignored() -> None:
+    """Bearer query params are not an auth transport."""
     rt = _make_runtime()
-    rt.config.jwt.allow_query_token = False
     req = _MockRequest(url="https://x/path?token=qtoken")
     assert rt._extract_token(req) is None
 
 
-def test_extract_token_from_query_param() -> None:
-    """Lines 126-130: token in ?token= when allow_query_token=True."""
+def test_extract_token_access_token_query_param_ignored() -> None:
+    """OAuth-style access_token query params are not an auth transport."""
     rt = _make_runtime()
-    rt.config.jwt.allow_query_token = True
-    req = _MockRequest(url="https://x/path?token=qtoken")
-    assert rt._extract_token(req) == "qtoken"
+    req = _MockRequest(url="https://x/path?access_token=qtoken")
+    assert rt._extract_token(req) is None

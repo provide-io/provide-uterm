@@ -16,8 +16,8 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, initialize, rule
 
-from provide.uterm.bridge.hub import TermHub
 from provide.uterm.client import connect_test_ws
+from provide.uterm.server.bridge.hub import TermHub
 
 # ---------------------------------------------------------------------------
 # Hypothesis strategies

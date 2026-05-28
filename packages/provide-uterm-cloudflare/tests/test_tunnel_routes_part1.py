@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -170,9 +171,11 @@ class TestTunnelApi:
         body = json.loads(resp.body)
         assert body["tunnel_id"].startswith("tunnel-")
         assert "worker_token" in body
-        assert "/app/session/" in body["share_url"]
-        assert "token=" in body["share_url"]
-        assert "token=" in body["control_url"]
+        assert "/s/" in body["share_url"]
+        assert "invite=" in body["share_url"]
+        assert "token=" not in body["share_url"]
+        assert "invite=" in body["control_url"]
+        assert "token=" not in body["control_url"]
         kv.put.assert_called_once()
 
     @pytest.mark.asyncio
@@ -196,7 +199,10 @@ class TestTunnelApi:
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
-        request.url = "https://example.com/app/session/tunnel-abc?token=abc"
+        request.url = "https://example.com/app/session/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: "uterm_tunnel_tunnel-abc=abc" if k in ("cookie", "Cookie") else d
+        )
 
         context = await resolve_share_context(request, env, "tunnel-abc")
         assert context == ("session", "viewer")
@@ -212,7 +218,10 @@ class TestTunnelApi:
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
-        request.url = "https://example.com/app/operator/tunnel-abc?token=def"
+        request.url = "https://example.com/app/operator/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: "uterm_tunnel_tunnel-abc=def" if k in ("cookie", "Cookie") else d
+        )
 
         context = await resolve_share_context(request, env, "tunnel-abc")
         assert context == ("operator", "operator")
@@ -339,8 +348,10 @@ class TestTunnelRotateTokens:
         assert resp.status == 200
         assert body["tunnel_id"] == "tunnel-abc"
         assert body["worker_token"] != "old_w"
-        assert "/app/session/tunnel-abc?token=" in body["share_url"]
-        assert "/app/operator/tunnel-abc?token=" in body["control_url"]
+        assert "/s/tunnel-abc?invite=" in body["share_url"]
+        assert "/s/tunnel-abc?invite=" in body["control_url"]
+        assert "token=" not in body["share_url"]
+        assert "token=" not in body["control_url"]
         assert "expires_at" in body
         assert body["ws_endpoint"] == "/tunnel/tunnel-abc"
         kv.put.assert_called_once()

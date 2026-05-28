@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.models import SessionDefinition
+from provide.uterm.tunnel.token_hash import hash_token
 
 
 def _make_client() -> TestClient:
@@ -32,9 +33,10 @@ def _make_client() -> TestClient:
     app = create_server_app(cfg)
     app.state.uterm_tunnel_tokens = {
         "share-sess": {
-            "share_token": "share-token-123",
-            "control_token": "control-token-123",
-            "worker_token": "worker-token-123",
+            "share_token_hash": hash_token("share-token-123"),
+            "control_token_hash": hash_token("control-token-123"),
+            "worker_token_hash": hash_token("worker-token-123"),
+            "expires_at": 9_999_999_999.0,
         }
     }
     return TestClient(app)
@@ -42,7 +44,8 @@ def _make_client() -> TestClient:
 
 def test_share_token_is_not_exposed_in_html_bootstrap() -> None:
     with _make_client() as client:
-        resp = client.get("/app/session/share-sess?token=share-token-123")
+        client.cookies.set("uterm_tunnel_share-sess", "share-token-123")
+        resp = client.get("/app/session/share-sess")
 
     assert resp.status_code == 200
     assert "share-token-123" not in resp.text

@@ -42,8 +42,12 @@ class TestTunnelIpBinding:
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
-        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
-        request.headers = SimpleNamespace(get=lambda k, d=None: "1.2.3.4" if "Connecting-IP" in k else d)
+        request.url = "https://example.com/app/session/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: (
+                "1.2.3.4" if "Connecting-IP" in k else "uterm_tunnel_tunnel-abc=tok" if k in ("cookie", "Cookie") else d
+            )
+        )
         config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
 
         result = await resolve_share_context(request, env, "tunnel-abc", config)
@@ -64,8 +68,12 @@ class TestTunnelIpBinding:
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
-        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
-        request.headers = SimpleNamespace(get=lambda k, d=None: "9.9.9.9" if "Connecting-IP" in k else d)
+        request.url = "https://example.com/app/session/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: (
+                "9.9.9.9" if "Connecting-IP" in k else "uterm_tunnel_tunnel-abc=tok" if k in ("cookie", "Cookie") else d
+            )
+        )
         config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
 
         result = await resolve_share_context(request, env, "tunnel-abc", config)
@@ -87,8 +95,12 @@ class TestTunnelIpBinding:
         env = MagicMock()
         env.SESSION_REGISTRY = kv
         request = MagicMock()
-        request.url = "https://example.com/app/session/tunnel-abc?token=tok"
-        request.headers = SimpleNamespace(get=lambda k, d=None: "9.9.9.9" if "Connecting-IP" in k else d)
+        request.url = "https://example.com/app/session/tunnel-abc"
+        request.headers = SimpleNamespace(
+            get=lambda k, d=None: (
+                "9.9.9.9" if "Connecting-IP" in k else "uterm_tunnel_tunnel-abc=tok" if k in ("cookie", "Cookie") else d
+            )
+        )
         config = SimpleNamespace(tunnel_token_transport="both", tunnel_ip_binding=True)
 
         result = await resolve_share_context(request, env, "tunnel-abc", config)

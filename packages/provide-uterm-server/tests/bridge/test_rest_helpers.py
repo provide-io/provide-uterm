@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from provide.uterm.bridge.rest_helpers import (
+from provide.uterm.server.bridge.rest_helpers import (
     MAX_EXPECT_REGEX_LEN,
     PromptRegexError,
     build_hijack_events_response,

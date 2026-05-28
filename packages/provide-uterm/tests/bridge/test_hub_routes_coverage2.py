@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 
 
 def _make_app() -> tuple[TermHub, FastAPI]:
@@ -31,7 +31,7 @@ class TestDisconnectWorkerCloseError:
     """hub:382-383 — ws.close() raises an exception inside _disconnect_worker."""
 
     async def test_ws_close_error_handled(self) -> None:
-        from provide.uterm.bridge.models import WorkerTermState
+        from provide.uterm.server.bridge.models import WorkerTermState
 
         hub, app = _make_app()
         mock_ws = AsyncMock()
@@ -56,7 +56,7 @@ class TestDisconnectWorkerWasHijacked:
     """hub:389-390 — was_hijacked=True fires _notify_hijack_changed + broadcast."""
 
     async def test_disconnect_with_active_hijack_notifies(self) -> None:
-        from provide.uterm.bridge.models import HijackSession, WorkerTermState
+        from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
         hijack_calls: list[dict[str, Any]] = []
 
@@ -101,7 +101,7 @@ class TestRestSendToctouRecheck:
     async def test_send_returns_404_when_session_expires_during_guard(self) -> None:
         from unittest.mock import patch
 
-        from provide.uterm.bridge.models import HijackSession, WorkerTermState
+        from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
         hub, app = _make_app()
         hid = "aabb0011-2233-4455-6677-000000000001"
@@ -144,7 +144,7 @@ class TestRestStepToctouRecheck:
     async def test_step_returns_404_when_session_expires_between_checks(self) -> None:
         from unittest.mock import patch
 
-        from provide.uterm.bridge.models import HijackSession, WorkerTermState
+        from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
         hub, app = _make_app()
         hid = "aabb0011-2233-4455-6677-000000000002"

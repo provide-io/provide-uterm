@@ -68,12 +68,11 @@ def _cmd_watch(args: argparse.Namespace) -> None:  # pragma: no cover — TUI en
 
     ws_base = server.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
     ws_url = f"{ws_base}/ws/browser/{tunnel_id}/term"
-    if token:
-        ws_url += f"?token={token}"
+    headers = {"Authorization": f"Bearer {token}"} if token else None
 
     from provide.uterm.cli._watch_app import WatchApp
 
-    app = WatchApp(ws_url=ws_url, tunnel_id=tunnel_id, initial_layout=layout)
+    app = WatchApp(ws_url=ws_url, tunnel_id=tunnel_id, initial_layout=layout, headers=headers)
     app.run()
 
 

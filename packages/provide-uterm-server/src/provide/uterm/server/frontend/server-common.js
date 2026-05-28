@@ -2,13 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-/**
- * Module-level share token for tunnel session authentication.
- * Set from bootstrap JSON on page load; null when using cookie-based auth.
- * SECURITY: ephemeral credential — do not log or persist to storage.
- */
+/** Legacy no-op share-token slot. Tunnel auth is cookie-only. */
 let _shareToken = null;
-/** Store the share token for subsequent API/WS calls. Pass null for cookie mode. */
+/** Store the share token for compatibility with older page bootstraps. */
 export function setShareToken(token) {
     _shareToken = typeof token === "string" && token.length > 0 ? token : null;
 }
@@ -16,12 +12,9 @@ export function setShareToken(token) {
 export function getShareToken() {
     return _shareToken;
 }
-/** Append the share token as a query parameter if set (query transport mode). No-op in cookie mode. */
+/** Return *path* unchanged; tunnel credentials are carried by HttpOnly cookies. */
 export function withShareToken(path) {
-    if (_shareToken === null)
-        return path;
-    const separator = path.includes("?") ? "&" : "?";
-    return `${path}${separator}token=${encodeURIComponent(_shareToken)}`;
+    return path;
 }
 export async function apiJson(path, method = "GET", body = null) {
     const init = {

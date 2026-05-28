@@ -15,12 +15,12 @@ service.
 
 from __future__ import annotations
 
-from provide.uterm.bridge.hub.limiter import (
+from provide.uterm.server.bridge.hub.limiter import (
     REST_CLIENT_CACHE_MAX,
     REST_CLIENT_EVICT_COUNT,
     RateLimiter,
 )
-from provide.uterm.bridge.ratelimit import TokenBucket
+from provide.uterm.server.bridge.ratelimit import TokenBucket
 
 
 def _drain(bucket: TokenBucket) -> None:

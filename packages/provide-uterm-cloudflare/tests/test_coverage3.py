@@ -252,21 +252,18 @@ def test_extract_token_headers_get_raises_returns_empty() -> None:
         headers = _BadHeaders()
         url = "http://localhost/"
 
-    # With no bearer header and query token disabled:
-    rt.config.jwt.allow_query_token = False
     result = rt._extract_token(_BadRequest())
     assert result is None
 
 
 # ---------------------------------------------------------------------------
-# do/session_runtime.py — _extract_token: URL parse fails (lines 118-119)
+# do/session_runtime.py — _extract_token: URL is ignored
 # ---------------------------------------------------------------------------
 
 
-def test_extract_token_url_parse_raises_returns_none() -> None:
-    """If URL parsing for query token raises, _extract_token returns None."""
+def test_extract_token_url_parse_not_touched() -> None:
+    """Query strings are not parsed, so broken URL objects are irrelevant."""
     rt = _make_runtime(mode="dev")
-    rt.config.jwt.allow_query_token = True
 
     class _BadUrl:
         def __str__(self):

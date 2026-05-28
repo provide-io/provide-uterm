@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.config import config_from_mapping
 from provide.uterm.server.models import RecordingConfig
 from provide.uterm.server.registry import SessionRegistry

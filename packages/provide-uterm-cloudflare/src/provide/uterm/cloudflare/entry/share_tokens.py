@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from http.cookies import SimpleCookie
 from typing import TYPE_CHECKING
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.entry.fallback_stubs import Response
@@ -13,16 +13,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _share_token_cookie_header(request: object, tunnel_id: str) -> str | None:
-    """Return an HttpOnly cookie header for a valid share token, if present."""
-    token: str | None = None
-    try:
-        query = parse_qs(urlparse(str(getattr(request, "url", ""))).query)
-        candidates: list[str | None] = [*query.get("token", []), *query.get("access_token", [])]
-        token = (candidates or [None])[0]
-    except Exception as exc:
-        logger.debug("share_token_query_parse_failed: %s", exc)
-        token = None
+def _share_token_cookie_header(request: object, tunnel_id: str, token: str | None = None) -> str | None:
+    """Return an HttpOnly cookie header for a share token.
+
+    The only query-string bootstrap accepted by tunnel sharing is the
+    one-time ``?invite=`` flow, which passes the consumed token explicitly.
+    Direct ``?token=`` and ``?access_token=`` URLs are intentionally ignored.
+    """
     if token is None:
         try:
             cookie_header = str(
@@ -37,7 +34,11 @@ def _share_token_cookie_header(request: object, tunnel_id: str) -> str | None:
             token = None
     if token is None:
         return None
-    secure = str(urlparse(str(getattr(request, "url", ""))).scheme).lower() == "https"
+    try:
+        secure = str(urlparse(str(getattr(request, "url", ""))).scheme).lower() == "https"
+    except Exception as exc:
+        logger.debug("share_token_cookie_secure_parse_failed: %s", exc)
+        secure = False
     parts = [f"uterm_tunnel_{tunnel_id}={token}", "Path=/", "HttpOnly", "SameSite=Lax"]
     if secure:
         parts.append("Secure")
@@ -45,7 +46,7 @@ def _share_token_cookie_header(request: object, tunnel_id: str) -> str | None:
 
 
 def _attach_share_token_cookie(response: Response, request: object, tunnel_id: str) -> Response:
-    """Stamp the share token as an HttpOnly cookie so it stays out of HTML."""
+    """Refresh an existing share-token cookie without reading URL tokens."""
     cookie = _share_token_cookie_header(request, tunnel_id)
     if cookie is not None:
         headers = dict(response.headers or {})

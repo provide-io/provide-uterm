@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import ssl
+from ipaddress import ip_address
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,16 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # SshWsGateway
 # ---------------------------------------------------------------------------
+
+
+def _is_loopback_bind_host(host: str) -> bool:
+    normalized = str(host or "").strip().strip("[]").lower()
+    if normalized == "localhost":
+        return True
+    try:
+        return ip_address(normalized).is_loopback
+    except ValueError:
+        return False
 
 
 class SshWsGateway:
@@ -80,6 +91,7 @@ class SshWsGateway:
         token_file: Path | None = None,
         key_resolver: SSHKeyResolver | None = None,
         require_resolver: bool = False,
+        allow_unauthenticated: bool = False,
         ws_ssl: _ssl.SSLContext | bool | None = None,
         upstream_proxy_secret: str | bytes | None = None,
         client_cert: Path | str | None = None,
@@ -99,6 +111,8 @@ class SshWsGateway:
             require_resolver: When True, pubkeys the resolver doesn't know
                 are rejected outright (no password fallback). Defaults to
                 False — unknown keys fall through to password auth.
+            allow_unauthenticated: Explicit opt-in for binding an SSH listener
+                without required key authentication to a non-loopback address.
             ws_ssl: Optional ``ssl.SSLContext`` (or ``False`` to disable
                 verification) forwarded to ``websockets.connect`` when the
                 upstream URL is ``wss://``. For production ``wss://`` with
@@ -118,7 +132,9 @@ class SshWsGateway:
         self._token_file = token_file
         self._key_resolver = key_resolver
         self._require_resolver = require_resolver
+        self._allow_unauthenticated = allow_unauthenticated
         self._upstream_proxy_secret = upstream_proxy_secret
+        self._ws_ssl: ssl.SSLContext | bool | None
 
         if client_cert and client_key:
             if ws_ssl is not None and not isinstance(ws_ssl, bool):
@@ -130,7 +146,7 @@ class SshWsGateway:
             self._ws_ssl = ws_ssl
 
     async def start(
-        self, host: str = TerminalDefaults.BIND_ALL, port: int = TerminalDefaults.GATEWAY_SSH_PORT
+        self, host: str = TerminalDefaults.TELNET_HOST, port: int = TerminalDefaults.GATEWAY_SSH_PORT
     ) -> object:  # nosec B104
         """Start the SSH server and return the server object.
 
@@ -143,6 +159,13 @@ class SshWsGateway:
             to block until shutdown.
         """
         import asyncssh
+
+        unauthenticated = not (self._key_resolver is not None and self._require_resolver)
+        if unauthenticated and not self._allow_unauthenticated and not _is_loopback_bind_host(host):
+            raise RuntimeError(
+                "refusing to start an unauthenticated SSH gateway on a non-loopback bind address; "
+                "set allow_unauthenticated=True only when this listener is protected by another access-control layer"
+            )
 
         if self._server_key:
             key_path = Path(self._server_key)

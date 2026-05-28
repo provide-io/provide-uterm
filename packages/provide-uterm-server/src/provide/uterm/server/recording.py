@@ -46,7 +46,8 @@ class WebhookRecordingStore(RecordingStore):
         resp = await self._get(session_id, "entries", params=params)
         return resp.get("entries", []) if isinstance(resp, dict) else []
 
-    async def get_path(self, _session_id: str) -> Path | None:
+    async def get_path(self, session_id: str) -> Path | None:
+        _ = session_id
         return None  # No local path for webhook store
 
     async def _post(self, session_id: str, action: str, payload: dict[str, Any]) -> None:

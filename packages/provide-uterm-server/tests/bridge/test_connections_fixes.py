@@ -20,9 +20,9 @@ from collections import deque
 from typing import Any
 from unittest.mock import MagicMock
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
-from provide.uterm.bridge.ratelimit import TokenBucket
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.ratelimit import TokenBucket
 
 
 def _make_hub(**kwargs: Any) -> TermHub:

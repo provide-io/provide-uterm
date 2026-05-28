@@ -167,11 +167,11 @@ class TestWebhookAuthzIsAdmin:
     async def test_is_admin_consults_webhook(self) -> None:
         from unittest.mock import AsyncMock, patch
 
-        from provide.uterm.bridge.identity import Principal
         from provide.uterm.server.authorization import (
             AuthorizationService,
             WebhookAuthorizationProvider,
         )
+        from provide.uterm.server.bridge.identity import Principal
 
         provider = WebhookAuthorizationProvider("https://example.com/authz")
         service = AuthorizationService(provider)

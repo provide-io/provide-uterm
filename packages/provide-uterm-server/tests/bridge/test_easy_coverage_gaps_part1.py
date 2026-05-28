@@ -21,7 +21,7 @@ import pytest
 
 
 async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
-    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub import TermHub
 
     hub = TermHub()
     with pytest.raises(ValueError, match="invalid input mode"):
@@ -36,13 +36,13 @@ async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
 async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogCaptureFixture) -> None:
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
     hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
-    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.hub.connection")
+    caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
     assert any("worker_hello_legacy_protocol" in r.getMessage() for r in caplog.records), (
         "set_worker_hello with protocol_version<1 must log worker_hello_legacy_protocol warning"
@@ -55,7 +55,7 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
 
 
 def test_command_splitter_empty_returns_empty_list() -> None:
-    from provide.uterm.bridge.hub.semantics import CommandSplitter
+    from provide.uterm.server.bridge.hub.semantics import CommandSplitter
 
     assert CommandSplitter().split("") == []
 

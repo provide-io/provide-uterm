@@ -78,7 +78,7 @@ def _fastapi_server():
 
     import uvicorn
     from fastapi import FastAPI
-    from provide.uterm.bridge.hub.core import TermHub
+    from provide.uterm.server.bridge.hub.core import TermHub
 
     logging.getLogger("provide").setLevel(logging.CRITICAL)
 

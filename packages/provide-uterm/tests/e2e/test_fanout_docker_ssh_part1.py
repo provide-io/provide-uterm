@@ -30,8 +30,8 @@ from typing import Any
 import httpx
 import pytest
 import uvicorn
-from provide.uterm.bridge.hub import EventBus
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.bridge.hub import EventBus
 
 # ---------------------------------------------------------------------------
 # Constants

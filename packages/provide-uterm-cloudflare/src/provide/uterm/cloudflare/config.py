@@ -13,7 +13,6 @@ class JwtConfig:
     public_key_pem: str | None = None
     jwks_url: str | None = None
     clock_skew_seconds: int = 30
-    allow_query_token: bool = False
     # Parity with provide-uterm AuthConfig: configurable claim keys so that
     # IdP-specific tokens (Auth0, Okta, Azure AD) work without token transforms.
     jwt_roles_claim: str = "roles"
@@ -54,7 +53,7 @@ class CloudflareConfig:
     upstream: UpstreamConfig = field(default_factory=UpstreamConfig)
     worker_bearer_token: str | None = None
     tunnel_token_ttl_s: int = 3600
-    tunnel_token_transport: str = "both"  # noqa: S105 — "query", "cookie", or "both"
+    tunnel_token_transport: str = "cookie"  # noqa: S105 — legacy env knob; tunnel auth is cookie-only
     tunnel_ip_binding: bool = False
     security_mode: str = "strict"
     security_csp: str | None = None
@@ -137,7 +136,6 @@ class CloudflareConfig:
             public_key_pem=_get("JWT_PUBLIC_KEY_PEM") or None,
             jwks_url=_get("JWT_JWKS_URL") or None,
             clock_skew_seconds=max(0, int(_get("JWT_CLOCK_SKEW_SECONDS", "30"))),
-            allow_query_token=_get_bool("AUTH_ALLOW_QUERY_TOKEN", default=not is_production),
             jwt_roles_claim=_get("JWT_ROLES_CLAIM", "roles") or "roles",
             jwt_scopes_claim=_get("JWT_SCOPES_CLAIM", "scope") or "scope",
             jwt_default_role=_get("JWT_DEFAULT_ROLE", "viewer") or "viewer",
@@ -158,7 +156,7 @@ class CloudflareConfig:
             upstream=upstream,
             worker_bearer_token=worker_bearer_token,
             tunnel_token_ttl_s=max(60, int(_get("TUNNEL_TOKEN_TTL_S", "3600"))),
-            tunnel_token_transport=_get("TUNNEL_TOKEN_TRANSPORT", "both") or "both",
+            tunnel_token_transport=_get("TUNNEL_TOKEN_TRANSPORT", "cookie") or "cookie",
             tunnel_ip_binding=_get_bool("TUNNEL_IP_BINDING", default=False),
             security_mode=security_mode,
             security_csp=_get_optional("SECURITY_CSP"),

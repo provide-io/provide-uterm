@@ -31,6 +31,7 @@ from provide.uterm.server.routes._helpers import (
     set_span_attrs,
     source_ip,
 )
+from provide.uterm.server.tunnel_invites import discard_tunnel_invites_for_session, issue_tunnel_invites
 from provide.uterm.tunnel.token_hash import hash_token
 
 # Finding #12: keys masked before connector_config is persisted on the session
@@ -169,6 +170,7 @@ def create_tunnels_router() -> APIRouter:
         base = cfg.server.public_base_url or str(request.base_url).rstrip("/")
         ws_base = base.replace("http://", "ws://").replace("https://", "wss://")
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
+        tunnel_invites = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_invites)
 
         with get_tracer(__name__).start_as_current_span("uterm.tunnel.create") as span:
             set_span_attrs(
@@ -189,10 +191,11 @@ def create_tunnels_router() -> APIRouter:
                         "input_mode": "open",
                         "auto_start": False,
                         "ephemeral": True,
-                        # Tunnels rely on bearer-capability URLs (share_url /
-                        # control_url).  The session itself is private and owned
-                        # by the creator so other authenticated principals cannot
-                        # list/read/mutate it without the token.
+                        # Tunnels rely on one-time invite URLs that bootstrap an
+                        # HttpOnly tunnel cookie. The session itself is private
+                        # and owned by the creator so other authenticated
+                        # principals cannot list/read/mutate it without that
+                        # cookie.
                         "owner": p.subject_id,
                         "visibility": "private",
                         "recording_enabled": True,
@@ -219,6 +222,15 @@ def create_tunnels_router() -> APIRouter:
             "tunnel_type": tunnel_type,
             "share_page": share_page,
         }
+        share_invite, control_invite = issue_tunnel_invites(
+            tunnel_invites,
+            session_id=tunnel_id,
+            share_token=share_token,
+            control_token=control_token,
+            tunnel_expires_at=expires_at,
+            issued_ip=src_ip if tunnel_cfg.ip_binding else None,
+            now=now,
+        )
 
         from provide.telemetry import get_logger
 
@@ -241,8 +253,8 @@ def create_tunnels_router() -> APIRouter:
             "tunnel_type": tunnel_type,
             "ws_endpoint": f"{ws_base}/tunnel/{tunnel_id}",
             "worker_token": worker_token,
-            "share_url": f"{base}{cfg.ui.app_path}/{share_page}/{tunnel_id}?token={share_token}",
-            "control_url": f"{base}{cfg.ui.app_path}/operator/{tunnel_id}?token={control_token}",
+            "share_url": f"{base}/s/{tunnel_id}?invite={share_invite}",
+            "control_url": f"{base}/s/{tunnel_id}?invite={control_invite}",
             "expires_at": expires_at,
         }
 
@@ -261,6 +273,8 @@ def create_tunnels_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="insufficient privileges")
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
         removed = tunnel_tokens.pop(tunnel_id, None)
+        tunnel_invites = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_invites)
+        discard_tunnel_invites_for_session(tunnel_invites, tunnel_id)
         from provide.telemetry import get_logger
 
         get_logger(__name__).info("tunnel_token_revoked session_id=%s found=%s", tunnel_id, removed is not None)
@@ -286,6 +300,7 @@ def create_tunnels_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="insufficient privileges")
 
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
+        tunnel_invites = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_invites)
         old = tunnel_tokens.get(tunnel_id)
         if old is None:
             raise HTTPException(status_code=404, detail=f"no tunnel tokens for {tunnel_id}")
@@ -310,6 +325,16 @@ def create_tunnels_router() -> APIRouter:
             "tunnel_type": tunnel_type_r,
             "share_page": share_page_r,
         }
+        discard_tunnel_invites_for_session(tunnel_invites, tunnel_id)
+        share_invite, control_invite = issue_tunnel_invites(
+            tunnel_invites,
+            session_id=tunnel_id,
+            share_token=share_token,
+            control_token=control_token,
+            tunnel_expires_at=now + ttl_s,
+            issued_ip=src_ip if cfg.tunnel.ip_binding else None,
+            now=now,
+        )
 
         base = cfg.server.public_base_url or str(request.base_url).rstrip("/")
         ws_base = base.replace("http://", "ws://").replace("https://", "wss://")
@@ -327,8 +352,8 @@ def create_tunnels_router() -> APIRouter:
             "tunnel_id": tunnel_id,
             "ws_endpoint": f"{ws_base}/tunnel/{tunnel_id}",
             "worker_token": worker_token,
-            "share_url": f"{base}{cfg.ui.app_path}/{share_page_r}/{tunnel_id}?token={share_token}",
-            "control_url": f"{base}{cfg.ui.app_path}/operator/{tunnel_id}?token={control_token}",
+            "share_url": f"{base}/s/{tunnel_id}?invite={share_invite}",
+            "control_url": f"{base}/s/{tunnel_id}?invite={control_invite}",
             "expires_at": now + ttl_s,
         }
 

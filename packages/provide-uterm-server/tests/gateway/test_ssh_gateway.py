@@ -11,10 +11,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.uterm.gateway._ssh_gateway import SshWsGateway
+from provide.uterm.gateway._ssh_gateway import SshWsGateway, _is_loopback_bind_host
 
 
 class TestSshWsGatewayInit:
+    def test_loopback_bind_host_detection(self) -> None:
+        assert _is_loopback_bind_host("localhost") is True
+        assert _is_loopback_bind_host("[::1]") is True
+        assert _is_loopback_bind_host("127.0.0.1") is True
+        assert _is_loopback_bind_host("0.0.0.0") is False
+        assert _is_loopback_bind_host("example.invalid") is False
+
     def test_default_init(self) -> None:
         gw = SshWsGateway("ws://test")
         assert gw._ws_url == "ws://test"
@@ -44,6 +51,27 @@ class TestSshWsGatewayInit:
 
 
 class TestSshWsGatewayStart:
+    async def test_non_loopback_without_auth_requires_explicit_opt_in(self) -> None:
+        gw = SshWsGateway("ws://test")
+
+        with pytest.raises(RuntimeError, match="refusing to start an unauthenticated SSH gateway"):
+            await gw.start("0.0.0.0", 2222)
+
+    async def test_non_loopback_with_explicit_opt_in_starts(self) -> None:
+        gw = SshWsGateway("ws://test", allow_unauthenticated=True)
+
+        mock_key = MagicMock()
+        mock_server = AsyncMock()
+
+        with (
+            patch("asyncssh.generate_private_key", return_value=mock_key),
+            patch("asyncssh.create_server", new_callable=AsyncMock, return_value=mock_server) as create_srv,
+        ):
+            result = await gw.start("0.0.0.0", 0)
+
+        assert result == mock_server
+        assert create_srv.call_args[0][1] == "0.0.0.0"
+
     async def test_start_with_generated_key(self) -> None:
         gw = SshWsGateway("ws://test")
 

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.bridge.hub import PolicyContext, TermHub
-from provide.uterm.bridge.hub.ext import OutputPolicyGate, RedactionRule
 from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.server.bridge.hub import PolicyContext, TermHub
+from provide.uterm.server.bridge.hub.ext import OutputPolicyGate, RedactionRule
 
 
 class MockOutputPolicy(OutputPolicyGate):

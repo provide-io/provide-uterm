@@ -77,3 +77,32 @@ async def test_memory_transaction_commit_persists_state() -> None:
     new_tx = await plane.begin()
     new_store = plane.session_store(new_tx)
     assert await new_store.get_session(session_id) == record
+
+
+@pytest.mark.asyncio
+async def test_memory_transaction_rollback_does_not_revert_committed_concurrent_transaction() -> None:
+    config = ControlPlaneConfig(backend="memory")
+    plane = await bootstrap_control_plane(config)
+
+    tx1 = await plane.begin()
+    tx2 = await plane.begin()
+
+    store2 = plane.session_store(tx2)
+    record = SessionRecord(
+        session_id="committed-while-first-open",
+        display_name="Committed Concurrent Session",
+        connector_type="pty",
+        owner="user",
+        visibility="private",
+        lifecycle_state="waiting",
+        created_at=time.time(),
+        updated_at=time.time(),
+    )
+    await store2.upsert_session(record)
+    await tx2.commit()
+
+    await tx1.rollback()
+
+    read_tx = await plane.begin()
+    read_store = plane.session_store(read_tx)
+    assert await read_store.get_session(record.session_id) == record

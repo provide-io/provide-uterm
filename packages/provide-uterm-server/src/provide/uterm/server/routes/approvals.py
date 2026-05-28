@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import APIRouter, HTTPException, Request
 
-from provide.uterm.bridge.hub.approvals import ApprovalStatus
-from provide.uterm.bridge.hub.ext import PolicyDecision
+from provide.uterm.server.bridge.hub.approvals import ApprovalStatus
+from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
 if TYPE_CHECKING:
     from provide.uterm.server.authorization import AuthorizationService

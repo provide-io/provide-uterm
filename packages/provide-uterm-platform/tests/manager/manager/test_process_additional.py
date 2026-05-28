@@ -202,11 +202,11 @@ class TestAdditionalCoverage:
     async def test_monitor_processes_single_iteration(self, pm, manager):
         manager.health_check_interval = 0.01
         with (
-            patch.object(process_module, "_handle_exited_processes", AsyncMock()),
-            patch.object(process_module, "_handle_heartbeat_timeouts", AsyncMock()),
-            patch.object(process_module, "_handle_stale_queued", MagicMock()),
-            patch.object(process_module, "_handle_bust_respawn", AsyncMock()),
-            patch.object(process_module, "_handle_desired_state", AsyncMock()),
+            patch.object(process_impl_module, "_handle_exited_processes", AsyncMock()),
+            patch.object(process_impl_module, "_handle_heartbeat_timeouts", AsyncMock()),
+            patch.object(process_impl_module, "_handle_stale_queued", MagicMock()),
+            patch.object(process_impl_module, "_handle_bust_respawn", AsyncMock()),
+            patch.object(process_impl_module, "_handle_desired_state", AsyncMock()),
             patch("asyncio.sleep", AsyncMock(side_effect=asyncio.CancelledError)),
         ):
             with pytest.raises(asyncio.CancelledError):

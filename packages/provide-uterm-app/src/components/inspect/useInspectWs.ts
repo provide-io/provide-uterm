@@ -12,11 +12,6 @@ import {
   ValidationError,
 } from "../../api/validators";
 
-function getShareToken(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("token");
-}
-
 export function useInspectWs(sessionId: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const { addRequest, addResponse, syncInterceptState, setWsStatus } = useInspectStore();
@@ -30,9 +25,7 @@ export function useInspectWs(sessionId: string) {
 
   useEffect(() => {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    let wsUrl = `${proto}//${window.location.host}/ws/browser/${encodeURIComponent(sessionId)}/term`;
-    const shareToken = getShareToken();
-    if (shareToken) wsUrl += `?token=${encodeURIComponent(shareToken)}`;
+    const wsUrl = `${proto}//${window.location.host}/ws/browser/${encodeURIComponent(sessionId)}/term`;
 
     const ws = new WebSocket(wsUrl);
     const controlDecoder = new ControlFrameDecoder();

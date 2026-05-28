@@ -23,35 +23,13 @@ export function resolveWsUrl(state: HijackState): string {
   const { config } = state;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const url = config.wsUrl;
-  const authToken = config.authToken;
-  const appendToken = (value: string): string => {
-    if (!authToken) return value;
-    const parsed = new URL(value, `${proto}//${location.host}`);
-    parsed.searchParams.set("token", authToken);
-    // Auth tokens carried on the query string surface in proxy / CDN access
-    // logs. The HttpOnly `uterm_tunnel_{session_id}` cookie cannot be read
-    // from JS (by design), so we can't reliably skip the token client-side
-    // without risking a broken WS upgrade in browsers that drop cookies on
-    // cross-origin Upgrade requests (Safari ITP, SameSite=Strict). Instead we
-    // emit a one-shot console warning over wss:// so production deploys can
-    // audit and operators can confirm cookie-based auth is sufficient.
-    if (parsed.protocol === "wss:" && !state._wssTokenWarned) {
-      state._wssTokenWarned = true;
-      console.warn(
-        "[provide-uterm] Appending auth token as ?token=… on a wss:// URL. " +
-          "Token may appear in proxy/CDN access logs. " +
-          "Prefer HttpOnly cookie auth (uterm_tunnel_{session_id}) in production.",
-      );
-    }
-    return parsed.toString();
-  };
   if (url) {
-    if (url.startsWith("/")) return appendToken(`${proto}//${location.host}${url}`);
-    return appendToken(url);
+    if (url.startsWith("/")) return `${proto}//${location.host}${url}`;
+    return url;
   }
   const workerId = encodeURIComponent(config.workerId ?? "default");
   const prefix = config.wsPathPrefix;
-  return appendToken(`${proto}//${location.host}${prefix}/${workerId}/term`);
+  return `${proto}//${location.host}${prefix}/${workerId}/term`;
 }
 
 export function resolveHijackApiBase(state: HijackState): string {
@@ -59,11 +37,8 @@ export function resolveHijackApiBase(state: HijackState): string {
   return `/worker/${workerId}/hijack`;
 }
 
-export function withAuthToken(state: HijackState, path: string): string {
-  const token = state.config.authToken;
-  if (!token) return path;
-  const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}token=${encodeURIComponent(token)}`;
+export function withAuthToken(_state: HijackState, path: string): string {
+  return path;
 }
 
 export function saveResumeToken(state: HijackState, token: string): void {

@@ -9,8 +9,8 @@ from pathlib import Path
 # Add packages to sys.path
 sys.path.insert(0, str(Path("packages/provide-uterm-server/src").resolve()))
 
-from provide.uterm.bridge.hub.ext import RedactionRule
-from provide.uterm.bridge.hub.redaction import StreamRedactor
+from provide.uterm.server.bridge.hub.ext import RedactionRule
+from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 
 
 def benchmark():

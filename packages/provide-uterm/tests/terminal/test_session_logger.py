@@ -159,6 +159,22 @@ class TestSessionLogger:
         assert found
 
     @pytest.mark.asyncio
+    async def test_log_screen_applies_redaction_to_nested_lists(self, mock_store) -> None:
+        logger = SessionLogger(mock_store, redactor=lambda text: text.replace("secret", "[REDACTED]"))
+        await logger.start(session_id="red-list")
+        await logger.log_screen({"tokens": ["secret", {"nested": ["keep", "secret"]}]}, b"")
+        await logger.stop()
+
+        found = False
+        for call in mock_store.append_events.call_args_list:
+            events = call[0][1]
+            for evt in events:
+                if evt["event"] == "read":
+                    found = True
+                    assert evt["data"]["tokens"] == ["[REDACTED]", {"nested": ["keep", "[REDACTED]"]}]
+        assert found
+
+    @pytest.mark.asyncio
     async def test_log_wire_applies_redaction(self, mock_store) -> None:
         logger = SessionLogger(
             mock_store,

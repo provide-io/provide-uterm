@@ -73,7 +73,7 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | `POST /api/tunnels` | supported | supported |
 | `DELETE /api/tunnels/{id}/tokens` | supported (revocation) | supported (revocation) |
 | `POST /api/tunnels/{id}/tokens/rotate` | supported (rotation) | supported (rotation) |
-| Share URL (`?token=...`) | `/s/{id}` → 302 redirect | `/s/{id}` → 302 redirect |
+| Share URL (`?invite=...`) | `/s/{id}` → set HttpOnly cookie, 302 clean redirect | `/s/{id}` → set HttpOnly cookie, 302 clean redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
 ### Tunnel auth
@@ -81,8 +81,8 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | Capability | FastAPI backend | Cloudflare backend |
 |---|---|---|
 | Agent auth | Global `worker_bearer_token` OR per-session `worker_token` | same |
-| Share token | Query param or `uterm_tunnel_{id}` cookie | Query param or `uterm_tunnel_{id}` cookie |
-| Control token | Query param or cookie | Query param or cookie |
+| Share token | `uterm_tunnel_{id}` cookie only after invite bootstrap | `uterm_tunnel_{id}` cookie only after invite bootstrap |
+| Control token | `uterm_tunnel_{id}` cookie only after invite bootstrap | `uterm_tunnel_{id}` cookie only after invite bootstrap |
 | Token TTL | Default 1h, configurable via `TunnelConfig.token_ttl_s` | Default 1h, configurable via `TUNNEL_TOKEN_TTL_S` env var |
 | Token revocation | `DELETE /api/tunnels/{id}/tokens` | `DELETE /api/tunnels/{id}/tokens` |
 | Token rotation | `POST /api/tunnels/{id}/tokens/rotate` | `POST /api/tunnels/{id}/tokens/rotate` |

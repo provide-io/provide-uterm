@@ -13,8 +13,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import TermHub
 from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import (
     register_tunnel_routes as _tunnel_registrar,
 )

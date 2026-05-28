@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.bridge.hub import EventBus, TermHub
 
 
 def _make_hub() -> TermHub:

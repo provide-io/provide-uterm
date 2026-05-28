@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from provide.uterm.bridge.fanout import FanOutGroup, FanOutResult, SessionFanOutResult
+from provide.uterm.server.bridge.fanout import FanOutGroup, FanOutResult, SessionFanOutResult
 
 
 class TestFanOutGroupDefaults:

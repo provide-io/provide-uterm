@@ -30,14 +30,14 @@ def test_production_rejects_dev_mode() -> None:
         CloudflareConfig.from_env({"ENVIRONMENT": "production", "AUTH_MODE": "dev"})
 
 
-def test_query_token_disabled_in_production_by_default() -> None:
-    cfg = CloudflareConfig.from_env({"ENVIRONMENT": "production", "WORKER_BEARER_TOKEN": "t"})
-    assert cfg.jwt.allow_query_token is False
+def test_query_token_env_knob_removed() -> None:
+    cfg = CloudflareConfig.from_env({"AUTH_ALLOW_QUERY_TOKEN": "1", "WORKER_BEARER_TOKEN": "t"})
+    assert not hasattr(cfg.jwt, "allow_query_token")
 
 
-def test_session_runtime_extract_token_respects_query_policy() -> None:
+def test_session_runtime_extract_token_ignores_query_token() -> None:
     runtime = object.__new__(SessionRuntime)
-    runtime.config = SimpleNamespace(jwt=SimpleNamespace(allow_query_token=False))
+    runtime.config = SimpleNamespace(jwt=SimpleNamespace())
     request = _Req("https://example.invalid/ws/browser/agent1/term?token=abc123")
     assert runtime._extract_token(request) is None
 

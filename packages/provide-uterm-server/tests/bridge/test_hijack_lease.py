@@ -13,7 +13,7 @@ tested without booting a full hub.
 from __future__ import annotations
 
 from provide.uterm.bridge.coordinator import HijackSession
-from provide.uterm.bridge.models import HijackLease, WorkerTermState
+from provide.uterm.server.bridge.models import HijackLease, WorkerTermState
 
 
 class _FakeWebSocket:

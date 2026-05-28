@@ -4,7 +4,7 @@
 import asyncio
 from typing import Any
 
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 
 
 class _NoopWs:

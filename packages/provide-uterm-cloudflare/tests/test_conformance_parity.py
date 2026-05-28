@@ -21,8 +21,8 @@ def _make_default(env_attrs: dict[str, object] | None = None) -> Default:
     return Default(SimpleNamespace(**attrs))
 
 
-def _req(path: str, *, method: str = "GET") -> SimpleNamespace:
-    return SimpleNamespace(url=f"https://example.invalid{path}", method=method, headers={})
+def _req(path: str, *, method: str = "GET", headers: dict[str, str] | None = None) -> SimpleNamespace:
+    return SimpleNamespace(url=f"https://example.invalid{path}", method=method, headers=headers or {})
 
 
 def _html_text(resp: object) -> str:
@@ -103,7 +103,7 @@ async def test_share_token_is_not_exposed_in_html_bootstrap() -> None:
     )
     d = _make_default({"SESSION_REGISTRY": kv})
 
-    resp = await d.fetch(_req("/app/session/share-sess?token=share-token-123"))
+    resp = await d.fetch(_req("/app/session/share-sess", headers={"cookie": "uterm_tunnel_share-sess=share-token-123"}))
     html = _html_text(resp)
 
     assert resp.status == 200

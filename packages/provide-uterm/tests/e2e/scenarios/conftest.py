@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 import uvicorn
 from fastapi import FastAPI
-from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
 from provide.uterm.client import connect_async_ws
+from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 
 from tests.e2e._live_server import live_server_with_bus
 

@@ -11,6 +11,10 @@ identity control frame emitted by the SSH gateway resolver.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -103,6 +107,26 @@ class TestParseIdentityFrame:
     def test_signature_validation_succeeds(self) -> None:
         frame = make_identity(subject="x", secret="my-secret")
         result = parse_identity_frame(frame, expected_secret="my-secret")
+        assert result is not None
+        assert result.subject == "x"
+
+    def test_signed_non_string_transport_is_normalized_to_empty(self) -> None:
+        secret = "my-secret"
+        claims: dict[str, str] = {}
+        canonical = f"1:x:::{json.dumps(claims, sort_keys=True, separators=(',', ':'))}"
+        signature = hmac.new(secret.encode(), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+        frame = {
+            "type": "identity",
+            "version": 1,
+            "subject": "x",
+            "claims": claims,
+            "fingerprint": "",
+            "transport": 123,
+            "signature": signature,
+        }
+
+        result = parse_identity_frame(frame, expected_secret=secret)
+
         assert result is not None
         assert result.subject == "x"
 

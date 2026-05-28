@@ -175,7 +175,7 @@ class TunnelConfig(ServerBaseModel):
     """Tunnel sharing security settings."""
 
     token_ttl_s: int = 3600
-    token_transport: Literal["query", "cookie", "both"] = "both"  # noqa: S105
+    token_transport: Literal["query", "cookie", "both"] = "cookie"  # noqa: S105
     cookie_secure: bool = True
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     ip_binding: bool = False

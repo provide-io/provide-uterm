@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.uterm.bridge.hub import BrowserRoleResolutionError, TermHub
+from provide.uterm.server.bridge.hub import BrowserRoleResolutionError, TermHub
 from provide.uterm.server.models import SessionDefinition
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport, AsyncClient
-from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.bridge.hub import EventBus, TermHub
 from provide.uterm.server.config import config_from_mapping
 
 from provide.uterm.ai.server import create_mcp_app

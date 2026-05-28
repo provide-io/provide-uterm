@@ -11,13 +11,13 @@ import sqlite3
 import time
 from unittest.mock import patch
 
-from provide.uterm.bridge.hub.resume import (
+from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
+from provide.uterm.server.bridge.hub.resume import (
     ControlPlaneResumeStore,
     InMemoryResumeStore,
     ResumeSession,
     ResumeTokenStore,
 )
-from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
 
 
 class TestResumeSession:
@@ -134,7 +134,7 @@ class TestInMemoryResumeStore:
 
     def test_ttl_respected(self) -> None:
         store = InMemoryResumeStore()
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             token = asyncio.run(store.create("w1", "admin", 30))
             # Not expired yet at 129
@@ -180,7 +180,7 @@ class TestInMemoryResumeStore:
     def test_create_prunes_expired_tokens_opportunistically(self) -> None:
         """Creating a new token should prune previously-expired entries."""
         store = InMemoryResumeStore()
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             expired = asyncio.run(store.create("w1", "admin", 1.0))
             mock_time.monotonic.return_value = 102.0
@@ -193,7 +193,7 @@ class TestInMemoryResumeStore:
     def test_get_at_exact_expiry_not_expired(self) -> None:
         """Kill get__mutmut_4: > → >= makes token at exactly expires_at return None."""
         store = InMemoryResumeStore()
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             token = asyncio.run(store.create("w1", "admin", 30.0))
             # At exactly expires_at (130.0), should NOT be expired (uses >, not >=)
@@ -203,7 +203,7 @@ class TestInMemoryResumeStore:
     def test_cleanup_expired_at_exact_expiry_not_removed(self) -> None:
         """Kill cleanup_expired__mutmut_3: > → >= removes token at exactly expires_at."""
         store = InMemoryResumeStore()
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             asyncio.run(store.create("w1", "admin", 30.0))
             # At exactly expires_at (130.0), should NOT be cleaned up (uses >, not >=)
@@ -215,7 +215,7 @@ class TestInMemoryResumeStore:
     def test_active_tokens_at_exact_expiry_is_active(self) -> None:
         """Kill active_tokens__mutmut_2: <= → < excludes token at exactly expires_at."""
         store = InMemoryResumeStore()
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             token = asyncio.run(store.create("w1", "admin", 30.0))
             # At exactly expires_at (130.0), should be active (uses <=, not <)
@@ -230,7 +230,7 @@ class TestControlPlaneResumeStore:
         asyncio.run(plane.open())
         store = ControlPlaneResumeStore(plane)
 
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             mock_time.time.return_value = 1700000000.0
             token = asyncio.run(store.create("w1", "admin", 30.0))
@@ -257,7 +257,7 @@ class TestControlPlaneResumeStore:
         asyncio.run(plane1.migrate())
         store1 = ControlPlaneResumeStore(plane1)
 
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             mock_time.time.return_value = 1_000.0
             token = asyncio.run(store1.create("w1", "admin", 30.0))
@@ -267,7 +267,7 @@ class TestControlPlaneResumeStore:
         asyncio.run(plane2.open())
         store2 = ControlPlaneResumeStore(plane2)
 
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 10.0
             mock_time.time.return_value = 1_010.0
             session = asyncio.run(store2.get(token))
@@ -299,7 +299,7 @@ class TestControlPlaneResumeStore:
         asyncio.run(plane1.migrate())
         store1 = ControlPlaneResumeStore(plane1)
 
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 100.0
             mock_time.time.return_value = 1_000.0
             first_token = asyncio.run(store1.create("w1", "admin", 60.0))
@@ -310,7 +310,7 @@ class TestControlPlaneResumeStore:
         asyncio.run(plane2.open())
         store2 = ControlPlaneResumeStore(plane2)
 
-        with patch("provide.uterm.bridge.hub.resume.time") as mock_time:
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
             mock_time.monotonic.return_value = 110.0
             mock_time.time.return_value = 1_010.0
             second_token = asyncio.run(store2.create("w1", "admin", 60.0))

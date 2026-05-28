@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qs, urlparse
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.auth.jwt import (
@@ -50,29 +49,19 @@ class _AuthMixin:
     """Mixin providing JWT/share-token authentication helpers for SessionRuntime."""
 
     def _share_role_for_request(self, request: object) -> str | None:
-        transport = str(getattr(self.config, "tunnel_token_transport", "both"))  # type: ignore[attr-defined]
         ip_binding = bool(getattr(self.config, "tunnel_ip_binding", False))  # type: ignore[attr-defined]
 
         token = None
-        if transport != "cookie":  # "query" or "both"
-            try:
-                qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-                tokens = qs.get("token", []) + qs.get("access_token", [])
-                token = tokens[0] if tokens else None
-            except Exception as exc:
-                logger.debug("failed to parse share token: %s", exc)
-        # Cookie fallback: uterm_tunnel_{worker_id}
-        if not token and transport != "query":  # "cookie" or "both"
-            try:
-                from http.cookies import SimpleCookie
+        try:
+            from http.cookies import SimpleCookie
 
-                cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[attr-defined]
-                cookies = SimpleCookie(cookie_header)
-                cookie_key = f"uterm_tunnel_{self.worker_id}"  # type: ignore[attr-defined]
-                if cookie_key in cookies:
-                    token = cookies[cookie_key].value
-            except Exception:
-                pass
+            cookie_header = str(request.headers.get("cookie") or request.headers.get("Cookie") or "")  # type: ignore[attr-defined]
+            cookies = SimpleCookie(cookie_header)
+            cookie_key = f"uterm_tunnel_{self.worker_id}"  # type: ignore[attr-defined]
+            if cookie_key in cookies:
+                token = cookies[cookie_key].value
+        except Exception:
+            pass
         if not token:
             return None
 
@@ -105,19 +94,10 @@ class _AuthMixin:
     # ------------------------------------------------------------------
 
     def _extract_token(self, request: object) -> str | None:
-        """Extract a token from Authorization header, CF_Authorization cookie, or query params."""
+        """Extract a token from Authorization header or CF_Authorization cookie."""
         token = extract_bearer_or_cookie(request)
         if token:
             return token
-        if not self.config.jwt.allow_query_token:  # type: ignore[attr-defined]
-            return None
-        try:
-            qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-            candidates = qs.get("token", []) + qs.get("access_token", [])
-            if candidates:
-                return candidates[0] or None
-        except Exception as exc:
-            logger.debug("failed to parse query token: %s", exc)
         return None
 
     async def resolve_principal(self, request: object) -> tuple[Any, Response | None]:

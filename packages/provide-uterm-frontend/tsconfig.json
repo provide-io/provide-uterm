@@ -16,7 +16,8 @@
     "skipLibCheck": true,
     "rootDir": "src",
     "outDir": "../../packages/provide-uterm-server/src/provide/uterm/server/frontend",
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*_part*.ts"]

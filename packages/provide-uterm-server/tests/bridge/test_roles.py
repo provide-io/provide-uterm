@@ -12,9 +12,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import VALID_ROLES
 from provide.uterm.client import connect_test_ws
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import VALID_ROLES
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

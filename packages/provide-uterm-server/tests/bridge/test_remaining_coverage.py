@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from provide.uterm.bridge.coordinator import HijackCoordinator
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 
 # ---------------------------------------------------------------------------
 # HijackCoordinator — lines 90, 92, 100, 102, 109
@@ -85,7 +85,7 @@ class TestEventBusEdgeCases:
         Lines 146-152: QueueFull on second put_nowait → while loop drains → sentinel delivered.
         We use a maxsize=1 queue and patch put_nowait to count calls.
         """
-        from provide.uterm.bridge.hub.event_bus import EventBus, _Subscription
+        from provide.uterm.server.bridge.hub.event_bus import EventBus, _Subscription
 
         bus = EventBus(max_subscribers_per_worker=10)
         sub = _Subscription(
@@ -151,7 +151,7 @@ class TestEventBusEdgeCases:
 
     async def test_max_subscribers_exceeded(self) -> None:
         """EventBus raises when max_subscribers_per_worker is exceeded (line 186)."""
-        from provide.uterm.bridge.hub.event_bus import EventBus
+        from provide.uterm.server.bridge.hub.event_bus import EventBus
 
         bus = EventBus(max_subscribers_per_worker=2)
 

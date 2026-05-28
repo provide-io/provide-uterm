@@ -185,6 +185,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
             iac_negotiate=args.iac_negotiate,
             authorized_keys=args.authorized_keys,
             require_resolver=args.require_resolver,
+            allow_unauthenticated_ssh=args.allow_unauthenticated_ssh,
         )
     )
 
@@ -202,6 +203,7 @@ async def _run_listen(
     iac_negotiate: bool = True,
     authorized_keys: str | None = None,
     require_resolver: bool = False,
+    allow_unauthenticated_ssh: bool = False,
 ) -> None:
     servers = []
 
@@ -223,6 +225,7 @@ async def _run_listen(
                 server_key=server_key,
                 key_resolver=key_resolver,
                 require_resolver=require_resolver,
+                allow_unauthenticated=allow_unauthenticated_ssh,
             )
             srv_ssh = await gw_ssh.start(bind, ssh_port)
             servers.append(srv_ssh)
@@ -374,6 +377,15 @@ def _build_parser() -> argparse.ArgumentParser:
             "Reject SSH connections whose pubkey is not in --authorized-keys. "
             "Disables password and keyboard-interactive fallback so unknown "
             "keys can't sneak through. Requires --authorized-keys."
+        ),
+    )
+    listen_p.add_argument(
+        "--allow-unauthenticated-ssh",
+        action="store_true",
+        default=False,
+        help=(
+            "Explicitly allow an SSH listener without required public-key auth on a non-loopback bind address. "
+            "Only use this behind another access-control layer."
         ),
     )
     listen_p.set_defaults(func=_cmd_listen)

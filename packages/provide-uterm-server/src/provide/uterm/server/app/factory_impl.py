@@ -14,14 +14,11 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, cast
-from urllib.parse import parse_qs
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
 from starlette.requests import HTTPConnection  # noqa: TC002
 
 from provide.telemetry import get_logger
-from provide.uterm.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
-from provide.uterm.bridge.identity import Principal
 from provide.uterm.server.api_keys import ApiKeyStore
 from provide.uterm.server.app.auth import _validate_auth_config
 from provide.uterm.server.app.connectors import _register_builtin_connectors
@@ -39,16 +36,19 @@ from provide.uterm.server.auth import (
     resolve_http_principal,
     resolve_ws_principal,
 )
+from provide.uterm.server.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
+from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.policy import SessionPolicyResolver
 from provide.uterm.server.profiles import FileProfileStore
 from provide.uterm.server.registry import SessionRegistry
+from provide.uterm.server.tunnel_invites import sweep_expired_tunnel_invites
 from provide.uterm.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from provide.uterm.bridge.hub.resume import _ControlPlaneResumeBackend
-    from provide.uterm.bridge.identity import IdentityProvider
+    from provide.uterm.server.bridge.hub.resume import _ControlPlaneResumeBackend
+    from provide.uterm.server.bridge.identity import IdentityProvider
     from provide.uterm.server.models import ServerConfig
 
 logger = get_logger(__name__)
@@ -86,10 +86,9 @@ def _detect_multi_replica_environment() -> set[str]:
 
 _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)(?:/.*)?$"),
-    # ``inspect`` is included so HTTP-tunnel share tokens reach the inspector
-    # page that the CLI documents.  Without it, /app/inspect/{id}?token=...
-    # falls through to normal JWT auth and returns 401 even with a valid share
-    # token — a docs-vs-behavior mismatch the reviewer flagged.
+    # ``inspect`` is included so HTTP-tunnel share cookies reach the inspector
+    # page that the CLI documents.  Without it, /app/inspect/{id} falls through
+    # to normal JWT auth and returns 401 even after a valid invite bootstrap.
     re.compile(r"^/app/(?:session|operator|replay|inspect)/(?P<session_id>[\w\-]+)$"),
     re.compile(r"^/ws/browser/(?P<session_id>[\w\-]+)/term$"),
     re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack(?:/.*)?$"),
@@ -193,6 +192,7 @@ def create_server_app(
     # Token state values are heterogeneous (str token values, float expiries,
     # int counters); the registry expects ``dict[str, object]`` per-session.
     tunnel_tokens: dict[str, dict[str, object]] = {}
+    tunnel_invites: dict[str, dict[str, object]] = {}
 
     def _inc_metric(name: str, value: int = 1) -> None:
         metrics[name] = metrics.get(name, 0) + value
@@ -209,35 +209,24 @@ def create_server_app(
         session_id = _share_session_id_for(path)
         if session_id is None:
             return None
-        # The page handler always stamps the HttpOnly ``uterm_tunnel_{id}``
-        # cookie on initial load (routes/pages.py:_set_page_cookies), so the
-        # cookie is the primary transport for follow-on REST/WS requests that
-        # no longer carry ``?token=...``.  ``token_transport`` controls whether
-        # a query-string token is ALSO accepted (legacy bearer-URL flow):
-        #   "cookie" — cookie only, reject query
-        #   "both"   — cookie + query
-        #   "query"  — treated same as "both" (legacy; frontend no longer
-        #              emits ?token= after initial page load, so cookie must
-        #              still be read to avoid stranding follow-on requests)
-        transport = config.tunnel.token_transport
+        # Tunnel share/control auth is cookie-only after the one-time
+        # ``?invite=`` bootstrap. Do not accept raw bearer tokens in the query
+        # string; URLs are routinely logged by proxies and browser history.
         provided = None
         from http.cookies import SimpleCookie
+
+        app = connection.scope.get("app")
+        token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
+        token_state = token_map.get(session_id) if isinstance(token_map, dict) else None
+        if token_state is None:
+            return None
 
         cookie_header = dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
         cookies = SimpleCookie(cookie_header)
         cookie_key = f"uterm_tunnel_{session_id}"
         if cookie_key in cookies:
             provided = cookies[cookie_key].value
-        if not provided and transport in ("query", "both"):
-            raw_qs = connection.scope.get("query_string", b"")
-            query = raw_qs.decode("utf-8", errors="ignore") if isinstance(raw_qs, bytes) else str(raw_qs)
-            provided = (parse_qs(query).get("token", [None]) or [None])[0]
         if not provided:
-            return None
-        app = connection.scope.get("app")
-        token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
-        token_state = token_map.get(session_id) if isinstance(token_map, dict) else None
-        if token_state is None:
             return None
         # Check expiry.
         expires_at = token_state.get("expires_at")
@@ -419,7 +408,7 @@ def create_server_app(
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return await policy.role_for(principal, session)
 
-    from provide.uterm.bridge.hub.ext import (
+    from provide.uterm.server.bridge.hub.ext import (
         BehavioralThresholds,
         WebhookBehavioralAuditGate,
         WebhookPolicyGate,
@@ -481,9 +470,9 @@ def create_server_app(
         behavioral_audit_interval_s=config.governance.behavioral_audit_interval_s,
     )
     # Attach the fan-out controller so routes and WS dispatch can find it.
-    from provide.uterm.bridge.fanout import FanOutController, InMemoryFanOutStore
+    from provide.uterm.server.bridge.fanout import FanOutController, InMemoryFanOutStore
 
-    hub.fan_out_controller = FanOutController(hub=hub, store=InMemoryFanOutStore())  # type: ignore[attr-defined]
+    setattr(hub, "fan_out_controller", FanOutController(hub=hub, store=InMemoryFanOutStore()))  # noqa: B010
     webhook_manager = WebhookManager(allow_loopback_destinations=config.webhooks.allow_loopback_destinations)
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     # Imported lazily — annotation lives in the separate provide-uterm-annotation
@@ -603,10 +592,11 @@ def create_server_app(
                     logger.exception("recording_retention_sweep_error path=%s", str(path))
 
     async def _sweep_expired_tunnel_tokens() -> None:
-        """Periodically remove expired tunnel tokens from the in-memory map."""
+        """Periodically remove expired tunnel tokens and pending invites."""
         while True:
             await asyncio.sleep(60)
             now = time.time()
+            sweep_expired_tunnel_invites(tunnel_invites, now=now)
             expired: list[str] = []
             for sid, state in tunnel_tokens.items():
                 expires_at = state.get("expires_at")
@@ -717,6 +707,7 @@ def create_server_app(
     app.state.uterm_control_plane = control_plane
     app.state.uterm_durability_capabilities = durability_capabilities
     app.state.uterm_tunnel_tokens = tunnel_tokens
+    app.state.uterm_tunnel_invites = tunnel_invites
     app.state.uterm_api_key_store = api_key_store
     app.state.uterm_idp = idp
     app.state.uterm_startup_time = time.time()

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node ../../scripts/clean-frontend-generated.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint src/",

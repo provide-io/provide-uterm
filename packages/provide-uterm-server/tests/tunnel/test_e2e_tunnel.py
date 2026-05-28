@@ -68,6 +68,10 @@ class TestE2ETunnelDataFlow:
         assert "worker_token" in body
         assert "share_url" in body
         assert "control_url" in body
+        assert "?invite=" in body["share_url"]
+        assert "?invite=" in body["control_url"]
+        assert "token=" not in body["share_url"]
+        assert "token=" not in body["control_url"]
         assert "expires_at" in body
         assert body["expires_at"] > time.time()
 
@@ -173,20 +177,41 @@ class TestE2ETunnelTokenAPIs:
 class TestShortShareUrl:
     """Test /s/{id} short share URL redirect."""
 
-    def test_short_url_redirects(self, e2e_client: TestClient) -> None:
-        # The hub stores only token hashes; the plain share_token is
-        # returned exactly once in the create response. Tests must capture
-        # it from there — see ``tunnel/token_hash.py``.
+    def test_short_url_invite_sets_cookie_and_redirects_clean(self, e2e_client: TestClient) -> None:
         resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
         tid = resp.json()["tunnel_id"]
         share_url = resp.json()["share_url"]
-        share_token = share_url.split("token=", 1)[1]
+        invite = share_url.split("invite=", 1)[1]
 
-        redirect = e2e_client.get(f"/s/{tid}?token={share_token}", follow_redirects=False)
+        redirect = e2e_client.get(f"/s/{tid}?invite={invite}", follow_redirects=False)
         assert redirect.status_code == 302
         location = redirect.headers["location"]
         assert f"/app/session/{tid}" in location
-        assert f"token={share_token}" in location
+        assert "invite=" not in location
+        assert "token=" not in location
+        assert f"uterm_tunnel_{tid}=" in redirect.headers["set-cookie"]
+
+    def test_short_url_invite_is_single_use(self, e2e_client: TestClient) -> None:
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
+        tid = resp.json()["tunnel_id"]
+        invite = resp.json()["share_url"].split("invite=", 1)[1]
+
+        first = e2e_client.get(f"/s/{tid}?invite={invite}", follow_redirects=False)
+        second = e2e_client.get(f"/s/{tid}?invite={invite}", follow_redirects=False)
+
+        assert first.status_code == 302
+        assert second.status_code == 403
+
+    def test_short_url_rejects_stale_invite(self, e2e_client: TestClient) -> None:
+        resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
+        tid = resp.json()["tunnel_id"]
+        invite = resp.json()["share_url"].split("invite=", 1)[1]
+        e2e_client.app.state.uterm_tunnel_tokens[tid]["share_token_hash"] = "rotated-away"  # type: ignore[union-attr]
+
+        stale = e2e_client.get(f"/s/{tid}?invite={invite}", follow_redirects=False)
+
+        assert stale.status_code == 403
+        assert stale.json()["detail"] == "stale invite"
 
     def test_short_url_without_token(self, e2e_client: TestClient) -> None:
         resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
@@ -199,7 +224,7 @@ class TestShortShareUrl:
     def test_short_url_follows_redirect(self, e2e_client: TestClient) -> None:
         resp = e2e_client.post("/api/tunnels", json={"tunnel_type": "terminal"})
         tid = resp.json()["tunnel_id"]
-        share_token = resp.json()["share_url"].split("token=", 1)[1]
+        invite = resp.json()["share_url"].split("invite=", 1)[1]
 
-        final = e2e_client.get(f"/s/{tid}?token={share_token}", follow_redirects=True)
+        final = e2e_client.get(f"/s/{tid}?invite={invite}", follow_redirects=True)
         assert final.status_code == 200

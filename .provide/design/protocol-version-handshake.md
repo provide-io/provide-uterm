@@ -2,7 +2,7 @@
 
 ## Problem
 
-`CURRENT_PROTOCOL_VERSION = 1` is declared at `packages/provide-uterm/src/provide/uterm/bridge/contracts.py:24` and stamped onto the server's `hello` frame to the browser at `packages/provide-uterm-server/src/provide/uterm/bridge/routes/websockets.py:317`. However, the value is **never validated** — the server logs the worker's reported version (`websockets.py:156-163`, `hub/connections.py:179-189`) but accepts any value, including `None`. Workers built against the in-tree connectors (`server/connectors/{shell,ssh,telnet,websocket}.py:115/139/74/76`) and `provide/uterm/shell/terminal/_output.py:18-20` send a `worker_hello` that omits `protocol_version` entirely. Browsers don't return a `protocol_version` to the server. Any future bump (e.g. control-frame shape change) will silently mis-parse on older peers.
+`CURRENT_PROTOCOL_VERSION = 1` is declared at `packages/provide-uterm/src/provide/uterm/bridge/contracts.py:24` and stamped onto the server's `hello` frame to the browser at `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets.py:317`. However, the value is **never validated** — the server logs the worker's reported version (`websockets.py:156-163`, `hub/connections.py:179-189`) but accepts any value, including `None`. Workers built against the in-tree connectors (`server/connectors/{shell,ssh,telnet,websocket}.py:115/139/74/76`) and `provide/uterm/shell/terminal/_output.py:18-20` send a `worker_hello` that omits `protocol_version` entirely. Browsers don't return a `protocol_version` to the server. Any future bump (e.g. control-frame shape change) will silently mis-parse on older peers.
 
 ## Options
 
@@ -28,10 +28,10 @@ Server replies in `make_hello_frame(...)` with `"protocol": {"selected": 1, "ser
 ## Files that would change
 
 - `packages/provide-uterm/src/provide/uterm/bridge/contracts.py:24` — replace single `CURRENT_PROTOCOL_VERSION` with `MIN_PROTOCOL_VERSION`, `MAX_PROTOCOL_VERSION`, `PREFERRED_PROTOCOL_VERSION`.
-- `packages/provide-uterm-server/src/provide/uterm/bridge/frames.py:100` — extend the WorkerHello typed dict / `make_hello_frame` to include the protocol range field.
-- `packages/provide-uterm-server/src/provide/uterm/bridge/routes/websockets.py:154-180` — parse client range, negotiate, close on mismatch.
-- `packages/provide-uterm-server/src/provide/uterm/bridge/routes/websockets.py:301-321` — emit server range in browser hello.
-- `packages/provide-uterm-server/src/provide/uterm/bridge/hub/connections.py:179-200` (`set_worker_hello`) — store negotiated version on the worker entry, expose via `WorkerEntry.protocol_version`.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/frames.py:100` — extend the WorkerHello typed dict / `make_hello_frame` to include the protocol range field.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets.py:154-180` — parse client range, negotiate, close on mismatch.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets.py:301-321` — emit server range in browser hello.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/connections.py:179-200` (`set_worker_hello`) — store negotiated version on the worker entry, expose via `WorkerEntry.protocol_version`.
 - All worker-hello emitters:
   - `packages/provide-uterm/src/provide/uterm/shell/terminal/_output.py:18-20`
   - `packages/provide-uterm-server/src/provide/uterm/server/connectors/shell.py:115`

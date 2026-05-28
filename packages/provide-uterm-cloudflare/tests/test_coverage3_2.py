@@ -241,6 +241,5 @@ def test_extract_token_cf_authorization_cookie_returned() -> None:
         return None
 
     req = SimpleNamespace(headers=SimpleNamespace(get=_get_header), url="http://localhost/")
-    rt.config.jwt.allow_query_token = False
     result = rt._extract_token(req)
     assert result == token

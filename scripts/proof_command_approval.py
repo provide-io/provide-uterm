@@ -8,9 +8,9 @@ import asyncio
 import json
 from unittest.mock import AsyncMock
 
-from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
-from provide.uterm.bridge.hub.approvals import ApprovalStatus
-from provide.uterm.bridge.routes.browser_handlers import _handle_input
+from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
+from provide.uterm.server.bridge.hub.approvals import ApprovalStatus
+from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
 from provide.uterm.control_channel import ControlChannelDecoder
 

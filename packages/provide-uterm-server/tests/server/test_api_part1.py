@@ -256,7 +256,7 @@ def test_delete_session(app_client: TestClient) -> None:
     assert app_client.get("/api/sessions/del-me").status_code == 404
 
 
-def test_tunnel_share_token_allows_read_only_session_api() -> None:
+def test_tunnel_share_cookie_allows_read_only_session_api() -> None:
     cfg = default_server_config()
     cfg.auth = AuthConfig(
         mode="jwt",
@@ -285,13 +285,14 @@ def test_tunnel_share_token_allows_read_only_session_api() -> None:
         }
     }
     with TestClient(app) as client:
-        response = client.get("/api/sessions/tunnel-api-view?token=share-token-123")
-        denied = client.post("/api/sessions/tunnel-api-view/mode?token=share-token-123", json={"input_mode": "open"})
+        cookie = {"uterm_tunnel_tunnel-api-view": "share-token-123"}
+        response = client.get("/api/sessions/tunnel-api-view", cookies=cookie)
+        denied = client.post("/api/sessions/tunnel-api-view/mode", json={"input_mode": "open"}, cookies=cookie)
     assert response.status_code == 200
     assert denied.status_code == 403
 
 
-def test_tunnel_control_token_allows_session_mutation_api() -> None:
+def test_tunnel_control_cookie_allows_session_mutation_api() -> None:
     cfg = default_server_config()
     cfg.auth = AuthConfig(
         mode="jwt",
@@ -320,9 +321,8 @@ def test_tunnel_control_token_allows_session_mutation_api() -> None:
         }
     }
     with TestClient(app) as client:
-        response = client.post(
-            "/api/sessions/tunnel-api-control/mode?token=control-token-123", json={"input_mode": "hijack"}
-        )
+        cookie = {"uterm_tunnel_tunnel-api-control": "control-token-123"}
+        response = client.post("/api/sessions/tunnel-api-control/mode", json={"input_mode": "hijack"}, cookies=cookie)
     assert response.status_code == 200
     assert response.json()["input_mode"] == "hijack"
 

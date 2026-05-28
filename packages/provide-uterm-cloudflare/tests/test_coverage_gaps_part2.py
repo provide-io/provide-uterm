@@ -211,8 +211,8 @@ class TestSessionRuntimeGaps:
         )
         assert rt._share_role_for_request(req) is None
 
-    def test_share_role_query_only_rejects_cookie_token(self) -> None:
-        """F1: tunnel_token_transport=query → cookie token ignored."""
+    def test_share_role_legacy_query_mode_accepts_cookie_token(self) -> None:
+        """F1: tunnel_token_transport is legacy; cookie token is still accepted."""
         import sqlite3
 
         from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
@@ -233,7 +233,7 @@ class TestSessionRuntimeGaps:
             url="https://x/app/session/rt-test2",
             headers=SimpleNamespace(get=lambda k, d=None: "uterm_tunnel_rt-test2=tok" if k == "cookie" else d),
         )
-        assert rt._share_role_for_request(req) is None
+        assert rt._share_role_for_request(req) == "viewer"
 
     def test_share_role_ip_binding_mismatch_rejected(self) -> None:
         """F1: tunnel_ip_binding=True + IP mismatch → None."""
@@ -255,8 +255,12 @@ class TestSessionRuntimeGaps:
         rt._control_token_hash = None
         rt._issued_ip = "1.2.3.4"
         req = SimpleNamespace(
-            url="https://x/app/session/rt-test3?token=tok",
-            headers=SimpleNamespace(get=lambda k, d=None: "9.9.9.9" if k == "CF-Connecting-IP" else d),
+            url="https://x/app/session/rt-test3",
+            headers=SimpleNamespace(
+                get=lambda k, d=None: (
+                    "9.9.9.9" if k == "CF-Connecting-IP" else "uterm_tunnel_rt-test3=tok" if k == "cookie" else d
+                )
+            ),
         )
         assert rt._share_role_for_request(req) is None
 
@@ -280,8 +284,12 @@ class TestSessionRuntimeGaps:
         rt._control_token_hash = None
         rt._issued_ip = "1.2.3.4"
         req = SimpleNamespace(
-            url="https://x/app/session/rt-test4?token=tok",
-            headers=SimpleNamespace(get=lambda k, d=None: "1.2.3.4" if k == "CF-Connecting-IP" else d),
+            url="https://x/app/session/rt-test4",
+            headers=SimpleNamespace(
+                get=lambda k, d=None: (
+                    "1.2.3.4" if k == "CF-Connecting-IP" else "uterm_tunnel_rt-test4=tok" if k == "cookie" else d
+                )
+            ),
         )
         assert rt._share_role_for_request(req) == "viewer"
 

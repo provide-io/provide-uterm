@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
-from provide.uterm.bridge.hub.event_bus import EventBus
+from provide.uterm.server.bridge.hub.event_bus import EventBus
 
 WORKER_ID = "worker-stress"
 NUM_SUBSCRIBERS = 100
