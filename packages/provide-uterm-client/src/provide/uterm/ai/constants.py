@@ -13,3 +13,8 @@ from __future__ import annotations
 # Keystroke byte cap for hijack_send (matches the sanitizer default so the two
 # code paths cannot drift).
 MAX_KEYSTROKE_BYTES: int = 4096
+
+# Whether MCP-driven session_create may target private/internal hosts. Defaults
+# to deny: an LLM should not be able to pivot to 169.254.169.254, RFC1918, or
+# loopback. Operators that genuinely need internal targets must opt in.
+ALLOW_PRIVATE_HOSTS: bool = False

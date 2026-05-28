@@ -39,7 +39,7 @@ from provide.uterm.ai.auth import (
     authorized,
     principal_from_headers,
 )
-from provide.uterm.ai.constants import MAX_KEYSTROKE_BYTES
+from provide.uterm.ai.constants import ALLOW_PRIVATE_HOSTS, MAX_KEYSTROKE_BYTES
 from provide.uterm.ai.policy import is_allowed_connector
 from provide.uterm.client.hijack import HijackClient
 from provide.uterm.client.mcp_tools import _ok
@@ -51,6 +51,40 @@ TOOL_COUNT = 21
 # ``provide.uterm.client.sanitizer`` so both MCP code paths share it, but the
 # original private name remains importable for existing callers/tests.
 _unescape_keys = unescape_keys
+
+# Hostnames that resolve to cloud metadata / internal-only endpoints. We refuse
+# these by name (no blocking DNS lookup) — DNS-rebinding / egress filtering
+# remains the server's responsibility.
+_BLOCKED_HOST_NAMES: frozenset[str] = frozenset(
+    {
+        "localhost",
+        "metadata.google.internal",
+        "metadata",
+    },
+)
+
+
+def _is_internal_host(host: str) -> bool:
+    """Return ``True`` when *host* targets an internal / metadata endpoint.
+
+    Literal IPs are classified with :mod:`ipaddress` (loopback, link-local,
+    and — unless :data:`ALLOW_PRIVATE_HOSTS` — private / unique-local ranges).
+    Hostnames are matched against a small denylist of well-known metadata
+    names. We never perform a DNS lookup here: rebinding and egress control are
+    the server's responsibility.
+    """
+    import ipaddress
+
+    candidate = host.strip().strip("[]").lower()
+    if candidate in _BLOCKED_HOST_NAMES:
+        return True
+    try:
+        ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+    if ip.is_loopback or ip.is_link_local:
+        return True
+    return not ALLOW_PRIVATE_HOSTS and (ip.is_private or ip.is_reserved or ip.is_unspecified)
 
 
 def _trim_tail(screen: str, tail_lines: int | None) -> str:
@@ -105,6 +139,7 @@ def _validate_session_create_config(
     connector_type: str,
     url: str | None,
     port: int | None,
+    host: str | None = None,
 ) -> dict[str, Any] | None:
     """Vet a ``session_create`` request against the connector allowlist.
 
@@ -119,6 +154,10 @@ def _validate_session_create_config(
     * When supplied, ``url`` must use a vetted scheme; arbitrary
       ``file://`` / ``javascript:`` / etc. are rejected so an MCP client
       cannot ask the worker to open a malicious resource.
+    * When supplied, ``host`` must not target an internal / cloud-metadata
+      endpoint (loopback, link-local, and—unless
+      :data:`~provide.uterm.ai.constants.ALLOW_PRIVATE_HOSTS`—RFC1918 /
+      unique-local), blocking SSRF / internal-pivot via model input.
     """
     if not is_allowed_connector(connector_type):
         return {
@@ -140,6 +179,12 @@ def _validate_session_create_config(
                 "error": "invalid_url_scheme",
                 "scheme": scheme or "<missing>",
             }
+    if host is not None and _is_internal_host(host):
+        return {
+            "success": False,
+            "error": "invalid_host",
+            "host": host,
+        }
     return None
 
 
@@ -394,6 +439,7 @@ def create_mcp_app(
             connector_type=connector_type,
             url=url,
             port=port,
+            host=host,
         )
         if rejection is not None:
             return rejection
