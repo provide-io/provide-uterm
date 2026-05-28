@@ -84,8 +84,8 @@ async def test_missing_type_field_is_anonymous() -> None:
     assert result is not None
     assert len(result["users"]) == 1
     user = result["users"][0]
-    # Anonymous: user_id is str(id(ws)), not "alice"
-    assert user["user_id"] == str(id(ws))
+    # Anonymous: user_id is the per-connection anon id, not "alice"
+    assert user["user_id"] == ws._deckmux_anon_id
     assert user["name"] != ""  # generated name must be non-empty
 
 
@@ -104,7 +104,7 @@ async def test_unknown_version_is_anonymous() -> None:
 
     assert result is not None
     user = result["users"][0]
-    assert user["user_id"] == str(id(ws))
+    assert user["user_id"] == ws._deckmux_anon_id
     assert user["name"] != ""
 
 
@@ -123,7 +123,7 @@ async def test_empty_subject_is_anonymous() -> None:
 
     assert result is not None
     user = result["users"][0]
-    assert user["user_id"] == str(id(ws))
+    assert user["user_id"] == ws._deckmux_anon_id
     assert user["name"] != ""
 
 
@@ -142,7 +142,7 @@ async def test_non_string_subject_is_anonymous() -> None:
 
     assert result is not None
     user = result["users"][0]
-    assert user["user_id"] == str(id(ws))
+    assert user["user_id"] == ws._deckmux_anon_id
     assert user["name"] != ""
 
 
@@ -186,7 +186,7 @@ async def test_non_identity_first_frame_is_anonymous() -> None:
 
     assert result is not None
     user = result["users"][0]
-    assert user["user_id"] == str(id(ws))
+    assert user["user_id"] == ws._deckmux_anon_id
     assert user["name"] != ""
 
     # Now simulate a second "correct" identity frame arriving after connect:
