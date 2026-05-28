@@ -112,7 +112,24 @@ class LocalAuthorizationProvider:
         return capability in await self.capabilities_for(principal)
 
     async def is_admin(self, principal: Principal) -> bool:
-        return "admin" in principal.roles
+        # A session-scoped admin grant (tunnel share-operator) is NOT a global
+        # administrator: it confers admin rights on a single session only. Such
+        # principals must fail the global admin check so the grant cannot leak
+        # to other sessions; per-session admin is resolved via
+        # ``_is_admin_for_session``.
+        return "admin" in principal.roles and principal.admin_session_scope is None
+
+    @staticmethod
+    def _is_admin_for_session(principal: Principal, session: SessionDefinition) -> bool:
+        """True if ``principal`` has admin rights over this specific session.
+
+        Covers global admins (``admin_session_scope is None``) and
+        session-scoped admins whose scope matches ``session.session_id``.
+        """
+        if "admin" not in principal.roles:
+            return False
+        scope = principal.admin_session_scope
+        return scope is None or scope == session.session_id
 
     async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
         return session.owner is not None and session.owner == principal.subject_id
@@ -120,7 +137,7 @@ class LocalAuthorizationProvider:
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
         if not await self.has_capability(principal, "session.read"):
             return False
-        if await self.is_admin(principal) or await self.is_owner(principal, session):
+        if self._is_admin_for_session(principal, session) or await self.is_owner(principal, session):
             return True
         if principal.subject_id.startswith(f"share:{session.session_id}:"):
             return True
@@ -141,7 +158,7 @@ class LocalAuthorizationProvider:
     async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
         if not await self.has_capability(principal, action):
             return False
-        if await self.is_admin(principal):
+        if self._is_admin_for_session(principal, session):
             return True
         if session.owner is None:
             return False
