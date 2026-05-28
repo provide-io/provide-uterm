@@ -3,6 +3,41 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+_HMAC_ALGS = frozenset({"HS256", "HS384", "HS512"})
+
+
+def _looks_like_asymmetric_key(pem: str | None) -> bool:
+    """Return True if *pem* carries an asymmetric public-key/certificate PEM marker.
+
+    A raw HMAC shared secret has no PEM header, so it is not treated as an
+    asymmetric key — only genuine PUBLIC KEY / CERTIFICATE blocks count.
+    """
+    if not pem:
+        return False
+    return "PUBLIC KEY" in pem or "BEGIN CERTIFICATE" in pem
+
+
+def _reject_jwt_algorithm_confusion(
+    algorithms: tuple[str, ...], public_key_pem: str | None, jwks_url: str | None
+) -> None:
+    """Fail closed on JWT algorithm-confusion configurations.
+
+    If an HMAC algorithm (HS*) is configured together with an asymmetric
+    algorithm (RS*/ES*/PS*), a JWKS URL, or a PEM that is an asymmetric public
+    key, an attacker can forge an HS* token using the public key bytes as the
+    HMAC secret. Reject such configs loudly at startup.
+    """
+    has_hmac = any(a in _HMAC_ALGS for a in algorithms)
+    if not has_hmac:
+        return
+    has_asym_alg = any(a not in _HMAC_ALGS for a in algorithms)
+    has_asym_key = bool(jwks_url) or _looks_like_asymmetric_key(public_key_pem)
+    if has_asym_alg or has_asym_key:
+        raise ValueError(
+            "JWT_ALGORITHMS must not combine HMAC (HS*) with asymmetric algorithms "
+            "or an asymmetric public key / JWKS URL (algorithm-confusion risk)"
+        )
+
 
 @dataclass(slots=True)
 class JwtConfig:
@@ -148,6 +183,7 @@ class CloudflareConfig:
             jwt_role_map=jwt_role_map,
             jwt_service_token_admin=_get_bool("JWT_SERVICE_TOKEN_ADMIN", default=False),
         )
+        _reject_jwt_algorithm_confusion(jwt.algorithms, jwt.public_key_pem, jwt.jwks_url)
         worker_bearer_token = _get("WORKER_BEARER_TOKEN") or None
         if mode == "jwt" and not worker_bearer_token:
             raise ValueError("WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'")
