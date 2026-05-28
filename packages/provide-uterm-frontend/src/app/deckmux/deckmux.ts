@@ -412,7 +412,7 @@ export class DeckMux {
     const user = this._users.get(userId);
     if (!user) return;
 
-    const avatarEl = this._barContainer?.querySelector(`[data-user-id="${userId}"]`);
+    const avatarEl = this._presenceBar?.getAvatarElement(userId);
     const rect = avatarEl?.getBoundingClientRect();
     const pos = rect ? { x: rect.left, y: rect.bottom + 4 } : { x: 0, y: 0 };
 
