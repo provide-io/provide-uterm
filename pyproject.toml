@@ -342,6 +342,7 @@ also_copy = [
     "packages/provide-uterm-server/tests/tunnel",
     "packages/provide-uterm-server/tests/server",
     "packages/provide-uterm-platform/tests/manager",
+    "docker",
     "conftest.py",
 ]
 pytest_add_cli_args = [

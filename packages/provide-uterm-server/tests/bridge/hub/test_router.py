@@ -90,6 +90,19 @@ async def test_send_worker_returns_false_when_no_worker(hub: TermHub) -> None:
     assert await hub.router.send_worker("nobody", {"type": "input", "data": "x"}) is False
 
 
+async def test_send_worker_reraises_base_exception_after_clearing_stale_worker(hub: TermHub) -> None:
+    """BaseException subclasses must not be swallowed, but stale worker state is cleared first."""
+    ws = AsyncMock()
+    ws.send_text.side_effect = KeyboardInterrupt
+    async with hub._lock:
+        hub.registry.put("w1", WorkerTermState(worker_ws=ws))
+
+    with pytest.raises(KeyboardInterrupt):
+        await hub.router.send_worker("w1", {"type": "input", "data": "x"})
+
+    assert hub.registry.get("w1").worker_ws is None
+
+
 async def test_hijack_state_msg_for_unknown_worker(hub: TermHub) -> None:
     """hijack_state_msg_for builds a fresh frame even when the worker is unknown."""
     frame = await hub.router.hijack_state_msg_for("no-such-worker", AsyncMock())

@@ -183,6 +183,22 @@ class TestPipeWs:
         with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
             await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False)
 
+    async def test_passes_ssl_context_to_websocket_connect(self) -> None:
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(return_value=b"")
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+
+        ws_mock = _mock_ws([])
+        mock_ws_mod = MagicMock()
+        mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
+        ws_ssl = object()
+
+        with patch.dict("sys.modules", {"websockets": mock_ws_mod}):
+            await _pipe_ws(reader, writer, "ws://test", token_holder=[None], telnet=False, ws_ssl=ws_ssl)  # type: ignore[arg-type]
+
+        assert mock_ws_mod.connect.call_args.kwargs["ssl"] is ws_ssl
+
     async def test_sends_resume_token(self) -> None:
         holder: list[dict | None] = [{"token": "mytoken"}]
 

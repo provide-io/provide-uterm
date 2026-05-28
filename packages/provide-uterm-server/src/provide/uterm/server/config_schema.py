@@ -20,6 +20,7 @@ from provide.uterm.defaults import TerminalDefaults
 XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
 FITADDON_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
 FONTS_CDN_DEFAULT = "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap"
+SERVER_BUILTIN_CONNECTOR_TYPES = frozenset({"shell", "ssh", "telnet", "websocket", "ushell"})
 
 
 def _clean_path(value: str, fallback: str) -> str:
@@ -279,10 +280,11 @@ class SessionDefinition(ServerBaseModel):
             from provide.uterm.server.connectors import registered_types
 
             known = registered_types()
-            if known and connector_type not in known:
+            valid = known | SERVER_BUILTIN_CONNECTOR_TYPES
+            if known and connector_type not in valid:
                 label = session_id or "<unknown>"
                 raise ValueError(
-                    f"invalid connector_type for {label!r}: {connector_type!r} — must be one of {sorted(known)}"
+                    f"invalid connector_type for {label!r}: {connector_type!r} — must be one of {sorted(valid)}"
                 )
         except ImportError:  # pragma: no cover — server.connectors is always present in this package
             # Fallback for environments where server.connectors isn't available

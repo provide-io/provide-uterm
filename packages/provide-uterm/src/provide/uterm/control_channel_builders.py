@@ -41,8 +41,8 @@ def _canonical_identity_signature_payload(
 def make_identity(
     subject: str,
     claims: Mapping[str, Any] | None = None,
-    fingerprint: str = "",
-    transport: str = "ssh",
+    fingerprint: str | None = None,
+    transport: str | None = None,
     secret: str | bytes | None = None,
 ) -> dict[str, Any]:
     """Build an ``identity`` control message.
@@ -61,23 +61,25 @@ def make_identity(
     """
     if not subject:
         raise ValueError("make_identity: 'subject' must be a non-empty string")
+    fingerprint_value = "" if fingerprint is None else fingerprint
+    transport_value = "ssh" if transport is None else transport
     msg: dict[str, Any] = {
         "type": "identity",
         "version": 1,
         "subject": subject,
-        "fingerprint": fingerprint,
-        "transport": transport,
+        "fingerprint": fingerprint_value,
+        "transport": transport_value,
     }
     if claims is not None:
         msg["claims"] = dict(claims)
 
     if secret:
-        secret_bytes = secret if isinstance(secret, bytes) else secret.encode("utf-8")
+        secret_bytes = secret if isinstance(secret, bytes) else secret.encode()
         payload = _canonical_identity_signature_payload(
             version=msg["version"],
             subject=msg["subject"],
-            fingerprint=msg.get("fingerprint", ""),
-            transport=msg.get("transport", ""),
+            fingerprint=fingerprint_value,
+            transport=transport_value,
             claims=msg.get("claims", {}),
         )
         signature = hmac.new(secret_bytes, payload, hashlib.sha256).hexdigest()

@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import provide.uterm.manager.process as process_module
+import provide.uterm.manager.process_impl as process_impl_module
 from provide.uterm.manager.config import ManagerConfig
 from provide.uterm.manager.core import AgentManager
 from provide.uterm.manager.models import AgentStatusBase
@@ -222,12 +223,12 @@ class TestAdditionalCoverage:
                 raise asyncio.CancelledError
 
         with (
-            patch.object(process_module, "_handle_exited_processes", AsyncMock()),
-            patch.object(process_module, "_handle_heartbeat_timeouts", AsyncMock()),
-            patch.object(process_module, "_handle_stale_queued", MagicMock()),
-            patch.object(process_module, "_handle_bust_respawn", AsyncMock()),
-            patch.object(process_module, "_handle_desired_state", AsyncMock()),
-            patch.object(process_module, "_cleanup_old_worker_logs", MagicMock()) as mock_cleanup,
+            patch.object(process_impl_module, "_handle_exited_processes", AsyncMock()),
+            patch.object(process_impl_module, "_handle_heartbeat_timeouts", AsyncMock()),
+            patch.object(process_impl_module, "_handle_stale_queued", MagicMock()),
+            patch.object(process_impl_module, "_handle_bust_respawn", AsyncMock()),
+            patch.object(process_impl_module, "_handle_desired_state", AsyncMock()),
+            patch.object(process_impl_module, "_cleanup_old_worker_logs", MagicMock()) as mock_cleanup,
             patch("asyncio.sleep", AsyncMock(side_effect=_sleep_side_effect)),
         ):
             with pytest.raises(asyncio.CancelledError):

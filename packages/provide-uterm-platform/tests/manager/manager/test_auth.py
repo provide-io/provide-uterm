@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from provide.uterm.manager.auth import TokenAuthMiddleware, setup_auth
+from provide.uterm.manager.auth import TokenAuthMiddleware, _is_loopback_bind, setup_auth
 
 
 class TestTokenAuthMiddleware:
@@ -202,6 +202,10 @@ class TestSetupAuthBindHostGuard:
         yield
         for var in ("UTERM_MANAGER_API_TOKEN", "UTERM_MANAGER_ALLOW_UNAUTHENTICATED"):
             os.environ.pop(var, None)
+
+    def test_empty_host_is_not_loopback(self) -> None:
+        assert _is_loopback_bind(None) is False
+        assert _is_loopback_bind("") is False
 
     @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
     def test_loopback_bind_without_token_warns_and_skips(self, host: str) -> None:
