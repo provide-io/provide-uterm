@@ -175,5 +175,8 @@ class TerminalEmulator:
         """
         self.cols = cols
         self.rows = rows
-        self._screen.resize(cols, rows)
+        # pyte's Screen.resize signature is (lines, columns) == (rows, cols),
+        # unlike the constructor pyte.Screen(columns, lines). See
+        # render/buffer.py:103 for the correct reference.
+        self._screen.resize(rows, cols)
         self._dirty = True
