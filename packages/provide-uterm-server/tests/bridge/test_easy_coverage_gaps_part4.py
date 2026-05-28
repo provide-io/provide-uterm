@@ -183,14 +183,14 @@ async def test_audit_all_browsers_leaves_allowed_browsers_open() -> None:
 
 async def test_resume_run_tx_rolls_back_on_op_exception() -> None:
     """resume.py:153-156 — _run_tx rolls back when the op raises and re-raises."""
-    from unittest.mock import AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
 
     from provide.uterm.server.bridge.hub.resume import ControlPlaneResumeStore
 
     tx = AsyncMock()
-    cp = AsyncMock()
+    cp = MagicMock()
     cp.begin = AsyncMock(return_value=tx)
-    cp.token_store = AsyncMock()
+    cp.token_store = MagicMock(return_value=AsyncMock())
     manager = ControlPlaneResumeStore.__new__(ControlPlaneResumeStore)
     manager._control_plane = cp  # type: ignore[attr-defined]
 

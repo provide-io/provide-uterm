@@ -24,6 +24,15 @@ from provide.uterm.tunnel.protocol import CHANNEL_TCP, FLAG_EOF, TunnelFrame, de
 from provide.uterm.tunnel.types import TunnelCreateResponse, TunnelTokenState
 
 
+def _close_asyncio_run_coro(coro):
+    coro.close()
+
+
+def _close_asyncio_run_coro_then_interrupt(coro):
+    coro.close()
+    raise KeyboardInterrupt
+
+
 class TestTunnelArgParsing:
     def test_tunnel_subcommand_recognised(self) -> None:
         parser = _build_parser()
@@ -157,7 +166,8 @@ class TestRelayTcpToWs:
 class TestRelayWsToTcp:
     @pytest.mark.asyncio
     async def test_writes_to_tcp(self) -> None:
-        writer = AsyncMock()
+        writer = MagicMock()
+        writer.drain = AsyncMock()
         writer.close = MagicMock()
         frames = [
             TunnelFrame(channel=CHANNEL_TCP, flags=0, payload=b"hello"),
@@ -172,7 +182,8 @@ class TestRelayWsToTcp:
 
     @pytest.mark.asyncio
     async def test_skips_non_tcp_channel(self) -> None:
-        writer = AsyncMock()
+        writer = MagicMock()
+        writer.drain = AsyncMock()
         writer.close = MagicMock()
         frames = [
             TunnelFrame(channel=0x01, flags=0, payload=b"terminal data"),
@@ -186,7 +197,8 @@ class TestRelayWsToTcp:
 
     @pytest.mark.asyncio
     async def test_handles_connection_error(self) -> None:
-        writer = AsyncMock()
+        writer = MagicMock()
+        writer.drain = AsyncMock()
         writer.close = MagicMock()
         ws_recv = AsyncMock(side_effect=ConnectionError("broken"))
         await _relay_ws_to_tcp(ws_recv, writer)  # should not raise
@@ -243,7 +255,7 @@ class TestCmdTunnel:
                     "share_url": "https://example.com/s/tunnel-abc",
                 },
             ),
-            patch("provide.uterm.cli.tunnel.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.tunnel.asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
         ):
             _cmd_tunnel(args)
             mock_run.assert_called_once()
@@ -258,7 +270,7 @@ class TestCmdTunnel:
         )
         with (
             patch("provide.uterm.cli.tunnel._create_tunnel") as mock_create,
-            patch("provide.uterm.cli.tunnel.asyncio.run"),
+            patch("provide.uterm.cli.tunnel.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             _cmd_tunnel(args)
@@ -281,7 +293,7 @@ class TestCmdTunnel:
                     "share_url": "",
                 },
             ),
-            patch("provide.uterm.cli.tunnel.asyncio.run", side_effect=KeyboardInterrupt),
+            patch("provide.uterm.cli.tunnel.asyncio.run", side_effect=_close_asyncio_run_coro_then_interrupt),
         ):
             _cmd_tunnel(args)  # should not raise
 

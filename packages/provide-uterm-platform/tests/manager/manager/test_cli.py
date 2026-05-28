@@ -11,6 +11,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from provide.uterm.manager.cli import main
 
 
+def _close_asyncio_run_coro(coro):
+    coro.close()
+
+
 def test_main_parses_args_and_runs():
     mock_manager = MagicMock()
     mock_manager.run = AsyncMock()
@@ -18,7 +22,7 @@ def test_main_parses_args_and_runs():
     with (
         patch("sys.argv", ["uterm-manager", "--host", "0.0.0.0", "--port", "9999", "--log-level", "debug"]),
         patch("provide.uterm.manager.app.create_manager_app") as mock_create,
-        patch("asyncio.run") as mock_run,
+        patch("asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
     ):
         mock_create.return_value = (MagicMock(), mock_manager)
         main()
@@ -34,10 +38,11 @@ def test_main_parses_args_and_runs():
 
 def test_main_defaults():
     mock_manager = MagicMock()
+    mock_manager.run = AsyncMock()
     with (
         patch("sys.argv", ["uterm-manager"]),
         patch("provide.uterm.manager.app.create_manager_app") as mock_create,
-        patch("asyncio.run"),
+        patch("asyncio.run", side_effect=_close_asyncio_run_coro),
     ):
         mock_create.return_value = (MagicMock(), mock_manager)
         main()
@@ -49,10 +54,11 @@ def test_main_defaults():
 def test_main_unknown_args():
     """Unknown args are silently ignored."""
     mock_manager = MagicMock()
+    mock_manager.run = AsyncMock()
     with (
         patch("sys.argv", ["uterm-manager", "--unknown", "value"]),
         patch("provide.uterm.manager.app.create_manager_app") as mock_create,
-        patch("asyncio.run"),
+        patch("asyncio.run", side_effect=_close_asyncio_run_coro),
     ):
         mock_create.return_value = (MagicMock(), mock_manager)
         main()  # should not raise

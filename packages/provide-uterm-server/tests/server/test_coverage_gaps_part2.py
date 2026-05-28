@@ -26,6 +26,11 @@ from provide.uterm.server.registry import SessionRegistry
 _TEST_KEY = "uterm-test-secret-32-byte-minimum-key"
 
 
+def _close_created_coro(coro: Any) -> MagicMock:
+    coro.close()
+    return MagicMock()
+
+
 def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
     now = int(time.time())
     return _jwt.encode(
@@ -124,7 +129,7 @@ class TestPamTunnelGaps:
         ):
             mock_loop.return_value.add_reader = _add_reader
             mock_loop.return_value.remove_reader = MagicMock()
-            mock_loop.return_value.create_task = MagicMock()
+            mock_loop.return_value.create_task = MagicMock(side_effect=_close_created_coro)
             bridge = PamTunnelBridge("wss://x", "tok", connector)
             await bridge.start()
 
@@ -166,7 +171,7 @@ class TestPamTunnelGaps:
         ):
             mock_loop.return_value.add_reader = _add_reader
             mock_loop.return_value.remove_reader = MagicMock()
-            mock_loop.return_value.create_task = MagicMock()
+            mock_loop.return_value.create_task = MagicMock(side_effect=_close_created_coro)
             bridge = PamTunnelBridge("wss://x", "tok", connector)
             await bridge.start()
 

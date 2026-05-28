@@ -15,6 +15,10 @@ from provide.uterm.cli import _build_parser
 from provide.uterm.cli.inspect import _cmd_inspect, _create_tunnel, _read_token
 
 
+def _close_asyncio_run_coro(coro):
+    coro.close()
+
+
 class TestInspectArgParsing:
     def test_inspect_subcommand_recognised(self):
         parser = _build_parser()
@@ -111,7 +115,7 @@ class TestCmdInspect:
         )
         with (
             patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.uterm.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             _cmd_inspect(args)
@@ -131,7 +135,7 @@ class TestCmdInspect:
                 "provide.uterm.cli.inspect._create_tunnel",
                 return_value={"ws_endpoint": "/tunnel/t", "worker_token": "w", "share_url": ""},
             ),
-            patch("provide.uterm.cli.inspect.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
         ):
             _cmd_inspect(args)
             mock_run.assert_called_once()

@@ -14,6 +14,16 @@ import pytest
 from provide.uterm.cli.inspect import _cmd_inspect, _create_tunnel, _read_token
 from provide.uterm.tunnel.protocol import CHANNEL_HTTP
 
+
+def _close_asyncio_run_coro(coro):
+    coro.close()
+
+
+def _close_asyncio_run_coro_then_interrupt(coro):
+    coro.close()
+    raise KeyboardInterrupt
+
+
 # ---------------------------------------------------------------------------
 # CHANNEL_HTTP constant
 # ---------------------------------------------------------------------------
@@ -138,7 +148,7 @@ class TestCmdInspectEdge:
         args = self._make_args(display_name="my-api")
         with (
             patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.uterm.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/t", "worker_token": "", "share_url": ""}
             _cmd_inspect(args)
@@ -148,7 +158,7 @@ class TestCmdInspectEdge:
         args = self._make_args()
         with (
             patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.uterm.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             mock_create.return_value = {
                 "ws_endpoint": "ws://x/tunnel/t",
@@ -163,7 +173,7 @@ class TestCmdInspectEdge:
         args = self._make_args()
         with (
             patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.uterm.cli.inspect.asyncio.run"),
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             _cmd_inspect(args)
@@ -174,7 +184,7 @@ class TestCmdInspectEdge:
         args = self._make_args()
         with (
             patch("provide.uterm.cli.inspect._create_tunnel") as mock_create,
-            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=KeyboardInterrupt),
+            patch("provide.uterm.cli.inspect.asyncio.run", side_effect=_close_asyncio_run_coro_then_interrupt),
         ):
             mock_create.return_value = {"ws_endpoint": "ws://x/tunnel/t", "worker_token": "", "share_url": ""}
             # Should NOT raise — KeyboardInterrupt is suppressed by `with suppress(KeyboardInterrupt):`
@@ -194,6 +204,7 @@ class TestCmdInspectEdge:
         assert "wss://example.com/tunnel/abc" in str(
             ws_arg.cr_frame.f_locals if hasattr(ws_arg, "cr_frame") else ws_arg
         )
+        ws_arg.close()
 
     def test_relative_ws_endpoint_resolved_with_http(self):
         args = self._make_args(server="http://localhost:8000")

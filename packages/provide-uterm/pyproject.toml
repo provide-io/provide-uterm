@@ -114,7 +114,6 @@ addopts = [
     "-ra",
     "-m",
     "not playwright and not memray and not slow and not docker",
-    "--cov=provide.uterm.__init__",
     "--cov=provide.uterm.ansi",
     "--cov=provide.uterm.bridge.coordinator",
     "--cov=provide.uterm.bridge.schemas",
@@ -142,7 +141,6 @@ addopts = [
 
 [tool.coverage.run]
 source = [
-    "provide.uterm.__init__",
     "provide.uterm.ansi",
     "provide.uterm.bridge.coordinator",
     "provide.uterm.bridge.schemas",
