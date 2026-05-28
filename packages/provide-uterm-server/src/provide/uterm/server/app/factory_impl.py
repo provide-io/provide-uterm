@@ -256,6 +256,11 @@ def create_server_app(
                 subject_id=f"share:{session_id}:operator",
                 roles=frozenset({"admin"}),
                 scopes=frozenset({"*"}),
+                # Confine the admin grant to this share's session: the operator
+                # drives its own session with full admin capabilities but is not
+                # a global administrator, so the grant cannot escalate to other
+                # sessions even if this principal is resolved off-path.
+                admin_session_scope=session_id,
             )
         if verify_token(str(provided), str(token_state.get("share_token_hash", ""))):
             connection.state.uterm_share_token = str(provided)

@@ -280,6 +280,10 @@ async def test_authz_service_fallback_paths() -> None:
     principal.roles = ["admin"]
     principal.subject_id = "alice"
     principal.scopes = ["*"]
+    # A global admin has no session scope (None); without this the MagicMock
+    # auto-attr would be truthy and the is_admin fallback would treat it as a
+    # session-scoped (non-global) admin grant.
+    principal.admin_session_scope = None
 
     session = MagicMock()
     session.owner = "alice"
