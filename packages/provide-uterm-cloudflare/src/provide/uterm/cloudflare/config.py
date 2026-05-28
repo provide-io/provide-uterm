@@ -25,6 +25,11 @@ class JwtConfig:
     # Set JWT_ROLE_MAP to a JSON object: e.g. '{"engineering":"admin","ops":"operator"}'.
     # When set with JWT_ROLES_CLAIM=groups, arbitrary CF Access group names map to roles.
     jwt_role_map: dict[str, str] = field(default_factory=dict)
+    # Opt-in: grant the ``admin`` role to CF Access service-token JWTs (tokens that
+    # carry a ``common_name`` claim and no human ``email`` claim). Defaults to False
+    # so a service-token-shaped JWT is never silently elevated to admin; set
+    # JWT_SERVICE_TOKEN_ADMIN=1 only when service tokens are trusted automation.
+    jwt_service_token_admin: bool = False
 
 
 @dataclass(slots=True)
@@ -141,6 +146,7 @@ class CloudflareConfig:
             jwt_scopes_claim=_get("JWT_SCOPES_CLAIM", "scope") or "scope",
             jwt_default_role=_get("JWT_DEFAULT_ROLE", "viewer") or "viewer",
             jwt_role_map=jwt_role_map,
+            jwt_service_token_admin=_get_bool("JWT_SERVICE_TOKEN_ADMIN", default=False),
         )
         worker_bearer_token = _get("WORKER_BEARER_TOKEN") or None
         if mode == "jwt" and not worker_bearer_token:

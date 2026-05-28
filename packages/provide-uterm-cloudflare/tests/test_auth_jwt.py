@@ -245,3 +245,82 @@ async def test_decode_jwt_has_no_none_bypass() -> None:
     cfg = JwtConfig(mode="none", public_key_pem="any")
     with pytest.raises(JwtValidationError):
         await decode_jwt("not.a.valid.token", cfg)
+
+
+# ---------------------------------------------------------------------------
+# CF-svc: CF Access service tokens only get admin when explicitly enabled.
+# ---------------------------------------------------------------------------
+
+_SVC_SECRET = "uterm-test-secret-32-byte-minimum-key"
+
+
+def _svc_token(**claims: object) -> str:
+    now = int(time.time())
+    payload: dict = {"exp": now + 600}
+    payload.update(claims)
+    return jwt.encode(payload, _SVC_SECRET, algorithm="HS256")
+
+
+async def test_empty_sub_service_token_not_admin_by_default() -> None:
+    """A service-token-shaped JWT must NOT be auto-granted admin unless opted in.
+
+    Default config does not enable service-token admin, so common_name becomes
+    the subject but the principal gets only the default role, never admin.
+    """
+    token = _svc_token(sub="", common_name="acme-client-id")
+    cfg = JwtConfig(mode="jwt", public_key_pem=_SVC_SECRET, algorithms=("HS256",))
+    principal = await decode_jwt(token, cfg)
+    assert principal.subject_id == "acme-client-id"
+    assert "admin" not in principal.roles
+    assert resolve_role(principal) == "viewer"
+
+
+async def test_service_token_admin_requires_opt_in_and_common_name() -> None:
+    """With service-token admin enabled, a token carrying common_name gets admin."""
+    token = _svc_token(sub="", common_name="acme-client-id")
+    cfg = JwtConfig(
+        mode="jwt",
+        public_key_pem=_SVC_SECRET,
+        algorithms=("HS256",),
+        jwt_service_token_admin=True,
+    )
+    principal = await decode_jwt(token, cfg)
+    assert principal.subject_id == "acme-client-id"
+    assert principal.roles == ("admin",)
+
+
+async def test_service_token_admin_opt_in_rejects_human_email_token() -> None:
+    """Even with service-token admin enabled, a token carrying a human email claim
+    is treated as a user (never silently elevated to a service-token admin)."""
+    token = _svc_token(sub="", common_name="acme-client-id", email="person@example.com")
+    cfg = JwtConfig(
+        mode="jwt",
+        public_key_pem=_SVC_SECRET,
+        algorithms=("HS256",),
+        jwt_service_token_admin=True,
+    )
+    principal = await decode_jwt(token, cfg)
+    assert "admin" not in principal.roles
+
+
+def test_config_reads_jwt_service_token_admin_from_env() -> None:
+    """JWT_SERVICE_TOKEN_ADMIN env var wires JwtConfig.jwt_service_token_admin."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    cfg = CloudflareConfig.from_env(
+        {
+            "AUTH_MODE": "jwt",
+            "JWT_PUBLIC_KEY_PEM": "pem",
+            "WORKER_BEARER_TOKEN": "t",
+            "JWT_SERVICE_TOKEN_ADMIN": "1",
+        }
+    )
+    assert cfg.jwt.jwt_service_token_admin is True
+
+
+def test_config_jwt_service_token_admin_defaults_false() -> None:
+    """Service-token admin is opt-in: defaults to False (fail closed)."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
+
+    cfg = CloudflareConfig.from_env({"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "pem", "WORKER_BEARER_TOKEN": "t"})
+    assert cfg.jwt.jwt_service_token_admin is False
