@@ -30,6 +30,7 @@ body is a line-for-line move from the prior mixin implementation, with
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from provide.uterm.deckmux._names import (
@@ -46,6 +47,35 @@ from provide.uterm.deckmux._protocol import (
     make_presence_leave,
 )
 from provide.uterm.deckmux._transfer import TransferManager
+
+# Attribute name used to stash a stable per-connection anonymous identity on
+# the websocket object. Using a private dunder-ish name avoids clashing with
+# transport attributes.
+_ANON_ID_ATTR = "_deckmux_anon_id"
+
+
+def _anon_user_id(ws: Any) -> str:
+    """Return a stable per-connection anonymous identity for *ws*.
+
+    ``str(id(ws))`` is unsafe: CPython reuses an object's ``id()`` after it
+    is garbage-collected, so a freshly-connected browser can collide with a
+    disconnected one's id and inherit its presence/ownership. Instead we mint
+    a ``uuid4`` once per connection and stash it on the ws, returning the same
+    value for the lifetime of that connection object.
+    """
+    existing = getattr(ws, _ANON_ID_ATTR, None)
+    if isinstance(existing, str):
+        return existing
+    minted = uuid.uuid4().hex
+    try:
+        setattr(ws, _ANON_ID_ATTR, minted)
+    except (AttributeError, TypeError):
+        # Some ws objects forbid attribute assignment (e.g. __slots__ without
+        # the field). The minted id is still unique per call; for such objects
+        # identity stability across calls is not achievable without the stash,
+        # but uniqueness (the security property) is preserved.
+        return minted
+    return minted
 
 
 class DeckMuxPresence:
@@ -103,7 +133,7 @@ class DeckMuxPresence:
         store = self.get_presence_store(worker_id)
 
         # Generate identity
-        user_id = str(id(ws))
+        user_id = _anon_user_id(ws)
         if principal and hasattr(principal, "subject_id"):
             name = getattr(principal, "display_name", "") or getattr(principal, "subject_id", "")
             user_id = getattr(principal, "subject_id", user_id)
@@ -137,7 +167,7 @@ class DeckMuxPresence:
     ) -> None:
         """Called when a browser disconnects. Broadcasts presence_leave."""
         store = self.get_presence_store(worker_id)
-        user_id = str(id(ws))
+        user_id = _anon_user_id(ws)
         if principal and hasattr(principal, "subject_id"):
             user_id = getattr(principal, "subject_id", user_id)
         removed = store.remove(user_id)
@@ -157,7 +187,7 @@ class DeckMuxPresence:
         store = self.get_presence_store(worker_id)
         # Resolve user_id the same way as on_browser_connect so the
         # store lookup succeeds (must match the ID used during add()).
-        user_id = str(id(ws))
+        user_id = _anon_user_id(ws)
         if principal and hasattr(principal, "subject_id"):
             user_id = getattr(principal, "subject_id", user_id)
 
