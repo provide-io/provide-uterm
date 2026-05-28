@@ -169,7 +169,8 @@ def test_tunnel_share_cookie_allows_session_page_without_jwt() -> None:
     app = _jwt_app_public_session("tok-sess-share")
     _seed_tunnel_tokens(app, "tok-sess-share", share_token=token, control_token="control-token-123")
     with TestClient(app) as c:
-        r = c.get("/app/session/tok-sess-share", cookies={"uterm_tunnel_tok-sess-share": token})
+        c.cookies.set("uterm_tunnel_tok-sess-share", token)
+        r = c.get("/app/session/tok-sess-share")
     assert r.status_code == 200
     assert '"share_role": "viewer"' in r.text
     # The capability token must NOT appear in the page body.
@@ -184,7 +185,8 @@ def test_tunnel_control_cookie_allows_operator_page_without_jwt() -> None:
     app = _jwt_app_public_session("tok-sess-control")
     _seed_tunnel_tokens(app, "tok-sess-control", share_token="share-token-123", control_token=token)
     with TestClient(app) as c:
-        r = c.get("/app/operator/tok-sess-control", cookies={"uterm_tunnel_tok-sess-control": token})
+        c.cookies.set("uterm_tunnel_tok-sess-control", token)
+        r = c.get("/app/operator/tok-sess-control")
     assert r.status_code == 200
     assert '"share_role": "operator"' in r.text
     assert token not in r.text
@@ -203,7 +205,8 @@ def test_tunnel_share_cookie_allows_inspect_page_without_jwt() -> None:
     app = _jwt_app_public_session("tok-sess-inspect")
     _seed_tunnel_tokens(app, "tok-sess-inspect", share_token=token, control_token="ct", share_page="inspect")
     with TestClient(app) as c:
-        r = c.get("/app/inspect/tok-sess-inspect", cookies={"uterm_tunnel_tok-sess-inspect": token})
+        c.cookies.set("uterm_tunnel_tok-sess-inspect", token)
+        r = c.get("/app/inspect/tok-sess-inspect")
     assert r.status_code == 200
     assert '"page_kind": "inspect"' in r.text
 

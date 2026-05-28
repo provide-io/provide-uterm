@@ -53,6 +53,15 @@ def _make_args(**overrides: Any) -> Any:
     return ns
 
 
+def _close_asyncio_run_coro(coro: Any) -> None:
+    coro.close()
+
+
+def _close_asyncio_run_coro_then_interrupt(coro: Any) -> None:
+    coro.close()
+    raise KeyboardInterrupt
+
+
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
@@ -237,7 +246,7 @@ class TestCmdShare:
         with (
             self._mock_create_tunnel(),
             patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
-            patch("provide.uterm.cli.share.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
             patch("provide.uterm.cli.share._read_token", return_value="tok"),
         ):
             args = _make_args(cmd=["bash"])
@@ -262,7 +271,7 @@ class TestCmdShare:
         with (
             self._mock_create_tunnel(),
             patch("provide.uterm.cli.share.TtyProxy", return_value=mock_tty) as mock_cls,
-            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
             patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
             args = _make_args(attach=True)
@@ -279,7 +288,7 @@ class TestCmdShare:
         with (
             self._mock_create_tunnel(),
             patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
-            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
             patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
             args = _make_args(cmd=[])
@@ -294,7 +303,7 @@ class TestCmdShare:
         with (
             self._mock_create_tunnel(),
             patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.uterm.cli.share.asyncio.run", side_effect=KeyboardInterrupt),
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro_then_interrupt),
             patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
             args = _make_args()
@@ -321,7 +330,7 @@ class TestCmdShare:
         with (
             patch("provide.uterm.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE) as mock_ct,
             patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
             patch("provide.uterm.cli.share._read_token", return_value="t"),
         ):
             args = _make_args(display_name="custom@host")

@@ -46,6 +46,10 @@ def _make_args(**overrides: Any) -> Any:
     return ns
 
 
+def _close_asyncio_run_coro(coro: Any) -> None:
+    coro.close()
+
+
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
@@ -153,7 +157,7 @@ class TestCmdShareRelativeEndpoint:
         with (
             patch("provide.uterm.cli.share._create_tunnel", return_value=resp),
             patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.uterm.cli.share.asyncio.run") as mock_run,
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
         ):
             _cmd_share(_make_args())
         mock_pty.close.assert_called_once()
@@ -211,7 +215,7 @@ class TestCmdShareCleanup:
         with (
             patch("provide.uterm.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE),
             patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
-            patch("provide.uterm.cli.share.asyncio.run"),
+            patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             _cmd_share(_make_args())
         mock_pty.close.assert_called_once()

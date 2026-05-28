@@ -117,11 +117,17 @@ class TestHandleDesiredStateAlreadyRegistered:
         )
         manager.agents["agent_000"] = pre_existing_agent
 
+        task = asyncio.Future()
+
+        def _capture_task(coro):
+            coro.close()
+            return task
+
         # Patch allocate_agent_id to return agent_000 (already in agents)
         with (
             patch.object(pm, "allocate_agent_id", return_value="agent_000"),
             patch.object(pm, "_launch_queued_agent", new_callable=AsyncMock),
-            patch("provide.uterm.manager._monitor.asyncio.create_task", return_value=asyncio.Future()),
+            patch("provide.uterm.manager._monitor.asyncio.create_task", side_effect=_capture_task),
         ):
             await _handle_desired_state(pm)
 

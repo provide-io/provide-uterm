@@ -75,12 +75,15 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:websockets\\.legacy is deprecated; see .*:DeprecationWarning:websockets\\.legacy",
+    "ignore:websockets\\.server\\.serve is deprecated:DeprecationWarning",
     "ignore:websockets\\.server\\.WebSocketServerProtocol is deprecated:DeprecationWarning:uvicorn\\.protocols\\.websockets\\.websockets_impl",
     "ignore:remove second argument of ws_handler:DeprecationWarning:websockets\\.legacy\\.server",
+    "ignore:This process \\(pid=.*\\) is multi-threaded, use of forkpty\\(\\) may lead to deadlocks in the child\\.:DeprecationWarning:pty",
 ]
 markers = [
     "playwright: browser-based UI tests (deselected by default, run with -m playwright)",
     "slow: slow tests >10s (deselected by default)",
+    "unit: fast unit-level tests",
     "mutant: mutation-testing harness tests (run by mutation gate only)",
 ]
 addopts = [

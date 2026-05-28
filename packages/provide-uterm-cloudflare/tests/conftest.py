@@ -11,7 +11,9 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -72,6 +74,25 @@ def _install_testclient_dev_principal_autoauth() -> None:
 
 
 _install_testclient_dev_principal_autoauth()
+
+
+@pytest.fixture(autouse=True)
+def _close_test_sqlite_connections(monkeypatch: pytest.MonkeyPatch):
+    """Close sqlite connections created by unit-test DO storage stubs."""
+
+    original_connect = sqlite3.connect
+    connections: list[sqlite3.Connection] = []
+
+    def tracked_connect(*args, **kwargs):
+        conn = original_connect(*args, **kwargs)
+        connections.append(conn)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", tracked_connect)
+    yield
+    for conn in reversed(connections):
+        with contextlib.suppress(sqlite3.Error):
+            conn.close()
 
 
 def pytest_configure(config: pytest.Config) -> None:

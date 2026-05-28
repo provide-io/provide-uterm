@@ -285,9 +285,9 @@ def test_tunnel_share_cookie_allows_read_only_session_api() -> None:
         }
     }
     with TestClient(app) as client:
-        cookie = {"uterm_tunnel_tunnel-api-view": "share-token-123"}
-        response = client.get("/api/sessions/tunnel-api-view", cookies=cookie)
-        denied = client.post("/api/sessions/tunnel-api-view/mode", json={"input_mode": "open"}, cookies=cookie)
+        client.cookies.set("uterm_tunnel_tunnel-api-view", "share-token-123")
+        response = client.get("/api/sessions/tunnel-api-view")
+        denied = client.post("/api/sessions/tunnel-api-view/mode", json={"input_mode": "open"})
     assert response.status_code == 200
     assert denied.status_code == 403
 
@@ -321,8 +321,8 @@ def test_tunnel_control_cookie_allows_session_mutation_api() -> None:
         }
     }
     with TestClient(app) as client:
-        cookie = {"uterm_tunnel_tunnel-api-control": "control-token-123"}
-        response = client.post("/api/sessions/tunnel-api-control/mode", json={"input_mode": "hijack"}, cookies=cookie)
+        client.cookies.set("uterm_tunnel_tunnel-api-control", "control-token-123")
+        response = client.post("/api/sessions/tunnel-api-control/mode", json={"input_mode": "hijack"})
     assert response.status_code == 200
     assert response.json()["input_mode"] == "hijack"
 

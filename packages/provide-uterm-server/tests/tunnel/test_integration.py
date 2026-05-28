@@ -79,6 +79,11 @@ def _consume_invite_cookie(client: TestClient, invite_url: str, tunnel_id: str) 
     return cookie
 
 
+def _get_with_tunnel_cookie(client: TestClient, path: str, tunnel_id: str, token: str) -> Any:
+    client.cookies.set(f"uterm_tunnel_{tunnel_id}", token)
+    return client.get(path)
+
+
 # ---------------------------------------------------------------------------
 # 1. Full data flow
 # ---------------------------------------------------------------------------
@@ -132,7 +137,7 @@ class TestShareTokenAuth:
         tunnel_id = tunnel["tunnel_id"]
         share_token = _consume_invite_cookie(client, tunnel["share_url"], tunnel_id)
 
-        resp = client.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": share_token})
+        resp = _get_with_tunnel_cookie(client, f"/app/session/{tunnel_id}", tunnel_id, share_token)
         assert resp.status_code == 200
         assert "text/html" in resp.headers.get("content-type", "")
 
@@ -146,12 +151,10 @@ class TestShareTokenAuth:
 
         # Use separate clients to avoid cookie persistence between requests.
         client_good = TestClient(app)
-        resp_good = client_good.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": share_token})
+        resp_good = _get_with_tunnel_cookie(client_good, f"/app/session/{tunnel_id}", tunnel_id, share_token)
 
         client_bad = TestClient(app)
-        resp_bad = client_bad.get(
-            f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": "wrong-token-value"}
-        )
+        resp_bad = _get_with_tunnel_cookie(client_bad, f"/app/session/{tunnel_id}", tunnel_id, "wrong-token-value")
 
         # Both return 200 in none-auth mode, but the principal differs.
         assert resp_good.status_code == 200
@@ -177,7 +180,7 @@ class TestControlTokenAuth:
         tunnel_id = tunnel["tunnel_id"]
         control_token = _consume_invite_cookie(client, tunnel["control_url"], tunnel_id)
 
-        resp = client.get(f"/app/operator/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": control_token})
+        resp = _get_with_tunnel_cookie(client, f"/app/operator/{tunnel_id}", tunnel_id, control_token)
         assert resp.status_code == 200
         assert "text/html" in resp.headers.get("content-type", "")
 
@@ -205,7 +208,7 @@ class TestTokenExpiry:
 
         # Token works before expiry (fresh client to avoid cookie persistence)
         client_fresh = TestClient(app)
-        resp = client_fresh.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": share_token})
+        resp = _get_with_tunnel_cookie(client_fresh, f"/app/session/{tunnel_id}", tunnel_id, share_token)
         assert resp.status_code == 200
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
@@ -216,7 +219,7 @@ class TestTokenExpiry:
 
         # Token fails after expiry (fresh client)
         client_fresh2 = TestClient(app)
-        resp = client_fresh2.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": share_token})
+        resp = _get_with_tunnel_cookie(client_fresh2, f"/app/session/{tunnel_id}", tunnel_id, share_token)
         assert resp.status_code == 200  # still 200 because auth=none fallback
         cookies = {c.name: c.value for c in resp.cookies.jar}
         # But the share principal is NOT set (expired token)
@@ -240,7 +243,7 @@ class TestTokenRevocation:
 
         # Tokens work before revocation (fresh client)
         c1 = TestClient(app)
-        resp = c1.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": share_token})
+        resp = _get_with_tunnel_cookie(c1, f"/app/session/{tunnel_id}", tunnel_id, share_token)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
 
@@ -251,13 +254,13 @@ class TestTokenRevocation:
 
         # Share token no longer resolves as share principal (fresh client)
         c2 = TestClient(app)
-        resp = c2.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": share_token})
+        resp = _get_with_tunnel_cookie(c2, f"/app/session/{tunnel_id}", tunnel_id, share_token)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" not in cookies.get("uterm_principal", "")
 
         # Control token no longer resolves as share principal (fresh client)
         c3 = TestClient(app)
-        resp = c3.get(f"/app/operator/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": control_token})
+        resp = _get_with_tunnel_cookie(c3, f"/app/operator/{tunnel_id}", tunnel_id, control_token)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" not in cookies.get("uterm_principal", "")
 
@@ -278,7 +281,7 @@ class TestTokenRotation:
 
         # Old token works (fresh client)
         c1 = TestClient(app)
-        resp = c1.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": old_share})
+        resp = _get_with_tunnel_cookie(c1, f"/app/session/{tunnel_id}", tunnel_id, old_share)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
 
@@ -291,13 +294,13 @@ class TestTokenRotation:
 
         # Old token no longer works (fresh client)
         c2 = TestClient(app)
-        resp = c2.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": old_share})
+        resp = _get_with_tunnel_cookie(c2, f"/app/session/{tunnel_id}", tunnel_id, old_share)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" not in cookies.get("uterm_principal", "")
 
         # New token works (fresh client)
         c3 = TestClient(app)
-        resp = c3.get(f"/app/session/{tunnel_id}", cookies={f"uterm_tunnel_{tunnel_id}": new_share})
+        resp = _get_with_tunnel_cookie(c3, f"/app/session/{tunnel_id}", tunnel_id, new_share)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
 
@@ -372,10 +375,8 @@ class TestCookieAuth:
 
         # Send via cookie instead of query param
         cookie_name = f"uterm_tunnel_{tunnel_id}"
-        resp = client.get(
-            f"/app/session/{tunnel_id}",
-            cookies={cookie_name: share_token},
-        )
+        client.cookies.set(cookie_name, share_token)
+        resp = client.get(f"/app/session/{tunnel_id}")
         assert resp.status_code == 200
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
@@ -389,10 +390,8 @@ class TestCookieAuth:
         control_token = _consume_invite_cookie(client, tunnel["control_url"], tunnel_id)
 
         cookie_name = f"uterm_tunnel_{tunnel_id}"
-        resp = client.get(
-            f"/app/operator/{tunnel_id}",
-            cookies={cookie_name: control_token},
-        )
+        client.cookies.set(cookie_name, control_token)
+        resp = client.get(f"/app/operator/{tunnel_id}")
         assert resp.status_code == 200
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
@@ -406,10 +405,8 @@ class TestCookieAuth:
         tunnel_id = tunnel["tunnel_id"]
 
         cookie_name = f"uterm_tunnel_{tunnel_id}"
-        resp = client.get(
-            f"/app/session/{tunnel_id}",
-            cookies={cookie_name: "wrong-value"},
-        )
+        client.cookies.set(cookie_name, "wrong-value")
+        resp = client.get(f"/app/session/{tunnel_id}")
         assert resp.status_code == 200  # auth=none fallback
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" not in cookies.get("uterm_principal", "")
@@ -470,10 +467,8 @@ class TestTokenTransportEnforcement:
         tid = tunnel["tunnel_id"]
         share_tok = _consume_invite_cookie(client, tunnel["share_url"], tid)
         # Simulate a follow-on request: cookie only, no query param.
-        resp = TestClient(app).get(
-            f"/app/session/{tid}",
-            cookies={f"uterm_tunnel_{tid}": share_tok},
-        )
+        follow_client = TestClient(app)
+        resp = _get_with_tunnel_cookie(follow_client, f"/app/session/{tid}", tid, share_tok)
         cookies = {c.name: c.value for c in resp.cookies.jar}
         assert "share:" in cookies.get("uterm_principal", "")
 
