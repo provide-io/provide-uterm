@@ -181,6 +181,7 @@ class TestSpawnRouteCoverage:
             state_file=str(tmp_path / "s.json"),
             timeseries_dir=str(tmp_path / "m"),
             log_dir=str(tmp_path / "logs"),
+            spawn_config_dir=str(tmp_path),
         )
         app, manager = create_manager_app(
             config,
