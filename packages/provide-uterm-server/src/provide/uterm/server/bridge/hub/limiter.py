@@ -15,11 +15,13 @@ Two purposes are tracked today:
 - REST send (``allow_rest_send``) — gates ``POST /send`` style flows.
   Same global + per-client composition with its own tunables.
 
-Per-client buckets are stored in plain dicts capped at
-:data:`REST_CLIENT_CACHE_MAX`. On overflow the oldest half of entries
-are evicted (LRU-lite) so recently-active clients keep their
-rate-limit state while bounding memory growth — this is the same
-strategy that previously lived inline in ``_ConnectionMixin``.
+Per-client buckets are stored in insertion-ordered dicts capped at
+:data:`REST_CLIENT_CACHE_MAX` and managed as a true LRU: each access
+moves the client to the most-recent end, and on overflow the oldest
+half of entries are evicted (never the client currently being served)
+so recently-active clients keep their rate-limit state while bounding
+memory growth — refining the eviction strategy that previously lived
+inline in ``_ConnectionMixin``.
 
 Lock semantics: the limiter holds no locks. Concurrent calls are safe
 because CPython dict ops are atomic and ``TokenBucket.allow`` is a
@@ -33,8 +35,9 @@ from __future__ import annotations
 from provide.uterm.server.bridge.ratelimit import TokenBucket
 
 # Maximum number of per-client rate-limit buckets held in memory at once.
-# On overflow the oldest half of entries are evicted (LRU-lite), preserving
-# rate-limit state for recently-active clients while bounding memory growth.
+# On overflow the oldest (least-recently-used) half of entries are evicted,
+# preserving rate-limit state for recently-active clients while bounding
+# memory growth.
 REST_CLIENT_CACHE_MAX = 1024
 REST_CLIENT_EVICT_COUNT = REST_CLIENT_CACHE_MAX // 2
 
@@ -130,43 +133,66 @@ class RateLimiter:
     def allow_rest_acquire(self, client_id: str) -> bool:
         """Return True if *client_id* passes both global and per-client acquire limits.
 
-        The per-client dict is capped at :data:`REST_CLIENT_CACHE_MAX`;
-        on overflow the oldest half of entries are evicted (LRU-lite).
-        Both the per-client bucket and the global bucket must allow for
-        the request to be admitted — short-circuit semantics are
-        preserved (the per-client bucket is consumed first; if it
-        denies, the global bucket is *not* consumed).
+        The per-client dict is capped at :data:`REST_CLIENT_CACHE_MAX`
+        and behaves as a true LRU: touching a client refreshes its
+        recency, and on overflow the oldest (least-recently-used)
+        entries are evicted. Crucially, eviction runs *after* the
+        current client's bucket is created/refreshed and never drops the
+        key just touched — so a client that churns the cache cannot reset
+        its own limit. Both the per-client bucket and the global bucket
+        must allow for the request to be admitted; short-circuit
+        semantics are preserved (the per-client bucket is consumed first;
+        if it denies, the global bucket is *not* consumed).
         """
-        self._evict_if_full(self._rest_acquire_per_client)
-        bucket = self._rest_acquire_per_client.setdefault(client_id, TokenBucket(self._rest_acquire_rate))
+        bucket = self._touch(self._rest_acquire_per_client, client_id, self._rest_acquire_rate)
         return bucket.allow() and self._rest_acquire_bucket.allow()
 
     def allow_rest_send(self, client_id: str) -> bool:
         """Return True if *client_id* passes both global and per-client send limits.
 
-        Same composition and eviction strategy as
+        Same composition and LRU eviction strategy as
         :meth:`allow_rest_acquire`; uses its own pair of buckets so the
         REST acquire and send rate ceilings can be tuned independently.
         """
-        self._evict_if_full(self._rest_send_per_client)
-        bucket = self._rest_send_per_client.setdefault(client_id, TokenBucket(self._rest_send_rate))
+        bucket = self._touch(self._rest_send_per_client, client_id, self._rest_send_rate)
         return bucket.allow() and self._rest_send_bucket.allow()
 
     # -- Internal helpers --------------------------------------------------
 
     @staticmethod
-    def _evict_if_full(per_client: dict[str, TokenBucket]) -> None:
-        """Drop the oldest half of *per_client* if it has reached the cap.
+    def _touch(per_client: dict[str, TokenBucket], client_id: str, rate: float) -> TokenBucket:
+        """Get-or-create *client_id*'s bucket, mark it most-recently-used, then evict.
 
-        Insertion order is preserved by CPython dicts, so iterating the
-        keys and trimming the first ``REST_CLIENT_EVICT_COUNT`` entries
-        approximates an LRU eviction without the overhead of a real LRU
-        cache. The eviction count is half the cap so the next overflow
+        Implements LRU recency on a plain ``dict`` (CPython preserves
+        insertion order): an existing key is moved to the end by
+        delete+reinsert so its bucket *state* is preserved, then the
+        bucket is created if missing. Eviction runs last and skips the
+        key just touched, so the inserting client is never the one
+        evicted — closing the self-reset hole where a drained bucket
+        could be evicted and immediately recreated full.
+        """
+        bucket = per_client.pop(client_id, None)
+        if bucket is None:
+            bucket = TokenBucket(rate)
+        per_client[client_id] = bucket  # (re)insert at the most-recent end
+        RateLimiter._evict_if_full(per_client, keep=client_id)
+        return bucket
+
+    @staticmethod
+    def _evict_if_full(per_client: dict[str, TokenBucket], *, keep: str) -> None:
+        """Drop the oldest entries of *per_client* if it exceeds the cap.
+
+        Insertion order is recency order (callers move touched keys to
+        the end), so iterating from the front and trimming the first
+        ``REST_CLIENT_EVICT_COUNT`` entries is a true LRU eviction. The
+        *keep* key — the client that just triggered the call — is never
+        evicted. The eviction count is half the cap so the next overflow
         is amortised across many calls.
         """
-        if len(per_client) >= REST_CLIENT_CACHE_MAX:
+        if len(per_client) > REST_CLIENT_CACHE_MAX:
             for k in list(per_client)[:REST_CLIENT_EVICT_COUNT]:
-                del per_client[k]
+                if k != keep:
+                    del per_client[k]
 
 
 __all__ = ["REST_CLIENT_CACHE_MAX", "REST_CLIENT_EVICT_COUNT", "RateLimiter"]
