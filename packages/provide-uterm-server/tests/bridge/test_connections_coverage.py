@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.hub import connections as _conn_module
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import connections as _conn_module
 
 # ---------------------------------------------------------------------------
 # allow_rest_send_for — LRU eviction (lines 93-94)
@@ -20,7 +20,7 @@ def test_allow_rest_send_for_evicts_on_overflow() -> None:
     cap = _conn_module._REST_CLIENT_CACHE_MAX
 
     # Fill dict just to the cap by bypassing the public method (avoids rate limit logic).
-    from provide.uterm.bridge.ratelimit import TokenBucket
+    from provide.uterm.server.bridge.ratelimit import TokenBucket
 
     hub._rest_send_per_client = {f"c{i}": TokenBucket(1) for i in range(cap)}
 
@@ -48,7 +48,7 @@ async def test_set_worker_hello_mode_blocked_when_hijack_active() -> None:
     ws.send_text = AsyncMock()
 
     async with hub._lock:
-        from provide.uterm.bridge.models import WorkerTermState
+        from provide.uterm.server.bridge.models import WorkerTermState
 
         st = WorkerTermState()
         hub._workers[worker_id] = st
@@ -56,7 +56,7 @@ async def test_set_worker_hello_mode_blocked_when_hijack_active() -> None:
     # Activate a hijack lease
     import time
 
-    from provide.uterm.bridge.models import HijackSession
+    from provide.uterm.server.bridge.models import HijackSession
 
     now = time.time()
     async with hub._lock:
@@ -86,7 +86,7 @@ async def test_set_worker_hello_mode_succeeds_when_no_hijack() -> None:
     hub = TermHub()
     worker_id = "w-hello-ok"
     async with hub._lock:
-        from provide.uterm.bridge.models import WorkerTermState
+        from provide.uterm.server.bridge.models import WorkerTermState
 
         hub._workers[worker_id] = WorkerTermState()
 
@@ -107,7 +107,7 @@ async def test_force_release_hijack_clears_rest_session() -> None:
     async with hub._lock:
         import time
 
-        from provide.uterm.bridge.models import HijackSession, WorkerTermState
+        from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
         now = time.time()
         st = WorkerTermState()
@@ -134,7 +134,7 @@ def test_allow_rest_acquire_for_evicts_on_overflow() -> None:
     """LRU eviction for acquire bucket."""
     hub = TermHub()
     cap = _conn_module._REST_CLIENT_CACHE_MAX
-    from provide.uterm.bridge.ratelimit import TokenBucket
+    from provide.uterm.server.bridge.ratelimit import TokenBucket
 
     hub._rest_acquire_per_client = {f"c{i}": TokenBucket(1) for i in range(cap)}
 
@@ -178,7 +178,7 @@ async def test_register_worker_clears_all_hijack_fields() -> None:
     import time
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import HijackSession, WorkerTermState
+    from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
     # Pre-populate with expired hijack state (use monotonic for lease comparison)
     async with hub._lock:
@@ -232,7 +232,7 @@ async def test_is_active_worker_returns_false_on_ws_mismatch() -> None:
     ws2 = MagicMock()
 
     async with hub._lock:
-        from provide.uterm.bridge.models import WorkerTermState
+        from provide.uterm.server.bridge.models import WorkerTermState
 
         st = WorkerTermState()
         st.worker_ws = ws1
@@ -250,7 +250,7 @@ async def test_is_active_worker_returns_true_on_ws_match() -> None:
 
     ws = MagicMock()
     async with hub._lock:
-        from provide.uterm.bridge.models import WorkerTermState
+        from provide.uterm.server.bridge.models import WorkerTermState
 
         st = WorkerTermState()
         st.worker_ws = ws
@@ -270,7 +270,7 @@ async def test_can_send_input_open_mode_viewer_denied() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     st = WorkerTermState()
     st.input_mode = "open"
@@ -286,7 +286,7 @@ async def test_can_send_input_open_mode_operator_allowed() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     st = WorkerTermState()
     st.input_mode = "open"
@@ -302,7 +302,7 @@ async def test_can_send_input_open_mode_admin_allowed() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     st = WorkerTermState()
     st.input_mode = "open"
@@ -318,7 +318,7 @@ async def test_can_send_input_open_mode_missing_role_defaults_viewer() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     st = WorkerTermState()
     st.input_mode = "open"
@@ -351,7 +351,7 @@ async def test_cleanup_browser_disconnect_was_owner_with_rest_active() -> None:
     import time
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import HijackSession, WorkerTermState
+    from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
     worker_id = "w-owner"
     ws_owner = MagicMock()
@@ -384,7 +384,7 @@ async def test_cleanup_browser_disconnect_not_owner_triggers_on_worker_empty() -
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     worker_id = "w-empty"
     ws = MagicMock()
@@ -414,7 +414,7 @@ async def test_cleanup_browser_disconnect_resume_without_owner() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     worker_id = "w-resume"
     ws = MagicMock()
@@ -437,7 +437,7 @@ async def test_cleanup_browser_disconnect_no_resume_on_expired_event() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     worker_id = "w-no-resume"
     ws = MagicMock()
@@ -460,7 +460,7 @@ async def test_cleanup_browser_disconnect_no_resume_on_lease_expired_event() -> 
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     worker_id = "w-no-resume-lease"
     ws = MagicMock()
@@ -483,7 +483,7 @@ async def test_can_send_input_open_mode_roles_exact() -> None:
     """can_send_input in open mode: only 'operator' and 'admin', not 'viewer'."""
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
     st = WorkerTermState()

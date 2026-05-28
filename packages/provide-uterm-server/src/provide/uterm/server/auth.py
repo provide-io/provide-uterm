@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
-from provide.uterm.bridge.identity import IdentityProvider, Principal
 from provide.uterm.server.audit import audit_event
+from provide.uterm.server.bridge.identity import IdentityProvider, Principal
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 # Explicit re-export list for mypy strict mode. ``Principal`` is the
 # canonical name callers reach for when they need the authenticated-user
-# type; it lives in ``provide.uterm.bridge.identity`` but is also
+# type; it lives in ``provide.uterm.server.bridge.identity`` but is also
 # imported here so server-side modules don't need to know that.
 __all__ = [
     "IdentityProvider",

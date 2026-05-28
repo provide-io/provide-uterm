@@ -24,7 +24,7 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required: pip install 'provide-uterm[websocket]'") from _e
 
-from provide.uterm.bridge.frames import (
+from provide.uterm.server.bridge.frames import (
     make_term_frame,
     make_worker_connected_frame,
     make_worker_disconnected_frame,
@@ -37,7 +37,7 @@ from provide.uterm.tunnel.protocol import (
 )
 
 if TYPE_CHECKING:
-    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub import TermHub
 
 logger = get_logger(__name__)
 _HIJACK_CLEANUP_INTERVAL_S = 1.0

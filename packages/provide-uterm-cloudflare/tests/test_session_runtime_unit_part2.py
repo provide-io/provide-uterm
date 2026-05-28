@@ -117,7 +117,6 @@ class _MockRequest:
 def test_extract_token_no_header_no_query() -> None:
     """Lines 118-133: no auth header, no query param → None."""
     rt = _make_runtime()
-    rt.config.jwt.allow_query_token = True
     req = _MockRequest(url="https://x/path")
     assert rt._extract_token(req) is None
 
@@ -228,7 +227,10 @@ async def test_browser_role_share_token_viewer() -> None:
 
     rt = _make_runtime(mode="jwt")
     rt._share_token_hash = hash_token("share-token-123")
-    req = _MockRequest(url="https://x/app/session/test-worker?token=share-token-123")
+    req = _MockRequest(
+        url="https://x/app/session/test-worker",
+        headers={"cookie": "uterm_tunnel_test-worker=share-token-123"},
+    )
     assert await rt.browser_role_for_request(req) == "viewer"
 
 
@@ -237,7 +239,10 @@ async def test_browser_role_share_token_control_maps_to_admin() -> None:
 
     rt = _make_runtime(mode="jwt")
     rt._control_token_hash = hash_token("control-token-123")
-    req = _MockRequest(url="https://x/app/operator/test-worker?token=control-token-123")
+    req = _MockRequest(
+        url="https://x/app/operator/test-worker",
+        headers={"cookie": "uterm_tunnel_test-worker=control-token-123"},
+    )
     assert await rt.browser_role_for_request(req) == "admin"
 
 
@@ -246,7 +251,10 @@ async def test_resolve_principal_share_token_bypasses_jwt() -> None:
 
     rt = _make_runtime(mode="jwt")
     rt._share_token_hash = hash_token("share-token-123")
-    req = _MockRequest(url="https://x/app/session/test-worker?token=share-token-123")
+    req = _MockRequest(
+        url="https://x/app/session/test-worker",
+        headers={"cookie": "uterm_tunnel_test-worker=share-token-123"},
+    )
     principal, error = await rt._resolve_principal(req)
     assert principal is None
     assert error is None

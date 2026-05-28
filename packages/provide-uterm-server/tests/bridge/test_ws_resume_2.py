@@ -15,8 +15,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
 from provide.uterm.client import connect_test_ws
+from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -227,7 +227,7 @@ class TestResumeBranchCoverage:
     @pytest.mark.asyncio()
     async def test_resume_with_no_store_calls_handle_resume_noop(self) -> None:
         """Calling _handle_resume with no store configured returns owned_hijack unchanged."""
-        from provide.uterm.bridge.routes.browser_handlers import _handle_resume
+        from provide.uterm.server.bridge.routes.browser_handlers import _handle_resume
 
         hub = TermHub()  # no resume_store
         assert hub._resume_store is None

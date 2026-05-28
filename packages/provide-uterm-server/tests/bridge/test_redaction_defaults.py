@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from provide.uterm.bridge.hub.redaction import StreamRedactor
-from provide.uterm.bridge.hub.redaction_defaults import default_rules
+from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
 
 
 @pytest.fixture()

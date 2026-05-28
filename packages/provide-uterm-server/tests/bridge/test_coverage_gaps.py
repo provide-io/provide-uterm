@@ -22,12 +22,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
-from provide.uterm.bridge.rest_helpers import compile_expect_regex
-from provide.uterm.bridge.worker_link import TermBridge
 from provide.uterm.client import connect_test_ws
 from provide.uterm.control_channel import ControlChannelProtocolError, encode_data
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.rest_helpers import compile_expect_regex
+from provide.uterm.server.bridge.worker_link import TermBridge
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -351,8 +351,8 @@ class TestBrowserHandlersResumeReclaimFail:
         but the lock check fails because input_mode == 'open' → reclaimed_hijack stays False.
         check_still_hijacked returns False (no REST/WS hijack) → compensating resume is sent (line 274-276).
         """
-        from provide.uterm.bridge.hub.resume import InMemoryResumeStore
-        from provide.uterm.bridge.routes.browser_handlers import _handle_resume
+        from provide.uterm.server.bridge.hub.resume import InMemoryResumeStore
+        from provide.uterm.server.bridge.routes.browser_handlers import _handle_resume
 
         hub = _make_hub()
         store = InMemoryResumeStore()

@@ -85,13 +85,13 @@ describe("useInspectWs", () => {
     expect(useInspectStore.getState().wsStatus).toBe("disconnected");
   });
 
-  it("uses wss:// for https pages and appends share token", () => {
+  it("uses wss:// for https pages without query tokens", () => {
     Object.defineProperty(window, "location", {
       configurable: true,
       value: { protocol: "https:", host: "example.test", search: "?token=abc" },
     });
     renderHook(() => useInspectWs("s1"));
-    expect(lastSocket?.url).toBe("wss://example.test/ws/browser/s1/term?token=abc");
+    expect(lastSocket?.url).toBe("wss://example.test/ws/browser/s1/term");
   });
 
   it("ignores non-string frame payloads", () => {

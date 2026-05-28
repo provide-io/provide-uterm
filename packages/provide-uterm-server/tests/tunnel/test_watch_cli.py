@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import base64
+from types import SimpleNamespace
 
 import pytest
 
@@ -205,3 +206,42 @@ class TestReadToken:
 
         args = MagicMock(token=None, token_file="/nonexistent")
         assert _read_token(args) is None
+
+
+class TestCmdWatch:
+    def test_token_uses_authorization_header_not_query(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from provide.uterm.cli.watch import _cmd_watch
+
+        captured: dict[str, object] = {}
+
+        class _FakeWatchApp:
+            def __init__(
+                self,
+                *,
+                ws_url: str,
+                tunnel_id: str,
+                initial_layout: str,
+                headers: dict[str, str] | None,
+            ) -> None:
+                captured["ws_url"] = ws_url
+                captured["tunnel_id"] = tunnel_id
+                captured["initial_layout"] = initial_layout
+                captured["headers"] = headers
+
+            def run(self) -> None:
+                captured["ran"] = True
+
+        monkeypatch.setattr("provide.uterm.cli._watch_app.WatchApp", _FakeWatchApp)
+        args = SimpleNamespace(
+            tunnel="tunnel-abc",
+            server="https://example.test",
+            layout="horizontal",
+            token="secret-token",
+            token_file=None,
+        )
+
+        _cmd_watch(args)
+
+        assert captured["ws_url"] == "wss://example.test/ws/browser/tunnel-abc/term"
+        assert captured["headers"] == {"Authorization": "Bearer secret-token"}
+        assert captured["ran"] is True

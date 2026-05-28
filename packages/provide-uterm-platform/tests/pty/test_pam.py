@@ -354,6 +354,94 @@ def test_close_session_skips_pam_calls_with_null_handle() -> None:
     assert not session._session_open  # type: ignore[attr-defined]
 
 
+def test_authenticate_success_sets_username_with_mocked_libpam() -> None:
+    """authenticate() records the username after mocked PAM success."""
+    import provide.uterm.pty.pam as pam_mod
+
+    with (
+        patch.object(pam_mod, "_libpam", object()),
+        patch.object(pam_mod, "_pam_start", return_value=0),
+        patch.object(pam_mod, "_pam_authenticate", return_value=0),
+    ):
+        session = PamSession()
+        session.authenticate("alice", "secret")
+
+    assert session._username == "alice"  # type: ignore[attr-defined]
+
+
+def test_acct_mgmt_success_calls_pam_when_handle_present() -> None:
+    """acct_mgmt() calls into PAM on authenticated sessions with handles."""
+    import ctypes
+
+    import provide.uterm.pty.pam as pam_mod
+
+    with (
+        patch.object(pam_mod, "_libpam", object()),
+        patch.object(pam_mod, "_pam_acct_mgmt", return_value=0) as mock_acct,
+    ):
+        session = PamSession()
+        session._username = "alice"  # type: ignore[assignment]
+        session._handle = ctypes.c_void_p(1)  # type: ignore[attr-defined]
+        session.acct_mgmt()
+
+    mock_acct.assert_called_once()
+
+
+def test_close_session_calls_pam_close_and_end_with_handle() -> None:
+    """close_session() closes and ends the PAM handle when one is active."""
+    import ctypes
+
+    import provide.uterm.pty.pam as pam_mod
+
+    with (
+        patch.object(pam_mod, "_libpam", object()),
+        patch.object(pam_mod, "_pam_close_session", return_value=0) as mock_close,
+        patch.object(pam_mod, "_pam_end", return_value=0) as mock_end,
+    ):
+        session = PamSession()
+        session._username = "alice"  # type: ignore[assignment]
+        session._session_open = True  # type: ignore[attr-defined]
+        session._handle = ctypes.c_void_p(1)  # type: ignore[attr-defined]
+        session._cb = object()  # type: ignore[attr-defined]
+        session.close_session()
+
+    mock_close.assert_called_once()
+    mock_end.assert_called_once()
+    assert not session._session_open  # type: ignore[attr-defined]
+    assert not session._handle  # type: ignore[attr-defined]
+    assert session._cb is None  # type: ignore[attr-defined]
+
+
+def test_conv_callback_echo_off_uses_password() -> None:
+    """_conv handles PAM_PROMPT_ECHO_OFF by returning the password."""
+    import ctypes
+
+    from provide.uterm.pty.pam import (
+        _PAM_PROMPT_ECHO_OFF,
+        _PAM_SUCCESS,
+        _make_conv_callback,
+        _PamMessage,
+        _PamResponse,
+    )
+
+    _, cb = _make_conv_callback("alice", "secret")
+    msg = _PamMessage()
+    msg.msg_style = _PAM_PROMPT_ECHO_OFF
+    msg.msg = b"Password:"
+    msg_ptrs = (ctypes.POINTER(_PamMessage) * 1)(ctypes.pointer(msg))
+    resp_ptr = ctypes.pointer(_PamResponse())
+    resp_ptr_p = ctypes.pointer(resp_ptr)
+
+    result = cb(
+        1,
+        ctypes.cast(msg_ptrs, ctypes.POINTER(ctypes.POINTER(_PamMessage))),
+        ctypes.cast(resp_ptr_p, ctypes.POINTER(ctypes.POINTER(_PamResponse))),
+        None,
+    )
+
+    assert result == _PAM_SUCCESS
+
+
 def test_conv_callback_echo_on_and_text_info_branches() -> None:
     """_conv handles PAM_PROMPT_ECHO_ON (username) and PAM_TEXT_INFO (no response)."""
     _requires_libpam()

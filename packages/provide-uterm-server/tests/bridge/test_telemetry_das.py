@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.hub.ext import (
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub.ext import (
     EVENT_HIJACK_ACQUIRED,
     EVENT_HIJACK_RELEASED,
     EVENT_SESSION_REGISTERED,
@@ -23,8 +23,8 @@ async def test_session_registration_telemetry() -> None:
 
     # Phase 6 of refactor #16 moved the registration log into the
     # ConnectionManager service module; the previous home
-    # (``provide.uterm.bridge.hub.connections``) is now a thin shim.
-    with patch("provide.uterm.bridge.hub.connection.logger") as mock_logger:
+    # (``provide.uterm.server.bridge.hub.connections``) is now a thin shim.
+    with patch("provide.uterm.server.bridge.hub.connection.logger") as mock_logger:
         await hub.register_browser("w1", ws, "operator")
 
         # Verify logger.info was called with DAS event
@@ -43,7 +43,7 @@ async def test_hijack_lifecycle_telemetry() -> None:
     await hub.register_worker(worker_id, worker_ws)
     await hub.register_browser(worker_id, ws, "admin")
 
-    with patch("provide.uterm.bridge.hub.lease.logger") as mock_logger:
+    with patch("provide.uterm.server.bridge.hub.lease.logger") as mock_logger:
         # Acquire hijack
         from unittest.mock import ANY
 

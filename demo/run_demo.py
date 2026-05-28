@@ -287,7 +287,7 @@ async def main() -> None:
     print(f"[demo] FastAPI server ready: http://127.0.0.1:{DEMO_SERVER_PORT}/")
 
     # Attach EventBus so SSE streams and webhooks work
-    from provide.uterm.bridge.hub import EventBus
+    from provide.uterm.server.bridge.hub import EventBus
 
     app.state.uterm_registry._hub._event_bus = EventBus()
 

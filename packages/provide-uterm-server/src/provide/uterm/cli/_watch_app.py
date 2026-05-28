@@ -168,11 +168,18 @@ class WatchApp(App[None]):
     #status-bar { height: 1; background: $primary-background; padding: 0 1; }
     """
 
-    def __init__(self, ws_url: str, tunnel_id: str, initial_layout: str = "horizontal") -> None:
+    def __init__(
+        self,
+        ws_url: str,
+        tunnel_id: str,
+        initial_layout: str = "horizontal",
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__()
         self._ws_url = ws_url
         self._tunnel_id = tunnel_id
         self._layout_mode = initial_layout
+        self._headers = dict(headers or {})
         self._exchanges: list[Exchange] = []
         self._method_filter: str = ""
         self._connected = False
@@ -197,7 +204,10 @@ class WatchApp(App[None]):
         import websockets.sync.client as wsc
 
         try:
-            ws = wsc.connect(self._ws_url)
+            if self._headers:
+                ws = wsc.connect(self._ws_url, additional_headers=self._headers)
+            else:
+                ws = wsc.connect(self._ws_url)
             self._connected = True
             self.call_from_thread(self._update_status)
             while True:

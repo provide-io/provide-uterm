@@ -30,8 +30,8 @@ import uvicorn
 sys.path.insert(0, "packages/provide-uterm/src")
 
 import provide.uterm.server.connectors.ssh  # noqa: F401  — registers "ssh" connector
-from provide.uterm.bridge.hub import TermHub
 from provide.uterm.server import create_server_app
+from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.models import (
     AuthConfig,
     RecordingConfig,

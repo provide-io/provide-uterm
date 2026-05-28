@@ -23,7 +23,6 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
-import inspect
 import ipaddress
 import json
 import re
@@ -40,9 +39,9 @@ import httpx
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
-    from provide.uterm.bridge.hub import EventBus
+    from provide.uterm.server.bridge.hub import EventBus
 
-from provide.uterm.bridge.hub.event_bus import _compile_pattern
+from provide.uterm.server.bridge.hub.event_bus import _compile_pattern
 
 logger = get_logger(__name__)
 
@@ -83,7 +82,7 @@ def _resolve_hostname_sync(hostname: str) -> tuple[str, ...]:
         infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
     finally:
         socket.setdefaulttimeout(previous_timeout)
-    return tuple({info[4][0] for info in infos})
+    return tuple({str(info[4][0]) for info in infos})
 
 
 def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False) -> str:
@@ -179,7 +178,7 @@ class WebhookManager:
         # unregistered to avoid burning CPU re-evaluating it forever.
         self._blocked_counts: dict[str, int] = {}
         # Strong refs to background unregister tasks so they aren't GC'd mid-flight.
-        self._unregister_tasks: set[asyncio.Task[None]] = set()
+        self._unregister_tasks: set[asyncio.Task[bool]] = set()
 
     def validate_url(self, url: str) -> str:
         return validate_webhook_url(url, allow_loopback_destinations=self._allow_loopback_destinations)
@@ -368,7 +367,7 @@ class WebhookManager:
 
 async def _resolve_host(hostname: str) -> tuple[str, ...]:
     infos = await asyncio.to_thread(socket.getaddrinfo, hostname, None, type=socket.SOCK_STREAM)
-    return tuple({info[4][0] for info in infos})
+    return tuple({str(info[4][0]) for info in infos})
 
 
 async def _delivery_url_allowed(
@@ -388,11 +387,14 @@ async def _delivery_url_allowed(
         return False
 
     try:
-        addresses = _literal_or_resolved_addresses(host, resolver)
-        if inspect.isawaitable(addresses):
-            addresses = await addresses
+        addresses_result = _literal_or_resolved_addresses(host, resolver)
+        if isinstance(addresses_result, Awaitable):
+            resolved_addresses = await addresses_result
+        else:
+            resolved_addresses = addresses_result
     except Exception:
         return False
+    addresses = tuple(resolved_addresses)
     if not addresses:
         return False
     try:

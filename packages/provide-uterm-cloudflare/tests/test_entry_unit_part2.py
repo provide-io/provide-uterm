@@ -189,8 +189,10 @@ async def test_default_fetch_share_page_keeps_token_out_of_bootstrap() -> None:
     )
     d = _make_default({"SESSION_REGISTRY": kv})
     req = SimpleNamespace(
-        url="https://x/app/session/test-123?token=shared-tok",
-        headers=SimpleNamespace(get=lambda *_a, **_k: None),
+        url="https://x/app/session/test-123",
+        headers=SimpleNamespace(
+            get=lambda k, d=None: "uterm_tunnel_test-123=shared-tok" if k in ("cookie", "Cookie") else d
+        ),
     )
     resp = await d.fetch(req)
     assert resp.status == 200
@@ -207,17 +209,27 @@ async def test_default_fetch_share_page_keeps_token_out_of_bootstrap() -> None:
 
 async def test_default_fetch_share_route() -> None:
     """Shared tunnel links under /s/{id} redirect to /app/session/{id}."""
+    entry = {
+        "share_token_hash": hash_token("abc"),
+        "control_token_hash": hash_token("def"),
+        "share_invite_hash": hash_token("invite-abc"),
+        "share_invite_token": "abc",
+        "share_invite_expires_at": __import__("time").time() + 300,
+        "expires_at": __import__("time").time() + 3600,
+    }
     kv = SimpleNamespace(
-        get=AsyncMock(
-            return_value=json.dumps({"share_token_hash": hash_token("abc"), "control_token_hash": hash_token("def")})
-        )
+        get=AsyncMock(return_value=json.dumps(entry)),
+        put=AsyncMock(),
     )
     d = _make_default({"SESSION_REGISTRY": kv})
-    req = SimpleNamespace(url="https://x/s/test-123?token=abc", headers=SimpleNamespace(get=lambda *_a, **_k: None))
+    req = SimpleNamespace(
+        url="https://x/s/test-123?invite=invite-abc", headers=SimpleNamespace(get=lambda *_a, **_k: None)
+    )
     resp = await d.fetch(req)
     assert resp.status == 302
     assert "/app/session/test-123" in str(resp.headers.get("location", ""))
-    assert "token=abc" in str(resp.headers.get("location", ""))
+    assert "token=" not in str(resp.headers.get("location", ""))
+    assert "uterm_tunnel_test-123=abc" in str(resp.headers.get("Set-Cookie", ""))
 
 
 async def test_default_fetch_root_path() -> None:

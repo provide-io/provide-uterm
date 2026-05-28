@@ -34,7 +34,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 from starlette.staticfiles import StaticFiles
 
 from provide.uterm.control_channel import encode_control

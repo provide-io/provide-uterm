@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from provide.uterm.bridge.worker_link import TermBridge
 from provide.uterm.control_channel import encode_control
+from provide.uterm.server.bridge.worker_link import TermBridge
 
 
 class MockSession:

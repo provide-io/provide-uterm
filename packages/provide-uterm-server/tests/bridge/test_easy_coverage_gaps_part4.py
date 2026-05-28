@@ -21,7 +21,7 @@ import pytest
 
 
 async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
-    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub import TermHub
 
     hub = TermHub()
     with pytest.raises(ValueError, match="invalid input mode"):
@@ -36,13 +36,13 @@ async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
 async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogCaptureFixture) -> None:
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
     hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
-    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.hub.connection")
+    caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
     assert any("worker_hello_legacy_protocol" in r.getMessage() for r in caplog.records), (
         "set_worker_hello with protocol_version<1 must log worker_hello_legacy_protocol warning"
@@ -88,8 +88,8 @@ def test_fingerprint_for_key_handles_none_missing_and_exception() -> None:
 async def test_audit_all_browsers_closes_browser_on_deny() -> None:
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
-    from provide.uterm.bridge.hub.ext import BehavioralThresholds, ConnectionHeuristics
+    from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.server.bridge.hub.ext import BehavioralThresholds, ConnectionHeuristics
 
     class DenyGate:
         async def audit_connection(
@@ -118,9 +118,9 @@ async def test_resolve_approval_deny_sends_rejection_with_reason() -> None:
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-    from provide.uterm.bridge.hub.ext import PolicyDecision
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
     hub = TermHub()
     worker_ws = AsyncMock()
@@ -154,8 +154,8 @@ async def test_resolve_approval_deny_sends_rejection_with_reason() -> None:
 async def test_audit_all_browsers_leaves_allowed_browsers_open() -> None:
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
-    from provide.uterm.bridge.hub.ext import BehavioralThresholds, ConnectionHeuristics
+    from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.server.bridge.hub.ext import BehavioralThresholds, ConnectionHeuristics
 
     class AllowGate:
         async def audit_connection(
@@ -185,7 +185,7 @@ async def test_resume_run_tx_rolls_back_on_op_exception() -> None:
     """resume.py:153-156 — _run_tx rolls back when the op raises and re-raises."""
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub.resume import ControlPlaneResumeStore
+    from provide.uterm.server.bridge.hub.resume import ControlPlaneResumeStore
 
     tx = AsyncMock()
     cp = AsyncMock()
@@ -207,7 +207,7 @@ async def test_resume_mark_hijack_owner_returns_silently_for_missing_token() -> 
     """resume.py:213 — mark_hijack_owner returns without raising when token unknown."""
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub.resume import ControlPlaneResumeStore
+    from provide.uterm.server.bridge.hub.resume import ControlPlaneResumeStore
 
     tx = AsyncMock()
     store = AsyncMock()
@@ -229,7 +229,7 @@ async def test_resume_revoke_unknown_token_pops_creation_time() -> None:
     the token isn't in the durable store."""
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub.resume import ControlPlaneResumeStore
+    from provide.uterm.server.bridge.hub.resume import ControlPlaneResumeStore
 
     tx = AsyncMock()
     store = AsyncMock()
@@ -257,8 +257,8 @@ async def test_handle_input_notifies_browser_when_send_worker_fails() -> None:
     Worker-connection-lost error when send_worker returns False."""
     from unittest.mock import AsyncMock, patch
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
     hub = TermHub()
     ws = AsyncMock()
@@ -281,9 +281,9 @@ async def test_resolve_approval_fanout_allow_without_fan_out_controller() -> Non
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-    from provide.uterm.bridge.hub.ext import PolicyDecision
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
     hub = TermHub()  # no fan_out_controller attribute set
     await hub.register_worker("w1", AsyncMock())
@@ -308,9 +308,9 @@ async def test_resolve_approval_fanout_deny_without_fan_out_controller() -> None
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-    from provide.uterm.bridge.hub.ext import PolicyDecision
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
     hub = TermHub()
     await hub.register_worker("w1", AsyncMock())
@@ -334,9 +334,9 @@ async def test_resolve_approval_fanout_hold_decision_is_noop() -> None:
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-    from provide.uterm.bridge.hub.ext import PolicyDecision
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
     hub = TermHub()
     await hub.register_worker("w1", AsyncMock())
@@ -361,9 +361,9 @@ async def test_resolve_approval_non_fanout_hold_decision_is_noop_on_worker() -> 
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-    from provide.uterm.bridge.hub.ext import PolicyDecision
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
     hub = TermHub()
     worker_ws = AsyncMock()
@@ -408,7 +408,7 @@ async def test_intercept_cancel_all_skips_already_done_futures() -> None:
 
 def test_redaction_stream_redactor_with_no_rules_is_passthrough() -> None:
     """bridge/hub/redaction.py:29->exit — empty rules list skips the entire setup block."""
-    from provide.uterm.bridge.hub.redaction import StreamRedactor
+    from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 
     redactor = StreamRedactor([])
     assert redactor.redact("anything goes") == "anything goes"

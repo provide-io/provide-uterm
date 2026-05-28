@@ -13,8 +13,8 @@ import respx
 from httpx import Response
 from starlette.testclient import TestClient
 
-from provide.uterm.bridge.hub.ext import PolicyContext, WebhookPolicyGate
 from provide.uterm.server.authorization import AuthorizationService, WebhookAuthorizationProvider
+from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookPolicyGate
 
 
 @pytest.mark.asyncio
@@ -77,6 +77,12 @@ async def test_webhook_authz_provider_checks() -> None:
     route1 = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await authz.can_read_session(principal, session) is True
     assert json.loads(route1.calls.last.request.content)["action"] == "session.read"
+
+    # Test direct capability and owner checks
+    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    assert await provider.has_capability(principal, "session.read") is True
+    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    assert await provider.is_owner(principal, session) is True
 
     # Test can_mutate_session
     route2 = respx.post(url).mock(return_value=Response(200, json={"allow": False}))

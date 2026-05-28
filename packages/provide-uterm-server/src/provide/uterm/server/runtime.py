@@ -12,8 +12,6 @@ import time
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from provide.telemetry import get_logger
-from provide.uterm.bridge.hub.redaction import StreamRedactor
-from provide.uterm.bridge.hub.redaction_defaults import default_rules
 from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
@@ -21,6 +19,8 @@ from provide.uterm.control_channel import (
     encode_control,
     encode_data,
 )
+from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
 from provide.uterm.server.connectors import SessionConnector, build_connector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
 from provide.uterm.session_logger import SessionLogger
@@ -30,8 +30,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from provide.uterm.annotation import PatternDetector
-    from provide.uterm.bridge.hub import TermHub
     from provide.uterm.recording import RecordingStore
+    from provide.uterm.server.bridge.hub import TermHub
 
 logger = get_logger(__name__)
 

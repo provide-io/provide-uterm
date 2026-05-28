@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock
 
-from provide.uterm.bridge.fanout._collector import OutputCollector
-from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.bridge.fanout._collector import OutputCollector
+from provide.uterm.server.bridge.hub import EventBus, TermHub
 
 # ---------------------------------------------------------------------------
 # Helpers

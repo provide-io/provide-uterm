@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal
 
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 
 from provide.uterm.control_channel import (
     ControlChannelDecoder,

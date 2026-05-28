@@ -21,7 +21,7 @@ import pytest
 
 
 async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
-    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub import TermHub
 
     hub = TermHub()
     with pytest.raises(ValueError, match="invalid input mode"):
@@ -36,13 +36,13 @@ async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
 async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogCaptureFixture) -> None:
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
     hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
-    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.hub.connection")
+    caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
     assert any("worker_hello_legacy_protocol" in r.getMessage() for r in caplog.records), (
         "set_worker_hello with protocol_version<1 must log worker_hello_legacy_protocol warning"
@@ -120,7 +120,7 @@ async def test_event_bus_filters_non_string_screen_via_coercion() -> None:
     import asyncio as _asyncio
     import re as _re
 
-    from provide.uterm.bridge.hub.event_bus import EventBus, _Subscription
+    from provide.uterm.server.bridge.hub.event_bus import EventBus, _Subscription
 
     bus = EventBus()
     queue: _asyncio.Queue = _asyncio.Queue()
@@ -132,7 +132,7 @@ async def test_event_bus_filters_non_string_screen_via_coercion() -> None:
 
 def test_event_bus_pattern_safety_char_class_and_counted_quantifier() -> None:
     """event_bus.py:274-275, 300, 310-317 — pattern safety walks [...] and {N,M}."""
-    from provide.uterm.bridge.hub.event_bus import _compile_pattern
+    from provide.uterm.server.bridge.hub.event_bus import _compile_pattern
 
     # Character class — exercises in_class branch (274-275)
     assert _compile_pattern("[abc]+def") is not None
@@ -157,8 +157,8 @@ def test_event_bus_pattern_safety_char_class_and_counted_quantifier() -> None:
 
 def test_state_event_bus_setter_assigns_value() -> None:
     """state.py:54 — event_bus.setter writes through to _event_bus."""
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.event_bus import EventBus
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.event_bus import EventBus
 
     hub = TermHub()
     bus = EventBus()
@@ -172,8 +172,8 @@ async def test_state_prepare_policy_context_role_resolution() -> None:
     """state.py:188-194, 218-225 — claims-driven role mapping (delegate_roles=False)."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.identity import Principal
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.identity import Principal
 
     # delegate_roles=False: claims-driven role mapping.
     hub = TermHub(delegate_roles=False)
@@ -199,8 +199,8 @@ async def test_state_prepare_policy_context_delegated_roles_empty_falls_back_to_
     """state.py:214 — delegate_roles=True with empty principal.roles -> viewer."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.identity import Principal
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.identity import Principal
 
     hub = TermHub(delegate_roles=True)
     ws = AsyncMock()
@@ -219,8 +219,8 @@ async def test_state_prepare_policy_context_delegated_roles_empty_falls_back_to_
 async def test_resolve_browser_role_no_session_operator_principal_returns_operator() -> None:
     from types import SimpleNamespace
 
-    from provide.uterm.bridge.identity import Principal
     from provide.uterm.server import create_server_app, default_server_config
+    from provide.uterm.server.bridge.identity import Principal
 
     cfg = default_server_config()
     cfg.auth.mode = "header"
@@ -246,8 +246,8 @@ async def test_resolve_browser_role_no_session_operator_principal_returns_operat
 
 
 def test_redaction_engine_ignores_invalid_pattern_and_passes_data_when_empty() -> None:
-    from provide.uterm.bridge.hub.ext import RedactionRule
-    from provide.uterm.bridge.hub.redaction import StreamRedactor
+    from provide.uterm.server.bridge.hub.ext import RedactionRule
+    from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 
     # Only an invalid regex -> no compiled pattern -> redact() returns input as-is.
     engine = StreamRedactor([RedactionRule(pattern="[unterminated", replacement="X")])
@@ -272,7 +272,7 @@ def test_redaction_engine_ignores_invalid_pattern_and_passes_data_when_empty() -
 async def test_fanout_release_approved_command_returns_none_for_unknown_request() -> None:
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.fanout._controller import FanOutController
+    from provide.uterm.server.bridge.fanout._controller import FanOutController
 
     ctrl = FanOutController(hub=MagicMock(), fanout_policy_gate=MagicMock())
     # No pending approval registered -> None (line 226).

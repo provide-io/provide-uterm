@@ -14,8 +14,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
 # ---------------------------------------------------------------------------
 # Helpers

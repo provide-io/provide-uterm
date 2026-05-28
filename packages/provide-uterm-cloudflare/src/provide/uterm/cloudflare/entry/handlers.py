@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from provide.uterm.cloudflare.entry import auth as _auth_mod
 from provide.uterm.cloudflare.entry.auth import _require_jwt, _resolve_principal_id
 from provide.uterm.cloudflare.entry.fallback_stubs import CloudflareConfig, Response, json_response
-from provide.uterm.cloudflare.entry.share_tokens import _attach_share_token_cookie
+from provide.uterm.cloudflare.entry.share_tokens import _attach_share_token_cookie, _share_token_cookie_header
 from provide.uterm.cloudflare.entry.spa import _resolve_spa_route, _spa_response
 
 logger = logging.getLogger(__name__)
@@ -187,31 +187,42 @@ async def _route_request(request: object, env: object, config: CloudflareConfig)
         return _entry_attr("serve_asset")(path.removeprefix("/"))
 
     try:
-        from provide.uterm.cloudflare.api._tunnel_api import resolve_share_context
+        from provide.uterm.cloudflare.api._tunnel_api import (
+            consume_tunnel_invite as _consume_tunnel_invite,
+        )
+        from provide.uterm.cloudflare.api._tunnel_api import (
+            resolve_share_context as _resolve_share_context,
+        )
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import resolve_share_context  # type: ignore[import-not-found,no-redef]
+        import importlib
+
+        _tunnel_api = importlib.import_module("api._tunnel_api")
+        _consume_tunnel_invite = _tunnel_api.consume_tunnel_invite
+        _resolve_share_context = _tunnel_api.resolve_share_context
 
     spa = _resolve_spa_route(path)
     if spa is not None and spa[0] == "share" and "session_id" in spa[1]:
-        # /s/{id} → 302 redirect to /app/{inspect|session}/{id}
+        # /s/{id}?invite=... consumes a one-time invite, stamps an HttpOnly
+        # cookie, then redirects to a clean /app URL.
         sid = str(spa[1]["session_id"])
-        page = "session"
-        kv_s = getattr(env, "SESSION_REGISTRY", None)
-        if kv_s is not None:
-            try:
-                raw_s = await kv_s.get(f"session:{sid}")
-                if raw_s is not None:
-                    page = str(_json.loads(str(raw_s)).get("share_page", "session"))
-            except Exception as exc:
-                logger.debug("share_route_kv_lookup_failed: %s", exc)
-        qs = urlparse(str(request.url)).query  # type: ignore[attr-defined]
+        invite_context = await _consume_tunnel_invite(request, env, sid)
+        if invite_context is not None:
+            page, _share_role, token = invite_context
+            target = f"/app/{page}/{sid}"
+            headers = {"location": target}
+            cookie = _share_token_cookie_header(request, sid, token)
+            if cookie is not None:
+                headers["Set-Cookie"] = cookie
+            return Response(None, status=302, headers=headers)
+        share_context = await _resolve_share_context(request, env, sid, config)
+        if share_context is None:
+            return json_response({"error": "not_found", "session_id": sid}, status=404)
+        page, _share_role = share_context
         target = f"/app/{page}/{sid}"
-        if qs:
-            target += f"?{qs}"
         return Response(None, status=302, headers={"location": target})
 
     if spa is not None and "session_id" in spa[1]:
-        share_context = await resolve_share_context(request, env, str(spa[1]["session_id"]), config)
+        share_context = await _resolve_share_context(request, env, str(spa[1]["session_id"]), config)
         if share_context is not None:
             _, share_role = share_context
             # Use the URL-requested page kind (inspect, replay, session, operator)
@@ -288,7 +299,7 @@ async def _api_tunnels(request: object, env: object, config: CloudflareConfig) -
     try:
         from provide.uterm.cloudflare.api._tunnel_api import handle_tunnels
     except ImportError:  # pragma: no cover
-        from api._tunnel_api import handle_tunnels  # type: ignore[no-redef]
+        from api._tunnel_api import handle_tunnels  # type: ignore[import-not-found,no-redef]
 
     principal = await _decode_jwt_principal(request, config)
     return await handle_tunnels(request, env, principal)

@@ -21,9 +21,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.bridge.hub.lease import HijackLeaseManager
-from provide.uterm.bridge.hub.registry import WorkerRegistry
-from provide.uterm.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.server.bridge.hub.lease import HijackLeaseManager
+from provide.uterm.server.bridge.hub.registry import WorkerRegistry
+from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
 
 class _FakeHub:

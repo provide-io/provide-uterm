@@ -92,7 +92,7 @@ class AgentManager:
         self.app: Any = None
 
         # AgentProcessManager set after construction to break circular dep.
-        self.agent_process_manager: AgentProcessManager = None  # type: ignore[assignment]
+        self.agent_process_manager = cast("AgentProcessManager", None)
 
     # --- Delegate process management ---
 

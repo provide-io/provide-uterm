@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from provide.uterm.bridge.hub.registry import WorkerRegistry
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub.registry import WorkerRegistry
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 def _state() -> WorkerTermState:

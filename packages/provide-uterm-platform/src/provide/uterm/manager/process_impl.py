@@ -45,6 +45,16 @@ from provide.uterm.manager._monitor import (
 logger = get_logger(__name__)
 _AGENT_ID_RE = re.compile(r"^agent_(\d+)$")
 
+__all__ = [
+    "_STOP_TIMEOUT_S",
+    "AgentProcessManager",
+    "inspect",
+    "os",
+    "signal",
+    "subprocess",
+    "sys",
+]
+
 
 class _PopenPlatformKwargs(TypedDict, total=False):
     creationflags: int

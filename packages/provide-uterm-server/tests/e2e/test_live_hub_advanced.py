@@ -16,8 +16,8 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 
-from provide.uterm.bridge.hub import TermHub
 from provide.uterm.client import connect_async_ws
+from provide.uterm.server.bridge.hub import TermHub
 
 from .conftest import _drain_all, _drain_until, _snapshot_msg, _wait_for_server, _ws_url
 

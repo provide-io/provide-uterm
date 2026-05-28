@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from provide.uterm.bridge.worker_link import TermBridge, _to_ws_url
 from provide.uterm.control_channel import encode_control, encode_data
+from provide.uterm.server.bridge.worker_link import TermBridge, _to_ws_url
 
 # ---------------------------------------------------------------------------
 # bridge.py line 46->48 — _to_ws_url with http:// URL
@@ -138,7 +138,7 @@ class TestBridgeRunCancelledError:
 class TestBridgeInvalidUri:
     async def test_invalid_uri_stops_reconnect(self) -> None:
         """Lines 214-220: InvalidURI exception → stop reconnect."""
-        from provide.uterm.bridge.worker_link import _InvalidURI
+        from provide.uterm.server.bridge.worker_link import _InvalidURI
 
         if _InvalidURI is None:
             # websockets not installed or version doesn't have InvalidURI

@@ -61,7 +61,7 @@ def _register() -> None:
     if connectors is not None and hasattr(connectors, "KNOWN_CONNECTOR_TYPES"):
         from provide.uterm.server.connectors.registry import registered_types
 
-        connectors.KNOWN_CONNECTOR_TYPES = registered_types()  # type: ignore[attr-defined]
+        setattr(connectors, "KNOWN_CONNECTOR_TYPES", registered_types())  # noqa: B010
 
 
 class PTYConnector:

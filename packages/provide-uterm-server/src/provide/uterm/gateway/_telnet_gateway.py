@@ -101,6 +101,7 @@ class TelnetWsGateway:
         self._token_file = token_file
         self._iac_negotiate = iac_negotiate
         self._iac_negotiate_timeout = iac_negotiate_timeout
+        self._ws_ssl: ssl.SSLContext | bool | None
 
         if client_cert and client_key:
             if ws_ssl is not None and not isinstance(ws_ssl, bool):

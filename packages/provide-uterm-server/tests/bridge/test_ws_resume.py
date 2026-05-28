@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
 from provide.uterm.client import connect_test_ws
+from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 
 # ---------------------------------------------------------------------------
 # Helpers

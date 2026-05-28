@@ -25,9 +25,10 @@ _vite_manifest_loaded = False
 def _hijack_js_version() -> str:
     """Return a short cache-busting token based on hijack.js mtime."""
     try:
-        path = importlib.resources.files("provide.uterm.server") / "frontend" / "hijack.js"
-        if path.is_file():
-            return format(int(path.stat().st_mtime_ns), "x")[-8:]  # type: ignore[attr-defined]
+        resource = importlib.resources.files("provide.uterm.server") / "frontend" / "hijack.js"
+        if resource.is_file():
+            with importlib.resources.as_file(resource) as path:
+                return format(int(path.stat().st_mtime_ns), "x")[-8:]
     except Exception:
         pass
     return "0"

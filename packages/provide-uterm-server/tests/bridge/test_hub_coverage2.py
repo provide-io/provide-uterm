@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 def _make_app(**hub_kwargs: Any) -> tuple[TermHub, FastAPI, TestClient]:
@@ -60,7 +60,7 @@ async def _register_browser_ws(hub: TermHub, worker_id: str, browser_ws: Any, ro
 class TestBridgeInvalidUriFixed:
     async def test_invalid_uri_stops_reconnect_via_run(self) -> None:
         """Lines 214-220: InvalidURI exception → _running=False, break from reconnect loop."""
-        from provide.uterm.bridge.worker_link import TermBridge, _InvalidURI
+        from provide.uterm.server.bridge.worker_link import TermBridge, _InvalidURI
 
         if _InvalidURI is None:
             return  # websockets not installed

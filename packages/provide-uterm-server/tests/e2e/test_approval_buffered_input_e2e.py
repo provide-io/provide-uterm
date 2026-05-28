@@ -17,10 +17,10 @@ import httpx
 import uvicorn
 from playwright.sync_api import sync_playwright
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.hub.ext import PolicyDecision, PolicyGate
 from provide.uterm.control_channel import ControlChannelDecoder, DataChunk, encode_control
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub.ext import PolicyDecision, PolicyGate
 
 
 class ProofGate(PolicyGate):

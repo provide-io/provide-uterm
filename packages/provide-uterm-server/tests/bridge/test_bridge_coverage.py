@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.uterm.bridge.models import _safe_float
-from provide.uterm.bridge.worker_link import TermBridge, _safe_int
 from provide.uterm.control_channel import encode_control
+from provide.uterm.server.bridge.models import _safe_float
+from provide.uterm.server.bridge.worker_link import TermBridge, _safe_int
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 
@@ -203,7 +203,7 @@ class TestAttachSessionCp437Decode:
         import asyncio
         from unittest.mock import MagicMock
 
-        from provide.uterm.bridge.worker_link import TermBridge
+        from provide.uterm.server.bridge.worker_link import TermBridge
 
         bot = MagicMock()
         watcher_cb: list = []

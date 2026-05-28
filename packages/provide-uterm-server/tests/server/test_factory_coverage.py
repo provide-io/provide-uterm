@@ -23,7 +23,7 @@ from provide.uterm.server.recording import WebhookRecordingStore
 @pytest.mark.asyncio
 async def test_factory_initializes_webhook_behavioral_audit_gate() -> None:
     """When governance.behavioral_audit_url is set, a WebhookBehavioralAuditGate is wired into the hub."""
-    from provide.uterm.bridge.hub.ext import WebhookBehavioralAuditGate
+    from provide.uterm.server.bridge.hub.ext import WebhookBehavioralAuditGate
 
     config = default_server_config()
     config.governance.behavioral_audit_url = "https://fleet.example.com/audit"

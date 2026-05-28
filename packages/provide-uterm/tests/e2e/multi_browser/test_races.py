@@ -20,8 +20,8 @@ from typing import Any
 import httpx
 import uvicorn
 from fastapi import FastAPI
-from provide.uterm.bridge.hub import InMemoryResumeStore, TermHub
 from provide.uterm.client import connect_async_ws
+from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 
 from .conftest import (
     ADMIN_H,

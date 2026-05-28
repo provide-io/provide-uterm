@@ -12,7 +12,7 @@ import asyncio
 from typing import Any
 from unittest.mock import MagicMock
 
-from provide.uterm.bridge.worker_link import TermBridge, _to_ws_url
+from provide.uterm.server.bridge.worker_link import TermBridge, _to_ws_url
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 
@@ -362,7 +362,7 @@ class TestTermBridgeDroppedFrameLogging:
         watch_fn = session._watches[0]
 
         mock_logger = MagicMock()
-        with patch("provide.uterm.bridge.worker_link.logger", mock_logger):
+        with patch("provide.uterm.server.bridge.worker_link.logger", mock_logger):
             # This call should drop the frame and emit a debug log
             watch_fn({"screen": "test"}, b"dropped data")
 
@@ -384,7 +384,7 @@ class TestTermBridgeDroppedFrameLogging:
         watch_fn = session._watches[0]
 
         mock_logger = MagicMock()
-        with patch("provide.uterm.bridge.worker_link.logger", mock_logger):
+        with patch("provide.uterm.server.bridge.worker_link.logger", mock_logger):
             watch_fn({"screen": "test"}, b"normal data")
 
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]

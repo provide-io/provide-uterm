@@ -137,7 +137,6 @@ ignore_missing_imports = true
 # and SessionRegistry from call sites in other modules. Ignores are unused from mypy's
 # perspective — suppress the warn_unused_ignores noise.
 module = [
-    "provide.uterm.mcp.server",
     "provide.uterm.server.routes.api",
 ]
 warn_unused_ignores = false
@@ -233,7 +232,7 @@ paths_to_mutate = [
     # mutants but binds to zero tests and reports them all as ``no_tests``.
     #
     # HijackLease.expire boundary + lease arithmetic.
-    "packages/provide-uterm-server/src/provide/uterm/bridge/models.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/models.py",
     # Tunnel token hashing — constant-time compare, security-critical.
     "packages/provide-uterm-server/src/provide/uterm/tunnel/token_hash.py",
     # HTTP intercept header denylist + gating policy.
@@ -251,14 +250,14 @@ paths_to_mutate = [
     # Refactor #16 service classes — state-machine + dispatch logic split
     # out of the former TermHub mixin pile. High mutation value; tests for
     # each service live under tests/bridge/hub/test_<name>.py.
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/registry.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/limiter.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/lease.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/router.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/connection.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/presence.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/store.py",
-    "packages/provide-uterm-server/src/provide/uterm/bridge/hub/polling_service.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/registry.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/limiter.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/lease.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/router.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/connection.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/presence.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/store.py",
+    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/polling_service.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # HijackCoordinator (moved to core in #15) — lease state machine.

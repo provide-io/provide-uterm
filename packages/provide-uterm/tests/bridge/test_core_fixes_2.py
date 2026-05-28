@@ -18,8 +18,8 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 from tests.bridge.control_channel_helpers import decode_control_payloads
 
@@ -323,7 +323,7 @@ class TestDisconnectWorkerCloseException:
 
         # Log emits from ConnectionManager.disconnect_worker after the
         # Phase 7b collapse moved the body off the hub.
-        with patch("provide.uterm.bridge.hub.connection.logger") as mock_logger:
+        with patch("provide.uterm.server.bridge.hub.connection.logger") as mock_logger:
             await hub.disconnect_worker("w1")
 
         mock_logger.debug.assert_called_once()

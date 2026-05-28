@@ -16,8 +16,8 @@ import time
 from typing import Any
 from unittest.mock import MagicMock
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 def _make_hub(**kwargs: Any) -> TermHub:

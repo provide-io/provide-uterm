@@ -92,7 +92,7 @@ addopts = [
     "-ra",
     "-m",
     "not playwright and not slow",
-    "--cov=provide.uterm.bridge",
+    "--cov=provide.uterm.server.bridge",
     "--cov=provide.uterm.server",
     "--cov=provide.uterm.tunnel",
     "--cov=provide.uterm.gateway",
@@ -103,7 +103,7 @@ addopts = [
 
 [tool.coverage.run]
 source = [
-    "provide.uterm.bridge",
+    "provide.uterm.server.bridge",
     "provide.uterm.server",
     "provide.uterm.tunnel",
     "provide.uterm.gateway",

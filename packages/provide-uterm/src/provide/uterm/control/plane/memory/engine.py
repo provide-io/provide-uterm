@@ -4,6 +4,7 @@
 #
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -25,10 +26,12 @@ class MemoryControlPlane:
     config: ControlPlaneConfig
     capabilities: EngineCapabilities = field(init=False)
     _state: MemoryState = field(init=False, repr=False)
+    _lock: asyncio.Lock = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.capabilities = self.config.capabilities
         self._state = MemoryState()
+        self._lock = asyncio.Lock()
 
     async def open(self) -> None:
         return None
@@ -40,16 +43,16 @@ class MemoryControlPlane:
         return None
 
     async def begin(self) -> MemoryTransaction:
-        return MemoryTransaction(self._state)
+        return MemoryTransaction(self._state, self._lock)
 
     def session_store(self, tx: MemoryTransaction) -> MemorySessionStore:
-        return MemorySessionStore(self._state, tx)
+        return MemorySessionStore(tx.state, tx)
 
     def token_store(self, tx: MemoryTransaction) -> MemoryTokenStore:
-        return MemoryTokenStore(self._state, tx)
+        return MemoryTokenStore(tx.state, tx)
 
     def approval_store(self, tx: MemoryTransaction) -> MemoryApprovalStore:
-        return MemoryApprovalStore(self._state, tx)
+        return MemoryApprovalStore(tx.state, tx)
 
     def lease_store(self, tx: MemoryTransaction) -> MemoryLeaseStore:
-        return MemoryLeaseStore(self._state, tx)
+        return MemoryLeaseStore(tx.state, tx)

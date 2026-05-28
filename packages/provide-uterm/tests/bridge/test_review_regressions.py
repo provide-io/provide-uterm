@@ -16,9 +16,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
+
 from provide.uterm.bridge.coordinator import HijackSession
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
 
 
 def _make_hub(**kwargs: Any) -> TermHub:
@@ -299,7 +300,7 @@ class TestRateLimitEvaluationOrder:
         If global is checked first, it loses a token even though the request
         is ultimately rejected.
         """
-        from provide.uterm.bridge.ratelimit import TokenBucket
+        from provide.uterm.server.bridge.ratelimit import TokenBucket
 
         hub = _make_hub()
         # Give global bucket plenty of tokens
@@ -321,7 +322,7 @@ class TestRateLimitEvaluationOrder:
 
     def test_exhausted_per_client_does_not_drain_global_send(self) -> None:
         """Same check for the send rate limiter."""
-        from provide.uterm.bridge.ratelimit import TokenBucket
+        from provide.uterm.server.bridge.ratelimit import TokenBucket
 
         hub = _make_hub()
         hub._rest_send_bucket = TokenBucket(100)

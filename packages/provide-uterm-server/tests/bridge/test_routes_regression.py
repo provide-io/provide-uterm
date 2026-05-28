@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 from tests.bridge.control_channel_helpers import decode_control_payloads
 
 
@@ -205,7 +205,7 @@ def test_acquire_compensating_resume_swallows_send_worker_failure(caplog) -> Non
     async def _send_worker_raises(*args: object, **kwargs: object) -> bool:
         raise _asyncio.CancelledError
 
-    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.routes.rest")
+    caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.routes.rest")
     with (
         patch.object(hub, "append_event", side_effect=_append_event_raises),
         patch.object(hub, "send_worker", side_effect=_send_worker_raises),

@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from provide.uterm.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub import TermHub
 
 NUM_WORKERS = 200
 BROWSERS_PER_WORKER = 50

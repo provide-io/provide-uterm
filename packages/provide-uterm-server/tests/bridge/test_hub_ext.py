@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.uterm.bridge.hub import NoOpPolicyGate, PolicyContext, TermHub
+from provide.uterm.server.bridge.hub import NoOpPolicyGate, PolicyContext, TermHub
 
 
 @pytest.mark.asyncio

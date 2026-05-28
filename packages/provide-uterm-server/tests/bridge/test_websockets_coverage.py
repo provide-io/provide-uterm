@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import TermHub
 from provide.uterm.client import connect_test_ws
+from provide.uterm.server.bridge.hub import TermHub
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,7 +87,7 @@ def test_worker_auth_success_with_valid_token() -> None:
 
 def test_set_ws_span_attrs_none_value_skipped() -> None:
     """When a kwarg value is None, set_attribute must NOT be called for it."""
-    from provide.uterm.bridge.routes.websockets import _set_ws_span_attrs
+    from provide.uterm.server.bridge.routes.websockets import _set_ws_span_attrs
 
     calls: list[tuple[str, str]] = []
 

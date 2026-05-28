@@ -24,14 +24,15 @@ class AgentSpawnPolicyGate(Protocol):
         ...
 
 
-class NoOpAgentSpawnPolicyGate:
+class NoOpAgentSpawnPolicyGate(AgentSpawnPolicyGate):
     """Default policy gate that allows all spawns."""
 
-    async def intercept_spawn(self, _agent_id: str, _config_path: str, _raw_config: dict[str, Any]) -> bool:
+    async def intercept_spawn(self, agent_id: str, config_path: str, raw_config: dict[str, Any]) -> bool:
+        _ = (agent_id, config_path, raw_config)
         return True
 
 
-class WebhookAgentSpawnPolicyGate:
+class WebhookAgentSpawnPolicyGate(AgentSpawnPolicyGate):
     """Policy gate that delegates spawn decisions to an external webhook."""
 
     def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):

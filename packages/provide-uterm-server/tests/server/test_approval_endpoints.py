@@ -8,8 +8,8 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 VIEWER_H = {"X-Uterm-Principal": "viewer-user", "X-Uterm-Role": "viewer"}

@@ -85,7 +85,7 @@ def _load_libpam() -> ctypes.CDLL | None:
 
 _libpam = _load_libpam()
 
-if _libpam is not None:
+if _libpam is not None:  # pragma: no branch
     _pam_start = _libpam.pam_start
     _pam_start.restype = ctypes.c_int
     _pam_start.argtypes = [

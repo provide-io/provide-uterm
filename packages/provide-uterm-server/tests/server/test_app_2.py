@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from fastapi.testclient import TestClient
 
-from provide.uterm.bridge.hub import ResumeSession
 from provide.uterm.client import connect_test_ws
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.bridge.hub import ResumeSession
 
 if TYPE_CHECKING:
     pass

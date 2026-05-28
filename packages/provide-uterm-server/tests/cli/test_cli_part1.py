@@ -283,6 +283,11 @@ class TestListenParser:
         args = _build_parser().parse_args(["listen", "ws://x"])
         assert args.authorized_keys is None
         assert args.require_resolver is False
+        assert args.allow_unauthenticated_ssh is False
+
+    def test_listen_allow_unauthenticated_ssh_flag(self) -> None:
+        args = _build_parser().parse_args(["listen", "ws://x", "--allow-unauthenticated-ssh"])
+        assert args.allow_unauthenticated_ssh is True
 
     def test_listen_authorized_keys_flag(self) -> None:
         args = _build_parser().parse_args(["listen", "ws://x", "--authorized-keys", "/etc/ssh_keys"])

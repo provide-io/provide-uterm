@@ -6,15 +6,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from provide.uterm.server.connectors.base import SessionConnector
 
-_registry: dict[str, type[SessionConnector]] = {}
+
+class SessionConnectorFactory(Protocol):
+    def __call__(self, session_id: str, display_name: str, config: dict[str, Any], /) -> SessionConnector: ...
 
 
-def register_connector(name: str, cls: type[SessionConnector]) -> None:
+_registry: dict[str, SessionConnectorFactory] = {}
+
+
+def register_connector(name: str, cls: SessionConnectorFactory) -> None:
     """Register a connector class under a type name."""
     _registry[name] = cls
 
@@ -29,7 +34,7 @@ def build_connector(
     cls = _registry.get(connector_type)
     if cls is None:
         raise ValueError(f"unsupported connector_type: {connector_type!r}")
-    return cls(session_id, display_name, config)  # type: ignore[call-arg]
+    return cls(session_id, display_name, config)
 
 
 def registered_types() -> frozenset[str]:

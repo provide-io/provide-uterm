@@ -10,9 +10,9 @@ import asyncio
 import time
 from unittest.mock import AsyncMock
 
-from provide.uterm.bridge.fanout._controller import FanOutController
-from provide.uterm.bridge.fanout._models import FanOutGroup
-from provide.uterm.bridge.hub import EventBus, TermHub
+from provide.uterm.server.bridge.fanout._controller import FanOutController
+from provide.uterm.server.bridge.fanout._models import FanOutGroup
+from provide.uterm.server.bridge.hub import EventBus, TermHub
 
 # ---------------------------------------------------------------------------
 # Helpers

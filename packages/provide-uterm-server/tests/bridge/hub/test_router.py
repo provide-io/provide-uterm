@@ -23,9 +23,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.hub.router import MessageRouter
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.hub.router import MessageRouter
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 @pytest.fixture()

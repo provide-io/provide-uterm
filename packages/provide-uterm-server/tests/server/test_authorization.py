@@ -275,3 +275,24 @@ async def test_admin_can_mutate_any_profile() -> None:
     principal = _principal("admin", roles=["admin"])
     profile = _make_test_profile(owner="bob")
     assert await authz.can_mutate_profile(principal, profile) is True
+
+
+async def test_authorization_service_uses_local_fallbacks_for_partial_provider() -> None:
+    class EmptyProvider:
+        pass
+
+    authz = AuthorizationService(EmptyProvider())  # type: ignore[arg-type]
+
+    admin = _principal("admin", roles=["admin"])
+    operator = _principal("op", roles=["operator"])
+    viewer = _principal("viewer", roles=["viewer"])
+    public_session = _session(visibility="public")
+    profile = _make_test_profile(owner="op", visibility="private")
+
+    assert "session.control.delete" in await authz.capabilities_for(admin)
+    assert await authz.can_read_session(viewer, public_session) is True
+    assert await authz.can_read_recording(viewer, public_session) is True
+    assert await authz.can_create_session(operator) is True
+    assert await authz.can_mutate_session(admin, public_session, "session.control.delete") is True
+    assert await authz.can_read_profile(operator, profile) is True
+    assert await authz.can_mutate_profile(operator, profile) is True

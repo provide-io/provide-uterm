@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import ssl as _ssl
@@ -90,7 +90,7 @@ def _make_no_auth_server_class(
             # can recover the accepted pubkey — asyncssh exposes no
             # first-class 'public_key' via get_extra_info.
             with contextlib.suppress(Exception):
-                conn._warp_gateway_server = self  # type: ignore[attr-defined]
+                setattr(conn, "_warp_gateway_server", self)  # noqa: B010
 
         def begin_auth(self, username: str) -> bool:
             # Require auth so asyncssh actually exercises the pubkey
@@ -224,7 +224,7 @@ async def _make_process_handler(
     token_file: Path | None = None,
     ws_ssl: _ssl.SSLContext | bool | None = None,
     upstream_proxy_secret: str | bytes | None = None,
-) -> Callable[[asyncssh.SSHServerProcess], Coroutine[Any, Any, None]]:
+) -> Callable[[asyncssh.SSHServerProcess[Any]], Coroutine[Any, Any, None]]:
     """Return an asyncssh process_factory coroutine bound to ws_url/color_mode.
 
     ``ws_ssl`` (optional) is forwarded to :func:`websockets.connect` when the
@@ -234,11 +234,11 @@ async def _make_process_handler(
     normal way to trust an internal CA or self-signed cert.
     """
 
-    async def _process_handler(process: object) -> None:
+    async def _process_handler(process: asyncssh.SSHServerProcess[Any]) -> None:
         max_reconnects = 12
         reconnect_delay = 3.0
-        stdin = process.stdin  # type: ignore[attr-defined]
-        stdout = process.stdout  # type: ignore[attr-defined]
+        stdin = process.stdin
+        stdout = process.stdout
 
         # Resolve this connection's pubkey fingerprint (if any) so multi-user
         # SSH proxies can keep per-user token files instead of fighting over
@@ -254,7 +254,7 @@ async def _make_process_handler(
                 for part in parts:
                     obj = getattr(obj, part)
                 if callable(obj):
-                    obj = obj()
+                    obj = cast("Callable[[], object]", obj)()
                 candidates.append(obj)
         for (
             conn
@@ -399,6 +399,6 @@ async def _make_process_handler(
             logger.debug("ssh_ws_session_ended: %s", exc)
         finally:
             with contextlib.suppress(Exception):
-                process.exit(0)  # type: ignore[attr-defined]
+                process.exit(0)
 
     return _process_handler

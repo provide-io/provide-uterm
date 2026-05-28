@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-from provide.uterm.bridge.fanout._controller import FanOutController
-from provide.uterm.bridge.fanout._models import FanOutGroup, FanOutResult
-from provide.uterm.bridge.hub.core import TermHub
-from provide.uterm.bridge.hub.ext import FanOutPolicyGate, PolicyContext, PolicyDecision
+from provide.uterm.server.bridge.fanout._controller import FanOutController
+from provide.uterm.server.bridge.fanout._models import FanOutGroup, FanOutResult
+from provide.uterm.server.bridge.hub.core import TermHub
+from provide.uterm.server.bridge.hub.ext import FanOutPolicyGate, PolicyContext, PolicyDecision
 
 
 class MockFanOutGate(FanOutPolicyGate):

@@ -6,7 +6,7 @@
 
 Verifies:
 - POST /api/tunnels creates session with tokens
-- GET /s/{id}?token=... redirects to /app/session/{id}
+- GET /s/{id}?invite=... sets a cookie and redirects to /app/session/{id}
 - WSS /tunnel/{id} with worker_token connects agent
 - Channel 0x03 HTTP inspection frames accepted
 - Terminal + HTTP channels coexist on same WS
@@ -110,18 +110,16 @@ class TestTunnelCreation:
 @pytest.mark.e2e
 class TestShortShareUrl:
     def test_s_route_serves_page(self, wrangler_server: str) -> None:
-        """GET /s/{id}?token=... → serves page (200 or 302 redirect)."""
+        """GET /s/{id}?invite=... → redirects to a clean app URL."""
         _, tunnel = _http_post(wrangler_server, "/api/tunnels", {"tunnel_type": "terminal"})
         tid = tunnel["tunnel_id"]
         share_url = tunnel["share_url"]
-        token = share_url.split("token=")[1] if "token=" in share_url else ""
-        # Accept either 200 (direct serve) or 302 (redirect) — both are valid
-        status, body, headers = _http_get(wrangler_server, f"/s/{tid}?token={token}", follow_redirects=False)
-        if status == 302:
-            location = headers.get("location", headers.get("Location", ""))
-            assert f"/app/session/{tid}" in location
-        else:
-            assert status == 200, f"Expected 200 or 302, got {status}: {body[:200]}"
+        invite = share_url.split("invite=")[1] if "invite=" in share_url else ""
+        status, body, headers = _http_get(wrangler_server, f"/s/{tid}?invite={invite}", follow_redirects=False)
+        assert status == 302, f"Expected 302, got {status}: {body[:200]}"
+        location = headers.get("location", headers.get("Location", ""))
+        assert f"/app/session/{tid}" in location
+        assert "Set-Cookie" in headers
 
 
 @pytest.mark.e2e

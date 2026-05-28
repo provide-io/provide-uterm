@@ -25,6 +25,49 @@ else:
     except ImportError:  # pragma: no cover
         from cf_types import Response, json_response  # type: ignore[import-not-found,no-redef]
 
+_TUNNEL_INVITE_TTL_S = 300
+
+
+def _issue_tunnel_invites(
+    entry: dict[str, Any],
+    *,
+    share_token: str,
+    control_token: str,
+    now: float,
+) -> tuple[str, str]:
+    share_invite = secrets.token_urlsafe(32)
+    control_invite = secrets.token_urlsafe(32)
+    expires_at = now + _TUNNEL_INVITE_TTL_S
+    entry.update(
+        {
+            "share_invite_hash": hash_token(share_invite),
+            "share_invite_token": share_token,
+            "share_invite_expires_at": expires_at,
+            "control_invite_hash": hash_token(control_invite),
+            "control_invite_token": control_token,
+            "control_invite_expires_at": expires_at,
+        }
+    )
+    return share_invite, control_invite
+
+
+def _clear_tunnel_invites(entry: dict[str, Any]) -> None:
+    for key in (
+        "share_invite_hash",
+        "share_invite_token",
+        "share_invite_expires_at",
+        "control_invite_hash",
+        "control_invite_token",
+        "control_invite_expires_at",
+    ):
+        entry.pop(key, None)
+
+
+def _clear_tunnel_invite(entry: dict[str, Any], role: str) -> None:
+    prefix = "control" if role == "operator" else "share"
+    for suffix in ("hash", "token", "expires_at"):
+        entry.pop(f"{prefix}_invite_{suffix}", None)
+
 
 async def handle_tunnels(request: object, env: object, principal: object | None = None) -> object:
     """Handle POST /api/tunnels — create a tunnel session with share tokens.
@@ -90,13 +133,17 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
         "issued_ip": str(getattr(request, "headers", {}).get("CF-Connecting-IP") or ""),
         "share_page": "inspect" if tunnel_type == "http" else "session",
     }
+    share_invite, control_invite = _issue_tunnel_invites(
+        entry,
+        share_token=share_token,
+        control_token=control_token,
+        now=now,
+    )
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is not None:
         await kv.put(f"session:{tunnel_id}", json.dumps(entry))
 
     base_url = str(getattr(request, "url", "")).split("/api/")[0]
-    # Mirrored in server/routes/api.py — keep both in sync.
-    share_page = "inspect" if tunnel_type == "http" else "session"
     return json_response(
         {
             "tunnel_id": tunnel_id,
@@ -104,8 +151,8 @@ async def handle_tunnels(request: object, env: object, principal: object | None 
             "tunnel_type": tunnel_type,
             "ws_endpoint": f"/tunnel/{tunnel_id}",
             "worker_token": worker_token,
-            "share_url": f"{base_url}/app/{share_page}/{tunnel_id}?token={share_token}",
-            "control_url": f"{base_url}/app/operator/{tunnel_id}?token={control_token}",
+            "share_url": f"{base_url}/s/{tunnel_id}?invite={share_invite}",
+            "control_url": f"{base_url}/s/{tunnel_id}?invite={control_invite}",
             "expires_at": expires_at,
         }
     )
@@ -140,7 +187,10 @@ async def handle_tunnel_revoke_tokens(
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
         return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
-    raw = await kv.get(f"session:{tunnel_id}")
+    try:
+        raw = await kv.get(f"session:{tunnel_id}")
+    except Exception:
+        return None
     if raw is None:
         return json_response({"error": "not found"}, status=404)
     try:
@@ -153,6 +203,7 @@ async def handle_tunnel_revoke_tokens(
     entry["share_token_hash"] = None
     entry["control_token_hash"] = None
     entry["revoked"] = True
+    _clear_tunnel_invites(entry)
     await kv.put(f"session:{tunnel_id}", json.dumps(entry))
     return json_response({"ok": True, "session_id": tunnel_id})
 
@@ -172,7 +223,10 @@ async def handle_tunnel_rotate_tokens(
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
         return json_response({"error": "SESSION_REGISTRY not configured"}, status=500)
-    raw = await kv.get(f"session:{tunnel_id}")
+    try:
+        raw = await kv.get(f"session:{tunnel_id}")
+    except Exception:
+        return None
     if raw is None:
         return json_response({"error": "not found"}, status=404)
     try:
@@ -196,6 +250,12 @@ async def handle_tunnel_rotate_tokens(
     # Mirrored in server/routes/api.py — keep both in sync.
     share_page = "inspect" if tunnel_type == "http" else "session"
     entry["share_page"] = share_page
+    share_invite, control_invite = _issue_tunnel_invites(
+        entry,
+        share_token=new_share,
+        control_token=new_control,
+        now=time.time(),
+    )
     await kv.put(f"session:{tunnel_id}", json.dumps(entry))
 
     base_url = str(getattr(request, "url", "")).split("/api/")[0]
@@ -204,8 +264,8 @@ async def handle_tunnel_rotate_tokens(
             "tunnel_id": tunnel_id,
             "ws_endpoint": f"/tunnel/{tunnel_id}",
             "worker_token": new_worker,
-            "share_url": f"{base_url}/app/{share_page}/{tunnel_id}?token={new_share}",
-            "control_url": f"{base_url}/app/operator/{tunnel_id}?token={new_control}",
+            "share_url": f"{base_url}/s/{tunnel_id}?invite={share_invite}",
+            "control_url": f"{base_url}/s/{tunnel_id}?invite={control_invite}",
             "expires_at": expires_at,
         }
     )
@@ -214,16 +274,14 @@ async def handle_tunnel_rotate_tokens(
 async def resolve_share_context(
     request: object, env: object, tunnel_id: str, config: object = None
 ) -> tuple[str, str] | None:
-    """Return ``(page_kind, share_role)`` for a valid share token.
-
-    ``config`` is optional: when supplied, ``tunnel_token_transport`` and
-    ``tunnel_ip_binding`` are enforced.  Without it (e.g. legacy call-sites
-    in tests) the defaults are ``transport="both"`` and ``ip_binding=False``.
-    """
+    """Return ``(page_kind, share_role)`` for a valid share-token cookie."""
     kv = getattr(env, "SESSION_REGISTRY", None)
     if kv is None:
         return None
-    raw = await kv.get(f"session:{tunnel_id}")
+    try:
+        raw = await kv.get(f"session:{tunnel_id}")
+    except Exception:
+        return None
     if raw is None:
         return None
     try:
@@ -240,34 +298,23 @@ async def resolve_share_context(
     share_tok_hash = session.get("share_token_hash") or ""
     control_tok_hash = session.get("control_token_hash") or ""
 
-    # Effective transport mode and IP-binding from config (defaults: both / off).
-    transport = "both"
     ip_binding = False
     if config is not None:
-        transport = str(getattr(config, "tunnel_token_transport", "both"))
         ip_binding = bool(getattr(config, "tunnel_ip_binding", False))
 
     provided = None
-    if transport != "cookie":  # "query" or "both": try query string first
-        try:
-            qs = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-            provided = (qs.get("token", [None]) or [None])[0]
-        except Exception:
-            pass
-    # Cookie fallback: uterm_tunnel_{tunnel_id}
-    if not provided and transport != "query":  # "cookie" or "both"
-        try:
-            from http.cookies import SimpleCookie
+    try:
+        from http.cookies import SimpleCookie
 
-            cookie_header = str(
-                getattr(request, "headers", {}).get("cookie") or getattr(request, "headers", {}).get("Cookie") or ""
-            )
-            cookies = SimpleCookie(cookie_header)
-            cookie_key = f"uterm_tunnel_{tunnel_id}"
-            if cookie_key in cookies:
-                provided = cookies[cookie_key].value
-        except Exception:
-            pass
+        cookie_header = str(
+            getattr(request, "headers", {}).get("cookie") or getattr(request, "headers", {}).get("Cookie") or ""
+        )
+        cookies = SimpleCookie(cookie_header)
+        cookie_key = f"uterm_tunnel_{tunnel_id}"
+        if cookie_key in cookies:
+            provided = cookies[cookie_key].value
+    except Exception:
+        pass
 
     # Check expiry.
     expires_at = session.get("expires_at")
@@ -296,7 +343,62 @@ async def resolve_share_context(
         if issued_ip and client_ip != issued_ip:
             return None
 
-    return ("operator" if role == "operator" else "session", role)
+    if role == "operator":
+        return ("operator", role)
+    return (str(session.get("share_page") or "session"), role)
+
+
+async def consume_tunnel_invite(request: object, env: object, tunnel_id: str) -> tuple[str, str, str] | None:
+    """Consume a one-time tunnel invite and return ``(page_kind, role, token)``."""
+    try:
+        query = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
+        invite = (query.get("invite", [None]) or [None])[0]
+    except Exception:
+        invite = None
+    if not invite:
+        return None
+
+    kv = getattr(env, "SESSION_REGISTRY", None)
+    if kv is None:
+        return None
+    raw = await kv.get(f"session:{tunnel_id}")
+    if raw is None:
+        return None
+    try:
+        session = json.loads(str(raw))
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if session.get("revoked"):
+        return None
+
+    expires_at = session.get("expires_at")
+    now = time.time()
+    if isinstance(expires_at, (int, float)) and now > float(expires_at):
+        return None
+
+    matched: tuple[str, str, str] | None = None
+    for role, token_hash_key, invite_hash_key, invite_token_key, invite_expires_key in (
+        ("operator", "control_token_hash", "control_invite_hash", "control_invite_token", "control_invite_expires_at"),
+        ("viewer", "share_token_hash", "share_invite_hash", "share_invite_token", "share_invite_expires_at"),
+    ):
+        invite_hash = str(session.get(invite_hash_key) or "")
+        raw_token = str(session.get(invite_token_key) or "")
+        active_token_hash = str(session.get(token_hash_key) or "")
+        invite_expires = session.get(invite_expires_key)
+        if not invite_hash or not raw_token or not active_token_hash:
+            continue
+        if isinstance(invite_expires, (int, float)) and now > float(invite_expires):
+            _clear_tunnel_invite(session, role)
+            continue
+        if verify_token(str(invite), invite_hash) and verify_token(raw_token, active_token_hash):
+            page_kind = "operator" if role == "operator" else str(session.get("share_page") or "session")
+            matched = (page_kind, role, raw_token)
+            _clear_tunnel_invite(session, role)
+            break
+
+    if matched is not None:
+        await kv.put(f"session:{tunnel_id}", json.dumps(session))
+    return matched
 
 
 async def handle_share_route(
@@ -312,13 +414,9 @@ async def handle_share_route(
         return json_response({"error": "not_found", "session_id": tunnel_id}, status=404)
 
     page_kind, share_role = share_context
-    query = parse_qs(urlparse(str(request.url)).query)  # type: ignore[attr-defined]
-    tokens = query.get("token", []) + query.get("access_token", [])
-    token: str | None = tokens[0] if tokens else None
     return spa_response(
         page_kind,
         session_id=tunnel_id,
         surface="operator" if share_role == "operator" else "user",
         share_role=share_role,
-        share_token=token,
     )

@@ -1,10 +1,27 @@
-# Split shim to keep file size below 500 LOC while preserving import paths.
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+"""Public exports for the split agent process manager implementation."""
+
 from __future__ import annotations
 
-from importlib import import_module
+from provide.uterm.manager.process_impl import (
+    _STOP_TIMEOUT_S,
+    AgentProcessManager,
+    inspect,
+    os,
+    signal,
+    subprocess,
+    sys,
+)
 
-_impl = import_module(".process_impl", __package__)
-for _name, _value in vars(_impl).items():
-    if _name in {"__name__", "__package__", "__loader__", "__spec__", "__file__", "__cached__"}:
-        continue
-    globals()[_name] = _value
+__all__ = [
+    "_STOP_TIMEOUT_S",
+    "AgentProcessManager",
+    "inspect",
+    "os",
+    "signal",
+    "subprocess",
+    "sys",
+]

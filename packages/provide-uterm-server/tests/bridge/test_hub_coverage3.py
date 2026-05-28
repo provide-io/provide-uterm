@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 def _make_hub(**kwargs: Any) -> TermHub:
@@ -49,7 +49,7 @@ class TestResolveRoleTimeout:
         """Lines 164-166: timeout branch via patching wait_for."""
         from unittest.mock import patch
 
-        from provide.uterm.bridge.hub import BrowserRoleResolutionError
+        from provide.uterm.server.bridge.hub import BrowserRoleResolutionError
 
         def _slow_resolver(ws: Any, worker_id: str) -> Any:
             return asyncio.get_running_loop().create_future()
@@ -72,7 +72,7 @@ class TestResolveRoleTimeout:
 class TestResolveRoleBrowserRoleError:
     async def test_browser_role_resolution_error_reraised(self) -> None:
         """Line 169: BrowserRoleResolutionError from resolver is re-raised."""
-        from provide.uterm.bridge.hub import BrowserRoleResolutionError
+        from provide.uterm.server.bridge.hub import BrowserRoleResolutionError
 
         def _raising_resolver(ws: Any, worker_id: str) -> str:
             raise BrowserRoleResolutionError(worker_id)

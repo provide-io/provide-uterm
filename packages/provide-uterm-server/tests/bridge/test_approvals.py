@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus, InMemoryApprovalStore
+from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus, InMemoryApprovalStore
 
 
 def test_approval_request_creation():

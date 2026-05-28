@@ -149,7 +149,7 @@ class TestSseStreamEventsSuccess:
         """
         from fastapi import FastAPI
 
-        from provide.uterm.bridge.hub import TermHub
+        from provide.uterm.server.bridge.hub import TermHub
         from provide.uterm.server.routes.sse import create_sse_router
 
         # Build a minimal app with only the SSE router and a known session.
@@ -220,7 +220,7 @@ class TestRegistryStreamNoEventBus:
 
     async def test_stream_session_events_no_event_bus_returns_empty(self) -> None:
         """When the hub has no EventBus, stream_session_events yields nothing."""
-        from provide.uterm.bridge.hub import TermHub
+        from provide.uterm.server.bridge.hub import TermHub
         from provide.uterm.server.registry import SessionRegistry
 
         # Hub without EventBus.
@@ -250,7 +250,7 @@ class TestRegistryStreamHeartbeat:
         Then the worker disconnect sentinel stops the generator."""
         from unittest.mock import AsyncMock
 
-        from provide.uterm.bridge.hub import EventBus, TermHub
+        from provide.uterm.server.bridge.hub import EventBus, TermHub
         from provide.uterm.server.registry import SessionRegistry
 
         hub = TermHub(event_bus=EventBus())
@@ -290,7 +290,7 @@ class TestRegistryStreamHeartbeat:
         """When an event arrives, it is yielded as a data: line (line 388)."""
         from unittest.mock import AsyncMock
 
-        from provide.uterm.bridge.hub import EventBus, TermHub
+        from provide.uterm.server.bridge.hub import EventBus, TermHub
         from provide.uterm.server.registry import SessionRegistry
 
         hub = TermHub(event_bus=EventBus())

@@ -20,7 +20,7 @@ import json
 
 import pytest
 
-from provide.uterm.bridge.frames import (
+from provide.uterm.server.bridge.frames import (
     coerce_worker_status_frame,
     make_analysis_frame,
     make_error_frame,

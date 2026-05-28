@@ -91,47 +91,55 @@ class TestEntryDispatchGaps:
         resp = await _api_tunnel_rotate(req, env, cfg, "tid")
         assert resp.status in {200, 404, 500}
 
-    async def test_share_redirect_without_query_string(self) -> None:
-        """Line 337->339: /s/{id} redirects without query string."""
+    async def test_share_redirect_without_invite_is_not_found(self) -> None:
+        """/s/{id} requires a valid one-time invite or existing cookie."""
         from provide.uterm.cloudflare.entry import Default
 
         d = Default(SimpleNamespace(AUTH_MODE="dev"))
         req = _req("/s/my-session")
         resp = await d.fetch(req)
-        assert resp.status == 302
-        loc = dict(resp.headers).get("location", "")
-        assert "my-session" in loc
-        assert "?" not in loc  # no query string appended
+        assert resp.status == 404
 
-    async def test_share_redirect_with_query_string(self) -> None:
-        """Lines 337-339: /s/{id}?token=x redirects with query."""
+    async def test_share_redirect_with_token_query_is_not_found(self) -> None:
+        """Bearer query tokens are not accepted by the short-share route."""
         from provide.uterm.cloudflare.entry import Default
 
         d = Default(SimpleNamespace(AUTH_MODE="dev"))
         req = _req("/s/my-session?token=abc123")
         resp = await d.fetch(req)
-        assert resp.status == 302
-        loc = dict(resp.headers).get("location", "")
-        assert "my-session" in loc
-        assert "token=abc123" in loc
+        assert resp.status == 404
 
     async def test_share_redirect_http_tunnel_uses_inspect_page(self) -> None:
         """Short-share /s/{id} for an HTTP tunnel must redirect to /app/inspect/."""
         import json
 
         from provide.uterm.cloudflare.entry import Default
+        from provide.uterm.tunnel.token_hash import hash_token
 
         kv = AsyncMock()
-        kv.get = AsyncMock(return_value=json.dumps({"share_page": "inspect"}))
+        kv.get = AsyncMock(
+            return_value=json.dumps(
+                {
+                    "share_page": "inspect",
+                    "share_token_hash": hash_token("tok"),
+                    "share_invite_hash": hash_token("invite-tok"),
+                    "share_invite_token": "tok",
+                    "share_invite_expires_at": __import__("time").time() + 300,
+                    "expires_at": __import__("time").time() + 3600,
+                }
+            )
+        )
+        kv.put = AsyncMock()
         d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
-        req = _req("/s/my-http-tunnel?token=tok")
+        req = _req("/s/my-http-tunnel?invite=invite-tok")
         resp = await d.fetch(req)
         assert resp.status == 302
         loc = dict(resp.headers).get("location", "")
         assert "/app/inspect/my-http-tunnel" in loc
+        assert "token=" not in loc
 
-    async def test_share_redirect_kv_returns_none_falls_back_to_session(self) -> None:
-        """Short-share KV returning None must fall back to /app/session/."""
+    async def test_share_redirect_kv_returns_none_is_not_found(self) -> None:
+        """Short-share KV returning None is not a valid invite."""
         from provide.uterm.cloudflare.entry import Default
 
         kv = AsyncMock()
@@ -139,12 +147,10 @@ class TestEntryDispatchGaps:
         d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
         req = _req("/s/missing-tunnel")
         resp = await d.fetch(req)
-        assert resp.status == 302
-        loc = dict(resp.headers).get("location", "")
-        assert "/app/session/missing-tunnel" in loc
+        assert resp.status == 404
 
-    async def test_share_redirect_kv_exception_falls_back_to_session(self) -> None:
-        """Short-share KV lookup failure must fall back to /app/session/."""
+    async def test_share_redirect_kv_exception_is_not_found(self) -> None:
+        """Short-share KV lookup failure must not expose a guessed app URL."""
         from provide.uterm.cloudflare.entry import Default
 
         kv = AsyncMock()
@@ -152,9 +158,7 @@ class TestEntryDispatchGaps:
         d = Default(SimpleNamespace(AUTH_MODE="dev", SESSION_REGISTRY=kv))
         req = _req("/s/any-tunnel")
         resp = await d.fetch(req)
-        assert resp.status == 302
-        loc = dict(resp.headers).get("location", "")
-        assert "/app/session/any-tunnel" in loc
+        assert resp.status == 404
 
     async def test_share_page_with_context(self) -> None:
         """Lines 344-345: SPA response for share page with context."""

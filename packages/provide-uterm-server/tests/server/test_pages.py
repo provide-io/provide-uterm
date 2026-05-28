@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import jwt
 import pytest
@@ -141,23 +142,34 @@ def test_operator_session_200_sets_cookies_and_fitaddon(client: TestClient) -> N
     assert "uterm_surface=operator" in cookies
 
 
-def test_tunnel_share_token_allows_session_page_without_jwt() -> None:
-    """Valid share_token in query param grants access; the token itself is NOT
-    embedded in the returned HTML (security: no JS-readable capability token).
-    """
+def _seed_tunnel_tokens(
+    app: Any,
+    session_id: str,
+    *,
+    share_token: str,
+    control_token: str,
+    share_page: str | None = None,
+) -> None:
     from provide.uterm.tunnel.token_hash import hash_token
+
+    token_state = {
+        "share_token_hash": hash_token(share_token),
+        "control_token_hash": hash_token(control_token),
+        "worker_token_hash": hash_token("worker-token-123"),
+    }
+    if share_page is not None:
+        token_state["share_page"] = share_page
+    app.state.uterm_tunnel_tokens = {session_id: token_state}
+
+
+def test_tunnel_share_cookie_allows_session_page_without_jwt() -> None:
+    """A valid tunnel cookie grants access without embedding the token in HTML."""
 
     token = "share-token-123"
     app = _jwt_app_public_session("tok-sess-share")
-    app.state.uterm_tunnel_tokens = {
-        "tok-sess-share": {
-            "share_token_hash": hash_token(token),
-            "control_token_hash": hash_token("control-token-123"),
-            "worker_token_hash": hash_token("worker-token-123"),
-        }
-    }
+    _seed_tunnel_tokens(app, "tok-sess-share", share_token=token, control_token="control-token-123")
     with TestClient(app) as c:
-        r = c.get(f"/app/session/tok-sess-share?token={token}")
+        r = c.get("/app/session/tok-sess-share", cookies={"uterm_tunnel_tok-sess-share": token})
     assert r.status_code == 200
     assert '"share_role": "viewer"' in r.text
     # The capability token must NOT appear in the page body.
@@ -165,73 +177,60 @@ def test_tunnel_share_token_allows_session_page_without_jwt() -> None:
     assert '"share_token"' not in r.text
 
 
-def test_tunnel_control_token_allows_operator_page_without_jwt() -> None:
-    """Valid control_token in query param grants operator role; the token
-    itself is NOT embedded in the returned HTML.
-    """
-    from provide.uterm.tunnel.token_hash import hash_token
+def test_tunnel_control_cookie_allows_operator_page_without_jwt() -> None:
+    """A valid control cookie grants operator role without embedding the token."""
 
     token = "control-token-123"
     app = _jwt_app_public_session("tok-sess-control")
-    app.state.uterm_tunnel_tokens = {
-        "tok-sess-control": {
-            "share_token_hash": hash_token("share-token-123"),
-            "control_token_hash": hash_token(token),
-            "worker_token_hash": hash_token("worker-token-123"),
-        }
-    }
+    _seed_tunnel_tokens(app, "tok-sess-control", share_token="share-token-123", control_token=token)
     with TestClient(app) as c:
-        r = c.get(f"/app/operator/tok-sess-control?token={token}")
+        r = c.get("/app/operator/tok-sess-control", cookies={"uterm_tunnel_tok-sess-control": token})
     assert r.status_code == 200
     assert '"share_role": "operator"' in r.text
     assert token not in r.text
     assert '"share_token"' not in r.text
 
 
-def test_tunnel_share_token_allows_inspect_page_without_jwt() -> None:
-    """HTTP-tunnel inspect page must accept share tokens.
+def test_tunnel_share_cookie_allows_inspect_page_without_jwt() -> None:
+    """HTTP-tunnel inspect page must accept share cookies.
 
     Regression guard: /app/inspect/{id} was missing from the
-    _SHARE_SESSION_PATTERNS regex, so the CLI-printed share URL (which
-    points at the inspector for http-tunnels) would 401 on a valid token.
+    _SHARE_SESSION_PATTERNS regex, so inspect pages would 401 on a valid
+    tunnel cookie.
     """
-    from provide.uterm.tunnel.token_hash import hash_token
 
     token = "inspect-share-token"
     app = _jwt_app_public_session("tok-sess-inspect")
-    app.state.uterm_tunnel_tokens = {
-        "tok-sess-inspect": {
-            "share_token_hash": hash_token(token),
-            "control_token_hash": hash_token("ct"),
-            "worker_token_hash": hash_token("wt"),
-        }
-    }
+    _seed_tunnel_tokens(app, "tok-sess-inspect", share_token=token, control_token="ct", share_page="inspect")
     with TestClient(app) as c:
-        r = c.get(f"/app/inspect/tok-sess-inspect?token={token}")
+        r = c.get("/app/inspect/tok-sess-inspect", cookies={"uterm_tunnel_tok-sess-inspect": token})
     assert r.status_code == 200
     assert '"page_kind": "inspect"' in r.text
 
 
-def test_tunnel_share_token_sets_httponly_cookie() -> None:
-    """Page serving a valid share token must persist it as an HttpOnly cookie.
-
-    This is what allows the WebSocket upgrade to authenticate via cookie
-    instead of a JS-readable query-param token embedded in the DOM.
-    """
-    from provide.uterm.tunnel.token_hash import hash_token
+def test_tunnel_invite_sets_httponly_cookie() -> None:
+    """The one-time invite bootstrap persists an HttpOnly tunnel cookie."""
+    from provide.uterm.server.tunnel_invites import issue_tunnel_invites
 
     token = "share-token-cookie-xyz"
     app = _jwt_app_public_session("cookie-sess")
-    app.state.uterm_tunnel_tokens = {
-        "cookie-sess": {
-            "share_token_hash": hash_token(token),
-            "control_token_hash": hash_token("ct"),
-            "worker_token_hash": hash_token("wt"),
-        }
-    }
+    _seed_tunnel_tokens(app, "cookie-sess", share_token=token, control_token="ct")
+    share_invite, _control_invite = issue_tunnel_invites(
+        app.state.uterm_tunnel_invites,
+        session_id="cookie-sess",
+        share_token=token,
+        control_token="ct",
+        tunnel_expires_at=time.time() + 300,
+        issued_ip=None,
+        now=time.time(),
+    )
     with TestClient(app) as c:
-        r = c.get(f"/app/session/cookie-sess?token={token}")
-    assert r.status_code == 200
+        r = c.get(f"/s/cookie-sess?invite={share_invite}", follow_redirects=False)
+    assert r.status_code == 302
+    location = r.headers.get("location", "")
+    assert location.endswith("/app/session/cookie-sess")
+    assert "invite=" not in location
+    assert "token=" not in location
     cookies = r.headers.get_list("set-cookie")
     matches = [c for c in cookies if c.startswith("uterm_tunnel_cookie-sess=")]
     assert matches, f"expected uterm_tunnel_cookie-sess cookie, got: {cookies}"

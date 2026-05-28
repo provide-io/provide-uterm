@@ -73,6 +73,7 @@ markers = [
 fail_under = 100
 show_missing = true
 partial_branches = [
+    "pragma: no branch",
     "if _libpam is not None:",
 ]
 

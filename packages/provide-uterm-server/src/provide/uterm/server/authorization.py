@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 import httpx
 
@@ -54,6 +54,18 @@ class AuthorizationProvider(Protocol):
 
     async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
         """Return the capability set granted to ``principal``."""
+        ...
+
+    async def has_capability(self, principal: Principal, capability: Capability) -> bool:
+        """Return True if ``principal`` has ``capability``."""
+        ...
+
+    async def is_admin(self, principal: Principal) -> bool:
+        """Return True if ``principal`` has administrator privileges."""
+        ...
+
+    async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
+        """Return True if ``principal`` owns ``session``."""
         ...
 
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
@@ -198,6 +210,9 @@ class WebhookAuthorizationProvider:
             pass
         return frozenset()
 
+    async def has_capability(self, principal: Principal, capability: Capability) -> bool:
+        return await self._check(principal, capability)
+
     async def is_admin(self, principal: Principal) -> bool:
         """Finding #8: delegate admin-check to the webhook.
 
@@ -210,6 +225,9 @@ class WebhookAuthorizationProvider:
         webhook keeps a single source of truth.
         """
         return await self._check(principal, "admin")
+
+    async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
+        return await self._check(principal, "session.owner", session_id=session.session_id)
 
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
         return await self._check(principal, "session.read", session_id=session.session_id)
@@ -256,49 +274,77 @@ class AuthorizationService:
     _provider: AuthorizationProvider = field(default_factory=LocalAuthorizationProvider)
 
     async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
-        return await self._provider.capabilities_for(principal)
+        provider: Any = self._provider
+        method = getattr(provider, "capabilities_for", None)
+        if callable(method):
+            return cast("frozenset[Capability]", await method(principal))
+        return await LocalAuthorizationProvider().capabilities_for(principal)
 
     async def has_role(self, principal: Principal, role: Role) -> bool:
         return role in principal.roles
 
     async def has_capability(self, principal: Principal, capability: Capability) -> bool:
-        provider = self._provider
-        if hasattr(provider, "has_capability"):
-            result: bool = await provider.has_capability(principal, capability)
-            return result
-        return capability in await provider.capabilities_for(principal)
+        provider: Any = self._provider
+        method = getattr(provider, "has_capability", None)
+        if callable(method):
+            return bool(await method(principal, capability))
+        return capability in await self.capabilities_for(principal)
 
     async def is_admin(self, principal: Principal) -> bool:
-        provider = self._provider
-        if hasattr(provider, "is_admin"):
-            result: bool = await provider.is_admin(principal)
-            return result
+        provider: Any = self._provider
+        method = getattr(provider, "is_admin", None)
+        if callable(method):
+            return bool(await method(principal))
         return await LocalAuthorizationProvider().is_admin(principal)
 
     async def is_owner(self, principal: Principal, session: SessionDefinition) -> bool:
-        provider = self._provider
-        if hasattr(provider, "is_owner"):
-            result: bool = await provider.is_owner(principal, session)
-            return result
+        provider: Any = self._provider
+        method = getattr(provider, "is_owner", None)
+        if callable(method):
+            return bool(await method(principal, session))
         return await LocalAuthorizationProvider().is_owner(principal, session)
 
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
-        return await self._provider.can_read_session(principal, session)
+        provider: Any = self._provider
+        method = getattr(provider, "can_read_session", None)
+        if callable(method):
+            return bool(await method(principal, session))
+        return await LocalAuthorizationProvider().can_read_session(principal, session)
 
     async def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
-        return await self._provider.can_read_recording(principal, session)
+        provider: Any = self._provider
+        method = getattr(provider, "can_read_recording", None)
+        if callable(method):
+            return bool(await method(principal, session))
+        return await LocalAuthorizationProvider().can_read_recording(principal, session)
 
     async def can_create_session(self, principal: Principal) -> bool:
-        return await self._provider.can_create_session(principal)
+        provider: Any = self._provider
+        method = getattr(provider, "can_create_session", None)
+        if callable(method):
+            return bool(await method(principal))
+        return await LocalAuthorizationProvider().can_create_session(principal)
 
     async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: Capability) -> bool:
-        return await self._provider.can_mutate_session(principal, session, action)
+        provider: Any = self._provider
+        method = getattr(provider, "can_mutate_session", None)
+        if callable(method):
+            return bool(await method(principal, session, action))
+        return await LocalAuthorizationProvider().can_mutate_session(principal, session, action)
 
     async def can_read_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
-        return await self._provider.can_read_profile(principal, profile)
+        provider: Any = self._provider
+        method = getattr(provider, "can_read_profile", None)
+        if callable(method):
+            return bool(await method(principal, profile))
+        return await LocalAuthorizationProvider().can_read_profile(principal, profile)
 
     async def can_mutate_profile(self, principal: Principal, profile: ConnectionProfile) -> bool:
-        return await self._provider.can_mutate_profile(principal, profile)
+        provider: Any = self._provider
+        method = getattr(provider, "can_mutate_profile", None)
+        if callable(method):
+            return bool(await method(principal, profile))
+        return await LocalAuthorizationProvider().can_mutate_profile(principal, profile)
 
     async def resolve_browser_role(self, principal: Principal, session: SessionDefinition) -> str:
         provider = self._provider

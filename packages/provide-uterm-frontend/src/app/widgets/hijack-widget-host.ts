@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { getShareToken } from "../../server-common.js";
 import { DeckMux } from "../deckmux/deckmux.js";
 
 type SessionSurface = "user" | "operator";
@@ -28,7 +27,6 @@ export function mountHijackWidget(
     return { mounted: false, error: "ProvideHijack is not available" };
   }
   const widgetConfig = widgetSurface(surface);
-  const shareToken = getShareToken();
 
   // DeckMux state — lazily initialised on first presence_sync
   let deckMux: DeckMux | null = null;
@@ -103,9 +101,6 @@ export function mountHijackWidget(
       }
     },
   };
-  if (shareToken) {
-    config.authToken = shareToken;
-  }
 
   const widget = new HijackWidget(container, config);
 

@@ -21,7 +21,7 @@ import pytest
 
 
 async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
-    from provide.uterm.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub import TermHub
 
     hub = TermHub()
     with pytest.raises(ValueError, match="invalid input mode"):
@@ -36,13 +36,13 @@ async def test_set_worker_hello_mode_rejects_invalid_mode() -> None:
 async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogCaptureFixture) -> None:
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.models import WorkerTermState
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
     hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
-    caplog.set_level(logging.WARNING, logger="provide.uterm.bridge.hub.connection")
+    caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
     assert any("worker_hello_legacy_protocol" in r.getMessage() for r in caplog.records), (
         "set_worker_hello with protocol_version<1 must log worker_hello_legacy_protocol warning"
@@ -58,7 +58,7 @@ def test_fanout_controller_works_without_approval_store_on_hub() -> None:
     """bridge/fanout/_controller.py:46->exit — hub without _approval_store doesn't crash init."""
     from unittest.mock import MagicMock
 
-    from provide.uterm.bridge.fanout._controller import FanOutController
+    from provide.uterm.server.bridge.fanout._controller import FanOutController
 
     hub = MagicMock(spec=[])  # no attributes -> _approval_store getattr returns None
     ctrl = FanOutController(hub=hub, fanout_policy_gate=MagicMock())
@@ -70,8 +70,8 @@ async def test_browser_handlers_multi_part_split_routes_each() -> None:
     """browser_handlers.py:289->291 — multi-part command takes the else branch."""
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
-    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+    from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
     class AllowGate:
         async def intercept_input(self, _data: str, _ctx: PolicyContext) -> PolicyDecision:
@@ -94,9 +94,9 @@ async def test_resolve_approval_paused_browser_resumed_without_hold_buffer() -> 
     import time as _time
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
-    from provide.uterm.bridge.hub.ext import PolicyDecision
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.hub.approvals import ApprovalRequest, ApprovalStatus
+    from provide.uterm.server.bridge.hub.ext import PolicyDecision
 
     hub = TermHub()
     worker_ws = AsyncMock()
@@ -126,8 +126,8 @@ async def test_handle_input_post_split_send_failure_notifies_browser() -> None:
     emit the Worker-connection-lost frame to the browser."""
     from unittest.mock import AsyncMock, patch
 
-    from provide.uterm.bridge.hub import PolicyContext, PolicyDecision, TermHub
-    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+    from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
+    from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
     class AllowGate:
         async def intercept_input(self, _data: str, _ctx: PolicyContext) -> PolicyDecision:
@@ -187,7 +187,7 @@ def test_setup_dev_idp_preserves_caller_supplied_bearer(monkeypatch, tmp_path) -
 
 
 def test_command_splitter_skips_empty_segments() -> None:
-    from provide.uterm.bridge.hub.semantics import CommandSplitter
+    from provide.uterm.server.bridge.hub.semantics import CommandSplitter
 
     splitter = CommandSplitter()
     # Empty mid-segment from `;;`
@@ -208,7 +208,7 @@ def test_command_splitter_skips_empty_segments() -> None:
 async def test_fanout_release_approved_command_returns_none_for_unauthorized_group() -> None:
     from unittest.mock import AsyncMock, MagicMock
 
-    from provide.uterm.bridge.fanout._controller import FanOutController
+    from provide.uterm.server.bridge.fanout._controller import FanOutController
 
     ctrl = FanOutController(hub=MagicMock(), fanout_policy_gate=MagicMock())
     ctrl._pending_approvals["req-y"] = {  # type: ignore[attr-defined]
@@ -353,8 +353,8 @@ async def test_handle_input_completing_buffered_command_passes_full_string() -> 
     should be joined with the prefix before the worker sees it."""
     from unittest.mock import AsyncMock
 
-    from provide.uterm.bridge.hub import TermHub
-    from provide.uterm.bridge.routes.browser_handlers import _handle_input
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
 
     hub = TermHub()
     ws = AsyncMock()

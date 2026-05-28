@@ -6,7 +6,8 @@
     "packages/provide-uterm-app"
   ],
   "scripts": {
-    "build:frontend": "npm run build --workspace=packages/provide-uterm-frontend && npm run build --workspace=packages/provide-uterm-app",
+    "clean:frontend-generated": "node scripts/clean-frontend-generated.mjs",
+    "build:frontend": "npm run build --workspace=packages/provide-uterm-frontend && npm run clean:frontend-generated && npm run build --workspace=packages/provide-uterm-app",
     "build:widgets": "npm run build --workspace=packages/provide-uterm-frontend",
     "build:app": "npm run build --workspace=packages/provide-uterm-app",
     "dev:app": "npm run dev --workspace=packages/provide-uterm-app",

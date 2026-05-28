@@ -9,11 +9,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     import collections.abc
     import ssl as _ssl
+    from collections.abc import AsyncIterator
     from pathlib import Path
 
 from provide.telemetry import get_logger
@@ -29,6 +30,22 @@ from provide.uterm.control_channel import (
 from provide.uterm.gateway._iac_negotiate import IacNegotiator
 
 logger = get_logger(__name__)
+
+
+class _GatewayWebSocket(Protocol):
+    async def send(self, message: str) -> None: ...
+
+    def __aiter__(self) -> AsyncIterator[Any]: ...
+
+
+class _SshProcessLike(Protocol):
+    @property
+    def stdin(self) -> Any: ...
+
+    @property
+    def stdout(self) -> Any: ...
+
+    def exit(self, status: int) -> None: ...
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +272,7 @@ def _require_websockets() -> None:
 
 async def _tcp_to_ws(
     reader: asyncio.StreamReader,
-    ws: object,
+    ws: _GatewayWebSocket,
     *,
     telnet: bool = False,
     negotiator: IacNegotiator | None = None,
@@ -285,11 +302,11 @@ async def _tcp_to_ws(
                 data = _strip_iac(data)
             if not data:
                 continue
-        await ws.send(encode_data(data.decode("latin-1", errors="replace")))  # type: ignore[attr-defined]
+        await ws.send(encode_data(data.decode("latin-1", errors="replace")))
 
 
 async def _ws_to_tcp(
-    ws: object,
+    ws: _GatewayWebSocket,
     writer: asyncio.StreamWriter,
     *,
     token_holder: list[dict[str, Any] | None],
@@ -303,7 +320,7 @@ async def _ws_to_tcp(
         writer.write(data)
         await writer.drain()
 
-    async for message in ws:  # type: ignore[attr-defined]
+    async for message in ws:
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)
@@ -400,15 +417,16 @@ async def _pipe_ws(
         connect_kwargs["ssl"] = ws_ssl
 
     async with websockets.connect(ws_url, **connect_kwargs) as ws:  # type: ignore[arg-type]
+        gateway_ws = cast("_GatewayWebSocket", ws)
         token_data = token_holder[0]
         if token_data:
             resume_msg: dict[str, object] = {"type": "resume", "token": token_data["token"]}
             if "player_id" in token_data:
                 resume_msg["player_id"] = token_data["player_id"]
-            await ws.send(encode_control(resume_msg))
-        t1 = asyncio.create_task(_tcp_to_ws(reader, ws, telnet=telnet, negotiator=negotiator, writer=writer))
+            await gateway_ws.send(encode_control(resume_msg))
+        t1 = asyncio.create_task(_tcp_to_ws(reader, gateway_ws, telnet=telnet, negotiator=negotiator, writer=writer))
         t2 = asyncio.create_task(
-            _ws_to_tcp(ws, writer, token_holder=token_holder, color_mode=color_mode, token_file=token_file)
+            _ws_to_tcp(gateway_ws, writer, token_holder=token_holder, color_mode=color_mode, token_file=token_file)
         )
         _done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
         for task in pending:  # pragma: no branch — may be empty if both finish
@@ -421,9 +439,9 @@ async def _pipe_ws(
 # ---------------------------------------------------------------------------
 
 
-async def _ssh_to_ws(process: object, ws: object) -> None:
+async def _ssh_to_ws(process: _SshProcessLike, ws: _GatewayWebSocket) -> None:
     """Forward SSH stdin → WebSocket text frames."""
-    stdin = process.stdin  # type: ignore[attr-defined]
+    stdin = process.stdin
     while True:
         try:
             data = await stdin.read(4096)
@@ -432,25 +450,25 @@ async def _ssh_to_ws(process: object, ws: object) -> None:
         if not data:
             break
         payload = data if isinstance(data, str) else data.decode("latin-1", errors="replace")
-        await ws.send(encode_data(payload))  # type: ignore[attr-defined]
+        await ws.send(encode_data(payload))
 
 
 async def _ws_to_ssh(
-    ws: object,
-    process: object,
+    ws: _GatewayWebSocket,
+    process: _SshProcessLike,
     *,
     token_holder: list[dict[str, Any] | None],
     color_mode: ColorMode = "passthrough",
     token_file: Path | None = None,
 ) -> None:
     """Forward WebSocket messages → SSH stdout."""
-    stdout = process.stdout  # type: ignore[attr-defined]
+    stdout = process.stdout
     decoder = ControlChannelDecoder()
 
     async def _write_fn(data: bytes) -> None:
         stdout.write(data.decode("utf-8", errors="replace"))
 
-    async for message in ws:  # type: ignore[attr-defined]
+    async for message in ws:
         if isinstance(message, str):
             try:
                 events = decoder.feed(message)

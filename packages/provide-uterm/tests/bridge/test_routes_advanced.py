@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from provide.uterm.bridge.hub import TermHub
-from provide.uterm.bridge.models import HijackSession, WorkerTermState
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
 
 def make_app() -> tuple[FastAPI, TermHub]:

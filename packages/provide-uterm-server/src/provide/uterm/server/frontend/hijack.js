@@ -1,2 +1,2 @@
 // Split shim to keep file size below 500 LOC.
-export * from './hijack_impl.js';
+export * from "./hijack_impl.js";

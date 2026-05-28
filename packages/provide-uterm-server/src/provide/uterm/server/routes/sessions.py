@@ -342,7 +342,7 @@ def create_sessions_router() -> APIRouter:
         if runtime._logger is not None:
             await runtime._logger.log_event("annotation", annotation_data)
         # Publish to EventBus so live browser observers see annotations in real-time
-        hub = cast("Any", request.app.state.uterm_hub)
+        hub = request.app.state.uterm_hub
         evt = await hub.append_event(session_id, "annotation", annotation_data)
         audit_event(
             "session.annotate",
