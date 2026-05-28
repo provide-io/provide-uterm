@@ -84,9 +84,21 @@ def create_manager_app(
     # Auth
     setup_auth(app, env_var=config.auth_token_env_var, config=config)
 
-    # CORS
+    # CORS — credentials are always allowed, so a wildcard or empty origin list
+    # would expose this process-kill/spawn API to credentialed cross-site
+    # requests. Refuse such a config at build time and require an explicit
+    # allowlist.
     cors_env = os.environ.get("UTERM_CORS_ORIGINS", "").strip()
     origins = [o.strip() for o in cors_env.split(",") if o.strip()] if cors_env else config.cors_origins
+    if not origins:
+        raise ValueError(
+            "CORS origin allowlist is empty; credentialed CORS requires an explicit list of origins "
+            "(set UTERM_CORS_ORIGINS or ManagerConfig.cors_origins)"
+        )
+    if "*" in origins:
+        raise ValueError(
+            "CORS wildcard origin '*' is not allowed when credentials are enabled; list explicit origins instead"
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
