@@ -122,12 +122,15 @@ def create_manager_mcp_tools(
         """Spawn a batch of agents from config files with staggered groups."""
         from provide.uterm.manager.routes.spawn import _validate_config_path
 
-        for path in config_paths:
-            try:
-                _validate_config_path(path)
-            except ValueError as e:
-                return {"error": str(e)}
         if manager is not None:
+            # Local mode: enforce the spawn sandbox against the live config dir.
+            # In HTTP mode the server owns the sandbox (it knows its own config
+            # dir) and validates on receipt, so we do not pre-validate here.
+            for path in config_paths:
+                try:
+                    _validate_config_path(path, config_dir_env=manager.config.spawn_config_dir)
+                except ValueError as e:
+                    return {"error": str(e)}
             total = len(config_paths)
             await manager.start_spawn_swarm(
                 config_paths,

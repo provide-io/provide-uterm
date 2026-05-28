@@ -16,6 +16,7 @@ from fastapi import Depends, Request
 from fastapi.responses import JSONResponse
 from provide.telemetry import get_logger
 
+from provide.uterm.manager.constants import CONFIG_DIR_ENV_VAR
 from provide.uterm.manager.models import SpawnBatchRequest  # noqa: TC001
 from provide.uterm.manager.routes.agent_ops import _queue_manager_command
 from provide.uterm.manager.routes.models import get_managed_agent_plugin, require_manager, router
@@ -61,23 +62,43 @@ async def health_check() -> Any:
     return {"status": "ok"}
 
 
+def _manager_config_dir() -> str:
+    """Return the configured spawn-sandbox base dir from ManagerConfig defaults.
+
+    Kept as a separate seam so the env var and the model default can both be
+    consulted without threading a live manager into the module-level validator.
+    """
+    from provide.uterm.manager.config import ManagerConfig
+
+    return ManagerConfig().spawn_config_dir.strip()
+
+
 def _validate_config_path(config_path: str, *, config_dir_env: str = "") -> Path:
-    """Validate config_path is a safe YAML file within the allowed directory."""
-    resolved = Path(config_path).resolve()
+    """Validate *config_path* is a safe YAML file inside the spawn sandbox.
+
+    A base config dir MUST be configured (via the ``config_dir_env`` argument,
+    the ``UTERM_CONFIG_DIR`` env var, or ``ManagerConfig.spawn_config_dir``);
+    otherwise the spawn is refused rather than allowing unrestricted traversal.
+    Both the candidate path and the base are fully resolved (symlinks followed)
+    before the containment check, so a symlinked leaf inside the base that
+    points outside is rejected.
+    """
+    base_raw = config_dir_env or os.environ.get(CONFIG_DIR_ENV_VAR, "").strip() or _manager_config_dir()
+    if not base_raw:
+        raise ValueError("config dir is not configured; refusing to spawn from an unrestricted path")
+    base = Path(os.path.realpath(base_raw))
+    resolved = Path(os.path.realpath(config_path))
     if resolved.suffix.lower() not in (".yaml", ".yml"):
         raise ValueError(f"config_path must be a .yaml or .yml file: {config_path}")
-    env = config_dir_env or os.environ.get("UTERM_CONFIG_DIR", "").strip()
-    if env:
-        config_base = Path(env).resolve()
-        if not resolved.is_relative_to(config_base):
-            raise ValueError(f"config_path is outside config dir ({config_base}): {config_path}")
+    if not resolved.is_relative_to(base):
+        raise ValueError(f"config_path is outside config dir ({base}): {config_path}")
     return resolved
 
 
 @router.post("/swarm/spawn")
 async def spawn(config_path: str, agent_id: str = "", manager: AgentManager = Depends(require_manager)) -> Any:  # noqa: B008
     try:
-        _validate_config_path(config_path)
+        _validate_config_path(config_path, config_dir_env=manager.config.spawn_config_dir)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     try:
@@ -95,7 +116,7 @@ async def spawn(config_path: str, agent_id: str = "", manager: AgentManager = De
 async def spawn_batch(request: SpawnBatchRequest, manager: AgentManager = Depends(require_manager)) -> Any:  # noqa: B008
     for path in request.config_paths:
         try:
-            _validate_config_path(path)
+            _validate_config_path(path, config_dir_env=manager.config.spawn_config_dir)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
     total = len(request.config_paths)

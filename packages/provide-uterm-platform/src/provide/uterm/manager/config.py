@@ -52,6 +52,11 @@ class ManagerConfig(BaseModel):
     worker_rlimit_as_mb: int = 0
     worker_rlimit_cpu_s: int = 0
 
+    # Spawn sandbox: directory that swarm config files must live under. When
+    # empty, the UTERM_CONFIG_DIR env var is consulted; if neither is set, spawn
+    # requests are refused (no unrestricted filesystem traversal).
+    spawn_config_dir: str = ""
+
     # Governance & Policy
     spawn_policy_webhook_url: str = ""
     spawn_policy_webhook_secret: str = ""

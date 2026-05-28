@@ -48,20 +48,20 @@ class TestConfigValidation:
     def test_valid_yaml(self, tmp_path):
         f = tmp_path / "config.yaml"
         f.write_text("key: value")
-        result = _validate_config_path(str(f))
+        result = _validate_config_path(str(f), config_dir_env=str(tmp_path))
         assert result == f.resolve()
 
     def test_valid_yml(self, tmp_path):
         f = tmp_path / "config.yml"
         f.write_text("key: value")
-        result = _validate_config_path(str(f))
+        result = _validate_config_path(str(f), config_dir_env=str(tmp_path))
         assert result == f.resolve()
 
     def test_non_yaml_rejected(self, tmp_path):
         f = tmp_path / "config.json"
         f.write_text("{}")
         with pytest.raises(ValueError, match="must be a .yaml"):
-            _validate_config_path(str(f))
+            _validate_config_path(str(f), config_dir_env=str(tmp_path))
 
     def test_outside_config_dir(self, tmp_path):
         f = tmp_path / "config.yaml"
@@ -79,15 +79,47 @@ class TestConfigValidation:
             result = _validate_config_path(str(f))
             assert result == f.resolve()
 
+    def test_requires_base_dir(self, monkeypatch, tmp_path):
+        """No config dir anywhere → refuse, never fall through to free traversal."""
+        monkeypatch.delenv("UTERM_CONFIG_DIR", raising=False)
+        f = tmp_path / "config.yaml"
+        f.write_text("key: value")
+        with pytest.raises(ValueError, match="config dir"):
+            _validate_config_path(str(f))
+
+    def test_blocks_symlink_escape(self, monkeypatch, tmp_path):
+        """A symlink inside the base dir pointing outside must be rejected."""
+        monkeypatch.delenv("UTERM_CONFIG_DIR", raising=False)
+        base = tmp_path / "cfgs"
+        base.mkdir()
+        outside = tmp_path / "secret.yaml"
+        outside.write_text("x")
+        (base / "link.yaml").symlink_to(outside)
+        with pytest.raises(ValueError, match="outside config dir"):
+            _validate_config_path(str(base / "link.yaml"), config_dir_env=str(base))
+
+    def test_uses_manager_config_dir_default(self, monkeypatch, tmp_path):
+        """When env unset, ManagerConfig.spawn_config_dir provides the base."""
+        monkeypatch.delenv("UTERM_CONFIG_DIR", raising=False)
+        f = tmp_path / "config.yaml"
+        f.write_text("key: value")
+        with patch(
+            "provide.uterm.manager.routes.spawn._manager_config_dir",
+            return_value=str(tmp_path),
+        ):
+            result = _validate_config_path(str(f))
+            assert result == f.resolve()
+
 
 class TestSpawnRoute:
     def test_spawn_invalid_config(self, client):
         resp = client.post("/swarm/spawn?config_path=bad.json")
         assert resp.status_code == 400
 
-    def test_spawn_batch(self, client, manager, tmp_path):
+    def test_spawn_batch(self, client, manager, tmp_path, monkeypatch):
         config = tmp_path / "c.yaml"
         config.write_text("worker_type: test\n")
+        monkeypatch.setenv("UTERM_CONFIG_DIR", str(tmp_path))
         manager.start_spawn_swarm = AsyncMock()
         resp = client.post(
             "/swarm/spawn-batch",

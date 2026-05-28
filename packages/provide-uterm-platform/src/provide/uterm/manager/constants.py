@@ -36,3 +36,9 @@ TIMESERIES_MAX_BYTES: int = 50 * 1024 * 1024  # 50 MB
 
 # Timeseries retention: delete old timeseries files after this age.
 TIMESERIES_RETENTION_S: float = 7.0 * 86400  # 7 days
+
+# Environment variable naming the directory that swarm config files must live
+# under. Spawn requests are refused unless a config dir is configured (here or
+# via ManagerConfig.spawn_config_dir) and the resolved config path is contained
+# within it — this is the spawn sandbox.
+CONFIG_DIR_ENV_VAR: str = "UTERM_CONFIG_DIR"
