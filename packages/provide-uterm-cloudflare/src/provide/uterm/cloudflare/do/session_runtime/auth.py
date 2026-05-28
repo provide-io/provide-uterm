@@ -131,14 +131,6 @@ class _AuthMixin:
         share_role = self._share_role_for_request(request)
         if share_role is not None:
             return None, None
-        # CF Access Service Auth: if the request carries a service token
-        # header, CF Access already validated it — trust the request.
-        try:
-            cf_client_id = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[attr-defined]
-            if cf_client_id.endswith(".access"):
-                return None, None
-        except Exception:
-            pass
         token = self._extract_token(request)
         if not token:
             return None, Response(

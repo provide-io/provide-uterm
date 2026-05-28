@@ -93,8 +93,8 @@ async def test_default_fetch_session_delete() -> None:
     assert resp.status == 200 and json.loads(resp.body)["deleted"] is True
 
 
-async def test_route_request_cf_service_token_bypasses_jwt() -> None:
-    """CF Access service token (.access suffix) bypasses JWT auth."""
+async def test_route_request_cf_service_token_header_does_not_bypass_jwt() -> None:
+    """Raw CF Access headers alone must not bypass JWT auth."""
     from provide.uterm.cloudflare.entry import Default
 
     d = Default(
@@ -114,7 +114,7 @@ async def test_route_request_cf_service_token_bypasses_jwt() -> None:
     req = SimpleNamespace(url="https://x/api/sessions", method="GET", headers=SimpleNamespace(get=_get))
     with patch("provide.uterm.cloudflare.entry.list_kv_sessions", new=AsyncMock(return_value=[])):
         resp = await d.fetch(req)
-    assert resp.status == 200
+    assert resp.status == 401
 
 
 # ---------------------------------------------------------------------------
@@ -202,14 +202,8 @@ async def test_decode_jwt_principal_cf_access_email_returns_viewer_principal() -
     assert "viewer" in result.roles
 
 
-async def test_decode_jwt_principal_cf_access_service_token_returns_admin_principal() -> None:
-    """CF Access service token maps to a service:<client_id> admin Principal.
-
-    Service tokens are machine-to-machine; they get admin role so
-    downstream ownership/capability checks enforce authorization while
-    still allowing the service caller the broad access a server-to-server
-    integration typically needs.
-    """
+async def test_decode_jwt_principal_cf_access_service_token_header_returns_none() -> None:
+    """Raw CF Access service-token headers do not synthesize a principal."""
     from provide.uterm.cloudflare.config import CloudflareConfig, JwtConfig
     from provide.uterm.cloudflare.entry.auth import _decode_jwt_principal
 
@@ -221,9 +215,7 @@ async def test_decode_jwt_principal_cf_access_service_token_returns_admin_princi
         )
     )
     result = await _decode_jwt_principal(req, cfg)
-    assert result is not None
-    assert result.subject_id == f"service:{client_id}"
-    assert "admin" in result.roles
+    assert result is None
 
 
 # ---------------------------------------------------------------------------

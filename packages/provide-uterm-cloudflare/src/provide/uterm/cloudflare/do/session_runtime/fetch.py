@@ -105,40 +105,35 @@ class _FetchMixin:
         # guarantees worker_bearer_token is set (ValueError otherwise).
         _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/", "/ws/raw/"))
         if _is_worker_ws and self.config.worker_bearer_token:  # type: ignore[attr-defined]
-            # CF Access service tokens bypass worker bearer token check.
-            _cf_client = str(request.headers.get("CF-Access-Client-Id") or "")  # type: ignore[attr-defined]
-            if _cf_client.endswith(".access"):
-                _principal, auth_error = None, None
-            else:
-                token = extract_bearer_or_cookie(request)
-                valid_worker_token = False
-                auth_type = "none"
-                if token and secrets.compare_digest(token, self.config.worker_bearer_token):  # type: ignore[attr-defined]
-                    valid_worker_token = True
-                    auth_type = "global_bearer"
-                # Constant-time hash compare against the stored BLAKE2b digest.
-                from provide.uterm.tunnel.token_hash import verify_token
+            token = extract_bearer_or_cookie(request)
+            valid_worker_token = False
+            auth_type = "none"
+            if token and secrets.compare_digest(token, self.config.worker_bearer_token):  # type: ignore[attr-defined]
+                valid_worker_token = True
+                auth_type = "global_bearer"
+            # Constant-time hash compare against the stored BLAKE2b digest.
+            from provide.uterm.tunnel.token_hash import verify_token
 
-                if (
-                    token
-                    and self._tunnel_worker_token_hash  # type: ignore[attr-defined]
-                    and verify_token(token, self._tunnel_worker_token_hash)  # type: ignore[attr-defined]
-                ):
-                    valid_worker_token = True
-                    auth_type = "tunnel_session"
-                if not valid_worker_token:
-                    logger.info("tunnel_token_validated worker_id=%s valid=false", self.worker_id)
-                    return Response(
-                        json.dumps({"error": "worker authentication required"}),
-                        status=403,
-                        headers={"content-type": "application/json"},
-                    )
-                logger.info(
-                    "tunnel_token_validated worker_id=%s auth_type=%s",
-                    self.worker_id,
-                    auth_type,
+            if (
+                token
+                and self._tunnel_worker_token_hash  # type: ignore[attr-defined]
+                and verify_token(token, self._tunnel_worker_token_hash)  # type: ignore[attr-defined]
+            ):
+                valid_worker_token = True
+                auth_type = "tunnel_session"
+            if not valid_worker_token:
+                logger.info("tunnel_token_validated worker_id=%s valid=false", self.worker_id)
+                return Response(
+                    json.dumps({"error": "worker authentication required"}),
+                    status=403,
+                    headers={"content-type": "application/json"},
                 )
-                _principal, auth_error = None, None
+            logger.info(
+                "tunnel_token_validated worker_id=%s auth_type=%s",
+                self.worker_id,
+                auth_type,
+            )
+            _principal, auth_error = None, None
         else:
             _principal, auth_error = await self.resolve_principal(request)  # type: ignore[attr-defined]
             if auth_error is not None:
