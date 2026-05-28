@@ -173,6 +173,31 @@ class PTYConnector:
         pid = os.fork()  # nosec B110 — deliberate fork for PTY supervision
         if pid == 0:  # pragma: no cover - fork-child path (coverage runs in parent only)
             # ── child ──────────────────────────────────────────────────────
+            self._child_exec(master_fd, slave_fd, resolved, env)
+        else:
+            # ── parent ─────────────────────────────────────────────────────
+            os.close(slave_fd)
+            self._master_fd = master_fd
+            self._child_pid = pid
+            self._connected = True
+
+    def _child_exec(
+        self,
+        master_fd: int,
+        slave_fd: int,
+        resolved: ResolvedUser | None,
+        env: dict[str, str],
+    ) -> None:
+        """Post-fork child body: set up the controlling tty, drop privileges,
+        and exec the target command.
+
+        The entire body is wrapped in a ``BaseException`` catch-all because a
+        raise from any step (e.g. ``setgid``/``setuid`` denied, ``execve`` on a
+        missing command) must terminate the child with ``os._exit(127)`` — never
+        unwind into inherited parent ``atexit``/buffered-IO handlers, which would
+        run them twice and corrupt parent state.
+        """
+        try:
             os.close(master_fd)
             os.setsid()
             fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
@@ -189,13 +214,9 @@ class PTYConnector:
 
             argv = [self._command, *self._args]
             os.execve(self._command, argv, env)  # noqa: S606  # nosec B606 — validated absolute path
-            os._exit(127)  # pragma: no cover - post-execve fallback (unreachable on success)
-        else:
-            # ── parent ─────────────────────────────────────────────────────
-            os.close(slave_fd)
-            self._master_fd = master_fd
-            self._child_pid = pid
-            self._connected = True
+        except BaseException:
+            os._exit(127)
+        os._exit(127)  # pragma: no cover - post-execve fallback (unreachable on success)
 
     async def stop(self) -> None:
         if self._child_pid is not None:
