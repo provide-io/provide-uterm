@@ -928,3 +928,50 @@ class TestAddPatternLegacyCompiledAttr:
         assert d._compiled is not None
         assert d._compiled is d._compiled_all
         assert len(d._compiled) == 2
+
+
+class TestPatternMutationAtomicity:
+    """add_pattern / reload_patterns must be atomic (compile-then-swap).
+
+    In strict mode a bad pattern must roll back so the detector is never
+    left holding a poisoned ``_patterns`` list that re-raises forever.
+    """
+
+    def test_add_bad_pattern_strict_does_not_wedge_detector(self) -> None:
+        det = PromptDetector(patterns=[{"id": "ok", "regex": "ready>"}], strict=True)
+        with pytest.raises(DetectorPatternCompileError):
+            det.add_pattern({"id": "bad", "regex": "("})  # invalid regex
+        # State must be unchanged: the good pattern still works.
+        assert det.pattern_count == 1
+        # A subsequent good add must succeed (not re-raise on a poisoned list).
+        det.add_pattern({"id": "ok2", "regex": "done>"})
+        assert det.pattern_count == 2
+        assert len(det._compiled_all) == 2
+
+    def test_add_bad_pattern_strict_rolls_back_compiled(self) -> None:
+        det = PromptDetector(patterns=[{"id": "ok", "regex": "ready>"}], strict=True)
+        compiled_before = det._compiled_all
+        with pytest.raises(DetectorPatternCompileError):
+            det.add_pattern({"id": "bad", "regex": "("})
+        # Compiled artifacts untouched by the failed add.
+        assert det._compiled_all is compiled_before
+        assert det._compiled is det._compiled_all
+        assert len(det._compiled_all) == 1
+
+    def test_reload_bad_pattern_strict_rolls_back(self) -> None:
+        det = PromptDetector(patterns=[{"id": "ok", "regex": "ready>"}], strict=True)
+        with pytest.raises(DetectorPatternCompileError):
+            det.reload_patterns([{"id": "bad", "regex": "("}])
+        # Original good pattern is preserved, not replaced by the bad set.
+        assert det.pattern_count == 1
+        assert det._patterns[0]["id"] == "ok"
+        # Recovery still works.
+        det.reload_patterns([{"id": "ok2", "regex": "done>"}])
+        assert det.pattern_count == 1
+        assert det._patterns[0]["id"] == "ok2"
+
+    def test_add_good_pattern_strict_commits(self) -> None:
+        det = PromptDetector(patterns=[{"id": "ok", "regex": "ready>"}], strict=True)
+        det.add_pattern({"id": "ok2", "regex": "done>"})
+        assert det.pattern_count == 2
+        assert [p["id"] for p in det._patterns] == ["ok", "ok2"]
