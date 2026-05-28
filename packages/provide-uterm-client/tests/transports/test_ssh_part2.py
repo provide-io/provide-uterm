@@ -190,6 +190,13 @@ class TestCredentialValidators:
 
 
 class TestHostKeyPermissions:
+    def test_loopback_bind_detection_edges(self) -> None:
+        from provide.uterm.transports.ssh import _is_loopback_bind
+
+        assert _is_loopback_bind("") is False
+        assert _is_loopback_bind("localhost") is True
+        assert _is_loopback_bind("not an ip") is False
+
     def test_rejects_world_readable_key(self, tmp_path) -> None:
         import asyncssh
 
@@ -240,3 +247,33 @@ class TestHostKeyPermissions:
         with patch("provide.uterm.transports.ssh.Path.home", side_effect=RuntimeError("no home")):
             with pytest.raises(RuntimeError, match="cannot determine"):
                 _default_host_key_dir()
+
+    def test_default_host_key_dir_raises_when_home_is_empty(self) -> None:
+        from provide.uterm.transports.ssh import _default_host_key_dir
+
+        class _EmptyHome:
+            def __str__(self) -> str:
+                return ""
+
+        with patch("provide.uterm.transports.ssh.Path.home", return_value=_EmptyHome()):
+            with pytest.raises(RuntimeError, match="cannot determine"):
+                _default_host_key_dir()
+
+    def test_permission_error_from_existing_key_load_is_not_regenerated(self, tmp_path) -> None:
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        key_path = tmp_path / "ssh_host_key"
+        key_path.write_bytes(b"fake")
+        key_path.chmod(0o600)
+
+        with patch("provide.uterm.transports.ssh.asyncssh.import_private_key", side_effect=PermissionError("nope")):
+            with pytest.raises(PermissionError, match="nope"):
+                _get_or_create_host_key(tmp_path)
+
+    def test_save_failure_still_returns_generated_key(self, tmp_path) -> None:
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        with patch("pathlib.Path.write_bytes", side_effect=OSError("readonly")):
+            key = _get_or_create_host_key(tmp_path)
+
+        assert key is not None

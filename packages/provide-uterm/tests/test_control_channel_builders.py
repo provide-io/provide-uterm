@@ -6,10 +6,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+
 import pytest
 
 from provide.uterm.control_channel import ControlChannelDecoder, encode_control
 from provide.uterm.control_channel_builders import (
+    _canonical_identity_signature_payload,
     make_identity,
     make_link_patterns,
     make_presence_update,
@@ -41,6 +45,15 @@ def _round_trip(payload: dict) -> dict:
 
 
 class TestMakeIdentity:
+    def test_default_identity_shape_exact(self) -> None:
+        assert make_identity("user:alice") == {
+            "type": "identity",
+            "version": 1,
+            "subject": "user:alice",
+            "fingerprint": "",
+            "transport": "ssh",
+        }
+
     def test_happy_path_minimal(self) -> None:
         msg = make_identity("user:alice")
         assert msg["type"] == "identity"
@@ -73,6 +86,12 @@ class TestMakeIdentity:
         with pytest.raises(ValueError, match="subject"):
             make_identity("")
 
+    def test_empty_subject_error_message_exact(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            make_identity("")
+
+        assert str(exc_info.value) == "make_identity: 'subject' must be a non-empty string"
+
     def test_returns_fresh_dict_each_call(self) -> None:
         a = make_identity("user:x")
         b = make_identity("user:x")
@@ -84,6 +103,57 @@ class TestMakeIdentity:
         assert recovered["type"] == "identity"
         assert recovered["subject"] == "user:alice"
         assert recovered["claims"] == {"role": "admin"}
+
+    def test_canonical_signature_payload_exact(self) -> None:
+        payload = _canonical_identity_signature_payload(
+            version=1,
+            subject="user:alice",
+            fingerprint="SHA256:abc",
+            transport="ssh",
+            claims={"scope": ["write", "read"], "role": "admin"},
+        )
+
+        assert payload == b'1:user:alice:SHA256:abc:ssh:{"role":"admin","scope":["write","read"]}'
+
+    def test_signature_string_secret_exact(self) -> None:
+        msg = make_identity(
+            "user:alice",
+            claims={"scope": ["write", "read"], "role": "admin"},
+            fingerprint="SHA256:abc",
+            transport="ws",
+            secret="proxy-secret",  # pragma: allowlist secret
+        )
+        expected_payload = b'1:user:alice:SHA256:abc:ws:{"role":"admin","scope":["write","read"]}'
+        expected_signature = hmac.new(b"proxy-secret", expected_payload, hashlib.sha256).hexdigest()
+
+        assert msg == {
+            "type": "identity",
+            "version": 1,
+            "subject": "user:alice",
+            "fingerprint": "SHA256:abc",
+            "transport": "ws",
+            "claims": {"scope": ["write", "read"], "role": "admin"},
+            "signature": expected_signature,
+        }
+
+    def test_signature_bytes_secret_matches_string_secret(self) -> None:
+        as_text = make_identity("user:alice", fingerprint="fp", secret="proxy-secret")
+        as_bytes = make_identity("user:alice", fingerprint="fp", secret=b"proxy-secret")
+
+        assert as_bytes["signature"] == as_text["signature"]
+
+    def test_signature_without_claims_uses_empty_claims_payload(self) -> None:
+        msg = make_identity("user:alice", fingerprint="fp", transport="ssh", secret="proxy-secret")
+        expected_payload = b"1:user:alice:fp:ssh:{}"
+        expected_signature = hmac.new(b"proxy-secret", expected_payload, hashlib.sha256).hexdigest()
+
+        assert "claims" not in msg
+        assert msg["signature"] == expected_signature
+
+    def test_empty_secret_does_not_sign(self) -> None:
+        msg = make_identity("user:alice", secret="")
+
+        assert "signature" not in msg
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +177,12 @@ class TestMakeSessionToken:
     def test_empty_token_raises(self) -> None:
         with pytest.raises(ValueError, match="token"):
             make_session_token("")
+
+    def test_empty_token_error_message_exact(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            make_session_token("")
+
+        assert str(exc_info.value) == "make_session_token: 'token' must be a non-empty string"
 
     def test_player_id_zero_is_included(self) -> None:
         msg = make_session_token("tok", player_id=0)
@@ -139,6 +215,12 @@ class TestMakeResume:
     def test_empty_token_raises(self) -> None:
         with pytest.raises(ValueError, match="token"):
             make_resume("")
+
+    def test_empty_token_error_message_exact(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            make_resume("")
+
+        assert str(exc_info.value) == "make_resume: 'token' must be a non-empty string"
 
     def test_round_trip(self) -> None:
         payload = make_resume("resume-rt")
@@ -236,8 +318,13 @@ class TestMakeLinkPatterns:
             make_link_patterns([{"pattern": "x", "action": "teleport"}])
 
     def test_invalid_action_error_mentions_valid_choices(self) -> None:
-        with pytest.raises(ValueError, match="cmd"):
+        with pytest.raises(ValueError) as exc_info:
             make_link_patterns([{"pattern": "x", "action": "bad"}])
+
+        assert (
+            str(exc_info.value)
+            == "make_link_patterns: entry[0] has invalid action 'bad'; must be one of: cmd, focus, key, url"
+        )
 
     def test_error_mentions_entry_index(self) -> None:
         with pytest.raises(ValueError, match=r"entry\[1\]"):

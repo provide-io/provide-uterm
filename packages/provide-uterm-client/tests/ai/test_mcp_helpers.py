@@ -340,7 +340,7 @@ class TestLifespan:
         from unittest.mock import AsyncMock
 
         with patch(
-            "provide.uterm.ai.server.HijackClient",
+            "provide.uterm.ai.server_impl.HijackClient",
         ) as mock_client_cls:
             mock_instance = mock_client_cls.return_value
             mock_instance.__aexit__ = AsyncMock()

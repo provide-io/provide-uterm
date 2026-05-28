@@ -96,6 +96,13 @@ class TestPlaceholderCredentialGuardrails:
         with pytest.raises(ValueError, match="header_mode_acknowledged"):
             _validate_auth_config(config)
 
+    @pytest.mark.parametrize("mode", ["dev", "none"])
+    def test_removed_legacy_modes_are_rejected(self, mode: str) -> None:
+        config = ServerConfig(auth=AuthConfig(mode=mode))
+
+        with pytest.raises(ValueError, match="removed for security reasons"):
+            _validate_auth_config(config)
+
 
 class TestLowEntropyCredentialGuardrails:
     """Production-like auth configs must reject short bearer tokens / HMAC secrets.

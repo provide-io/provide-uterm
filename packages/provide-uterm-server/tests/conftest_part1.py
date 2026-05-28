@@ -262,6 +262,7 @@ async def live_hub() -> AsyncGenerator[tuple[TermHub, str], None]:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(scope="session")
 def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
     """Session-scoped sync fixture: TermHub + static UI server for Playwright tests.
 

@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +19,18 @@ from provide.uterm.server.auth import Principal
 from provide.uterm.server.config import config_from_mapping, default_server_config, load_server_config
 from provide.uterm.server.models import AuthConfig, RecordingConfig, SessionDefinition, validation_error_message
 from provide.uterm.server.policy import SessionPolicyResolver
+
+
+def _load_config_schema_by_source_path() -> ModuleType:
+    module_name = "packages.provide-uterm-server.src.provide.uterm.server.config_schema"
+    source_path = Path(__file__).resolve().parents[2] / "src/provide/uterm/server/config_schema.py"
+    spec = importlib.util.spec_from_file_location(module_name, source_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_default_server_config_has_demo_session() -> None:
@@ -28,6 +43,26 @@ def test_default_server_config_has_demo_session() -> None:
     assert len(config.sessions) == 1
     assert config.sessions[0].session_id == "provide-shell"
     assert config.sessions[0].connector_type == "shell"
+
+
+def test_builtin_connector_type_validates_when_registry_is_partially_populated(monkeypatch: pytest.MonkeyPatch) -> None:
+    from provide.uterm.server import connectors
+
+    monkeypatch.setattr(connectors, "registered_types", lambda: frozenset({"pty"}))
+
+    session = SessionDefinition(session_id="provide-shell", connector_type="shell")
+
+    assert session.connector_type == "shell"
+
+
+def test_clean_path_normalizes_edge_cases() -> None:
+    _clean_path = _load_config_schema_by_source_path()._clean_path
+
+    assert _clean_path("admin", "/fallback") == "/admin"
+    assert _clean_path("/admin/", "/fallback") == "/admin"
+    assert _clean_path("/adminX/", "/fallback") == "/adminX"
+    assert _clean_path("", "/fallback") == "/fallback"
+    assert _clean_path("///", "/fallback") == "/"
 
 
 def test_config_from_mapping_parses_sessions_and_paths() -> None:
@@ -476,6 +511,9 @@ def test_config_from_mapping_non_dict_section_error_mentions_type(section: str =
 
 def test_loaded_max_sessions_is_enforced_by_app() -> None:
     config = config_from_mapping({"server": {"max_sessions": 1}})
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
 
     with TestClient(create_server_app(config)) as client:
         response = client.post("/api/connect", json={"connector_type": "shell"})

@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from provide.uterm.gateway._ssh_gateway import SshWsGateway
 
 
@@ -23,6 +25,22 @@ class TestSshWsGatewayInit:
         gw = SshWsGateway("ws://test", server_key="/tmp/key", color_mode="16")
         assert gw._server_key == "/tmp/key"
         assert gw._color_mode == "16"
+
+    def test_client_cert_builds_ssl_context(self) -> None:
+        context = MagicMock()
+        with patch("ssl.create_default_context", return_value=context) as create_context:
+            gw = SshWsGateway("wss://test", client_cert="/tmp/client.crt", client_key="/tmp/client.key")
+
+        create_context.assert_called_once_with()
+        context.load_cert_chain.assert_called_once_with(certfile="/tmp/client.crt", keyfile="/tmp/client.key")
+        assert gw._ws_ssl is context
+
+    def test_client_cert_rejects_explicit_ssl_context(self) -> None:
+        with (
+            patch("ssl.create_default_context"),
+            pytest.raises(ValueError, match="both ws_ssl and client_cert"),
+        ):
+            SshWsGateway("wss://test", ws_ssl=MagicMock(), client_cert="/tmp/client.crt", client_key="/tmp/client.key")
 
 
 class TestSshWsGatewayStart:

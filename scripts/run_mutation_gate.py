@@ -174,8 +174,8 @@ def _prepend_mutant_source_roots(env: dict[str, str], existing_pythonpath: str |
     root_paths = (
         "mutants/src",
         "mutants/packages/provide-uterm/src",
-        "mutants/packages/provide-uterm-platform/src",
         "mutants/packages/provide-uterm-server/src",
+        "mutants/packages/provide-uterm-platform/src",
         "mutants/packages/provide-uterm-client/src",
         "mutants/packages/provide-uterm-cloudflare/src",
     )

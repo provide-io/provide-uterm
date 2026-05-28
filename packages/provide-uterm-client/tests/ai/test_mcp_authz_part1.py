@@ -317,7 +317,7 @@ class TestPrincipalResolution:
 
         with (
             patch("provide.uterm.ai.server.FastMCP", _StubMCP),
-            patch("provide.uterm.ai.server.AuthorizationContext", _capture_auth_ctx),
+            patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx),
         ):
             _create("http://test")
         principal = captured["principal"]
@@ -347,7 +347,7 @@ class TestPrincipalResolution:
 
         with (
             patch("provide.uterm.ai.server.FastMCP", _StubMCP),
-            patch("provide.uterm.ai.server.AuthorizationContext", _capture_auth_ctx),
+            patch("provide.uterm.ai.server_impl.AuthorizationContext", _capture_auth_ctx),
         ):
             _create("http://test", default_role="admin")
         assert captured["principal"].roles == frozenset({"admin"})

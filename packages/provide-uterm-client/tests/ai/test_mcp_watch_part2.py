@@ -329,6 +329,35 @@ class TestSessionSubscribeMcpTool:
 
         assert data["matched_pattern"] is False
 
+    async def test_subscribe_invalid_pattern_is_ignored(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        with patch(
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(return_value=(True, {"events": [{"type": "snapshot", "data": {"screen": "$ "}}]})),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": "["})
+
+        assert data["matched_pattern"] is False
+
+    async def test_subscribe_skips_non_dict_events_and_coerces_screen(self) -> None:
+        app = self._make_app()
+        mcp = _mcp_for_server(app)
+
+        events = [
+            "not-a-dict",
+            {"type": "snapshot", "data": "not-a-payload"},
+            {"type": "snapshot", "data": {"screen": 12345}},
+        ]
+        with patch(
+            "provide.uterm.client.hijack.HijackClient.watch_session_events",
+            new=AsyncMock(return_value=(True, {"events": events, "dropped_count": 0, "timed_out": False})),
+        ):
+            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": "12345"})
+
+        assert data["matched_pattern"] is True
+
     async def test_subscribe_matched_pattern_true_when_one_event_matches(self) -> None:
         """A single matching snapshot among many non-matching events fires the flag."""
         app = self._make_app()

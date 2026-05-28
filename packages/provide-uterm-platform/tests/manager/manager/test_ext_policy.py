@@ -71,7 +71,7 @@ async def test_lifecycle_telemetry(manager):
     pm = manager.agent_process_manager
 
     with (
-        patch("provide.uterm.manager.process.logger") as mock_logger,
+        patch("provide.uterm.manager.process_impl.logger") as mock_logger,
         patch.object(pm, "_load_worker_type", return_value=("shell", {})),
         patch.object(pm, "_get_registry_entry") as mock_reg,
         patch.object(pm, "_spawn_process", return_value=MagicMock(pid=1234)),
