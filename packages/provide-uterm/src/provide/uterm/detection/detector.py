@@ -46,7 +46,7 @@ class PromptDetector:
         patterns: list[dict[str, Any]],
         *,
         normalizer: Callable[[str], str] | None = None,
-        strict: bool = False,
+        strict: bool = False,  # pragma: no mutate  # trampoline-masked default (see docs/mutmut-survivors-triage.md): mutmut's wrapper passes the original default positionally, so strict=False->True is unkillable.
     ) -> None:
         """Initialize prompt detector.
 
@@ -108,18 +108,22 @@ class PromptDetector:
                 compiled.append((regex, pattern))
                 logger.debug("pattern_compile_ok pattern_id=%s", pattern.get("id", "unknown"))
             except re.error as e:
-                # Pattern compilation failed - emit diagnostic
+                # Pattern compilation failed - emit diagnostic.
+                # Reaching ``re.error`` means ``pattern["regex"]`` was successfully
+                # read above (only ``re.compile`` failed), so the ``regex`` key is
+                # always present here — no ``.get`` default is reachable.
+                regex_value = pattern["regex"]
                 failed_patterns.append(
                     {
                         "id": pattern.get("id", "unknown"),
-                        "regex": pattern.get("regex", ""),
+                        "regex": regex_value,
                         "error": str(e),
                     }
                 )
                 logger.exception(
                     "pattern_compile_failed pattern_id=%s regex=%s error=%s",
                     pattern.get("id", "unknown"),
-                    pattern.get("regex", ""),
+                    regex_value,
                     str(e),
                 )
                 continue
@@ -141,14 +145,17 @@ class PromptDetector:
         logger.info("pattern_compile_complete succeeded=%d failed=%d", len(compiled), len(failed_patterns))
 
         if failed_patterns:
+            # Every entry appended above carries both ``id`` and ``error`` keys
+            # (set on both the ``re.error`` and ``KeyError`` branches), so direct
+            # indexing is correct and leaves no dead ``.get`` default to mutate.
             logger.error(
                 "pattern_compile_failures count=%d failed=%s",
                 len(failed_patterns),
-                [{"id": p["id"], "error": p.get("error", "unknown error")} for p in failed_patterns],
+                [{"id": p["id"], "error": p["error"]} for p in failed_patterns],
             )
             self._compile_failures = failed_patterns
             if self._strict:
-                summary = ", ".join(f"{p['id']}: {p.get('error', '?')}" for p in failed_patterns)
+                summary = ", ".join(f"{p['id']}: {p['error']}" for p in failed_patterns)
                 raise DetectorPatternCompileError(
                     f"{len(failed_patterns)} pattern(s) failed to compile in strict mode: {summary}"
                 )
@@ -168,7 +175,9 @@ class PromptDetector:
         We anchor to the last non-empty line of the screen, not the bottom row,
         because many UIs leave blank rows below the last content.
         """
-        screen = snapshot.get("screen", "") or ""
+        # ``or ""`` collapses a missing/None screen to "", so a ``.get`` default
+        # would be behaviourally inert — omit it to leave no dead literal.
+        screen = snapshot.get("screen") or ""
         if not screen:
             return ("", False)
 
@@ -183,8 +192,9 @@ class PromptDetector:
         start_idx = max(0, last_idx - max(1, int(tail_lines)) + 1)
 
         cursor = snapshot.get("cursor") or {}
+        # ``or 0`` collapses None/falsy to 0, so a ``.get`` default would be inert.
         try:
-            cursor_y = int(cursor.get("y", 0) or 0)
+            cursor_y = int(cursor.get("y") or 0)
         except Exception:
             cursor_y = 0
         cursor_in_region = start_idx <= cursor_y <= last_idx
@@ -210,14 +220,26 @@ class PromptDetector:
         """Compute a stable fingerprint for prompt-detection caching."""
         region, _cursor_above = PromptDetector.prompt_region(snapshot, tail_lines=tail_lines)
         norm = PromptDetector.normalize_prompt_region(region, self._normalizer)
-        h = hashlib.blake2s(norm.encode("utf-8", errors="replace")).hexdigest()
+        # ``str.encode`` defaults to UTF-8; spelling it out would only add an
+        # encoding literal whose case-fold ("utf-8" <-> "UTF-8") is normalized by
+        # the codec registry (a behaviourally-inert mutant). Relying on the
+        # default leaves no such literal to mutate. ``errors="replace"`` is load
+        # bearing — an invalid handler name raises at encode time, so any
+        # fingerprint test exercises it.
+        h = hashlib.blake2s(norm.encode(errors="replace")).hexdigest()
         cursor_at_end = int(bool(snapshot.get("cursor_at_end", True)))
-        trailing = int(bool(snapshot.get("has_trailing_space", False)))
+        # No ``.get`` default: a missing/None/False value all collapse to 0 via
+        # ``int(bool(...))``, so any default literal here would be inert.
+        trailing = int(bool(snapshot.get("has_trailing_space")))
 
         cursor = snapshot.get("cursor") or {}
+        # ``.get`` without a default returns None when absent; the ``or 0`` then
+        # collapses None/"" /0 to 0.  Supplying a ``.get`` default here would be
+        # behaviourally inert (the ``or 0`` overrides it), so it is omitted to
+        # leave no dead literal for mutation.
         try:
-            cx = int(cursor.get("x", 0) or 0)
-            cy = int(cursor.get("y", 0) or 0)
+            cx = int(cursor.get("x") or 0)
+            cy = int(cursor.get("y") or 0)
         except (ValueError, TypeError):
             cx = 0
             cy = 0
@@ -346,13 +368,18 @@ class PromptDetector:
         cursor_miss_candidates: list[PromptMatch] = []
         region_text, cursor_in_region = self.prompt_region(snapshot)
         if region_text:
+            # The region pass uses ``compiled_fast``, which never reaches the
+            # cursor-miss branch (it is either the no-cursor-required subset, or
+            # the full set under ``cursor_at_end=True`` where the miss branch is
+            # gated off).  So no candidate is ever appended here — we deliberately
+            # omit ``cursor_miss_candidates`` (defaults to None) rather than thread
+            # a list that can never be written, leaving no dead kwarg to mutate.
             match = self._detect_in_text(
                 text=region_text,
                 full_screen=screen,
                 cursor_at_end=cursor_at_end,
                 compiled=compiled_fast,
                 regex_matched_but_failed=regex_matched_but_failed,
-                cursor_miss_candidates=cursor_miss_candidates,
             )
             if match:
                 logger.info(
@@ -390,11 +417,17 @@ class PromptDetector:
         Returns:
             PromptDetectionDiagnostics containing both match and partial-match failures
         """
-        screen = snapshot.get("screen", "") or ""
+        # ``or ""`` collapses a missing/None screen to "", so a ``.get`` default
+        # would be behaviourally inert — omit it to leave no dead literal.
+        screen = snapshot.get("screen") or ""
         # Most callers supply cursor metadata; tests/legacy callers may not.
         # Defaulting to True keeps prompt detection working for minimal snapshots.
         cursor_at_end = snapshot.get("cursor_at_end", True)
-        has_trailing_space = snapshot.get("has_trailing_space", False)
+        # Normalize to a real bool at the boundary: ``has_trailing_space`` is only
+        # ever consumed as a truthiness gate below, so collapsing here removes any
+        # behaviourally-inert default literal (missing → False) and makes the
+        # logged value deterministic.
+        has_trailing_space = bool(snapshot.get("has_trailing_space"))
 
         # Track patterns that partially matched (for diagnostics)
         regex_matched_but_failed: list[dict[str, Any]] = []
@@ -429,7 +462,12 @@ class PromptDetector:
 
         # Fallback: if we matched prompt regexes but the cursor heuristic disagreed, prefer progress.
         # Gate this on "trailing space" which strongly correlates with an active input field.
-        if cursor_miss_candidates and not bool(cursor_at_end) and bool(has_trailing_space):
+        # ``cursor_miss_candidates`` is only ever populated when the per-pattern
+        # cursor check saw ``not cursor_at_end`` (same ``bool(cursor_at_end)`` we
+        # passed into the two-pass run), so a redundant ``not cursor_at_end`` guard
+        # here would be dead — the non-empty candidate list already implies it.
+        # ``has_trailing_space`` is already a bool (normalized above).
+        if cursor_miss_candidates and has_trailing_space:
             cand = cursor_miss_candidates[0]
             logger.warning(
                 "prompt_detection_cursor_heuristic_fallback fallback_prompt_id=%s",
@@ -452,7 +490,9 @@ class PromptDetector:
                 screen[-150:],
             )
 
-        return PromptDetectionDiagnostics(match=None, regex_matched_but_failed=regex_matched_but_failed)
+        # No explicit ``match=`` kwarg: the model defaults ``match`` to None, so
+        # passing it would be a behaviourally-inert literal with nothing to mutate.
+        return PromptDetectionDiagnostics(regex_matched_but_failed=regex_matched_but_failed)
 
     def add_pattern(self, pattern: dict[str, Any]) -> None:
         """Add a new pattern to the detector.
