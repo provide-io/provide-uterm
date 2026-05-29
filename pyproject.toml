@@ -340,6 +340,10 @@ tests_dir = [
     "packages/provide-uterm-server/tests/server/test_config.py",
     "packages/provide-uterm-server/tests/server/test_app_coverage.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process.py",
+    # RateLimiter (hub/limiter.py) LRU eviction — without this the
+    # --changed-only gate finds limiter.py mutants but binds zero tests and
+    # reports them all as ``no_tests`` (2026-05-28 remediation, lane A4).
+    "packages/provide-uterm-server/tests/bridge/hub/test_limiter.py",
 ]
 also_copy = [
     "src",
