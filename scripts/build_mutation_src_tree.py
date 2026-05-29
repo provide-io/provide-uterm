@@ -55,11 +55,23 @@ CROSS_PACKAGE_NAMESPACES: dict[str, str] = {
 }
 
 
+def _is_ignored(name: str) -> bool:
+    """Skip non-source cruft that must never be symlinked into the tree.
+
+    ``__pycache__`` appears whenever bytecode is written under the core
+    package; ``*.egg-info`` is editable-install metadata. Neither is a
+    mutation target, and symlinking them would make ``--check`` flap.
+    """
+    return name == "__pycache__" or name.endswith(".egg-info")
+
+
 def _planned_links() -> dict[str, Path]:
     """Return ``{child_name: absolute_target}`` for every symlink in the tree."""
     links: dict[str, Path] = {}
     # Core package children (modules + subpackages) come first.
     for child in sorted(CORE_UTERM.iterdir()):
+        if _is_ignored(child.name):
+            continue
         links[child.name] = CORE_UTERM / child.name
     # Cross-package namespaces override / extend the core view.
     for name, rel in CROSS_PACKAGE_NAMESPACES.items():
@@ -91,7 +103,7 @@ def check() -> int:
         print(f"ERROR: {UTERM_ROOT} must be a real directory of symlinks, not a symlink/file")
         return 1
     planned = _planned_links()
-    actual = {p.name for p in UTERM_ROOT.iterdir()}
+    actual = {p.name for p in UTERM_ROOT.iterdir() if not _is_ignored(p.name)}
     missing = set(planned) - actual
     extra = actual - set(planned)
     problems: list[str] = []
