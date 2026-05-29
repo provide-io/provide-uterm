@@ -54,6 +54,11 @@ _PYTEST_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
             "addopts=--import-mode=importlib",
         ),
     ),
+    (
+        "conformance (FastAPI ↔ Cloudflare parity)",
+        (),
+        ("tests/conformance/", "-o", "addopts=--import-mode=importlib"),
+    ),
 )
 
 
