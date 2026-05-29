@@ -155,6 +155,12 @@ export class DeckMuxPresenceBar {
             return;
         entry.el.classList.toggle("dm-avatar--requesting", requesting);
     }
+    /** Return the avatar wrapper element for a user, or null if not present.
+     * Uses the internal map rather than a CSS selector so a userId containing
+     * selector-special characters (e.g. `"` or `]`) cannot throw a SyntaxError. */
+    getAvatarElement(userId) {
+        return this._entries.get(userId)?.el ?? null;
+    }
     destroy() {
         for (const entry of this._entries.values()) {
             if (entry.idleTimer !== null)
