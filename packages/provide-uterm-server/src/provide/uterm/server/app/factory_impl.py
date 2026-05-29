@@ -333,6 +333,19 @@ def create_server_app(
         return None
 
     async def _require_authenticated(connection: HTTPConnection) -> None:
+        async def _resolve_configured_principal(connection: HTTPConnection) -> Principal:
+            # Keep the existing local-auth resolver path (including API-key
+            # store lookups) and route webhook mode through the configured IDP.
+            if isinstance(idp, LocalIdentityProvider):
+                if connection.scope.get("type") == "websocket":
+                    return await resolve_ws_principal(cast("WebSocket", connection), config.auth)
+                return await resolve_http_principal(cast("Request", connection), config.auth)
+
+            resolved = await idp.resolve_principal(cast("Request | WebSocket", connection))
+            if resolved is None:
+                return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+            return resolved
+
         share_principal = _resolve_tunnel_share_principal(connection)
         if share_principal is not None:
             connection.state.uterm_principal = share_principal
@@ -362,19 +375,14 @@ def create_server_app(
                 )
                 return
         if connection.scope.get("type") == "websocket":
-            # JWT mode: JWKS key fetch may make a blocking HTTP call; offload to
-            # a thread pool to avoid stalling the event loop.  ``connection`` is
-            # an HTTPConnection at the FastAPI dependency layer; cast to the
-            # concrete WebSocket the resolver expects (the runtime object is the
-            # same ``Request``/``WebSocket`` Starlette built).
-            principal = await resolve_ws_principal(cast("WebSocket", connection), config.auth)
+            principal = await _resolve_configured_principal(connection)
             connection.state.uterm_principal = principal
             if principal.subject_id == "anonymous":
                 _inc_metric("auth_failures_ws_total")
                 logger.info("authn_denied surface=websocket")
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="authentication required")
             return
-        principal = await resolve_http_principal(cast("Request", connection), config.auth)
+        principal = await _resolve_configured_principal(connection)
         connection.state.uterm_principal = principal
         if principal.subject_id == "anonymous":
             _inc_metric("auth_failures_http_total")
@@ -397,7 +405,12 @@ def create_server_app(
     async def _resolve_browser_role(ws: WebSocket, worker_id: str) -> str:
         principal = getattr(ws.state, "uterm_principal", None)
         if principal is None:
-            principal = await resolve_ws_principal(ws, config.auth)
+            if isinstance(idp, LocalIdentityProvider):
+                principal = await resolve_ws_principal(ws, config.auth)
+            else:
+                principal = await idp.resolve_principal(ws)
+                if principal is None:
+                    principal = Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
         session = await registry.get_definition(worker_id) if registry is not None else None
         if session is None:
             # No registered SessionDefinition (worker connected ad-hoc). Honor
