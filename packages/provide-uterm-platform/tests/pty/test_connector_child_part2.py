@@ -375,3 +375,76 @@ async def test_start_mkdtemp_prefix_is_uterm_cap() -> None:
     assert mkdtemp_calls[0].get("prefix") == "uterm-cap-", (
         f"mkdtemp prefix must be 'uterm-cap-', got {mkdtemp_calls[0].get('prefix')!r}"
     )
+
+
+# ── Exact child syscall arguments (mutmut survivor kills) ─────────────────────
+
+
+async def test_child_exec_passes_exact_fds_and_command() -> None:
+    """Child syscalls use the exact fds/command, not None or a wrong fd.
+
+    Kills the argument mutants: os.close(master_fd)->close(None),
+    fcntl.ioctl(slave_fd,...)->ioctl(None,...), os.dup2(slave_fd, N)->dup2(None, N),
+    the slave_fd>2 os.close(slave_fd)->close(None), argv=[cmd,*args]->None,
+    and os.execve(cmd, argv, env) first/second-arg drops.
+    """
+    from contextlib import ExitStack
+
+    master_fd, slave_fd = 10, 11
+    captured_env: dict[str, str] = {}
+    dup2_calls: list[tuple[int, int]] = []
+    ioctl_calls: list[tuple[Any, ...]] = []
+    close_calls: list[int] = []
+    execve_calls: list[tuple[Any, Any]] = []
+    patches = _child_fork_patches_recording(
+        captured_env,
+        dup2_calls=dup2_calls,
+        ioctl_calls=ioctl_calls,
+        close_calls=close_calls,
+        execve_calls=execve_calls,
+    )
+    with ExitStack() as stack:
+        stack.enter_context(patch("provide.uterm.pty.connector.pty.openpty", return_value=(master_fd, slave_fd)))
+        for p in patches:
+            stack.enter_context(p)
+        conn = make_connector("/bin/echo", args=["hello"])
+        with pytest.raises(SystemExit):
+            await conn.start()
+
+    # master fd closed in the child; slave fd (>2) closed after dup2.
+    assert master_fd in close_calls, f"master_fd must be closed in child, got {close_calls}"
+    assert slave_fd in close_calls, f"slave_fd (>2) must be closed after dup2, got {close_calls}"
+    # controlling tty set on the slave fd, not None/other.
+    assert ioctl_calls and ioctl_calls[0][0] == slave_fd, f"ioctl must target slave_fd, got {ioctl_calls}"
+    # stdio dup2'd FROM the slave fd to 0/1/2 in order.
+    assert dup2_calls[:3] == [(slave_fd, 0), (slave_fd, 1), (slave_fd, 2)], f"dup2 args wrong: {dup2_calls}"
+    # execve with the exact command and argv.
+    assert execve_calls, "execve must be called"
+    cmd, argv = execve_calls[0]
+    assert cmd == "/bin/echo", f"execve command wrong: {cmd!r}"
+    assert argv == ["/bin/echo", "hello"], f"execve argv wrong: {argv!r}"
+
+
+async def test_start_parent_records_child_pid() -> None:
+    """The parent path stores the forked child's pid on the connector.
+
+    Kills ``self._child_pid = pid`` -> ``self._child_pid = None``.
+    """
+    from contextlib import ExitStack
+
+    master_fd, slave_fd, child_pid = 10, 11, 4242
+    captured_env: dict[str, str] = {}
+    patches = _child_fork_patches_recording(captured_env)
+    with ExitStack() as stack:
+        stack.enter_context(patch("provide.uterm.pty.connector.pty.openpty", return_value=(master_fd, slave_fd)))
+        for p in patches:
+            stack.enter_context(p)
+        # Override fork to take the PARENT path (non-zero pid) after the
+        # recording helper's child-path fork patch.
+        stack.enter_context(patch("provide.uterm.pty.connector.os.fork", return_value=child_pid))
+        conn = make_connector("/bin/echo")
+        await conn.start()
+
+    assert conn._child_pid == child_pid
+    assert conn._master_fd == master_fd
+    assert conn._connected is True
