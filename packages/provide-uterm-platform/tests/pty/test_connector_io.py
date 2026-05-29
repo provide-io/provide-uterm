@@ -130,6 +130,12 @@ async def test_handle_input_noop_when_paused() -> None:
     assert any(m.get("type") == "snapshot" for m in msgs)
 
 
+# Short timeout (signal method): this test does a real blocking os.read against
+# /bin/cat (no output). If start() fails to set the master fd O_NONBLOCK, the
+# read blocks forever. The tight cap turns that into a fast test FAILURE so the
+# mutmut F_SETFL mutant is killed cleanly instead of racing mutmut's own
+# per-mutant SIGXCPU budget (which reports a "timeout" verdict, not a kill).
+@pytest.mark.timeout(8)
 async def test_poll_messages_empty_when_no_output() -> None:
     conn = make_connector("/bin/cat")
     await conn.start()
@@ -345,6 +351,9 @@ async def test_handle_control_step_sets_paused_false() -> None:
     await conn.stop()
 
 
+# Short timeout (signal method): real blocking os.read against /bin/cat; caps the
+# F_SETFL mutant to a fast test failure instead of mutmut's timeout verdict.
+@pytest.mark.timeout(8)
 async def test_buffer_capped_at_32768() -> None:
     """Buffer is truncated to last 32768 chars when it exceeds the limit."""
     conn = make_connector("/bin/cat")
