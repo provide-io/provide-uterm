@@ -188,8 +188,9 @@ class ControlChannelDecoder:
         try:
             _check_json_depth(payload, max_depth=self._max_frame_depth)
         except ControlChannelProtocolError as exc:
-            if self._on_error:
-                self._on_error("control_channel_protocol_error")
+            # ``_report_error`` already fires ``self._on_error(...)``; an inline
+            # notification here would double-fire the callback for one error
+            # (and only adds dead, behaviourally-inert mutable literals).
             raise self._report_error(str(exc)) from exc
         return payload
 
