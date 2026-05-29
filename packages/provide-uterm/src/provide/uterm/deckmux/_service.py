@@ -135,8 +135,15 @@ class DeckMuxPresence:
         # Generate identity
         user_id = _anon_user_id(ws)
         if principal and hasattr(principal, "subject_id"):
-            name = getattr(principal, "display_name", "") or getattr(principal, "subject_id", "")
-            user_id = getattr(principal, "subject_id", user_id)
+            # hasattr guard guarantees ``subject_id`` exists, so no getattr
+            # default is needed (removing it eliminates dead-default mutants).
+            user_id = principal.subject_id
+            # Explicit hasattr check rather than ``getattr(..., "")`` so there is
+            # no mutatable (and behaviourally-inert under ``or``) default literal.
+            if hasattr(principal, "display_name") and principal.display_name:
+                name = principal.display_name
+            else:
+                name = user_id
         else:
             name = generate_name(user_id)
 
@@ -169,7 +176,7 @@ class DeckMuxPresence:
         store = self.get_presence_store(worker_id)
         user_id = _anon_user_id(ws)
         if principal and hasattr(principal, "subject_id"):
-            user_id = getattr(principal, "subject_id", user_id)
+            user_id = principal.subject_id
         removed = store.remove(user_id)
         if removed:
             msg = make_presence_leave(user_id)
@@ -189,7 +196,7 @@ class DeckMuxPresence:
         # store lookup succeeds (must match the ID used during add()).
         user_id = _anon_user_id(ws)
         if principal and hasattr(principal, "subject_id"):
-            user_id = getattr(principal, "subject_id", user_id)
+            user_id = principal.subject_id
 
         if msg_type == MSG_PRESENCE_UPDATE:
             fields = {

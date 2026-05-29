@@ -286,6 +286,7 @@ tests_dir = [
     "packages/provide-uterm/tests/deckmux/test_protocol.py",
     "packages/provide-uterm/tests/deckmux/test_names.py",
     "packages/provide-uterm/tests/deckmux/test_edge.py",
+    "packages/provide-uterm/tests/deckmux/test_service_mutants.py",
     "packages/provide-uterm-platform/tests/pty/test_validate.py",
     "packages/provide-uterm-platform/tests/pty/test_uid_map.py",
     "packages/provide-uterm-platform/tests/pty/test_capture.py",
