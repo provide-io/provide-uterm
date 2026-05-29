@@ -29,8 +29,15 @@ def _child_fork_patches(captured_env: dict[str, str]) -> list[Any]:
     """
 
     def _fake_execve(cmd: str, argv: list[str], env: dict[str, str]) -> None:
+        # Real execve replaces the process and never returns; the child body's
+        # catch-all then routes to os._exit. Capture env and let the (patched)
+        # os._exit below stand in for process termination.
         captured_env.update(env)
-        raise SystemExit(0)
+
+    def _fake_exit(code: int) -> None:
+        # Stand in for the real os._exit (which would terminate the process)
+        # by raising SystemExit so the child body unwinds out of start().
+        raise SystemExit(code)
 
     return [
         patch("provide.uterm.pty.connector.os.fork", return_value=0),
@@ -42,7 +49,7 @@ def _child_fork_patches(captured_env: dict[str, str]) -> list[Any]:
         patch("provide.uterm.pty.connector.termios.tcsetattr"),
         patch("provide.uterm.pty.connector.fcntl.fcntl"),
         patch("provide.uterm.pty.connector.os.execve", side_effect=_fake_execve),
-        patch("provide.uterm.pty.connector.os._exit"),
+        patch("provide.uterm.pty.connector.os._exit", side_effect=_fake_exit),
         patch("provide.uterm.pty.connector.os.setgid"),
         patch("provide.uterm.pty.connector.os.initgroups"),
         patch("provide.uterm.pty.connector.os.setuid"),
@@ -63,7 +70,6 @@ def _child_fork_patches_recording(
 
     def _fake_execve(cmd: str, argv: list[str], env: dict[str, str]) -> None:
         captured_env.update(env)
-        raise SystemExit(0)
 
     def _fake_dup2(fd: int, newfd: int) -> int:
         if dup2_calls is not None:
@@ -85,6 +91,9 @@ def _child_fork_patches_recording(
     def _fake_exit(code: int) -> None:
         if exit_calls is not None:
             exit_calls.append(code)
+        # Stand in for real os._exit terminating the process so the child body
+        # unwinds out of start() instead of returning into parent code.
+        raise SystemExit(code)
 
     def _fake_ioctl(fd: int, request: int, *args: Any) -> bytes:
         if ioctl_calls is not None:

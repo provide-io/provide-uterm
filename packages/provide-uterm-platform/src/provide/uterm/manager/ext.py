@@ -4,6 +4,9 @@
 #
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
@@ -46,10 +49,18 @@ class WebhookAgentSpawnPolicyGate(AgentSpawnPolicyGate):
             "config_path": config_path,
             "raw_config": raw_config,
         }
-        # In a real implementation we would add HMAC signatures here if secret is set.
+        # Serialize the body deterministically so the signature covers exactly
+        # the bytes on the wire. When a secret is configured, sign with
+        # HMAC-SHA256 and send it in X-Signature so the webhook can verify the
+        # request actually came from this manager.
+        body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if self.secret:
+            digest = hmac.new(self.secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+            headers["X-Signature"] = f"sha256={digest}"
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     return bool(resp.json().get("allow", False))
                 return False

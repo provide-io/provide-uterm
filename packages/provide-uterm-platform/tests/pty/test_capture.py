@@ -142,6 +142,54 @@ async def test_stop_socket_already_removed() -> None:
         await cap.stop()  # must not raise
 
 
+async def test_queue_is_bounded() -> None:
+    """The capture queue must have a finite maxsize (PLAT-cap, no OOM)."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+        assert cap._queue.maxsize > 0
+
+
+async def test_queue_drops_oldest_on_overflow(monkeypatch) -> None:
+    """When the queue is full, the oldest frame is dropped (not blocking)."""
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+        # Shrink the queue so we can force overflow deterministically.
+        cap._queue = asyncio.Queue(maxsize=2)
+        await cap.start()
+
+        await _send_frames(
+            path,
+            [
+                _make_frame(CHANNEL_STDOUT, b"a"),
+                _make_frame(CHANNEL_STDOUT, b"b"),
+                _make_frame(CHANNEL_STDOUT, b"c"),
+            ],
+        )
+        await asyncio.sleep(0.05)
+
+        # Oldest ("a") dropped; queue still holds exactly maxsize frames.
+        assert cap._queue.qsize() == 2
+        first = await asyncio.wait_for(cap.read_frame(), timeout=1.0)
+        second = await asyncio.wait_for(cap.read_frame(), timeout=1.0)
+        assert (first.data, second.data) == (b"b", b"c")
+        await cap.stop()
+
+
+async def test_socket_file_has_restrictive_perms() -> None:
+    """The listening socket must be owner-only (0600) (PLAT-cap)."""
+    import stat
+
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+        await cap.start()
+        mode = stat.S_IMODE(Path(path).stat().st_mode)
+        assert mode == 0o600
+        await cap.stop()
+
+
 async def test_handle_connection_wait_closed_exception_ignored() -> None:
     """_handle_connection() suppresses exceptions from writer.wait_closed()."""
     with tempfile.TemporaryDirectory() as td:

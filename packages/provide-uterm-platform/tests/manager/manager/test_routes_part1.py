@@ -148,6 +148,24 @@ class TestAgentRegister:
         # pydantic may coerce or reject
         assert resp.status_code in (200, 422)
 
+    def test_register_rejected_at_max_agents(self, client, manager):
+        """Auto-creating a new record must honor max_agents (PLAT-reg)."""
+        manager.max_agents = 2
+        manager.agents["a0"] = AgentStatusBase(agent_id="a0", state="running")
+        manager.agents["a1"] = AgentStatusBase(agent_id="a1", state="running")
+        resp = client.post("/agent/a2/register", json={"state": "running"})
+        assert resp.status_code == 429
+        assert "a2" not in manager.agents
+
+    def test_register_existing_allowed_at_max_agents(self, client, manager):
+        """An update to an already-known agent at the cap is still allowed."""
+        manager.max_agents = 2
+        manager.agents["a0"] = AgentStatusBase(agent_id="a0", state="running")
+        manager.agents["a1"] = AgentStatusBase(agent_id="a1", state="running")
+        resp = client.post("/agent/a1/register", json={"state": "stopped"})
+        assert resp.status_code == 200
+        assert resp.json()["created"] is False
+
 
 class TestAgentStatusUpdate:
     def test_update_base_fields(self, client, manager):
@@ -170,6 +188,24 @@ class TestAgentStatusUpdate:
         resp = client.post("/agent/new_agent/status", json={"state": "running"})
         assert resp.status_code == 200
         assert "new_agent" in manager.agents
+
+    def test_status_auto_create_rejected_at_max_agents(self, client, manager):
+        """Status auto-create for a new id must honor max_agents (PLAT-reg)."""
+        manager.max_agents = 2
+        manager.agents["a0"] = AgentStatusBase(agent_id="a0", state="running")
+        manager.agents["a1"] = AgentStatusBase(agent_id="a1", state="running")
+        resp = client.post("/agent/a2/status", json={"state": "running"})
+        assert resp.status_code == 429
+        assert "a2" not in manager.agents
+
+    def test_status_known_agent_allowed_at_max_agents(self, client, manager):
+        """A status update for an already-known agent at the cap is allowed."""
+        manager.max_agents = 2
+        manager.agents["a0"] = AgentStatusBase(agent_id="a0", state="running")
+        manager.agents["a1"] = AgentStatusBase(agent_id="a1", state="running")
+        resp = client.post("/agent/a1/status", json={"state": "recovering"})
+        assert resp.status_code == 200
+        assert manager.agents["a1"].state == "recovering"
 
     def test_stale_report_rejected(self, client, manager):
         agent = AgentStatusBase(agent_id="agent_000", state="running", status_reported_at=1000.0)
