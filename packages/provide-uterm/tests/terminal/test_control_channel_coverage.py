@@ -228,9 +228,10 @@ class TestDepthErrorWithOnErrorCallback:
             payload = {k: payload}
         with pytest.raises(cc.ControlChannelProtocolError, match="nests deeper than 2"):
             decoder.feed(cc.encode_control(payload))
-        # on_error fires twice: once inside the depth try-block (line 192),
-        # once via _report_error wrapping the protocol error.
-        assert errors.count("control_channel_protocol_error") >= 1
+        # on_error fires exactly once, via _report_error wrapping the protocol
+        # error. The inline re-notification that used to double-fire here was
+        # removed (it added dead, mutable literals with no behavioural effect).
+        assert errors == ["control_channel_protocol_error"]
 
 
 class TestOptionalJsonImplementations:
