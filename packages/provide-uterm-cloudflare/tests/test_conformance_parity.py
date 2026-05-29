@@ -9,16 +9,28 @@ from unittest.mock import AsyncMock
 
 from provide.uterm.cloudflare.api.http_routes import route_http
 from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
+from provide.uterm.cloudflare.config import CloudflareConfig
 from provide.uterm.cloudflare.entry import Default
 from provide.uterm.cloudflare.state.store import SqliteStateStore
 from provide.uterm.tunnel.token_hash import hash_token
 
 
 def _make_default(env_attrs: dict[str, object] | None = None) -> Default:
-    attrs: dict[str, object] = {"AUTH_MODE": "dev"}
+    # from_env only accepts jwt mode now; build a valid jwt config and override the
+    # in-memory mode to ``dev`` to preserve the open-access path under test.
+    attrs: dict[str, object] = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": "test-worker-token",
+    }
     if env_attrs:
         attrs.update(env_attrs)
-    return Default(SimpleNamespace(**attrs))
+    env = SimpleNamespace(**attrs)
+    d = Default(env)
+    d._config = CloudflareConfig.from_env(env)
+    d._config.jwt.mode = "dev"
+    return d
 
 
 def _req(path: str, *, method: str = "GET", headers: dict[str, str] | None = None) -> SimpleNamespace:

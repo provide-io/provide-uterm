@@ -36,14 +36,23 @@ def _make_ctx(worker_id: str = "test-worker") -> SimpleNamespace:
     )
 
 
-def _make_env(mode: str = "dev") -> SimpleNamespace:
-    return SimpleNamespace(AUTH_MODE=mode)
+def _make_env(mode: str = "jwt") -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    return SimpleNamespace(
+        AUTH_MODE="jwt",
+        JWT_ALGORITHMS="HS256",
+        JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+        WORKER_BEARER_TOKEN="test-worker-token",
+    )
 
 
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev"):
     from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
-    return SessionRuntime(_make_ctx(worker_id), _make_env(mode))
+    # Override the in-memory mode for tests exercising the legacy open-access branches.
+    rt = SessionRuntime(_make_ctx(worker_id), _make_env())
+    rt.config.jwt.mode = mode
+    return rt
 
 
 # ---------------------------------------------------------------------------

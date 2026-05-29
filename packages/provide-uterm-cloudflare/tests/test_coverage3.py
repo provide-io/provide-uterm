@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
-from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt, resolve_role
+from provide.uterm.cloudflare.auth.jwt import JwtValidationError, decode_jwt
 from provide.uterm.cloudflare.config import JwtConfig
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
@@ -53,20 +53,23 @@ def _make_ctx(worker_id: str = "test-worker"):
     )
 
 
-def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
-    env = SimpleNamespace(AUTH_MODE=mode, **extra)
-    if mode == "jwt":
-        env.JWT_ALGORITHMS = "HS256"
-        env.JWT_PUBLIC_KEY_PEM = _KEY
-        if not hasattr(env, "WORKER_BEARER_TOKEN"):
-            env.WORKER_BEARER_TOKEN = "test-worker-token"
+def _make_env(mode: str = "jwt", **extra) -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    env = SimpleNamespace(AUTH_MODE="jwt", **extra)
+    env.JWT_ALGORITHMS = "HS256"
+    env.JWT_PUBLIC_KEY_PEM = _KEY
+    if not hasattr(env, "WORKER_BEARER_TOKEN"):
+        env.WORKER_BEARER_TOKEN = "test-worker-token"
     return env
 
 
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionRuntime:
+    # from_env only accepts jwt mode now; build a valid jwt config, then override
+    # the in-memory mode for tests that exercise the legacy open-access branches.
     ctx = _make_ctx(worker_id)
-    env = _make_env(mode)
-    return SessionRuntime(ctx, env)
+    rt = SessionRuntime(ctx, _make_env("jwt"))
+    rt.config.jwt.mode = mode
+    return rt
 
 
 def _make_token(sub: str = "user", roles: list[str] | None = None) -> str:
@@ -118,21 +121,20 @@ async def test_fetch_jwks_urllib_fallback() -> None:
 
 
 # ---------------------------------------------------------------------------
-# auth/jwt.py — decode_jwt in dev/none mode (line 74)
+# auth/jwt.py — dev/none modes no longer bypass token verification (CB-3)
 # ---------------------------------------------------------------------------
 
 
-async def test_decode_jwt_dev_mode_returns_dev_principal() -> None:
+async def test_decode_jwt_dev_mode_does_not_bypass() -> None:
     config = JwtConfig(mode="dev", public_key_pem="any")
-    principal = await decode_jwt("ignored-token", config)
-    assert principal.subject_id == "dev"
-    assert resolve_role(principal) == "admin"
+    with pytest.raises(JwtValidationError):
+        await decode_jwt("not.a.valid.token", config)
 
 
-async def test_decode_jwt_none_mode_returns_dev_principal() -> None:
-    config = JwtConfig(mode="dev", public_key_pem="any")
-    principal = await decode_jwt("ignored-token", config)
-    assert principal.subject_id == "dev"
+async def test_decode_jwt_none_mode_does_not_bypass() -> None:
+    config = JwtConfig(mode="none", public_key_pem="any")
+    with pytest.raises(JwtValidationError):
+        await decode_jwt("not.a.valid.token", config)
 
 
 # ---------------------------------------------------------------------------

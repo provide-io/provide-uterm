@@ -342,7 +342,10 @@ def test_extract_roles_role_map_applied() -> None:
 
 
 async def test_decode_jwt_service_token_common_name_fallback() -> None:
-    """CF Access service token JWT: sub="" but common_name set → admin role."""
+    """CF Access service token JWT: sub="" but common_name set → common_name subject.
+
+    Admin is granted only when service-token admin is explicitly opted in.
+    """
     import jwt as _jwt
 
     now = int(time.time())
@@ -351,7 +354,12 @@ async def test_decode_jwt_service_token_common_name_fallback() -> None:
         "uterm-test-secret-32-byte-minimum-key",
         algorithm="HS256",
     )
-    config = JwtConfig(mode="jwt", public_key_pem="uterm-test-secret-32-byte-minimum-key", algorithms=("HS256",))
+    config = JwtConfig(
+        mode="jwt",
+        public_key_pem="uterm-test-secret-32-byte-minimum-key",
+        algorithms=("HS256",),
+        jwt_service_token_admin=True,
+    )
     principal = await decode_jwt(token, config)
     assert principal.subject_id == "my-service-client-id"
     assert principal.roles == ("admin",)

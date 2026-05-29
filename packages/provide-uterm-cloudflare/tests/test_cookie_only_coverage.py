@@ -8,6 +8,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from provide.uterm.tunnel.token_hash import hash_token
 
 
+def _make_dev_default() -> object:
+    """Build a Default configured for the legacy open-access path.
+
+    from_env only accepts jwt mode now; build a valid jwt config and override the
+    in-memory mode to ``dev`` (reachable only via direct config mutation).
+    """
+    from provide.uterm.cloudflare.config import CloudflareConfig
+    from provide.uterm.cloudflare.entry import Default
+
+    env = SimpleNamespace(
+        AUTH_MODE="jwt",
+        JWT_ALGORITHMS="HS256",
+        JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+        WORKER_BEARER_TOKEN="test-worker-token",
+    )
+    d = Default(env)
+    d._config = CloudflareConfig.from_env(env)
+    d._config.jwt.mode = "dev"
+    return d
+
+
 class _Headers:
     def __init__(self, *, cookie: str | None = None, ip: str | None = None, raise_ip: bool = False) -> None:
         self.cookie = cookie
@@ -209,9 +230,7 @@ async def test_consume_tunnel_invite_skips_non_matching_control_then_matches_sha
 
 
 async def test_short_share_invite_without_cookie_header_still_redirects() -> None:
-    from provide.uterm.cloudflare.entry import Default
-
-    d = Default(SimpleNamespace(AUTH_MODE="dev"))
+    d = _make_dev_default()
     request = SimpleNamespace(url="https://example.invalid/s/tunnel-abc?invite=abc", headers={})
     with (
         patch(
@@ -228,9 +247,7 @@ async def test_short_share_invite_without_cookie_header_still_redirects() -> Non
 
 
 async def test_short_share_existing_cookie_redirects_without_invite() -> None:
-    from provide.uterm.cloudflare.entry import Default
-
-    d = Default(SimpleNamespace(AUTH_MODE="dev"))
+    d = _make_dev_default()
     request = SimpleNamespace(url="https://example.invalid/s/tunnel-abc", headers={})
     with (
         patch(

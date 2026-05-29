@@ -48,8 +48,16 @@ def _make_ctx(worker_id: str = "test-worker"):
     )
 
 
-def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
-    return SimpleNamespace(AUTH_MODE=mode, **extra)
+def _make_env(mode: str = "jwt", **extra) -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    base = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": "test-worker-token",
+    }
+    base.update(extra)
+    return SimpleNamespace(**base)
 
 
 def _make_runtime(worker_id: str = "test-worker") -> SessionRuntime:

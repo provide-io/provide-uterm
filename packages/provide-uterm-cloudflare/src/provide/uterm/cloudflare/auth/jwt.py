@@ -267,8 +267,8 @@ async def _verify_pyjwt(token: str, config: JwtConfig) -> dict[str, Any]:
 
 
 async def decode_jwt(token: str, config: JwtConfig) -> Principal:
-    if config.mode in {"none", "dev"}:
-        return Principal(subject_id="dev", roles=("admin",))
+    # No dev/none bypass: every principal must come from a cryptographically
+    # verified token. The worker is always internet-facing.
     if not config.public_key_pem and not config.jwks_url:
         raise JwtValidationError("missing jwt public key")
 
@@ -283,16 +283,25 @@ async def decode_jwt(token: str, config: JwtConfig) -> Principal:
         raise JwtValidationError(f"failed to verify token: {exc}") from exc
 
     sub = str(claims.get("sub") or "")
-    # CF Access service token JWTs have sub="" but common_name set to the client ID.
-    is_service_token = False
+    common_name = str(claims.get("common_name") or "")
+    # CF Access service-token JWTs carry a ``common_name`` claim and no human
+    # ``email`` claim. The presence of ``email`` (or any human identity) means a
+    # user token, never a service token — so it can never be elevated as one.
+    has_email = bool(claims.get("email"))
+    is_service_token = bool(common_name) and not has_email
+
     if not sub:
-        sub = str(claims.get("common_name") or "")
-        is_service_token = bool(sub)
+        # Fall back to common_name as the subject for service tokens.
+        sub = common_name
     if not sub:
         raise JwtValidationError("missing sub")
 
-    # Service tokens get admin role — they represent trusted automation, not end users.
-    roles = ("admin",) if is_service_token else _extract_roles(claims, config)
+    # Service tokens get admin ONLY when explicitly opted in via config; an empty
+    # ``sub`` or a bare ``common_name`` is too weak a signal to auto-grant admin.
+    if is_service_token and getattr(config, "jwt_service_token_admin", False):
+        roles: tuple[str, ...] = ("admin",)
+    else:
+        roles = _extract_roles(claims, config)
     return Principal(subject_id=sub, roles=roles)
 
 
