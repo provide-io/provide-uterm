@@ -22,6 +22,13 @@ except ImportError as _e:  # pragma: no cover
 
 _CP437 = "cp437"
 
+# Bounded rolling raw-output tail (decoded chars, ANSI/control intact). pyte's
+# Screen keeps only the 25-row viewport, so output that scrolls off within a
+# single server turn (e.g. a TWGS scan that scans-and-redisplays the prompt)
+# is otherwise unrecoverable. This tail lets consumers recover that content.
+# Kept small so it rides every snapshot frame cheaply.
+_RAW_TAIL_MAX = 4096
+
 
 def _parse_screen_text(screen: pyte.Screen) -> str:
     return "\n".join(screen.display)
@@ -54,6 +61,7 @@ class TerminalEmulator:
         self._stream = pyte.Stream(self._screen)
         self._dirty = True
         self._last_snapshot: dict[str, Any] | None = None
+        self._raw_tail: str = ""
 
     def process(self, data: bytes) -> None:
         """Feed raw bytes (CP437) through the emulator.
@@ -61,8 +69,18 @@ class TerminalEmulator:
         Args:
             data: Raw bytes from a transport or file.
         """
-        self._stream.feed(data.decode(_CP437, errors="replace"))
+        text = data.decode(_CP437, errors="replace")
+        self._stream.feed(text)
+        # Retain a bounded tail of the raw decoded stream (ANSI/control intact)
+        # so consumers can recover content that scrolled off pyte's viewport
+        # within a single turn. See ``_RAW_TAIL_MAX``.
+        if text:
+            self._raw_tail = (self._raw_tail + text)[-_RAW_TAIL_MAX:]
         self._dirty = True
+
+    def get_raw_tail(self) -> str:
+        """Return the bounded rolling tail of raw decoded output (ANSI intact)."""
+        return self._raw_tail
 
     def _is_cursor_at_end(self) -> bool:
         # ``len(line) - 2`` slack is a deliberate heuristic, not an off-by-one:
@@ -108,6 +126,7 @@ class TerminalEmulator:
                 "term": self.term,
                 "cursor_at_end": self._is_cursor_at_end(),
                 "has_trailing_space": screen_text.rstrip() != screen_text.rstrip(" :"),
+                "raw_tail": self._raw_tail,
             }
             self._dirty = False
 
