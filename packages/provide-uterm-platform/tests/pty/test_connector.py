@@ -112,6 +112,23 @@ def test_connector_init_default_state() -> None:
     assert conn2._inject is False
 
 
+def test_connector_init_input_mode_read_from_config_key() -> None:
+    """__init__ reads _input_mode from the exact config key 'input_mode'.
+
+    With no 'input_mode' key the default 'open' is returned regardless of the
+    key string, so the default-only assertions cannot distinguish the key
+    mutations (config.get(None / 'XXinput_modeXX' / 'INPUT_MODE', 'open')).
+    Supplying a non-default value through the real key forces the correct
+    lookup: any mutated key would miss and fall back to 'open'.
+    """
+    conn = PTYConnector(
+        "s1",
+        "n",
+        config={"command": "/bin/bash", "input_mode": "hijack"},
+    )
+    assert conn._input_mode == "hijack"
+
+
 def test_connector_init_run_as_fields() -> None:
     """__init__ stores run_as, run_as_uid, run_as_gid from config correctly."""
     conn = PTYConnector(
