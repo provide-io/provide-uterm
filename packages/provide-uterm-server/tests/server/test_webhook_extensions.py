@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 from unittest.mock import MagicMock
 
@@ -33,6 +35,10 @@ async def test_webhook_policy_gate_allow() -> None:
     payload = json.loads(route.calls.last.request.content)
     assert payload["worker_id"] == "w1"
     assert payload["data"] == "ls -la"
+    assert route.calls.last.request.headers["X-Webhook-Secret"] == "shhh"
+    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    expected = hmac.new(b"shhh", route.calls.last.request.content, hashlib.sha256).hexdigest()
+    assert sig == f"sha256={expected}"
 
 
 @pytest.mark.asyncio

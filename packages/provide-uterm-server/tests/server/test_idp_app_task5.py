@@ -2,6 +2,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
+from starlette.testclient import TestClient
+
 from provide.uterm.server.app import create_server_app
 from provide.uterm.server.auth import LocalIdentityProvider, WebhookIdentityProvider
 from provide.uterm.server.bridge.identity import Principal
@@ -61,3 +63,29 @@ async def test_webhook_idp_is_used_by_auth_dependency(monkeypatch) -> None:
     await dep(conn)
     assert called["count"] == 1
     assert conn.state.uterm_principal.subject_id == "webhook-user"
+
+
+def test_webhook_idp_route_level_failure_modes_require_auth(monkeypatch) -> None:
+    config = ServerConfig(
+        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+    )
+
+    # deny-mode semantics: resolver failure / None principal should 401.
+    app_deny = create_server_app(config, api_only=True)
+
+    async def _deny(_connection):
+        return None
+
+    monkeypatch.setattr(app_deny.state.uterm_idp, "resolve_principal", _deny)
+    with TestClient(app_deny) as client:
+        assert client.get("/api/sessions").status_code == 401
+
+    # viewer-mode semantics: anonymous viewer principal is still unauthenticated for API.
+    app_viewer = create_server_app(config, api_only=True)
+
+    async def _viewer(_connection):
+        return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
+
+    monkeypatch.setattr(app_viewer.state.uterm_idp, "resolve_principal", _viewer)
+    with TestClient(app_viewer) as client:
+        assert client.get("/api/sessions").status_code == 401

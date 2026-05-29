@@ -17,20 +17,21 @@ This runbook is for incident triage of the hosted terminal server.
 ## Immediate triage
 
 1. Confirm service health:
-   - `GET /api/health`
+   - `GET /healthz` (public minimal health probe)
+   - `GET /api/health` (authenticated API health/status)
 2. Confirm durability posture:
-   - `GET /api/durability/capabilities`
+   - `GET /api/durability/capabilities` (authenticated)
    - If `ha_safe` is `false`, verify the deployment has only one active FastAPI control-plane instance.
    - In sqlite mode, treat `tunnel_tokens`, `webhook_registrations`, and `fanout_groups` in `process_local_state` as restart/failover-lost state.
 3. Pull request counters:
-   - `GET /api/metrics`
+   - `GET /api/metrics` (authenticated)
    - Focus counters:
      - `hijack_conflicts_total`
      - `hijack_lease_expiries_total`
      - `ws_disconnect_total`
      - `ws_disconnect_worker_total`
      - `ws_disconnect_browser_total`
-3. Correlate failing calls with request IDs:
+4. Correlate failing calls with request IDs:
    - use `x-request-id` response header from failed requests
    - filter logs with `request_id=<id>`
 

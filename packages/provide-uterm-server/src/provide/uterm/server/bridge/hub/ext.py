@@ -4,6 +4,9 @@
 #
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -66,10 +69,11 @@ class WebhookPolicyGate:
             "data": data,
             "metadata": context.metadata,
         }
-        # In a real implementation we would add HMAC signatures here if secret is set.
+        body = _encode_webhook_payload(payload)
+        headers = _build_webhook_headers(self.secret, body)
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     body = resp.json()
                     if "action" in body:
@@ -117,9 +121,11 @@ class WebhookFanOutPolicyGate:
             "group_id": group_id,
             "metadata": context.metadata,
         }
+        body = _encode_webhook_payload(payload)
+        headers = _build_webhook_headers(self.secret, body)
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     return PolicyDecision(**resp.json())
                 return PolicyDecision(action="deny")
@@ -205,9 +211,11 @@ class WebhookBehavioralAuditGate:
             "thresholds": thresholds.model_dump(),
             "metadata": context.metadata,
         }
+        body = _encode_webhook_payload(payload)
+        headers = _build_webhook_headers(self.secret, body)
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     return PolicyDecision(**resp.json())
                 return PolicyDecision(action="allow")  # Default to allow on error
@@ -248,12 +256,27 @@ class WebhookOutputPolicyGate:
             "action": "get_redaction_rules",
             "metadata": context.metadata,
         }
+        body = _encode_webhook_payload(payload)
+        headers = _build_webhook_headers(self.secret, body)
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload)
+                resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     rules_data = resp.json().get("rules", [])
                     return [RedactionRule(**r) for r in rules_data]
                 return []
         except Exception:
             return []
+
+
+def _encode_webhook_payload(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+
+def _build_webhook_headers(secret: str | None, body: bytes) -> dict[str, str]:
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if secret:
+        headers["X-Webhook-Secret"] = secret
+        sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+        headers["X-Uterm-Signature"] = f"sha256={sig}"
+    return headers
