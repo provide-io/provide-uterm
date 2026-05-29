@@ -172,6 +172,15 @@ def test_parse_options_only_double_quotes_are_stripped_not_single() -> None:
     assert out == {"k": "'a'"}
 
 
+def test_parse_options_strips_only_double_quotes_not_arbitrary_chars() -> None:
+    # ``value.strip('"')`` must strip the literal double-quote character ONLY,
+    # not a char set. A value whose content begins/ends with ``X`` (after the
+    # quotes are removed) must keep those ``X`` characters intact. Kills the
+    # ``strip('"') -> strip('XX"XX')`` mutant, which would also strip ``X``.
+    out = _parse_options('k="Xdatax"')
+    assert out == {"k": "Xdatax"}
+
+
 def test_parse_options_partition_consumes_only_the_first_equals_sign() -> None:
     # ``token.partition("=")`` yields (before, "=", after). Any later
     # ``=`` is part of ``after`` and must be preserved verbatim after
