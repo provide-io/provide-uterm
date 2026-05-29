@@ -15,3 +15,14 @@ class ControlPlaneConfigurationError(ControlPlaneError):
 
 class ControlPlaneCapabilityError(ControlPlaneError):
     """Raised when a caller requests a capability the engine does not expose."""
+
+
+class ControlPlaneConflictError(ControlPlaneError):
+    """Raised on commit when a write conflicts with a concurrently committed transaction.
+
+    Mirrors the serialization failure the SQLite backend produces via
+    ``BEGIN IMMEDIATE`` + a held transaction lock: two overlapping
+    transactions that write the same key cannot both succeed. The memory
+    backend detects this optimistically at commit time so that, e.g., a
+    lease-acquire race yields exactly one winner on both backends.
+    """

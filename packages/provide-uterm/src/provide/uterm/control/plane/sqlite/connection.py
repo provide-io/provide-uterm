@@ -24,7 +24,9 @@ def resolve_database_path(database_url: str) -> str:
         path = unquote(parsed.path or "")
         if path in {"", "/:memory:", ":memory:"}:
             return ":memory:"
-        if parsed.netloc and not path.startswith("/"):
+        # Defensive: urlparse always yields a leading "/" (or empty path,
+        # handled above) when netloc is set, so this branch is unreachable.
+        if parsed.netloc and not path.startswith("/"):  # pragma: no cover
             return f"//{parsed.netloc}{path}"
         return path
     return database_url

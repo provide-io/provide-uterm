@@ -5,7 +5,7 @@
 """Gap #8: DeckMux owner/control-transfer via the SSH identity-frame path.
 
 Verifies that PresenceStore keys and control-transfer payloads use real
-subjects (e.g. ``"sre:alice"``) rather than ``str(id(ws))`` when users
+subjects (e.g. ``"sre:alice"``) rather than an anonymous per-connection id when users
 arrive through ``identity_as_principal(ResolvedIdentity(...))``.
 """
 
@@ -53,7 +53,7 @@ class _FakeWS:
 
 async def test_identity_principals_have_real_subject_keys() -> None:
     """Both alice and bob should appear in the PresenceStore keyed by their
-    real subject strings, not by ``str(id(ws))``."""
+    real subject strings, not by an anonymous per-connection id."""
     hub = _FakeHub()
     ws_alice = _FakeWS()
     ws_bob = _FakeWS()
@@ -76,8 +76,8 @@ async def test_identity_principals_have_real_subject_keys() -> None:
     assert bob_entry.user_id == "sre:bob"
 
     # Confirm they are NOT keyed by object-id fallback
-    assert store.get(str(id(ws_alice))) is None
-    assert store.get(str(id(ws_bob))) is None
+    assert store.get(ws_alice._deckmux_anon_id) is None
+    assert store.get(ws_bob._deckmux_anon_id) is None
 
     # The sync returned to bob must show both users
     assert result is not None
@@ -93,7 +93,7 @@ async def test_identity_principals_have_real_subject_keys() -> None:
 
 async def test_control_request_grants_to_real_subject() -> None:
     """When no owner exists and bob sends control_request, ownership is
-    assigned to ``"sre:bob"`` (the real subject), not to ``str(id(ws_bob))``.
+    assigned to ``"sre:bob"`` (the real subject), not to an anonymous per-connection id.
     The hub broadcast carries a ``control_transfer`` with that subject as
     ``to_user_id``."""
     hub = _FakeHub()
@@ -194,11 +194,15 @@ async def test_control_transfer_works_with_anonymous_principal() -> None:
     store = hub._get_presence_store("w1")
     owner = store.get_owner()
     assert owner is not None, "anonymous control_request should still grant ownership"
-    # Anonymous user_id is str(id(ws))
-    assert owner.user_id == str(id(ws))
+    # Anonymous user_id is a stable per-connection token (NOT str(id(ws))).
+    anon_id = owner.user_id
+    assert anon_id != str(id(ws))
+    assert anon_id == ws._deckmux_anon_id
+    assert anon_id  # non-empty
 
     hub.broadcast.assert_called_once()
     _, msg = hub.broadcast.call_args[0]
     assert msg["type"] == "control_transfer"
-    assert msg["to_user_id"] == str(id(ws))
+    # The broadcast must use the same per-connection token, consistently.
+    assert msg["to_user_id"] == anon_id
     assert msg["from_user_id"] == ""

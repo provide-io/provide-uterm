@@ -62,7 +62,7 @@ async def test_browser_disconnect_broadcasts_leave() -> None:
     args = hub.broadcast.call_args
     assert args[0][0] == "w1"
     assert args[0][1]["type"] == "presence_leave"
-    assert args[0][1]["user_id"] == str(id(ws))
+    assert args[0][1]["user_id"] == ws._deckmux_anon_id
 
 
 @pytest.mark.asyncio
@@ -213,7 +213,7 @@ async def test_identity_anonymous() -> None:
     user = result["users"][0]
     # Anonymous user gets a generated name
     assert user["name"] != ""
-    assert user["user_id"] == str(id(ws))
+    assert user["user_id"] == ws._deckmux_anon_id
     assert len(user["initials"]) == 2
 
 
@@ -225,7 +225,7 @@ async def test_owner_typing_resets_warning() -> None:
 
     # Make user the owner
     store = hub._get_presence_store("w1")
-    user_id = str(id(ws))
+    user_id = ws._deckmux_anon_id
     store.set_owner(user_id)
 
     tm = hub._get_transfer_manager("w1")
@@ -250,13 +250,13 @@ async def test_control_request_grants_when_no_owner() -> None:
     hub.broadcast.assert_called_once()
     _, msg = hub.broadcast.call_args[0]
     assert msg["type"] == "control_transfer"
-    assert msg["to_user_id"] == str(id(ws))
+    assert msg["to_user_id"] == ws._deckmux_anon_id
     assert msg["from_user_id"] == ""
 
     store = hub._get_presence_store("w1")
     owner = store.get_owner()
     assert owner is not None
-    assert owner.user_id == str(id(ws))
+    assert owner.user_id == ws._deckmux_anon_id
 
 
 @pytest.mark.asyncio
@@ -273,7 +273,7 @@ async def test_control_request_releases_when_already_owner() -> None:
     hub.broadcast.assert_called_once()
     _, msg = hub.broadcast.call_args[0]
     assert msg["type"] == "control_transfer"
-    assert msg["from_user_id"] == str(id(ws))
+    assert msg["from_user_id"] == ws._deckmux_anon_id
     assert msg["to_user_id"] == ""
     assert hub._get_presence_store("w1").get_owner() is None
 
@@ -294,7 +294,7 @@ async def test_control_request_ignored_when_other_owns() -> None:
     hub.broadcast.assert_not_called()
     owner = hub._get_presence_store("w1").get_owner()
     assert owner is not None
-    assert owner.user_id == str(id(ws_a))
+    assert owner.user_id == ws_a._deckmux_anon_id
 
 
 @pytest.mark.asyncio
@@ -364,7 +364,7 @@ async def test_connect_prunes_idle_users() -> None:
     # Connect a user, then backdate their activity to make them appear idle
     await hub.deckmux_on_browser_connect("w1", ws_stale, "viewer")
     store = hub._get_presence_store("w1")
-    stale_id = str(id(ws_stale))
+    stale_id = ws_stale._deckmux_anon_id
     store._users[stale_id].last_activity_at = time.time() - 60  # 60 s ago (> 30 s threshold)
 
     # New user connects — stale user should be pruned from the sync
@@ -373,7 +373,7 @@ async def test_connect_prunes_idle_users() -> None:
     assert result is not None
     user_ids = [u["user_id"] for u in result["users"]]
     assert stale_id not in user_ids
-    assert str(id(ws_new)) in user_ids
+    assert ws_new._deckmux_anon_id in user_ids
 
 
 @pytest.mark.asyncio
@@ -642,7 +642,7 @@ async def test_connect_prunes_at_30_not_31_seconds() -> None:
     ws_stale = _FakeWS()
     await hub.deckmux_on_browser_connect("w1", ws_stale, "viewer")
     store = hub._get_presence_store("w1")
-    stale_id = str(id(ws_stale))
+    stale_id = ws_stale._deckmux_anon_id
     store._users[stale_id].last_activity_at = time.time() - 30.5  # between 30 and 31
 
     ws_new = _FakeWS()
@@ -667,7 +667,7 @@ async def test_principal_truthy_without_subject_id_uses_generated_name() -> None
     # Correct: hasattr fails → generate_name → non-empty generated name
     # Mutation (or): truthy short-circuits → getattr falls back → name=""
     assert user["name"] != ""
-    assert user["user_id"] == str(id(ws))
+    assert user["user_id"] == ws._deckmux_anon_id
 
 
 @pytest.mark.asyncio
@@ -747,7 +747,7 @@ async def test_first_connect_does_not_broadcast() -> None:
 
 @pytest.mark.asyncio
 async def test_authenticated_disconnect_uses_subject_id() -> None:
-    """Disconnect with principal uses subject_id, not str(id(ws)), so the store lookup succeeds."""
+    """Disconnect with principal uses subject_id, not getattr(ws, "_deckmux_anon_id"), so the store lookup succeeds."""
     hub = _FakeHub()
     ws = _FakeWS()
     principal = _FakePrincipal(subject_id="alice")
@@ -773,6 +773,6 @@ async def test_authenticated_disconnect_wrong_ws_id_ghost_absence() -> None:
     await hub.deckmux_on_browser_connect("w1", ws_connect, "operator", principal=principal)
     hub.broadcast.reset_mock()
 
-    # Disconnect without principal — str(id(ws_disconnect)) != "bob" → ghost remains
+    # Disconnect without principal — anon id != "bob" → ghost remains
     await hub.deckmux_on_browser_disconnect("w1", ws_disconnect)
     hub.broadcast.assert_not_called()  # no leave broadcast; user is still in store

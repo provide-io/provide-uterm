@@ -51,6 +51,22 @@ class TestTerminalEmulator:
         assert snap["cols"] == 40
         assert snap["rows"] == 12
 
+    def test_resize_preserves_geometry(self) -> None:
+        # The underlying pyte buffer geometry must match the requested
+        # (cols, rows), not a transposed (rows, cols). Exercise the buffer
+        # directly: a full-width row must not be clipped at the row count.
+        emu = TerminalEmulator(cols=80, rows=24)
+        emu.resize(120, 40)  # cols=120, rows=40
+        assert emu.cols == 120
+        assert emu.rows == 40
+        # pyte's screen geometry: lines == rows, columns == cols.
+        assert emu._screen.lines == 40
+        assert emu._screen.columns == 120
+        emu.process(b"x" * 120 + b"\r\n")
+        display = emu._screen.display
+        assert len(display) == 40  # rows
+        assert display[0].rstrip() == "x" * 120  # full width, not clipped at 40
+
     def test_snapshot_has_captured_at(self) -> None:
         emu = TerminalEmulator()
         snap = emu.get_snapshot()

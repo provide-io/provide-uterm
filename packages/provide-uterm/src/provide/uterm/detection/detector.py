@@ -460,13 +460,7 @@ class PromptDetector:
         Args:
             pattern: Pattern dictionary to add
         """
-        self._patterns.append(pattern)
-        # Recompile patterns
-        self._compiled_all = self._compile_patterns()
-        self._compiled_no_cursor_end_req = [
-            (regex, pat) for (regex, pat) in self._compiled_all if not bool(pat.get("expect_cursor_at_end", True))
-        ]
-        self._compiled = self._compiled_all
+        self._swap_patterns([*self._patterns, pattern])
 
     def reload_patterns(self, patterns: list[dict[str, Any]]) -> None:
         """Replace all patterns with new set.
@@ -474,8 +468,24 @@ class PromptDetector:
         Args:
             patterns: New list of pattern dictionaries
         """
-        self._patterns = patterns
-        self._compiled_all = self._compile_patterns()
+        self._swap_patterns(list(patterns))
+
+    def _swap_patterns(self, candidate: list[dict[str, Any]]) -> None:
+        """Atomically replace ``self._patterns`` with ``candidate``.
+
+        Compiles the candidate set into locals first. In ``strict=True``
+        mode a bad pattern makes ``_compile_patterns`` raise; we restore the
+        previous ``_patterns`` before re-raising so the detector is never
+        left holding a poisoned list that re-raises on every future call.
+        """
+        saved = self._patterns
+        self._patterns = candidate
+        try:
+            compiled_all = self._compile_patterns()
+        except Exception:
+            self._patterns = saved  # roll back before re-raising
+            raise
+        self._compiled_all = compiled_all
         self._compiled_no_cursor_end_req = [
             (regex, pat) for (regex, pat) in self._compiled_all if not bool(pat.get("expect_cursor_at_end", True))
         ]
