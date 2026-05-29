@@ -75,3 +75,70 @@ async def test_hub_output_redaction_noop_default() -> None:
                 received_data += event.data
 
     assert "secret_123" in received_data
+
+
+@pytest.mark.asyncio
+async def test_broadcast_builds_policy_context_once_per_frame() -> None:
+    """SRV-bcast: a single frame to N same-role viewers builds the policy context once.
+
+    The pre-fix code called ``prepare_policy_context`` (which re-acquires the
+    hub lock) and ``get_redaction_rules`` once per browser per frame, so N
+    viewers meant N policy builds and N lock acquisitions per terminal frame.
+    The context/rules are now built once per distinct viewer role per frame.
+    """
+    rules = [RedactionRule(pattern=r"sk_live_[0-9a-zA-Z]+", replacement="[STRIPE_SECRET]")]
+    hub = TermHub(output_policy_gate=MockOutputPolicy(rules))
+    worker_id = "w1"
+    await hub.register_worker(worker_id, AsyncMock())
+
+    viewers = [AsyncMock() for _ in range(5)]
+    for ws in viewers:
+        await hub.register_browser(worker_id, ws, "viewer")
+
+    calls = 0
+    orig = hub.prepare_policy_context
+
+    async def spy(*args: object, **kwargs: object) -> PolicyContext:
+        nonlocal calls
+        calls += 1
+        return await orig(*args, **kwargs)  # type: ignore[arg-type]
+
+    hub.prepare_policy_context = spy  # type: ignore[method-assign]
+
+    await hub.broadcast(worker_id, {"type": "term", "data": "key sk_live_abc123 here"})
+
+    assert calls == 1, f"expected one policy-context build for 5 same-role viewers, got {calls}"
+    # Redaction still applied to every viewer.
+    decoder = ControlChannelDecoder()
+    for ws in viewers:
+        redacted = False
+        for call in ws.send_text.call_args_list:
+            for event in decoder.feed(call[0][0]):
+                if event.kind == "data" and "[STRIPE_SECRET]" in event.data:
+                    redacted = True
+        assert redacted, "viewer did not receive redacted data"
+
+
+@pytest.mark.asyncio
+async def test_broadcast_builds_policy_context_per_distinct_role() -> None:
+    """Different viewer roles each get their own policy context within one frame."""
+    rules = [RedactionRule(pattern=r"sk_live_[0-9a-zA-Z]+", replacement="[STRIPE_SECRET]")]
+    hub = TermHub(output_policy_gate=MockOutputPolicy(rules))
+    worker_id = "w1"
+    await hub.register_worker(worker_id, AsyncMock())
+    await hub.register_browser(worker_id, AsyncMock(), "viewer")
+    await hub.register_browser(worker_id, AsyncMock(), "operator")
+
+    calls = 0
+    orig = hub.prepare_policy_context
+
+    async def spy(*args: object, **kwargs: object) -> PolicyContext:
+        nonlocal calls
+        calls += 1
+        return await orig(*args, **kwargs)  # type: ignore[arg-type]
+
+    hub.prepare_policy_context = spy  # type: ignore[method-assign]
+
+    await hub.broadcast(worker_id, {"type": "term", "data": "x"})
+
+    assert calls == 2, f"expected one build per distinct role (2), got {calls}"
