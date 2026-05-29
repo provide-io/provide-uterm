@@ -186,3 +186,38 @@ def _validate_auth_config(config: ServerConfig) -> None:
         raise ValueError("'none' is not permitted in auth.jwt_algorithms")
     if not config.auth.jwt_public_key_pem and not config.auth.jwt_jwks_url:
         raise ValueError("configure auth.jwt_public_key_pem or auth.jwt_jwks_url when auth.mode='jwt'")
+    _validate_no_jwt_algorithm_confusion(config)
+
+
+# JWT signing algorithm families. HMAC (HS*) is symmetric: verification uses
+# the same shared secret as signing. Asymmetric families verify with a public
+# key. Accepting both at once is the classic alg-confusion vulnerability: an
+# attacker forges an HS256 token using the *public* key bytes (which are not
+# secret) as the HMAC secret, and the server accepts it.
+_HMAC_ALGS = frozenset({"HS256", "HS384", "HS512"})
+
+
+def _validate_no_jwt_algorithm_confusion(config: ServerConfig) -> None:
+    """Reject configs that combine HMAC algorithms with asymmetric verification.
+
+    Fires loudly at config-load time (never per-request). A config is rejected
+    when an HMAC algorithm (``HS256``/``HS384``/``HS512``) is listed *together
+    with* an asymmetric algorithm, **or** alongside an asymmetric verification
+    key — a PEM-encoded public key or a JWKS URL. A pure-HMAC config that
+    stores its shared secret in ``jwt_public_key_pem`` (a non-PEM string) is
+    still permitted, as are pure-asymmetric configs.
+    """
+    algorithms = [str(a).strip().upper() for a in config.auth.jwt_algorithms]
+    has_hmac = any(a in _HMAC_ALGS for a in algorithms)
+    if not has_hmac:
+        return
+    has_asymmetric_alg = any(a not in _HMAC_ALGS for a in algorithms)
+    pem = str(config.auth.jwt_public_key_pem or "").strip()
+    has_public_key = pem.startswith(_PEM_PREFIX)
+    has_jwks = bool(config.auth.jwt_jwks_url)
+    if has_asymmetric_alg or has_public_key or has_jwks:
+        raise ValueError(
+            "auth.jwt_algorithms must not combine HMAC (HS256/HS384/HS512) with asymmetric "
+            "algorithms or an asymmetric verification key (PEM public key / JWKS URL). Accepting "
+            "both enables JWT algorithm-confusion forgery — use only HMAC or only asymmetric algorithms."
+        )

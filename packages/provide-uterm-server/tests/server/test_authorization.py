@@ -177,6 +177,47 @@ class TestCanMutateSession:
         assert await authz.can_mutate_session(p, s, "session.control.delete") is False
 
 
+class TestSessionScopedShareOperator:
+    """SRV-share: a share-operator principal's admin grant is scoped to one session.
+
+    The tunnel share-operator carries admin capabilities so it can drive its own
+    session, but that admin grant must NOT leak to other sessions. A principal
+    scoped to session A must be denied admin operations on session B.
+    """
+
+    def _scoped(self, session_id: str) -> Principal:
+        return Principal(
+            subject_id=f"share:{session_id}:operator",
+            roles=frozenset({"admin"}),
+            scopes=frozenset({"*"}),
+            admin_session_scope=session_id,
+        )
+
+    async def test_scoped_operator_is_not_a_global_admin(self, authz: AuthorizationService) -> None:
+        p = self._scoped("A")
+        assert await authz.is_admin(p) is False
+
+    async def test_scoped_operator_can_mutate_its_own_session(self, authz: AuthorizationService) -> None:
+        p = self._scoped("A")
+        s = _session(session_id="A", owner=None)
+        assert await authz.can_mutate_session(p, s, "session.control.hijack") is True
+
+    async def test_scoped_operator_cannot_mutate_other_session(self, authz: AuthorizationService) -> None:
+        p = self._scoped("A")
+        s = _session(session_id="B", owner=None)
+        assert await authz.can_mutate_session(p, s, "session.control.hijack") is False
+
+    async def test_scoped_operator_can_read_its_own_session(self, authz: AuthorizationService) -> None:
+        p = self._scoped("A")
+        s = _session(session_id="A", owner=None, visibility="private")
+        assert await authz.can_read_session(p, s) is True
+
+    async def test_scoped_operator_cannot_read_other_private_session(self, authz: AuthorizationService) -> None:
+        p = self._scoped("A")
+        s = _session(session_id="B", owner=None, visibility="private")
+        assert await authz.can_read_session(p, s) is False
+
+
 class TestResolveBrowserRole:
     async def test_admin_principal_gets_admin_role(self, authz: AuthorizationService) -> None:
         p = _principal(roles=["admin"])

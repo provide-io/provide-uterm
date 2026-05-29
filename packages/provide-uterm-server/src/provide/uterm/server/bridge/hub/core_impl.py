@@ -507,6 +507,7 @@ class TermHub:
         self.router.forget_browser(ws)
         self._input_buffers.pop(ws, None)
         self._hold_buffers.pop(ws, None)
+        self._paused_browsers.discard(ws)
         return await self.connection_mgr.cleanup_browser_disconnect(worker_id, ws, owned_hijack)
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
@@ -515,6 +516,7 @@ class TermHub:
             self._input_buffers.pop(ws, None)
             self._hold_buffers.pop(ws, None)
             self._startup_pending_browsers.discard(ws)
+            self._paused_browsers.discard(ws)
         return await self.lease.remove_dead_browsers(worker_id, dead)
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:

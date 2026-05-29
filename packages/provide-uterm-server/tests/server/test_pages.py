@@ -241,6 +241,57 @@ def test_tunnel_invite_sets_httponly_cookie() -> None:
     assert token in matches[0]
 
 
+def _issue_share_invite(app: object, session_id: str, *, token: str = "share-token-xyz") -> str:  # noqa: S107 — test fixture token
+    from provide.uterm.server.tunnel_invites import issue_tunnel_invites
+
+    _seed_tunnel_tokens(app, session_id, share_token=token, control_token="ct")
+    share_invite, _control = issue_tunnel_invites(
+        app.state.uterm_tunnel_invites,  # type: ignore[attr-defined]
+        session_id=session_id,
+        share_token=token,
+        control_token="ct",
+        tunnel_expires_at=time.time() + 300,
+        issued_ip=None,
+        now=time.time(),
+    )
+    return share_invite
+
+
+def test_share_cookie_not_secure_ignores_spoofed_forwarded_proto() -> None:
+    """A spoofed X-Forwarded-Proto: https must NOT make the share cookie Secure.
+
+    When tunnel.cookie_secure is False the cookie's Secure flag must come from
+    config alone — an untrusted peer setting X-Forwarded-Proto cannot flip it.
+    """
+    app = _jwt_app_public_session("spoof-sess")
+    app.state.uterm_config.tunnel.cookie_secure = False  # type: ignore[attr-defined]
+    invite = _issue_share_invite(app, "spoof-sess")
+    with TestClient(app) as c:
+        r = c.get(
+            f"/s/spoof-sess?invite={invite}",
+            headers={"X-Forwarded-Proto": "https"},
+            follow_redirects=False,
+        )
+    assert r.status_code == 302
+    matches = [h for h in r.headers.get_list("set-cookie") if h.startswith("uterm_tunnel_spoof-sess=")]
+    assert matches, f"expected tunnel cookie, got: {r.headers.get_list('set-cookie')}"
+    assert "Secure" not in matches[0], f"cookie must not be Secure when cookie_secure=False: {matches[0]}"
+
+
+def test_share_cookie_secure_from_config_flag() -> None:
+    """With tunnel.cookie_secure True the cookie is Secure regardless of the request scheme."""
+    app = _jwt_app_public_session("secure-sess")
+    app.state.uterm_config.tunnel.cookie_secure = True  # type: ignore[attr-defined]
+    invite = _issue_share_invite(app, "secure-sess")
+    with TestClient(app) as c:
+        # No X-Forwarded-Proto header at all; secure must still be set from config.
+        r = c.get(f"/s/secure-sess?invite={invite}", follow_redirects=False)
+    assert r.status_code == 302
+    matches = [h for h in r.headers.get_list("set-cookie") if h.startswith("uterm_tunnel_secure-sess=")]
+    assert matches, f"expected tunnel cookie, got: {r.headers.get_list('set-cookie')}"
+    assert "Secure" in matches[0], f"cookie must be Secure when cookie_secure=True: {matches[0]}"
+
+
 def test_cdn_sri_emitted_when_configured() -> None:
     """When xterm_cdn_integrity is set, the <script> tag must include integrity=."""
     from provide.uterm.server import create_server_app, default_server_config
