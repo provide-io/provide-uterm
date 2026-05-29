@@ -36,8 +36,10 @@ typecheck:
 
 test:
 	@for pkg in $(PY_TEST_PACKAGES); do \
-		echo "==> pytest $$pkg"; \
-		uv run pytest $$pkg || exit $$?; \
+		pkg_dir=$$(dirname $$pkg); \
+		pkg_tests=$$(basename $$pkg); \
+		echo "==> pytest $$pkg (cwd=$$pkg_dir)"; \
+		( cd $$pkg_dir && uv run pytest $$pkg_tests ) || exit $$?; \
 	done
 
 frontend-test:
