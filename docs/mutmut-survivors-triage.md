@@ -283,3 +283,75 @@ Remaining non-detector survivors (~78) live in `control_channel`,
 EQUIV / cosmetic-rename family per the bucket counts above; a small
 number could still be killed with surgical assertions but are not
 high-ROI.
+
+## Wave 6 — recording.py binding + auth.py/recording.py kill sweep (2026-05-28)
+
+**recording.py `no_tests` fix.** recording.py's real test files
+(`tests/terminal/test_recording_stores.py` for the In-memory/Null stores,
+plus a new `tests/terminal/test_recording_local.py` for
+`LocalFileRecordingStore`) were never enumerated in
+`[tool.mutmut].tests_dir`, so the gate bound zero tests and reported all
+~249 recording mutants as `no_tests`. Both files are now in `tests_dir`
+(`tests/` is already in `also_copy`). No exit-4/forced-fail recurred — the
+server-package harness fixes (canonical `src/` symlink tree, `pytest_configure`
+guard under `MUTANT_UNDER_TEST`, `--import-mode=importlib`) carry the
+core-package binding too. Result: recording.py **249 `no_tests` → 0**;
+255 mutants bound, 245 killed.
+
+**auth.py + recording.py kill sweep.** Combined gate run
+(`--changed-only`, both files): 436 mutants, started 24 survived, ended
+**23 survived (94.72%)** after surgical kills. Killed in this wave:
+
+* recording.py LocalFile per-session lock keying (`_get_lock(session_id)`
+  → `_get_lock(None)`), cached-handle reuse (`f = self._files.get(...)`
+  → `None` / `_files[sid] = None`), `log_stop`/`log_start` dict-key shapes,
+  `setdefault(sid, [])` default (kills `setdefault(sid, None)`), and the
+  In-memory `recording_meta` `len > 0` boundary + `+ 1`-per-event
+  size_bytes numeric. ~19 kills.
+* auth.py `_parse_options` `value.strip('"')` → `strip('XX"XX')`: killed by
+  `test_parse_options_strips_only_double_quotes_not_arbitrary_chars`
+  (value `"Xdatax"` must keep its leading/trailing `X`).
+
+**The 23 residual survivors are all EQUIV** and documented here:
+
+recording.py (7):
+- `path.open(..., encoding="utf-8")` / `read_text(encoding=...)` codec
+  case-folds (`"utf-8"` → `"UTF-8"`, `encoding=None`, dropped kwarg). All
+  runtime-equivalent under the test platform's UTF-8 text I/O. The same
+  source line also hosts *killable* siblings (`encoding="XXutf-8XX"` →
+  LookupError, mode `"a"` → `"A"`/None), so `# pragma: no mutate` is
+  disallowed by policy (would mask a killable mutant).
+
+recording.py default-arg (pragma'd, no longer counted): the
+`get_entries(..., limit: int = 200, ...)` default on `LocalFileRecordingStore`,
+`InMemoryRecordingStore`, and `NullRecordingStore` is trampoline-masked
+(the mutmut wrapper passes the original default positionally). The
+signature line carries *only* that masked default, so it earns
+`# pragma: no mutate — trampoline-masked default`.
+
+auth.py (13):
+- codec case-folds: `decode("ascii")`/`encode("ascii")` → `"ASCII"`,
+  `read_text(encoding="utf-8")` → `"UTF-8"`/`encoding=None`. Same
+  killable-sibling constraint as recording — no pragma.
+- `fingerprint_from_openssh_blob` `b64.rstrip("=")` → `rstrip("XX=XX")`:
+  *provably* EQUIV. A SHA-256 digest is 32 bytes → 43 base64 chars + one
+  `=`; the 43rd char encodes only 2 bits so it is always one of
+  `{A,E,I,M,Q,U,Y,c,g,k,o,s,w,0,4,8}` — never `X`. The mutated strip set
+  `{X,=}` can therefore never strip a real character.
+- `_coerce_to_binary_pubkey` `split(None, 2)` → `split(None)` /
+  `split(None, 3)`: only `parts[1]` (the 2nd token) is read, identical
+  under any maxsplit ≥ 1.
+- `_parse_authorized_keys_line` `options_str = ""` → `None` (both falsy in
+  the `if options_str` guard), `rest.lstrip()` → `rstrip()` (the line is
+  already `.strip()`'d upstream and `split(None, …)` ignores leading
+  whitespace, so parts are identical).
+- `_find_first_token_end` / `_split_options` `in_quotes = False` → `None`
+  (only ever used as `not in_quotes` / toggled — `None` and `False` are
+  both falsy and toggle identically).
+- cosmetic `ValueError` message `XX`-wraps (`"malformed OpenSSH public
+  key line"`, `"missing key payload"`) — brittle to test verbatim, EQUIV
+  per established policy.
+
+These 23 do not fire the `--changed-only` CI gate for unrelated PRs; they
+fire only on PRs that touch auth.py/recording.py, where they are the
+intentional EQUIV ceiling.
