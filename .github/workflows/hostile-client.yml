@@ -51,57 +51,25 @@ jobs:
           npm run build:frontend
           uv sync --group dev
 
+      # Launch the server in the background on the suite's configured bind
       - name: Start server
-        run: |
-          nohup uv run uterm server --host 127.0.0.1 --port 8400 > /tmp/uterm-hostile.log 2>&1 &
-          echo $! > /tmp/uterm-hostile.pid
+        run: ci/hostile_probe.sh start
 
+      # Poll /api/health until the server is up (or fail with the log)
       - name: Wait for health
-        run: |
-          for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8400/api/health >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "server failed to become healthy"
-          cat /tmp/uterm-hostile.log || true
-          exit 1
+        run: ci/hostile_probe.sh wait-health
 
+      # Connection-burst flood probe
       - name: Burst probe
-        run: |
-          uv run python scripts/hostile_profile.py \
-            --base-url http://127.0.0.1:8400 \
-            --worker-id provide-shell \
-            --mode burst \
-            --iterations 200 \
-            --concurrency 40 \
-            --min-success-rate 0.95 \
-            --max-failure-rate 0.05
+        run: ci/hostile_probe.sh burst
 
+      # Oversized-frame payload probe
       - name: Oversized-frame probe
-        run: |
-          uv run python scripts/hostile_profile.py \
-            --base-url http://127.0.0.1:8400 \
-            --worker-id provide-shell \
-            --mode oversized \
-            --iterations 120 \
-            --concurrency 20 \
-            --payload-bytes 2000000 \
-            --min-success-rate 0.90 \
-            --max-failure-rate 0.10
+        run: ci/hostile_probe.sh oversized
 
+      # Slow-header (slowloris) probe
       - name: Slowloris probe
-        run: |
-          uv run python scripts/hostile_profile.py \
-            --base-url http://127.0.0.1:8400 \
-            --mode slowloris \
-            --iterations 80 \
-            --concurrency 10 \
-            --header-bytes-per-chunk 8 \
-            --delay-s 0.2 \
-            --min-success-rate 0.80 \
-            --max-failure-rate 0.20
+        run: ci/hostile_probe.sh slowloris
 
       - name: Upload server log
         if: always()
