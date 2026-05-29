@@ -23,7 +23,7 @@ The repo already documents the intended operating model in `README.md`:
 
 In practice, the FastAPI backend is currently a reference implementation with either fully in-memory control-plane state or partial SQLite-backed durability. It can serve production traffic, but only if the deployment topology preserves one active process for the FastAPI control plane.
 
-The server exposes `GET /api/durability/capabilities` so operators can inspect the active backend and the state categories that remain process-local.
+The server exposes `GET /api/durability/capabilities` (authenticated) so operators can inspect the active backend and the state categories that remain process-local. Public liveness is limited to `GET /healthz`.
 
 ## Decision
 

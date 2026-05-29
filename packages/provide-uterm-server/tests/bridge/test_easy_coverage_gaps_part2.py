@@ -218,6 +218,9 @@ async def test_noop_fanout_audit_output_gates_allow_by_default() -> None:
 
 
 async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
+    import hashlib
+    import hmac
+
     import httpx
     import respx
 
@@ -228,12 +231,16 @@ async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
 
     # 200 -> decision propagated
     with respx.mock(assert_all_called=False) as r:
-        r.post("http://hook.test/fanout").mock(
+        route = r.post("http://hook.test/fanout").mock(
             return_value=httpx.Response(200, json={"action": "deny", "reason": "policy"})
         )
         d = await gate.intercept_fanout("ls", ctx, group_id="g1")
     assert d.action == "deny"
     assert d.reason == "policy"
+    assert route.calls.last.request.headers["X-Webhook-Secret"] == "s"
+    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
+    assert sig == f"sha256={expected}"
 
     # Non-200 -> deny
     with respx.mock(assert_all_called=False) as r:
@@ -247,6 +254,8 @@ async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
 
 
 async def test_webhook_behavioral_gate_defaults_to_allow_on_error() -> None:
+    import hashlib
+    import hmac
     import time as _time
 
     import httpx
@@ -266,8 +275,12 @@ async def test_webhook_behavioral_gate_defaults_to_allow_on_error() -> None:
 
     # 200 -> decision propagated
     with respx.mock(assert_all_called=False) as r:
-        r.post("http://hook.test/audit").mock(return_value=httpx.Response(200, json={"action": "deny"}))
+        route = r.post("http://hook.test/audit").mock(return_value=httpx.Response(200, json={"action": "deny"}))
         assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
+    assert route.calls.last.request.headers["X-Webhook-Secret"] == "s"
+    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
+    assert sig == f"sha256={expected}"
 
     # Non-200 -> allow (safety default)
     with respx.mock(assert_all_called=False) as r:
@@ -281,6 +294,9 @@ async def test_webhook_behavioral_gate_defaults_to_allow_on_error() -> None:
 
 
 async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -> None:
+    import hashlib
+    import hmac
+
     import httpx
     import respx
 
@@ -292,11 +308,15 @@ async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -
     # 200 -> rules parsed
     payload = {"rules": [{"pattern": r"\d+", "replacement": "###"}]}
     with respx.mock(assert_all_called=False) as r:
-        r.post("http://hook.test/output").mock(return_value=httpx.Response(200, json=payload))
+        route = r.post("http://hook.test/output").mock(return_value=httpx.Response(200, json=payload))
         rules = await gate.get_redaction_rules(ctx)
     assert len(rules) == 1
     assert rules[0].pattern == r"\d+"
     assert rules[0].replacement == "###"
+    assert route.calls.last.request.headers["X-Webhook-Secret"] == "s"
+    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
+    assert sig == f"sha256={expected}"
 
     # Non-200 -> empty list
     with respx.mock(assert_all_called=False) as r:
