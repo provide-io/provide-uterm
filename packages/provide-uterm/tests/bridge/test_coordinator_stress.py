@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 
 import pytest
+
 from provide.uterm.bridge.coordinator import HijackCoordinator
 
 MIN_COORDINATOR_OPS_PER_SEC = 1_000
