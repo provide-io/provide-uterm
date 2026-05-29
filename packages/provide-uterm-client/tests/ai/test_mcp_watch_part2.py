@@ -329,17 +329,16 @@ class TestSessionSubscribeMcpTool:
 
         assert data["matched_pattern"] is False
 
-    async def test_subscribe_invalid_pattern_is_ignored(self) -> None:
+    async def test_subscribe_invalid_pattern_is_rejected(self) -> None:
+        # An invalid regex now fails closed with ``invalid_pattern`` (ReDoS
+        # hardening) rather than being silently ignored.
         app = self._make_app()
         mcp = _mcp_for_server(app)
 
-        with patch(
-            "provide.uterm.client.hijack.HijackClient.watch_session_events",
-            new=AsyncMock(return_value=(True, {"events": [{"type": "snapshot", "data": {"screen": "$ "}}]})),
-        ):
-            data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": "["})
+        data = await _call(mcp, "session_subscribe", {"session_id": "s1", "pattern": "["})
 
-        assert data["matched_pattern"] is False
+        assert data["success"] is False
+        assert data["error"] == "invalid_pattern"
 
     async def test_subscribe_skips_non_dict_events_and_coerces_screen(self) -> None:
         app = self._make_app()

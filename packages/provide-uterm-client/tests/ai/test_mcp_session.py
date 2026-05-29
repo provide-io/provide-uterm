@@ -205,7 +205,7 @@ class TestSessionTools:
             {
                 "connector_type": "shell",
                 "display_name": "Full",
-                "host": "127.0.0.1",
+                "host": "example.com",  # public: loopback/RFC1918 now rejected (SSRF guard)
                 "port": 23,
                 "url": "ws://example.com/ws",
                 "username": "user",
