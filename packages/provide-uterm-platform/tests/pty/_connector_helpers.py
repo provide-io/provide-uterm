@@ -65,11 +65,19 @@ def _child_fork_patches_recording(
     exit_calls: list[int] | None = None,
     ioctl_calls: list[tuple[Any, ...]] | None = None,
     tcsetattr_calls: list[tuple[Any, ...]] | None = None,
+    close_calls: list[int] | None = None,
+    execve_calls: list[tuple[Any, Any]] | None = None,
 ) -> list[Any]:
     """Like _child_fork_patches but records specific syscall arguments."""
 
     def _fake_execve(cmd: str, argv: list[str], env: dict[str, str]) -> None:
         captured_env.update(env)
+        if execve_calls is not None:
+            execve_calls.append((cmd, argv))
+
+    def _fake_close(fd: int) -> None:
+        if close_calls is not None:
+            close_calls.append(fd)
 
     def _fake_dup2(fd: int, newfd: int) -> int:
         if dup2_calls is not None:
@@ -106,7 +114,7 @@ def _child_fork_patches_recording(
 
     return [
         patch("provide.uterm.pty.connector.os.fork", return_value=0),
-        patch("provide.uterm.pty.connector.os.close"),
+        patch("provide.uterm.pty.connector.os.close", side_effect=_fake_close),
         patch("provide.uterm.pty.connector.os.setsid"),
         patch("provide.uterm.pty.connector.fcntl.ioctl", side_effect=_fake_ioctl),
         patch("provide.uterm.pty.connector.os.dup2", side_effect=_fake_dup2),
