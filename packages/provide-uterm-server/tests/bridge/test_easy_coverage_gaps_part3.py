@@ -76,6 +76,26 @@ def test_validate_webhook_pattern_rejects_non_string_input() -> None:
         validate_webhook_pattern(123)  # type: ignore[arg-type]
 
 
+def test_webhook_signature_helpers_verify_expected_and_reject_bad_values() -> None:
+    from provide.uterm.server.webhooks import build_webhook_signature, verify_webhook_signature
+
+    secret = "uterm-test-secret"  # pragma: allowlist secret
+    body = b'{"event":"snapshot","worker_id":"w1"}'
+
+    canonical = build_webhook_signature(secret, body)
+    assert canonical.startswith("sha256=")
+    assert verify_webhook_signature(secret, body, canonical) is True
+
+    # Bare hex digest remains accepted for compatibility.
+    bare_hex = canonical.split("=", 1)[1]
+    assert verify_webhook_signature(secret, body, bare_hex) is True
+
+    # Bad / missing signatures fail closed.
+    assert verify_webhook_signature(secret, body, None) is False
+    assert verify_webhook_signature(secret, body, "") is False
+    assert verify_webhook_signature(secret, body, "sha256=deadbeef") is False
+
+
 # ---------------------------------------------------------------------------
 # server/webhooks.py:299-300, 311-326, 331-332 — delivery URL allowlist edges
 # ---------------------------------------------------------------------------

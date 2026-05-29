@@ -85,6 +85,29 @@ def _resolve_hostname_sync(hostname: str) -> tuple[str, ...]:
     return tuple({str(info[4][0]) for info in infos})
 
 
+def build_webhook_signature(secret: str, body: bytes) -> str:
+    """Return the canonical ``sha256=<hex>`` signature for *body*."""
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return f"sha256={digest}"
+
+
+def verify_webhook_signature(secret: str, body: bytes, signature_header: str | None) -> bool:
+    """Verify an incoming ``X-Uterm-Signature`` header.
+
+    Accepts either ``sha256=<hex>`` (preferred) or a bare hex digest for
+    compatibility with simple receivers.
+    """
+    if not signature_header:
+        return False
+    supplied = signature_header.strip()
+    if supplied.lower().startswith("sha256="):
+        supplied = supplied.split("=", 1)[1].strip()
+    if not supplied:
+        return False
+    expected = build_webhook_signature(secret, body).split("=", 1)[1]
+    return hmac.compare_digest(supplied, expected)
+
+
 def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False) -> str:
     """Validate and normalize a webhook delivery URL.
 
@@ -332,8 +355,7 @@ class WebhookManager:
         body = json.dumps(payload).encode()
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if cfg.secret:
-            sig = hmac.new(cfg.secret.encode(), body, hashlib.sha256).hexdigest()
-            headers["X-Uterm-Signature"] = f"sha256={sig}"
+            headers["X-Uterm-Signature"] = build_webhook_signature(cfg.secret, body)
 
         for attempt, delay in enumerate((*_RETRY_DELAYS, None)):
             try:
