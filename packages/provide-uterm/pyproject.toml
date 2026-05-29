@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Terminals",
     "Framework :: FastAPI",
 ]
-dependencies = ["provide-telemetry>=0.3", "aiosqlite>=0.20"]
+dependencies = ["provide-telemetry>=0.4.4", "aiosqlite>=0.20"]
 
 [project.urls]
 Homepage = "https://github.com/provide-io/provide-uterm"
@@ -114,66 +114,42 @@ addopts = [
     "-ra",
     "-m",
     "not playwright and not memray and not slow and not docker",
-    "--cov=provide.uterm.ansi",
-    "--cov=provide.uterm.bridge.coordinator",
-    "--cov=provide.uterm.bridge.schemas",
-    "--cov=provide.uterm.colors",
-    "--cov=provide.uterm.control_channel",
-    "--cov=provide.uterm.deckmux",
-    "--cov=provide.uterm.defaults",
-    "--cov=provide.uterm.detection",
-    "--cov=provide.uterm.emulator",
-    "--cov=provide.uterm.file_io",
-    "--cov=provide.uterm.filters",
-    "--cov=provide.uterm.io",
-    "--cov=provide.uterm.line_editor",
-    "--cov=provide.uterm.protocols",
-    "--cov=provide.uterm.render",
-    "--cov=provide.uterm.replay",
-    "--cov=provide.uterm.screen",
-    "--cov=provide.uterm.session_logger",
-    "--cov=provide.uterm.shell",
-    "--cov=provide.uterm.telnet_session",
+    # Coverage source is the package root (see [tool.coverage.run].source);
+    # genuinely out-of-scope modules are listed in [tool.coverage.run].omit.
+    "--cov=src/provide/uterm",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
 
 [tool.coverage.run]
-source = [
-    "provide.uterm.ansi",
-    "provide.uterm.bridge.coordinator",
-    "provide.uterm.bridge.schemas",
-    "provide.uterm.control_channel",
-    "provide.uterm.deckmux",
-    "provide.uterm.defaults",
-    "provide.uterm.detection",
-    "provide.uterm.emulator",
-    "provide.uterm.file_io",
-    "provide.uterm.filters",
-    "provide.uterm.io",
-    "provide.uterm.line_editor",
-    "provide.uterm.protocols",
-    "provide.uterm.render",
-    "provide.uterm.replay",
-    "provide.uterm.screen",
-    "provide.uterm.session_logger",
-    "provide.uterm.shell",
-    "provide.uterm.telnet_session",
+# Measure the whole package source, not an enumerated module allowlist. This
+# keeps newly-added modules in the 100% gate by default. Genuinely
+# out-of-scope modules are listed explicitly in ``omit`` below so the waiver
+# is visible and grep-able (CORE-cov, 2026-05-28 remediation).
+source = ["src/provide/uterm"]
+omit = [
+    "tests/*",
+    # DEFERRED (CORE-cov follow-up): worker-side HijackableMixin checkpoint
+    # gating; substantial async-loop surface not yet under the 100% gate.
+    "src/provide/uterm/bridge/base.py",
+    # DEFERRED (CORE-cov follow-up): asciinema-style recording writer; file-IO
+    # and rotation branches not yet fully covered.
+    "src/provide/uterm/recording.py",
 ]
-omit = ["tests/*"]
 branch = true
 
 [tool.coverage.report]
 fail_under = 100
 show_missing = true
 skip_covered = false
-# Loop-back branches in async receive loops — the True branch IS exercised
-# but coverage can't track the loop continuation edge reliably.
+# Only the standard explicit waiver remains. The previous broad
+# ``elif msg_type ==`` / ``more_body`` regex escape-hatches were removed
+# (CORE-cov): real branch tests now cover those dispatch fall-throughs, and
+# any genuinely-unreachable branch carries a per-site ``# pragma: no cover``
+# with an inline justification so the waiver is visible and grep-able.
 partial_branches = [
     "pragma: no branch",
-    "if not msg.get\\(\"more_body\"",
-    "elif msg_type ==",
 ]
 
 [tool.mutmut]
