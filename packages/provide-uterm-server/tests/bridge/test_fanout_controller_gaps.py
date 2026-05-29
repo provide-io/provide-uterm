@@ -19,6 +19,7 @@ import asyncio
 import time
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -74,6 +75,40 @@ def _make_rest_app() -> object:
 # ---------------------------------------------------------------------------
 # _controller.py 54->exit: delete_group when group is None (no-op)
 # ---------------------------------------------------------------------------
+
+
+class TestErrorPatternRegexBound:
+    """Fan-out error_pattern is a server-side regex surface and must be bounded.
+
+    A2 (client/MCP) hardens client regex; the server independently validates
+    error_pattern at group-creation time so an unbounded / invalid pattern
+    cannot reach the per-output-delta re.search (a ReDoS vector).
+    """
+
+    async def test_create_group_rejects_oversized_error_pattern(self) -> None:
+        from provide.uterm.server.bridge.rest_helpers import MAX_EXPECT_REGEX_LEN, PromptRegexError
+
+        hub = TermHub(event_bus=EventBus())
+        ctrl = FanOutController(hub)
+        group = _make_group(["w1"], error_pattern="a" * (MAX_EXPECT_REGEX_LEN + 1))
+        with pytest.raises(PromptRegexError):
+            await ctrl.create_group(group, principal="admin")
+
+    async def test_create_group_rejects_invalid_error_pattern(self) -> None:
+        from provide.uterm.server.bridge.rest_helpers import PromptRegexError
+
+        hub = TermHub(event_bus=EventBus())
+        ctrl = FanOutController(hub)
+        group = _make_group(["w1"], error_pattern="(unterminated")
+        with pytest.raises(PromptRegexError):
+            await ctrl.create_group(group, principal="admin")
+
+    async def test_create_group_accepts_bounded_error_pattern(self) -> None:
+        hub = TermHub(event_bus=EventBus())
+        ctrl = FanOutController(hub)
+        group = _make_group(["w1"], error_pattern=r"ERROR:")
+        gid = await ctrl.create_group(group, principal="admin")
+        assert gid == "g1"
 
 
 class TestDeleteGroupGroupNotFound:
