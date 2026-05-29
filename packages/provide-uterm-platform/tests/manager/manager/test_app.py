@@ -72,6 +72,25 @@ class TestCreateManagerApp:
         app, _manager = create_manager_app(config)
         assert app is not None
 
+    def test_rejects_wildcard_origin_with_credentials(self, config):
+        """A `*` origin with credentials is a CSRF foot-gun → refuse at build."""
+        with (
+            patch.dict(os.environ, {"UTERM_CORS_ORIGINS": "*"}),
+            pytest.raises(ValueError, match="wildcard"),
+        ):
+            create_manager_app(config)
+
+    def test_rejects_wildcard_origin_from_config(self, config):
+        config.cors_origins = ["*"]
+        with pytest.raises(ValueError, match="wildcard"):
+            create_manager_app(config)
+
+    def test_rejects_empty_origin_list(self, config):
+        """Empty origins would let CORSMiddleware behave permissively — refuse."""
+        config.cors_origins = []
+        with pytest.raises(ValueError, match="origin"):
+            create_manager_app(config)
+
     def test_plugins_wired(self, config):
         pool = MagicMock()
         identity = MagicMock()

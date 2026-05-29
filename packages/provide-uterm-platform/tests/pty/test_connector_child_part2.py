@@ -229,9 +229,64 @@ async def test_start_child_exit_code_is_127() -> None:
         patches[12],
     ):
         conn = make_connector("/bin/echo")
-        await conn.start()  # must not raise since execve mock returns normally
+        with pytest.raises(SystemExit):
+            # execve returns normally → child body falls through to os._exit(127),
+            # which the test harness turns into SystemExit to stand in for
+            # real process termination.
+            await conn.start()
 
     assert exit_calls == [127], f"os._exit must be called with 127, got {exit_calls}"
+
+
+def test_child_exec_exits_127_on_privilege_drop_failure() -> None:
+    """A raise from setgid/setuid in the child must route to os._exit(127),
+    never unwind into inherited parent atexit/buffered-IO handlers (PLAT-fork)."""
+    exit_calls: list[int] = []
+
+    def _record_exit(code: int) -> None:
+        exit_calls.append(code)
+        raise SystemExit(code)
+
+    resolved = MagicMock(gid=999, uid=999, name="op")
+    conn = make_connector("/bin/echo")
+    with (
+        patch("provide.uterm.pty.connector.os.close"),
+        patch("provide.uterm.pty.connector.os.setsid"),
+        patch("provide.uterm.pty.connector.fcntl.ioctl"),
+        patch("provide.uterm.pty.connector.os.dup2"),
+        patch("provide.uterm.pty.connector.os.setgid", side_effect=PermissionError("denied")),
+        patch("provide.uterm.pty.connector.os.initgroups"),
+        patch("provide.uterm.pty.connector.os.setuid"),
+        patch("provide.uterm.pty.connector.os.execve"),
+        patch("provide.uterm.pty.connector.os._exit", side_effect=_record_exit),
+    ):
+        with pytest.raises(SystemExit):
+            conn._child_exec(3, 4, resolved, {"PATH": "/bin"})
+    # PermissionError was swallowed; child terminated with 127, not the raise.
+    assert exit_calls == [127]
+
+
+def test_child_exec_exits_127_on_execve_failure() -> None:
+    """execve raising (e.g. missing command) must also terminate the child 127."""
+    exit_calls: list[int] = []
+
+    def _record_exit(code: int) -> None:
+        exit_calls.append(code)
+        raise SystemExit(code)
+
+    conn = make_connector("/no/such/cmd")
+    with (
+        patch("provide.uterm.pty.connector.os.close"),
+        patch("provide.uterm.pty.connector.os.setsid"),
+        patch("provide.uterm.pty.connector.fcntl.ioctl"),
+        patch("provide.uterm.pty.connector.os.dup2"),
+        patch("provide.uterm.pty.connector.os.execve", side_effect=FileNotFoundError("nope")),
+        patch("provide.uterm.pty.connector.os._exit", side_effect=_record_exit),
+    ):
+        # slave_fd <= 2 also exercises the branch that skips the extra close.
+        with pytest.raises(SystemExit):
+            conn._child_exec(3, 2, None, {"PATH": "/bin"})
+    assert exit_calls == [127]
 
 
 async def test_start_resolve_username_fallback_is_empty_string() -> None:

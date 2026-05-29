@@ -37,6 +37,7 @@ def config(tmp_path):
         timeseries_dir=str(tmp_path / "metrics"),
         log_dir=str(tmp_path / "logs"),
         health_check_interval_s=0,
+        spawn_config_dir=str(tmp_path),
     )
 
 

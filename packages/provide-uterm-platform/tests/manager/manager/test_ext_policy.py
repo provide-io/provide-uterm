@@ -4,6 +4,9 @@
 #
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -121,14 +124,53 @@ async def test_webhook_policy_gate_allows_on_200_allow_true():
         assert await gate.intercept_spawn("agent_123", "config.yaml", {"worker_type": "shell"}) is True
 
     async_client.assert_called_once_with(timeout=0.5)
-    client.post.assert_awaited_once_with(
-        "https://policy.example/spawn",
-        json={
-            "agent_id": "agent_123",
-            "config_path": "config.yaml",
-            "raw_config": {"worker_type": "shell"},
-        },
-    )
+    args, kwargs = client.post.call_args
+    assert args == ("https://policy.example/spawn",)
+    assert json.loads(kwargs["content"]) == {
+        "agent_id": "agent_123",
+        "config_path": "config.yaml",
+        "raw_config": {"worker_type": "shell"},
+    }
+    # No secret on this gate → request is unsigned.
+    assert "X-Signature" not in kwargs["headers"]
+
+
+@pytest.mark.asyncio
+async def test_webhook_policy_gate_signs_body_when_secret_set():
+    """When a secret is configured the request body is HMAC-signed."""
+    gate = WebhookAgentSpawnPolicyGate("https://policy.example/allow", secret="s3cret")
+    response = MagicMock(status_code=200)
+    response.json.return_value = {"allow": True}
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = response
+
+    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client):
+        assert await gate.intercept_spawn("a1", "/cfg/a.yaml", {"k": "v"}) is True
+
+    _, kwargs = client.post.call_args
+    body = kwargs["content"]
+    sig = kwargs["headers"]["X-Signature"]
+    expected = "sha256=" + hmac.new(b"s3cret", body, hashlib.sha256).hexdigest()
+    assert hmac.compare_digest(sig, expected)
+    assert kwargs["headers"]["Content-Type"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_webhook_policy_gate_unsigned_when_no_secret():
+    """Without a secret no X-Signature header is sent (body still posted)."""
+    gate = WebhookAgentSpawnPolicyGate("https://policy.example/allow")
+    response = MagicMock(status_code=200)
+    response.json.return_value = {"allow": True}
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = response
+
+    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client):
+        assert await gate.intercept_spawn("a1", "/cfg/a.yaml", {"k": "v"}) is True
+
+    _, kwargs = client.post.call_args
+    assert "X-Signature" not in kwargs["headers"]
 
 
 @pytest.mark.asyncio

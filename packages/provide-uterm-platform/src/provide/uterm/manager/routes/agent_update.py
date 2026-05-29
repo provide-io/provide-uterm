@@ -14,6 +14,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Body, Depends, Path, Request
+from fastapi.responses import JSONResponse
 from provide.telemetry import get_logger
 from pydantic import BaseModel, ConfigDict
 
@@ -121,6 +122,13 @@ async def update_status(
 ) -> Any:
     payload = update.model_dump(exclude_unset=True)
     if agent_id not in manager.agents:
+        # Auto-create must honor max_agents so any token holder cannot grow the
+        # agent registry without bound (PLAT-reg).
+        if len(manager.agents) >= manager.max_agents:
+            return JSONResponse(
+                {"error": f"Max agents ({manager.max_agents}) reached"},
+                status_code=429,
+            )
         manager.agents[agent_id] = manager._agent_status_class(
             agent_id=agent_id,
             pid=0,
