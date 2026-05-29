@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import hashlib
-import hmac
 import ipaddress
 import json
 import re
@@ -42,6 +40,7 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import EventBus
 
 from provide.uterm.server.bridge.hub.event_bus import _compile_pattern
+from provide.uterm.server.webhook_signing import build_webhook_signature
 
 logger = get_logger(__name__)
 
@@ -83,29 +82,6 @@ def _resolve_hostname_sync(hostname: str) -> tuple[str, ...]:
     finally:
         socket.setdefaulttimeout(previous_timeout)
     return tuple({str(info[4][0]) for info in infos})
-
-
-def build_webhook_signature(secret: str, body: bytes) -> str:
-    """Return the canonical ``sha256=<hex>`` signature for *body*."""
-    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-    return f"sha256={digest}"
-
-
-def verify_webhook_signature(secret: str, body: bytes, signature_header: str | None) -> bool:
-    """Verify an incoming ``X-Uterm-Signature`` header.
-
-    Accepts either ``sha256=<hex>`` (preferred) or a bare hex digest for
-    compatibility with simple receivers.
-    """
-    if not signature_header:
-        return False
-    supplied = signature_header.strip()
-    if supplied.lower().startswith("sha256="):
-        supplied = supplied.split("=", 1)[1].strip()
-    if not supplied:
-        return False
-    expected = build_webhook_signature(secret, body).split("=", 1)[1]
-    return hmac.compare_digest(supplied, expected)
 
 
 def validate_webhook_url(url: str, *, allow_loopback_destinations: bool = False) -> str:
