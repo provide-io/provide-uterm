@@ -89,13 +89,14 @@ def install_routers(
         target = f"{config.ui.app_path}/{page}/{session_id}"
         response = RedirectResponse(url=target, status_code=302)
         if invite is not None:
-            secure = (
-                request.url.scheme == "https" or "https" in str(request.headers.get("x-forwarded-proto", "")).lower()
-            )
+            # The Secure flag is taken from static config (tunnel.cookie_secure,
+            # default True) — never from request.url.scheme or the spoofable
+            # X-Forwarded-Proto header. An untrusted peer must not be able to
+            # flip a cookie to/from Secure by forging the forwarded-proto header.
             response.set_cookie(
                 key=f"uterm_tunnel_{session_id}",
                 value=invite.tunnel_token,
-                secure=secure if config.tunnel.cookie_secure else False,
+                secure=config.tunnel.cookie_secure,
                 httponly=True,
                 samesite=config.tunnel.cookie_samesite,
             )

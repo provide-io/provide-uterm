@@ -17,6 +17,7 @@ from provide.uterm.server.bridge.fanout._divergence import compute_divergence
 from provide.uterm.server.bridge.fanout._models import FanOutResult, SessionFanOutResult
 from provide.uterm.server.bridge.fanout._store import InMemoryFanOutStore
 from provide.uterm.server.bridge.hub.ext import FanOutPolicyGate, PolicyDecision
+from provide.uterm.server.bridge.rest_helpers import compile_expect_regex
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.fanout._models import FanOutGroup
@@ -70,6 +71,12 @@ class FanOutController:
         if len(group.worker_ids) > self._max_group_size:
             msg = f"Group size {len(group.worker_ids)} exceeds max {self._max_group_size}"
             raise ValueError(msg)
+        # error_pattern is caller-supplied and re.search'd against every output
+        # delta — an unbounded or pathological pattern is a ReDoS vector. Bound
+        # its length and validate it compiles at creation time (PromptRegexError
+        # is a ValueError, so the REST route maps it to a 400) rather than
+        # letting it reach the per-delta match path.
+        compile_expect_regex(group.error_pattern)
         group.created_by = principal
         await self._store.save(group)
         return group.group_id

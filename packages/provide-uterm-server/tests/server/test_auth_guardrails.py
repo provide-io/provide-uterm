@@ -244,3 +244,81 @@ class TestDevTokenMode:
         config = ServerConfig(auth=AuthConfig(mode="dev_token"))
         app = create_server_app(config, api_only=True)
         assert app is not None
+
+
+# ---------------------------------------------------------------------------
+# JWT algorithm-confusion startup guard (ALG)
+# ---------------------------------------------------------------------------
+
+# A syntactically valid PEM public-key armour marker — enough for the guard,
+# which only inspects the leading "-----BEGIN" marker.
+_FAKE_PUBLIC_KEY_PEM = "-----BEGIN PUBLIC KEY-----\nMFkw...not-a-real-key...\n-----END PUBLIC KEY-----"
+# A long non-PEM HMAC shared secret (legitimate for a pure HS256 config).
+_VALID_HMAC_SECRET = "uterm-test-hs256-secret-32-byte-minimum"  # pragma: allowlist secret
+
+
+class TestJwtAlgorithmConfusionGuard:
+    """Reject configs that mix HMAC (HS*) with asymmetric algorithms or a public key.
+
+    If both HS256 and an RSA/EC public key are accepted, an attacker forges an
+    HS256 token using the public-key bytes as the HMAC secret. The guard must
+    fire loudly at config-load time, never per-request.
+    """
+
+    def test_rejects_hmac_mixed_with_asymmetric_algorithm(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_public_key_pem=_FAKE_PUBLIC_KEY_PEM,
+                jwt_algorithms=["RS256", "HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        with pytest.raises(ValueError, match="algorithm"):
+            _validate_auth_config(config)
+
+    def test_rejects_hmac_with_public_key_pem(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_public_key_pem=_FAKE_PUBLIC_KEY_PEM,
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        with pytest.raises(ValueError, match="algorithm"):
+            _validate_auth_config(config)
+
+    def test_rejects_hmac_with_jwks_url(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_jwks_url="https://idp.example.com/.well-known/jwks.json",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        with pytest.raises(ValueError, match="algorithm"):
+            _validate_auth_config(config)
+
+    def test_allows_pure_asymmetric_config(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_public_key_pem=_FAKE_PUBLIC_KEY_PEM,
+                jwt_algorithms=["RS256", "ES256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        _validate_auth_config(config)  # must not raise
+
+    def test_allows_pure_hmac_config_with_shared_secret(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_public_key_pem=_VALID_HMAC_SECRET,
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            )
+        )
+        _validate_auth_config(config)  # must not raise

@@ -23,6 +23,12 @@ class Principal:
     scopes: frozenset[str] = frozenset()
     claims: dict[str, Any] = field(default_factory=dict)
     display_name: str | None = None
+    # When set, the principal's ``admin`` role is confined to this single
+    # session id: it grants admin capabilities on the named session only and
+    # is NOT a global administrator. Used by tunnel share-operator principals
+    # so a per-session grant cannot escalate into cross-session admin if the
+    # principal is ever resolved independently of the request path.
+    admin_session_scope: str | None = None
 
     @property
     def name(self) -> str:

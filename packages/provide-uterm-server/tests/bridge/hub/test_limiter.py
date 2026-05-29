@@ -158,3 +158,66 @@ def test_per_client_setters_replace_underlying_dict() -> None:
     limiter.rest_send_per_client = replacement_send
     assert limiter.rest_acquire_per_client is replacement_acquire
     assert limiter.rest_send_per_client is replacement_send
+
+
+# ---------------------------------------------------------------------------
+# SRV-rl: eviction is true LRU and never resets the active (inserting) client.
+# ---------------------------------------------------------------------------
+
+
+def test_acquire_eviction_never_drops_the_inserting_client() -> None:
+    """A client that overflows the cache must NOT have its own bucket reset.
+
+    Old bug: eviction ran *before* setdefault, evicting the first
+    REST_CLIENT_EVICT_COUNT keys by insertion order. A client whose bucket sat
+    in that window — and which then triggers the overflow insert itself — would
+    have its drained bucket evicted and immediately recreated full, resetting
+    its own limit. Eviction must run *after* the insert and never drop the key
+    just inserted.
+    """
+    limiter = RateLimiter(rest_acquire_rate=5.0, rest_send_rate=20.0)
+    # The victim is the OLDEST key (front of the evict window) with a drained
+    # bucket. It must survive when it is the one forcing the overflow.
+    victim = "c0"
+    pre = {f"c{i}": TokenBucket(5.0) for i in range(REST_CLIENT_CACHE_MAX)}
+    _drain(pre[victim])
+    limiter.rest_acquire_per_client = pre
+
+    # The victim itself forces the overflow. Its drained bucket must be kept,
+    # so the call is rejected — its limit is NOT reset.
+    assert limiter.allow_rest_acquire(victim) is False
+    assert victim in limiter.rest_acquire_per_client
+    assert limiter.rest_acquire_per_client[victim]._tokens < 1.0
+
+
+def test_send_eviction_never_drops_the_inserting_client() -> None:
+    """Same evict-after-insert guarantee for the send limiter."""
+    limiter = RateLimiter(rest_acquire_rate=5.0, rest_send_rate=20.0)
+    victim = "c0"
+    pre = {f"c{i}": TokenBucket(20.0) for i in range(REST_CLIENT_CACHE_MAX)}
+    _drain(pre[victim])
+    limiter.rest_send_per_client = pre
+
+    assert limiter.allow_rest_send(victim) is False
+    assert victim in limiter.rest_send_per_client
+
+
+def test_acquire_access_moves_client_to_end_lru() -> None:
+    """Accessing an existing client refreshes its recency (true LRU).
+
+    Old code was FIFO: a frequently-used client inserted early could still be
+    evicted. After this fix, touching a client moves it to the most-recent
+    position, so the oldest *untouched* clients are evicted first.
+    """
+    limiter = RateLimiter(rest_acquire_rate=5.0, rest_send_rate=20.0)
+    pre = {f"c{i}": TokenBucket(5.0) for i in range(REST_CLIENT_CACHE_MAX)}
+    limiter.rest_acquire_per_client = pre
+
+    # Touch c0 (the oldest) so it becomes the most-recently-used; it must
+    # survive the next overflow eviction while c1 (now oldest) is dropped.
+    limiter.allow_rest_acquire("c0")
+    limiter.allow_rest_acquire("new-client")
+
+    assert "c0" in limiter.rest_acquire_per_client  # refreshed → kept
+    assert "c1" not in limiter.rest_acquire_per_client  # now-oldest → evicted
+    assert "new-client" in limiter.rest_acquire_per_client

@@ -123,16 +123,31 @@ class MessageRouter:
         # Pre-encode for all browsers (except when redaction is needed)
         encoded_default = _encode_browser_frame(msg)
 
-        for ws, _role in browsers_with_roles:
+        # Redaction rules are role-scoped, so the policy context + redacted
+        # payload only need to be built once per distinct viewer role per
+        # frame — not once per browser. This caps the per-frame
+        # prepare_policy_context calls (each re-acquires hub._lock) and
+        # get_redaction_rules calls at the number of distinct roles, instead
+        # of letting N viewers trigger N policy builds + N lock acquisitions.
+        gate_active = is_term_data and bool(hub._output_policy_gate)
+        payload_by_role: dict[str | None, str] = {}
+
+        for ws, role in browsers_with_roles:
             try:
                 final_payload = encoded_default
-                if is_term_data and hub._output_policy_gate:
-                    context = await hub.prepare_policy_context(ws, worker_id, action="output")
-                    rules = await hub._output_policy_gate.get_redaction_rules(context)
-                    if rules:  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
-                        redactor = StreamRedactor(rules)
-                        redacted_data = redactor.redact(raw_data)
-                        final_payload = _encode_browser_frame({"type": "term", "data": redacted_data})
+                if gate_active:
+                    cached = payload_by_role.get(role)
+                    if cached is None:
+                        context = await hub.prepare_policy_context(ws, worker_id, action="output")
+                        rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]
+                        if rules:  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
+                            redactor = StreamRedactor(rules)
+                            redacted_data = redactor.redact(raw_data)
+                            cached = _encode_browser_frame({"type": "term", "data": redacted_data})
+                        else:
+                            cached = encoded_default
+                        payload_by_role[role] = cached
+                    final_payload = cached
                 await ws.send_text(final_payload)
             except Exception as exc:
                 logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, exc)
