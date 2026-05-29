@@ -2,6 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
+"""Recording-store backends for terminal session capture.
+
+Defines the :class:`RecordingStore` protocol plus three reference
+implementations: :class:`LocalFileRecordingStore` (JSONL files),
+:class:`InMemoryRecordingStore` (ephemeral), and :class:`NullRecordingStore`
+(no-op). See the protocol docstring for the lifecycle contract.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -75,7 +83,11 @@ class RecordingStore(Protocol):
         ...
 
     async def get_entries(
-        self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
+        self,
+        session_id: str,
+        limit: int = 200,  # pragma: no mutate — trampoline-masked default
+        offset: int | None = None,
+        event: str | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve paginated events from the recording.
 
@@ -159,7 +171,11 @@ class LocalFileRecordingStore(RecordingStore):
         }
 
     async def get_entries(
-        self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
+        self,
+        session_id: str,
+        limit: int = 200,  # pragma: no mutate — trampoline-masked default
+        offset: int | None = None,
+        event: str | None = None,
     ) -> list[dict[str, Any]]:
         path = self._get_path(session_id)
         if not path.exists():
@@ -240,7 +256,11 @@ class InMemoryRecordingStore:
         return {"session_id": session_id, "exists": exists, "size_bytes": size_bytes}
 
     async def get_entries(
-        self, session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
+        self,
+        session_id: str,
+        limit: int = 200,  # pragma: no mutate — trampoline-masked default
+        offset: int | None = None,
+        event: str | None = None,
     ) -> list[dict[str, Any]]:
         all_events = self._events.get(session_id, [])
         if event is not None:
@@ -279,7 +299,11 @@ class NullRecordingStore:
         return {"session_id": session_id, "exists": False, "size_bytes": 0}
 
     async def get_entries(
-        self, _session_id: str, limit: int = 200, offset: int | None = None, event: str | None = None
+        self,
+        _session_id: str,
+        limit: int = 200,  # pragma: no mutate — trampoline-masked default
+        offset: int | None = None,
+        event: str | None = None,
     ) -> list[dict[str, Any]]:
         return []
 

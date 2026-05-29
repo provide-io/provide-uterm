@@ -341,6 +341,11 @@ tests_dir = [
     "packages/provide-uterm/tests/terminal/test_io.py",
     # Covers bridge/contracts.py negotiate_protocol_version + worker_hello emitter.
     "packages/provide-uterm/tests/test_protocol_negotiation.py",
+    # Covers recording.py RecordingStore implementations (In-memory / Null /
+    # LocalFile). Without these the gate finds recording.py mutants but binds
+    # zero tests and reports them all as ``no_tests``.
+    "packages/provide-uterm/tests/terminal/test_recording_stores.py",
+    "packages/provide-uterm/tests/terminal/test_recording_local.py",
     # Server-package coverage — matches the server-package paths_to_mutate
     # entries above. Without these the gate finds the mutants but binds
     # to zero tests and reports them all as ``no_tests``.

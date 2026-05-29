@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import json
+
 from provide.uterm.recording import InMemoryRecordingStore, NullRecordingStore, RecordingStore
 
 
@@ -229,3 +231,60 @@ class TestNullRecordingStoreOperations:
         entries = await store.get_entries("s1")
         assert entries == []
         assert await store.get_path("s1") is None
+
+
+class TestInMemoryRecordingStoreSessionMetadataShape:
+    """Pin the internal ``_sessions`` dict shape (dict-key mutants)."""
+
+    async def test_session_record_uses_metadata_and_active_keys(self) -> None:
+        store = InMemoryRecordingStore()
+        await store.start_session("s1", {"who": "alice"})
+        record = store._sessions["s1"]
+        assert record["metadata"] == {"who": "alice"}
+        assert record["active"] is True
+
+
+class TestInMemoryRecordingStoreEventShape:
+    """Pin the log_stop event key shape and append target (dict-key mutants)."""
+
+    async def test_stop_event_has_ts_event_data_keys(self) -> None:
+        store = InMemoryRecordingStore()
+        await store.start_session("s1", {})
+        await store.end_session("s1")
+        stop = store._events["s1"][-1]
+        assert "ts" in stop
+        assert stop["event"] == "log_stop"
+        assert stop["data"] == {}
+        assert stop["session_id"] == "s1"
+
+    async def test_end_on_never_started_session_appends_stop_event(self) -> None:
+        # Kills setdefault(sid, None) / setdefault(sid) — the default must be a
+        # list so .append works on a session that was never started.
+        store = InMemoryRecordingStore()
+        await store.end_session("ghost")
+        assert store._events["ghost"][-1]["event"] == "log_stop"
+
+
+class TestInMemoryRecordingStoreMetaBoundaries:
+    """Boundary + numeric kills for recording_meta."""
+
+    async def test_empty_event_list_reports_not_exists(self) -> None:
+        # append_events with an empty batch registers an empty list under the
+        # session id. exists must use ``> 0`` (not ``>= 0``).
+        store = InMemoryRecordingStore()
+        await store.append_events("s1", [])
+        assert "s1" in store._events
+        meta = await store.recording_meta("s1")
+        assert meta["exists"] is False
+
+    async def test_size_bytes_is_json_len_plus_one_per_event(self) -> None:
+        store = InMemoryRecordingStore()
+        events = [{"event": "a", "n": 1}, {"event": "b", "n": 2}]
+        await store.append_events("s1", events)
+        expected = sum(len(json.dumps(e)) + 1 for e in events)
+        meta = await store.recording_meta("s1")
+        assert meta["size_bytes"] == expected
+        # Guard against the +1 -> -1 / +2 mutants by pinning the exact newline
+        # accounting: size must exceed the raw json length by exactly one per event.
+        raw = sum(len(json.dumps(e)) for e in events)
+        assert meta["size_bytes"] == raw + len(events)

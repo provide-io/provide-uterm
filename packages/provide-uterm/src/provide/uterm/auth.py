@@ -253,7 +253,8 @@ def _parse_authorized_keys_line(line: str) -> _AuthorizedKeyEntry:
     Options are detected by the first token not matching a keytype prefix.
     """
     # Decide whether the line starts with an options field. Options end at
-    # the first whitespace that isn't inside a quoted value.
+    # the first whitespace that isn't inside a quoted value. The keytype
+    # prefixes below mirror those in ``_coerce_to_binary_pubkey``.
     keytype_prefixes = ("ssh-", "ecdsa-", "sk-ssh-", "sk-ecdsa-")
     first_token_end = _find_first_token_end(line)
     first_token = line[:first_token_end]
