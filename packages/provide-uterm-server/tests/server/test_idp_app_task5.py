@@ -2,6 +2,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
+import respx
+from httpx import Response
 from starlette.testclient import TestClient
 
 from provide.uterm.server.app import create_server_app
@@ -89,3 +91,29 @@ def test_webhook_idp_route_level_failure_modes_require_auth(monkeypatch) -> None
     monkeypatch.setattr(app_viewer.state.uterm_idp, "resolve_principal", _viewer)
     with TestClient(app_viewer) as client:
         assert client.get("/api/sessions").status_code == 401
+
+
+@respx.mock
+def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
+    webhook_url = "https://idp.example.test/resolve"
+    config = ServerConfig(auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url=webhook_url))
+
+    app = create_server_app(config, api_only=True)
+    with TestClient(app) as client:
+        route_ok = respx.post(webhook_url).mock(
+            return_value=Response(
+                200,
+                json={
+                    "subject_id": "alice",
+                    "roles": ["admin"],
+                    "scopes": ["*"],
+                },
+            )
+        )
+        ok = client.get("/api/sessions")
+        assert ok.status_code == 200
+        assert route_ok.called
+
+        respx.post(webhook_url).mock(return_value=Response(500))
+        denied = client.get("/api/sessions")
+        assert denied.status_code == 401

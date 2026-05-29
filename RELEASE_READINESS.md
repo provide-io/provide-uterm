@@ -56,6 +56,18 @@ harden the out-of-box posture:
   `usedforsecurity=False` so static analysis (bandit, ruff) and the
   CPython hashlib itself understand the boundary.
 
+## Security and auth changes (latest)
+
+- **Durability capabilities endpoint now authenticated** — `GET /api/durability/capabilities`
+  is protected by the standard auth dependency; public liveness remains
+  `GET /healthz`.
+- **Governance webhooks now emit shared-secret auth and HMAC signatures** —
+  policy, fanout, behavioral-audit, and output-policy webhooks now send
+  both `X-Webhook-Secret` and `X-Uterm-Signature: sha256=<hmac>`.
+- **Configured webhook IDP is now enforced in route auth path** —
+  when `auth.identity_provider=webhook`, HTTP/WS auth resolution runs
+  through the configured IDP instead of local-only resolution.
+
 ## Known gaps
 
 These prevent the GA promotion from `rc/0.4.0` to a final `v0.4.0` tag.
