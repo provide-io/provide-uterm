@@ -225,39 +225,47 @@ paths_to_mutate = [
     # Bridge protocol negotiation — boundary-heavy, security-relevant.
     # Covered by tests/test_protocol_negotiation.py.
     "src/provide/uterm/bridge/contracts.py",
-    # Server-package paths. Use the full ``packages/.../src/...`` prefix
-    # because these files don't appear in the workspace-root ``src/`` namespace
-    # merge (only provide-uterm contributes there). The matching test files
-    # are added to ``tests_dir`` below — without that the gate finds the
-    # mutants but binds to zero tests and reports them all as ``no_tests``.
+    # Server-package paths. These MUST be addressed through the workspace-root
+    # ``src/`` symlink tree (``src/provide/uterm/server/...``), NOT the real
+    # ``packages/provide-uterm-server/src/...`` path. mutmut derives a mutant's
+    # name from ``str(path).replace(os.sep, ".")`` after stripping a leading
+    # ``src.`` prefix (see ``get_mutant_name`` in mutmut/__main__.py). The
+    # trampoline that records test→mutant coverage keys on the imported
+    # module's ``__module__`` (``provide.uterm.server.bridge.hub.limiter``).
+    # A ``packages/...`` path yields the name
+    # ``packages.provide-uterm-server.src.provide.uterm.server...`` which never
+    # matches ``__module__`` — so EVERY server mutant reported ``no_tests``.
+    # The ``src/provide/uterm/server`` symlink (-> the server package's source)
+    # makes the derived name equal ``provide.uterm.server...`` and binding
+    # works. The matching test files are in ``tests_dir`` below.
     #
     # HijackLease.expire boundary + lease arithmetic.
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/models.py",
+    "src/provide/uterm/server/bridge/models.py",
     # Tunnel token hashing — constant-time compare, security-critical.
-    "packages/provide-uterm-server/src/provide/uterm/tunnel/token_hash.py",
+    "src/provide/uterm/tunnel/token_hash.py",
     # HTTP intercept header denylist + gating policy.
-    "packages/provide-uterm-server/src/provide/uterm/tunnel/intercept.py",
+    "src/provide/uterm/tunnel/intercept.py",
     # Server routes/webhooks/registry — security-relevant request handling.
     # Gate runs with --changed-only in CI so this only fires when those files
     # change; safe to keep enumerated even before dedicated mutmut suites exist.
-    "packages/provide-uterm-server/src/provide/uterm/server/routes/",
-    "packages/provide-uterm-server/src/provide/uterm/server/webhooks.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/registry.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/config_schema.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/app/factory.py",
-    "packages/provide-uterm-platform/src/provide/uterm/manager/process.py",
-    "packages/provide-uterm-platform/src/provide/uterm/manager/config.py",
+    "src/provide/uterm/server/routes/",
+    "src/provide/uterm/server/webhooks.py",
+    "src/provide/uterm/server/registry.py",
+    "src/provide/uterm/server/config_schema.py",
+    "src/provide/uterm/server/app/factory.py",
+    "src/provide/uterm/manager/process.py",
+    "src/provide/uterm/manager/config.py",
     # Refactor #16 service classes — state-machine + dispatch logic split
     # out of the former TermHub mixin pile. High mutation value; tests for
     # each service live under tests/bridge/hub/test_<name>.py.
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/registry.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/limiter.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/lease.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/router.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/connection.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/presence.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/store.py",
-    "packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/polling_service.py",
+    "src/provide/uterm/server/bridge/hub/registry.py",
+    "src/provide/uterm/server/bridge/hub/limiter.py",
+    "src/provide/uterm/server/bridge/hub/lease.py",
+    "src/provide/uterm/server/bridge/hub/router.py",
+    "src/provide/uterm/server/bridge/hub/connection.py",
+    "src/provide/uterm/server/bridge/hub/presence.py",
+    "src/provide/uterm/server/bridge/hub/store.py",
+    "src/provide/uterm/server/bridge/hub/polling_service.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # HijackCoordinator (moved to core in #15) — lease state machine.
@@ -327,6 +335,10 @@ tests_dir = [
     "packages/provide-uterm-server/tests/server/test_config.py",
     "packages/provide-uterm-server/tests/server/test_app_coverage.py",
     "packages/provide-uterm-platform/tests/manager/manager/test_process.py",
+    # RateLimiter (hub/limiter.py) LRU eviction — without this the
+    # --changed-only gate finds limiter.py mutants but binds zero tests and
+    # reports them all as ``no_tests`` (2026-05-28 remediation, lane A4).
+    "packages/provide-uterm-server/tests/bridge/hub/test_limiter.py",
 ]
 also_copy = [
     "src",
@@ -341,12 +353,38 @@ also_copy = [
     "packages/provide-uterm-server/tests/bridge",
     "packages/provide-uterm-server/tests/tunnel",
     "packages/provide-uterm-server/tests/server",
+    # The server test package's shared conftest (and its split parts) must be
+    # copied so the autouse auth fixtures load. Without them the TestClient
+    # sends no X-Principal/X-Role header in ``header`` auth mode, so
+    # ``test_config.py::test_loaded_max_sessions_is_enforced_by_app`` returns
+    # 401 instead of 409 and fails. mutmut's stats phase runs with ``-x``, so
+    # that one failure aborts coverage binding *before* it reaches the
+    # alphabetically-later suites (``tests/bridge/hub/test_limiter.py`` etc.),
+    # leaving every later server mutant reporting ``no_tests``. These file
+    # entries must come *after* the directory entries above so the parent
+    # ``mutants/.../tests/`` dir already exists when mutmut copies them.
+    # NOTE: deliberately *not* copying ``tests/__init__.py`` — leaving the
+    # server ``tests`` dir as a non-package lets importlib import-mode key its
+    # conftest by file path instead of the ``tests.conftest`` dotted name,
+    # which would otherwise collide with the core package's identically-named
+    # ``tests.conftest``.
+    "packages/provide-uterm-server/tests/conftest.py",
+    "packages/provide-uterm-server/tests/conftest_part1.py",
+    "packages/provide-uterm-server/tests/conftest_part2.py",
     "packages/provide-uterm-platform/tests/manager",
     "docker",
     "conftest.py",
 ]
 pytest_add_cli_args = [
     "--timeout=30",
+    # The mutants/ tree copies two ``tests`` packages (core +
+    # provide-uterm-server), both exposing a ``tests.conftest`` dotted name.
+    # pytest's default prepend import-mode registers the first under that name
+    # and then rejects the second ("Plugin already registered under a
+    # different name"). importlib import-mode keys modules by file path
+    # instead, so both conftests load side by side. Required for the server
+    # test package's autoauth fixtures to be present.
+    "--import-mode=importlib",
     "-p", "no:randomly",
     "-p", "no:hypothesis",
     "--ignore=packages/provide-uterm-platform/tests/pty/test_ld_preload_capture.py",
