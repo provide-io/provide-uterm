@@ -143,12 +143,13 @@ branch = true
 fail_under = 100
 show_missing = true
 skip_covered = false
-# Loop-back branches in async receive loops — the True branch IS exercised
-# but coverage can't track the loop continuation edge reliably.
+# Only the standard explicit waiver remains. The previous broad
+# ``elif msg_type ==`` / ``more_body`` regex escape-hatches were removed
+# (CORE-cov): real branch tests now cover those dispatch fall-throughs, and
+# any genuinely-unreachable branch carries a per-site ``# pragma: no cover``
+# with an inline justification so the waiver is visible and grep-able.
 partial_branches = [
     "pragma: no branch",
-    "if not msg.get\\(\"more_body\"",
-    "elif msg_type ==",
 ]
 
 [tool.mutmut]
