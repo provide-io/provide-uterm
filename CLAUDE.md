@@ -80,7 +80,7 @@ docker compose -f docker/docker-compose.yml up
 
 **Control Channel**: JSON control frames (snapshots, hijack state, presence, analysis) mixed inline with raw terminal bytes in the same WebSocket stream.
 
-**Lazy-loading module interface**: `provide/uterm/__init__.py` uses `__getattr__` to defer imports, avoiding hard dependencies.
+**Module import strategy**: the core `provide/uterm/__init__.py` uses **eager** imports (it re-exports from `ansi`, `auth`, `colors`, `control_channel_*`, etc. at import time). The **lazy** `__getattr__`-based deferral lives in the *client* package (`packages/provide-uterm-client/src/provide/uterm/client/__init__.py`), which defers optional/heavy imports to avoid hard dependencies.
 
 ### Hub services
 
@@ -99,13 +99,15 @@ The full service map (with one-line descriptions of each) is in the docstring of
 
 ## Pre-commit Hooks
 
-Runs on commit: ruff (format+lint), mypy (strict), ty, bandit (security), biome (TS), vitest (frontend), reuse (SPDX headers), codespell. All new files need SPDX headers.
+Runs on **every commit**: `codegen-frames` (Pydantic→TS frame-schema drift check), ruff (format+lint), reuse (SPDX headers), codespell, bandit (security), detect-secrets. All new files need SPDX headers.
+
+Staged as `stages: [manual]` (NOT run on a normal commit — invoke with `pre-commit run --hook-stage manual`): mypy (strict), ty, mypy-platform, and the frontend hooks tsc/biome/vitest. mypy/ty are manual until accumulated type drift is cleaned up; the TS hooks are manual because they need a fresh `npm install` in `packages/provide-uterm-frontend/` first. See the header comment in `.pre-commit-config.yaml` for the rationale.
 
 ## Key Conventions
 
 - Python >=3.11, line length 120, ruff lint rules: E/W/F/I/N/UP/B/C4/SIM/TCH/PTH/DTZ/S/ARG/RUF and more
 - mypy strict mode enabled
-- External dependency: `provide-telemetry` (sibling repo at `../provide-telemetry`, editable install)
+- External dependency: `provide-telemetry` is resolved from **PyPI** (root floor `>=0.4.4`; the committed `uv.lock` pins it at the latest published release). There is **no** `[tool.uv.sources]` editable entry for it, so a local sibling checkout at `../provide-telemetry` is NOT picked up automatically. To develop against the sibling, add `provide-telemetry = { path = "../provide-telemetry", editable = true }` under `[tool.uv.sources]` and re-run `uv sync` locally — but do not commit that change or the resulting lock (the path is relative to the workspace root and breaks in git worktrees / CI).
 - Config files: TOML-based server config (see `docker/server.toml`, `scripts/uterm-server.example.toml`)
 - Auth modes: `dev_token` (local-only stub IdP that mints a JWT), `jwt` (production), `header` (proxy-stripped headers; requires loopback bind or `auth.trusted_proxy_ips` allowlist), `api_key`, `webhook` (delegated IDP; `auth.webhook_idp_on_failure` defaults to `deny`). Legacy server-side `dev`/`none` modes are removed.
 
