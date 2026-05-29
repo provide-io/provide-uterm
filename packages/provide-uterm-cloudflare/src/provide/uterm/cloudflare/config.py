@@ -3,6 +3,41 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+_HMAC_ALGS = frozenset({"HS256", "HS384", "HS512"})
+
+
+def _looks_like_asymmetric_key(pem: str | None) -> bool:
+    """Return True if *pem* carries an asymmetric public-key/certificate PEM marker.
+
+    A raw HMAC shared secret has no PEM header, so it is not treated as an
+    asymmetric key — only genuine PUBLIC KEY / CERTIFICATE blocks count.
+    """
+    if not pem:
+        return False
+    return "PUBLIC KEY" in pem or "BEGIN CERTIFICATE" in pem
+
+
+def _reject_jwt_algorithm_confusion(
+    algorithms: tuple[str, ...], public_key_pem: str | None, jwks_url: str | None
+) -> None:
+    """Fail closed on JWT algorithm-confusion configurations.
+
+    If an HMAC algorithm (HS*) is configured together with an asymmetric
+    algorithm (RS*/ES*/PS*), a JWKS URL, or a PEM that is an asymmetric public
+    key, an attacker can forge an HS* token using the public key bytes as the
+    HMAC secret. Reject such configs loudly at startup.
+    """
+    has_hmac = any(a in _HMAC_ALGS for a in algorithms)
+    if not has_hmac:
+        return
+    has_asym_alg = any(a not in _HMAC_ALGS for a in algorithms)
+    has_asym_key = bool(jwks_url) or _looks_like_asymmetric_key(public_key_pem)
+    if has_asym_alg or has_asym_key:
+        raise ValueError(
+            "JWT_ALGORITHMS must not combine HMAC (HS*) with asymmetric algorithms "
+            "or an asymmetric public key / JWKS URL (algorithm-confusion risk)"
+        )
+
 
 @dataclass(slots=True)
 class JwtConfig:
@@ -25,6 +60,11 @@ class JwtConfig:
     # Set JWT_ROLE_MAP to a JSON object: e.g. '{"engineering":"admin","ops":"operator"}'.
     # When set with JWT_ROLES_CLAIM=groups, arbitrary CF Access group names map to roles.
     jwt_role_map: dict[str, str] = field(default_factory=dict)
+    # Opt-in: grant the ``admin`` role to CF Access service-token JWTs (tokens that
+    # carry a ``common_name`` claim and no human ``email`` claim). Defaults to False
+    # so a service-token-shaped JWT is never silently elevated to admin; set
+    # JWT_SERVICE_TOKEN_ADMIN=1 only when service tokens are trusted automation.
+    jwt_service_token_admin: bool = False
 
 
 @dataclass(slots=True)
@@ -92,15 +132,16 @@ class CloudflareConfig:
             return str(val)
 
         environment = _get("ENVIRONMENT", "development")
-        env_lower = environment.strip().lower()
-        is_production = env_lower in {"production", "prod"}
         algorithms_raw = _get("JWT_ALGORITHMS", "RS256")
         algorithms = tuple(part.strip() for part in algorithms_raw.split(",") if part.strip())
         mode = _get("AUTH_MODE", "jwt").strip().lower() or "jwt"
-        if mode not in {"jwt", "dev", "none"}:
-            mode = "jwt"
-        if is_production and mode in {"dev", "none"}:
-            raise ValueError("AUTH_MODE must be 'jwt' in production environments")
+        # dev/none modes are removed: the worker is always internet-facing, so an
+        # open-access mode is an admin bypass regardless of ENVIRONMENT. Matches the
+        # FastAPI server, which dropped server-side dev/none modes.
+        if mode != "jwt":
+            raise ValueError(
+                "AUTH_MODE must be 'jwt' (dev/none modes are removed; the worker is always internet-facing)"
+            )
         limits = LimitsConfig(
             max_ws_message_bytes=max(1024, int(_get("MAX_WS_MESSAGE_BYTES", "1048576"))),
             max_input_chars=max(100, int(_get("MAX_INPUT_CHARS", "10000"))),
@@ -140,7 +181,9 @@ class CloudflareConfig:
             jwt_scopes_claim=_get("JWT_SCOPES_CLAIM", "scope") or "scope",
             jwt_default_role=_get("JWT_DEFAULT_ROLE", "viewer") or "viewer",
             jwt_role_map=jwt_role_map,
+            jwt_service_token_admin=_get_bool("JWT_SERVICE_TOKEN_ADMIN", default=False),
         )
+        _reject_jwt_algorithm_confusion(jwt.algorithms, jwt.public_key_pem, jwt.jwks_url)
         worker_bearer_token = _get("WORKER_BEARER_TOKEN") or None
         if mode == "jwt" and not worker_bearer_token:
             raise ValueError("WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'")

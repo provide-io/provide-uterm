@@ -22,12 +22,26 @@ import provide.uterm.cloudflare.cf_types  # noqa: F401
 
 
 def _make_default(env_attrs: dict | None = None):
+    from provide.uterm.cloudflare.config import CloudflareConfig
     from provide.uterm.cloudflare.entry import Default
 
-    attrs: dict = {"AUTH_MODE": "dev"}
+    # from_env only accepts jwt mode now; build a valid jwt config and override the
+    # in-memory mode to ``dev`` unless the caller explicitly requested jwt enforcement.
+    attrs: dict = {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+        "WORKER_BEARER_TOKEN": "test-worker-token",
+    }
+    force_dev = not (env_attrs and env_attrs.get("AUTH_MODE") == "jwt")
     if env_attrs:
         attrs.update(env_attrs)
-    return Default(SimpleNamespace(**attrs))
+    env = SimpleNamespace(**attrs)
+    d = Default(env)
+    d._config = CloudflareConfig.from_env(env)
+    if force_dev:
+        d._config.jwt.mode = "dev"
+    return d
 
 
 def _req(path: str, method: str = "GET", headers: dict | None = None) -> SimpleNamespace:

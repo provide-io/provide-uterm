@@ -36,17 +36,19 @@ def persist_lease(
     """
     if session is None:
         return
+    # session.lease_expires_at is a monotonic timestamp; persist it as wall-clock
+    # so it survives DO restart/hibernation (monotonic clocks reset per isolate).
+    wall_expires = session.lease_expires_at + (time.time() - time.monotonic())
     store.save_lease(
         lease_record_cls(
             worker_id=worker_id,
             hijack_id=session.hijack_id,
             owner=session.owner,
-            lease_expires_at=session.lease_expires_at,
+            lease_expires_at=wall_expires,
         )
     )
     _s = getattr(ctx, "storage", None)
     if _s is not None and callable(getattr(_s, "setAlarm", None)):
-        wall_expires = session.lease_expires_at + (time.time() - time.monotonic())
         _s.setAlarm(int(wall_expires * 1000))
 
 

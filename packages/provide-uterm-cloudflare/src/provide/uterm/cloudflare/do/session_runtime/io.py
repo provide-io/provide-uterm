@@ -52,6 +52,15 @@ def _mono_to_wall(mono: float | None) -> float | None:
     return mono + (time.time() - time.monotonic())
 
 
+def _wall_to_mono(wall: float) -> float:
+    """Convert a persisted wall-clock timestamp back to a monotonic timestamp.
+
+    Persisted leases are stored as wall-clock so they survive a DO restart; the
+    in-memory HijackSession uses monotonic time for countdown/alarm scheduling.
+    """
+    return wall - (time.time() - time.monotonic())
+
+
 class _SessionRuntimeIoMixin:
     """Mixin providing request helpers, broadcast, worker I/O, and alarm for SessionRuntime.
 
@@ -88,16 +97,18 @@ class _SessionRuntimeIoMixin:
         hijack_id = row.get("hijack_id")
         owner = row.get("owner")
         lease_expires_at = row.get("lease_expires_at")
+        # The persisted value is wall-clock (see persist_lease); compare against
+        # wall time, then convert back to monotonic for the in-memory session.
         if (
             isinstance(hijack_id, str)
             and isinstance(owner, str)
             and isinstance(lease_expires_at, (float, int))
-            and float(lease_expires_at) > time.monotonic()
+            and float(lease_expires_at) > time.time()
         ):
             self.hijack._session = HijackSession(  # type: ignore[attr-defined]
                 hijack_id=hijack_id,
                 owner=owner,
-                lease_expires_at=float(lease_expires_at),
+                lease_expires_at=_wall_to_mono(float(lease_expires_at)),
             )
         snapshot = row.get("last_snapshot")
         if isinstance(snapshot, dict):

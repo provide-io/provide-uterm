@@ -155,14 +155,20 @@ async def test_pam_event_tty_empty_uses_tty_fallback() -> None:
 
 async def test_route_http_dispatches_pam_events() -> None:
     """entry.py must route /api/pam-events to the pam handler."""
+    from provide.uterm.cloudflare.config import CloudflareConfig
     from provide.uterm.cloudflare.entry import Default
 
     env = SimpleNamespace(
-        AUTH_MODE="dev",
+        AUTH_MODE="jwt",
+        JWT_ALGORITHMS="HS256",
+        JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
+        WORKER_BEARER_TOKEN="t",
         SESSION_REGISTRY=None,
-        JWT_SECRET="s",
     )
     default = Default(env)
+    # Exercise the legacy open-access path (reachable only via direct config mutation).
+    default._config = CloudflareConfig.from_env(env)
+    default._config.jwt.mode = "dev"
 
     async def _json() -> dict:
         return {"event": "open", "username": "alice", "tty": "/dev/pts/3", "pid": 1}

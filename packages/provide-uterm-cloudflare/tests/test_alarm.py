@@ -22,7 +22,15 @@ def _make_runtime() -> SessionRuntime:
         ),
         id=SimpleNamespace(name=lambda: "test-worker"),
     )
-    runtime = SessionRuntime(ctx, {"AUTH_MODE": "dev"})
+    runtime = SessionRuntime(
+        ctx,
+        {
+            "AUTH_MODE": "jwt",
+            "JWT_ALGORITHMS": "HS256",
+            "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
+            "WORKER_BEARER_TOKEN": "test-worker-token",
+        },
+    )
     runtime._alarm_calls = alarm_calls  # expose for assertions
     return runtime
 

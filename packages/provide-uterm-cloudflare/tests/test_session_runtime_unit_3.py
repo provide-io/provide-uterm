@@ -33,20 +33,23 @@ def _make_ctx(worker_id: str = "test-worker"):
     )
 
 
-def _make_env(mode: str = "dev", **extra) -> SimpleNamespace:
-    env = SimpleNamespace(AUTH_MODE=mode, **extra)
-    if mode == "jwt":
-        env.JWT_ALGORITHMS = "HS256"
-        env.JWT_PUBLIC_KEY_PEM = _KEY
-        if not hasattr(env, "WORKER_BEARER_TOKEN"):
-            env.WORKER_BEARER_TOKEN = "test-worker-token"
+def _make_env(mode: str = "jwt", **extra) -> SimpleNamespace:
+    # from_env only accepts jwt mode now; always emit a valid jwt config.
+    env = SimpleNamespace(AUTH_MODE="jwt", **extra)
+    env.JWT_ALGORITHMS = "HS256"
+    env.JWT_PUBLIC_KEY_PEM = _KEY
+    if not hasattr(env, "WORKER_BEARER_TOKEN"):
+        env.WORKER_BEARER_TOKEN = "test-worker-token"
     return env
 
 
 def _make_runtime(worker_id: str = "test-worker", mode: str = "dev") -> SessionRuntime:
+    # from_env only accepts jwt mode now; build a valid jwt config, then override
+    # the in-memory mode for tests that exercise the legacy open-access branches.
     ctx = _make_ctx(worker_id)
-    env = _make_env(mode)
-    return SessionRuntime(ctx, env)
+    rt = SessionRuntime(ctx, _make_env("jwt"))
+    rt.config.jwt.mode = mode
+    return rt
 
 
 def _decode_sent(raw: str, *, data_frame_type: str | None = None) -> dict:
@@ -101,6 +104,51 @@ def test_persist_lease_saves_to_store() -> None:
     rt.persist_lease(session)
     row = rt.store.load_session(rt.worker_id)
     assert row is not None and row["hijack_id"] == "h1"
+
+
+def test_persist_lease_stores_wall_clock_not_monotonic() -> None:
+    """The persisted lease_expires_at must be wall-clock, not the monotonic value.
+
+    HijackSession.lease_expires_at is a monotonic timestamp; persisting it raw
+    breaks restore after a DO restart (monotonic resets per isolate). The stored
+    SQLite value must be wall-clock time so it survives hibernation/restart.
+    """
+    rt = _make_runtime()
+    mono_expiry = time.monotonic() + 300
+    session = HijackSession(hijack_id="h1", owner="alice", lease_expires_at=mono_expiry)
+    rt.persist_lease(session)
+
+    stored = rt.store.load_session(rt.worker_id)["lease_expires_at"]
+    expected_wall = time.time() + 300
+    # Stored value must be near wall-clock expiry, NOT the (much smaller) monotonic value.
+    assert abs(stored - expected_wall) < 5
+    assert stored > mono_expiry  # wall epoch is far larger than monotonic uptime
+
+
+def test_restored_lease_uses_wall_clock_active_then_expired() -> None:
+    """A restored lease reads as active before its wall-clock expiry and expired after."""
+    rt = _make_runtime("wall-w1")
+    # Persist a lease 300s in the (monotonic) future → stored as wall-clock.
+    session = HijackSession(hijack_id="hid", owner="op", lease_expires_at=time.monotonic() + 300)
+    rt.persist_lease(session)
+
+    # Simulate a fresh isolate: drop the in-memory session, restore from SQLite.
+    rt.hijack._session = None
+    rt._restore_state()
+    assert rt.hijack.session is not None
+    assert rt.hijack.session.owner == "op"
+
+
+def test_restored_expired_wall_lease_is_inactive() -> None:
+    """A lease whose wall-clock expiry is in the past must not be restored as active."""
+    rt = _make_runtime("wall-w2")
+    # Store a wall-clock expiry 60s in the past.
+    rt.store.save_lease(
+        LeaseRecord(worker_id="wall-w2", hijack_id="old", owner="op", lease_expires_at=time.time() - 60)
+    )
+    rt.hijack._session = None
+    rt._restore_state()
+    assert rt.hijack.session is None
 
 
 def test_clear_lease_removes_from_store() -> None:
