@@ -238,6 +238,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             cursor_at_end=bool(msg.get("cursor_at_end", True)),
                             has_trailing_space=bool(msg.get("has_trailing_space", False)),
                             prompt_detected=cast("dict[str, Any] | None", msg.get("prompt_detected")),
+                            raw_tail=cast("str | None", msg.get("raw_tail")),
                             ts=_safe_float(msg.get("ts"), time.time()),
                         )
                         await hub.update_last_snapshot(worker_id, cast("dict[str, Any]", snapshot))

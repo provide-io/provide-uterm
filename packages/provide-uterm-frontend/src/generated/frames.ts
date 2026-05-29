@@ -50,6 +50,7 @@ export type HasTrailingSpace = boolean | null;
 export type PromptDetected = {
   [k: string]: unknown;
 } | null;
+export type RawTail = string | null;
 export type Rows = number | null;
 export type Screen = string;
 export type ScreenHash = string | null;
@@ -189,6 +190,7 @@ export interface SnapshotFrame {
   cursor_at_end?: CursorAtEnd;
   has_trailing_space?: HasTrailingSpace;
   prompt_detected?: PromptDetected;
+  raw_tail?: RawTail;
   rows?: Rows;
   screen: Screen;
   screen_hash?: ScreenHash;

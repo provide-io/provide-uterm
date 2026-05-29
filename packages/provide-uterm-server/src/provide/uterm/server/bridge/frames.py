@@ -96,6 +96,7 @@ class SnapshotFrame(TypedDict):
     cursor_at_end: bool
     has_trailing_space: bool
     prompt_detected: dict[str, Any] | None
+    raw_tail: str | None
     ts: float
 
 
@@ -203,6 +204,7 @@ def make_snapshot_frame(
     has_trailing_space: bool,
     prompt_detected: dict[str, Any] | None,
     ts: float,
+    raw_tail: str | None = None,
 ) -> SnapshotFrame:
     # exclude_none=False preserves ``prompt_detected: None`` on the wire —
     # consumers depend on the field being present (even when null) to
@@ -219,6 +221,7 @@ def make_snapshot_frame(
             cursor_at_end=cursor_at_end,
             has_trailing_space=has_trailing_space,
             prompt_detected=prompt_detected,
+            raw_tail=raw_tail,
             ts=ts,
         ).model_dump(exclude_none=False),
     )

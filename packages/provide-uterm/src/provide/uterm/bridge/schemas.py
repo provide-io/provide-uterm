@@ -77,6 +77,10 @@ class SnapshotFrame(_FrameBase):
     cursor_at_end: bool | None = None
     has_trailing_space: bool | None = None
     prompt_detected: dict[str, Any] | None = None
+    # Bounded rolling tail of raw decoded output (ANSI/control intact) so
+    # consumers can recover content that scrolled off pyte's 25-row viewport
+    # within a single turn. Optional/backward-compatible.
+    raw_tail: str | None = None
     ts: float | None = None
 
 

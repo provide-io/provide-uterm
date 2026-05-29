@@ -1059,6 +1059,18 @@
           "default": null,
           "title": "Prompt Detected"
         },
+        "raw_tail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Tail"
+        },
         "rows": {
           "anyOf": [
             {
