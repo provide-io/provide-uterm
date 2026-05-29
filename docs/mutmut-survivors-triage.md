@@ -69,6 +69,70 @@ Five attack waves landed:
    path, or (b) a script-side mechanism to point Python at the mutants/
    tree exclusively (e.g. via a per-test virtualenv that doesn't have
    the editable installs). Both are non-trivial.
+
+   **RESOLVED (2026-05-28).** The earlier diagnosis above was only
+   partly right. The actual root cause of the server-package
+   `no_tests` is a **mutant-name vs `__module__` mismatch**, plus a
+   stats-phase `-x` abort:
+
+   1. *Name mismatch.* mutmut derives a mutant's name from the
+      `paths_to_mutate` path: `str(path).replace(os.sep, ".")` after
+      stripping a leading `src.` (`get_mutant_name` in
+      `mutmut/__main__.py`). The coverage trampoline keys on the
+      *imported* module's `__module__`. A `packages/...` path yields
+      `packages.provide-uterm-server.src.provide.uterm.server.bridge.hub.limiter`,
+      which never equals the import name
+      `provide.uterm.server.bridge.hub.limiter` — so the recorded
+      coverage key and the mutant key never join, and *every* server
+      mutant reports `no_tests`. (Import resolution to the mutated copy
+      was actually fine — verified by probing `lim.__file__` under the
+      stats env.)
+   2. *Stats-phase abort.* mutmut's stats phase runs the whole
+      `tests_dir` under `-x`. `tests/server/test_config.py::
+      test_loaded_max_sessions_is_enforced_by_app` (and other
+      `TestClient` suites) need the autouse auth fixtures in the server
+      test package's `conftest_part1.py`. That conftest was never
+      copied into `mutants/`, so the `TestClient` sent no
+      `X-Principal/X-Role` header in `header` auth mode → 401 ≠ 409 →
+      the test failed → `-x` aborted stats binding before reaching the
+      later suites.
+
+   The fix (all in harness/config scope):
+
+   - **`src/provide/uterm` is now a real directory of symlinks** (built
+     by `scripts/build_mutation_src_tree.py`): the core package's
+     children plus one symlink per cross-package namespace — `server`,
+     `tunnel` (provide-uterm-server) and `pty`, `manager`
+     (provide-uterm-platform). All server/platform `paths_to_mutate`
+     entries were switched from `packages/.../src/...` to
+     `src/provide/uterm/...`, so the derived name now equals
+     `__module__`. `_resolve_to_mutmut_path` in
+     `scripts/run_mutation_gate.py` already maps the changed real file
+     back to the symlinked entry by inode, so `--changed-only` keeps
+     working.
+   - **The server test package's `conftest.py` + split parts are added
+     to `also_copy`** (after the directory entries so the parent dir
+     exists). `pytest_configure` in `conftest_part2.py` is guarded to
+     no-op under `MUTANT_UNDER_TEST` (it eagerly built a server app,
+     which instantiates the mutated `RateLimiter` and tripped the
+     forced-fail trampoline during the stats phase).
+   - **`--import-mode=importlib`** is added to the mutmut
+     `pytest_add_cli_args`: the core and server test packages both
+     expose a `tests.conftest` dotted name; prepend import-mode rejects
+     the second ("Plugin already registered under a different name").
+     The server `tests/__init__.py` is deliberately *not* copied so its
+     conftest is keyed by file path under importlib.
+
+   Result: `bridge/hub/limiter.py` went 36 `no_tests` → 36 `killed`
+   (100%). The whole server perimeter now binds (e.g. token_hash +
+   models + intercept = 119 killed where they were 0/`no_tests`
+   before). Files whose unit suites are not yet enumerated in
+   `tests_dir` (the other hub services — lease/router/registry/
+   connection/presence/store/polling — and a few token_hash/intercept
+   survivors) still report `no_tests`/`survived`; that is a *test
+   completeness* gap, not a binding-mechanism gap, and is tracked
+   separately. The `--changed-only` CI gate only fires on the perimeter
+   files a PR actually touches, so it stays green for unrelated PRs.
 5. **Detector long-tail sweep (2026-05-23).** Targeted the ~130
    pre-existing detector.py survivors carried over since wave 1.
    Result: **90 killed**, dropping detector survivors 133 → 43 and the
