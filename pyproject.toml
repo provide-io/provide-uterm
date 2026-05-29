@@ -335,6 +335,7 @@ tests_dir = [
     "packages/provide-uterm/tests/test_io.py",
     "packages/provide-uterm/tests/test_io_mutations.py",
     "packages/provide-uterm/tests/test_io_mutations_2.py",
+    "packages/provide-uterm/tests/test_io_mutations_3.py",
     "packages/provide-uterm/tests/test_io_mutmut.py",
     "packages/provide-uterm/tests/test_high_roi_mutmut.py",
     "packages/provide-uterm/tests/terminal/test_io.py",
