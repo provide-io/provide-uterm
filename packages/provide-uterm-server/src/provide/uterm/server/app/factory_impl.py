@@ -15,7 +15,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, cast
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
 from starlette.requests import HTTPConnection  # noqa: TC002
 
 from provide.telemetry import get_logger
@@ -717,7 +717,7 @@ def create_server_app(
     app.state.uterm_idp = idp
     app.state.uterm_startup_time = time.time()
 
-    @app.get("/api/durability/capabilities")
+    @app.get("/api/durability/capabilities", dependencies=[Depends(_require_authenticated)])
     async def durability_capabilities_endpoint() -> dict[str, object]:
         return cast("dict[str, object]", app.state.uterm_durability_capabilities)
 
