@@ -39,52 +39,93 @@ from provide.uterm.ai.auth import (
     authorized,
     principal_from_headers,
 )
+from provide.uterm.ai.constants import (
+    ALLOW_PRIVATE_HOSTS,
+    MAX_KEYSTROKE_BYTES,
+    MAX_USER_PATTERN_LEN,
+)
 from provide.uterm.ai.policy import is_allowed_connector
 from provide.uterm.client.hijack import HijackClient
 from provide.uterm.client.mcp_tools import _ok
+from provide.uterm.client.sanitizer import prepare_keystrokes, unescape_keys
 
 TOOL_COUNT = 21
 
+# Backwards-compatible alias: the canonical unescape logic now lives in
+# ``provide.uterm.client.sanitizer`` so both MCP code paths share it, but the
+# original private name remains importable for existing callers/tests.
+_unescape_keys = unescape_keys
 
-_SIMPLE_ESCAPES: dict[str, str] = {
-    "n": "\n",
-    "r": "\r",
-    "t": "\t",
-    "e": "\x1b",
-    "0": "\x00",
-    "\\": "\\",
-    "'": "'",
-    '"': '"',
-}
-
-_ESCAPE_PATTERN = re.compile(
-    r"\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|(.))",
-    re.DOTALL,
+# Hostnames that resolve to cloud metadata / internal-only endpoints. We refuse
+# these by name (no blocking DNS lookup) — DNS-rebinding / egress filtering
+# remains the server's responsibility.
+_BLOCKED_HOST_NAMES: frozenset[str] = frozenset(
+    {
+        "localhost",
+        "metadata.google.internal",
+        "metadata",
+    },
 )
 
 
-def _unescape_keys(raw: str) -> str:
-    """Translate terminal-relevant escape sequences in *raw* to real characters.
+def _is_internal_host(host: str) -> bool:
+    """Return ``True`` when *host* targets an internal / metadata endpoint.
 
-    Recognises ``\\n``, ``\\r``, ``\\t``, ``\\e``, ``\\0``, ``\\\\``, ``\\'``,
-    ``\\"``, ``\\xNN`` and ``\\uNNNN``. Unknown single-letter escapes such as
-    ``\\a``, ``\\b``, ``\\c``, ``\\q`` are left untouched (passed through as
-    the original two-character backslash sequence) so that callers may safely
-    embed literal text without surprise translation.
+    Literal IPs are classified with :mod:`ipaddress` (loopback, link-local,
+    and — unless :data:`ALLOW_PRIVATE_HOSTS` — private / unique-local ranges).
+    Hostnames are matched against a small denylist of well-known metadata
+    names. We never perform a DNS lookup here: rebinding and egress control are
+    the server's responsibility.
     """
+    import ipaddress
 
-    def _replace(match: re.Match[str]) -> str:
-        hex2, hex4, ch = match.groups()
-        if hex2 is not None:
-            return chr(int(hex2, 16))
-        if hex4 is not None:
-            return chr(int(hex4, 16))
-        if ch in _SIMPLE_ESCAPES:
-            return _SIMPLE_ESCAPES[ch]
-        # Unknown escape — preserve the original sequence verbatim.
-        return match.group(0)
+    candidate = host.strip().strip("[]").lower()
+    if candidate in _BLOCKED_HOST_NAMES:
+        return True
+    try:
+        ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+    if ip.is_loopback or ip.is_link_local:
+        return True
+    return not ALLOW_PRIVATE_HOSTS and (ip.is_private or ip.is_reserved or ip.is_unspecified)
 
-    return _ESCAPE_PATTERN.sub(_replace, raw)
+
+def _compile_user_pattern(pattern: str) -> re.Pattern[str]:
+    """Compile an attacker-supplied regex with a length cap (ReDoS mitigation).
+
+    The length cap removes the cheap amplification path; it does not bound
+    catastrophic backtracking for short pathological patterns — true time
+    bounds need a ``regex``/``re2`` engine. Residual risk is documented here.
+    """
+    if len(pattern) > MAX_USER_PATTERN_LEN:
+        msg = f"pattern too long (max {MAX_USER_PATTERN_LEN} chars)"
+        raise ValueError(msg)
+    try:
+        return re.compile(pattern)
+    except re.error as exc:
+        msg = f"invalid pattern: {exc}"
+        raise ValueError(msg) from exc
+
+
+def _reject_bad_pattern(pattern: str | None) -> dict[str, Any] | None:
+    """Validate a user-supplied regex, returning a rejection dict or ``None``.
+
+    ``None`` pattern is allowed (no filter requested). A pattern that is too
+    long or otherwise invalid yields a structured ``invalid_pattern`` error so
+    an LLM cannot trigger ReDoS via an oversized/complex regex.
+    """
+    if pattern is None:
+        return None
+    try:
+        _compile_user_pattern(pattern)
+    except ValueError as exc:
+        return {
+            "success": False,
+            "error": "invalid_pattern",
+            "detail": str(exc),
+        }
+    return None
 
 
 def _trim_tail(screen: str, tail_lines: int | None) -> str:
@@ -139,6 +180,7 @@ def _validate_session_create_config(
     connector_type: str,
     url: str | None,
     port: int | None,
+    host: str | None = None,
 ) -> dict[str, Any] | None:
     """Vet a ``session_create`` request against the connector allowlist.
 
@@ -153,6 +195,10 @@ def _validate_session_create_config(
     * When supplied, ``url`` must use a vetted scheme; arbitrary
       ``file://`` / ``javascript:`` / etc. are rejected so an MCP client
       cannot ask the worker to open a malicious resource.
+    * When supplied, ``host`` must not target an internal / cloud-metadata
+      endpoint (loopback, link-local, and—unless
+      :data:`~provide.uterm.ai.constants.ALLOW_PRIVATE_HOSTS`—RFC1918 /
+      unique-local), blocking SSRF / internal-pivot via model input.
     """
     if not is_allowed_connector(connector_type):
         return {
@@ -174,6 +220,12 @@ def _validate_session_create_config(
                 "error": "invalid_url_scheme",
                 "scheme": scheme or "<missing>",
             }
+    if host is not None and _is_internal_host(host):
+        return {
+            "success": False,
+            "error": "invalid_host",
+            "host": host,
+        }
     return None
 
 
@@ -319,10 +371,16 @@ def create_mcp_app(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Send input to a hijacked worker, optionally guarded by prompt/regex."""
+        # Cap the attacker-supplied expect_regex length before forwarding it to
+        # the server (which also compiles it). The server must additionally
+        # bound matching time — see the A4 cross-lane request.
+        rejection = _reject_bad_pattern(expect_regex)
+        if rejection is not None:
+            return rejection
         ok, data = await client.send(
             worker_id,
             hijack_id,
-            keys=_unescape_keys(keys),
+            keys=prepare_keystrokes(keys, max_bytes=MAX_KEYSTROKE_BYTES),
             expect_prompt_id=expect_prompt_id,
             expect_regex=expect_regex,
             timeout_ms=timeout_ms,
@@ -428,6 +486,7 @@ def create_mcp_app(
             connector_type=connector_type,
             url=url,
             port=port,
+            host=host,
         )
         if rejection is not None:
             return rejection
@@ -519,6 +578,9 @@ def create_mcp_app(
         max_events:
             Maximum events to collect before returning early.
         """
+        rejection = _reject_bad_pattern(pattern)
+        if rejection is not None:
+            return rejection
         ok, data = await client.watch_session_events(
             session_id,
             event_types=event_types,
@@ -563,6 +625,11 @@ def create_mcp_app(
             Maximum events to collect before returning early (clamped to
             1-500).
         """
+        # Bound the attacker-supplied pattern up front (length cap → ReDoS
+        # mitigation) before any compile/match work happens.
+        rejection = _reject_bad_pattern(pattern)
+        if rejection is not None:
+            return rejection
         clamped_duration_s = min(max(duration_s, 1.0), 120.0)
         clamped_max_events = min(max(max_events, 1), 500)
         ok, data = await client.watch_session_events(
@@ -576,23 +643,20 @@ def create_mcp_app(
         # Re-check each event's screen text against the compiled regex rather
         # than trusting that "events arrived" implies "pattern matched" — the
         # registry fallback path (no EventBus) does not pre-filter events.
+        # The pattern is already validated above, so the compile cannot fail.
         matched = False
         if pattern and ok:
-            try:
-                compiled = re.compile(pattern)
-            except re.error:
-                compiled = None
-            if compiled is not None:
-                for event in data.get("events", []):
-                    if not isinstance(event, dict):
-                        continue
-                    payload = event.get("data") or {}
-                    screen = payload.get("screen", "") if isinstance(payload, dict) else ""
-                    if not isinstance(screen, str):
-                        screen = str(screen)
-                    if compiled.search(screen):
-                        matched = True
-                        break
+            compiled = _compile_user_pattern(pattern)
+            for event in data.get("events", []):
+                if not isinstance(event, dict):
+                    continue
+                payload = event.get("data") or {}
+                screen = payload.get("screen", "") if isinstance(payload, dict) else ""
+                if not isinstance(screen, str):
+                    screen = str(screen)
+                if compiled.search(screen):
+                    matched = True
+                    break
         result = _ok(ok, data)
         result["matched_pattern"] = matched
         return result
