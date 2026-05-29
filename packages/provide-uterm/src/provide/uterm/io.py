@@ -86,7 +86,9 @@ class PromptWaiter:
             return False
         if on_prompt_rejected:
             on_prompt_rejected(detected_full, "not_idle")
-        remaining_idle = getattr(self.session, "seconds_until_idle", lambda _t=2.0: read_interval_sec)()
+        # Fallback takes no args (it is invoked as ``()`` below); a defaulted
+        # unused parameter would only add a dead, inert literal to mutate.
+        remaining_idle = getattr(self.session, "seconds_until_idle", lambda: read_interval_sec)()
         wait_ms = int(max(1, min(remaining_idle, timeout_sec - elapsed) * 1000))
         await self.session.wait_for_update(timeout_ms=wait_ms)  # type: ignore[union-attr]  # ty:ignore[unresolved-attribute]
         return True
@@ -116,13 +118,16 @@ class PromptWaiter:
     async def wait_for_prompt(
         self,
         expected_prompt_id: str | None = None,
-        timeout_ms: int = 10000,
-        read_interval_ms: int = 250,
+        # The mutmut trampoline captures these public-API defaults from the
+        # outer wrapper and passes them positionally into the mutant body, so
+        # mutating the literal here is inert (unkillable trampoline artefact).
+        timeout_ms: int = 10000,  # pragma: no mutate
+        read_interval_ms: int = 250,  # pragma: no mutate
         on_prompt_detected: Callable[[dict[str, Any]], bool] | None = None,
         on_prompt_seen: Callable[[dict[str, Any]], None] | None = None,
         on_prompt_rejected: Callable[[dict[str, Any], str], None] | None = None,
-        require_idle: bool = True,
-        idle_grace_ratio: float = 0.8,
+        require_idle: bool = True,  # pragma: no mutate
+        idle_grace_ratio: float = 0.8,  # pragma: no mutate
     ) -> dict[str, Any]:
         """Poll the session until a matching prompt is detected.
 
@@ -217,8 +222,10 @@ class InputSender:
     async def send_input(
         self,
         keys: str,
-        input_type: str | None = "multi_key",
-        wait_after_sec: float = 0.2,
+        # mutmut trampoline passes these defaults positionally from the outer
+        # wrapper, so mutating the literal here is inert (trampoline artefact).
+        input_type: str | None = "multi_key",  # pragma: no mutate
+        wait_after_sec: float = 0.2,  # pragma: no mutate
     ) -> None:
         """Send input respecting prompt type.
 
