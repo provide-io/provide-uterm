@@ -142,3 +142,32 @@ async def test_broadcast_builds_policy_context_per_distinct_role() -> None:
     await hub.broadcast(worker_id, {"type": "term", "data": "x"})
 
     assert calls == 2, f"expected one build per distinct role (2), got {calls}"
+
+
+@pytest.mark.asyncio
+async def test_hub_output_gate_empty_rules_sends_unredacted_default() -> None:
+    """A configured output gate that returns *no* rules falls through to the
+    default (unredacted) payload.
+
+    Covers the empty-rules ``else`` branch in ``broadcast`` (the gate is active
+    so the redaction path runs, but ``get_redaction_rules`` returns ``[]`` so
+    the cached default frame is used)."""
+    gate = MockOutputPolicy([])  # active gate, but no redaction rules
+    hub = TermHub(output_policy_gate=gate)
+
+    ws = AsyncMock()
+    worker_id = "w1"
+    await hub.register_worker(worker_id, AsyncMock())
+    await hub.register_browser(worker_id, ws, "viewer")
+
+    raw_data = "plain terminal output with no secrets"
+    await hub.broadcast(worker_id, {"type": "term", "data": raw_data})
+
+    found_plain = False
+    decoder = ControlChannelDecoder()
+    for call in ws.send_text.call_args_list:
+        payload = call[0][0]
+        for event in decoder.feed(payload):
+            if event.kind == "data" and raw_data in event.data:
+                found_plain = True
+    assert found_plain, "default (unredacted) terminal data was not broadcast"
