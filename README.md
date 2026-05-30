@@ -295,19 +295,20 @@ docker compose -f docker/docker-compose.yml up
 | `provide-uterm-client` | Client: HTTP/WS client, transports, AI/MCP | ~690 |
 | `provide-uterm-platform` | Platform: PTY, PAM, capture, External Management Tier | ~780 |
 | `provide-uterm-cloudflare` | CF Worker + Durable Object | ~890 |
+| `provide-uterm-annotation` | Annotation layer | — |
 | `provide-uterm-frontend` | Browser UI (TypeScript, xterm.js) | — |
 | `provide-uterm-app` | App shell | — |
 
-All packages at 100% branch+line coverage. 8760+ tests total.
+All Python packages at 100% branch+line coverage. 8760+ tests total.
 
 ---
 
 ## Security & Quality
 
-- **Auth modes** — `dev` (local), `jwt` (production), fail-closed on misconfiguration
+- **Auth modes** — `dev_token` (local), `jwt` (production), `header`, `api_key`, `webhook`; fail-closed on misconfiguration <!-- pragma: allowlist secret -->
 - **Security headers** — CSP, HSTS, X-Frame-Options, SRI integrity hashes (configurable per-header)
 - **100% branch coverage** — enforced via `--cov-fail-under=100` in every package
-- **Pre-commit** — ruff, mypy strict, ty, bandit, biome (TS/JS) on every commit
+- **Pre-commit** — ruff, reuse, codespell, bandit, detect-secrets on every commit; mypy/ty/frontend hooks are manual-staged
 - **Security audit** — `pip-audit`, `bandit`, timing-safe token comparison
 
 ---

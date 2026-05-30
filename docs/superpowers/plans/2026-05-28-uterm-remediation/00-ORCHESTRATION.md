@@ -70,7 +70,7 @@ These come from `CLAUDE.md` (project + user global) and the existing CI gates. E
 
 1. **TDD, red→green.** Before editing any production file, the lane MUST read the surrounding code, then write a failing test that pins the corrected behavior, confirm it fails, implement, confirm it passes. Exact `pytest` invocations are in each plan.
 2. **100% branch+line coverage** is enforced on the measured perimeter (`--cov-fail-under=100`). Any new prod branch needs a covering test. Do not add `# pragma: no cover` to dodge this — if you think a branch is unreachable, prove it in the test or raise it as a cross-lane request.
-3. **100% mutation kill** on the curated perimeter (auth, token hashing, intercept denylist, lease state machine, frame schemas, hub services). Lanes A1/A4/A5 touch perimeter files and MUST run `uv run python scripts/run_mutation_gate.py --changed-only` before declaring done.
+3. **100% mutation kill** on the curated perimeter (auth, token hashing, intercept denylist, lease state machine, frame schemas, hub services). Lanes A1/A4/A5 touch perimeter files and MUST run `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100` before declaring done.
 4. **SPDX headers** on every new file (tests and scripts included):
    ```
    #
@@ -112,7 +112,7 @@ uv run python scripts/run_all_tests.py
 uv run python scripts/run_pytest_gate.py -q
 
 # 3. Mutation gate on everything touched on the branch
-uv run python scripts/run_mutation_gate.py --changed-only
+uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 
 # 4. Frontend
 npm ci && npm run build:frontend && npm run typecheck:frontend && npm run lint:frontend

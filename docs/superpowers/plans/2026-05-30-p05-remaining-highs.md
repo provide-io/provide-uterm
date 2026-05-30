@@ -401,7 +401,7 @@ uv run python scripts/run_all_tests.py
 Expected: "All package test suites passed", every package 100% coverage, 0 failures. Then mutation gate on changed perimeter files:
 
 ```bash
-uv run python scripts/run_mutation_gate.py --changed-only
+uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 ```
 
 If a mutant survives, add a pinning test (e.g. Task 1: assert the *legit* small SB still parses AND the oversized one is dropped; Task 4: assert all four `session is None` branches).

@@ -12,6 +12,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (CB-2 🟠): Discard `_paused_browsers` on disconnect
 
 **Files:**
@@ -194,7 +196,7 @@ async def test_broadcast_builds_policy_context_once_per_frame(hub, monkeypatch):
 ### Done criteria (Lane A4)
 - [ ] `uv run pytest packages/provide-uterm-server/tests/ -q` green
 - [ ] `uv run ruff check --fix && uv run ruff format && uv run mypy packages/provide-uterm-server/src/`
-- [ ] `uv run python scripts/run_mutation_gate.py --changed-only` → 0 survivors on touched hub/auth files
+- [ ] `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100` → 0 survivors on touched hub/auth files
 - [ ] 6 commits, one per task. Signal A4 complete so B1 can start.
 - [ ] If A2 filed a cross-lane request for server-side regex matching bounds, address it (add a length cap where the server compiles `expect_regex`/`pattern`) as an extra task + commit.
 

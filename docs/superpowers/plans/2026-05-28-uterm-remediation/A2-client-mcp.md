@@ -12,6 +12,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (MCP-send 🟠 High): Sanitize `hijack_send` keystrokes
 
 **Files:**

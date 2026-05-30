@@ -10,6 +10,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (INF-tel 🟠 High): Resolve the `provide-telemetry` editable-sibling discrepancy
 
 **Files:** Modify `/pyproject.toml` (`[tool.uv.sources]`), regenerate `/uv.lock`; and/or correct `/CLAUDE.md`.

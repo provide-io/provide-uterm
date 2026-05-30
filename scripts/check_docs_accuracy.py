@@ -63,7 +63,22 @@ def _style_violations(path: Path, content: str) -> list[str]:
         violations.append(f"{path}: empty markdown file")
         return violations
 
-    first_non_empty = next((line for line in lines if line.strip()), "")
+    # Skip leading HTML comment blocks (e.g. SPDX licence headers) when
+    # determining the first meaningful line.
+    in_html_comment = False
+    first_non_empty = ""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("<!--"):
+            in_html_comment = True
+        if in_html_comment:
+            if "-->" in stripped:
+                in_html_comment = False
+            continue
+        first_non_empty = line
+        break
     if not first_non_empty.startswith("# "):
         violations.append(f"{path}: first non-empty line must be H1 heading")
 
@@ -145,6 +160,116 @@ def _claim_violations(path: Path, content: str) -> list[str]:
     return violations
 
 
+def _structural_claim_violations(root: Path) -> list[str]:
+    """Cross-file structural checks: live code/config vs documented claims."""
+    violations: list[str] = []
+
+    # --- 1. Coverage threshold ---
+    # Every package pyproject.toml that enables --cov in addopts must also set
+    # --cov-fail-under=100.  This reflects the "100% coverage enforced" claim.
+    for pyproject in sorted((root / "packages").glob("*/pyproject.toml")):
+        text = pyproject.read_text(encoding="utf-8")
+        in_pytest_section = False
+        addopts_lines: list[str] = []
+        collecting = False
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped == "[tool.pytest.ini_options]":
+                in_pytest_section = True
+                continue
+            if in_pytest_section and stripped.startswith("[") and stripped != "[tool.pytest.ini_options]":
+                in_pytest_section = False
+                collecting = False
+            if in_pytest_section:
+                if stripped.startswith("addopts"):
+                    collecting = True
+                if collecting:
+                    addopts_lines.append(stripped)
+                    # Stop collecting at the closing bracket of the array
+                    if "]" in stripped and not stripped.startswith("addopts"):
+                        collecting = False
+        addopts_blob = " ".join(addopts_lines)
+        if "--cov" in addopts_blob and "--cov-fail-under=100" not in addopts_blob:
+            violations.append(f"{pyproject}: addopts enables --cov but is missing --cov-fail-under=100")
+
+    # --- 2. MCP tool count ---
+    # Count @mcp.tool decorators in server_impl.py and compare to README's claim.
+    server_impl = root / "packages/provide-uterm-client/src/provide/uterm/ai/server_impl.py"
+    readme = root / "README.md"
+    if server_impl.exists() and readme.exists():
+        actual_tool_count = server_impl.read_text(encoding="utf-8").count("@mcp.tool")
+        readme_text = readme.read_text(encoding="utf-8")
+        # Match numbers adjacent to "MCP" or "tools for AI agents" (e.g. "21 tools", "21 session")
+        mcp_count_match = re.search(
+            r"(\d+)\s+(?:tools?\s+for\s+AI\s+agents?|session\s+control\s+tools?)", readme_text
+        ) or re.search(r"AI\s+Tools?\s+\(MCP\)[^>]*?(\d+)\s+session", readme_text)
+        if mcp_count_match is None:
+            # Fallback: find any number immediately before or after "tools" near "MCP"
+            mcp_count_match = re.search(r"(\d+)\s+tools?\b.*?MCP|MCP.*?(\d+)\s+tools?\b", readme_text)
+        if mcp_count_match:
+            doc_count_str = next(g for g in mcp_count_match.groups() if g is not None)
+            doc_count = int(doc_count_str)
+            if doc_count != actual_tool_count:
+                for line_no, line in enumerate(readme_text.splitlines(), start=1):
+                    if doc_count_str in line and ("MCP" in line or "tools" in line.lower()):
+                        violations.append(
+                            f"{readme}:{line_no}: MCP tool count says {doc_count},"
+                            f" found {actual_tool_count} @mcp.tool decorators in server_impl.py"
+                        )
+                        break
+
+    # --- 3. Package count ---
+    # Count packages/ subdirectories and compare to CLAUDE.md's "N packages under packages/" claim.
+    claude_md = root / "CLAUDE.md"
+    if claude_md.exists():
+        actual_pkg_count = sum(1 for p in (root / "packages").iterdir() if p.is_dir())
+        claude_text = claude_md.read_text(encoding="utf-8")
+        pkg_count_match = re.search(r"(\d+)\s+packages?\s+under\s+[`']?packages/[`']?", claude_text)
+        if pkg_count_match:
+            doc_pkg_count = int(pkg_count_match.group(1))
+            if doc_pkg_count != actual_pkg_count:
+                for line_no, line in enumerate(claude_text.splitlines(), start=1):
+                    if pkg_count_match.group(0) in line:
+                        violations.append(
+                            f"{claude_md}:{line_no}: says {doc_pkg_count} packages under packages/,"
+                            f" found {actual_pkg_count} directories"
+                        )
+                        break
+
+    # --- 4. Supported version ---
+    # Read VERSION (e.g. "0.4.0"), derive the minor line (e.g. "0.4"), and assert
+    # SECURITY.md's supported-versions table contains a row for that line (e.g. "0.4.x").
+    version_file = root / "VERSION"
+    security_md = root / "SECURITY.md"
+    if version_file.exists() and security_md.exists():
+        version_str = version_file.read_text(encoding="utf-8").strip()
+        parts = version_str.split(".")
+        if len(parts) >= 2:
+            minor_line = f"{parts[0]}.{parts[1]}"  # e.g. "0.4"
+            security_text = security_md.read_text(encoding="utf-8")
+            # Look for the minor line followed by .x (e.g. "0.4.x") in the table
+            if not re.search(rf"\b{re.escape(minor_line)}\b", security_text):
+                violations.append(
+                    f"{security_md}: VERSION is {version_str} but no {minor_line}.x row found"
+                    " in supported-versions table"
+                )
+
+    # --- 5. Removed auth mode ---
+    # The legacy "dev" mode (without _token) was removed; only dev_token is valid.
+    # Violation if README lists "dev" as a standalone auth mode label (e.g. "dev (local)").
+    if readme.exists():
+        readme_text = readme.read_text(encoding="utf-8")
+        # Match "dev" preceded by a word boundary and followed by a space/paren (not "_token")
+        for line_no, line in enumerate(readme_text.splitlines(), start=1):
+            # Matches: "dev (local)", "`dev`", "| dev |" — but NOT "dev_token"
+            if (re.search(r"\bdev\s*\(", line) or re.search(r"[`|]\s*dev\s*[`|]", line)) and "dev_token" not in line:
+                violations.append(
+                    f"{readme}:{line_no}: references removed 'dev' auth mode; current mode is 'dev_token'"
+                )
+
+    return violations
+
+
 def _architecture_diagram_violations(path: Path, content: str) -> list[str]:
     violations: list[str] = []
     if path.name != "ARCHITECTURE.md":
@@ -175,6 +300,7 @@ def check_docs(root: Path) -> list[str]:
         violations.extend(_link_violations(resolved_path, content, anchor_map))
         violations.extend(_claim_violations(resolved_path, content))
         violations.extend(_architecture_diagram_violations(resolved_path, content))
+    violations.extend(_structural_claim_violations(root))
     return sorted(violations)
 
 

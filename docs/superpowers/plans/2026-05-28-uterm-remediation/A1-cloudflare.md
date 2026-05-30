@@ -12,6 +12,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (CB-3 🔴 Critical): Remove `dev`/`none` admin bypass from the worker
 
 **Files:**
@@ -164,7 +166,7 @@ async def test_restored_lease_uses_wall_clock(do_store, monkeypatch):
 ### Done criteria (Lane A1)
 - [ ] `uv run pytest packages/provide-uterm-cloudflare/tests/ -q` green
 - [ ] `uv run ruff check --fix && uv run ruff format && uv run mypy packages/provide-uterm-cloudflare/src/`
-- [ ] `uv run python scripts/run_mutation_gate.py --changed-only` → 0 survivors on touched CF auth/lease files
+- [ ] `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100` → 0 survivors on touched CF auth/lease files
 - [ ] `.ci/check_cf_vendor_tree.sh` still passes (no vendor drift)
 - [ ] 4 commits, one per task. Signal A1 complete so B1 can start.
 
