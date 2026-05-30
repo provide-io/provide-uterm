@@ -220,8 +220,6 @@ async def test_webhook_unregister_stops_delivery(shell_server: Any) -> None:
 
 
 async def test_webhook_hmac_signature_header(shell_server: Any) -> None:
-    import hashlib
-    import hmac as stdlib_hmac
 
     hub, base_url = shell_server
     secret = "e2e-secret"
@@ -272,9 +270,14 @@ async def test_webhook_hmac_signature_header(shell_server: Any) -> None:
     assert captured, "no webhook delivery received"
     body, headers = captured[0]
     sig_header = headers.get("x-uterm-signature", "")
+    ts_header = headers.get("x-uterm-timestamp", "")
     assert sig_header.startswith("sha256=")
-    expected = "sha256=" + stdlib_hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    assert sig_header == expected
+    assert ts_header != "", "X-Uterm-Timestamp must be present for replay-resistant signing"
+    assert "x-webhook-secret" not in headers, "cleartext secret must not appear in delivery headers"
+    # Verify signature covers ts.body (timestamped HMAC scheme).
+    from provide.uterm.server.webhook_signing import verify_webhook_signature
+
+    assert verify_webhook_signature(secret, body, sig_header, ts_header) is True
 
 
 # ---------------------------------------------------------------------------
