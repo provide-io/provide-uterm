@@ -220,6 +220,15 @@ def _validate_session_create_config(
                 "error": "invalid_url_scheme",
                 "scheme": scheme or "<missing>",
             }
+        from urllib.parse import urlparse
+
+        parsed_host = urlparse(url).hostname
+        if parsed_host is not None and _is_internal_host(parsed_host):
+            return {
+                "success": False,
+                "error": "invalid_host",
+                "host": parsed_host,
+            }
     if host is not None and _is_internal_host(host):
         return {
             "success": False,

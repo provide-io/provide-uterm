@@ -217,6 +217,51 @@ class TestSessionCreateHostValidation:
 
 
 # ---------------------------------------------------------------------------
+# MCP-host: validate session_create host INSIDE url (SSRF via url argument)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionCreateUrlHostValidation:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "ws://169.254.169.254/term",
+            "ws://127.0.0.1:8080",
+            "wss://10.0.0.5/terminal",
+            "ws://[::1]:9000/x",
+            "ws://localhost:8080/term",
+            "wss://metadata.google.internal/term",
+            "ws://192.168.1.1/term",
+        ],
+    )
+    def test_validate_rejects_internal_host_in_url(self, url: str) -> None:
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        rejection = _validate_session_create_config(connector_type="websocket", url=url, port=None)
+        assert rejection is not None
+        assert rejection["error"] == "invalid_host"
+
+    def test_validate_allows_external_host_in_url(self) -> None:
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        result = _validate_session_create_config(
+            connector_type="websocket", url="wss://example.com:443/term", port=None
+        )
+        assert result is None or result.get("error") != "invalid_host"
+
+    async def test_session_create_rejects_internal_host_in_url_over_mcp(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        data = await _call(
+            mcp,
+            "session_create",
+            {"connector_type": "websocket", "url": "ws://169.254.169.254/term"},
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_host"
+
+
+# ---------------------------------------------------------------------------
 # MCP-redos: bound user-supplied regex
 # ---------------------------------------------------------------------------
 
