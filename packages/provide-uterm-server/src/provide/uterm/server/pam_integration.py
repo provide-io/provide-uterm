@@ -134,7 +134,7 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
         elif ev.event == "close":  # pragma: no branch
             await _on_close(ev, pam_cfg, registry, _bridges)
 
-    listener = PamNotifyListener(pam_cfg.notify_socket)
+    listener = PamNotifyListener(pam_cfg.notify_socket, require_peer_uids=pam_cfg.require_peer_uids)
     await listener.start(handle)
     logger.info(
         "pam_integration started socket=%s mode=%s auto_session=%s",
@@ -163,7 +163,7 @@ async def _on_open(
     cfg = pam_cfg
 
     if cfg.mode == "capture" and ev.capture_socket:
-        await _create_capture_session(ev, registry)
+        await _create_capture_session(ev, cfg, registry)
     elif cfg.auto_session:
         await _create_notify_session(ev, cfg, registry)
 
@@ -267,10 +267,43 @@ async def _create_notify_session(event: PamEvent, pam_cfg: PamConfig, registry: 
 # ── capture mode ──────────────────────────────────────────────────────────────
 
 
-async def _create_capture_session(event: PamEvent, registry: SessionRegistry) -> None:
+async def _create_capture_session(event: PamEvent, pam_cfg: PamConfig, registry: SessionRegistry) -> None:
     ev = event
     if ev.capture_socket is None:
         return
+
+    # ── capture_socket path confinement ──────────────────────────────────────
+    # Determine the trusted base directory for capture sockets.
+    # Priority: explicit capture_socket_dir > parent of notify_socket > no confinement.
+    base_dir: str | None = None
+    if pam_cfg.capture_socket_dir:
+        base_dir = pam_cfg.capture_socket_dir
+    elif pam_cfg.notify_socket:
+        from pathlib import Path as _Path
+
+        base_dir = str(_Path(pam_cfg.notify_socket).parent)
+
+    if base_dir is not None:
+        from pathlib import Path as _Path
+
+        try:
+            resolved = str(_Path(ev.capture_socket).resolve())
+            trusted = str(_Path(base_dir).resolve())
+            # Ensure resolved path starts with the trusted directory prefix.
+            # Add os.sep to avoid /run/evil matching /run/uterm prefix falsely.
+            if not (resolved == trusted or resolved.startswith(trusted + "/")):
+                logger.warning(
+                    "pam_capture_socket_confined socket=%r is outside trusted dir=%r — session NOT created",
+                    ev.capture_socket,
+                    base_dir,
+                )
+                return
+        except Exception:
+            logger.warning(
+                "pam_capture_socket_confined failed to resolve socket=%r — session NOT created",
+                ev.capture_socket,
+            )
+            return
 
     session_id = _session_id(ev)
 

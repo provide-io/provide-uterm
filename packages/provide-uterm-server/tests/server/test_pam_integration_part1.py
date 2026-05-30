@@ -275,4 +275,225 @@ def test_pam_config_mode_capture() -> None:
     assert cfg.mode == "capture"
 
 
+# ── capture_socket confinement (Fix 1) ───────────────────────────────────────
+
+
+async def test_create_capture_session_inside_allowed_dir_creates_session() -> None:
+    """capture_socket inside capture_socket_dir → session created."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    import tempfile
+    from pathlib import Path
+
+    from provide.uterm.server.models import PamConfig
+    from provide.uterm.server.pam_integration import _create_capture_session
+
+    with tempfile.TemporaryDirectory() as td:
+        trusted_dir = td
+        sock_path = str(Path(td) / "uterm-cap-1234.sock")
+
+        ev = PamEvent(
+            event="open",
+            username="alice",
+            tty="/dev/pts/3",
+            pid=1234,
+            mode="capture",
+            capture_socket=sock_path,
+        )
+        cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture", capture_socket_dir=trusted_dir)
+        registry = MagicMock()
+        registry.create_session = AsyncMock()
+
+        await _create_capture_session(ev, cfg, registry)
+
+        registry.create_session.assert_awaited_once()
+        payload = registry.create_session.call_args[0][0]
+        assert payload["connector_config"]["socket_path"] == sock_path
+
+
+async def test_create_capture_session_outside_allowed_dir_rejected() -> None:
+    """capture_socket outside capture_socket_dir → session NOT created, warning logged."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    from provide.uterm.server.models import PamConfig
+    from provide.uterm.server.pam_integration import _create_capture_session
+
+    ev = PamEvent(
+        event="open",
+        username="alice",
+        tty="/dev/pts/3",
+        pid=1234,
+        mode="capture",
+        capture_socket="/etc/evil.sock",
+    )
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture", capture_socket_dir="/run")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+
+    await _create_capture_session(ev, cfg, registry)
+
+    # /etc/evil.sock is outside /run → confinement check must reject it
+    registry.create_session.assert_not_awaited()
+
+
+async def test_create_capture_session_no_confinement_basis_creates_session() -> None:
+    """No capture_socket_dir and no notify_socket → no confinement → session created."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    from provide.uterm.server.models import PamConfig
+    from provide.uterm.server.pam_integration import _create_capture_session
+
+    ev = PamEvent(
+        event="open",
+        username="alice",
+        tty="/dev/pts/3",
+        pid=1234,
+        mode="capture",
+        capture_socket="/anywhere/uterm-cap-1234.sock",
+    )
+    # No capture_socket_dir, no notify_socket → no confinement basis
+    cfg = PamConfig()
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+
+    await _create_capture_session(ev, cfg, registry)
+
+    registry.create_session.assert_awaited_once()
+
+
+async def test_create_capture_session_uses_notify_socket_dir_when_no_cap_dir() -> None:
+    """No capture_socket_dir but notify_socket set → confinement derived from notify_socket's parent."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    import tempfile
+    from pathlib import Path
+
+    from provide.uterm.server.models import PamConfig
+    from provide.uterm.server.pam_integration import _create_capture_session
+
+    with tempfile.TemporaryDirectory() as td:
+        notify_sock = str(Path(td) / "uterm-notify.sock")
+        cap_sock = str(Path(td) / "uterm-cap-99.sock")
+
+        ev = PamEvent(
+            event="open",
+            username="alice",
+            tty="/dev/pts/3",
+            pid=99,
+            mode="capture",
+            capture_socket=cap_sock,
+        )
+        cfg = PamConfig(notify_socket=notify_sock)  # no capture_socket_dir
+
+        registry = MagicMock()
+        registry.create_session = AsyncMock()
+
+        await _create_capture_session(ev, cfg, registry)
+
+        # Same directory → allowed
+        registry.create_session.assert_awaited_once()
+
+
+async def test_create_capture_session_notify_dir_rejects_outside() -> None:
+    """notify_socket dir used as confinement basis; outside path rejected."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    import tempfile
+    from pathlib import Path
+
+    from provide.uterm.server.models import PamConfig
+    from provide.uterm.server.pam_integration import _create_capture_session
+
+    with tempfile.TemporaryDirectory() as td:
+        notify_sock = str(Path(td) / "uterm-notify.sock")
+
+        ev = PamEvent(
+            event="open",
+            username="alice",
+            tty="/dev/pts/3",
+            pid=99,
+            mode="capture",
+            capture_socket="/etc/evil.sock",
+        )
+        cfg = PamConfig(notify_socket=notify_sock)  # no capture_socket_dir
+
+        registry = MagicMock()
+        registry.create_session = AsyncMock()
+
+        await _create_capture_session(ev, cfg, registry)
+
+        # /etc/evil.sock is outside td → rejected
+        registry.create_session.assert_not_awaited()
+
+
+# ── PamConfig new fields (Fix 3) ──────────────────────────────────────────────
+
+
+async def test_create_capture_session_path_resolution_error_rejects() -> None:
+    """If Path.resolve() raises, the session is NOT created and a warning is logged."""
+    try:
+        from provide.uterm.pty.pam_listener import PamEvent
+    except ImportError:
+        pytest.skip("provide-uterm-platform not installed")
+
+    from unittest.mock import patch
+
+    from provide.uterm.server.models import PamConfig
+    from provide.uterm.server.pam_integration import _create_capture_session
+
+    ev = PamEvent(
+        event="open",
+        username="alice",
+        tty="/dev/pts/3",
+        pid=99,
+        mode="capture",
+        capture_socket="/run/uterm-cap-99.sock",
+    )
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", capture_socket_dir="/run")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+
+    with patch("pathlib.Path.resolve", side_effect=OSError("simulated resolve failure")):
+        await _create_capture_session(ev, cfg, registry)
+
+    registry.create_session.assert_not_awaited()
+
+
+def test_pam_config_new_fields_default_none() -> None:
+    """capture_socket_dir and require_peer_uids default to None."""
+    from provide.uterm.server.models import PamConfig
+
+    cfg = PamConfig()
+    assert cfg.capture_socket_dir is None
+    assert cfg.require_peer_uids is None
+
+
+def test_pam_config_new_fields_accept_values() -> None:
+    """capture_socket_dir and require_peer_uids accept configured values."""
+    from provide.uterm.server.models import PamConfig
+
+    cfg = PamConfig(
+        notify_socket="/run/uterm-notify.sock",
+        capture_socket_dir="/run/uterm-caps",
+        require_peer_uids=[0, 1000],
+    )
+    assert cfg.capture_socket_dir == "/run/uterm-caps"
+    assert cfg.require_peer_uids == [0, 1000]
+
+
 # ── CF forwarding ─────────────────────────────────────────────────────────────

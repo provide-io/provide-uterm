@@ -241,19 +241,21 @@ class TestPamIntegrationGaps:
         runtime.stop.assert_awaited_once()
 
     async def test_create_capture_session_none_socket_returns_early(self) -> None:
-        """Line 271: _create_capture_session returns early when capture_socket is None."""
+        """_create_capture_session returns early when capture_socket is None."""
         try:
             from provide.uterm.pty.pam_listener import PamEvent
         except ImportError:
             pytest.skip("provide-uterm-platform not installed")
 
+        from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _create_capture_session
 
         ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42, capture_socket=None)
+        cfg = PamConfig()
         registry = MagicMock()
         registry.create_session = AsyncMock()
 
-        await _create_capture_session(ev, registry)
+        await _create_capture_session(ev, cfg, registry)
         registry.create_session.assert_not_awaited()
 
     async def test_safe_create_exception_swallowed(self) -> None:
