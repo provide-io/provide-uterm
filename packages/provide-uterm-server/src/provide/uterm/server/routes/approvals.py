@@ -55,13 +55,11 @@ def create_approvals_router() -> APIRouter:
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
 
-        if approval_req.status != ApprovalStatus.PENDING:
+        if not hub._approval_store.claim(request_id, ApprovalStatus.APPROVED):
             raise HTTPException(status_code=400, detail="Approval request is not pending")
-
         await hub.resolve_approval(
             approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
         )
-        hub._approval_store.resolve(request_id, ApprovalStatus.APPROVED)
         return {"status": "approved"}
 
     @router.post("/{request_id}/reject")
@@ -72,13 +70,11 @@ def create_approvals_router() -> APIRouter:
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
 
-        if approval_req.status != ApprovalStatus.PENDING:
+        if not hub._approval_store.claim(request_id, ApprovalStatus.REJECTED):
             raise HTTPException(status_code=400, detail="Approval request is not pending")
-
         await hub.resolve_approval(
             approval_req.worker_id, request_id, PolicyDecision(action="deny", reason=reason), approval_req.command
         )
-        hub._approval_store.resolve(request_id, ApprovalStatus.REJECTED)
         return {"status": "rejected"}
 
     return router

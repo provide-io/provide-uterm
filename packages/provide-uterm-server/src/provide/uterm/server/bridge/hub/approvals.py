@@ -61,10 +61,30 @@ class InMemoryApprovalStore:
         return self._requests.get(request_id)
 
     def resolve(self, request_id: str, status: ApprovalStatus) -> None:
+        """Transition a PENDING request to *status*.
+
+        Superseded by ``claim()`` for request handling; retained for
+        direct/test use.
+        """
         with self._lock:
             req = self._requests.get(request_id)
             if req and req.status == ApprovalStatus.PENDING:
                 req.status = status
+
+    def claim(self, request_id: str, status: ApprovalStatus) -> bool:
+        """Atomically transition a PENDING request to *status*.
+
+        Returns ``True`` only for the caller that performs the transition, so a
+        held command is resolved — and therefore injected — exactly once even
+        under concurrent approve/reject requests. Callers MUST inject the
+        command only when this returns ``True``.
+        """
+        with self._lock:
+            req = self._requests.get(request_id)
+            if req is None or req.status != ApprovalStatus.PENDING:
+                return False
+            req.status = status
+            return True
 
     async def cleanup_expired(self) -> None:
         now = time.time()
