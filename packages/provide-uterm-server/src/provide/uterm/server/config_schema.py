@@ -187,6 +187,14 @@ class SecurityConfig(ServerBaseModel):
     x_content_type_options: str | None = None
     referrer_policy: str | None = None
     permissions_policy: str | None = None
+    # When True, connector targets that resolve to private / loopback /
+    # link-local / multicast / unspecified / reserved addresses are blocked.
+    # Default False preserves the intended use-case: SSHing into internal
+    # servers is the tool's purpose.  Enable in multi-tenant / hosted
+    # deployments where tenants must not reach the operator's internal network.
+    # Cloud-metadata IPs (169.254.169.254, 100.100.100.200, fd00:ec2::254) are
+    # ALWAYS blocked regardless of this flag.
+    block_private_connector_targets: bool = False
 
 
 class TunnelConfig(ServerBaseModel):
