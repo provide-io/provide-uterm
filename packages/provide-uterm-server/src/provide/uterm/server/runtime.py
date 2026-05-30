@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import time
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -125,6 +126,7 @@ class HostedSessionRuntime:
         self._logger: SessionLogger | None = None
         self._detector = detector
         self._event_seq: int = 0
+        self._at_password_prompt: bool = False
 
     def _ws_url(self) -> str:
         if self._public_base_url.startswith("https://"):
@@ -268,9 +270,10 @@ class HostedSessionRuntime:
                 await connector.stop()
 
     async def _log_snapshot(self, msg: dict[str, Any]) -> None:
+        screen = str(msg.get("screen", ""))
+        self._at_password_prompt = bool(re.search(r"(?i)(?:password|passphrase)[^\n]*:\s*$", screen.rstrip()))
         if self._logger is None:
             return
-        screen = str(msg.get("screen", ""))
         await self._logger.log_screen(msg, screen.encode("cp437", errors="replace"))
         self._event_seq += 1
         if self._detector is not None:
@@ -279,7 +282,10 @@ class HostedSessionRuntime:
 
     async def _log_send(self, data: str) -> None:
         if self._logger is not None:
-            await self._logger.log_send(data)
+            if self._at_password_prompt:
+                await self._logger.log_send_masked(len(data.encode("cp437", errors="replace")))
+            else:
+                await self._logger.log_send(data)
             self._event_seq += 1
             if self._detector is not None:
                 for annotation in self._detector.detect("send", data, seq=self._event_seq):
