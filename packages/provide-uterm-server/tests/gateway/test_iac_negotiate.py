@@ -358,3 +358,20 @@ class TestDerivedColormodeStillWorks:
         n = IacNegotiator()
         n.term = "xterm-256color"
         assert n.derived_colormode() == derive_colormode("xterm-256color", {})
+
+
+class TestSbBufferCap:
+    def test_unterminated_subnegotiation_is_bounded(self) -> None:
+        from provide.uterm.gateway._iac_negotiate import _MAX_SB_BYTES, IacNegotiator
+
+        neg = IacNegotiator()
+        neg.feed(b"\xff\xfa\x18")  # IAC SB TTYPE
+        neg.feed(b"A" * (_MAX_SB_BYTES * 4))
+        assert len(neg._sb_buf) <= _MAX_SB_BYTES
+        assert neg._sb_option is None
+
+    def test_legitimate_small_subnegotiation_still_parses(self) -> None:
+        """A well-formed TTYPE IS within the cap parses normally after the cap is in place."""
+        n = IacNegotiator()
+        n.feed(bytes([IAC, SB, TTYPE, SUB_IS]) + b"xterm-256color" + bytes([IAC, SE]))
+        assert n.term == "xterm-256color"
