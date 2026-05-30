@@ -117,3 +117,50 @@ def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
         respx.post(webhook_url).mock(return_value=Response(500))
         denied = client.get("/api/sessions")
         assert denied.status_code == 401
+
+
+async def test_resolve_browser_role_webhook_idp_none_principal_is_anonymous_viewer(monkeypatch) -> None:
+    """Non-Local IDP browser-role path: a webhook IDP returning None yields an anonymous viewer.
+
+    Covers the ``else`` branch of ``_resolve_browser_role`` (idp is not a
+    ``LocalIdentityProvider``) and its ``principal is None`` fallback.
+    """
+    from types import SimpleNamespace
+
+    config = ServerConfig(
+        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+    )
+    app = create_server_app(config, api_only=True)
+    hub = app.state.uterm_hub
+
+    async def _none(_ws):
+        return None
+
+    monkeypatch.setattr(app.state.uterm_idp, "resolve_principal", _none)
+    # Browser WS with no pre-resolved principal in ws.state; the worker_id is
+    # unregistered (no SessionDefinition) so resolution falls through to viewer.
+    ws = SimpleNamespace(state=SimpleNamespace())
+    role = await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-1")
+    assert role == "viewer"
+
+
+async def test_resolve_browser_role_webhook_idp_principal_role_honored(monkeypatch) -> None:
+    """Non-Local IDP browser-role path: a webhook IDP principal's role is honored.
+
+    Covers the ``principal is not None`` edge of the same ``else`` branch.
+    """
+    from types import SimpleNamespace
+
+    config = ServerConfig(
+        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+    )
+    app = create_server_app(config, api_only=True)
+    hub = app.state.uterm_hub
+
+    async def _admin(_ws):
+        return Principal(subject_id="alice", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
+
+    monkeypatch.setattr(app.state.uterm_idp, "resolve_principal", _admin)
+    ws = SimpleNamespace(state=SimpleNamespace())
+    role = await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-2")
+    assert role == "admin"
