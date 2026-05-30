@@ -5,8 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 from unittest.mock import MagicMock
 
@@ -17,6 +15,7 @@ from starlette.testclient import TestClient
 
 from provide.uterm.server.authorization import AuthorizationService, WebhookAuthorizationProvider
 from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookPolicyGate
+from provide.uterm.server.webhook_signing import verify_webhook_signature
 
 
 @pytest.mark.asyncio
@@ -35,10 +34,11 @@ async def test_webhook_policy_gate_allow() -> None:
     payload = json.loads(route.calls.last.request.content)
     assert payload["worker_id"] == "w1"
     assert payload["data"] == "ls -la"
-    assert route.calls.last.request.headers["X-Webhook-Secret"] == "shhh"
-    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
-    expected = hmac.new(b"shhh", route.calls.last.request.content, hashlib.sha256).hexdigest()
-    assert sig == f"sha256={expected}"
+    assert "X-Webhook-Secret" not in route.calls.last.request.headers
+    req_ts = route.calls.last.request.headers.get("X-Uterm-Timestamp", "")
+    req_sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    assert req_ts != ""
+    assert verify_webhook_signature("shhh", route.calls.last.request.content, req_sig, req_ts) is True
 
 
 @pytest.mark.asyncio
@@ -131,7 +131,11 @@ async def test_webhook_authz_provider_sends_configured_secret_header() -> None:
 
     assert await provider.can_read_session(principal, session) is True
     assert route.called
-    assert route.calls.last.request.headers["X-Webhook-Secret"] == "shhh"
+    assert "X-Webhook-Secret" not in route.calls.last.request.headers
+    req_ts = route.calls.last.request.headers.get("X-Uterm-Timestamp", "")
+    req_sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    assert req_ts != ""
+    assert verify_webhook_signature("shhh", route.calls.last.request.content, req_sig, req_ts) is True
 
 
 @pytest.mark.asyncio

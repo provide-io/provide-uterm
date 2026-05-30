@@ -218,13 +218,11 @@ async def test_noop_fanout_audit_output_gates_allow_by_default() -> None:
 
 
 async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
-    import hashlib
-    import hmac
-
     import httpx
     import respx
 
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookFanOutPolicyGate
+    from provide.uterm.server.webhook_signing import verify_webhook_signature
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={"k": "v"})
     gate = WebhookFanOutPolicyGate(url="http://hook.test/fanout", secret="s", timeout_s=1.0)
@@ -237,10 +235,12 @@ async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
         d = await gate.intercept_fanout("ls", ctx, group_id="g1")
     assert d.action == "deny"
     assert d.reason == "policy"
-    assert route.calls.last.request.headers["X-Webhook-Secret"] == "s"
-    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
-    expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
-    assert sig == f"sha256={expected}"
+    # X-Webhook-Secret must be absent; timestamped HMAC must be present and valid.
+    assert "X-Webhook-Secret" not in route.calls.last.request.headers
+    req_ts = route.calls.last.request.headers.get("X-Uterm-Timestamp", "")
+    req_sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    assert req_ts != ""
+    assert verify_webhook_signature("s", route.calls.last.request.content, req_sig, req_ts) is True
 
     # Non-200 -> deny
     with respx.mock(assert_all_called=False) as r:
@@ -254,8 +254,6 @@ async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
 
 
 async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
-    import hashlib
-    import hmac
     import time as _time
 
     import httpx
@@ -267,6 +265,7 @@ async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
         PolicyContext,
         WebhookBehavioralAuditGate,
     )
+    from provide.uterm.server.webhook_signing import verify_webhook_signature
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={})
     heur = ConnectionHeuristics(cps=0.0, jitter=0.0, timestamp=_time.time())
@@ -277,10 +276,12 @@ async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
     with respx.mock(assert_all_called=False) as r:
         route = r.post("http://hook.test/audit").mock(return_value=httpx.Response(200, json={"action": "deny"}))
         assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
-    assert route.calls.last.request.headers["X-Webhook-Secret"] == "s"
-    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
-    expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
-    assert sig == f"sha256={expected}"
+    # X-Webhook-Secret must be absent; timestamped HMAC must be present and valid.
+    assert "X-Webhook-Secret" not in route.calls.last.request.headers
+    req_ts = route.calls.last.request.headers.get("X-Uterm-Timestamp", "")
+    req_sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    assert req_ts != ""
+    assert verify_webhook_signature("s", route.calls.last.request.content, req_sig, req_ts) is True
 
     # Non-200 -> deny (fail closed by default)
     with respx.mock(assert_all_called=False) as r:
@@ -294,13 +295,11 @@ async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
 
 
 async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -> None:
-    import hashlib
-    import hmac
-
     import httpx
     import respx
 
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
+    from provide.uterm.server.webhook_signing import verify_webhook_signature
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={})
     gate = WebhookOutputPolicyGate(url="http://hook.test/output", secret="s", timeout_s=1.0)
@@ -313,10 +312,12 @@ async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -
     assert len(rules) == 1
     assert rules[0].pattern == r"\d+"
     assert rules[0].replacement == "###"
-    assert route.calls.last.request.headers["X-Webhook-Secret"] == "s"
-    sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
-    expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
-    assert sig == f"sha256={expected}"
+    # X-Webhook-Secret must be absent; timestamped HMAC must be present and valid.
+    assert "X-Webhook-Secret" not in route.calls.last.request.headers
+    req_ts = route.calls.last.request.headers.get("X-Uterm-Timestamp", "")
+    req_sig = route.calls.last.request.headers.get("X-Uterm-Signature", "")
+    assert req_ts != ""
+    assert verify_webhook_signature("s", route.calls.last.request.content, req_sig, req_ts) is True
 
     # Non-200 -> empty list
     with respx.mock(assert_all_called=False) as r:

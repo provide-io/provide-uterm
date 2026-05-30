@@ -4,9 +4,8 @@
 #
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -14,6 +13,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from provide.telemetry import event
+from provide.uterm.server.webhook_signing import build_webhook_signature
 
 
 @dataclass(frozen=True)
@@ -280,7 +280,7 @@ def _encode_webhook_payload(payload: dict[str, Any]) -> bytes:
 def _build_webhook_headers(secret: str | None, body: bytes) -> dict[str, str]:
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if secret:
-        headers["X-Webhook-Secret"] = secret
-        sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-        headers["X-Uterm-Signature"] = f"sha256={sig}"
+        ts = str(time.time())
+        headers["X-Uterm-Timestamp"] = ts
+        headers["X-Uterm-Signature"] = build_webhook_signature(secret, body, ts)
     return headers
