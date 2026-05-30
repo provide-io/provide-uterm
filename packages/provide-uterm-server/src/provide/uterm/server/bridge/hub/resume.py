@@ -23,6 +23,7 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from provide.uterm.control.plane.errors import ControlPlaneConflictError
 from provide.uterm.control.plane.token.types import ResumeTokenRecord
 
 if TYPE_CHECKING:
@@ -51,6 +52,9 @@ class ResumeTokenStore(Protocol):
 
     async def get(self, token: str) -> ResumeSession | None:
         """Look up a token, returning ``None`` if expired or not found."""
+
+    async def consume(self, token: str) -> ResumeSession | None:
+        """Atomically validate and revoke a token (single-use). Returns None if already used or expired."""
 
     async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
         """Flag that the session held (or lost) hijack ownership at disconnect."""
@@ -97,6 +101,14 @@ class InMemoryResumeStore:
             return None
         return session
 
+    async def consume(self, token: str) -> ResumeSession | None:
+        session = self._tokens.pop(token, None)
+        if session is None:
+            return None
+        if time.monotonic() > session.expires_at:
+            return None
+        return session
+
     async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:
         session = self._tokens.get(token)
         if session is not None:
@@ -129,6 +141,8 @@ class _ControlPlaneResumeTokenStore(Protocol):
     async def get_resume_token(self, token_value: str) -> Any | None: ...
 
     async def revoke_resume_token(self, token_value: str, revoked_at: float) -> None: ...
+
+    async def consume_resume_token(self, token_value: str, revoked_at: float) -> Any | None: ...
 
 
 @runtime_checkable
@@ -204,6 +218,37 @@ class ControlPlaneResumeStore:
             )
 
         result: ResumeSession | None = await self._run_tx(_op)
+        return result
+
+    async def consume(self, token: str) -> ResumeSession | None:
+        async def _op(store: _ControlPlaneResumeTokenStore) -> ResumeSession | None:
+            record = await store.consume_resume_token(token, time.time())
+            if record is None:
+                self._created_at_mono.pop(token, None)
+                return None
+            now_wall = time.time()
+            now_mono = time.monotonic()
+            if now_wall > float(record.expires_at):
+                self._created_at_mono.pop(token, None)
+                return None
+            age_s = max(0.0, now_wall - float(record.created_at))
+            created_at = self._created_at_mono.get(token, now_mono - age_s)
+            expires_at = now_mono + max(0.0, float(record.expires_at) - now_wall)
+            self._created_at_mono.pop(token, None)
+            return ResumeSession(
+                token=str(record.token_value),
+                worker_id=str(record.session_id),
+                role=str(record.role),
+                created_at=created_at,
+                expires_at=expires_at,
+                was_hijack_owner=bool(record.was_hijack_owner),
+                wall_created_at=float(record.created_at),
+            )
+
+        try:
+            result: ResumeSession | None = await self._run_tx(_op)
+        except ControlPlaneConflictError:
+            return None
         return result
 
     async def mark_hijack_owner(self, token: str, is_owner: bool) -> None:

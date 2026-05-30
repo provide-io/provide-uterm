@@ -37,3 +37,10 @@ class MemoryTokenStore:
         if record is None:
             return
         self._state.resume_tokens[token_value] = replace(record, revoked_at=revoked_at)
+
+    async def consume_resume_token(self, token_value: str, revoked_at: float) -> ResumeTokenRecord | None:
+        record = self._state.resume_tokens.get(token_value)
+        if record is None or record.revoked_at is not None:
+            return None
+        self._state.resume_tokens[token_value] = replace(record, revoked_at=revoked_at)
+        return record
