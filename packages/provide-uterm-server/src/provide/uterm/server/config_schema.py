@@ -356,6 +356,10 @@ class PamConfig(ServerBaseModel):
     auto_session_command: str = "/bin/bash"
     relay_url: str | None = None
     relay_token: str | None = None
+    # Confine capture sockets to this dir (None → derive from notify_socket's parent dir)
+    capture_socket_dir: str | None = None
+    # Opt-in: only these peer euids may send notify events (None → don't enforce, log only)
+    require_peer_uids: list[int] | None = None
 
     @model_validator(mode="after")
     def _validate_outbound_url_schemes(self) -> PamConfig:

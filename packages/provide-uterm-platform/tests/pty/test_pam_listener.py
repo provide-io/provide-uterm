@@ -338,3 +338,229 @@ async def test_notify_socket_is_owner_only(tmp_path) -> None:
         assert mode == 0o600
     finally:
         await listener.stop()
+
+
+# ── peer-uid auth (Fix 2) ─────────────────────────────────────────────────────
+
+
+async def test_peer_uid_allowed_when_in_allowlist(tmp_path) -> None:
+    """require_peer_uids=[0] + peer euid 0 → connection allowed, handler called."""
+    path = str(tmp_path / "notify.sock")
+    events: list[PamEvent] = []
+    listener = PamNotifyListener(path, require_peer_uids=[0])
+    # Monkeypatch _peer_euid to return 0 (root)
+    listener._peer_euid = lambda w: 0  # type: ignore[method-assign]
+
+    await listener.start(lambda e: _collect(events, e))
+
+    reader, writer = await asyncio.open_unix_connection(path)
+    writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+    await asyncio.sleep(0.05)
+
+    await listener.stop()
+    assert len(events) == 1
+
+
+async def test_peer_uid_rejected_when_not_in_allowlist(tmp_path) -> None:
+    """require_peer_uids=[0] + peer euid 1000 → connection rejected, handler NOT called."""
+    path = str(tmp_path / "notify.sock")
+    events: list[PamEvent] = []
+    listener = PamNotifyListener(path, require_peer_uids=[0])
+    # Monkeypatch _peer_euid to return 1000 (unprivileged user)
+    listener._peer_euid = lambda w: 1000  # type: ignore[method-assign]
+
+    await listener.start(lambda e: _collect(events, e))
+
+    reader, writer = await asyncio.open_unix_connection(path)
+    writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+    await asyncio.sleep(0.05)
+
+    await listener.stop()
+    # Rejected: handler must not have been called
+    assert len(events) == 0
+
+
+async def test_peer_uid_no_enforcement_when_allowlist_none(tmp_path) -> None:
+    """require_peer_uids=None (default) → no enforcement, even euid 1000 allowed."""
+    path = str(tmp_path / "notify.sock")
+    events: list[PamEvent] = []
+    listener = PamNotifyListener(path, require_peer_uids=None)
+    listener._peer_euid = lambda w: 1000  # type: ignore[method-assign]
+
+    await listener.start(lambda e: _collect(events, e))
+
+    reader, writer = await asyncio.open_unix_connection(path)
+    writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+    await asyncio.sleep(0.05)
+
+    await listener.stop()
+    assert len(events) == 1
+
+
+async def test_peer_uid_none_platform_allowed_with_warning(tmp_path) -> None:
+    """_peer_euid returning None (unsupported platform) → allowed (warn, not reject)."""
+    path = str(tmp_path / "notify.sock")
+    events: list[PamEvent] = []
+    listener = PamNotifyListener(path, require_peer_uids=[0])
+    # Simulate macOS: SO_PEERCRED unavailable
+    listener._peer_euid = lambda w: None  # type: ignore[method-assign]
+
+    await listener.start(lambda e: _collect(events, e))
+
+    reader, writer = await asyncio.open_unix_connection(path)
+    writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+    await asyncio.sleep(0.05)
+
+    await listener.stop()
+    # Platform without SO_PEERCRED → allow (chmod 0o600 is the baseline)
+    assert len(events) == 1
+
+
+def test_peer_euid_returns_none_without_so_peercred(tmp_path) -> None:
+    """_peer_euid returns None when SO_PEERCRED is unavailable on the platform."""
+    import socket as _socket
+
+    listener = PamNotifyListener(str(tmp_path / "s.sock"))
+    writer = MagicMock()
+    writer.get_extra_info = MagicMock(return_value=None)
+
+    # Simulate platform without SO_PEERCRED
+    orig = getattr(_socket, "SO_PEERCRED", None)
+    try:
+        if hasattr(_socket, "SO_PEERCRED"):
+            del _socket.SO_PEERCRED  # type: ignore[attr-defined]
+        result = listener._peer_euid(writer)
+        assert result is None
+    finally:
+        if orig is not None:
+            _socket.SO_PEERCRED = orig  # type: ignore[attr-defined]
+
+
+def test_peer_euid_returns_none_when_socket_is_none(tmp_path) -> None:
+    """_peer_euid returns None when get_extra_info('socket') returns None."""
+    import socket as _socket
+
+    listener = PamNotifyListener(str(tmp_path / "s.sock"))
+    writer = MagicMock()
+    writer.get_extra_info = MagicMock(return_value=None)
+
+    # Ensure SO_PEERCRED is present so we exercise line 128-130 (sock is None branch)
+    fake_so_peercred = getattr(_socket, "SO_PEERCRED", 17)
+    orig_peercred = getattr(_socket, "SO_PEERCRED", None)
+    try:
+        _socket.SO_PEERCRED = fake_so_peercred  # type: ignore[attr-defined]
+        result = listener._peer_euid(writer)
+    finally:
+        if orig_peercred is None and hasattr(_socket, "SO_PEERCRED"):
+            del _socket.SO_PEERCRED  # type: ignore[attr-defined]
+        elif orig_peercred is not None:
+            _socket.SO_PEERCRED = orig_peercred  # type: ignore[attr-defined]
+
+    assert result is None
+
+
+def test_peer_euid_handles_getsockopt_oserror(tmp_path) -> None:
+    """_peer_euid returns None when getsockopt raises OSError."""
+    import socket as _socket
+
+    so_peercred = getattr(_socket, "SO_PEERCRED", None)
+    if so_peercred is None:
+        pytest.skip("SO_PEERCRED not available on this platform")
+
+    listener = PamNotifyListener(str(tmp_path / "s.sock"))
+    mock_sock = MagicMock()
+    mock_sock.getsockopt = MagicMock(side_effect=OSError("permission denied"))
+    writer = MagicMock()
+    writer.get_extra_info = MagicMock(return_value=mock_sock)
+
+    result = listener._peer_euid(writer)
+    assert result is None
+
+
+def test_peer_euid_returns_uid_when_so_peercred_available(tmp_path) -> None:
+    """_peer_euid returns the uid from getsockopt when SO_PEERCRED is available."""
+    import socket as _socket
+    import struct
+
+    listener = PamNotifyListener(str(tmp_path / "s.sock"))
+    # Simulate getsockopt returning pid=100, uid=42, gid=1000 packed as 3i
+    fake_raw = struct.pack("3i", 100, 42, 1000)
+    mock_sock = MagicMock()
+    mock_sock.getsockopt = MagicMock(return_value=fake_raw)
+    writer = MagicMock()
+    writer.get_extra_info = MagicMock(return_value=mock_sock)
+
+    # Install a fake SO_PEERCRED if not available so the code path executes
+    fake_so_peercred = getattr(_socket, "SO_PEERCRED", 17)
+    orig_peercred = getattr(_socket, "SO_PEERCRED", None)
+    try:
+        _socket.SO_PEERCRED = fake_so_peercred  # type: ignore[attr-defined]
+        result = listener._peer_euid(writer)
+    finally:
+        if orig_peercred is None and hasattr(_socket, "SO_PEERCRED"):
+            del _socket.SO_PEERCRED  # type: ignore[attr-defined]
+        elif orig_peercred is not None:
+            _socket.SO_PEERCRED = orig_peercred  # type: ignore[attr-defined]
+
+    assert result == 42
+
+
+def test_peer_euid_returns_none_on_struct_error(tmp_path) -> None:
+    """_peer_euid returns None when struct.unpack raises (malformed getsockopt data)."""
+    import socket as _socket
+
+    listener = PamNotifyListener(str(tmp_path / "s.sock"))
+    # Return too-short bytes to force a struct.error on unpack
+    mock_sock = MagicMock()
+    mock_sock.getsockopt = MagicMock(return_value=b"\x00\x01")  # too short for 3i
+    writer = MagicMock()
+    writer.get_extra_info = MagicMock(return_value=mock_sock)
+
+    fake_so_peercred = getattr(_socket, "SO_PEERCRED", 17)
+    orig_peercred = getattr(_socket, "SO_PEERCRED", None)
+    try:
+        _socket.SO_PEERCRED = fake_so_peercred  # type: ignore[attr-defined]
+        result = listener._peer_euid(writer)
+    finally:
+        if orig_peercred is None and hasattr(_socket, "SO_PEERCRED"):
+            del _socket.SO_PEERCRED  # type: ignore[attr-defined]
+        elif orig_peercred is not None:
+            _socket.SO_PEERCRED = orig_peercred  # type: ignore[attr-defined]
+
+    assert result is None
+
+
+async def test_handle_connection_peer_euid_logged_when_no_enforcement(tmp_path, caplog) -> None:
+    """Without allowlist, peer euid is still logged at debug level."""
+    import logging
+
+    path = str(tmp_path / "notify.sock")
+    events: list[PamEvent] = []
+    listener = PamNotifyListener(path, require_peer_uids=None)
+    listener._peer_euid = lambda w: 500  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.DEBUG, logger="provide.uterm.pty.pam_listener"):
+        await listener.start(lambda e: _collect(events, e))
+
+        reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(b'{"event":"open","username":"alice","tty":"","pid":1}\n')
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(0.05)
+
+        await listener.stop()
+
+    assert any("euid=500" in r.message for r in caplog.records)
