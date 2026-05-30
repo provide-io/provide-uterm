@@ -6,14 +6,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
 from typing import Any
 
+from provide.telemetry import get_logger
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.screen import decode_cp437
 from provide.uterm.server.connectors.base import SessionConnector
 from provide.uterm.transports.telnet import TelnetTransport
+
+logger = get_logger(__name__)
 
 _COLS = 80
 _ROWS = 25
@@ -89,7 +93,14 @@ class TelnetSessionConnector(SessionConnector):
     async def poll_messages(self) -> list[dict[str, Any]]:
         if not self.is_connected():
             return []
-        data = await self._transport.receive(4096, 100)
+        try:
+            data = await self._transport.receive(4096, 100)
+        except ConnectionError as exc:
+            logger.warning("telnet_connector receive failed: %s", exc)
+            with contextlib.suppress(Exception):
+                await self._transport.disconnect()
+            self._connected = False
+            return []
         if not data:
             return []
         self._received_bytes += len(data)

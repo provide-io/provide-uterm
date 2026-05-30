@@ -36,6 +36,12 @@ TTYPE_IS: int = 0
 # Default connection timeout in seconds
 _DEFAULT_CONNECT_TIMEOUT_S: float = 30.0
 
+# Max unconsumed receive-buffer bytes before the connection is treated as
+# hostile/malformed. An upstream that sends `IAC SB` without `IAC SE` would
+# otherwise grow _rx_buf without bound (memory-exhaustion DoS). 256 KiB is far
+# above any legitimate telnet subnegotiation.
+_MAX_RX_BUF_BYTES: int = 256 * 1024
+
 # Telnet option codes
 OPT_BINARY: int = 0
 OPT_ECHO: int = ECHO
@@ -270,6 +276,12 @@ class TelnetTransport:
 
         self._rx_buf.extend(chunk)
         payload, events = self._consume_rx_buffer()
+        if len(self._rx_buf) > _MAX_RX_BUF_BYTES:
+            self._rx_buf.clear()
+            raise ConnectionError(
+                f"telnet receive buffer exceeded {_MAX_RX_BUF_BYTES} bytes "
+                "(likely IAC SB without IAC SE) — closing connection"
+            )
         for event_type, cmd, opt_or_payload in events:
             if event_type == "negotiate":
                 task = asyncio.create_task(self._negotiate(cmd, int(opt_or_payload)))
