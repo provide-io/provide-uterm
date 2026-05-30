@@ -325,3 +325,16 @@ async def _send_line(path: str, data: dict) -> None:
     await writer.drain()
     writer.close()
     await writer.wait_closed()
+
+
+async def test_notify_socket_is_owner_only(tmp_path) -> None:
+    import stat
+
+    sock = tmp_path / "notify.sock"
+    listener = PamNotifyListener(str(sock))
+    await listener.start(AsyncMock())
+    try:
+        mode = stat.S_IMODE(sock.stat().st_mode)
+        assert mode == 0o600
+    finally:
+        await listener.stop()

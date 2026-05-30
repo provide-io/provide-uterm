@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -40,6 +41,7 @@ from provide.uterm.pty.socket_utils import validate_socket_path
 logger = logging.getLogger(__name__)
 
 _MAX_LINE = 4096  # bytes — guard against runaway senders
+_NOTIFY_SOCKET_MODE = 0o600
 
 
 @dataclass
@@ -86,6 +88,10 @@ class PamNotifyListener:
             raise RuntimeError("PamNotifyListener already started")
         self._handler = handler
         self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
+        # Restrict the notify socket to the owner so other local users cannot
+        # forge login events that drive root-side session creation. Mirrors
+        # CaptureSocket.start() in pty/capture.py.
+        os.chmod(self._path, _NOTIFY_SOCKET_MODE)  # noqa: PTH101 — chmod the just-bound socket fd path
         logger.info("pam_notify_listener started socket=%s", self._path)
 
     async def stop(self) -> None:
