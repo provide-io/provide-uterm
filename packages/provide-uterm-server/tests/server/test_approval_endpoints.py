@@ -105,3 +105,46 @@ def test_reject_request(client):
 def test_approve_not_found(client):
     response = client.post("/api/approvals/non-existent/approve", headers=ADMIN_H)
     assert response.status_code == 404
+
+
+def test_approve_already_resolved_returns_400(client):
+    # A request already in a terminal (non-PENDING) state can no longer be
+    # claimed, so re-approving it must fail closed with HTTP 400 rather than
+    # re-injecting the command.
+    hub = client.app.state.uterm_hub
+    req_id = str(uuid.uuid4())
+    req = ApprovalRequest(
+        id=req_id,
+        worker_id="worker1",
+        submitter_id="user1",
+        command="rm -rf /",
+        status=ApprovalStatus.APPROVED,
+        created_at=time.time(),
+        expires_at=time.time() + 60,
+    )
+    hub._approval_store.add(req)
+
+    response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
+    assert response.status_code == 400
+    assert "not pending" in response.json()["detail"]
+
+
+def test_reject_already_resolved_returns_400(client):
+    # Same fail-closed guarantee for the reject route: a request that has
+    # already been rejected cannot be claimed again and must return HTTP 400.
+    hub = client.app.state.uterm_hub
+    req_id = str(uuid.uuid4())
+    req = ApprovalRequest(
+        id=req_id,
+        worker_id="worker1",
+        submitter_id="user1",
+        command="format c:",
+        status=ApprovalStatus.REJECTED,
+        created_at=time.time(),
+        expires_at=time.time() + 60,
+    )
+    hub._approval_store.add(req)
+
+    response = client.post(f"/api/approvals/{req_id}/reject", headers=ADMIN_H)
+    assert response.status_code == 400
+    assert "not pending" in response.json()["detail"]
