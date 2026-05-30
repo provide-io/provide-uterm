@@ -128,6 +128,37 @@ class TestInMemoryResumeStore:
         assert t1 in active
         assert t2 not in active
 
+    def test_consume_returns_session_and_removes_token(self) -> None:
+        """consume() returns the session and makes the token single-use."""
+        store = InMemoryResumeStore()
+        token = asyncio.run(store.create("w1", "admin", 60))
+        session = asyncio.run(store.consume(token))
+        assert session is not None
+        assert session.worker_id == "w1"
+        assert len(store) == 0
+
+    def test_consume_second_call_returns_none(self) -> None:
+        """A second consume() of the same token returns None (single-use)."""
+        store = InMemoryResumeStore()
+        token = asyncio.run(store.create("w1", "admin", 60))
+        asyncio.run(store.consume(token))
+        assert asyncio.run(store.consume(token)) is None
+
+    def test_consume_expired_token_returns_none(self) -> None:
+        """consume() on an expired token returns None."""
+        store = InMemoryResumeStore()
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            token = asyncio.run(store.create("w1", "admin", 1.0))
+            mock_time.monotonic.return_value = 102.0
+            result = asyncio.run(store.consume(token))
+        assert result is None
+
+    def test_consume_nonexistent_returns_none(self) -> None:
+        """consume() on a non-existent token returns None."""
+        store = InMemoryResumeStore()
+        assert asyncio.run(store.consume("nonexistent")) is None
+
     def test_protocol_conformance(self) -> None:
         store = InMemoryResumeStore()
         assert isinstance(store, ResumeTokenStore)
@@ -291,6 +322,86 @@ class TestControlPlaneResumeStore:
 
         assert row is not None
         assert row[0] is not None
+
+    def test_consume_returns_session_once_then_none(self) -> None:
+        """consume() is single-use: first call returns session, second returns None."""
+        plane = asyncio.run(bootstrap_control_plane(ControlPlaneConfig(backend="memory")))
+        asyncio.run(plane.open())
+        store = ControlPlaneResumeStore(plane)
+
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            mock_time.time.return_value = 1700000000.0
+            token = asyncio.run(store.create("w1", "admin", 30.0))
+            session = asyncio.run(store.consume(token))
+            assert session is not None
+            assert session.worker_id == "w1"
+            assert session.role == "admin"
+
+            second = asyncio.run(store.consume(token))
+            assert second is None
+
+    def test_consume_concurrent_exactly_one_winner(self) -> None:
+        """Two concurrent consume() calls → exactly one returns a ResumeSession, other None."""
+        plane = asyncio.run(bootstrap_control_plane(ControlPlaneConfig(backend="memory")))
+        asyncio.run(plane.open())
+        store = ControlPlaneResumeStore(plane)
+
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            mock_time.time.return_value = 1700000000.0
+            token = asyncio.run(store.create("w1", "admin", 30.0))
+
+            async def _run() -> tuple[object, object]:
+                a, b = await asyncio.gather(
+                    store.consume(token),
+                    store.consume(token),
+                )
+                return a, b
+
+            a, b = asyncio.run(_run())
+
+        winners = [x for x in (a, b) if x is not None]
+        losers = [x for x in (a, b) if x is None]
+        assert len(winners) == 1
+        assert len(losers) == 1
+
+    def test_consume_expired_at_wall_time_returns_none(self) -> None:
+        """consume() returns None when the record's expires_at has passed by wall clock."""
+        plane = asyncio.run(bootstrap_control_plane(ControlPlaneConfig(backend="memory")))
+        asyncio.run(plane.open())
+        store = ControlPlaneResumeStore(plane)
+
+        with patch("provide.uterm.server.bridge.hub.resume.time") as mock_time:
+            mock_time.monotonic.return_value = 100.0
+            mock_time.time.return_value = 1700000000.0
+            token = asyncio.run(store.create("w1", "admin", 30.0))
+            # Advance wall clock past expiry; monotonic just needs to be consistent
+            mock_time.monotonic.return_value = 200.0
+            mock_time.time.return_value = 1700000031.0  # past expires_at
+            result = asyncio.run(store.consume(token))
+
+        assert result is None
+
+    def test_consume_conflict_error_returns_none(self) -> None:
+        """ControlPlaneConflictError from the tx → consume returns None (no exception leaks)."""
+
+        from provide.uterm.control.plane.errors import ControlPlaneConflictError
+
+        plane = asyncio.run(bootstrap_control_plane(ControlPlaneConfig(backend="memory")))
+        asyncio.run(plane.open())
+        store = ControlPlaneResumeStore(plane)
+
+        # Patch _run_tx to raise ControlPlaneConflictError, simulating a concurrent winner
+        original_run_tx = store._run_tx
+
+        async def _raise_conflict(op):
+            raise ControlPlaneConflictError("simulated conflict")
+
+        store._run_tx = _raise_conflict  # type: ignore[method-assign]
+        result = asyncio.run(store.consume("any-token"))
+        store._run_tx = original_run_tx
+        assert result is None
 
     def test_sqlite_resume_rotation_survives_restart_after_revoke(self, tmp_path) -> None:
         db_path = tmp_path / "resume-rotation.db"

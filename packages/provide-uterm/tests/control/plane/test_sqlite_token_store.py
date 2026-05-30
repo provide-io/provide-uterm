@@ -66,6 +66,105 @@ async def test_sqlite_token_store_round_trip(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_sqlite_token_store_consume_resume_token_single_use(tmp_path: Path) -> None:
+    """consume_resume_token returns the record on first call, None on second (already revoked)."""
+    plane = SqliteControlPlane(ControlPlaneConfig(database_url=str(tmp_path / "cp.db")))
+    await plane.migrate()
+
+    resume_token = ResumeTokenRecord(
+        token_value="consume-test",
+        session_id="s1",
+        role="admin",
+        created_at=1.0,
+        expires_at=9999.0,
+        was_hijack_owner=False,
+        revoked_at=None,
+    )
+
+    tx = await plane.begin()
+    await plane.token_store(tx).create_resume_token(resume_token)
+    await tx.commit()
+
+    # First consume: should return the record
+    tx2 = await plane.begin()
+    record = await plane.token_store(tx2).consume_resume_token("consume-test", 2.0)
+    await tx2.commit()
+    assert record is not None
+    assert record.token_value == "consume-test"
+    assert record.session_id == "s1"
+
+    # Second consume: already revoked, should return None
+    tx3 = await plane.begin()
+    record2 = await plane.token_store(tx3).consume_resume_token("consume-test", 3.0)
+    await tx3.commit()
+    assert record2 is None
+
+    await plane.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_token_store_consume_nonexistent_returns_none(tmp_path: Path) -> None:
+    """consume_resume_token on a non-existent token returns None."""
+    plane = SqliteControlPlane(ControlPlaneConfig(database_url=str(tmp_path / "cp.db")))
+    await plane.migrate()
+    tx = await plane.begin()
+    record = await plane.token_store(tx).consume_resume_token("no-such-token", 1.0)
+    await tx.commit()
+    assert record is None
+    await plane.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_token_store_consume_rowcount_zero_returns_none(tmp_path: Path) -> None:
+    """consume_resume_token returns None when rowcount==0 (token revoked between SELECT and UPDATE)."""
+    from unittest.mock import MagicMock
+
+    plane = SqliteControlPlane(ControlPlaneConfig(database_url=str(tmp_path / "cp.db")))
+    await plane.migrate()
+
+    # Insert a token
+    resume_token = ResumeTokenRecord(
+        token_value="rowcount-test",
+        session_id="s1",
+        role="admin",
+        created_at=1.0,
+        expires_at=9999.0,
+        was_hijack_owner=False,
+        revoked_at=None,
+    )
+    tx0 = await plane.begin()
+    await plane.token_store(tx0).create_resume_token(resume_token)
+    await tx0.commit()
+
+    # Now call consume_resume_token against a store whose _conn.execute returns
+    # a cursor with rowcount=0 for the UPDATE (simulating a concurrent revoke).
+    tx1 = await plane.begin()
+    store = plane.token_store(tx1)
+
+    real_conn = store._conn
+    original_execute = real_conn.execute
+    call_count = 0
+
+    async def patched_execute(sql, params=()):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2 and "revoked_at" in sql and "AND revoked_at IS NULL" in sql:
+            # Return a cursor stub with rowcount=0 to simulate zero rows updated
+            stub = MagicMock()
+            stub.rowcount = 0
+            return stub
+        return await original_execute(sql, params)
+
+    real_conn.execute = patched_execute  # type: ignore[method-assign]
+    result = await store.consume_resume_token("rowcount-test", 2.0)
+    real_conn.execute = original_execute  # type: ignore[method-assign]
+    await tx1.rollback()
+    await plane.close()
+
+    assert result is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("session_id", "token_kind", "token_value", "role"),
     [

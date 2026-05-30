@@ -110,3 +110,30 @@ class SqliteTokenStore:
             "UPDATE cp_resume_tokens SET revoked_at = ? WHERE token_value = ?",
             (revoked_at, token_value),
         )
+
+    async def consume_resume_token(self, token_value: str, revoked_at: float) -> ResumeTokenRecord | None:
+        cursor = await self._conn.execute("SELECT * FROM cp_resume_tokens WHERE token_value = ?", (token_value,))
+        row = await cursor.fetchone()
+        if row is None:
+            await cursor.close()
+            return None
+        data = dict(row)
+        if data.get("revoked_at") is not None:
+            await cursor.close()
+            return None
+        await cursor.close()
+        update_cursor = await self._conn.execute(
+            "UPDATE cp_resume_tokens SET revoked_at = ? WHERE token_value = ? AND revoked_at IS NULL",
+            (revoked_at, token_value),
+        )
+        if update_cursor.rowcount != 1:
+            return None
+        return ResumeTokenRecord(
+            token_value=str(data["token_value"]),
+            session_id=str(data["session_id"]),
+            role=str(data["role"]),
+            created_at=float(data["created_at"]),
+            expires_at=float(data["expires_at"]),
+            was_hijack_owner=bool(data["was_hijack_owner"]),
+            revoked_at=None,
+        )

@@ -218,7 +218,7 @@ class TestHandleResumeTokenLogic:
             assert resumed["role"] == "viewer"
 
     def test_resume_old_token_revoked_after_resume(self) -> None:
-        """mutmut_24: store.revoke(old_token) must be called."""
+        """mutmut_24: token must be consumed (single-use) after resume."""
         store = InMemoryResumeStore()
         client, _ = self._make_app_client("admin", store)
         with connect_test_ws(client, "/ws/browser/w1/term") as ws:
@@ -230,6 +230,34 @@ class TestHandleResumeTokenLogic:
             ws.send_json({"type": "resume", "token": token})
             ws.receive_json()
             assert asyncio.run(store.get(token)) is None
+
+    def test_second_resume_with_same_token_fails(self) -> None:
+        """Atomic consume: a second connection presenting the same token is rejected."""
+        store = InMemoryResumeStore()
+        client, _ = self._make_app_client("admin", store)
+        with connect_test_ws(client, "/ws/browser/w1/term") as ws:
+            hello, _ = self._read_initial(ws)
+            token = hello["resume_token"]
+
+        # First resume succeeds
+        with connect_test_ws(client, "/ws/browser/w1/term") as ws:
+            self._read_initial(ws)
+            ws.send_json({"type": "resume", "token": token})
+            resumed = ws.receive_json()
+            assert resumed["type"] == "hello"
+            assert resumed["resumed"] is True
+            new_token = resumed["resume_token"]
+
+        # Second resume with the same OLD token must fail (pong comes through, not a resumed hello)
+        with connect_test_ws(client, "/ws/browser/w1/term") as ws:
+            self._read_initial(ws)
+            ws.send_json({"type": "resume", "token": token})
+            ws.send_json({"type": "ping"})
+            pong = ws.receive_json()
+            assert pong["type"] == "pong"
+
+        # The new token from the first resume is distinct from the old one
+        assert new_token != token
 
     def test_resume_new_token_different_from_old(self) -> None:
         """mutmut_55-61: new_token = store.create(...) must create a new token."""

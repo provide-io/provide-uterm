@@ -393,17 +393,15 @@ async def _handle_resume(
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_malformed")
         return owned_hijack
 
-    session = await store.get(old_token)
+    session = await store.consume(old_token)
     if session is None or session.worker_id != worker_id:
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
         return owned_hijack
 
-    # Optional application-level validation
+    # Optional application-level validation (token already consumed; rejected resume spends the token)
     if hub._on_resume is not None and not await hub._on_resume(old_token, session):
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="callback_rejected")
         return owned_hijack
-
-    await store.revoke(old_token)
 
     new_role, can_hijack = await _resolve_resumed_role(hub, ws, worker_id, role, session.role)
     owned_hijack, reclaimed_hijack = await _try_reclaim_hijack(hub, ws, worker_id, session, can_hijack)
