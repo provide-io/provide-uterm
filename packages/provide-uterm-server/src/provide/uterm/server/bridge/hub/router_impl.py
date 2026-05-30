@@ -29,6 +29,7 @@ serialising against the same object that the rest of the hub uses.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import statistics
 import time
@@ -47,6 +48,11 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.core import TermHub
 
 logger = get_logger(__name__)
+
+# Per-browser send timeout in broadcast(). A viewer whose receive window is
+# stalled is treated as dead and pruned rather than head-of-line-blocking the
+# worker-output fanout indefinitely.
+_BROADCAST_SEND_TIMEOUT_S = 5.0
 
 
 class MessageRouter:
@@ -148,7 +154,7 @@ class MessageRouter:
                             cached = encoded_default
                         payload_by_role[role] = cached
                     final_payload = cached
-                await ws.send_text(final_payload)
+                await asyncio.wait_for(ws.send_text(final_payload), timeout=_BROADCAST_SEND_TIMEOUT_S)
             except Exception as exc:
                 logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, exc)
                 dead.add(ws)
