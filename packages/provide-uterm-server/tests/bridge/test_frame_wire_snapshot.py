@@ -99,6 +99,7 @@ class TestNullablePreservingFrames:
             "cursor_at_end": True,
             "has_trailing_space": True,
             "prompt_detected": None,
+            "raw_tail": None,
             "ts": 1.0,
         }
         # Belt-and-suspenders: round-trips through JSON without dropping the null.
