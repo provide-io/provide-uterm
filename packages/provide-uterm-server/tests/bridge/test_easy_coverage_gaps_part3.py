@@ -93,6 +93,8 @@ def test_webhook_signature_helpers_verify_expected_and_reject_bad_values() -> No
     # Bad / missing signatures fail closed.
     assert verify_webhook_signature(secret, body, None) is False
     assert verify_webhook_signature(secret, body, "") is False
+    # Empty digest after the ``sha256=`` prefix is rejected, not treated as a match.
+    assert verify_webhook_signature(secret, body, "sha256=") is False
     assert verify_webhook_signature(secret, body, "sha256=deadbeef") is False
 
 
