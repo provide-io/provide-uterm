@@ -39,6 +39,11 @@ from .ws_helpers import _WsHelperMixin
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
 
+# Tunnel token hashes are re-read from KV on this TTL so a revoked/rotated
+# token stops working within the window and the hashes survive DO hibernation
+# (where _restore_state sets _meta_loaded=True from SQLite without them).
+_CREDENTIAL_TTL_S = 60.0
+
 
 class SessionRuntime(
     _SessionRuntimeIoMixin,
@@ -90,6 +95,9 @@ class SessionRuntime(
         self._share_token_hash: str | None = None
         self._control_token_hash: str | None = None
         self._issued_ip: str | None = None
+        # Timestamp of the last _ensure_credentials() KV read (None = not loaded).
+        # Independent of _meta_loaded so revocation and post-hibernation recovery work.
+        self._credentials_loaded_at: float | None = None
 
         # ushell — set for sessions whose worker_id starts with "ushell-".
         self._ushell: Any = None  # UshellConnector | None
@@ -133,3 +141,36 @@ class SessionRuntime(
         except Exception:
             logger.debug("_ensure_meta kv read failed for %s", self.worker_id)
         self.store.save_session_meta(self.worker_id, self.meta)
+
+    async def _ensure_credentials(self) -> None:
+        """Refresh tunnel token hashes from KV on a short TTL.
+
+        Unlike _ensure_meta (one-time, gated by _meta_loaded), this always
+        re-reads the credential fields from KV so a revoked/rotated token takes
+        effect within _CREDENTIAL_TTL_S, and the hashes are restored after DO
+        hibernation. KV is authoritative (the Default Worker writes revoked/
+        rotated hashes there); a missing entry means no valid tunnel tokens.
+        """
+        now = time.time()
+        if self._credentials_loaded_at is not None and (now - self._credentials_loaded_at) < _CREDENTIAL_TTL_S:
+            return
+        kv = getattr(self.env, "SESSION_REGISTRY", None)
+        if kv is None:
+            self._credentials_loaded_at = now
+            return
+        try:
+            raw = await kv.get(f"session:{self.worker_id}")
+            if raw is not None:
+                data = json.loads(str(raw))
+                self._tunnel_worker_token_hash = str(data.get("worker_token_hash") or "") or None
+                self._share_token_hash = str(data.get("share_token_hash") or "") or None
+                self._control_token_hash = str(data.get("control_token_hash") or "") or None
+                self._issued_ip = str(data.get("issued_ip") or "") or None
+            else:
+                self._tunnel_worker_token_hash = None
+                self._share_token_hash = None
+                self._control_token_hash = None
+                self._issued_ip = None
+            self._credentials_loaded_at = now
+        except Exception:
+            logger.debug("_ensure_credentials kv read failed for %s", self.worker_id)
