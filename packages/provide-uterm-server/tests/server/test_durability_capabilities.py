@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.app.control_plane import _build_durability_capabilities
 
 
 def test_sqlite_mode_reports_process_local_tunnel_webhook_and_fanout_state(tmp_path) -> None:
@@ -35,3 +38,14 @@ def test_sqlite_mode_reports_process_local_tunnel_webhook_and_fanout_state(tmp_p
 
     assert response.status_code == 200
     assert response.json() == capabilities
+
+
+def test_sqlite_durability_does_not_claim_approvals_or_leases() -> None:
+    cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="sqlite"))
+    caps = _build_durability_capabilities(cfg)
+    assert "resume_tokens" in caps.durable_state
+    assert "control_plane_session_records" in caps.durable_state
+    assert "approvals" not in caps.durable_state
+    assert "leases" not in caps.durable_state
+    assert "approvals" in caps.process_local_state
+    assert "leases" in caps.process_local_state

@@ -55,19 +55,20 @@ def _build_durability_capabilities(config: ServerConfig) -> DurabilityCapabiliti
         durable_state = (
             "control_plane_session_records",
             "resume_tokens",
-            "approvals",
-            "leases",
         )
     process_local_state = (
         "tunnel_tokens",
         "webhook_registrations",
         "fanout_groups",
+        "approvals",
+        "leases",
         "live_session_arbitration",
         "session_registry_runtime_state",
     )
     notes = (
-        "SQLite mode persists only the shared control-plane stores it implements.",
-        "Tunnel tokens, webhook registrations, fan-out groups, and live runtime state remain process-local.",
+        "SQLite mode persists only the resume-token and session-record stores wired into the factory.",
+        "Approvals and hijack leases are in-memory and are lost on restart.",
+        "Tunnel tokens, webhook registrations, and fan-out groups remain process-local.",
         "Run one active FastAPI control-plane instance, or use the durable backend for HA deployments.",
     )
     return DurabilityCapabilities(
