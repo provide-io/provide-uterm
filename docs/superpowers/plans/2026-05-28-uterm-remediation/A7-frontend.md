@@ -10,6 +10,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (FE-sel 🟢): Harden the DeckMux `querySelector` userId interpolation
 
 **Files:**

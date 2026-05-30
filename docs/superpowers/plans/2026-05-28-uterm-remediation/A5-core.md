@@ -12,6 +12,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (CB-1 🔴 High): Fix transposed terminal resize
 
 **Files:**
@@ -177,7 +179,7 @@ async def test_concurrent_lease_acquire_single_winner(engine):
 ### Done criteria (Lane A5)
 - [ ] `uv run pytest packages/provide-uterm/tests/ -q` green at 100% over the widened perimeter
 - [ ] `uv run ruff check --fix && uv run ruff format && uv run mypy packages/provide-uterm/src/`
-- [ ] `uv run python scripts/run_mutation_gate.py --changed-only` → 0 survivors on touched perimeter files (detector, control-plane, schemas if touched)
+- [ ] `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100` → 0 survivors on touched perimeter files (detector, control-plane, schemas if touched)
 - [ ] If any task changed `bridge/schemas.py`: `uv run python scripts/codegen_frames.py` and commit `schemas.py` + `frames.schema.json` + `frames.ts` together. (None of the tasks above require it, but verify.)
 - [ ] Commits, one logical unit each.
 

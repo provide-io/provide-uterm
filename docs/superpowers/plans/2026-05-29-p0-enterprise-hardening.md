@@ -675,7 +675,7 @@ uv run python scripts/run_pytest_gate.py -q
 Expected: all pass; **100% coverage maintained**. Then run the mutation gate on the changed perimeter files:
 
 ```bash
-uv run python scripts/run_mutation_gate.py --changed-only
+uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 ```
 
 Expected: 100% kill rate on changed perimeter files. If a mutant survives, add a pinning test (e.g. for Task 2 assert *both* `fail_open` branches; for Task 7 assert the loopback-allow *and* remote-reject branches; for Task 3 assert claim returns False for both "missing" and "already-resolved").

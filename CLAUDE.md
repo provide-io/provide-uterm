@@ -61,7 +61,7 @@ docker compose -f docker/docker-compose.yml up
 
 ## Architecture
 
-**Monorepo** using uv workspace (Python) + npm workspaces (TypeScript). 7 packages under `packages/`:
+**Monorepo** using uv workspace (Python) + npm workspaces (TypeScript). 8 packages under `packages/`:
 
 | Package | Role |
 |---------|------|
@@ -70,6 +70,7 @@ docker compose -f docker/docker-compose.yml up
 | `provide-uterm-client` | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`) |
 | `provide-uterm-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, External Management Tier (`uterm-manager`) |
 | `provide-uterm-cloudflare` | CF Worker + Durable Object adapter |
+| `provide-uterm-annotation` | Annotation layer (100% coverage gate, own CI job) |
 | `provide-uterm-frontend` | Browser UI (vanilla TypeScript, xterm.js) |
 | `provide-uterm-app` | App shell |
 

@@ -12,6 +12,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1 (CB-4 🟠 High): Make the spawn config-path sandbox mandatory & symlink-safe
 
 **Files:**
