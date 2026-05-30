@@ -152,6 +152,11 @@ class RecordingConfig(ServerBaseModel):
             raise ValueError(f"recording.retention_s must be >= 0 (0 = keep indefinitely), got: {value}")
         return value
 
+    @model_validator(mode="after")
+    def _validate_outbound_url_schemes(self) -> RecordingConfig:
+        _require_secure_url(self.webhook_url, "recording.webhook_url")
+        return self
+
 
 class ControlPlaneConfig(ServerBaseModel):
     """Backend selection for the hosted server control plane."""
@@ -337,6 +342,11 @@ class PamConfig(ServerBaseModel):
     auto_session_command: str = "/bin/bash"
     relay_url: str | None = None
     relay_token: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_outbound_url_schemes(self) -> PamConfig:
+        _require_secure_url(self.relay_url, "pam.relay_url")
+        return self
 
 
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
