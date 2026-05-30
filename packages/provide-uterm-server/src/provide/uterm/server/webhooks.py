@@ -40,7 +40,16 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import EventBus
 
 from provide.uterm.server.bridge.hub.event_bus import _compile_pattern
-from provide.uterm.server.webhook_signing import build_webhook_signature
+
+# ``verify_webhook_signature`` is re-exported (self-alias) for import compatibility:
+# existing callers/tests import it from this module, though it now lives in
+# ``webhook_signing``. See docs/code-review-2026-05-29.md.
+from provide.uterm.server.webhook_signing import (
+    build_webhook_signature,
+)
+from provide.uterm.server.webhook_signing import (
+    verify_webhook_signature as verify_webhook_signature,
+)
 
 logger = get_logger(__name__)
 
