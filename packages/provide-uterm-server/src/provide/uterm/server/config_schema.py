@@ -10,6 +10,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -87,6 +88,12 @@ class AuthConfig(ServerBaseModel):
     def _validate_proxy_secret(self) -> AuthConfig:
         if self.require_upstream_proxy_secret and not str(self.upstream_proxy_secret or "").strip():
             raise ValueError("auth.upstream_proxy_secret is required when auth.require_upstream_proxy_secret=True")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_outbound_url_schemes(self) -> AuthConfig:
+        _require_secure_url(self.webhook_idp_url, "auth.webhook_idp_url")
+        _require_secure_url(self.jwt_jwks_url, "auth.jwt_jwks_url")
         return self
 
 
@@ -332,6 +339,30 @@ class PamConfig(ServerBaseModel):
     relay_token: str | None = None
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _require_secure_url(url: str | None, field_name: str) -> None:
+    """Reject a cleartext ``http://`` outbound URL unless its host is loopback.
+
+    ``https://`` is always allowed; ``http://`` is allowed only for loopback
+    hosts (local dev). Any other scheme, or ``http://`` to a routable host,
+    raises -- these channels carry HMAC secrets, auth headers, and the JWKS
+    used to validate admin tokens, so cleartext to a remote host is unsafe.
+    """
+    if not url:
+        return
+    parsed = urlparse(url)
+    if parsed.scheme == "https":
+        return
+    if parsed.scheme != "http":
+        raise ValueError(f"{field_name} must use http(s)")
+    host = (parsed.hostname or "").lower()
+    if host in _LOOPBACK_HOSTS or host.endswith(".localhost"):
+        return
+    raise ValueError(f"{field_name} must use https:// (cleartext http:// is only allowed for loopback hosts)")
+
+
 class GovernanceConfig(ServerBaseModel):
     """Configuration for external policy and telemetry hooks."""
 
@@ -355,6 +386,14 @@ class GovernanceConfig(ServerBaseModel):
     behavioral_min_jitter: float | None = None
 
     external_connectors: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_outbound_url_schemes(self) -> GovernanceConfig:
+        _require_secure_url(self.policy_webhook_url, "governance.policy_webhook_url")
+        _require_secure_url(self.registry_webhook_url, "governance.registry_webhook_url")
+        _require_secure_url(self.authz_webhook_url, "governance.authz_webhook_url")
+        _require_secure_url(self.behavioral_audit_url, "governance.behavioral_audit_url")
+        return self
 
 
 class UtermServerConfig(ServerBaseModel):
