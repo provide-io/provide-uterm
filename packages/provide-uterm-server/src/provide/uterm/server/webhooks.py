@@ -340,7 +340,9 @@ class WebhookManager:
         body = json.dumps(payload).encode()
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if cfg.secret:
-            headers["X-Uterm-Signature"] = build_webhook_signature(cfg.secret, body)
+            ts = str(time.time())
+            headers["X-Uterm-Timestamp"] = ts
+            headers["X-Uterm-Signature"] = build_webhook_signature(cfg.secret, body, ts)
 
         for attempt, delay in enumerate((*_RETRY_DELAYS, None)):
             try:

@@ -7,6 +7,7 @@ import pytest
 import respx
 
 from provide.uterm.server.auth import WebhookIdentityProvider
+from provide.uterm.server.webhook_signing import verify_webhook_signature
 
 
 @pytest.mark.asyncio
@@ -90,3 +91,60 @@ async def test_webhook_idp_resolve_error_viewer_on_failure():
     assert principal is not None
     assert principal.subject_id == "anonymous"
     assert "viewer" in principal.roles
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_sends_signed_headers_not_cleartext_secret():
+    """IDP requests carry X-Uterm-Timestamp + X-Uterm-Signature, no X-Webhook-Secret."""
+    url = "https://auth.example.com/resolve"
+    secret = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
+    idp = WebhookIdentityProvider(url=url, secret=secret)
+
+    route = respx.post(url).mock(
+        return_value=httpx.Response(
+            200,
+            json={"subject_id": "user-1", "roles": ["viewer"]},
+        )
+    )
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    await idp.resolve_principal(MockConnection())
+
+    assert route.called
+    req = route.calls.last.request
+    assert "X-Webhook-Secret" not in req.headers
+    ts = req.headers.get("X-Uterm-Timestamp", "")
+    sig = req.headers.get("X-Uterm-Signature", "")
+    assert ts != ""
+    assert verify_webhook_signature(secret, req.content, sig, ts) is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_no_secret_sends_no_signing_headers():
+    """When no secret is configured, no signing headers are sent."""
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url)
+
+    route = respx.post(url).mock(
+        return_value=httpx.Response(
+            200,
+            json={"subject_id": "user-1", "roles": ["viewer"]},
+        )
+    )
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    await idp.resolve_principal(MockConnection())
+
+    assert route.called
+    req = route.calls.last.request
+    assert "X-Webhook-Secret" not in req.headers
+    assert "X-Uterm-Signature" not in req.headers
+    assert "X-Uterm-Timestamp" not in req.headers

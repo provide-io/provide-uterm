@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import time
 from typing import Any
@@ -202,6 +200,8 @@ async def test_deliver_adds_hmac_signature() -> None:
     assert len(captured_headers) >= 1
     sig_header = captured_headers[0].get("X-Uterm-Signature", "")
     assert sig_header.startswith("sha256=")
+    assert "X-Uterm-Timestamp" in captured_headers[0]
+    assert "X-Webhook-Secret" not in captured_headers[0]
     await manager.shutdown()
 
 
@@ -229,17 +229,20 @@ async def test_deliver_no_signature_when_no_secret() -> None:
 
 
 async def test_hmac_signature_is_correct() -> None:
-    """Verify the HMAC signature can be independently verified."""
+    """Verify the HMAC signature can be independently re-verified (timestamped scheme)."""
+    from provide.uterm.server.webhook_signing import build_webhook_signature
+
     bus, hub = await _make_bus_with_worker("s1")
     manager = _make_manager()
 
-    captured: list[tuple[bytes, str]] = []  # (body, signature)
+    captured: list[tuple[bytes, str, str]] = []  # (body, signature, timestamp)
 
     async def _mock_post(*args: Any, **kwargs: Any) -> MagicMock:
         body = kwargs.get("content", b"")
         headers = kwargs.get("headers", {})
         sig = headers.get("X-Uterm-Signature", "")
-        captured.append((body, sig))
+        ts = headers.get("X-Uterm-Timestamp", "")
+        captured.append((body, sig, ts))
         resp = MagicMock()
         resp.is_success = True
         return resp
@@ -252,9 +255,12 @@ async def test_hmac_signature_is_correct() -> None:
         await asyncio.sleep(0.2)
 
     assert captured
-    body, sig_header = captured[0]
-    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    body, sig_header, ts_header = captured[0]
+    assert ts_header != ""
+    expected = build_webhook_signature(secret, body, ts_header)
     assert sig_header == expected
+    # X-Webhook-Secret must not appear in delivery headers.
+    assert "X-Webhook-Secret" not in captured[0]
     await manager.shutdown()
 
 

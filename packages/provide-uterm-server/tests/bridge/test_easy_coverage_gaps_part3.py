@@ -81,21 +81,41 @@ def test_webhook_signature_helpers_verify_expected_and_reject_bad_values() -> No
 
     secret = "uterm-test-secret"  # pragma: allowlist secret
     body = b'{"event":"snapshot","worker_id":"w1"}'
+    ts = "1700000000.0"
+    now = float(ts)
 
-    canonical = build_webhook_signature(secret, body)
+    canonical = build_webhook_signature(secret, body, ts)
     assert canonical.startswith("sha256=")
-    assert verify_webhook_signature(secret, body, canonical) is True
 
-    # Bare hex digest remains accepted for compatibility.
+    # Valid signature + fresh timestamp → True.
+    assert verify_webhook_signature(secret, body, canonical, ts, now=now) is True
+
+    # Missing timestamp header → False.
+    assert verify_webhook_signature(secret, body, canonical, None, now=now) is False
+
+    # Missing signature header → False.
+    assert verify_webhook_signature(secret, body, None, ts, now=now) is False
+
+    # Stale timestamp (more than 300 s in the past) → False.
+    stale_now = now + 301.0
+    assert verify_webhook_signature(secret, body, canonical, ts, now=stale_now) is False
+
+    # Non-numeric timestamp → False.
+    assert verify_webhook_signature(secret, body, canonical, "not-a-number", now=now) is False
+
+    # Empty digest after the ``sha256=`` prefix is rejected.
+    assert verify_webhook_signature(secret, body, "sha256=", ts, now=now) is False
+
+    # Wrong signature → False.
+    assert verify_webhook_signature(secret, body, "sha256=deadbeef", ts, now=now) is False
+
+    # Tampered body → False.
+    assert verify_webhook_signature(secret, b"tampered", canonical, ts, now=now) is False
+
+    # A bare hex digest (no ``sha256=`` prefix) exercises the branch where
+    # ``supplied`` does NOT start with ``sha256=``; the raw hex still matches.
     bare_hex = canonical.split("=", 1)[1]
-    assert verify_webhook_signature(secret, body, bare_hex) is True
-
-    # Bad / missing signatures fail closed.
-    assert verify_webhook_signature(secret, body, None) is False
-    assert verify_webhook_signature(secret, body, "") is False
-    # Empty digest after the ``sha256=`` prefix is rejected, not treated as a match.
-    assert verify_webhook_signature(secret, body, "sha256=") is False
-    assert verify_webhook_signature(secret, body, "sha256=deadbeef") is False
+    assert verify_webhook_signature(secret, body, bare_hex, ts, now=now) is True
 
 
 # ---------------------------------------------------------------------------

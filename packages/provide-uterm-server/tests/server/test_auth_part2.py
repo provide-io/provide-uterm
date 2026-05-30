@@ -191,11 +191,14 @@ class TestWebhookAuthzIsAdmin:
             instance.__aenter__.return_value = instance
             instance.post = AsyncMock(return_value=_Resp())
             mock_client_cls.return_value = instance
+            import json as _json
+
             allowed = await service.is_admin(principal)
             # Webhook said no → not admin, even though roles claim admin.
             assert allowed is False
             assert instance.post.await_count == 1
-            sent_payload = instance.post.await_args.kwargs["json"]
+            # Now sends pre-serialized bytes via ``content=`` (not ``json=``).
+            sent_payload = _json.loads(instance.post.await_args.kwargs["content"])
             assert sent_payload["action"] == "admin"
 
 

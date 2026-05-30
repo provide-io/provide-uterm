@@ -6,10 +6,14 @@
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 import httpx
+
+from provide.uterm.server.webhook_signing import build_webhook_signature
 
 if TYPE_CHECKING:
     from provide.uterm.server.auth import Principal
@@ -188,10 +192,12 @@ class WebhookAuthorizationProvider:
         self.secret = secret
         self.timeout = timeout_s
 
-    def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
+    def _signed_headers(self, body: bytes) -> dict[str, str]:
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if self.secret:
-            headers["X-Webhook-Secret"] = self.secret
+            ts = str(time.time())
+            headers["X-Uterm-Timestamp"] = ts
+            headers["X-Uterm-Signature"] = build_webhook_signature(self.secret, body, ts)
         return headers
 
     async def _check(self, principal: Principal, action: str, **context: Any) -> bool:
@@ -205,9 +211,10 @@ class WebhookAuthorizationProvider:
             "action": action,
             "context": context,
         }
+        body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload, headers=self._headers())
+                resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:
                     return bool(resp.json().get("allow", False))
                 return False
@@ -218,9 +225,10 @@ class WebhookAuthorizationProvider:
         # Webhooks usually return specific booleans, but for full cap sets we might need a separate endpoint.
         # Fallback to empty if not implemented or error.
         payload = {"subject_id": principal.subject_id, "action": "capabilities"}
+        body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload, headers=self._headers())
+                resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:
                     return frozenset(resp.json().get("capabilities", []))
         except Exception:
@@ -274,9 +282,10 @@ class WebhookAuthorizationProvider:
             "session_id": session.session_id,
             "action": "resolve_role",
         }
+        body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, json=payload, headers=self._headers())
+                resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:
                     return str(resp.json().get("role", "viewer"))
         except Exception:

@@ -365,6 +365,13 @@ class WebhookIdentityProvider(IdentityProvider):
         self.on_failure = on_failure
 
     async def resolve_principal(self, connection: Request | WebSocket) -> Principal | None:
+        import json
+        import time
+
+        import httpx
+
+        from provide.uterm.server.webhook_signing import build_webhook_signature
+
         headers = dict(getattr(connection, "headers", {}))
         cookies = dict(getattr(connection, "cookies", {}))
 
@@ -374,15 +381,16 @@ class WebhookIdentityProvider(IdentityProvider):
             "action": "resolve_principal",
         }
 
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        req_headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.secret:
+            ts = str(time.time())
+            req_headers["X-Uterm-Timestamp"] = ts
+            req_headers["X-Uterm-Signature"] = build_webhook_signature(self.secret, body, ts)
+
         try:
-            import httpx
-
             async with httpx.AsyncClient(timeout=self.timeout_s) as client:
-                req_headers = {}
-                if self.secret:
-                    req_headers["X-Webhook-Secret"] = self.secret
-
-                resp = await client.post(self.url, json=payload, headers=req_headers)
+                resp = await client.post(self.url, content=body, headers=req_headers)
                 resp.raise_for_status()
                 data = resp.json()
 
