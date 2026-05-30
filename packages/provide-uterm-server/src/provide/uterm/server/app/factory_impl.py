@@ -459,6 +459,7 @@ def create_server_app(
         behavioral_audit_gate = WebhookBehavioralAuditGate(
             url=config.governance.behavioral_audit_url,
             secret=config.governance.behavioral_audit_secret,
+            fail_open=config.governance.behavioral_fail_open,
         )
     behavioral_thresholds = BehavioralThresholds(
         max_cps=config.governance.behavioral_max_cps,

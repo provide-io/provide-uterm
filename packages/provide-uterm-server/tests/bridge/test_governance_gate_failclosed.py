@@ -35,3 +35,24 @@ async def test_behavioral_gate_denies_on_non_200(respx_mock) -> None:
     gate = WebhookBehavioralAuditGate(url="https://gov.example/audit")
     decision = await gate.audit_connection(_H, _CTX, _T)
     assert decision.action == "deny"
+
+
+def test_governance_config_exposes_behavioral_fail_open_default_false() -> None:
+    from provide.uterm.server.config_schema import GovernanceConfig
+
+    assert GovernanceConfig().behavioral_fail_open is False
+    assert GovernanceConfig(behavioral_fail_open=True).behavioral_fail_open is True
+
+
+async def test_factory_passes_behavioral_fail_open_to_gate() -> None:
+    from provide.uterm.server.app import create_server_app
+    from provide.uterm.server.models import AuthConfig, GovernanceConfig, ServerConfig
+
+    config = ServerConfig(
+        auth=AuthConfig(mode="dev_token"),
+        governance=GovernanceConfig(behavioral_audit_url="https://gov.example/audit", behavioral_fail_open=True),
+    )
+    app = create_server_app(config, api_only=True)
+    gate = app.state.uterm_hub._behavioral_audit_gate
+    assert isinstance(gate, WebhookBehavioralAuditGate)
+    assert gate.fail_open is True
