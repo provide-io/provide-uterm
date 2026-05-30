@@ -388,6 +388,18 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 await websocket.send_text(encode_control(sync_msg))
 
         if initial_snapshot is not None:
+            _gate = getattr(hub, "_output_policy_gate", None)
+            if _gate is not None:
+                from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+                from provide.uterm.server.bridge.hub.router_impl import _redact_frame_fields
+
+                _ctx = await hub.prepare_policy_context(websocket, worker_id, action="output")
+                _rules = await _gate.get_redaction_rules(_ctx)
+                if _rules:
+                    initial_snapshot = _redact_frame_fields(
+                        cast("dict[str, Any]", dict(initial_snapshot)),
+                        StreamRedactor(_rules),
+                    )
             await websocket.send_text(encode_control(initial_snapshot))
         else:
             await hub.request_snapshot(worker_id)

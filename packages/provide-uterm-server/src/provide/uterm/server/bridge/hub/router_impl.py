@@ -55,6 +55,32 @@ logger = get_logger(__name__)
 _BROADCAST_SEND_TIMEOUT_S = 5.0
 
 
+def _redact_frame_fields(msg: dict[str, Any], redactor: StreamRedactor) -> dict[str, Any]:
+    """Return a copy of *msg* with its terminal-content string fields redacted.
+
+    Applies role-scoped redaction to the content-bearing fields of term,
+    snapshot, and analysis frames; other frame types are returned unchanged.
+    """
+    mtype = msg.get("type")
+    if mtype == "term":
+        return {**msg, "data": redactor.redact(str(msg.get("data", "")))}
+    if mtype == "snapshot":
+        out = dict(msg)
+        out["screen"] = redactor.redact(str(msg.get("screen", "")))
+        raw_tail = msg.get("raw_tail")
+        if isinstance(raw_tail, str):
+            out["raw_tail"] = redactor.redact(raw_tail)
+        return out
+    if mtype == "analysis":
+        out = dict(msg)
+        out["formatted"] = redactor.redact(str(msg.get("formatted", "")))
+        raw = msg.get("raw")
+        if isinstance(raw, str):
+            out["raw"] = redactor.redact(raw)
+        return out
+    return msg
+
+
 class MessageRouter:
     """Outbound-frame plumbing: broadcasts, worker sends, hijack-state notifications.
 
@@ -123,8 +149,6 @@ class MessageRouter:
             ]
 
         dead: set[WebSocket] = set()
-        is_term_data = msg.get("type") == "term"
-        raw_data = str(msg.get("data", "")) if is_term_data else ""
 
         # Pre-encode for all browsers (except when redaction is needed)
         encoded_default = _encode_browser_frame(msg)
@@ -135,7 +159,7 @@ class MessageRouter:
         # prepare_policy_context calls (each re-acquires hub._lock) and
         # get_redaction_rules calls at the number of distinct roles, instead
         # of letting N viewers trigger N policy builds + N lock acquisitions.
-        gate_active = is_term_data and bool(hub._output_policy_gate)
+        gate_active = bool(hub._output_policy_gate) and msg.get("type") in {"term", "snapshot", "analysis"}
         payload_by_role: dict[str | None, str] = {}
 
         for ws, role in browsers_with_roles:
@@ -148,8 +172,7 @@ class MessageRouter:
                         rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]
                         if rules:  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
                             redactor = StreamRedactor(rules)
-                            redacted_data = redactor.redact(raw_data)
-                            cached = _encode_browser_frame({"type": "term", "data": redacted_data})
+                            cached = _encode_browser_frame(_redact_frame_fields(msg, redactor))
                         else:
                             cached = encoded_default
                         payload_by_role[role] = cached
@@ -535,4 +558,4 @@ class MessageRouter:
             return list(st.events)[-max(1, min(limit, 500)) :]
 
 
-__all__ = ["MessageRouter"]
+__all__ = ["MessageRouter", "_redact_frame_fields"]
