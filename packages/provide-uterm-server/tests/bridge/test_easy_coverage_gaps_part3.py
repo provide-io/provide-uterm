@@ -239,6 +239,7 @@ async def test_state_prepare_policy_context_delegated_roles_empty_falls_back_to_
 
 
 async def test_resolve_browser_role_no_session_operator_principal_returns_operator() -> None:
+    """Operator principal on an ad-hoc worker returns 'operator' when allow_adhoc_browser_observers=True."""
     from types import SimpleNamespace
 
     from provide.uterm.server import create_server_app, default_server_config
@@ -248,6 +249,8 @@ async def test_resolve_browser_role_no_session_operator_principal_returns_operat
     cfg.auth.mode = "header"
     cfg.auth.header_mode_acknowledged = True
     cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+    # Opt in to legacy ad-hoc observer behavior so operator role is honored.
+    cfg.auth.allow_adhoc_browser_observers = True
     app = create_server_app(cfg)
     hub = app.state.uterm_hub
 

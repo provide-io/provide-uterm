@@ -297,6 +297,9 @@ class TestFactoryClosures:
         assert await hub._on_resume("tok", session) is True
 
     async def test_resolve_browser_role_branches(self) -> None:
+        from provide.uterm.server.models import AuthConfig
+
+        # Admin is always allowed on ad-hoc (unregistered) workers.
         app, _ = _make_app()
         hub = app.state.uterm_hub
         ws = MagicMock()
@@ -304,10 +307,25 @@ class TestFactoryClosures:
         ws.state.uterm_principal = Principal(subject_id="u", roles=frozenset({"admin"}))
         app.state.uterm_registry.get_definition = AsyncMock(return_value=None)
         assert await hub._resolve_browser_role(ws, "sid") == "admin"
-        ws.state.uterm_principal = Principal(subject_id="u", roles=frozenset({"operator"}))
-        assert await hub._resolve_browser_role(ws, "sid") == "operator"
-        ws.state.uterm_principal = Principal(subject_id="u", roles=frozenset({"viewer"}))
-        assert await hub._resolve_browser_role(ws, "sid") == "viewer"
+
+        # Operator/viewer on ad-hoc workers require allow_adhoc_browser_observers=True
+        # (opt-in to legacy behavior).
+        app_optin, _ = _make_app(
+            auth=AuthConfig(
+                mode="header",
+                header_mode_acknowledged=True,
+                worker_bearer_token="test-bearer-token-32-chars-long-x",
+                allow_adhoc_browser_observers=True,
+            )
+        )
+        hub_optin = app_optin.state.uterm_hub
+        app_optin.state.uterm_registry.get_definition = AsyncMock(return_value=None)
+        ws_optin = MagicMock()
+        ws_optin.state = MagicMock()
+        ws_optin.state.uterm_principal = Principal(subject_id="u", roles=frozenset({"operator"}))
+        assert await hub_optin._resolve_browser_role(ws_optin, "sid") == "operator"
+        ws_optin.state.uterm_principal = Principal(subject_id="u", roles=frozenset({"viewer"}))
+        assert await hub_optin._resolve_browser_role(ws_optin, "sid") == "viewer"
 
     async def test_resolve_browser_role_resolves_missing_principal_and_session_authz(self) -> None:
         app, _ = _make_app()

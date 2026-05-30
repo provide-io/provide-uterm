@@ -414,15 +414,17 @@ def create_server_app(
                     principal = Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
         session = await registry.get_definition(worker_id) if registry is not None else None
         if session is None:
-            # No registered SessionDefinition (worker connected ad-hoc). Honor
-            # the principal's role claim — admins/operators keep their role,
-            # everyone else falls back to viewer.
-            roles = principal.roles
-            if "admin" in roles:
+            # No registered SessionDefinition (worker connected ad-hoc). There
+            # is no visibility policy to consult, so fail closed: only a global
+            # admin may observe an unregistered worker. Operators/viewers are
+            # rejected unless the operator explicitly opts in.
+            if "admin" in principal.roles:
                 return "admin"
-            if "operator" in roles:
-                return "operator"
-            return "viewer"
+            if config.auth.allow_adhoc_browser_observers:
+                if "operator" in principal.roles:
+                    return "operator"
+                return "viewer"
+            raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         if not await authz.can_read_session(principal, session):
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return await policy.role_for(principal, session)

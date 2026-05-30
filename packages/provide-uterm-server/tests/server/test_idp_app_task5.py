@@ -119,13 +119,19 @@ def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
         assert denied.status_code == 401
 
 
-async def test_resolve_browser_role_webhook_idp_none_principal_is_anonymous_viewer(monkeypatch) -> None:
-    """Non-Local IDP browser-role path: a webhook IDP returning None yields an anonymous viewer.
+import pytest
+
+
+async def test_resolve_browser_role_webhook_idp_none_principal_denied(monkeypatch) -> None:
+    """Non-Local IDP browser-role path: a webhook IDP returning None (anonymous) is denied on ad-hoc workers.
 
     Covers the ``else`` branch of ``_resolve_browser_role`` (idp is not a
-    ``LocalIdentityProvider``) and its ``principal is None`` fallback.
+    ``LocalIdentityProvider``) and its ``principal is None`` deny path (anonymous
+    is non-admin, so the default deny-ad-hoc policy raises WebSocketException).
     """
     from types import SimpleNamespace
+
+    from fastapi import WebSocketException
 
     config = ServerConfig(
         auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
@@ -137,17 +143,15 @@ async def test_resolve_browser_role_webhook_idp_none_principal_is_anonymous_view
         return None
 
     monkeypatch.setattr(app.state.uterm_idp, "resolve_principal", _none)
-    # Browser WS with no pre-resolved principal in ws.state; the worker_id is
-    # unregistered (no SessionDefinition) so resolution falls through to viewer.
     ws = SimpleNamespace(state=SimpleNamespace())
-    role = await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-1")
-    assert role == "viewer"
+    with pytest.raises(WebSocketException):
+        await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-1")
 
 
 async def test_resolve_browser_role_webhook_idp_principal_role_honored(monkeypatch) -> None:
-    """Non-Local IDP browser-role path: a webhook IDP principal's role is honored.
+    """Non-Local IDP browser-role path: an admin principal's role is honored on ad-hoc workers.
 
-    Covers the ``principal is not None`` edge of the same ``else`` branch.
+    Covers the ``principal is not None`` + admin branch of the same ``else`` block.
     """
     from types import SimpleNamespace
 
@@ -164,3 +168,70 @@ async def test_resolve_browser_role_webhook_idp_principal_role_honored(monkeypat
     ws = SimpleNamespace(state=SimpleNamespace())
     role = await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-2")
     assert role == "admin"
+
+
+async def test_resolve_browser_role_adhoc_non_admin_denied_by_default(monkeypatch) -> None:
+    """Viewer principal on an ad-hoc (unregistered) worker is denied when the opt-in flag is False (default)."""
+    from types import SimpleNamespace
+
+    from fastapi import WebSocketException
+
+    config = ServerConfig(
+        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+    )
+    app = create_server_app(config, api_only=True)
+    hub = app.state.uterm_hub
+
+    async def _viewer(_ws):
+        return Principal(subject_id="bob", roles=frozenset({"viewer"}), scopes=frozenset())
+
+    monkeypatch.setattr(app.state.uterm_idp, "resolve_principal", _viewer)
+    ws = SimpleNamespace(state=SimpleNamespace())
+    with pytest.raises(WebSocketException):
+        await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-deny")
+
+
+async def test_resolve_browser_role_adhoc_viewer_allowed_when_opted_in(monkeypatch) -> None:
+    """Viewer principal on an ad-hoc worker is allowed when allow_adhoc_browser_observers=True."""
+    from types import SimpleNamespace
+
+    config = ServerConfig(
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            allow_adhoc_browser_observers=True,
+        )
+    )
+    app = create_server_app(config, api_only=True)
+    hub = app.state.uterm_hub
+
+    async def _viewer(_ws):
+        return Principal(subject_id="bob", roles=frozenset({"viewer"}), scopes=frozenset())
+
+    monkeypatch.setattr(app.state.uterm_idp, "resolve_principal", _viewer)
+    ws = SimpleNamespace(state=SimpleNamespace())
+    assert await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-optin") == "viewer"
+
+
+async def test_resolve_browser_role_adhoc_operator_allowed_when_opted_in(monkeypatch) -> None:
+    """Operator principal on an ad-hoc worker is allowed when allow_adhoc_browser_observers=True."""
+    from types import SimpleNamespace
+
+    config = ServerConfig(
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            allow_adhoc_browser_observers=True,
+        )
+    )
+    app = create_server_app(config, api_only=True)
+    hub = app.state.uterm_hub
+
+    async def _operator(_ws):
+        return Principal(subject_id="carol", roles=frozenset({"operator"}), scopes=frozenset())
+
+    monkeypatch.setattr(app.state.uterm_idp, "resolve_principal", _operator)
+    ws = SimpleNamespace(state=SimpleNamespace())
+    assert await hub.resolve_role_for_browser(ws, "ad-hoc-unregistered-optin-op") == "operator"
