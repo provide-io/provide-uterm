@@ -167,6 +167,12 @@ class TestOverrideIntegration:
 
 class TestFieldToHeaderMapping:
     def test_all_fields_mapped(self) -> None:
-        """Ensure every config field has a mapping."""
-        config_fields = {f for f in SecurityConfig.model_fields if f != "mode"}
+        """Ensure every header-related config field has a mapping.
+
+        Behavioral flags (``mode``, ``block_private_connector_targets``) are
+        excluded because they control connector egress or mode selection, not
+        HTTP response headers.
+        """
+        _NON_HEADER_FIELDS = {"mode", "block_private_connector_targets"}
+        config_fields = {f for f in SecurityConfig.model_fields if f not in _NON_HEADER_FIELDS}
         assert config_fields == set(_FIELD_TO_HEADER.keys())
