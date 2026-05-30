@@ -253,7 +253,7 @@ async def test_webhook_fanout_gate_handles_200_non_200_and_exception() -> None:
         assert (await gate.intercept_fanout("ls", ctx)).action == "deny"
 
 
-async def test_webhook_behavioral_gate_defaults_to_allow_on_error() -> None:
+async def test_webhook_behavioral_gate_fails_closed_on_error() -> None:
     import hashlib
     import hmac
     import time as _time
@@ -282,15 +282,15 @@ async def test_webhook_behavioral_gate_defaults_to_allow_on_error() -> None:
     expected = hmac.new(b"s", route.calls.last.request.content, hashlib.sha256).hexdigest()
     assert sig == f"sha256={expected}"
 
-    # Non-200 -> allow (safety default)
+    # Non-200 -> deny (fail closed by default)
     with respx.mock(assert_all_called=False) as r:
         r.post("http://hook.test/audit").mock(return_value=httpx.Response(503))
-        assert (await gate.audit_connection(heur, ctx, thr)).action == "allow"
+        assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
 
-    # Exception -> allow
+    # Exception -> deny (fail closed by default)
     with respx.mock(assert_all_called=False) as r:
         r.post("http://hook.test/audit").mock(side_effect=httpx.ConnectError("network down"))
-        assert (await gate.audit_connection(heur, ctx, thr)).action == "allow"
+        assert (await gate.audit_connection(heur, ctx, thr)).action == "deny"
 
 
 async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -> None:

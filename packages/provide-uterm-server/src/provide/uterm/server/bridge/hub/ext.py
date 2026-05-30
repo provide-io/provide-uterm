@@ -193,10 +193,14 @@ class NoOpBehavioralAuditGate:
 class WebhookBehavioralAuditGate:
     """Behavioral gate that delegates to an external webhook."""
 
-    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0):
+    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0, *, fail_open: bool = False):
+        # fail_open: when the webhook errors, allow (True) instead of the
+        # secure default deny (False). Programmatic opt-out; surfacing it as a
+        # GovernanceConfig field is a planned follow-up.
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        self.fail_open = fail_open
 
     async def audit_connection(
         self,
@@ -218,9 +222,9 @@ class WebhookBehavioralAuditGate:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
                     return PolicyDecision(**resp.json())
-                return PolicyDecision(action="allow")  # Default to allow on error
+                return PolicyDecision(action="allow" if self.fail_open else "deny")
         except Exception:
-            return PolicyDecision(action="allow")
+            return PolicyDecision(action="allow" if self.fail_open else "deny")
 
 
 # Standardized DAS Events for Terminal Sessions
