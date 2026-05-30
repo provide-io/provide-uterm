@@ -394,6 +394,7 @@ class GovernanceConfig(ServerBaseModel):
     behavioral_audit_interval_s: float = 30.0
     behavioral_max_cps: float | None = None
     behavioral_min_jitter: float | None = None
+    behavioral_fail_open: bool = False
 
     external_connectors: list[str] = Field(default_factory=list)
 
