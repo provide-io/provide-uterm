@@ -59,6 +59,11 @@ _ENV_VALUE = 1
 _ENV_ESC = 2
 _ENV_USERVAR = 3
 
+# Max bytes buffered for a single IAC subnegotiation before it is abandoned.
+# Legitimate TTYPE / NEW-ENVIRON payloads are tiny; 4 KiB is far above any real
+# value and bounds a hostile client that opens `IAC SB` and never sends `IAC SE`.
+_MAX_SB_BYTES = 4096
+
 
 # ---------------------------------------------------------------------------
 # Palette derivation (shared with the SSH path — SSH has native pty-req /
@@ -223,10 +228,10 @@ class IacNegotiator:
                     continue
                 # Literal IAC inside SB is escaped as IAC IAC.
                 if data[i] == _IAC and i + 1 < n and data[i + 1] == _IAC:
-                    self._sb_buf.append(_IAC)
+                    self._append_sb(_IAC)
                     i += 2
                     continue
-                self._sb_buf.append(data[i])
+                self._append_sb(data[i])
                 i += 1
                 continue
             b = data[i]
@@ -289,6 +294,19 @@ class IacNegotiator:
             return _iac_sb_send(_OPT_NEW_ENVIRON)
         # Client declined — accept the refusal silently; nothing else to do.
         return b""
+
+    def _append_sb(self, byte: int) -> None:
+        """Buffer a subnegotiation byte, abandoning the SB if it grows too large.
+
+        Past ``_MAX_SB_BYTES`` the subnegotiation is discarded and SB state is
+        reset so a client that never sends ``IAC SE`` cannot grow ``_sb_buf``
+        without bound.
+        """
+        if len(self._sb_buf) >= _MAX_SB_BYTES:
+            self._sb_option = None
+            self._sb_buf = bytearray()
+            return
+        self._sb_buf.append(byte)
 
     def _finish_sb(self) -> None:
         """Called when we see ``IAC SE`` that closes a subnegotiation."""
