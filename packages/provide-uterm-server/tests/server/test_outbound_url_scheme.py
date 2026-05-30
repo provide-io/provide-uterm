@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from provide.uterm.server.config_schema import AuthConfig, GovernanceConfig
+from provide.uterm.server.config_schema import AuthConfig, GovernanceConfig, PamConfig, RecordingConfig
 
 
 def test_cleartext_governance_url_to_remote_host_is_rejected() -> None:
@@ -37,3 +37,23 @@ def test_localhost_http_idp_url_allowed() -> None:
 def test_non_http_scheme_rejected() -> None:
     with pytest.raises(ValueError, match="http"):
         GovernanceConfig(policy_webhook_url="ftp://policy.internal/x")
+
+
+def test_cleartext_recording_webhook_url_is_rejected() -> None:
+    with pytest.raises(ValueError, match="https"):
+        RecordingConfig(webhook_url="http://recorder.internal/x")
+
+
+def test_https_recording_webhook_url_is_accepted() -> None:
+    cfg = RecordingConfig(webhook_url="https://recorder.internal/x")
+    assert cfg.webhook_url == "https://recorder.internal/x"
+
+
+def test_cleartext_pam_relay_url_is_rejected() -> None:
+    with pytest.raises(ValueError, match="https"):
+        PamConfig(relay_url="http://relay.internal/x")
+
+
+def test_loopback_http_pam_relay_url_is_allowed_for_dev() -> None:
+    cfg = PamConfig(relay_url="http://localhost:9000/x")
+    assert cfg.relay_url == "http://localhost:9000/x"
