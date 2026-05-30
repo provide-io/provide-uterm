@@ -61,11 +61,13 @@ class SessionLogger:
                     # Always append to support 'test_file_opens_in_append_mode'
                     with self._path.open("a", encoding="utf-8") as f:
                         f.write(json.dumps(event) + "\n")
+                    self._path.chmod(0o600)
 
                 async def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
                     with self._path.open("a", encoding="utf-8") as f:
                         for e in events:
                             f.write(json.dumps(e) + "\n")
+                    self._path.chmod(0o600)
 
                 async def end_session(self, session_id: str) -> None:
                     event = {"ts": time.time(), "event": "log_stop", "data": {}, "session_id": session_id}

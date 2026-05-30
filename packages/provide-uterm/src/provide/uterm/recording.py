@@ -136,6 +136,7 @@ class LocalFileRecordingStore(RecordingStore):
             path = self._get_path(session_id)
             path.parent.mkdir(parents=True, exist_ok=True)
             f = path.open("a", encoding="utf-8")
+            path.chmod(0o600)
             self._files[session_id] = f
             event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
             f.write(json.dumps(event) + "\n")
@@ -147,6 +148,7 @@ class LocalFileRecordingStore(RecordingStore):
             if not f:
                 path = self._get_path(session_id)
                 f = path.open("a", encoding="utf-8")
+                path.chmod(0o600)
                 self._files[session_id] = f
 
             for event in events:
