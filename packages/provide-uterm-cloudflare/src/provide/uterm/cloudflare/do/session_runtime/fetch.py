@@ -93,6 +93,7 @@ class _FetchMixin:
                 headers={"content-type": "application/json"},
             )
         await self._ensure_meta()  # type: ignore[attr-defined]
+        await self._ensure_credentials()  # type: ignore[attr-defined]
 
         # Parse URL once — reused for worker WS check and socket role routing.
         upgrade_header = str(request.headers.get("Upgrade") or "").lower()  # type: ignore[attr-defined]
