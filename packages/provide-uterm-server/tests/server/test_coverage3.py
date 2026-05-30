@@ -92,11 +92,18 @@ def test_validate_auth_config_header_mode_passes() -> None:
 
 
 async def test_resolve_browser_role_no_principal_unknown_session_returns_viewer() -> None:
-    """_resolve_browser_role resolves principal when ws.state lacks uterm_principal."""
+    """_resolve_browser_role resolves principal when ws.state lacks uterm_principal.
+
+    With allow_adhoc_browser_observers=True, a viewer principal resolved via the
+    local IDP returns 'viewer' for an unregistered worker.  This covers the
+    local-IDP branch that calls resolve_ws_principal() instead of the webhook path.
+    """
     cfg = default_server_config()
     cfg.auth.mode = "header"
     cfg.auth.header_mode_acknowledged = True
     cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+    # Opt in so the viewer role is honored for ad-hoc (unregistered) workers.
+    cfg.auth.allow_adhoc_browser_observers = True
     app = create_server_app(cfg)
     hub = app.state.uterm_hub
 

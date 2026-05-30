@@ -84,6 +84,12 @@ class AuthConfig(ServerBaseModel):
     # behaviour for callers who explicitly want it.
     webhook_idp_on_failure: Literal["deny", "viewer"] = "deny"
 
+    # When a worker has no registered SessionDefinition (ad-hoc), browser
+    # observers are denied by default -- only a global admin may observe. Set
+    # this True to restore the legacy behavior of honoring the principal's role
+    # claim for unregistered workers.
+    allow_adhoc_browser_observers: bool = False
+
     @model_validator(mode="after")
     def _validate_proxy_secret(self) -> AuthConfig:
         if self.require_upstream_proxy_secret and not str(self.upstream_proxy_secret or "").strip():
