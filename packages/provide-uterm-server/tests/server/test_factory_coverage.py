@@ -304,3 +304,33 @@ async def test_approval_sweep_error_is_swallowed(monkeypatch: pytest.MonkeyPatch
         await asyncio.wait_for(called.wait(), timeout=5.0)
     # No exception escaping means the except path absorbed the error.
     assert called.is_set()
+
+
+@pytest.mark.asyncio
+async def test_approval_sweep_cancellation_is_reraised(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the lifespan cancels the approval sweep while cleanup_expired is
+    awaiting, the CancelledError must propagate (not be swallowed) so the task
+    actually stops — this drives the ``except asyncio.CancelledError: raise``
+    branch."""
+    config = default_server_config()
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    inside = asyncio.Event()
+
+    async def _block_cleanup() -> None:
+        # Park inside the sweep's try block so the lifespan's cancel lands on
+        # an awaiting cleanup_expired, raising CancelledError from here.
+        inside.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(app.state.uterm_hub.approval_store, "cleanup_expired", _block_cleanup)
+
+    with TestClient(app):
+        # Ensure the sweep task is parked inside cleanup_expired before the
+        # lifespan teardown cancels it.
+        await asyncio.wait_for(inside.wait(), timeout=5.0)
+    # Reaching here means the lifespan teardown completed cleanly: the
+    # CancelledError was re-raised and awaited without escaping.
+    assert inside.is_set()
