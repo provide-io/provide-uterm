@@ -33,6 +33,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV PATH="/root/.local/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
+# Pin every `uv sync` / `uv run` in this image to the committed uv.lock (no
+# in-image re-resolution), including the `uv run pywrangler` CMD below.
+ENV UV_FROZEN=1
 
 # Install wrangler CLI (required by pywrangler)
 RUN npm install -g wrangler@latest
@@ -46,8 +49,9 @@ COPY packages/provide-uterm-cloudflare/ packages/provide-uterm-cloudflare/
 
 WORKDIR /app/packages/provide-uterm-cloudflare
 
-# Install CF package dependencies including dev extras (workers-py provides pywrangler)
-RUN uv sync --extra dev
+# Install CF package dependencies including dev extras (workers-py provides
+# pywrangler) from the committed lock (UV_FROZEN=1 above).
+RUN uv sync --frozen --extra dev
 
 # Populate the CF package's static dir with compiled frontend assets so the
 # worker can serve the UI without needing the provide-uterm package at runtime.
