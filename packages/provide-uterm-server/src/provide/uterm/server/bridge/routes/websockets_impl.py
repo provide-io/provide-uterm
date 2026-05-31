@@ -337,77 +337,89 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
         # send a resume if the worker is still paused.  Does NOT reflect current
         # ownership — check hub state for that.
         owned_hijack = False
+        # Declared before the try so the finally can safely guard it: the
+        # cleanup task is created INSIDE the try (after the handshake), so on
+        # an early disconnect/raise it may never be assigned.
+        cleanup_task: asyncio.Task[None] | None = None
         # Capture all startup state atomically while registering the browser.
+        # register_browser increments the per-principal browser quota; the
+        # paired decrement lives in cleanup_browser_disconnect, invoked from
+        # the finally below. The try MUST start immediately after this call so
+        # that any setup line raising (or the browser disconnecting) between
+        # the increment and the receive loop still runs the finally — otherwise
+        # the quota counter leaks and the principal is eventually locked out.
         browser_state = await hub.register_browser(worker_id, websocket, role, defer_broadcast=True)
-        await hub.touch_activity(worker_id)
-        with get_tracer(__name__).start_as_current_span("uterm.ws.browser.connect") as _b_span:
-            _set_ws_span_attrs(_b_span, worker_id=worker_id, operation="ws.browser.connect", role=role)
-        is_hijacked = browser_state["is_hijacked"]
-        hijacked_by_me = browser_state["hijacked_by_me"]
-        worker_online = browser_state["worker_online"]
-        input_mode = browser_state["input_mode"]
-        initial_snapshot = browser_state["initial_snapshot"]
+        try:
+            await hub.touch_activity(worker_id)
+            with get_tracer(__name__).start_as_current_span("uterm.ws.browser.connect") as _b_span:
+                _set_ws_span_attrs(_b_span, worker_id=worker_id, operation="ws.browser.connect", role=role)
+            is_hijacked = browser_state["is_hijacked"]
+            hijacked_by_me = browser_state["hijacked_by_me"]
+            worker_online = browser_state["worker_online"]
+            input_mode = browser_state["input_mode"]
+            initial_snapshot = browser_state["initial_snapshot"]
 
-        _resume_token = browser_state.get("resume_token")
-        _hello_kwargs: dict[str, Any] = {
-            "worker_id": worker_id,
-            "can_hijack": can_hijack,
-            "hijacked": is_hijacked,
-            "hijacked_by_me": hijacked_by_me,
-            "worker_online": worker_online,
-            "input_mode": input_mode,
-            "role": role,
-            "hijack_control": "ws",
-            "hijack_step_supported": True,
-            "capabilities": {
+            _resume_token = browser_state.get("resume_token")
+            _hello_kwargs: dict[str, Any] = {
+                "worker_id": worker_id,
+                "can_hijack": can_hijack,
+                "hijacked": is_hijacked,
+                "hijacked_by_me": hijacked_by_me,
+                "worker_online": worker_online,
+                "input_mode": input_mode,
+                "role": role,
                 "hijack_control": "ws",
                 "hijack_step_supported": True,
-            },
-            "resume_supported": hub.resume_store is not None,
-            "resume_token": _resume_token,
-            "protocol_version": CURRENT_PROTOCOL_VERSION,
-            # Range advertisement for client-side negotiation. Browsers
-            # currently don't echo back, so this is informational; the
-            # field exists so future browser versions can read it.
-            "protocol": {
-                "selected": PREFERRED_PROTOCOL_VERSION,
-                "server_min": MIN_PROTOCOL_VERSION,
-                "server_max": MAX_PROTOCOL_VERSION,
-            },
-        }
-        if hasattr(hub, "deckmux_on_browser_connect"):
-            _hello_kwargs["presence_enabled"] = True
-        await websocket.send_text(encode_control(make_hello_frame(**_hello_kwargs)))
-        await websocket.send_text(encode_control(await hub.hijack_state_msg_for(worker_id, websocket)))
+                "capabilities": {
+                    "hijack_control": "ws",
+                    "hijack_step_supported": True,
+                },
+                "resume_supported": hub.resume_store is not None,
+                "resume_token": _resume_token,
+                "protocol_version": CURRENT_PROTOCOL_VERSION,
+                # Range advertisement for client-side negotiation. Browsers
+                # currently don't echo back, so this is informational; the
+                # field exists so future browser versions can read it.
+                "protocol": {
+                    "selected": PREFERRED_PROTOCOL_VERSION,
+                    "server_min": MIN_PROTOCOL_VERSION,
+                    "server_max": MAX_PROTOCOL_VERSION,
+                },
+            }
+            if hasattr(hub, "deckmux_on_browser_connect"):
+                _hello_kwargs["presence_enabled"] = True
+            await websocket.send_text(encode_control(make_hello_frame(**_hello_kwargs)))
+            await websocket.send_text(encode_control(await hub.hijack_state_msg_for(worker_id, websocket)))
 
-        _dm_connect: Any = getattr(hub, "deckmux_on_browser_connect", None)
-        if _dm_connect is not None:
-            _dm_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
-            sync_msg = await _dm_connect(worker_id, websocket, role, principal=_dm_principal)
-            if sync_msg:
-                await websocket.send_text(encode_control(sync_msg))
+            _dm_connect: Any = getattr(hub, "deckmux_on_browser_connect", None)
+            if _dm_connect is not None:
+                _dm_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
+                sync_msg = await _dm_connect(worker_id, websocket, role, principal=_dm_principal)
+                if sync_msg:
+                    await websocket.send_text(encode_control(sync_msg))
 
-        if initial_snapshot is not None:
-            _gate = getattr(hub, "_output_policy_gate", None)
-            if _gate is not None:
-                from provide.uterm.server.bridge.hub.redaction import StreamRedactor
-                from provide.uterm.server.bridge.hub.router_impl import _redact_frame_fields
+            if initial_snapshot is not None:
+                _gate = getattr(hub, "_output_policy_gate", None)
+                if _gate is not None:
+                    from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+                    from provide.uterm.server.bridge.hub.router_impl import _redact_frame_fields
 
-                _ctx = await hub.prepare_policy_context(websocket, worker_id, action="output")
-                _rules = await _gate.get_redaction_rules(_ctx)
-                if _rules:
-                    initial_snapshot = _redact_frame_fields(
-                        cast("dict[str, Any]", dict(initial_snapshot)),
-                        StreamRedactor(_rules),
-                    )
-            await websocket.send_text(encode_control(initial_snapshot))
-        else:
-            await hub.request_snapshot(worker_id)
-        await hub.activate_browser_broadcasts(worker_id, websocket)
+                    _ctx = await hub.prepare_policy_context(websocket, worker_id, action="output")
+                    _rules = await _gate.get_redaction_rules(_ctx)
+                    if _rules:
+                        initial_snapshot = _redact_frame_fields(
+                            cast("dict[str, Any]", dict(initial_snapshot)),
+                            StreamRedactor(_rules),
+                        )
+                await websocket.send_text(encode_control(initial_snapshot))
+            else:
+                await hub.request_snapshot(worker_id)
+            await hub.activate_browser_broadcasts(worker_id, websocket)
 
-        cleanup_task = asyncio.create_task(_periodic_hijack_cleanup(hub, worker_id, _BROWSER_HIJACK_CLEANUP_INTERVAL_S))
-        decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
-        try:
+            cleanup_task = asyncio.create_task(
+                _periodic_hijack_cleanup(hub, worker_id, _BROWSER_HIJACK_CLEANUP_INTERVAL_S)
+            )
+            decoder = ControlChannelDecoder(max_control_payload_bytes=hub.max_ws_message_bytes)
             _browser_bucket = TokenBucket(hub.browser_rate_limit_per_sec)
             # Separate budget for non-input control frames. See
             # ``browser_control_rate_limit_per_sec`` in TermHub for the
@@ -514,9 +526,12 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
             if _dm_disconnect is not None:
                 _dm_disc_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
                 await _dm_disconnect(worker_id, websocket, principal=_dm_disc_principal)
-            cleanup_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await cleanup_task
+            # cleanup_task may be None if the handshake raised before it was
+            # created (e.g. a mid-handshake disconnect); guard both references.
+            if cleanup_task is not None:
+                cleanup_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cleanup_task
             # Atomically detect ownership, capture REST-session liveness, and clear
             # the owner — all in one lock block to avoid the TOCTOU window where
             # _is_owner() returns True but another coroutine steals hijack_owner
