@@ -118,8 +118,12 @@ def test_redact_frame_fields_analysis_formatted_and_raw_str() -> None:
     assert msg["formatted"] == "saw sk_live_ABC"
 
 
-def test_redact_frame_fields_analysis_raw_non_str() -> None:
-    """analysis frames: raw that is not a str is left unchanged."""
+def test_redact_frame_fields_analysis_raw_structured() -> None:
+    """analysis frames: raw that is a dict is recursively redacted (M4).
+
+    Pre-M4 a structured ``raw`` was shipped verbatim; now nested string values
+    are redacted while scalars are preserved.
+    """
     redactor = StreamRedactor(_STRIPE_RULES)
     msg: dict[str, Any] = {
         "type": "analysis",
@@ -129,7 +133,103 @@ def test_redact_frame_fields_analysis_raw_non_str() -> None:
     }
     result = _redact_frame_fields(msg, redactor)
     assert result["formatted"] == "ok [REDACTED]"
-    assert result["raw"] == {"nested": "sk_live_ABC"}  # dict untouched
+    assert result["raw"] == {"nested": "[REDACTED]"}  # nested string redacted
+    # original not mutated
+    assert msg["raw"] == {"nested": "sk_live_ABC"}
+
+
+def test_redact_frame_fields_snapshot_prompt_detected_redacted() -> None:
+    """M4: snapshot.prompt_detected (a dict carrying matched prompt text) is redacted."""
+    redactor = StreamRedactor(_STRIPE_RULES)
+    msg: dict[str, Any] = {
+        "type": "snapshot",
+        "screen": "ok",
+        "raw_tail": None,
+        "prompt_detected": {"matched": "login sk_live_ABC here", "name": "login"},
+    }
+    result = _redact_frame_fields(msg, redactor)
+    assert result["prompt_detected"] == {"matched": "login [REDACTED] here", "name": "login"}
+    # original not mutated
+    assert msg["prompt_detected"]["matched"] == "login sk_live_ABC here"
+
+
+def test_redact_frame_fields_snapshot_prompt_detected_none_untouched() -> None:
+    """M4: snapshot.prompt_detected=None passes through unchanged (and doesn't raise)."""
+    redactor = StreamRedactor(_STRIPE_RULES)
+    msg: dict[str, Any] = {"type": "snapshot", "screen": "sk_live_ABC", "prompt_detected": None}
+    result = _redact_frame_fields(msg, redactor)
+    assert result["prompt_detected"] is None
+    assert result["screen"] == "[REDACTED]"
+
+
+def test_redact_frame_fields_snapshot_without_prompt_detected_key() -> None:
+    """M4: a snapshot event payload without a prompt_detected key is unaffected."""
+    redactor = StreamRedactor(_STRIPE_RULES)
+    msg: dict[str, Any] = {"type": "snapshot", "screen": "sk_live_ABC", "screen_hash": "h"}
+    result = _redact_frame_fields(msg, redactor)
+    assert "prompt_detected" not in result
+    assert result["screen"] == "[REDACTED]"
+
+
+def test_redact_frame_fields_analysis_raw_structured_redacted() -> None:
+    """M4: analysis.raw as a nested dict/list is recursively redacted (not shipped verbatim)."""
+    redactor = StreamRedactor(_STRIPE_RULES)
+    msg: dict[str, Any] = {
+        "type": "analysis",
+        "formatted": "ok",
+        "raw": {"nested": ["sk_live_ABC", {"deep": "sk_live_XYZ"}], "n": 7, "flag": True},
+        "ts": 1.0,
+    }
+    result = _redact_frame_fields(msg, redactor)
+    assert result["raw"] == {"nested": ["[REDACTED]", {"deep": "[REDACTED]"}], "n": 7, "flag": True}
+    # scalars are preserved as-is
+    assert result["raw"]["n"] == 7
+    assert result["raw"]["flag"] is True
+    # original not mutated
+    assert msg["raw"]["nested"][0] == "sk_live_ABC"
+
+
+def test_redact_frame_fields_analysis_raw_list_redacted() -> None:
+    """M4: analysis.raw as a top-level list is recursively redacted."""
+    redactor = StreamRedactor(_STRIPE_RULES)
+    msg: dict[str, Any] = {
+        "type": "analysis",
+        "formatted": "ok",
+        "raw": ["plain", "sk_live_ABC", 42],
+    }
+    result = _redact_frame_fields(msg, redactor)
+    assert result["raw"] == ["plain", "[REDACTED]", 42]
+
+
+def test_redact_value_caps_recursion_depth() -> None:
+    """M4: _redact_value stops recursing past the depth cap (defensive; returns the deep value as-is)."""
+    from provide.uterm.server.bridge.hub.router_impl import _redact_value
+
+    redactor = StreamRedactor(_STRIPE_RULES)
+    # Build a structure deeper than the cap; the secret below the cap is NOT redacted
+    # (the cap is a defensive stop, not a correctness requirement — real frames are shallow).
+    deep: Any = "sk_live_DEEP"
+    for _ in range(40):
+        deep = [deep]
+    result = _redact_value(deep, redactor)
+    # Walk back down to confirm the too-deep secret survived (depth cap kicked in).
+    cur = result
+    while isinstance(cur, list):
+        cur = cur[0]
+    assert cur == "sk_live_DEEP"
+
+
+def test_redact_value_redacts_within_depth() -> None:
+    """M4: _redact_value redacts strings within a shallow structure."""
+    from provide.uterm.server.bridge.hub.router_impl import _redact_value
+
+    redactor = StreamRedactor(_STRIPE_RULES)
+    assert _redact_value("sk_live_ABC", redactor) == "[REDACTED]"
+    assert _redact_value(["sk_live_ABC", {"k": "sk_live_XYZ"}], redactor) == ["[REDACTED]", {"k": "[REDACTED]"}]
+    # scalars unchanged
+    assert _redact_value(7, redactor) == 7
+    assert _redact_value(None, redactor) is None
+    assert _redact_value(True, redactor) is True
 
 
 def test_redact_frame_fields_other_type_passthrough() -> None:
@@ -220,8 +320,8 @@ async def test_analysis_broadcast_redaction() -> None:
 
 
 @pytest.mark.asyncio
-async def test_analysis_broadcast_raw_non_str_untouched() -> None:
-    """analysis broadcast: raw that is a dict is not stringified/redacted."""
+async def test_analysis_broadcast_raw_structured_redacted() -> None:
+    """analysis broadcast: raw that is a dict is recursively redacted (M4)."""
     gate = MockOutputPolicy(_STRIPE_RULES)
     hub = TermHub(output_policy_gate=gate)
     worker_id = "w-analysis-raw"
@@ -244,8 +344,10 @@ async def test_analysis_broadcast_raw_non_str_untouched() -> None:
     af = analysis_frames[0]
     # formatted should be redacted
     assert "sk_live_" not in af["formatted"]
-    # raw dict should be unchanged (still a dict with nested secret)
+    # raw dict's nested secret is now redacted, not shipped verbatim
     assert isinstance(af.get("raw"), dict)
+    assert "sk_live_" not in str(af["raw"])
+    assert af["raw"] == {"nested_key": "[REDACTED]"}
 
 
 @pytest.mark.asyncio
