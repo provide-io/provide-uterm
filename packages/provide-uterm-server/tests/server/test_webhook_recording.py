@@ -179,3 +179,66 @@ async def test_webhook_recording_post_failure_exception():
     async with respx.mock:
         respx.post(url).mock(side_effect=httpx.ConnectError("fail"))
         await store.append_events("sid", [])
+
+
+# ---------------------------------------------------------------------------
+# L28: outbound recording webhooks honour the egress SSRF guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_recording_post_metadata_url_not_sent():
+    """_post to a cloud-metadata IP must be blocked by the egress guard and
+    degrade gracefully (no HTTP request made, no exception raised)."""
+    url = "http://169.254.169.254/recording"
+    store = WebhookRecordingStore(url)
+
+    async with respx.mock:
+        route = respx.post(url).mock(return_value=httpx.Response(200))
+        # start_session → _post; must not raise and must not POST.
+        await store.start_session("sid", {"user": "alice"})
+        assert not route.called
+
+
+@pytest.mark.asyncio
+async def test_webhook_recording_get_metadata_url_not_sent():
+    """_get to a cloud-metadata IP must be blocked by the egress guard and
+    degrade gracefully (no HTTP request made, meta returns the not-found default)."""
+    url = "http://169.254.169.254/recording"
+    store = WebhookRecordingStore(url)
+
+    async with respx.mock:
+        route = respx.get(f"{url}/sid/meta").mock(return_value=httpx.Response(200, json={"x": 1}))
+        meta = await store.recording_meta("sid")
+        assert not route.called
+        # _get returned None (guard blocked) → recording_meta falls back to default.
+        assert meta == {"session_id": "sid", "exists": False, "size_bytes": 0}
+
+
+@pytest.mark.asyncio
+async def test_webhook_recording_post_allowed_url_proceeds():
+    """With an allowed (benign-resolving) URL the POST proceeds normally.
+
+    The autouse _stub_egress_resolver fixture resolves the host to a benign
+    public IP, so the egress guard passes and the request is sent.
+    """
+    url = "https://fleet.example.com/webhooks/recording"
+    store = WebhookRecordingStore(url)
+
+    async with respx.mock:
+        route = respx.post(url).mock(return_value=httpx.Response(200))
+        await store.start_session("sid", {"user": "alice"})
+        assert route.called
+
+
+@pytest.mark.asyncio
+async def test_webhook_recording_get_allowed_url_proceeds():
+    """With an allowed URL the _get request proceeds normally."""
+    url = "https://fleet.example.com/webhooks/recording"
+    store = WebhookRecordingStore(url)
+
+    async with respx.mock:
+        route = respx.get(f"{url}/sid/meta").mock(return_value=httpx.Response(200, json={"exists": True}))
+        meta = await store.recording_meta("sid")
+        assert route.called
+        assert meta == {"exists": True}
