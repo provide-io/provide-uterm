@@ -502,6 +502,7 @@ def create_server_app(
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
         max_connections_per_principal=config.max_connections_per_principal,
+        max_workers=config.max_workers,
         event_bus=EventBus(on_metric=_inc_metric),
         policy_gate=policy_gate,
         identity_provider=idp,

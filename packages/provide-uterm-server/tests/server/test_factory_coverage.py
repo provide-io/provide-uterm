@@ -39,6 +39,18 @@ async def test_factory_initializes_webhook_behavioral_audit_gate() -> None:
         await app.state.uterm_hub.shutdown()
 
 
+async def test_factory_threads_max_workers_to_hub() -> None:
+    """Fix 2b: config.max_workers is passed through to the constructed hub."""
+    config = default_server_config()
+    config.max_workers = 7
+
+    app = create_server_app(config, api_only=True)
+    try:
+        assert app.state.uterm_hub.max_workers == 7
+    finally:
+        await app.state.uterm_hub.shutdown()
+
+
 def test_factory_uses_webhook_recording_store() -> None:
     """recording.store_type='webhook' with a webhook_url selects WebhookRecordingStore."""
     config = default_server_config()

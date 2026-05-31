@@ -133,6 +133,19 @@ class ConnectionManager:
         hub = self._hub
         with tracer.start_as_current_span("uterm.worker.register", attributes={"worker_id": worker_id}):
             async with hub._lock:
+                # --- Global worker-registration cap (OOM bound) ---
+                # Only reject a brand-NEW worker_id once the map is full. A
+                # reconnecting, already-registered worker_id (CF DO rotation,
+                # manager restart, network blip) MUST always be allowed — the
+                # ``worker_id not in _workers`` guard preserves reconnects (see
+                # the lease-preservation note below).
+                if worker_id not in hub.registry._workers and len(hub.registry._workers) >= hub.max_workers:
+                    from fastapi import WebSocketException
+
+                    raise WebSocketException(
+                        code=1008,
+                        reason="worker capacity exceeded",
+                    )
                 st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
                 st.events = deque(st.events, maxlen=hub._event_deque_maxlen)
                 # Only clear hijack state when the EXISTING lease is

@@ -582,6 +582,7 @@ class TermHub:
         max_buffer_chars: int = 40_000,
         max_event_data_chars: int = 8192,
         max_connections_per_principal: int = 25,
+        max_workers: int = 10000,
     ) -> None:
         self._lock = asyncio.Lock()
         # WorkerRegistry owns the worker map; the legacy ``_workers``
@@ -652,6 +653,11 @@ class TermHub:
         # Only concrete, non-anonymous principals are counted; the count is
         # decremented on browser disconnect so the dict never grows unboundedly.
         self.max_connections_per_principal = max(1, int(max_connections_per_principal))
+        # Generous GLOBAL cap on distinct worker_ids (workers share a static
+        # principal, so the per-principal browser quota does not bound them).
+        # Bounds OOM from unique-worker_id floods; reconnects of an already-
+        # registered worker_id are exempt. See register_worker in connection.py.
+        self.max_workers = max(1, int(max_workers))
         self._principal_browser_counts: dict[str, int] = {}
         # Reverse map from WebSocket → principal subject_id so the disconnect
         # path can decrement the right counter without re-reading ws.state
