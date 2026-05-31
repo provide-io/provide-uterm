@@ -201,6 +201,23 @@ def test_redact_frame_fields_analysis_raw_list_redacted() -> None:
     assert result["raw"] == ["plain", "[REDACTED]", 42]
 
 
+def test_redact_frame_fields_analysis_raw_none_or_absent_untouched() -> None:
+    """M4: analysis.raw that is neither str nor dict/list (None/absent) is left unset.
+
+    Covers the elif-False fall-through (raw is None) of the analysis branch.
+    """
+    redactor = StreamRedactor(_STRIPE_RULES)
+    # raw explicitly None
+    msg_none: dict[str, Any] = {"type": "analysis", "formatted": "ok sk_live_ABC", "raw": None}
+    result_none = _redact_frame_fields(msg_none, redactor)
+    assert result_none["formatted"] == "ok [REDACTED]"
+    assert result_none["raw"] is None
+    # raw absent entirely
+    msg_absent: dict[str, Any] = {"type": "analysis", "formatted": "ok"}
+    result_absent = _redact_frame_fields(msg_absent, redactor)
+    assert "raw" not in result_absent
+
+
 def test_redact_value_caps_recursion_depth() -> None:
     """M4: _redact_value stops recursing past the depth cap (defensive; returns the deep value as-is)."""
     from provide.uterm.server.bridge.hub.router_impl import _redact_value
