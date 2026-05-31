@@ -117,6 +117,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         # if fine-grained rate limiting is required.
         _client_id = (http_request.client.host if http_request.client else None) or "unknown"
         if not hub.allow_rest_acquire_for(_client_id):
+            hub.metric("rest_acquire_rate_limited_total")
             logger.warning("rest_acquire_rate_limited client=%s worker_id=%s", _client_id, worker_id)
             return JSONResponse({"error": "rate_limited"}, status_code=429)
         if request is None:
@@ -311,6 +312,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
     ) -> Any:
         _client_id = (http_request.client.host if http_request.client else None) or "unknown"
         if not hub.allow_rest_send_for(_client_id):
+            hub.metric("rest_send_rate_limited_total")
             logger.warning(
                 "rest_send_rate_limited worker_id=%s hijack_id=%s client=%s", worker_id, hijack_id, _client_id
             )
@@ -389,6 +391,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
     ) -> Any:
         _client_id = (http_request.client.host if http_request.client else None) or "unknown"
         if not hub.allow_rest_send_for(_client_id):
+            hub.metric("rest_step_rate_limited_total")
             logger.warning(
                 "rest_step_rate_limited worker_id=%s hijack_id=%s client=%s", worker_id, hijack_id, _client_id
             )

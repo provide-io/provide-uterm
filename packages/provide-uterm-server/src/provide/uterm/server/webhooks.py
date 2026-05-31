@@ -63,6 +63,8 @@ _DELIVER_TIMEOUT_S = 5.0
 # webhook will never succeed and continuing to evaluate it just wastes work.
 _MAX_BLOCKED_DELIVERIES = 3
 Resolver = Callable[[str], Sequence[str] | Awaitable[Sequence[str]]]
+# OnMetric type alias: callable(name, value=1) or None
+_OnMetric = Callable[[str, int], None] | None
 
 _METADATA_IPS = frozenset(
     {
@@ -176,11 +178,18 @@ class WebhookManager:
     the webhook is unregistered or when :meth:`shutdown` is called.
     """
 
-    def __init__(self, *, resolver: Resolver | None = None, allow_loopback_destinations: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        resolver: Resolver | None = None,
+        allow_loopback_destinations: bool = False,
+        on_metric: _OnMetric = None,
+    ) -> None:
         self._webhooks: dict[str, WebhookConfig] = {}  # webhook_id → config
         self._tasks: dict[str, asyncio.Task[None]] = {}  # webhook_id → task
         self._resolver = resolver if resolver is not None else _resolve_host
         self._allow_loopback_destinations = bool(allow_loopback_destinations)
+        self._on_metric = on_metric
         # Per-webhook count of consecutive deliveries blocked by the SSRF
         # guard. After ``_MAX_BLOCKED_DELIVERIES`` the webhook is auto-
         # unregistered to avoid burning CPU re-evaluating it forever.
@@ -307,6 +316,7 @@ class WebhookManager:
         ):
             self._blocked_counts[cfg.webhook_id] = self._blocked_counts.get(cfg.webhook_id, 0) + 1
             count = self._blocked_counts[cfg.webhook_id]
+            self._on_metric and self._on_metric("webhook_delivery_blocked_total", 1)
             logger.warning(
                 "webhook_delivery_blocked webhook_id=%s url=%s reason=unsafe_destination count=%d",
                 cfg.webhook_id,
@@ -314,6 +324,7 @@ class WebhookManager:
                 count,
             )
             if count >= _MAX_BLOCKED_DELIVERIES:
+                self._on_metric and self._on_metric("webhook_auto_unregistered_total", 1)
                 logger.error(
                     "webhook_auto_unregistered webhook_id=%s url=%s reason=ssrf_guard_threshold count=%d",
                     cfg.webhook_id,
@@ -350,6 +361,7 @@ class WebhookManager:
                     resp = await http.post(cfg.url, content=body, headers=headers)
                 if resp.is_success:
                     return
+                self._on_metric and self._on_metric("webhook_delivery_failed_total", 1)
                 logger.warning(
                     "webhook_delivery_failed webhook_id=%s url=%s status=%d attempt=%d",
                     cfg.webhook_id,
@@ -367,6 +379,7 @@ class WebhookManager:
                 )
             if delay is not None:
                 await asyncio.sleep(delay)
+        self._on_metric and self._on_metric("webhook_delivery_giving_up_total", 1)
         logger.error(
             "webhook_delivery_giving_up webhook_id=%s url=%s",
             cfg.webhook_id,

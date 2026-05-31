@@ -434,12 +434,14 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     msg_b = {"type": "input", "data": event.data} if isinstance(event, DataChunk) else event.control
                     mtype = msg_b.get("type")
                     if mtype == "input" and not _browser_bucket.allow():
+                        hub.metric("ws_browser_rate_limited_total")
                         logger.warning("ws_browser_rate_limited worker_id=%s", worker_id)
                         with suppress(Exception):
                             await websocket.send_text(encode_control(make_error_frame("rate_limited")))
                             logger.debug("ws_browser_rate_limited_sent worker_id=%s", worker_id)
                         continue
                     if mtype is not None and mtype != "input" and not _browser_control_bucket.allow():
+                        hub.metric("ws_browser_control_rate_limited_total")
                         logger.warning("ws_browser_control_rate_limited worker_id=%s mtype=%s", worker_id, mtype)
                         with suppress(Exception):
                             await websocket.send_text(encode_control(make_error_frame("rate_limited")))
