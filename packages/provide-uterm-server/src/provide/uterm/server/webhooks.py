@@ -33,9 +33,9 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
-from opentelemetry.propagate import inject
 
 from provide.telemetry import get_logger
+from provide.uterm.server.tracing import inject_trace_context
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import EventBus
@@ -356,9 +356,9 @@ class WebhookManager:
             headers["X-Uterm-Timestamp"] = ts
             headers["X-Uterm-Signature"] = build_webhook_signature(cfg.secret, body, ts)
         # Propagate the active W3C trace context onto the delivery so the
-        # downstream webhook receiver joins the same distributed trace. No-op
-        # when no recording span is active.
-        inject(headers)
+        # downstream webhook receiver joins the same distributed trace. Via
+        # provide.telemetry (OpenTelemetry-optional) — no-op when no span active.
+        inject_trace_context(headers)
 
         for attempt, delay in enumerate((*_RETRY_DELAYS, None)):
             try:

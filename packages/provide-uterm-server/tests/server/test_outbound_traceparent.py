@@ -5,15 +5,14 @@
 """Fix 3c — outbound httpx calls propagate the W3C ``traceparent`` header.
 
 Webhooks, governance gates, and the delegated IDP all build an outbound
-``headers`` dict before POSTing. When the call runs inside an active span,
-``opentelemetry.propagate.inject`` must stamp ``traceparent`` (and
-``tracestate``) onto that dict so distributed traces survive the hop.
+``headers`` dict before POSTing. When a span is active, ``inject_trace_context``
+stamps ``traceparent`` onto that dict so distributed traces survive the hop.
 
-The OpenTelemetry **SDK** is not installed in the test environment, only
-``opentelemetry-api``. The default (no-op) tracer provider produces no
-``traceparent``. We therefore activate a ``NonRecordingSpan`` built from an
-explicit *sampled* ``SpanContext`` — that is enough for the W3C propagator to
-emit a ``traceparent`` using only the API package.
+Crucially this goes through ``provide.telemetry`` (which is OpenTelemetry-
+OPTIONAL) and imports NO ``opentelemetry`` — so the server never hard-requires
+opentelemetry just to propagate trace context. These tests drive the trace
+context via ``provide.telemetry.set_trace_context`` (the same contextvars a real
+span sets) and never import opentelemetry.
 """
 
 from __future__ import annotations
@@ -26,34 +25,55 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 import respx
-from opentelemetry import trace
-from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 
+from provide.telemetry import set_trace_context
 from provide.uterm.server.auth import WebhookIdentityProvider
 from provide.uterm.server.bridge.hub.ext import _build_webhook_headers
+from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhooks import WebhookManager
 
-# Known fixed trace/span ids so the emitted traceparent is deterministic.
-_TRACE_ID = 0x1234567890ABCDEF1234567890ABCDEF
-_SPAN_ID = 0x1234567890ABCDEF
+# Known fixed trace/span ids (W3C hex) so the emitted traceparent is deterministic.
+_TRACE_ID = "1234567890abcdef1234567890abcdef"
+_SPAN_ID = "1234567890abcdef"
 _EXPECTED_TRACEPARENT = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01"
 
 
 @contextlib.contextmanager
 def _active_span() -> Iterator[None]:
-    """Activate a sampled span so the W3C propagator emits a traceparent.
-
-    Uses a ``NonRecordingSpan`` so no SDK is required: the API-only propagator
-    reads the span's ``SpanContext`` to format the ``traceparent`` value.
-    """
-    ctx = SpanContext(
-        trace_id=_TRACE_ID,
-        span_id=_SPAN_ID,
-        is_remote=False,
-        trace_flags=TraceFlags(TraceFlags.SAMPLED),
-    )
-    with trace.use_span(NonRecordingSpan(ctx), end_on_exit=False):
+    """Set a provide.telemetry trace context (as an active span would), then clear it."""
+    set_trace_context(_TRACE_ID, _SPAN_ID)
+    try:
         yield
+    finally:
+        set_trace_context(None, None)
+
+
+# ---------------------------------------------------------------------------
+# 0) inject_trace_context branch matrix (no opentelemetry involved)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("trace_id", "span_id", "expect_header"),
+    [
+        (_TRACE_ID, _SPAN_ID, True),  # real ids → emit
+        (None, None, False),  # no context → no emit
+        ("0" * 32, _SPAN_ID, False),  # all-zero trace id (W3C invalid sentinel) → no emit
+        (_TRACE_ID, "0" * 16, False),  # all-zero span id → no emit
+        (_TRACE_ID, None, False),  # missing span id → no emit
+    ],
+)
+def test_inject_trace_context_branches(trace_id: str | None, span_id: str | None, expect_header: bool) -> None:
+    set_trace_context(trace_id, span_id)
+    try:
+        headers: dict[str, str] = {}
+        inject_trace_context(headers)
+    finally:
+        set_trace_context(None, None)
+    if expect_header:
+        assert headers["traceparent"] == _EXPECTED_TRACEPARENT
+    else:
+        assert "traceparent" not in headers
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +83,7 @@ def _active_span() -> Iterator[None]:
 
 def test_build_webhook_headers_injects_traceparent_inside_span() -> None:
     with _active_span():
-        headers = _build_webhook_headers("uterm-test-secret-32-byte-minimum-key", b"body")
+        headers = _build_webhook_headers("uterm-test-secret-32-byte-minimum-key", b"body")  # pragma: allowlist secret
 
     assert headers["traceparent"] == _EXPECTED_TRACEPARENT
     # Existing header behaviour must remain intact.
@@ -73,7 +93,7 @@ def test_build_webhook_headers_injects_traceparent_inside_span() -> None:
 
 
 def test_build_webhook_headers_no_traceparent_without_active_span() -> None:
-    # No active recording span context → propagator is a no-op.
+    set_trace_context(None, None)
     headers = _build_webhook_headers(None, b"body")
 
     assert "traceparent" not in headers
@@ -91,14 +111,7 @@ def _make_manager() -> WebhookManager:
 
 @pytest.mark.asyncio
 async def test_webhook_delivery_includes_traceparent_end_to_end() -> None:
-    """Exercise the real ``_deliver`` POST path under an active span.
-
-    Delivery normally runs in a long-lived background loop decoupled from the
-    span active when the event was enqueued, so the propagated trace context is
-    the one active *at delivery time*. We therefore drive ``_deliver`` directly
-    inside an active span — that is the genuine code path that builds the
-    outbound ``headers`` dict and POSTs it.
-    """
+    """Exercise the real ``_deliver`` POST path under an active trace context."""
     manager = _make_manager()
     secret = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
     cfg = await manager.register("s1", "https://example.com/hook", secret=secret)
@@ -111,9 +124,8 @@ async def test_webhook_delivery_includes_traceparent_end_to_end() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
-        with _active_span():
-            await manager._deliver(cfg, {"type": "snapshot", "data": {"screen": "$ traced"}})
+    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)), _active_span():
+        await manager._deliver(cfg, {"type": "snapshot", "data": {"screen": "$ traced"}})
 
     assert captured_headers
     assert captured_headers[0]["traceparent"] == _EXPECTED_TRACEPARENT

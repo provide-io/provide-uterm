@@ -8,9 +8,27 @@ from __future__ import annotations
 
 from typing import Any
 
-from provide.telemetry import get_tracer
+from provide.telemetry import get_trace_context, get_tracer
 
 _tracer = get_tracer("provide.uterm.server")
+
+_ZERO_TRACE_ID = "0" * 32
+_ZERO_SPAN_ID = "0" * 16
+
+
+def inject_trace_context(headers: dict[str, str]) -> None:
+    """Add a W3C ``traceparent`` header from the active span, if one is active.
+
+    Uses ``provide.telemetry`` — which is OpenTelemetry-optional — so the server
+    never hard-requires ``opentelemetry`` just to propagate trace context. When
+    no span/telemetry is active the trace id is ``None``/all-zero and no header
+    is added (an all-zero id is the W3C "invalid" sentinel, not a real trace).
+    """
+    ctx = get_trace_context()
+    trace_id = ctx.get("trace_id")
+    span_id = ctx.get("span_id")
+    if trace_id and span_id and trace_id != _ZERO_TRACE_ID and span_id != _ZERO_SPAN_ID:
+        headers["traceparent"] = f"00-{trace_id}-{span_id}-01"
 
 
 def span(name: str, **attributes: Any) -> _SpanContext:
