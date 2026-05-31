@@ -52,7 +52,12 @@ async def assert_webhook_target_allowed(url: str) -> None:
     except ValueError:
         addresses = await _resolve_cached(h)
     for addr in addresses:
-        if ipaddress.ip_address(addr) in _METADATA_IPS:
+        ip = ipaddress.ip_address(addr)
+        # Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) to its IPv4
+        # form so a mapped metadata address can't slip past the membership check.
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        if ip in _METADATA_IPS:
             raise EgressBlockedError(f"webhook target {url!r} resolves to a blocked metadata address")
 
 
@@ -80,6 +85,10 @@ async def assert_connector_target_allowed(host: str, *, block_private: bool) -> 
             raise EgressBlockedError(f"could not resolve connector host {host!r}") from None
     for addr in addresses:
         ip = ipaddress.ip_address(addr)
+        # Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) to its IPv4
+        # form so a mapped metadata/private address can't slip past the checks.
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
         if ip in _METADATA_IPS:
             raise EgressBlockedError(f"connector target {host!r} resolves to a blocked metadata address")
         if block_private and (

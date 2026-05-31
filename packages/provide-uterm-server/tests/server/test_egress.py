@@ -155,6 +155,61 @@ async def test_bracketed_ipv6_literal_blocked_when_flag(monkeypatch: pytest.Monk
 
 
 # ---------------------------------------------------------------------------
+# M7: IPv4-mapped IPv6 metadata-IP bypass
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connector_mapped_ipv6_metadata_literal_blocked() -> None:
+    """A literal IPv4-mapped IPv6 metadata address (::ffff:169.254.169.254)
+    must be blocked even with block_private=False — it normalizes to the IPv4
+    metadata IP before the membership check."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_connector_target_allowed("::ffff:169.254.169.254", block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_connector_mapped_ipv6_metadata_resolved_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A DNS name (AAAA rebind) resolving to the mapped metadata form must be blocked."""
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    monkeypatch.setattr(egress_mod, "_resolve_host", AsyncMock(return_value=("::ffff:169.254.169.254",)))
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_connector_target_allowed("rebind.example.com", block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_connector_mapped_ipv6_private_blocked_when_flag() -> None:
+    """A mapped-IPv6 private address (::ffff:10.0.0.5) is blocked when block_private=True
+    because it normalizes to the private IPv4 before the private check."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="internal"):
+        await assert_connector_target_allowed("::ffff:10.0.0.5", block_private=True)
+
+
+@pytest.mark.asyncio
+async def test_connector_normal_ipv6_loopback_still_allowed_by_default() -> None:
+    """A genuine (non-mapped) IPv6 loopback ::1 is unaffected and allowed by default."""
+    from provide.uterm.server.egress import assert_connector_target_allowed
+
+    # Must not raise — no ipv4_mapped, behaves as before.
+    await assert_connector_target_allowed("::1", block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_connector_normal_ipv6_public_allowed() -> None:
+    """A public IPv6 address (no ipv4_mapped) is allowed regardless of block_private."""
+    from provide.uterm.server.egress import assert_connector_target_allowed
+
+    await assert_connector_target_allowed("2606:2800:220:1:248:1893:25c8:1946", block_private=False)
+    await assert_connector_target_allowed("2606:2800:220:1:248:1893:25c8:1946", block_private=True)
+
+
+# ---------------------------------------------------------------------------
 # Route-level integration tests
 # ---------------------------------------------------------------------------
 
