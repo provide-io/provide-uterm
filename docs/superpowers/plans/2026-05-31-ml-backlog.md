@@ -10,7 +10,12 @@
 - **C2 merged** (`4ea612d`, `9f006bd`): 2a, 2c.
 - **C3 merged** (`1c7890a`, `9a5ff99`): 3a, 3b.
 - **5c MERGED** (`e4abc87`, `12327c8`): MCP/client path-injection guard.
-- **In progress** (surgical batch, user-approved 2026-05-31): 4a, 3c, 2b.
+- **3c MERGED** (`20eb941f`): W3C traceparent on outbound webhooks/governance/IDP.
+- **2b MERGED** (`b43370d0`): global worker-registration cap (reconnect-preserving).
+- **4a DEFERRED — needs user input** (build-infra): Dockerfile `uv pip install --system` → lock-based is a
+  build-strategy change I can't validate locally (no Docker build); CI `--frozen` is verified-safe
+  (`uv sync --frozen --dry-run` passes) but can't be end-to-end validated and has a step-comment policy
+  question. Confirm approach before touching CI/Docker.
 - **Pending — needs a design decision**: 1f, 1d (IDP webhook contract), 5a (audit hash-chain scheme),
   5b (manager token model), 5d (inbound-frame validation strategy).
 - **Separate pre-existing item**: `tests/memray/test_event_bus_stress.py` baseline is borderline-flaky on
@@ -30,15 +35,15 @@
 
 ## Cluster 2 — Resource caps / DoS leftovers — MERGED (2a, 2c)
 - [x] **2a (E-med)** Hijack `expect_regex` ReDoS — `compile_expect_regex` now calls `_validate_pattern_safety`. `4ea612d`
-- [ ] **2b (E-med)** No cap on hub WORKER registrations. NOTE: workers share static `subject_id="worker"`, so a
-  per-principal quota would wrongly cap the fleet — the correct fix is a **generous global worker cap** + a
-  route-layer reject path (1008). Moved to the surgical batch. (S–M, server)
+- [x] **2b (E-med)** Generous global worker cap (`max_workers=10000`) — `register_worker` rejects a NEW
+  worker_id over cap with `WebSocketException(1008)` but ALWAYS allows reconnecting existing ids. MERGED `b43370d0`.
 - [x] **2c (E-med)** DeckMux `selection`/`pin` shape+size bounded (validate-before-setattr; service drops). `9f006bd`
 
 ## Cluster 3 — Outbound transport / config hardening — MERGED (3a, 3b)
 - [x] **3a (I-med)** Refuse `security.mode="dev"` on non-loopback bind (+ `dev_mode_acknowledged` escape). `1c7890a`
 - [x] **3b (I-med)** CF bearer-token entropy/placeholder floor at config load (unconditional; CF is public). `9a5ff99`
-- [ ] **3c (I-med)** No `traceparent` propagation outbound (webhooks/governance/IDP/JWKS). Surgical batch. (M, server)
+- [x] **3c (I-med)** W3C `traceparent` injected into outbound webhooks/governance/IDP headers (via the shared
+  `_build_webhook_headers` + webhooks.py `_deliver` + IDP). MERGED `20eb941f`. (CF JWKS left out of scope.)
 
 ## Cluster 4 — Supply chain / build (build+CI, no package code)
 - [ ] **4a (J-med)** `uv.lock` pinning never enforced — `Dockerfile.server` `uv pip install` (fresh resolve);

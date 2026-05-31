@@ -41,21 +41,22 @@ waves (P0 → P0.5 remaining-highs → P1 resource/resilience → M/L backlog).
     bearer entropy/placeholder floor.
   - **5c MCP path-injection** (`e4abc87`, `12327c8`): `_safe_id` validation in `HijackClient` (`_wp/_hp/_sp`)
     + the `fanout_send`/`session_annotate` MCP tools.
+  - **3c traceparent** (`20eb941f`): W3C `traceparent` injected into outbound webhooks/governance/IDP headers.
+  - **2b worker cap** (`b43370d0`): generous global `max_workers` cap; rejects new-over-cap with 1008,
+    always allows reconnecting existing worker ids.
 - **All HIGH-severity findings from the review are now closed.** Full gate green across every package
-  (Python 100% coverage + TS typecheck/vitest) as of the last C3 run.
+  (Python 100% coverage + TS typecheck/vitest) — last full run after 3c+2b merge.
 
 ## Detailed checklist for next session
 
 **Tracking is in `docs/superpowers/plans/2026-05-31-ml-backlog.md` (authoritative, checkboxes ticked).**
 
-Remaining surgical items (user approved continuing these; no design decision needed):
-- [ ] **4a** Supply chain: `uv sync --frozen` in `docker/Dockerfile.server` + CI (`.github/workflows/`).
-  Obey CLAUDE.md CI rules (no inline scripts >3 lines; comment each step). Verify `uv sync --frozen`
-  works locally first (lock must be consistent). No pytest gate — build-infra only.
-- [ ] **3c** `traceparent` (W3C) propagation on outbound httpx (webhooks/governance/IDP/JWKS). Server. (M)
-- [ ] **2b** Global worker-registration cap + route-layer 1008 reject. NOTE: workers share static
-  `subject_id="worker"`, so a *per-principal* cap would wrongly limit the fleet — use a **generous global
-  cap** (`bridge/hub/connection.py` `register_worker`, needs a caller-side reject path). Server. (S–M)
+Remaining — **4a needs a user decision** (build-infra, can't validate locally):
+- [ ] **4a** Supply chain: enforce `uv.lock`. CI part (`uv sync --group dev` → `--frozen` across
+  `.github/workflows/`) is verified-safe (`uv sync --frozen --dry-run` passes) but untestable without a
+  CI run, and the CLAUDE.md "comment every step" rule conflicts with the file's existing uncommented
+  steps. Dockerfile part (`docker/Dockerfile.server:57` `uv pip install --system` → lock-based) is a
+  build-strategy change needing a Docker build to validate. CONFIRM approach with the user before editing.
 
 Items needing a design decision from the user before coding (task #19):
 - [ ] **1f / 1d** IDP webhook contract: verify the IDP *response* signature inbound + minimize which
