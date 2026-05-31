@@ -1,208 +1,74 @@
-# Handoff: Test-Suite Resilience Sweep
+# Handoff: Enterprise Hardening & Reliability Program
 
-## Context (read first)
+_Last updated: 2026-05-31. Supersedes the prior "Test-Suite Resilience Sweep" handoff (that flake fix shipped long ago)._
 
-`main` shipped a flake fix in commit `8455a33` after CI scheduled-run
-`26397225022` failed on Python 3.14 with one test:
+## Problem / request
 
-> `tests/e2e/multi_browser/test_concurrent.py::test_three_role_browsers_all_receive_snapshot_eventbus_delivers — assert 0 == 1`
+"Perform a comprehensive code review and detailed architectural analysis … It is vital that this is
+'enterprise hardened' and 'reliable.'" The review produced
+`docs/enterprise-hardening-review-2026-05-29.md` (83 code-confirmed findings: 0 critical, 16 high, 36
+medium, 31 low). The ask evolved into a full review → remediate → verify program executed in priority
+waves (P0 → P0.5 remaining-highs → P1 resource/resilience → M/L backlog).
 
-Root cause: `await asyncio.sleep(0.1)` used to "wait" for an EventBus
-long-poll subscriber to register before the worker fired its event.
-Python 3.14's asyncio scheduler changed task-wakeup timing enough that
-100ms wasn't always enough — the snapshot was appended before any
-subscriber existed, so the poll returned 0 events.
+## Approach / reasoning (the operating contract — keep following it)
 
-The repo already had a deterministic helper
-(`tests/e2e/_live_server.py::wait_for_subscribers`) whose docstring
-literally calls this pattern out. The two affected tests just hadn't
-been migrated. Fix: replace the sleep with
-`wait_for_subscribers(hub, "s1", 1)`.
+- **Per item:** TDD (test first, RED, implement, GREEN) → **independent adversarial subagent review**
+  (spec + quality + security) → appropriate **gate** → **fast-forward merge** to local `main`.
+- **Gating ("smarter gating"):** leaf change → that package's suite; **cross-cutting change**
+  (auth, redaction, `/api/health`, frame schemas, config validation, lifespan) → **full**
+  `uv run python scripts/run_all_tests.py`. NEVER trust the wrapper exit code — grep the output for
+  `FAILED` / `not reached`. To exclude the flaky memray test from the full gate, use
+  `--deselect "packages/provide-uterm/tests/memray/test_event_bus_stress.py::test_event_bus_stress"`
+  (node-id). **Do NOT pass a global `-m`** to `run_all_tests.py` — it clobbers each suite's own marker
+  selection and re-enables e2e tests (one run produced 2001 false failures).
+- **Commits:** one logical unit per commit; conventional messages; **NO AI/Claude trailers**
+  (subagents' harness adds `Co-Authored-By: Claude`; strip via
+  `git rebase main --exec 'm=$(git log -1 --format=%B | grep -v "^Co-Authored-By: Claude"); git commit --amend -m "$m"'`
+  then verify `git diff OLD HEAD` is empty before merging). **No git rollbacks/resets** (auto-commit env).
+- detect-secrets pre-commit hook re-stamps `.secrets.baseline` line numbers on test edits — `git add` it and re-commit.
 
-Several adjacent fragile patterns remain. **Don't** generalize the fix
-to every `asyncio.sleep(...)` site — most are legitimate. Only the
-patterns below.
+## Work completed (all merged to local `main`; 54 commits ahead of origin, UNPUSHED)
 
-## Reference points
+- **P0 security program** + **P0.5 remaining-highs** + **P1 resource/resilience** (readiness `/readyz` +
+  `uterm_ready`, 10 metrics counters, buffer/event-ring/tunnel caps, per-principal browser quota,
+  control-plane reaper + WAL truncate, CF `_queue_bytes` finally-release + JWKS stale-fallback).
+- **M/L backlog (this session) — Clusters 1-3 + 5c, each reviewed + full-gated + merged:**
+  - **C1 data-protection** (`d6e6df9`..`979dbc5`): 1a approval-expiry sweep (was the last open **HIGH**),
+    1b output-redaction fails closed, 1c keystroke/command redaction before governance webhooks,
+    1e webhook-IDP role allow-list, 1g IDP-failure audit.
+  - **C2 resource caps** (`4ea612d`, `9f006bd`): 2a `expect_regex` ReDoS guard, 2c DeckMux selection/pin bound.
+  - **C3 config hardening** (`1c7890a`, `9a5ff99`): 3a refuse `security.mode=dev` on non-loopback, 3b CF
+    bearer entropy/placeholder floor.
+  - **5c MCP path-injection** (`e4abc87`, `12327c8`): `_safe_id` validation in `HijackClient` (`_wp/_hp/_sp`)
+    + the `fanout_send`/`session_annotate` MCP tools.
+- **All HIGH-severity findings from the review are now closed.** Full gate green across every package
+  (Python 100% coverage + TS typecheck/vitest) as of the last C3 run.
 
-- The flake fix: commit `8455a33`
-- Canonical subscription waiter: `tests/e2e/_live_server.py::wait_for_subscribers`
-- Server suite is at 100% coverage; the gate is in
-  `packages/provide-uterm-server/pyproject.toml`
-- Run server tests: `uv run pytest packages/provide-uterm-server/tests/`
-- Run full workspace tests: `uv run python scripts/run_all_tests.py`
-- Memray tests are deselected by default: `uv run pytest -m memray`
+## Detailed checklist for next session
 
-## Tasks
+**Tracking is in `docs/superpowers/plans/2026-05-31-ml-backlog.md` (authoritative, checkboxes ticked).**
 
-### 1. Replace "wait-for-nothing" negative assertions (medium priority, low risk)
+Remaining surgical items (user approved continuing these; no design decision needed):
+- [ ] **4a** Supply chain: `uv sync --frozen` in `docker/Dockerfile.server` + CI (`.github/workflows/`).
+  Obey CLAUDE.md CI rules (no inline scripts >3 lines; comment each step). Verify `uv sync --frozen`
+  works locally first (lock must be consistent). No pytest gate — build-infra only.
+- [ ] **3c** `traceparent` (W3C) propagation on outbound httpx (webhooks/governance/IDP/JWKS). Server. (M)
+- [ ] **2b** Global worker-registration cap + route-layer 1008 reject. NOTE: workers share static
+  `subject_id="worker"`, so a *per-principal* cap would wrongly limit the fleet — use a **generous global
+  cap** (`bridge/hub/connection.py` `register_worker`, needs a caller-side reject path). Server. (S–M)
 
-**Symptom**: tests prove a filter rejects events by sleeping and
-asserting `not delivered`. On a slow runner the event might have been
-delivered late and the assertion is vacuously true — silent under-test.
+Items needing a design decision from the user before coding (task #19):
+- [ ] **1f / 1d** IDP webhook contract: verify the IDP *response* signature inbound + minimize which
+  headers/cookies are forwarded to it (the IDP legitimately needs the auth credential — decide the allow-list).
+- [ ] **5a** Audit log monotonic sequence + hash-chain (which tamper-resistance scheme?). Server.
+- [ ] **5b** Manager scoped tokens — split worker-self-report vs operator authority (token model?). Platform.
+- [ ] **5d** Validate inbound worker frames through `AnyFrame` (drop-bad-frame vs reject-session?). Server.
 
-**Sites** (find with `grep -rn "asyncio.sleep" packages/provide-uterm-server/tests/e2e/observer/`):
-
-- `tests/e2e/observer/test_sse.py:157` — telnet event must not reach shell SSE
-- `tests/e2e/observer/test_sse.py:227, 264` — pattern / event-type filter rejection
-- `tests/e2e/observer/test_webhooks_e2e.py:172` — `event_types` filter
-
-**Pattern to apply** for each:
-
-```python
-# Was:
-await worker.send(filtered_event)
-await asyncio.sleep(0.15)
-assert not collect_task.done()
-
-# Becomes:
-await worker.send(filtered_event)
-await worker.send(should_be_delivered_event)  # positive control
-delivered = await asyncio.wait_for(collect_task, timeout=3.0)
-assert len(delivered) == 1
-assert delivered[0]["...marker..."] == should_be_delivered_event["..."]
-```
-
-Each test needs a "positive control" event that's known to pass the
-filter under test, so the assertion becomes "exactly one event
-delivered, and it's the right one."
-
-### 2. Consolidate duplicate subscription-wait helpers (low priority, low risk)
-
-Two near-identical helpers exist:
-
-- `tests/e2e/_live_server.py::wait_for_subscribers` — canonical
-- `tests/e2e/multi_browser/conftest.py::wait_for_event_subscriber` — duplicate
-
-Delete the multi_browser variant, update its callers to import from
-`_live_server`, verify tests still pass.
-
-### 3. SSH / telnet transport-level waiters (lower priority — these don't currently flake)
-
-**Sites** (find with `grep -rn "asyncio.sleep(0\.[1-9]" packages/provide-uterm-server/tests/e2e/test_ssh_*.py packages/provide-uterm-server/tests/e2e/test_telnet_*.py`):
-
-~10 sleeps across:
-
-- `tests/e2e/test_ssh_concurrent_identities.py`
-- `tests/e2e/test_ssh_authorized_keys_rotation.py`
-- `tests/e2e/test_ssh_full_chain.py`
-- `tests/e2e/test_telnet_gateway.py`
-
-Each "send → sleep → assert" pair is waiting for an asyncssh/telnet
-stream to surface bytes the test asserts on. Add a
-`wait_for_output(stream, marker_re, timeout=5.0)` helper to
-`tests/e2e/_live_server.py` that reads from the stream until
-`marker_re` matches the accumulated buffer, then migrate sites in
-order of historical flakiness.
-
-**Don't** bulk-migrate blind — some sleeps are intentional pre-send
-settles. Use:
-
-```
-git log -S "asyncio.sleep(0.2)" --since=6.months -- \
-  packages/provide-uterm-server/tests/e2e/test_ssh_*.py
-```
-
-to find which sleeps were added in response to flakes.
-
-### 4. Expand memray coverage (medium priority, no flake exposure)
-
-**Current** memray tests cover `ANSI SGR`, `ControlChannel encode/decode`,
-`TermHub 200×50 workers`. Layout:
-
-- `packages/provide-uterm/tests/memray/test_*.py` runs subprocess
-  `python -m memray run` + `memray stats`, parses
-  `Total allocations:` regex, asserts within ±15% of
-  `tests/memray/baselines.json`.
-- Stress scripts: `packages/provide-uterm/scripts/memray_*_stress.py`.
-
-**Add** stress tests for these allocation-heavy hot paths:
-
-| Subsystem | Hot path | Stress workload |
-|---|---|---|
-| EventBus fan-out (`bridge/hub/event_bus.py`) | `append_event` → deep-copies into N subscriber queues per event | 100 subscribers × 10k events |
-| Webhook dispatcher (`server/webhooks.py`) | JSON serialization per dispatch | 10 webhooks × 5k events |
-| Tunnel intercept (`tunnel/intercept.py`) | Request/response copies | 5k intercepted requests |
-| DeckMux presence (`deckmux/_hub_mixin.py`) | `generate_name` / `generate_color` / `generate_initials` per connection | 1k connections, full presence cycle |
-
-For each, the pattern is identical to existing memray tests:
-
-1. Write `packages/provide-uterm/scripts/memray_<name>_stress.py` that
-   does the workload synchronously (or via `asyncio.run(main())`).
-2. Copy `tests/memray/test_hub_stress.py` and swap the script name +
-   baseline key.
-3. Run once with
-   `MEMRAY_UPDATE_BASELINE=1 uv run pytest -m memray tests/memray/test_<name>_stress.py`
-   to record the initial baseline.
-4. Commit `baselines.json` + the new test + stress script.
-
-These tests aren't in the default suite (they have `@pytest.mark.memray`
-and `@pytest.mark.slow`); run them with `uv run pytest -m memray`.
-
-## Verification
-
-- **Local**: `uv run python scripts/run_all_tests.py` — server suite
-  must stay at 100% coverage, 3611+ passing.
-- **CI**: green on push + green on scheduled run on all four Python
-  versions (3.11, 3.12, 3.13, 3.14).
-- **Memray**: `uv run pytest -m memray packages/provide-uterm/tests/memray -v`
-  passes (and new baselines committed if added).
-
-## Anti-patterns to avoid
-
-- **Do not** bulk-sed `asyncio.sleep(...)` away — most are legitimate
-  (polling loops, transport settles).
-- **Do not** raise sleep values to "fix" timing flakes — that's the
-  failure mode this plan is trying to eliminate.
-- **Do not** add `# pragma: no cover` to broaden the coverage gate
-  workaround unless the path is genuinely unreachable from in-process
-  tests.
-- **Do not** add new tests for `bridge/hub/approvals.py:create_approvals_router`
-  — that function was deleted (commit `f095105`); the canonical router
-  is `server/routes/approvals.py`.
-
-## Resolution
-
-All four tasks closed. Captured here as historical record; the document
-is finished work.
-
-### Task 1 — sleep+negative-assert sites
-
-Five sites migrated to the positive-control pattern in commit
-`3000740` (test_sse.py:157,227,264; test_webhooks_e2e.py:172;
-test_filters.py:153). Three remaining "nothing happens" sites
-(test_webhooks_e2e.py:209,299,308) had no positive control available;
-two of those were tightened with `wait_for_condition` fast-fail probes
-in commit `f8374db`, the third left as a documented upper-bound sleep.
-
-### Task 2 — duplicate subscription-wait helper
-
-`multi_browser/conftest.py::wait_for_event_subscriber` deleted and
-test_roles.py rerouted to `_live_server.wait_for_subscribers` in
-commit `4ee826b`.
-
-### Task 3 — SSH/telnet transport-level waiters
-
-`wait_for_condition` helper added in commit `4a064a2`; two SSH e2e
-sites migrated as POC in same commit. Remaining six SSH sites
-(test_ssh_concurrent_identities.py:151,219;
-test_ssh_authorized_keys_rotation.py:148,191,246,259) migrated in
-commit `1022d9c`. Telnet sites were classified as fundamentally
-negative-only and left intact.
-
-### Task 4 — memray coverage expansion
-
-Four stress tests + baselines added in commit `9b7c676`:
-- EventBus fan-out: 71,997 allocations baseline
-- Webhook dispatcher: 1,495,338 allocations baseline
-- Tunnel intercept: 13,461 allocations baseline
-- DeckMux presence: 22,287 allocations baseline
-
-All marked `@pytest.mark.memray`, kept out of the default suite.
-
-### Related companion work in the same session
-
-- Server coverage gate raised from 97 → 100 (`8069514`).
-- Client + platform lazy-pragma audit (`234cae5`, `bb81d0b`).
-- Frontend Playwright e2e for the security fixes (`5be3973`).
-- Architecture refactors #15/#16/#17/#18 + DeckMux service extraction.
+Separate / operational:
+- [ ] **memray flaky baseline**: `test_event_bus_stress` baseline 71997, tol 0.15 (cutoff ~82796); this
+  dev machine produces ~83670 so it tips over intermittently. Re-baseline in **CI's** environment (not
+  blindly to dev) OR widen tolerance — its own small change, not bundled with feature work.
+- [ ] **Push to origin**: 54 local commits on `main` are unpushed by the user's explicit choice. Confirm
+  before pushing.
+- [ ] Optional **P2 architecture** (HA): single-active-instance enforcement vs shared control plane —
+  needs a design decision.
