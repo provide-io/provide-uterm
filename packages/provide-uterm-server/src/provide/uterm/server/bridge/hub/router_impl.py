@@ -118,9 +118,21 @@ class MessageRouter:
     # -- Event ring buffer -----------------------------------------------
 
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Append a timestamped event to the worker's event ring buffer and return it."""
+        """Append a timestamped event to the worker's event ring buffer and return it.
+
+        For ``event_type == "term"`` the stored ring copy's ``data["data"]``
+        field is truncated to ``hub.max_event_data_chars``.  This bounds the
+        per-event memory footprint in the ring; the live broadcast path
+        (``hub.broadcast``) sends the full payload independently and is
+        unaffected.
+        """
         hub = self._hub
         payload = data or {}
+        if event_type == "term" and isinstance(payload.get("data"), str):
+            cap = hub.max_event_data_chars
+            raw = payload["data"]
+            if len(raw) > cap:
+                payload = {**payload, "data": raw[:cap]}
         async with hub._lock:
             st = hub.registry.get(worker_id)
             if st is None:
