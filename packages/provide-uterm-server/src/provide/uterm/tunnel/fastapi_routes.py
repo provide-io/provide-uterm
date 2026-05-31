@@ -102,6 +102,9 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
         try:
             while True:
                 raw = await websocket.receive_bytes()
+                if len(raw) > hub.max_ws_message_bytes:
+                    logger.warning("ws_tunnel_oversized size=%d", len(raw))
+                    continue
                 if len(raw) < 2:
                     continue
                 if not await hub.is_active_worker(worker_id, websocket):  # pragma: no cover
