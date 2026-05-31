@@ -62,12 +62,15 @@ class WebhookPolicyGate:
         self.timeout = timeout_s
 
     async def intercept_input(self, data: str, context: PolicyContext) -> PolicyDecision:
+        # Redact secrets out of the keystroke stream before it leaves the
+        # process — the governance webhook is an external endpoint and must
+        # never receive passwords/keys verbatim.
         payload = {
             "worker_id": context.worker_id,
             "client_id": context.client_id,
             "role": context.role,
             "action": context.action,
-            "data": data,
+            "data": _governance_redactor().redact(data),
             "metadata": context.metadata,
         }
         body = _encode_webhook_payload(payload)
@@ -115,11 +118,13 @@ class WebhookFanOutPolicyGate:
         context: PolicyContext,
         group_id: str | None = None,
     ) -> PolicyDecision:
+        # Redact secrets out of the forwarded command for the same reason as
+        # intercept_input — the fan-out webhook is an external endpoint.
         payload = {
             "worker_id": context.worker_id,
             "client_id": context.client_id,
             "role": context.role,
-            "command": command,
+            "command": _governance_redactor().redact(command),
             "group_id": group_id,
             "metadata": context.metadata,
         }
@@ -284,6 +289,24 @@ class WebhookOutputPolicyGate:
         except Exception:
             # Fail CLOSED on any transport/egress error — same rationale.
             return default_rules()
+
+
+# Lazily-built singleton redactor for outbound governance webhook payloads.
+# Built lazily because redaction_defaults imports RedactionRule from this
+# module, so importing it at module load time would be circular. The redactor
+# is stateless after construction, so a single shared instance is safe.
+_GOVERNANCE_REDACTOR: Any = None
+
+
+def _governance_redactor() -> Any:
+    """Return the shared StreamRedactor seeded with the built-in default rules."""
+    global _GOVERNANCE_REDACTOR
+    if _GOVERNANCE_REDACTOR is None:
+        from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+        from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
+
+        _GOVERNANCE_REDACTOR = StreamRedactor(default_rules())
+    return _GOVERNANCE_REDACTOR
 
 
 def _encode_webhook_payload(payload: dict[str, Any]) -> bytes:
