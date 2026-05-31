@@ -12,10 +12,12 @@
 - **5c MERGED** (`e4abc87`, `12327c8`): MCP/client path-injection guard.
 - **3c MERGED** (`20eb941f`): W3C traceparent on outbound webhooks/governance/IDP.
 - **2b MERGED** (`b43370d0`): global worker-registration cap (reconnect-preserving).
-- **4a DEFERRED — needs user input** (build-infra): Dockerfile `uv pip install --system` → lock-based is a
-  build-strategy change I can't validate locally (no Docker build); CI `--frozen` is verified-safe
-  (`uv sync --frozen --dry-run` passes) but can't be end-to-end validated and has a step-comment policy
-  question. Confirm approach before touching CI/Docker.
+- **4a + uv-consistency MERGED** (`38cdf153` CI, `83d728ee` Docker), pending USER build/CI validation:
+  CI `--frozen` on every `uv sync` + pty-unit lock-bypass fixed (YAML valid, lock `--frozen`-consistent);
+  Dockerfile.server → multi-stage uv-managed venv (drops `--system` + `pip install uv`), Dockerfile.cf
+  `UV_FROZEN=1`. NOT done: `.python-version` (would break the 4-version CI matrix — interpreter stays
+  setup-python, correct for a matrix); small follow-ups: pin `uvx` reuse/twine versions, drop redundant
+  `pip-audit` install (release-governance.yml:39), modernize release.yml dry-run. Source: uv audit.
 - **Pending — needs a design decision**: 1f, 1d (IDP webhook contract), 5a (audit hash-chain scheme),
   5b (manager token model), 5d (inbound-frame validation strategy).
 - **Separate pre-existing item**: `tests/memray/test_event_bus_stress.py` baseline is borderline-flaky on
@@ -46,9 +48,10 @@
   `_build_webhook_headers` + webhooks.py `_deliver` + IDP). MERGED `20eb941f`. (CF JWKS left out of scope.)
 
 ## Cluster 4 — Supply chain / build (build+CI, no package code)
-- [ ] **4a (J-med)** `uv.lock` pinning never enforced — `Dockerfile.server` `uv pip install` (fresh resolve);
-  CI `uv sync` no `--frozen`. **Fix:** `uv sync --frozen` in Dockerfile + CI (obey CLAUDE.md CI script policy;
-  one-line flag add, keep step comments). Surgical batch. (S–M)
+- [x] **4a (J-med)** `uv.lock` pinning enforced — CI `--frozen` everywhere (`38cdf153`) + Dockerfiles use a
+  uv-managed venv pinned to the lock instead of `uv pip install --system` (`83d728ee`). MERGED; **needs a
+  `docker build` + CI run to fully validate** (can't be checked by inspection). See STATUS for the
+  deliberate `.python-version` omission and small follow-ups.
 
 ## Cluster 5 — Audit integrity + client/platform hardening (mixed; each its own small branch)
 - [x] **5c (A-med)** MCP path-injection — `_safe_id` validation of `worker_id`/`session_id`/`hijack_id`
