@@ -74,6 +74,127 @@ def test_factory_uses_null_recording_store() -> None:
     assert isinstance(registry._recording_store, NullRecordingStore)
 
 
+def _patch_fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace the factory module's asyncio.sleep with a fast yield so sweep loops
+    that sleep on their (>=1s) interval tick quickly under test."""
+    import provide.uterm.server.app.factory_impl as factory_impl
+
+    real_sleep = asyncio.sleep
+
+    async def _fast_sleep(_delay: float) -> None:
+        await real_sleep(0.001)
+
+    monkeypatch.setattr(factory_impl.asyncio, "sleep", _fast_sleep)
+
+
+@pytest.mark.asyncio
+async def test_sqlite_reaper_logs_when_rows_deleted(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    """With a sqlite backend, the reaper sweep is scheduled and runs; a non-zero
+    return drives the ``if deleted:`` True branch (the log line)."""
+    from pathlib import Path
+
+    db_path = Path(str(tmp_path)) / "cp.db"
+    config = default_server_config()
+    config.control_plane.backend = "sqlite"
+    config.control_plane.database_url = str(db_path)
+    config.control_plane.reap_interval_s = 1
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    called = asyncio.Event()
+
+    async def _spy_reap(self: object, *, now: float, retention_s: int) -> int:
+        called.set()
+        return 3  # non-zero -> exercises the ``if deleted:`` log branch
+
+    monkeypatch.setattr(type(app.state.uterm_control_plane), "reap", _spy_reap)
+
+    with TestClient(app):
+        await asyncio.wait_for(called.wait(), timeout=5.0)
+    assert called.is_set()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_reaper_runs_when_nothing_deleted(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    """A reap returning 0 takes the ``if deleted:`` False branch (no log line)."""
+    from pathlib import Path
+
+    db_path = Path(str(tmp_path)) / "cp.db"
+    config = default_server_config()
+    config.control_plane.backend = "sqlite"
+    config.control_plane.database_url = str(db_path)
+    config.control_plane.reap_interval_s = 1
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    called = asyncio.Event()
+
+    async def _spy_reap(self: object, *, now: float, retention_s: int) -> int:
+        called.set()
+        return 0  # nothing deleted -> ``if deleted:`` False branch
+
+    monkeypatch.setattr(type(app.state.uterm_control_plane), "reap", _spy_reap)
+
+    with TestClient(app):
+        await asyncio.wait_for(called.wait(), timeout=5.0)
+    assert called.is_set()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_reaper_error_is_swallowed(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    """A reap that raises is caught by the sweep's except Exception branch and
+    does not crash the lifespan."""
+    from pathlib import Path
+
+    db_path = Path(str(tmp_path)) / "cp.db"
+    config = default_server_config()
+    config.control_plane.backend = "sqlite"
+    config.control_plane.database_url = str(db_path)
+    config.control_plane.reap_interval_s = 1
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    called = asyncio.Event()
+
+    async def _boom_reap(self: object, *, now: float, retention_s: int) -> int:
+        called.set()
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(type(app.state.uterm_control_plane), "reap", _boom_reap)
+
+    with TestClient(app):
+        await asyncio.wait_for(called.wait(), timeout=5.0)
+    # No exception escaping means the except path absorbed the error.
+    assert called.is_set()
+
+
+@pytest.mark.asyncio
+async def test_memory_backend_does_not_schedule_reaper(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The memory backend takes the reap_task is None path: reap() is never called."""
+    config = default_server_config()  # defaults to memory backend
+    assert config.control_plane.backend == "memory"
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    calls = 0
+
+    async def _spy_reap(self: object, *, now: float, retention_s: int) -> int:
+        nonlocal calls
+        calls += 1
+        return 0
+
+    monkeypatch.setattr(type(app.state.uterm_control_plane), "reap", _spy_reap)
+
+    with TestClient(app):
+        # Give any scheduled sweeps several fast ticks; the reaper must stay unscheduled.
+        await asyncio.sleep(0.05)
+    assert calls == 0
+
+
 @pytest.mark.asyncio
 async def test_node_registry_heartbeat_outer_exception_is_logged(monkeypatch: pytest.MonkeyPatch) -> None:
     """An exception raised before discovery_provider.announce (e.g. from hub.browser_count_total)
