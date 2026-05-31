@@ -153,7 +153,15 @@ async def test_reap_soft_deleted_leases(tmp_path: Path) -> None:
         "VALUES(?, ?, ?, ?, ?, ?)",
         ("dead", "h1", "alice", NOW + 10_000, 0.0, CUTOFF - 1),
     )
-    # Live lease -> survives.
+    # Lease that expired via lease_expires_at (no explicit clear -> deleted_at NULL)
+    # past retention -> deleted.
+    await _insert(
+        plane,
+        "INSERT INTO cp_leases(session_id, hijack_id, owner, lease_expires_at, created_at, deleted_at) "
+        "VALUES(?, ?, ?, ?, ?, ?)",
+        ("expired", "h3", "carol", CUTOFF - 1, 0.0, None),
+    )
+    # Live lease (future lease_expires_at, never cleared) -> survives.
     await _insert(
         plane,
         "INSERT INTO cp_leases(session_id, hijack_id, owner, lease_expires_at, created_at, deleted_at) "
@@ -164,8 +172,12 @@ async def test_reap_soft_deleted_leases(tmp_path: Path) -> None:
     deleted = await plane.reap(now=NOW, retention_s=RETENTION_S)
     await plane.close()
 
-    assert deleted == 1
+    assert deleted == 2
     assert _count(db_path, "cp_leases") == 1
+    db = sqlite3.connect(str(db_path))
+    survivors = {row[0] for row in db.execute("SELECT session_id FROM cp_leases")}
+    db.close()
+    assert survivors == {"live"}
 
 
 @pytest.mark.asyncio
