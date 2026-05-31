@@ -240,6 +240,23 @@ class ConnectionManager:
 
     # -- Browser connection lifecycle ------------------------------------
 
+    @staticmethod
+    def _browser_principal_subject_id(ws: Any) -> str | None:
+        """Return the principal subject_id for quota tracking, or ``None`` if exempt.
+
+        Returns ``None`` (exempt — no count) for:
+        * WebSockets with no ``state.uterm_principal`` attribute.
+        * Principals with ``subject_id == "anonymous"``.
+        Only concrete, non-anonymous human principals are counted.
+        """
+        principal = getattr(getattr(ws, "state", None), "uterm_principal", None)
+        if principal is None:
+            return None
+        subject_id: str = getattr(principal, "subject_id", "") or ""
+        if subject_id == "anonymous" or not subject_id:
+            return None
+        return subject_id
+
     async def register_browser(
         self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
     ) -> dict[str, Any]:
@@ -248,6 +265,11 @@ class ConnectionManager:
         Returns a dict with keys: ``is_hijacked``, ``hijacked_by_me``,
         ``worker_online``, ``input_mode``, ``initial_snapshot``,
         and optionally ``resume_token``.
+
+        Raises ``WebSocketException(1008)`` when the authenticated principal has
+        reached ``hub.max_connections_per_principal`` concurrent browser
+        connections.  Anonymous principals and connections without a principal
+        are exempt from the quota (the auth layer handles them separately).
         """
         hub = self._hub
         with tracer.start_as_current_span("uterm.browser.register", attributes={"worker_id": worker_id, "role": role}):
@@ -256,6 +278,22 @@ class ConnectionManager:
                 resume_token = await hub._resume_store.create(worker_id, role, hub._resume_ttl_s)
                 hub._ws_to_resume_token[ws] = resume_token
             async with hub._lock:
+                # --- Per-principal browser connection quota (BROWSER-only) ---
+                subject_id = self._browser_principal_subject_id(ws)
+                if subject_id is not None:
+                    current = hub._principal_browser_counts.get(subject_id, 0)
+                    if current >= hub.max_connections_per_principal:
+                        # Do not register — release any resume token already created.
+                        hub._ws_to_resume_token.pop(ws, None)
+                        from fastapi import WebSocketException
+
+                        raise WebSocketException(
+                            code=1008,
+                            reason="too many connections",
+                        )
+                    hub._principal_browser_counts[subject_id] = current + 1
+                    hub._ws_principal[ws] = subject_id
+                # -----------------------------------------------------------
                 st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
                 st.browsers[ws] = role
                 if defer_broadcast:
@@ -308,6 +346,14 @@ class ConnectionManager:
         rest_still_active = False
         resume_without_owner = False
         st.browsers.pop(ws, None)
+        # Decrement per-principal browser count if this ws was counted.
+        subject_id = hub._ws_principal.pop(ws, None)
+        if subject_id is not None:
+            remaining = hub._principal_browser_counts.get(subject_id, 0) - 1
+            if remaining <= 0:
+                hub._principal_browser_counts.pop(subject_id, None)
+            else:
+                hub._principal_browser_counts[subject_id] = remaining
         if was_owner:
             st.hijack_owner = None
             st.hijack_owner_expires_at = None

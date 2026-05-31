@@ -454,6 +454,12 @@ class UtermServerConfig(ServerBaseModel):
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300
+    # Maximum concurrent BROWSER WebSocket connections per authenticated
+    # principal (identified by subject_id).  Workers and anonymous principals
+    # are exempt; only concrete human principals are counted.  Prevents a
+    # single authenticated user from exhausting server memory with thousands
+    # of open browser tabs.
+    max_connections_per_principal: int = 25
 
 
 SessionDefinition.model_rebuild()
