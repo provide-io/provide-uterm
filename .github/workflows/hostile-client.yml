@@ -49,7 +49,7 @@ jobs:
         run: |
           npm ci
           npm run build:frontend
-          uv sync --group dev
+          uv sync --frozen --group dev
 
       # Launch the server in the background on the suite's configured bind
       - name: Start server
