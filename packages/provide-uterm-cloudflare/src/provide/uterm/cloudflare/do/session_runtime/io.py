@@ -235,8 +235,14 @@ class _SessionRuntimeIoMixin:
                         pass
                     continue
                 self._queue_bytes += msg_len
-                await self.send_ws(ws, payload)
-                self._queue_bytes = max(0, self._queue_bytes - msg_len)
+                try:
+                    await self.send_ws(ws, payload)
+                finally:
+                    # Always release the reservation, even if send_ws raises —
+                    # otherwise a transient send failure leaks _queue_bytes
+                    # upward until every future broadcast trips the buffer-full
+                    # guard and is dropped.
+                    self._queue_bytes = max(0, self._queue_bytes - msg_len)
             except Exception:
                 self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
                 self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]

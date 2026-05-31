@@ -296,6 +296,26 @@ async def test_broadcast_to_browsers_send_failure_removes_socket() -> None:
     assert ws_id not in rt.browser_sockets
 
 
+async def test_broadcast_to_browsers_send_failure_releases_queue_bytes() -> None:
+    """A send_ws failure must not leak _queue_bytes.
+
+    The byte reservation is released in a ``finally`` so a transient send error
+    cannot permanently shrink the buffer budget and wedge every future
+    broadcast (queue stuck above max_buffer_bytes → all payloads dropped).
+    """
+    rt = _make_runtime()
+
+    ws = _MockWs(attachment="browser:admin:test-worker")
+    ws_id = rt.ws_key(ws)
+    rt.browser_sockets[ws_id] = ws
+    rt.ctx.getWebSockets = lambda: [ws]
+    rt.send_ws = AsyncMock(side_effect=RuntimeError("send failed"))
+
+    await rt.broadcast_to_browsers({"type": "term", "data": "non-trivial-payload"})
+
+    assert rt._queue_bytes == 0
+
+
 async def test_broadcast_to_browsers_getwebsockets_raises_uses_in_memory() -> None:
     """When ctx.getWebSockets() raises, falls back to in-memory browser_sockets dict."""
     rt = _make_runtime()
