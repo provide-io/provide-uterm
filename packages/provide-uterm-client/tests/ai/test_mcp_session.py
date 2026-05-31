@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
@@ -445,3 +446,19 @@ class TestFanoutAndAnnotateTools:
             {"session_id": "s1", "label": "test", "description": "a note", "severity": "info"},
         )
         assert isinstance(data["success"], bool)
+
+
+class TestMcpPathInjection:
+    """LLM-supplied group_id/session_id must not forge requests to other routes."""
+
+    async def test_fanout_send_rejects_injected_group_id(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        with pytest.raises(Exception, match="group_id"):
+            await _call(mcp, "fanout_send", {"group_id": "../../api/keys", "data": "x"})
+
+    async def test_session_annotate_rejects_injected_session_id(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        with pytest.raises(Exception, match="session_id"):
+            await _call(mcp, "session_annotate", {"session_id": "../../api/keys", "label": "x"})

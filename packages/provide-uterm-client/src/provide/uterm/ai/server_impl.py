@@ -45,7 +45,7 @@ from provide.uterm.ai.constants import (
     MAX_USER_PATTERN_LEN,
 )
 from provide.uterm.ai.policy import is_allowed_connector
-from provide.uterm.client.hijack import HijackClient
+from provide.uterm.client.hijack import HijackClient, _safe_id
 from provide.uterm.client.mcp_tools import _ok
 from provide.uterm.client.sanitizer import prepare_keystrokes, unescape_keys
 
@@ -698,7 +698,7 @@ def create_mcp_app(
     ) -> dict[str, Any]:
         """Broadcast input to all sessions in a fan-out group and return per-session results with divergence detection."""
         ok, result = await client.post(
-            f"/api/fanout/groups/{group_id}/send",
+            f"/api/fanout/groups/{_safe_id(group_id, 'group_id')}/send",
             json={"data": data, "quiesce_ms": quiesce_ms, "max_response_ms": max_response_ms},
         )
         return _ok(ok, result)
@@ -716,7 +716,7 @@ def create_mcp_app(
     ) -> dict[str, Any]:
         """Add an annotation to a session's recording timeline. Use this to mark important moments."""
         ok, data = await client.post(
-            f"/api/sessions/{session_id}/annotate",
+            f"/api/sessions/{_safe_id(session_id, 'session_id')}/annotate",
             json={"label": label, "description": description, "severity": severity},
         )
         return _ok(ok, data)
