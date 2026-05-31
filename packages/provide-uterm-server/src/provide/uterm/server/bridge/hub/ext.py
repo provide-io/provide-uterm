@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
+from opentelemetry.propagate import inject
 from pydantic import BaseModel, Field
 
 from provide.telemetry import event
@@ -319,4 +320,9 @@ def _build_webhook_headers(secret: str | None, body: bytes) -> dict[str, str]:
         ts = str(time.time())
         headers["X-Uterm-Timestamp"] = ts
         headers["X-Uterm-Signature"] = build_webhook_signature(secret, body, ts)
+    # Propagate the active W3C trace context (traceparent/tracestate) onto the
+    # outbound governance webhook so distributed traces survive the hop. No-op
+    # when there is no active recording span context. Covers all four gate
+    # classes, which share this builder.
+    inject(headers)
     return headers
