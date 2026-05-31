@@ -483,6 +483,7 @@ def create_server_app(
         resume_store=resume_store,
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
+        max_connections_per_principal=config.max_connections_per_principal,
         event_bus=EventBus(),
         policy_gate=policy_gate,
         identity_provider=idp,

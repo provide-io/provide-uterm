@@ -581,6 +581,7 @@ class TermHub:
         behavioral_audit_interval_s: float = 30.0,
         max_buffer_chars: int = 40_000,
         max_event_data_chars: int = 8192,
+        max_connections_per_principal: int = 25,
     ) -> None:
         self._lock = asyncio.Lock()
         # WorkerRegistry owns the worker map; the legacy ``_workers``
@@ -647,6 +648,15 @@ class TermHub:
         self._behavioral_audit_gate = behavioral_audit_gate or NoOpBehavioralAuditGate()
         self._behavioral_thresholds = behavioral_thresholds or BehavioralThresholds()
         self._behavioral_audit_interval_s = max(1.0, float(behavioral_audit_interval_s))
+        # Per-principal browser connection quota (BROWSER-only; workers exempt).
+        # Only concrete, non-anonymous principals are counted; the count is
+        # decremented on browser disconnect so the dict never grows unboundedly.
+        self.max_connections_per_principal = max(1, int(max_connections_per_principal))
+        self._principal_browser_counts: dict[str, int] = {}
+        # Reverse map from WebSocket → principal subject_id so the disconnect
+        # path can decrement the right counter without re-reading ws.state
+        # (which may be unreliable at that point).
+        self._ws_principal: dict[Any, str] = {}
         # MessageRouter owns the broadcast / send_worker hot path plus
         # the behavioral-heuristics ring buffer; ``HubMessagingMixin``
         # is now a thin facade forwarding to this service. The router
