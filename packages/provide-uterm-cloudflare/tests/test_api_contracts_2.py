@@ -110,7 +110,7 @@ def test_config_from_env_reads_jwt_roles_claim() -> None:
         {
             "AUTH_MODE": "jwt",
             "JWT_PUBLIC_KEY_PEM": "k",
-            "WORKER_BEARER_TOKEN": "t",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
             "JWT_ROLES_CLAIM": "https://myapp.com/roles",
         }
     )
@@ -119,13 +119,20 @@ def test_config_from_env_reads_jwt_roles_claim() -> None:
 
 def test_config_from_env_reads_jwt_scopes_claim() -> None:
     cfg = CloudflareConfig.from_env(
-        {"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "k", "WORKER_BEARER_TOKEN": "t", "JWT_SCOPES_CLAIM": "permissions"}
+        {
+            "AUTH_MODE": "jwt",
+            "JWT_PUBLIC_KEY_PEM": "k",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
+            "JWT_SCOPES_CLAIM": "permissions",
+        }
     )
     assert cfg.jwt.jwt_scopes_claim == "permissions"
 
 
 def test_config_from_env_jwt_claims_default_values() -> None:
-    cfg = CloudflareConfig.from_env({"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "k", "WORKER_BEARER_TOKEN": "t"})
+    cfg = CloudflareConfig.from_env(
+        {"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "k", "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz"}
+    )
     assert cfg.jwt.jwt_roles_claim == "roles"
     assert cfg.jwt.jwt_scopes_claim == "scope"
 

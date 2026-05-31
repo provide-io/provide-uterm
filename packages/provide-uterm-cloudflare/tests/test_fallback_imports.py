@@ -205,7 +205,7 @@ async def test_entry_inline_jwt_fallback() -> None:
         JWT_DEFAULT_ROLE="viewer",
         JWT_ROLES_CLAIM="role",
         SESSION_REGISTRY=None,
-        WORKER_BEARER_TOKEN="test-worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
     )
     default = Default(env)
 

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from provide.uterm.cloudflare.entry import Default
+
 from provide.uterm.tunnel.token_hash import hash_token
 
 # ---------------------------------------------------------------------------
@@ -45,7 +46,12 @@ async def test_resolve_principal_id_cf_access_service_token_header_is_not_truste
     from provide.uterm.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+        SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="k",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+        )
     )
     client_id = "abc123.access"
     req = SimpleNamespace(
@@ -62,7 +68,7 @@ def _make_default(env_attrs: dict | None = None) -> Default:
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-        "WORKER_BEARER_TOKEN": "test-worker-token",
+        "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
     }
     force_dev = not (env_attrs and env_attrs.get("AUTH_MODE") == "jwt")
     if env_attrs:

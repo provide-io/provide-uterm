@@ -5,6 +5,67 @@ from typing import Any
 
 _HMAC_ALGS = frozenset({"HS256", "HS384", "HS512"})
 
+# Minimum length for the worker bearer token. 32 chars ≈ ≥128 bits of entropy
+# across the common encodings (raw bytes / hex / base64). CF is a separate
+# package and must not import from provide-uterm-server, so this mirrors the
+# FastAPI backend's _MIN_BEARER_TOKEN_CHARS locally.
+_MIN_BEARER_TOKEN_CHARS = 32
+
+# Known placeholder bearer tokens (exact match, lowercased). The conservative
+# subset of the server's _PLACEHOLDER_AUTH_VALUES — short, generic words an
+# operator might leave in by mistake.
+_PLACEHOLDER_BEARER_VALUES = frozenset(
+    {
+        "change-me",
+        "changeme",
+        "placeholder",
+        "replace-me",
+        "secret",
+        "test",
+        "password",
+        "token",
+        "dev",
+        "worker-token",
+        "test-worker-token",
+        "dummy-token",
+        "worker-secret",
+    }
+)
+
+# Compound placeholder phrases (substring match). Kept compound to avoid false
+# positives on legitimate high-entropy tokens that merely contain "token" etc.
+_PLACEHOLDER_BEARER_MARKERS = (
+    "change-me",
+    "changeme",
+    "placeholder",
+    "replace-me",
+    "replace-with",
+    "replace_with",
+)
+
+
+def _reject_weak_bearer_token(value: str) -> None:
+    """Fail closed on a placeholder or low-entropy worker bearer token.
+
+    Applied UNCONDITIONALLY whenever WORKER_BEARER_TOKEN is set: a CF Worker is
+    always internet-facing (no loopback concept), so the edge token must always
+    clear the entropy/placeholder floor — stronger than the FastAPI backend's
+    production-like gate, which is correct for the more-exposed edge.
+    """
+    text = str(value).strip()
+    lowered = text.lower()
+    if lowered in _PLACEHOLDER_BEARER_VALUES or any(m in lowered for m in _PLACEHOLDER_BEARER_MARKERS):
+        raise ValueError(
+            "WORKER_BEARER_TOKEN uses a known placeholder value. Set a high-entropy runtime "
+            "token (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`)."
+        )
+    if len(text) < _MIN_BEARER_TOKEN_CHARS:
+        raise ValueError(
+            f"WORKER_BEARER_TOKEN must be at least {_MIN_BEARER_TOKEN_CHARS} characters of "
+            "high-entropy material. CF Workers are always internet-facing, so the worker "
+            "bearer token is an edge auth boundary — use a long random token."
+        )
+
 
 def _looks_like_asymmetric_key(pem: str | None) -> bool:
     """Return True if *pem* carries an asymmetric public-key/certificate PEM marker.
@@ -187,6 +248,12 @@ class CloudflareConfig:
         worker_bearer_token = _get("WORKER_BEARER_TOKEN") or None
         if mode == "jwt" and not worker_bearer_token:
             raise ValueError("WORKER_BEARER_TOKEN is required when AUTH_MODE='jwt'")
+        # A CF Worker is always internet-facing, so the worker bearer token is an
+        # edge auth boundary that must always clear the entropy/placeholder floor.
+        # The presence check above already guarantees a token in jwt mode (the
+        # only mode reachable here), so the falsy branch is unreachable.
+        if worker_bearer_token:  # pragma: no branch
+            _reject_weak_bearer_token(worker_bearer_token)
         security_mode = _get("SECURITY_MODE", "strict").strip().lower() or "strict"
         if security_mode not in {"strict", "dev"}:
             security_mode = "strict"

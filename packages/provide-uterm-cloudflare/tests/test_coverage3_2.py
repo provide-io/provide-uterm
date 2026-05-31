@@ -40,7 +40,7 @@ def _make_env(mode: str = "jwt", **extra) -> SimpleNamespace:
     env.JWT_ALGORITHMS = "HS256"
     env.JWT_PUBLIC_KEY_PEM = _KEY
     if not hasattr(env, "WORKER_BEARER_TOKEN"):
-        env.WORKER_BEARER_TOKEN = "test-worker-token"
+        env.WORKER_BEARER_TOKEN = "test-worker-token-padded-to-32xyz"
     return env
 
 
@@ -223,7 +223,7 @@ def test_config_invalid_mode_is_rejected() -> None:
     """An unrecognised AUTH_MODE is rejected (only 'jwt' is allowed)."""
     from provide.uterm.cloudflare.config import CloudflareConfig
 
-    env = SimpleNamespace(AUTH_MODE="invalid_mode", WORKER_BEARER_TOKEN="t")
+    env = SimpleNamespace(AUTH_MODE="invalid_mode", WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz")
     with pytest.raises(ValueError, match="AUTH_MODE"):
         CloudflareConfig.from_env(env)
 

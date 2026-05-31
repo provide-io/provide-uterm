@@ -117,7 +117,7 @@ def test_config_reads_jwt_default_role_from_env() -> None:
         AUTH_MODE = "jwt"
         JWT_PUBLIC_KEY_PEM = "pem"
         JWT_DEFAULT_ROLE = "operator"
-        WORKER_BEARER_TOKEN = "t"
+        WORKER_BEARER_TOKEN = "test-worker-token-padded-to-32xyz"
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_default_role == "operator"
@@ -191,7 +191,7 @@ def test_config_reads_jwt_role_map_from_env() -> None:
         AUTH_MODE = "jwt"
         JWT_PUBLIC_KEY_PEM = "pem"
         JWT_ROLE_MAP = json.dumps({"engineering": "admin", "ops": "operator"})
-        WORKER_BEARER_TOKEN = "t"
+        WORKER_BEARER_TOKEN = "test-worker-token-padded-to-32xyz"
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_role_map == {"engineering": "admin", "ops": "operator"}
@@ -205,7 +205,7 @@ def test_config_jwt_role_map_invalid_json_ignored() -> None:
         AUTH_MODE = "jwt"
         JWT_PUBLIC_KEY_PEM = "pem"
         JWT_ROLE_MAP = "not-valid-json{"
-        WORKER_BEARER_TOKEN = "t"
+        WORKER_BEARER_TOKEN = "test-worker-token-padded-to-32xyz"
 
     cfg = CloudflareConfig.from_env(_FakeEnv())
     assert cfg.jwt.jwt_role_map == {}
@@ -228,7 +228,7 @@ def test_from_env_rejects_dev_and_none_modes_in_all_environments(mode: str) -> N
                     "ENVIRONMENT": environment,
                     "AUTH_MODE": mode,
                     "JWT_PUBLIC_KEY_PEM": "pem",
-                    "WORKER_BEARER_TOKEN": "t",
+                    "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
                 }
             )
 
@@ -311,7 +311,7 @@ def test_config_reads_jwt_service_token_admin_from_env() -> None:
         {
             "AUTH_MODE": "jwt",
             "JWT_PUBLIC_KEY_PEM": "pem",
-            "WORKER_BEARER_TOKEN": "t",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
             "JWT_SERVICE_TOKEN_ADMIN": "1",
         }
     )
@@ -322,7 +322,9 @@ def test_config_jwt_service_token_admin_defaults_false() -> None:
     """Service-token admin is opt-in: defaults to False (fail closed)."""
     from provide.uterm.cloudflare.config import CloudflareConfig
 
-    cfg = CloudflareConfig.from_env({"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "pem", "WORKER_BEARER_TOKEN": "t"})
+    cfg = CloudflareConfig.from_env(
+        {"AUTH_MODE": "jwt", "JWT_PUBLIC_KEY_PEM": "pem", "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz"}
+    )
     assert cfg.jwt.jwt_service_token_admin is False
 
 
@@ -345,7 +347,7 @@ def test_jwt_config_rejects_hs_mixed_with_pem_key(algs: str) -> None:
                 "AUTH_MODE": "jwt",
                 "JWT_ALGORITHMS": algs,
                 "JWT_PUBLIC_KEY_PEM": "-----BEGIN PUBLIC KEY-----\nXXXX\n-----END PUBLIC KEY-----",
-                "WORKER_BEARER_TOKEN": "t",
+                "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
             }
         )
 
@@ -360,7 +362,7 @@ def test_jwt_config_rejects_hs_mixed_with_jwks_url() -> None:
                 "AUTH_MODE": "jwt",
                 "JWT_ALGORITHMS": "RS256,HS256",
                 "JWT_JWKS_URL": "https://idp.example.com/.well-known/jwks.json",
-                "WORKER_BEARER_TOKEN": "t",
+                "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
             }
         )
 
@@ -375,7 +377,7 @@ def test_jwt_config_rejects_hs_combined_with_asymmetric_alg() -> None:
                 "AUTH_MODE": "jwt",
                 "JWT_ALGORITHMS": "RS256,HS256",
                 "JWT_PUBLIC_KEY_PEM": "k",
-                "WORKER_BEARER_TOKEN": "t",
+                "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
             }
         )
 
@@ -389,7 +391,7 @@ def test_jwt_config_allows_pure_asymmetric_with_key() -> None:
             "AUTH_MODE": "jwt",
             "JWT_ALGORITHMS": "RS256,ES256",
             "JWT_PUBLIC_KEY_PEM": "k",
-            "WORKER_BEARER_TOKEN": "t",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
         }
     )
     assert cfg.jwt.algorithms == ("RS256", "ES256")
@@ -408,7 +410,7 @@ def test_jwt_config_allows_hs_without_asymmetric_key() -> None:
             "AUTH_MODE": "jwt",
             "JWT_ALGORITHMS": "HS256",
             "JWT_PUBLIC_KEY_PEM": "shared-secret-32-bytes-minimum-key!",
-            "WORKER_BEARER_TOKEN": "t",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
         }
     )
     assert cfg.jwt.algorithms == ("HS256",)
@@ -418,6 +420,8 @@ def test_jwt_config_allows_hs_with_no_key_material() -> None:
     """HMAC algorithm with neither a PEM key nor a JWKS URL passes the guard."""
     from provide.uterm.cloudflare.config import CloudflareConfig
 
-    cfg = CloudflareConfig.from_env({"AUTH_MODE": "jwt", "JWT_ALGORITHMS": "HS256", "WORKER_BEARER_TOKEN": "t"})
+    cfg = CloudflareConfig.from_env(
+        {"AUTH_MODE": "jwt", "JWT_ALGORITHMS": "HS256", "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz"}
+    )
     assert cfg.jwt.public_key_pem is None
     assert cfg.jwt.jwks_url is None

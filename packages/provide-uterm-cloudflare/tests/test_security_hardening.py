@@ -21,7 +21,7 @@ class _Req:
 
 
 def test_auth_mode_defaults_to_jwt() -> None:
-    cfg = CloudflareConfig.from_env({"WORKER_BEARER_TOKEN": "t"})
+    cfg = CloudflareConfig.from_env({"WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz"})
     assert cfg.jwt.mode == "jwt"
 
 
@@ -31,7 +31,9 @@ def test_production_rejects_dev_mode() -> None:
 
 
 def test_query_token_env_knob_removed() -> None:
-    cfg = CloudflareConfig.from_env({"AUTH_ALLOW_QUERY_TOKEN": "1", "WORKER_BEARER_TOKEN": "t"})
+    cfg = CloudflareConfig.from_env(
+        {"AUTH_ALLOW_QUERY_TOKEN": "1", "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz"}
+    )
     assert not hasattr(cfg.jwt, "allow_query_token")
 
 
@@ -208,7 +210,7 @@ def _make_runtime_with_token(token: str | None = None, mode: str = "dev"):
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-        "WORKER_BEARER_TOKEN": token if token is not None else "placeholder-token",
+        "WORKER_BEARER_TOKEN": token if token is not None else "test-worker-token-padded-to-32xyz",
     }
     rt = SessionRuntime(ctx, SimpleNamespace(**env_kwargs))
     rt.config.jwt.mode = mode
@@ -218,8 +220,64 @@ def _make_runtime_with_token(token: str | None = None, mode: str = "dev"):
 
 
 def test_config_reads_worker_bearer_token_from_env() -> None:
-    cfg = CloudflareConfig.from_env({"WORKER_BEARER_TOKEN": "my-secret-token"})
-    assert cfg.worker_bearer_token == "my-secret-token"
+    cfg = CloudflareConfig.from_env({"WORKER_BEARER_TOKEN": "uterm-cf-worker-bearer-32-byte-min!"})
+    assert cfg.worker_bearer_token == "uterm-cf-worker-bearer-32-byte-min!"
+
+
+# ---------------------------------------------------------------------------
+# Worker bearer-token entropy / placeholder floor (CF-local, unconditional)
+# ---------------------------------------------------------------------------
+
+_VALID_BEARER = "uterm-cf-worker-bearer-32-byte-min!"  # 35 chars, no placeholder marker
+
+
+def _bearer_env(token: str) -> dict[str, str]:
+    return {
+        "AUTH_MODE": "jwt",
+        "JWT_ALGORITHMS": "HS256",
+        "JWT_PUBLIC_KEY_PEM": "uterm-cf-hs256-shared-secret-32b!",
+        "WORKER_BEARER_TOKEN": token,
+    }
+
+
+class TestWorkerBearerTokenFloor:
+    """CF Workers are always internet-facing: a weak worker bearer token is an
+    edge auth bypass. ``from_env`` must reject short / placeholder tokens
+    unconditionally (no loopback concept exists at the CF edge)."""
+
+    def test_short_token_rejected(self) -> None:
+        with pytest.raises(ValueError, match="32"):
+            CloudflareConfig.from_env(_bearer_env("test-worker-token"))  # 17 chars
+
+    def test_placeholder_token_rejected(self) -> None:
+        with pytest.raises(ValueError, match="placeholder"):
+            # 32+ chars so length passes; rejected purely on the placeholder marker.
+            CloudflareConfig.from_env(_bearer_env("changeme-aaaaaaaaaaaaaaaaaaaaaaaaa"))
+
+    def test_exact_placeholder_word_rejected(self) -> None:
+        with pytest.raises(ValueError, match="placeholder"):
+            CloudflareConfig.from_env(_bearer_env("token"))
+
+    def test_valid_high_entropy_token_accepted(self) -> None:
+        cfg = CloudflareConfig.from_env(_bearer_env(_VALID_BEARER))
+        assert cfg.worker_bearer_token == _VALID_BEARER
+
+    def test_helper_rejects_short(self) -> None:
+        from provide.uterm.cloudflare.config import _reject_weak_bearer_token
+
+        with pytest.raises(ValueError, match="32"):
+            _reject_weak_bearer_token("short")
+
+    def test_helper_rejects_placeholder(self) -> None:
+        from provide.uterm.cloudflare.config import _reject_weak_bearer_token
+
+        with pytest.raises(ValueError, match="placeholder"):
+            _reject_weak_bearer_token("replace-me-with-a-real-runtime-tok")
+
+    def test_helper_accepts_valid(self) -> None:
+        from provide.uterm.cloudflare.config import _reject_weak_bearer_token
+
+        _reject_weak_bearer_token(_VALID_BEARER)  # must not raise
 
 
 def test_config_rejects_dev_mode_in_all_environments() -> None:
@@ -230,7 +288,7 @@ def test_config_rejects_dev_mode_in_all_environments() -> None:
 
 @pytest.mark.asyncio
 async def test_worker_ws_rejected_without_bearer_token() -> None:
-    runtime = _make_runtime_with_token(token="correct-token", mode="dev")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="dev")
     req = _Req(
         "https://example.invalid/ws/worker/test-worker/term",
         headers={"Upgrade": "websocket"},
@@ -243,7 +301,7 @@ async def test_worker_ws_rejected_without_bearer_token() -> None:
 
 @pytest.mark.asyncio
 async def test_worker_ws_rejected_with_wrong_bearer_token() -> None:
-    runtime = _make_runtime_with_token(token="correct-token", mode="dev")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="dev")
     req = _Req(
         "https://example.invalid/ws/worker/test-worker/term",
         headers={"Upgrade": "websocket", "Authorization": "Bearer wrong-token"},
@@ -259,10 +317,10 @@ async def test_worker_ws_accepted_with_correct_bearer_token() -> None:
     from types import ModuleType
     from unittest.mock import MagicMock
 
-    runtime = _make_runtime_with_token(token="correct-token", mode="dev")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="dev")
     req = _Req(
         "https://example.invalid/ws/worker/test-worker/term",
-        headers={"Upgrade": "websocket", "Authorization": "Bearer correct-token"},
+        headers={"Upgrade": "websocket", "Authorization": "Bearer test-worker-token-padded-to-32xyz"},
     )
     # Mock js.WebSocketPair so we don't crash on import
     fake_js = ModuleType("js")
@@ -296,10 +354,10 @@ def test_jwt_mode_accepts_worker_bearer_token() -> None:
             "AUTH_MODE": "jwt",
             "JWT_ALGORITHMS": "HS256",
             "JWT_PUBLIC_KEY_PEM": "test-key",
-            "WORKER_BEARER_TOKEN": "my-token",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
         }
     )
-    assert cfg.worker_bearer_token == "my-token"
+    assert cfg.worker_bearer_token == "test-worker-token-padded-to-32xyz"
     assert cfg.jwt.mode == "jwt"
 
 
@@ -312,7 +370,7 @@ async def test_page_routes_require_jwt_in_jwt_mode() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )
@@ -335,7 +393,7 @@ async def test_page_routes_accessible_in_dev_mode() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )
@@ -359,7 +417,7 @@ async def test_page_routes_invalid_jwt_returns_401() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )
@@ -391,7 +449,7 @@ async def test_page_routes_valid_jwt_returns_non_401() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM=signing_key,
-        WORKER_BEARER_TOKEN="worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )
@@ -416,7 +474,7 @@ async def test_root_page_requires_jwt_in_jwt_mode() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )
@@ -437,7 +495,7 @@ async def test_assets_accessible_without_jwt() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_RUNTIME=None,
         SESSION_REGISTRY=None,
     )

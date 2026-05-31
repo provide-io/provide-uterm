@@ -21,7 +21,7 @@ def _make_dev_default() -> object:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="test-worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
     )
     d = Default(env)
     d._config = CloudflareConfig.from_env(env)

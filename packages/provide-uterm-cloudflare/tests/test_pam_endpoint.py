@@ -162,7 +162,7 @@ async def test_route_http_dispatches_pam_events() -> None:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="t",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         SESSION_REGISTRY=None,
     )
     default = Default(env)

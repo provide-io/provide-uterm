@@ -49,7 +49,7 @@ def _make_env(**extra: object) -> SimpleNamespace:
     env.JWT_ALGORITHMS = "HS256"
     env.JWT_PUBLIC_KEY_PEM = _KEY
     if not hasattr(env, "WORKER_BEARER_TOKEN"):
-        env.WORKER_BEARER_TOKEN = "test-worker-token"
+        env.WORKER_BEARER_TOKEN = "test-worker-token-padded-to-32xyz"
     return env
 
 

@@ -53,7 +53,7 @@ def _make_dev_default(**extra: object) -> object:
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-        "WORKER_BEARER_TOKEN": "test-worker-token",
+        "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
     }
     attrs.update(extra)
     env = SimpleNamespace(**attrs)
@@ -94,7 +94,12 @@ class TestEntryDispatchGaps:
         from provide.uterm.cloudflare.entry.handlers import _api_tunnel_revoke
 
         cfg = CloudflareConfig.from_env(
-            SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+            SimpleNamespace(
+                AUTH_MODE="jwt",
+                JWT_ALGORITHMS="HS256",
+                JWT_PUBLIC_KEY_PEM="k",
+                WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+            )
         )
         req = _req("/api/tunnels/tid/tokens", method="DELETE")
         env = SimpleNamespace(SESSION_REGISTRY=None)
