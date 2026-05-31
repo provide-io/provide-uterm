@@ -158,6 +158,11 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
                     cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)),
                 )
             logger.info("tunnel_worker_disconnected worker_id=%s", worker_id)
+            # Prune the now-idle worker entry so the global max_workers cap stops
+            # counting this dead tunnel session. Mirrors the regular worker route
+            # (websockets_impl.py). prune_if_idle is idempotent and only removes
+            # the entry when worker_ws is cleared and no browsers/leases remain.
+            await hub.prune_if_idle(worker_id)
 
 
 async def _handle_control(
