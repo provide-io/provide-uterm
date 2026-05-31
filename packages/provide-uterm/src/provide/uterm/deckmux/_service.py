@@ -213,7 +213,15 @@ class DeckMuxPresence:
                 )
                 if k in msg
             }
-            user = store.update(user_id, **fields)
+            try:
+                user = store.update(user_id, **fields)
+            except ValueError:
+                # The browser shipped a malformed/oversized ``selection``/``pin``
+                # (the only ValueError reachable here — the field set is a fixed
+                # allow-list, so "Unknown presence field" cannot fire). Drop the
+                # bad update gracefully: no store mutation, no broadcast, and the
+                # session stays up instead of tearing down on attacker input.
+                user = None
             if user:
                 # Broadcast to other browsers
                 update_msg = user.to_dict()
