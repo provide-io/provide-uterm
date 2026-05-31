@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from collections import deque
 from pathlib import Path
@@ -21,6 +22,19 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
+
+
+def _open_append_owner_only(path: Path) -> TextIOWrapper:
+    """Open ``path`` for append with owner-only (0o600) permissions, atomically.
+
+    Creating the file via ``os.open(..., 0o600)`` and wrapping the fd avoids the
+    TOCTOU window of ``open()`` then ``chmod()`` (where the file is briefly
+    world/group-readable). The mode only applies on creation and is subject to
+    umask — but umask can only *remove* bits, and 0o600 has no group/world bits
+    for umask to clear, so the result is always exactly 0o600.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    return os.fdopen(fd, "a", encoding="utf-8")
 
 
 @runtime_checkable
@@ -134,9 +148,8 @@ class LocalFileRecordingStore(RecordingStore):
     async def start_session(self, session_id: str, metadata: dict[str, Any]) -> None:
         async with self._get_lock(session_id):
             path = self._get_path(session_id)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            f = path.open("a", encoding="utf-8")
-            path.chmod(0o600)
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            f = _open_append_owner_only(path)
             self._files[session_id] = f
             event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
             f.write(json.dumps(event) + "\n")
@@ -147,8 +160,8 @@ class LocalFileRecordingStore(RecordingStore):
             f = self._files.get(session_id)
             if not f:
                 path = self._get_path(session_id)
-                f = path.open("a", encoding="utf-8")
-                path.chmod(0o600)
+                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                f = _open_append_owner_only(path)
                 self._files[session_id] = f
 
             for event in events:
