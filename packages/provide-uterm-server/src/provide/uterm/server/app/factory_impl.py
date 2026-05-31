@@ -645,6 +645,19 @@ def create_server_app(
                 tunnel_tokens.pop(sid, None)
                 logger.info("tunnel_token_expired session_id=%s swept=true", sid)
 
+    async def _sweep_control_plane_reap() -> None:
+        """Periodically physically-delete expired/soft-deleted control-plane rows."""
+        while True:
+            await asyncio.sleep(config.control_plane.reap_interval_s)
+            try:
+                deleted = await control_plane.reap(now=time.time(), retention_s=config.control_plane.reap_retention_s)
+                if deleted:
+                    logger.info("control_plane_reap deleted_rows=%d", deleted)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("control_plane_reap_error")
+
     async def _node_registry_heartbeat() -> None:
         """Periodically announce Node status to the External Management Tier."""
         discovery_provider: DiscoveryProvider
@@ -699,6 +712,11 @@ def create_server_app(
         retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
         recording_retention_sweep_task = asyncio.create_task(_sweep_expired_recordings())
         heartbeat_task = asyncio.create_task(_node_registry_heartbeat())
+        # Only the sqlite backend accumulates rows; memory hard-deletes, so it
+        # needs no reaper.
+        reap_task: asyncio.Task[None] | None = None
+        if config.control_plane.backend == "sqlite":
+            reap_task = asyncio.create_task(_sweep_control_plane_reap())
         pam_task: asyncio.Task[None] | None = None
         with contextlib.suppress(ImportError):
             from provide.uterm.server.pam_integration import run_pam_integration
@@ -717,6 +735,10 @@ def create_server_app(
                 pam_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pam_task
+            if reap_task is not None:
+                reap_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await reap_task
             heartbeat_task.cancel()
             recording_retention_sweep_task.cancel()
             retention_sweep_task.cancel()
