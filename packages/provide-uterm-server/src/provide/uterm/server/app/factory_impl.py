@@ -730,11 +730,10 @@ def create_server_app(
         retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
         recording_retention_sweep_task = asyncio.create_task(_sweep_expired_recordings())
         heartbeat_task = asyncio.create_task(_node_registry_heartbeat())
-        # Only the sqlite backend accumulates rows; memory hard-deletes, so it
-        # needs no reaper.
-        reap_task: asyncio.Task[None] | None = None
-        if config.control_plane.backend == "sqlite":
-            reap_task = asyncio.create_task(_sweep_control_plane_reap())
+        # Both backends soft-delete (set deleted_at/revoked_at/resolved_at and
+        # leave expired rows in place), so both need the reaper to physically
+        # prune past the retention cutoff. Schedule it unconditionally.
+        reap_task = asyncio.create_task(_sweep_control_plane_reap())
         pam_task: asyncio.Task[None] | None = None
         with contextlib.suppress(ImportError):
             from provide.uterm.server.pam_integration import run_pam_integration
@@ -753,10 +752,9 @@ def create_server_app(
                 pam_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pam_task
-            if reap_task is not None:
-                reap_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await reap_task
+            reap_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reap_task
             heartbeat_task.cancel()
             recording_retention_sweep_task.cancel()
             retention_sweep_task.cancel()

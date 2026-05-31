@@ -46,8 +46,40 @@ class MemoryControlPlane:
         return MemoryTransaction(self._state, self._lock)
 
     async def reap(self, *, now: float, retention_s: int) -> int:
-        # Memory hard-deletes; nothing accumulates, so there is nothing to reap.
-        return 0
+        """Physically drop control-plane rows whose soft-delete/expiry timestamp
+        is older than ``now - retention_s``.  Mirrors the SQLite reap predicate
+        semantics (strict ``<``, IS-NOT-NULL guards) so both backends prune the
+        same rows.  Returns the total number of records removed."""
+        cutoff = now - retention_s
+        async with self._lock:
+            s = self._state
+            before = len(s.resume_tokens) + len(s.session_tokens) + len(s.sessions) + len(s.leases) + len(s.approvals)
+            s.resume_tokens = {
+                k: r
+                for k, r in s.resume_tokens.items()
+                if not ((r.revoked_at is not None and r.revoked_at < cutoff) or r.expires_at < cutoff)
+            }
+            s.session_tokens = {
+                k: r
+                for k, r in s.session_tokens.items()
+                if not (
+                    (r.revoked_at is not None and r.revoked_at < cutoff)
+                    or (r.expires_at is not None and r.expires_at < cutoff)
+                )
+            }
+            s.sessions = {
+                k: r for k, r in s.sessions.items() if not (r.deleted_at is not None and r.deleted_at < cutoff)
+            }
+            s.leases = {
+                k: r
+                for k, r in s.leases.items()
+                if not ((r.deleted_at is not None and r.deleted_at < cutoff) or r.lease_expires_at < cutoff)
+            }
+            s.approvals = {
+                k: r for k, r in s.approvals.items() if not (r.resolved_at is not None and r.resolved_at < cutoff)
+            }
+            after = len(s.resume_tokens) + len(s.session_tokens) + len(s.sessions) + len(s.leases) + len(s.approvals)
+            return before - after
 
     def session_store(self, tx: MemoryTransaction) -> MemorySessionStore:
         return MemorySessionStore(tx.state, tx)
