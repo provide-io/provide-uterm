@@ -72,6 +72,43 @@ class SqliteControlPlane:
 
         return SqliteTransaction(self._conn, on_close=_release_lock)
 
+    async def reap(self, *, now: float, retention_s: int) -> int:
+        """Physically delete control-plane rows whose soft-delete/expiry timestamp
+        is older than ``now - retention_s``, then truncate the WAL.  Returns the
+        total number of rows deleted."""
+        cutoff = now - retention_s
+        tx = await self.begin()
+        try:
+            assert self._conn is not None
+            deleted = 0
+            for sql, params in (
+                (
+                    "DELETE FROM cp_resume_tokens WHERE (revoked_at IS NOT NULL AND revoked_at < ?) OR expires_at < ?",
+                    (cutoff, cutoff),
+                ),
+                (
+                    "DELETE FROM cp_session_tokens "
+                    "WHERE (revoked_at IS NOT NULL AND revoked_at < ?) "
+                    "OR (expires_at IS NOT NULL AND expires_at < ?)",
+                    (cutoff, cutoff),
+                ),
+                ("DELETE FROM cp_sessions WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,)),
+                ("DELETE FROM cp_leases WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,)),
+                ("DELETE FROM cp_approvals WHERE resolved_at IS NOT NULL AND resolved_at < ?", (cutoff,)),
+            ):
+                cursor = await self._conn.execute(sql, params)
+                deleted += cursor.rowcount
+                await cursor.close()
+            await tx.commit()
+        except Exception:
+            await tx.rollback()
+            raise
+        # WAL checkpoint must run OUTSIDE the BEGIN IMMEDIATE txn (lock re-acquired).
+        async with self._tx_lock:
+            assert self._conn is not None
+            await self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        return deleted
+
     def session_store(self, tx: SqliteTransaction) -> SqliteSessionStore:
         return SqliteSessionStore(tx)
 
