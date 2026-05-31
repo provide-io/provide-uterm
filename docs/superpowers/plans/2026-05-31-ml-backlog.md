@@ -9,7 +9,8 @@
 - **C1 merged** (`d6e6df9`..`979dbc5`): 1a, 1b, 1c, 1e, 1g. **All remaining High findings are now closed.**
 - **C2 merged** (`4ea612d`, `9f006bd`): 2a, 2c.
 - **C3 merged** (`1c7890a`, `9a5ff99`): 3a, 3b.
-- **In progress** (surgical batch, user-approved 2026-05-31): 5c, 4a, 3c, 2b.
+- **5c MERGED** (`e4abc87`, `12327c8`): MCP/client path-injection guard.
+- **In progress** (surgical batch, user-approved 2026-05-31): 4a, 3c, 2b.
 - **Pending — needs a design decision**: 1f, 1d (IDP webhook contract), 5a (audit hash-chain scheme),
   5b (manager token model), 5d (inbound-frame validation strategy).
 - **Separate pre-existing item**: `tests/memray/test_event_bus_stress.py` baseline is borderline-flaky on
@@ -45,8 +46,9 @@
   one-line flag add, keep step comments). Surgical batch. (S–M)
 
 ## Cluster 5 — Audit integrity + client/platform hardening (mixed; each its own small branch)
-- [x] **5c (A-med)** MCP path-injection — validate `worker_id`/`session_id`/`group_id` before path
-  interpolation (`client/hijack.py`). Surgical batch (IN PROGRESS). (S, client)
+- [x] **5c (A-med)** MCP path-injection — `_safe_id` validation of `worker_id`/`session_id`/`hijack_id`
+  (`client/hijack.py` `_wp/_hp/_sp`) + `group_id`/`session_id` in the `fanout_send`/`session_annotate`
+  MCP tools (`ai/server_impl.py`). MERGED `e4abc87`, `12327c8`. (S, client)
 - [ ] **5a (G-med)** Audit log no ordering/sequence/tamper-resistance. NEEDS DESIGN: monotonic seq + optional
   prev-hash chain — which scheme? (M, server)
 - [ ] **5b (A-med)** Manager one-token-total-authority (`manager/auth.py:86`). NEEDS DESIGN: scoped tokens
