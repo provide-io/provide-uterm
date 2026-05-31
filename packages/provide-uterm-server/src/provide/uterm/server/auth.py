@@ -11,6 +11,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from opentelemetry.propagate import inject
+
 from provide.telemetry import get_logger
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.bridge.identity import IdentityProvider, Principal
@@ -404,6 +406,10 @@ class WebhookIdentityProvider(IdentityProvider):
             ts = str(time.time())
             req_headers["X-Uterm-Timestamp"] = ts
             req_headers["X-Uterm-Signature"] = build_webhook_signature(self.secret, body, ts)
+        # Propagate the active W3C trace context onto the IDP resolution call so
+        # the auth hop joins the same distributed trace. No-op when no recording
+        # span is active.
+        inject(req_headers)
 
         try:
             from provide.uterm.server.egress import assert_webhook_target_allowed
