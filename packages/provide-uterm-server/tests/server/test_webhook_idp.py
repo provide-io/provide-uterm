@@ -6,8 +6,25 @@ import httpx
 import pytest
 import respx
 
-from provide.uterm.server.auth import WebhookIdentityProvider
+from provide.uterm.server.auth import WebhookIdentityProvider, _filter_known_roles
 from provide.uterm.server.webhook_signing import verify_webhook_signature
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        ["Admin"],
+        ["ADMIN"],
+        ["aDmIn"],
+        ["  Admin  "],
+    ],
+)
+def test_filter_known_roles_case_folds_admin(raw):
+    """L24 regression: role resolution case-folds so mixed-case role strings
+    from an external IDP normalize to the canonical lower-cased allow-list
+    entry (consistent with the JWT/header paths). Pin this behavior so a
+    future refactor can't silently make role matching case-sensitive again."""
+    assert _filter_known_roles(raw) == frozenset({"admin"})
 
 
 @pytest.mark.asyncio
@@ -186,6 +203,28 @@ async def test_webhook_idp_keeps_legitimate_role():
     principal = await idp.resolve_principal(MockConnection())
     assert principal is not None
     assert principal.roles == frozenset({"operator"})
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_case_folds_mixed_case_admin_role():
+    """L24 regression: a webhook IDP returning a mixed-case ``Admin`` role
+    resolves to an admin Principal — the role is case-folded to the canonical
+    ``admin`` allow-list entry rather than dropped as unknown."""
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url)
+
+    respx.post(url).mock(
+        return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["Admin"]}),
+    )
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal is not None
+    assert principal.roles == frozenset({"admin"})
 
 
 @pytest.mark.asyncio
