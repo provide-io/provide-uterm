@@ -148,8 +148,15 @@ class SessionRuntime(
         Unlike _ensure_meta (one-time, gated by _meta_loaded), this always
         re-reads the credential fields from KV so a revoked/rotated token takes
         effect within _CREDENTIAL_TTL_S, and the hashes are restored after DO
-        hibernation. KV is authoritative (the Default Worker writes revoked/
-        rotated hashes there); a missing entry means no valid tunnel tokens.
+        hibernation. KV is authoritative for *present* entries: the Default
+        Worker writes a present-but-nulled entry to revoke/rotate, and that
+        explicit null path nulls the in-memory hashes.
+
+        A *transiently missing* entry (``raw is None``) is NOT treated as a
+        revocation — it leaves the last-known hashes intact. Otherwise a brief
+        KV miss (eventual consistency / not-yet-propagated write) would cause up
+        to _CREDENTIAL_TTL_S of false revocation, breaking tunnel/share/control
+        auth for a live session.
         """
         now = time.time()
         if self._credentials_loaded_at is not None and (now - self._credentials_loaded_at) < _CREDENTIAL_TTL_S:
@@ -161,16 +168,14 @@ class SessionRuntime(
         try:
             raw = await kv.get(f"session:{self.worker_id}")
             if raw is not None:
+                # Key present → authoritative. A real revoke writes the entry
+                # with nulled hash fields, so these resolve to None correctly.
                 data = json.loads(str(raw))
                 self._tunnel_worker_token_hash = str(data.get("worker_token_hash") or "") or None
                 self._share_token_hash = str(data.get("share_token_hash") or "") or None
                 self._control_token_hash = str(data.get("control_token_hash") or "") or None
                 self._issued_ip = str(data.get("issued_ip") or "") or None
-            else:
-                self._tunnel_worker_token_hash = None
-                self._share_token_hash = None
-                self._control_token_hash = None
-                self._issued_ip = None
+            # else: key absent → transient miss, keep the last-known hashes.
             self._credentials_loaded_at = now
         except Exception:
             logger.debug("_ensure_credentials kv read failed for %s", self.worker_id)
