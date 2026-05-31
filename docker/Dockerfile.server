@@ -21,10 +21,13 @@
 # Health:    http://localhost:27780/api/health
 # Sessions:  http://localhost:27780/api/sessions
 #
+# Dependencies are installed by uv into a managed virtualenv (/app/.venv),
+# pinned to the committed uv.lock (UV_FROZEN=1) — never into system site-packages.
+#
 
-FROM python:3.11-slim
+# ---- builder stage: resolve + install into a uv-managed venv ----------------
+FROM python:3.11-slim AS builder
 
-# Keeps Python from buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
 
 # Pull in the latest base-image security patches (Debian point releases ship
@@ -35,26 +38,52 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Bring pip's bundled wheel / setuptools (which vendors jaraco.context) up to
-# the post-fix versions before uv consumes them.
-RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=80.10.0" "wheel>=0.46.2" \
-    && pip install --no-cache-dir uv
+# Pin the uv toolchain via the official image instead of bootstrapping it with
+# system pip. Pin to a digest for full reproducibility when you cut a release.
+COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /uvx /bin/
+
+# uv installs into the venv at /app/.venv using the base image's interpreter (so
+# the venv is portable to the runtime stage, which shares the base), pinned to
+# uv.lock (UV_FROZEN=1) — never system site-packages (no `uv pip install --system`).
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_PYTHON_PREFERENCE=only-system \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_FROZEN=1
 
 WORKDIR /app
 
-# Copy workspace root metadata
+# Copy workspace root metadata (incl. uv.lock — now actually consumed) plus the
+# core, client (workspace dependency of server) and server packages.
 COPY pyproject.toml uv.lock README.md ./
-
-# Copy core, client (workspace dependency of server), and server packages.
-# provide-uterm-server requires provide-uterm-client, which is declared as a
-# workspace member in the root pyproject — uv refuses to resolve the install
-# if the workspace member directory is missing from the build context.
 COPY packages/provide-uterm/ packages/provide-uterm/
 COPY packages/provide-uterm-client/ packages/provide-uterm-client/
 COPY packages/provide-uterm-server/ packages/provide-uterm-server/
 
-# Install the server with all extras
-RUN uv pip install --system "./packages/provide-uterm[emulator]" "./packages/provide-uterm-server[all]"
+# Install the server with all extras (pulls core + client workspace deps from
+# the lock), then add core's `emulator` dependency (pyte) which the screen
+# renderer imports. NEEDS-BUILD-VALIDATION: confirm the resulting /app/.venv
+# matches the previous `[emulator]`/`[all]` surface and exposes the `uterm` CLI.
+RUN uv sync --no-dev --package provide-uterm-server --extra all \
+    && uv pip install --python /app/.venv pyte
+
+# ---- runtime stage ----------------------------------------------------------
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the uv-managed venv and the (editable-installed) workspace packages it
+# references. The venv's interpreter is the base image's python, present in
+# this stage too, so the venv is fully functional.
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/packages /app/packages
 
 # Default config is fail-closed: JWT/header secrets are placeholders rejected
 # by the server. Override via: -v /path/to/config.toml:/config/server.toml:ro
