@@ -19,6 +19,7 @@ Usage::
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -28,6 +29,24 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 log = get_logger(__name__)
+
+# A single safe URL path segment: no ``/`` (route forging) and no ``.``/``..``
+# dot-segments (path traversal). Caller/LLM-supplied ids are interpolated into
+# request paths, so an unvalidated id like ``../../api/keys`` would let httpx
+# resolve the URL to a *different* server route, escaping the per-method authz
+# model. Allow dotted ids (e.g. ``session.1``) but reject the bare traversal
+# segments.
+_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _safe_id(value: str, kind: str = "id") -> str:
+    """Return *value* if it is a single safe path segment, else raise.
+
+    Prevents request-path injection / route forging from caller-supplied ids.
+    """
+    if not value or value in (".", "..") or not _ID_RE.match(value):
+        raise ValueError(f"invalid {kind}: {value!r}")
+    return value
 
 
 def _sanitize(data: Any) -> Any:
@@ -167,10 +186,13 @@ class HijackClient:
     # -- worker path helpers --------------------------------------------------
 
     def _wp(self, worker_id: str) -> str:
-        return f"{self._entity_prefix}/{worker_id}"
+        return f"{self._entity_prefix}/{_safe_id(worker_id, 'worker_id')}"
 
     def _hp(self, worker_id: str, hijack_id: str) -> str:
-        return f"{self._entity_prefix}/{worker_id}/hijack/{hijack_id}"
+        return f"{self._entity_prefix}/{_safe_id(worker_id, 'worker_id')}/hijack/{_safe_id(hijack_id, 'hijack_id')}"
+
+    def _sp(self, session_id: str) -> str:
+        return f"/api/sessions/{_safe_id(session_id, 'session_id')}"
 
     # -- hijack lifecycle -----------------------------------------------------
 
@@ -316,11 +338,11 @@ class HijackClient:
 
     async def get_session(self, session_id: str) -> tuple[bool, dict[str, Any]]:
         """Get a single session's status."""
-        return await self._request("GET", f"/api/sessions/{session_id}")
+        return await self._request("GET", self._sp(session_id))
 
     async def session_snapshot(self, session_id: str) -> tuple[bool, Any]:
         """Get terminal snapshot for a session."""
-        return await self._request("GET", f"/api/sessions/{session_id}/snapshot")
+        return await self._request("GET", f"{self._sp(session_id)}/snapshot")
 
     async def session_events(
         self,
@@ -331,7 +353,7 @@ class HijackClient:
         """Get events for a session."""
         return await self._request(
             "GET",
-            f"/api/sessions/{session_id}/events",
+            f"{self._sp(session_id)}/events",
             params={"limit": limit},
         )
 
@@ -356,7 +378,7 @@ class HijackClient:
             params["pattern"] = pattern
         return await self._request(
             "GET",
-            f"/api/sessions/{session_id}/events/watch",
+            f"{self._sp(session_id)}/events/watch",
             params=params,
             timeout=timeout_ms / 1000 + 5.0,
         )
@@ -369,17 +391,17 @@ class HijackClient:
         """Set session input mode."""
         return await self._request(
             "POST",
-            f"/api/sessions/{session_id}/mode",
+            f"{self._sp(session_id)}/mode",
             json={"input_mode": mode},
         )
 
     async def connect_session(self, session_id: str) -> tuple[bool, dict[str, Any]]:
         """Start/connect a session."""
-        return await self._request("POST", f"/api/sessions/{session_id}/connect")
+        return await self._request("POST", f"{self._sp(session_id)}/connect")
 
     async def disconnect_session(self, session_id: str) -> tuple[bool, dict[str, Any]]:
         """Stop/disconnect a session."""
-        return await self._request("POST", f"/api/sessions/{session_id}/disconnect")
+        return await self._request("POST", f"{self._sp(session_id)}/disconnect")
 
     async def quick_connect(
         self,
