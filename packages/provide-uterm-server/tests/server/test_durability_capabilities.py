@@ -40,12 +40,16 @@ def test_sqlite_mode_reports_process_local_tunnel_webhook_and_fanout_state(tmp_p
     assert response.json() == capabilities
 
 
-def test_sqlite_durability_does_not_claim_approvals_or_leases() -> None:
+def test_sqlite_durability_advertises_only_the_wired_resume_token_store() -> None:
     cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="sqlite"))
     caps = _build_durability_capabilities(cfg)
-    assert "resume_tokens" in caps.durable_state
-    assert "control_plane_session_records" in caps.durable_state
+    # Only the resume-token store is wired into the reference server. Session
+    # records are NOT written to the control plane (no ControlPlaneSessionStore),
+    # so the advert must not claim them as durable.
+    assert caps.durable_state == ("resume_tokens",)
+    assert "control_plane_session_records" not in caps.durable_state
     assert "approvals" not in caps.durable_state
     assert "leases" not in caps.durable_state
     assert "approvals" in caps.process_local_state
     assert "leases" in caps.process_local_state
+    assert "session_registry_runtime_state" in caps.process_local_state

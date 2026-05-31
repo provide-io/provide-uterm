@@ -52,10 +52,12 @@ def _build_durability_capabilities(config: ServerConfig) -> DurabilityCapabiliti
     backend = str(config.control_plane.backend)
     durable_state: tuple[str, ...] = ()
     if backend == "sqlite":
-        durable_state = (
-            "control_plane_session_records",
-            "resume_tokens",
-        )
+        # Only the resume-token store is wired into the reference server (via
+        # ControlPlaneResumeStore -> token_store). Session records are NOT
+        # written to the control plane (no ControlPlaneSessionStore), approvals
+        # use the InMemoryApprovalStore, and leases live in WorkerTermState — so
+        # the resume-token store is the sole durable surface.
+        durable_state = ("resume_tokens",)
     process_local_state = (
         "tunnel_tokens",
         "webhook_registrations",
@@ -66,8 +68,8 @@ def _build_durability_capabilities(config: ServerConfig) -> DurabilityCapabiliti
         "session_registry_runtime_state",
     )
     notes = (
-        "SQLite mode persists only the resume-token and session-record stores wired into the factory.",
-        "Approvals and hijack leases are in-memory and are lost on restart.",
+        "SQLite mode persists only the resume-token store wired into the factory.",
+        "Session records, approvals, and hijack leases are in-memory and are lost on restart.",
         "Tunnel tokens, webhook registrations, and fan-out groups remain process-local.",
         "Run one active FastAPI control-plane instance, or use the durable backend for HA deployments.",
     )

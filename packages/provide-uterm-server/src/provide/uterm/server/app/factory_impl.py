@@ -155,9 +155,9 @@ def create_server_app(
             )
     else:
         logger.info(
-            "standalone_server_durability=sqlite: shared control-plane stores (sessions, resume tokens) are "
-            "persisted to %s. Approvals and hijack leases are in-memory and lost on restart; tunnel tokens, "
-            "webhook registrations, fan-out groups, and live runtime state also remain process-local; "
+            "standalone_server_durability=sqlite: the resume-token store is "
+            "persisted to %s. Session records, approvals, and hijack leases are in-memory and lost on restart; "
+            "tunnel tokens, webhook registrations, fan-out groups, and live runtime state also remain process-local; "
             "see /api/durability/capabilities.",
             config.control_plane.database_url,
         )
