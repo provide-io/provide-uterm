@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run python scripts/check_docs_accuracy.py
 
   quality:
@@ -46,7 +46,7 @@ jobs:
           node-version: "20"
       - run: npm ci
       - run: npm run build:frontend
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run playwright install chromium
       - run: uv run python scripts/check_max_loc.py --max-lines 500 --baseline .ci/max-loc-baseline.json
       # Verify the Pydantic frame schemas match the committed TS codegen
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       # Run annotation package tests with its own 100% branch coverage gate.
       - run: uv run pytest -q packages/provide-uterm-annotation/tests/
 
@@ -118,7 +118,7 @@ jobs:
       # Build frontend assets so test_validate_frontend_assets_succeeds runs (not skipped)
       - run: npm ci
       - run: npm run build:frontend
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       # Run server package tests with its own package coverage gate
       - run: uv run pytest -q packages/provide-uterm-server/tests/ --timeout=60 --timeout-method=thread
 
@@ -134,7 +134,10 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv venv && uv pip install -e "packages/provide-uterm-platform/[dev]"
+      # Install the platform package + dev extra from the committed lock (no
+      # fresh resolution). Replaces a `uv venv && uv pip install -e` that
+      # bypassed uv.lock entirely.
+      - run: uv sync --frozen --package provide-uterm-platform --extra dev
       - name: Run PTY unit tests (no PAM/root/native)
         run: uv run pytest packages/provide-uterm-platform/tests/pty/ -q --no-cov --timeout=10 --ignore=packages/provide-uterm-platform/tests/pty/e2e -o "addopts=--import-mode=importlib"
 
@@ -171,7 +174,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       # Run platform manager tests with its own 100% branch coverage gate
       - run: uv run pytest -q packages/provide-uterm-platform/tests/manager/
 
@@ -187,7 +190,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run pytest packages/provide-uterm-platform/tests/manager/manager/test_process.py -q -k kill_agent_terminates_spawned_child_process_tree --no-cov -vv
 
   mutation-gate:
@@ -200,7 +203,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       # Resolve --changed-only base ref from the trigger event and run the mutation gate.
       - name: Run mutation gate (changed-only)
         env:
@@ -220,7 +223,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: uvx reuse lint
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run codespell
 
   release-readiness:
@@ -237,7 +240,7 @@ jobs:
           node-version: "20"
       - run: npm ci
       - run: npm run build:frontend
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv build --package provide-uterm
       - run: uvx --from twine twine check dist/*
 
@@ -250,7 +253,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run python scripts/run_performance_smoke.py --iterations 300000 --enforce
 
   memory-regression:
@@ -263,7 +266,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - name: Run memray stress tests
         run: uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --tb=short --no-cov
       - name: Upload memray artifacts
