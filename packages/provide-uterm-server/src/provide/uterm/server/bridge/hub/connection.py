@@ -287,17 +287,15 @@ class ConnectionManager:
         hub = self._hub
         with tracer.start_as_current_span("uterm.browser.register", attributes={"worker_id": worker_id, "role": role}):
             resume_token: str | None = None
-            if hub._resume_store is not None:
-                resume_token = await hub._resume_store.create(worker_id, role, hub._resume_ttl_s)
-                hub._ws_to_resume_token[ws] = resume_token
             async with hub._lock:
                 # --- Per-principal browser connection quota (BROWSER-only) ---
+                # The quota gate runs BEFORE minting the resume token so a
+                # rejected connection never orphans a token in the resume store
+                # (which would otherwise linger until TTL/retention).
                 subject_id = self._browser_principal_subject_id(ws)
                 if subject_id is not None:
                     current = hub._principal_browser_counts.get(subject_id, 0)
                     if current >= hub.max_connections_per_principal:
-                        # Do not register — release any resume token already created.
-                        hub._ws_to_resume_token.pop(ws, None)
                         from fastapi import WebSocketException
 
                         raise WebSocketException(
@@ -307,6 +305,10 @@ class ConnectionManager:
                     hub._principal_browser_counts[subject_id] = current + 1
                     hub._ws_principal[ws] = subject_id
                 # -----------------------------------------------------------
+                # Mint the resume token only once the quota gate has passed.
+                if hub._resume_store is not None:
+                    resume_token = await hub._resume_store.create(worker_id, role, hub._resume_ttl_s)
+                    hub._ws_to_resume_token[ws] = resume_token
                 st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
                 st.browsers[ws] = role
                 if defer_broadcast:
