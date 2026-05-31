@@ -24,8 +24,40 @@ def test_extract_prompt_id_returns_id() -> None:
 
 
 def test_compile_expect_regex_rejects_too_long() -> None:
-    with pytest.raises(PromptRegexError, match="expect_regex too long"):
+    with pytest.raises(PromptRegexError, match="expect_regex too long") as exc_info:
         compile_expect_regex("a" * (MAX_EXPECT_REGEX_LEN + 1))
+    assert exc_info.value.kind == "too_long"
+
+
+def test_compile_expect_regex_allows_normal_pattern() -> None:
+    pattern = compile_expect_regex(r"foo.*bar")
+    assert pattern is not None
+    assert pattern.search("xfooYbarz")
+
+
+def test_compile_expect_regex_returns_none_for_empty() -> None:
+    assert compile_expect_regex(None) is None
+    assert compile_expect_regex("") is None
+
+
+def test_compile_expect_regex_rejects_nested_quantified_groups() -> None:
+    """A catastrophic-backtracking pattern like ``(a+)+`` must be rejected (ReDoS)."""
+    with pytest.raises(PromptRegexError, match="unsafe expect_regex") as exc_info:
+        compile_expect_regex("(a+)+")
+    assert exc_info.value.kind == "unsafe"
+
+
+def test_compile_expect_regex_rejects_quantified_alternation_group() -> None:
+    """A quantified alternation group like ``(a|b)*`` must be rejected (ReDoS)."""
+    with pytest.raises(PromptRegexError, match="unsafe expect_regex") as exc_info:
+        compile_expect_regex("(a|b)*")
+    assert exc_info.value.kind == "unsafe"
+
+
+def test_compile_expect_regex_rejects_invalid_regex() -> None:
+    with pytest.raises(PromptRegexError, match="invalid expect_regex") as exc_info:
+        compile_expect_regex("(")
+    assert exc_info.value.kind == "invalid"
 
 
 def test_snapshot_matches_uses_prompt_and_regex() -> None:

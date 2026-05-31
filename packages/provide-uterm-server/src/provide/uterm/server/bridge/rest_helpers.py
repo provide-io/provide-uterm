@@ -48,9 +48,21 @@ def compile_expect_regex(
         return None
     if len(expect_regex) > max_length:
         raise PromptRegexError("expect_regex too long", kind="too_long", max_length=max_length)
+    # Reject catastrophic-backtracking (ReDoS) patterns before compiling: this
+    # guard is re.search'd against the full screen inside the hijack poll loop,
+    # so a pattern like ``(a+)+`` could pin the event loop. Reuse the SSE watch
+    # path's validator (imported lazily — rest_helpers is pulled into the hub
+    # package import chain via polling_service, so a module-level import of
+    # event_bus would create an initialization cycle).
+    from provide.uterm.server.bridge.hub.event_bus import _validate_pattern_safety
+
+    try:
+        _validate_pattern_safety(expect_regex)
+    except ValueError as exc:
+        raise PromptRegexError(f"unsafe expect_regex: {exc}", kind="unsafe", max_length=max_length) from exc
     try:
         return re.compile(expect_regex, flags)
-    except re.error as exc:  # pragma: no cover - exercised by callers
+    except re.error as exc:
         raise PromptRegexError(f"invalid expect_regex: {exc}", kind="invalid", max_length=max_length) from exc
 
 
