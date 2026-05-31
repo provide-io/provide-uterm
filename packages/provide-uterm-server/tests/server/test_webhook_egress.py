@@ -153,6 +153,43 @@ async def test_cache_expires_after_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
+# M7: IPv4-mapped IPv6 metadata-IP bypass (webhook guard)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_mapped_ipv6_metadata_literal_blocked() -> None:
+    """A literal IPv4-mapped IPv6 metadata address in the webhook URL must be
+    blocked — it normalizes to the IPv4 metadata IP before the membership check."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_webhook_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_webhook_target_allowed("http://[::ffff:169.254.169.254]/")
+
+
+@pytest.mark.asyncio
+async def test_webhook_mapped_ipv6_metadata_resolved_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hostname (AAAA rebind) resolving to the mapped metadata form must be blocked."""
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.egress import EgressBlockedError, assert_webhook_target_allowed
+
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("::ffff:169.254.169.254",)))
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_webhook_target_allowed("https://rebind.example.com/hook")
+
+
+@pytest.mark.asyncio
+async def test_webhook_normal_ipv6_public_not_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A public IPv6 host (no ipv4_mapped) is unaffected and not blocked."""
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.egress import assert_webhook_target_allowed
+
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("2606:2800:220:1:248:1893:25c8:1946",)))
+    # Must not raise.
+    await assert_webhook_target_allowed("https://ipv6.example.com/hook")
+
+
+# ---------------------------------------------------------------------------
 # Gate integration: EgressBlockedError → fail-closed behaviour
 # ---------------------------------------------------------------------------
 
