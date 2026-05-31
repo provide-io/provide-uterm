@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
 
 from provide.telemetry import get_logger
 
@@ -79,11 +79,13 @@ class EventBus:
         *,
         max_pattern_length: int = _DEFAULT_MAX_PATTERN_LENGTH,
         max_match_input_chars: int = _DEFAULT_MAX_MATCH_INPUT_CHARS,
+        on_metric: Callable[[str, int], None] | None = None,
     ) -> None:
         self._max_queue_depth = max(1, int(max_queue_depth))
         self._max_subscribers_per_worker = max(1, int(max_subscribers_per_worker))
         self._max_pattern_length = max(1, int(max_pattern_length))
         self._max_match_input_chars = max(1, int(max_match_input_chars))
+        self._on_metric = on_metric
         # worker_id -> list of active subscriptions
         self._subs: dict[str, list[_Subscription]] = {}
 
@@ -125,6 +127,7 @@ class EventBus:
             with contextlib.suppress(asyncio.QueueEmpty):  # pragma: no cover — race guard
                 sub.queue.get_nowait()
             sub.dropped += 1
+            self._on_metric and self._on_metric("event_bus_subscriber_drop_total", 1)
             with contextlib.suppress(asyncio.QueueFull):
                 sub.queue.put_nowait(item)
 
@@ -156,6 +159,7 @@ class EventBus:
             with contextlib.suppress(asyncio.QueueEmpty):  # pragma: no cover — race guard
                 sub.queue.get_nowait()
             sub.dropped += 1
+            self._on_metric and self._on_metric("event_bus_subscriber_drop_total", 1)
             try:
                 sub.queue.put_nowait(None)
             except asyncio.QueueFull:
