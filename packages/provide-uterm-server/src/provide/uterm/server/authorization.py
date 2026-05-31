@@ -291,7 +291,16 @@ class WebhookAuthorizationProvider:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:
-                    return str(resp.json().get("role", "viewer"))
+                    # Filter the webhook-returned role to the canonical allow-list
+                    # at the boundary (case-folded), mirroring the IDP role path —
+                    # a compromised/misconfigured policy engine must not be able to
+                    # mint a privileged or bogus role string. ``_filter_known_roles``
+                    # yields a non-empty frozenset (falling back to viewer), so
+                    # ``next(iter(...))`` is always safe.
+                    from provide.uterm.server.auth import _filter_known_roles
+
+                    raw_role = resp.json().get("role", "viewer")
+                    return next(iter(_filter_known_roles([raw_role])))
         except Exception:
             pass
         return "viewer"
