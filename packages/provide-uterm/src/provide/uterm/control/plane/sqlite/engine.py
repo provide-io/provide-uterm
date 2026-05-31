@@ -93,7 +93,13 @@ class SqliteControlPlane:
                     (cutoff, cutoff),
                 ),
                 ("DELETE FROM cp_sessions WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,)),
-                ("DELETE FROM cp_leases WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,)),
+                # lease_expires_at is wall-clock (persistent stores normalize the
+                # monotonic runtime lease to wall-clock), so a lease that expired
+                # without an explicit clear_lease is reaped past the cutoff too.
+                (
+                    "DELETE FROM cp_leases WHERE (deleted_at IS NOT NULL AND deleted_at < ?) OR lease_expires_at < ?",
+                    (cutoff, cutoff),
+                ),
                 ("DELETE FROM cp_approvals WHERE resolved_at IS NOT NULL AND resolved_at < ?", (cutoff,)),
             ):
                 cursor = await self._conn.execute(sql, params)
