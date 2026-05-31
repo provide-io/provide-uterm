@@ -190,6 +190,23 @@ async def test_webhook_normal_ipv6_public_not_blocked(monkeypatch: pytest.Monkey
 
 
 # ---------------------------------------------------------------------------
+# L29: empty DNS resolve must fail closed (parity with connector guard)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_empty_resolve_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hostname whose DNS resolve returns no addresses must raise EgressBlockedError
+    rather than being silently allowed (the empty loop never ran the deny check)."""
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.egress import EgressBlockedError, assert_webhook_target_allowed
+
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=()))
+    with pytest.raises(EgressBlockedError, match="could not be resolved"):
+        await assert_webhook_target_allowed("https://nxdomain.example.invalid/hook")
+
+
+# ---------------------------------------------------------------------------
 # Gate integration: EgressBlockedError → fail-closed behaviour
 # ---------------------------------------------------------------------------
 
