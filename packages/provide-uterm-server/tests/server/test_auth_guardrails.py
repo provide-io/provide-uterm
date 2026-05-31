@@ -17,7 +17,7 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from provide.uterm.server.app import _validate_auth_config, create_server_app
+from provide.uterm.server.app import _validate_auth_config, _validate_security_config, create_server_app
 from provide.uterm.server.models import AuthConfig, SecurityConfig, ServerBindConfig, ServerConfig
 from provide.uterm.server.security import SecurityHeadersMiddleware
 
@@ -182,6 +182,63 @@ class TestLowEntropyCredentialGuardrails:
             ),
         )
         _validate_auth_config(config)
+
+
+# ---------------------------------------------------------------------------
+# security.mode='dev' non-loopback guardrail (mirrors auth.mode='dev_token')
+# ---------------------------------------------------------------------------
+
+
+class TestDevModeNonLoopbackGuard:
+    """security.mode='dev' strips HSTS/CSP/X-Frame-Options — refuse on a routable bind.
+
+    Mirrors the auth.mode='dev_token' loopback guard: a relaxed-header config
+    copied from a dev box to a non-loopback server silently disables
+    clickjacking/HSTS/CSP protection unless the operator acknowledges it.
+    """
+
+    def test_dev_mode_on_non_loopback_rejected(self) -> None:
+        config = ServerConfig(
+            server=ServerBindConfig(host="0.0.0.0"),
+            security=SecurityConfig(mode="dev"),
+        )
+        with pytest.raises(ValueError, match="0.0.0.0"):
+            _validate_security_config(config)
+
+    def test_dev_mode_on_non_loopback_allowed_when_acknowledged(self) -> None:
+        config = ServerConfig(
+            server=ServerBindConfig(host="0.0.0.0"),
+            security=SecurityConfig(mode="dev", dev_mode_acknowledged=True),
+        )
+        _validate_security_config(config)  # must not raise
+
+    def test_dev_mode_on_loopback_allowed(self) -> None:
+        config = ServerConfig(
+            server=ServerBindConfig(host="127.0.0.1"),
+            security=SecurityConfig(mode="dev"),
+        )
+        _validate_security_config(config)  # must not raise
+
+    def test_strict_mode_on_non_loopback_allowed(self) -> None:
+        config = ServerConfig(
+            server=ServerBindConfig(host="0.0.0.0"),
+            security=SecurityConfig(mode="strict"),
+        )
+        _validate_security_config(config)  # must not raise
+
+    def test_create_server_app_rejects_dev_mode_on_non_loopback(self) -> None:
+        config = ServerConfig(
+            server=ServerBindConfig(host="0.0.0.0"),
+            auth=AuthConfig(
+                mode="jwt",
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+            ),
+            security=SecurityConfig(mode="dev"),
+        )
+        with pytest.raises(ValueError, match="0.0.0.0"):
+            create_server_app(config, api_only=True)
 
 
 # ---------------------------------------------------------------------------

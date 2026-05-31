@@ -189,6 +189,29 @@ def _validate_auth_config(config: ServerConfig) -> None:
     _validate_no_jwt_algorithm_confusion(config)
 
 
+def _validate_security_config(config: ServerConfig) -> None:
+    """Refuse to serve the relaxed (dev) security-header set on a routable bind.
+
+    ``security.mode='dev'`` strips HSTS/CSP/X-Frame-Options. A config copied
+    from a dev box to a non-loopback server would silently disable
+    clickjacking/HSTS/CSP protection. This mirrors the ``auth.mode='dev_token'``
+    loopback guard above: dev-relaxed headers are only permitted on a loopback
+    bind, or when the operator explicitly sets
+    ``security.dev_mode_acknowledged=true``.
+    """
+    if str(config.security.mode).strip().lower() != "dev":
+        return
+    bind_host = str(config.server.host).strip().lower()
+    if _is_loopback_host(bind_host) or config.security.dev_mode_acknowledged:
+        return
+    raise ValueError(
+        f"security.mode='dev' on a non-loopback bind ({bind_host!r}) strips HSTS/CSP/"
+        "X-Frame-Options, disabling clickjacking/transport/content-injection protection. "
+        "Use security.mode='strict', or set security.dev_mode_acknowledged=true to "
+        "intentionally serve the relaxed header set on a routable host."
+    )
+
+
 # JWT signing algorithm families. HMAC (HS*) is symmetric: verification uses
 # the same shared secret as signing. Asymmetric families verify with a public
 # key. Accepting both at once is the classic alg-confusion vulnerability: an

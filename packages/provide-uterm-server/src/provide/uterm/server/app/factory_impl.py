@@ -20,7 +20,7 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 
 from provide.telemetry import get_logger
 from provide.uterm.server.api_keys import ApiKeyStore
-from provide.uterm.server.app.auth import _validate_auth_config
+from provide.uterm.server.app.auth import _validate_auth_config, _validate_security_config
 from provide.uterm.server.app.connectors import _register_builtin_connectors
 from provide.uterm.server.app.control_plane import _build_control_plane, _build_durability_capabilities
 from provide.uterm.server.app.hub_authz import build_require_hub_route_authz
@@ -124,6 +124,7 @@ def create_server_app(
 
     _register_builtin_connectors(config)
     _validate_auth_config(config)
+    _validate_security_config(config)
     _api_only_env = os.environ.get("UTERM_API_ONLY", "").strip().lower() in {"1", "true", "yes"}
     if not api_only and not _api_only_env:
         _app_pkg._validate_frontend_assets()

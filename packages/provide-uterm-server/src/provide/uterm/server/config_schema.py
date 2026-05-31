@@ -199,6 +199,11 @@ class SecurityConfig(ServerBaseModel):
     """Configurable security response headers."""
 
     mode: Literal["strict", "dev"] = "strict"
+    # Escape hatch for intentionally serving the relaxed (dev) header set on a
+    # non-loopback host. Mirrors AuthConfig.header_mode_acknowledged: the
+    # startup validator rejects security.mode='dev' on a routable bind unless
+    # this flag is set, so a dev config can't silently ship to prod.
+    dev_mode_acknowledged: bool = False
     csp: str | None = None
     hsts: str | None = None
     x_frame_options: str | None = None
