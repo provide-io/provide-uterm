@@ -10,6 +10,7 @@ import httpx
 from pydantic import BaseModel
 
 from provide.telemetry import get_logger
+from provide.uterm.server.egress import assert_webhook_target_allowed
 
 logger = get_logger(__name__)
 
@@ -41,6 +42,9 @@ class WebhookDiscoveryProvider(DiscoveryProvider):
 
     async def announce(self, status: NodeStatus) -> None:
         try:
+            # SSRF guard: an EgressBlockedError (a ValueError) is caught by the
+            # except below, so a blocked target is a logged best-effort no-op.
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 headers = {"Authorization": f"Bearer {self.secret}"} if self.secret else {}
                 await client.post(self.url, json=status.model_dump(), headers=headers)
