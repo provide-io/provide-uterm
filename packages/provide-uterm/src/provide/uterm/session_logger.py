@@ -49,25 +49,26 @@ class SessionLogger:
             # Legacy compatibility: tests pass a full file path like tmp/s.jsonl.
             # We must ensure that start(session_id) writes to THIS EXACT path,
             # regardless of session_id.
-            from provide.uterm.recording import RecordingStore
+            from provide.uterm.recording import RecordingStore, _open_append_owner_only
 
             class LegacyFileStore(RecordingStore):
                 def __init__(self, path: Path):
                     self._path = path
 
                 async def start_session(self, session_id: str, metadata: dict[str, Any]) -> None:
-                    self._path.parent.mkdir(parents=True, exist_ok=True)
+                    self._path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                     event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
-                    # Always append to support 'test_file_opens_in_append_mode'
-                    with self._path.open("a", encoding="utf-8") as f:
+                    # Always append to support 'test_file_opens_in_append_mode'.
+                    # Create owner-only (0o600) atomically — no chmod-after-open
+                    # TOCTOU window where the log is briefly world/group-readable.
+                    with _open_append_owner_only(self._path) as f:
                         f.write(json.dumps(event) + "\n")
-                    self._path.chmod(0o600)
 
                 async def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
-                    with self._path.open("a", encoding="utf-8") as f:
+                    self._path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    with _open_append_owner_only(self._path) as f:
                         for e in events:
                             f.write(json.dumps(e) + "\n")
-                    self._path.chmod(0o600)
 
                 async def end_session(self, session_id: str) -> None:
                     event = {"ts": time.time(), "event": "log_stop", "data": {}, "session_id": session_id}
