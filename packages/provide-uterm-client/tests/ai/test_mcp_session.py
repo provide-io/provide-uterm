@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
@@ -449,16 +448,46 @@ class TestFanoutAndAnnotateTools:
 
 
 class TestMcpPathInjection:
-    """LLM-supplied group_id/session_id must not forge requests to other routes."""
+    """LLM-supplied group_id/session_id must not forge requests to other routes.
+
+    L32: a bad id returns the structured ``{"success": False}`` rejection
+    contract every other MCP validator uses — not an uncaught ValueError.
+    """
 
     async def test_fanout_send_rejects_injected_group_id(self) -> None:
         app = _make_server_app()
         mcp = _mcp_for_server(app)
-        with pytest.raises(Exception, match="group_id"):
-            await _call(mcp, "fanout_send", {"group_id": "../../api/keys", "data": "x"})
+        data = await _call(mcp, "fanout_send", {"group_id": "../../api/keys", "data": "x"})
+        assert data["success"] is False
+        assert data["error"] == "invalid_id"
+        assert "group_id" in data["detail"]
 
     async def test_session_annotate_rejects_injected_session_id(self) -> None:
         app = _make_server_app()
         mcp = _mcp_for_server(app)
-        with pytest.raises(Exception, match="session_id"):
-            await _call(mcp, "session_annotate", {"session_id": "../../api/keys", "label": "x"})
+        data = await _call(mcp, "session_annotate", {"session_id": "../../api/keys", "label": "x"})
+        assert data["success"] is False
+        assert data["error"] == "invalid_id"
+        assert "session_id" in data["detail"]
+
+    async def test_fanout_send_valid_id_proceeds(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        create_data = await _call(
+            mcp,
+            "fanout_group_create",
+            {"session_ids": ["s1"], "name": "valid-id-test"},
+        )
+        group_id = create_data["group_id"]
+        data = await _call(mcp, "fanout_send", {"group_id": group_id, "data": "x", "quiesce_ms": 50})
+        # A valid id is not rejected at the validator boundary — the request
+        # reaches the server and returns a real (boolean-success) result.
+        assert isinstance(data["success"], bool)
+        assert data.get("error") != "invalid_id"
+
+    async def test_session_annotate_valid_id_proceeds(self) -> None:
+        app = _make_server_app()
+        mcp = _mcp_for_server(app)
+        data = await _call(mcp, "session_annotate", {"session_id": "s1", "label": "x"})
+        assert isinstance(data["success"], bool)
+        assert data.get("error") != "invalid_id"

@@ -128,6 +128,27 @@ def _reject_bad_pattern(pattern: str | None) -> dict[str, Any] | None:
     return None
 
 
+def _reject_bad_id(value: str, kind: str = "id") -> dict[str, Any] | None:
+    """Validate a caller/LLM-supplied path-segment id, returning a rejection
+    dict or ``None``.
+
+    Mirrors :func:`_reject_bad_pattern`: a bad id yields the structured
+    ``{"success": False, "error": "invalid_id"}`` contract every other MCP
+    validator uses, rather than letting ``_safe_id`` raise a ``ValueError``
+    (which the framework surfaces as a ToolError). Same allow-list as
+    ``_safe_id`` so the path-injection guarantee is unchanged.
+    """
+    try:
+        _safe_id(value, kind)
+    except ValueError as exc:
+        return {
+            "success": False,
+            "error": "invalid_id",
+            "detail": str(exc),
+        }
+    return None
+
+
 def _trim_tail(screen: str, tail_lines: int | None) -> str:
     """Trim *screen* to the last *tail_lines* lines (no-op when tail_lines is unset)."""
     if tail_lines is not None and tail_lines > 0:
@@ -697,8 +718,11 @@ def create_mcp_app(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Broadcast input to all sessions in a fan-out group and return per-session results with divergence detection."""
+        rejection = _reject_bad_id(group_id, "group_id")
+        if rejection is not None:
+            return rejection
         ok, result = await client.post(
-            f"/api/fanout/groups/{_safe_id(group_id, 'group_id')}/send",
+            f"/api/fanout/groups/{group_id}/send",
             json={"data": data, "quiesce_ms": quiesce_ms, "max_response_ms": max_response_ms},
         )
         return _ok(ok, result)
@@ -715,8 +739,11 @@ def create_mcp_app(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Add an annotation to a session's recording timeline. Use this to mark important moments."""
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.post(
-            f"/api/sessions/{_safe_id(session_id, 'session_id')}/annotate",
+            f"/api/sessions/{session_id}/annotate",
             json={"label": label, "description": description, "severity": severity},
         )
         return _ok(ok, data)
