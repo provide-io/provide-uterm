@@ -12,6 +12,13 @@ from typing import TYPE_CHECKING, Any
 # in different isolates), so the TTL only matters within a single long-lived isolate.
 _JWKS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _JWKS_CACHE_TTL_S: float = 60.0
+# After a refresh failure, keep serving the stale cached JWKS for this long
+# before attempting another network fetch — so a transient or flapping JWKS
+# endpoint cannot take down all authentication, and a known-bad endpoint is not
+# re-hit on every request.
+_JWKS_NEGATIVE_TTL_S: float = 5.0
+# url → monotonic deadline before which a failed refresh will not be retried.
+_JWKS_RETRY_AFTER: dict[str, float] = {}
 
 # Detect CF Workers (Pyodide) runtime once at import time.
 _IN_CF_RUNTIME = False
@@ -67,19 +74,12 @@ def _parse_jwt_parts(token: str) -> tuple[dict[str, Any], dict[str, Any], bytes,
     return header, payload, signature, signing_input
 
 
-async def _fetch_jwks(url: str) -> dict[str, Any]:
-    """Fetch JWKS data, with a per-isolate in-memory TTL cache.
+async def _request_jwks(url: str) -> dict[str, Any]:
+    """Perform the JWKS network fetch (no caching).
 
     In Cloudflare Workers, uses the native ``js.fetch`` (async, non-blocking).
     Outside CF (tests / local dev), falls back to ``urllib`` as a last resort.
     """
-    now = time.monotonic()
-    cached = _JWKS_CACHE.get(url)
-    if cached is not None:
-        fetched_at, jwks_dict = cached
-        if now - fetched_at < _JWKS_CACHE_TTL_S:
-            return jwks_dict
-
     try:
         from js import (
             fetch as _js_fetch,  # CF Workers native async fetch  # pragma: no cover
@@ -87,6 +87,7 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
 
         response = await _js_fetch(url)  # pragma: no cover
         result: dict[str, Any] = (await response.json()).to_py()  # pragma: no cover
+        return result  # pragma: no cover
     except ImportError:
         import urllib.request
 
@@ -98,9 +99,42 @@ async def _fetch_jwks(url: str) -> dict[str, Any]:
             raise ValueError(f"JWKS URL must be http(s), got: {url!r}") from None
         _req = urllib.request.Request(url, headers={"User-Agent": "provide-uterm/1.0"})  # noqa: S310
         with urllib.request.urlopen(_req, timeout=5) as resp:  # noqa: S310  # nosec B310 — scheme validated above
-            result = json.loads(resp.read())
+            data: dict[str, Any] = json.loads(resp.read())
+            return data
+
+
+async def _fetch_jwks(url: str) -> dict[str, Any]:
+    """Fetch JWKS with a per-isolate TTL cache and stale-on-error fallback.
+
+    On a cache miss or TTL expiry we attempt a refresh. If that refresh fails
+    but a previously-fetched copy is still held, the stale copy is served and
+    further refresh attempts are suppressed for ``_JWKS_NEGATIVE_TTL_S`` — so a
+    transient or flapping JWKS endpoint cannot take down all authentication. A
+    first-ever fetch with no cached fallback still propagates the error.
+    """
+    now = time.monotonic()
+    cached = _JWKS_CACHE.get(url)
+    if cached is not None:
+        fetched_at, jwks_dict = cached
+        if now - fetched_at < _JWKS_CACHE_TTL_S:
+            return jwks_dict
+        # TTL expired: while a recent refresh is still backed off, keep serving
+        # the stale copy rather than re-hitting a known-bad endpoint.
+        if now < _JWKS_RETRY_AFTER.get(url, 0.0):
+            return jwks_dict
+
+    try:
+        result = await _request_jwks(url)
+    except Exception:
+        if cached is not None:
+            # Transient refresh failure, but a usable copy is cached: serve it
+            # and back off before the next attempt.
+            _JWKS_RETRY_AFTER[url] = now + _JWKS_NEGATIVE_TTL_S
+            return cached[1]
+        raise
 
     _JWKS_CACHE[url] = (time.monotonic(), result)
+    _JWKS_RETRY_AFTER.pop(url, None)
     return result
 
 
