@@ -203,6 +203,57 @@ class TestWebhookAuthzIsAdmin:
 
 
 # ---------------------------------------------------------------------------
+# L25: WebhookAuthorizationProvider.resolve_browser_role filters the returned
+# role to the known allow-list (consistent with the IDP role-resolution path).
+# ---------------------------------------------------------------------------
+
+
+class TestWebhookAuthzResolveBrowserRoleFiltered:
+    @staticmethod
+    async def _resolve_with_role(returned_role) -> str:
+        from unittest.mock import AsyncMock, patch
+
+        from provide.uterm.server.authorization import WebhookAuthorizationProvider
+        from provide.uterm.server.bridge.identity import Principal
+        from provide.uterm.server.models import SessionDefinition
+
+        provider = WebhookAuthorizationProvider("https://example.com/authz")
+        principal = Principal(subject_id="bob", roles=frozenset({"viewer"}))
+        session = SessionDefinition(session_id="s1", display_name="s1", connector_type="shell")
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return {"role": returned_role}
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            instance = AsyncMock()
+            instance.__aenter__.return_value = instance
+            instance.post = AsyncMock(return_value=_Resp())
+            mock_client_cls.return_value = instance
+            return await provider.resolve_browser_role(principal, session)
+
+    async def test_bogus_role_falls_back_to_viewer(self) -> None:
+        """A non-allow-list role string (e.g. ``superuser``) must not leak
+        through — it is filtered to the default ``viewer``."""
+        assert await self._resolve_with_role("superuser") == "viewer"
+
+    async def test_mixed_case_admin_is_case_folded(self) -> None:
+        """A legitimate but mixed-case role is normalized to the canonical
+        lower-cased allow-list entry."""
+        assert await self._resolve_with_role("Admin") == "admin"
+
+    async def test_garbage_role_falls_back_to_viewer(self) -> None:
+        """Whitespace/garbage outside the allow-list resolves to ``viewer``."""
+        assert await self._resolve_with_role("  not-a-role  ") == "viewer"
+
+    async def test_legitimate_operator_passes_through(self) -> None:
+        """A valid lower-cased role passes through unchanged."""
+        assert await self._resolve_with_role("operator") == "operator"
+
+
+# ---------------------------------------------------------------------------
 # Finding #12: connector password scrub in /api/connect
 # ---------------------------------------------------------------------------
 
