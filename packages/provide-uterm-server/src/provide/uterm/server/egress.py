@@ -51,6 +51,10 @@ async def assert_webhook_target_allowed(url: str) -> None:
         addresses: tuple[str, ...] = (str(ipaddress.ip_address(h)),)
     except ValueError:
         addresses = await _resolve_cached(h)
+        # An empty resolve must fail closed (parity with the connector guard);
+        # otherwise the loop below never runs and the URL is silently allowed.
+        if not addresses:
+            raise EgressBlockedError(f"webhook target {url!r} could not be resolved") from None
     for addr in addresses:
         ip = ipaddress.ip_address(addr)
         # Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) to its IPv4
