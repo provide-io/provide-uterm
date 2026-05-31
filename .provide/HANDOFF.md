@@ -56,12 +56,18 @@ waves (P0 → P0.5 remaining-highs → P1 resource/resilience → M/L backlog).
 
 **Tracking is in `docs/superpowers/plans/2026-05-31-ml-backlog.md` (authoritative, checkboxes ticked).**
 
-Remaining — **4a needs a user decision** (build-infra, can't validate locally):
-- [ ] **4a** Supply chain: enforce `uv.lock`. CI part (`uv sync --group dev` → `--frozen` across
-  `.github/workflows/`) is verified-safe (`uv sync --frozen --dry-run` passes) but untestable without a
-  CI run, and the CLAUDE.md "comment every step" rule conflicts with the file's existing uncommented
-  steps. Dockerfile part (`docker/Dockerfile.server:57` `uv pip install --system` → lock-based) is a
-  build-strategy change needing a Docker build to validate. CONFIRM approach with the user before editing.
+**4a + uv-consistency — MERGED** (`38cdf153` CI, `83d728ee` Docker), but **NEEDS USER VALIDATION**:
+- CI: `uv sync --frozen` everywhere + pty-unit lock-bypass fixed (YAML valid; lock `--frozen`-consistent).
+  → confirm green on the next CI run.
+- Docker: `Dockerfile.server` rewritten to a multi-stage uv-managed venv (no `--system`, no `pip install
+  uv`), pinned to lock; `Dockerfile.cf` `UV_FROZEN=1`. → `docker compose -f docker/docker-compose.yml build`
+  to validate (uv-workspace extra resolution + venv/stage copy can't be checked by inspection; the
+  Dockerfile.server `uv sync --package provide-uterm-server --extra all` + `pyte` install is the part to
+  watch — confirm the `uterm` CLI + `[emulator]`/`[all]` surface match the old image).
+- NOT done (deliberate / follow-up): `.python-version` would break the 4-version CI matrix (interpreter
+  stays setup-python — uv manages the env, which is correct for a matrix); pin `uvx` reuse/twine versions;
+  drop the redundant `pip-audit` install (`release-governance.yml:39`, verify the gov script provisions it
+  via `uv run --with` first); modernize `release.yml` dry-run (bare pip → uvx twine).
 
 Items needing a design decision from the user before coding (task #19):
 - [ ] **1f / 1d** IDP webhook contract: verify the IDP *response* signature inbound + minimize which
