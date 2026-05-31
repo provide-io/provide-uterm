@@ -91,6 +91,8 @@ class TermHubProtocol(Protocol):
     max_ws_message_bytes: int
     max_input_chars: int
     browser_rate_limit_per_sec: float
+    # Finding #5d: malformed-worker-frame policy ("drop" | "reject").
+    worker_frame_on_invalid: str
 
     @property
     def event_bus(self) -> EventBus | None: ...

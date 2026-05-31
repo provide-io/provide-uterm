@@ -17,6 +17,8 @@ import time
 from contextlib import suppress
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
+from pydantic import ValidationError
+
 from provide.telemetry import get_logger, get_tracer
 
 try:
@@ -159,115 +161,151 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                             # accumulate output_delta from PTY-backed sessions.
                             await hub.append_event(worker_id, "term", {"data": event.data})
                         continue
-                    msg = event.control
-                    mtype = msg.get("type")
-                    if mtype not in {"worker_hello", "snapshot", "analysis", "status"}:
-                        logger.debug("ws_worker_ignored worker_id=%s type=%r", worker_id, mtype)
-                        continue
-                    if mtype == "worker_hello":
-                        _hello_mode = msg.get("input_mode")
-                        # Protocol range negotiation. Workers may send either
-                        # the legacy ``protocol_version`` field (single int)
-                        # or the new ``protocol`` object ``{min, max, preferred}``.
-                        # Absent fields default to ``{min=1, max=1}`` — preserves
-                        # behaviour for old clients that never advertised.
-                        _proto_block = msg.get("protocol")
-                        if isinstance(_proto_block, dict):
-                            _client_min = _safe_int(_proto_block.get("min"), MIN_PROTOCOL_VERSION, min_val=1)
-                            _client_max = _safe_int(_proto_block.get("max"), MAX_PROTOCOL_VERSION, min_val=1)
-                        elif "protocol_version" in msg:
-                            _legacy_v = _safe_int(msg.get("protocol_version"), 0)
-                            _client_min = _legacy_v if _legacy_v >= 1 else 1
-                            _client_max = _client_min
-                        else:
-                            _client_min = 1
-                            _client_max = 1
-                        _selected = negotiate_protocol_version(_client_min, _client_max)
-                        if _selected is None:
-                            # No overlap → close 1002. Send a structured
-                            # error frame first so the worker can surface
-                            # a meaningful disconnect reason.
-                            logger.warning(
-                                "worker_hello_protocol_mismatch worker_id=%s client=[%d,%d] server=[%d,%d]",
-                                worker_id,
-                                _client_min,
-                                _client_max,
-                                MIN_PROTOCOL_VERSION,
-                                MAX_PROTOCOL_VERSION,
-                            )
-                            with suppress(Exception):
-                                await websocket.send_text(
-                                    encode_control(
-                                        {
-                                            "type": "error",
-                                            "reason": "protocol_mismatch",
-                                            "client_min": _client_min,
-                                            "client_max": _client_max,
-                                            "server_min": MIN_PROTOCOL_VERSION,
-                                            "server_max": MAX_PROTOCOL_VERSION,
-                                        }
-                                    )
+                    # Finding #5d: validate control frames at the trust
+                    # boundary. The frame builders below (make_snapshot_frame /
+                    # make_analysis_frame / coerce_worker_status_frame) enforce
+                    # field types and raise on a malformed worker frame (e.g.
+                    # snapshot ``cursor.x="abc"``). Without this per-frame guard
+                    # that exception would reach the OUTER except and tear down
+                    # the worker session AND every browser viewing it — a DoS
+                    # from one bad frame. The guard isolates the bad frame:
+                    # ``drop`` (default) drops it and keeps the session alive;
+                    # ``reject`` sends an error frame and closes 1003.
+                    #
+                    # The DataChunk (raw terminal data) hot path stays OUTSIDE
+                    # this wrapper (above) — it builds no validated frame and
+                    # must not pay the try/except cost.
+                    #
+                    # Only frame-MALFORMATION errors are caught. ``break`` (the
+                    # protocol-mismatch close path) is control flow, not an
+                    # exception, so it still exits the loop cleanly; and
+                    # ``WebSocketDisconnect`` / ``CancelledError`` are NOT
+                    # subclasses of the caught types, so they still propagate.
+                    try:
+                        msg = event.control
+                        mtype = msg.get("type")
+                        if mtype not in {"worker_hello", "snapshot", "analysis", "status"}:
+                            logger.debug("ws_worker_ignored worker_id=%s type=%r", worker_id, mtype)
+                            continue
+                        if mtype == "worker_hello":
+                            _hello_mode = msg.get("input_mode")
+                            # Protocol range negotiation. Workers may send either
+                            # the legacy ``protocol_version`` field (single int)
+                            # or the new ``protocol`` object ``{min, max, preferred}``.
+                            # Absent fields default to ``{min=1, max=1}`` — preserves
+                            # behaviour for old clients that never advertised.
+                            _proto_block = msg.get("protocol")
+                            if isinstance(_proto_block, dict):
+                                _client_min = _safe_int(_proto_block.get("min"), MIN_PROTOCOL_VERSION, min_val=1)
+                                _client_max = _safe_int(_proto_block.get("max"), MAX_PROTOCOL_VERSION, min_val=1)
+                            elif "protocol_version" in msg:
+                                _legacy_v = _safe_int(msg.get("protocol_version"), 0)
+                                _client_min = _legacy_v if _legacy_v >= 1 else 1
+                                _client_max = _client_min
+                            else:
+                                _client_min = 1
+                                _client_max = 1
+                            _selected = negotiate_protocol_version(_client_min, _client_max)
+                            if _selected is None:
+                                # No overlap → close 1002. Send a structured
+                                # error frame first so the worker can surface
+                                # a meaningful disconnect reason.
+                                logger.warning(
+                                    "worker_hello_protocol_mismatch worker_id=%s client=[%d,%d] server=[%d,%d]",
+                                    worker_id,
+                                    _client_min,
+                                    _client_max,
+                                    MIN_PROTOCOL_VERSION,
+                                    MAX_PROTOCOL_VERSION,
                                 )
-                                await websocket.close(code=1002, reason="protocol_mismatch")
-                            break
-                        if _hello_mode in ("hijack", "open"):
-                            mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, _selected)
-                            if mode_applied:  # pragma: no branch — set_worker_hello returns False only on a missing worker registration, already filtered upstream
-                                await hub.broadcast_hijack_state(worker_id)
-                            logger.info(
-                                "worker_hello worker_id=%s input_mode=%s protocol_selected=%d applied=%s",
-                                worker_id,
-                                _hello_mode,
-                                _selected,
-                                mode_applied,
+                                with suppress(Exception):
+                                    await websocket.send_text(
+                                        encode_control(
+                                            {
+                                                "type": "error",
+                                                "reason": "protocol_mismatch",
+                                                "client_min": _client_min,
+                                                "client_max": _client_max,
+                                                "server_min": MIN_PROTOCOL_VERSION,
+                                                "server_max": MAX_PROTOCOL_VERSION,
+                                            }
+                                        )
+                                    )
+                                    await websocket.close(code=1002, reason="protocol_mismatch")
+                                break
+                            if _hello_mode in ("hijack", "open"):
+                                mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, _selected)
+                                if mode_applied:  # pragma: no branch — set_worker_hello returns False only on a missing worker registration, already filtered upstream
+                                    await hub.broadcast_hijack_state(worker_id)
+                                logger.info(
+                                    "worker_hello worker_id=%s input_mode=%s protocol_selected=%d applied=%s",
+                                    worker_id,
+                                    _hello_mode,
+                                    _selected,
+                                    mode_applied,
+                                )
+                            elif _hello_mode is not None:
+                                logger.warning(
+                                    "worker_hello_invalid_mode worker_id=%s input_mode=%r — expected 'hijack' or 'open', ignoring",
+                                    worker_id,
+                                    _hello_mode,
+                                )
+                            continue
+                        if mtype == "snapshot":
+                            snapshot = make_snapshot_frame(
+                                screen=str(msg.get("screen", "")),
+                                cursor=cast("dict[str, int]", msg.get("cursor", {"x": 0, "y": 0})),
+                                cols=_safe_int(msg.get("cols"), 80, min_val=1),
+                                rows=_safe_int(msg.get("rows"), 25, min_val=1),
+                                screen_hash=str(msg.get("screen_hash", "")),
+                                cursor_at_end=bool(msg.get("cursor_at_end", True)),
+                                has_trailing_space=bool(msg.get("has_trailing_space", False)),
+                                prompt_detected=cast("dict[str, Any] | None", msg.get("prompt_detected")),
+                                raw_tail=cast("str | None", msg.get("raw_tail")),
+                                ts=_safe_float(msg.get("ts"), time.time()),
                             )
-                        elif _hello_mode is not None:
-                            logger.warning(
-                                "worker_hello_invalid_mode worker_id=%s input_mode=%r — expected 'hijack' or 'open', ignoring",
+                            await hub.update_last_snapshot(worker_id, cast("dict[str, Any]", snapshot))
+                            await hub.broadcast(worker_id, cast("dict[str, Any]", snapshot))
+                            await hub.append_event(
                                 worker_id,
-                                _hello_mode,
+                                "snapshot",
+                                {
+                                    "prompt_id": extract_prompt_id(cast("dict[str, Any]", snapshot)),
+                                    "screen_hash": snapshot.get("screen_hash"),
+                                    "screen": snapshot.get("screen", ""),
+                                },
                             )
-                        continue
-                    if mtype == "snapshot":
-                        snapshot = make_snapshot_frame(
-                            screen=str(msg.get("screen", "")),
-                            cursor=cast("dict[str, int]", msg.get("cursor", {"x": 0, "y": 0})),
-                            cols=_safe_int(msg.get("cols"), 80, min_val=1),
-                            rows=_safe_int(msg.get("rows"), 25, min_val=1),
-                            screen_hash=str(msg.get("screen_hash", "")),
-                            cursor_at_end=bool(msg.get("cursor_at_end", True)),
-                            has_trailing_space=bool(msg.get("has_trailing_space", False)),
-                            prompt_detected=cast("dict[str, Any] | None", msg.get("prompt_detected")),
-                            raw_tail=cast("str | None", msg.get("raw_tail")),
-                            ts=_safe_float(msg.get("ts"), time.time()),
-                        )
-                        await hub.update_last_snapshot(worker_id, cast("dict[str, Any]", snapshot))
-                        await hub.broadcast(worker_id, cast("dict[str, Any]", snapshot))
-                        await hub.append_event(
-                            worker_id,
-                            "snapshot",
-                            {
-                                "prompt_id": extract_prompt_id(cast("dict[str, Any]", snapshot)),
-                                "screen_hash": snapshot.get("screen_hash"),
-                                "screen": snapshot.get("screen", ""),
-                            },
-                        )
-                    elif mtype == "analysis":
-                        await hub.broadcast(
-                            worker_id,
-                            cast(
-                                "dict[str, Any]",
-                                make_analysis_frame(
-                                    formatted=str(msg.get("formatted", "")),
-                                    raw=msg.get("raw"),
-                                    ts=_safe_float(msg.get("ts"), time.time()),
+                        elif mtype == "analysis":
+                            await hub.broadcast(
+                                worker_id,
+                                cast(
+                                    "dict[str, Any]",
+                                    make_analysis_frame(
+                                        formatted=str(msg.get("formatted", "")),
+                                        raw=msg.get("raw"),
+                                        ts=_safe_float(msg.get("ts"), time.time()),
+                                    ),
                                 ),
-                            ),
-                        )
-                    elif mtype == "status":  # pragma: no branch
-                        status_frame = coerce_worker_status_frame(msg)
-                        await hub.broadcast(worker_id, cast("dict[str, Any]", status_frame))
-                        await hub.append_event(worker_id, "worker_status", {"status": status_frame})
+                            )
+                        elif mtype == "status":  # pragma: no branch
+                            status_frame = coerce_worker_status_frame(msg)
+                            await hub.broadcast(worker_id, cast("dict[str, Any]", status_frame))
+                            await hub.append_event(worker_id, "worker_status", {"status": status_frame})
+                    except (ValidationError, ValueError, KeyError, TypeError) as exc:
+                        # A malformed worker control frame failed type validation
+                        # in a builder above. Isolate it per the configured
+                        # policy so one bad frame cannot DoS the session +
+                        # viewers. WebSocketDisconnect / CancelledError are NOT
+                        # caught here (not subclasses), so they still propagate.
+                        hub.metric("ws_worker_frame_invalid_total")
+                        if hub.worker_frame_on_invalid == "reject":
+                            logger.warning("ws_worker_frame_invalid_reject worker_id=%s error=%s", worker_id, exc)
+                            with suppress(Exception):
+                                await websocket.send_text(encode_control({"type": "error", "reason": "invalid_frame"}))
+                                await websocket.close(code=1003, reason="invalid_frame")
+                            break
+                        logger.debug("ws_worker_frame_invalid_drop worker_id=%s error=%s", worker_id, exc)
+                        continue
         except WebSocketDisconnect:
             pass
         except Exception as exc:  # pragma: no cover

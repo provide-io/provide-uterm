@@ -197,6 +197,8 @@ def create_server_app(
         # Rate-limit drop counters (websocket browser + REST acquire/send/step)
         "ws_browser_rate_limited_total": 0,
         "ws_browser_control_rate_limited_total": 0,
+        # Inbound worker control frame that failed type validation (finding #5d)
+        "ws_worker_frame_invalid_total": 0,
         "rest_acquire_rate_limited_total": 0,
         "rest_send_rate_limited_total": 0,
         "rest_step_rate_limited_total": 0,
@@ -498,6 +500,7 @@ def create_server_app(
         resolve_browser_role=_resolve_browser_role,
         on_metric=_inc_metric,
         worker_token=config.auth.worker_bearer_token,
+        worker_frame_on_invalid=config.worker_frame_on_invalid,
         resume_store=resume_store,
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,

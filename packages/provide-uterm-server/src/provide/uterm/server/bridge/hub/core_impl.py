@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Awaitable, Callable, Coroutine
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from provide.telemetry import get_logger
 
@@ -566,6 +566,7 @@ class TermHub:
         rest_acquire_rate_limit_per_sec: float = 5,
         rest_send_rate_limit_per_sec: float = 20,
         worker_token: str | None = None,
+        worker_frame_on_invalid: Literal["drop", "reject"] = "drop",
         event_deque_maxlen: int = 2000,
         resume_store: ResumeTokenStore | None = None,
         resume_ttl_s: float = 300,
@@ -595,6 +596,11 @@ class TermHub:
         self._resolve_browser_role = resolve_browser_role
         self.on_worker_empty: WorkerEmptyCallback | None = on_worker_empty
         self._worker_token = worker_token
+        # Finding #5d: policy for a malformed inbound worker control frame —
+        # ``"drop"`` isolates+drops the frame (session survives), ``"reject"``
+        # sends an error frame and closes the worker WS with 1003. Read by the
+        # per-frame guard in the worker recv loop (websockets_impl.py).
+        self.worker_frame_on_invalid: Literal["drop", "reject"] = worker_frame_on_invalid
         # HijackLeaseManager owns the hijack state machine; legacy
         # ``_dashboard_hijack_lease_s`` is exposed via a property shim
         # below so existing mixin and test code that reads it as an

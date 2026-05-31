@@ -477,6 +477,15 @@ class UtermServerConfig(ServerBaseModel):
     session_idle_timeout_s: int = 0
     session_retention_s: int = 0
     browser_rate_limit_per_sec: float = 300
+    # Finding #5d: how the worker WS recv loop handles a malformed inbound
+    # control frame (one whose fields fail the frame builder's type
+    # validation, e.g. snapshot ``cursor.x="abc"``).  ``drop`` (default)
+    # isolates the bad frame — it is dropped, ``ws_worker_frame_invalid_total``
+    # increments, and the worker session (plus every browser viewing it)
+    # stays alive; one bad frame can no longer DoS the session.  ``reject``
+    # sends a structured ``invalid_frame`` error frame and closes the worker
+    # WS with code 1003.
+    worker_frame_on_invalid: Literal["drop", "reject"] = "drop"
     # Maximum concurrent BROWSER WebSocket connections per authenticated
     # principal (identified by subject_id).  Workers and anonymous principals
     # are exempt; only concrete human principals are counted.  Prevents a
