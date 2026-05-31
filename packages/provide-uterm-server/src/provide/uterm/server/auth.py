@@ -389,6 +389,9 @@ class WebhookIdentityProvider(IdentityProvider):
             req_headers["X-Uterm-Signature"] = build_webhook_signature(self.secret, body, ts)
 
         try:
+            from provide.uterm.server.egress import assert_webhook_target_allowed
+
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout_s) as client:
                 resp = await client.post(self.url, content=body, headers=req_headers)
                 resp.raise_for_status()

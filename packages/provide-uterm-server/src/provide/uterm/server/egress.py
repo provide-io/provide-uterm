@@ -7,8 +7,53 @@
 from __future__ import annotations
 
 import ipaddress
+import time
+from urllib.parse import urlparse
 
 from provide.uterm.server.webhooks import _METADATA_IPS, _resolve_host
+
+# TTL for the per-host DNS cache used by assert_webhook_target_allowed.
+_EGRESS_DNS_TTL_S: float = 60.0
+# host → (timestamp, resolved_addresses)
+_resolve_cache: dict[str, tuple[float, tuple[str, ...]]] = {}
+
+
+async def _resolve_cached(host: str) -> tuple[str, ...]:
+    """Return resolved addresses for *host*, using a TTL-bounded in-process cache.
+
+    Caching prevents a DNS storm when the same governance webhook URL is
+    consulted on every incoming message.  The 60-second TTL is short enough
+    that a rebinding attack that switches a name to a metadata IP will be
+    caught on the next cache miss.
+    """
+    now = time.time()
+    cached = _resolve_cache.get(host)
+    if cached is not None and (now - cached[0]) < _EGRESS_DNS_TTL_S:
+        return cached[1]
+    addrs = tuple(await _resolve_host(host))
+    _resolve_cache[host] = (now, addrs)
+    return addrs
+
+
+async def assert_webhook_target_allowed(url: str) -> None:
+    """Raise EgressBlockedError if the webhook URL host resolves to a cloud-metadata IP.
+
+    Metadata IPs are never a legitimate webhook target.  Private/internal hosts
+    ARE allowed — a policy engine may be internal; HTTPS + TLS cert validation
+    (enforced at config-load) cover the rest.  DNS results are cached for
+    ``_EGRESS_DNS_TTL_S`` seconds to avoid per-request resolver storms.
+    """
+    host = urlparse(url).hostname
+    if not host:
+        return
+    h = host.strip().strip("[]")
+    try:
+        addresses: tuple[str, ...] = (str(ipaddress.ip_address(h)),)
+    except ValueError:
+        addresses = await _resolve_cached(h)
+    for addr in addresses:
+        if ipaddress.ip_address(addr) in _METADATA_IPS:
+            raise EgressBlockedError(f"webhook target {url!r} resolves to a blocked metadata address")
 
 
 class EgressBlockedError(ValueError):
