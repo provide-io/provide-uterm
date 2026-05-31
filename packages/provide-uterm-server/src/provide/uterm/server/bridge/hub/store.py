@@ -42,7 +42,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.hub.ext import PolicyContext
@@ -253,7 +253,24 @@ class StateStore:
         if principal:
             client_id = str(principal.subject_id) if hasattr(principal, "subject_id") else str(principal)
 
-        metadata = {"principal": principal} if principal else {}
+        # Project the Principal to an allow-listed JSON-safe dict. The
+        # governance webhook gates ``json.dumps`` ``context.metadata``; a raw
+        # Principal dataclass is not JSON-serializable (it raised TypeError and
+        # tore down the WS session on every keystroke when governance was on).
+        # We deliberately project ONLY {subject_id, roles} — NOT scopes/claims —
+        # so a global encoder hook can't leak the full principal to the webhook.
+        metadata: dict[str, Any]
+        if principal and not isinstance(principal, str):
+            metadata = {
+                "principal": {
+                    "subject_id": str(principal.subject_id),
+                    "roles": sorted(principal.roles),
+                }
+            }
+        elif principal:
+            metadata = {"principal": str(principal)}
+        else:
+            metadata = {}
         return PolicyContext(
             worker_id=worker_id,
             client_id=client_id,

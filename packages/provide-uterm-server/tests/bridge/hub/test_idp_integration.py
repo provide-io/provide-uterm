@@ -31,7 +31,9 @@ async def test_hub_uses_identity_provider():
     # Verify IDP was called
     mock_idp.resolve_principal.assert_called_once_with(mock_ws)
     assert context.client_id == "test_user"
-    assert context.metadata["principal"] == mock_principal
+    # M2: metadata carries an allow-listed JSON-safe projection, not the raw
+    # Principal dataclass (which is not JSON-serializable for the webhook gates).
+    assert context.metadata["principal"] == {"subject_id": "test_user", "roles": ["admin"]}
 
 
 @pytest.mark.asyncio
