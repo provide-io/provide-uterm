@@ -54,17 +54,24 @@ ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
 WORKDIR /app
 
 # Copy workspace root metadata (incl. uv.lock — now actually consumed) plus the
-# core, client (workspace dependency of server) and server packages.
+# `uv sync` reads the WHOLE workspace, so ALL 6 uv workspace members
+# ([tool.uv.workspace] in the root pyproject) must be present on disk — even
+# the ones not installed — or the frozen sync errors on a missing member.
+# server[all] in particular pulls provide-uterm-annotation (a workspace source).
 COPY pyproject.toml uv.lock README.md ./
 COPY packages/provide-uterm/ packages/provide-uterm/
 COPY packages/provide-uterm-client/ packages/provide-uterm-client/
 COPY packages/provide-uterm-server/ packages/provide-uterm-server/
+COPY packages/provide-uterm-annotation/ packages/provide-uterm-annotation/
+COPY packages/provide-uterm-cloudflare/ packages/provide-uterm-cloudflare/
+COPY packages/provide-uterm-platform/ packages/provide-uterm-platform/
 
-# Install the server with all extras (pulls core + client workspace deps from
-# the lock), then add core's `emulator` dependency (pyte) which the screen
-# renderer imports. NEEDS-BUILD-VALIDATION: confirm the resulting /app/.venv
-# matches the previous `[emulator]`/`[all]` surface and exposes the `uterm` CLI.
-RUN uv sync --no-dev --package provide-uterm-server --extra all \
+# Install the server with all extras (pulls core + client + annotation workspace
+# deps from the lock) NON-editable so the members are baked into /app/.venv and
+# the runtime stage needs only the venv, then add core's `emulator` dep (pyte).
+# NEEDS-BUILD-VALIDATION: confirm /app/.venv matches the previous
+# `[emulator]`/`[all]` surface and exposes the `uterm` CLI.
+RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all \
     && uv pip install --python /app/.venv pyte
 
 # ---- runtime stage ----------------------------------------------------------
@@ -79,11 +86,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy the uv-managed venv and the (editable-installed) workspace packages it
-# references. The venv's interpreter is the base image's python, present in
-# this stage too, so the venv is fully functional.
+# Copy the uv-managed venv. With --no-editable the workspace packages are baked
+# into the venv's site-packages, so no source tree is needed at runtime. The
+# venv's interpreter is the base image's python, present in this stage too.
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/packages /app/packages
 
 # Default config is fail-closed: JWT/header secrets are placeholders rejected
 # by the server. Override via: -v /path/to/config.toml:/config/server.toml:ro

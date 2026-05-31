@@ -42,10 +42,16 @@ RUN npm install -g wrangler@latest
 
 WORKDIR /app
 
-# Copy full workspace so uv can resolve the lockfile
+# Copy the full uv workspace. A frozen `uv sync` reads every member declared in
+# [tool.uv.workspace], so all 6 Python members must be present on disk (even the
+# ones not installed here) or the sync errors on a missing workspace member.
 COPY pyproject.toml uv.lock README.md ./
 COPY packages/provide-uterm/ packages/provide-uterm/
 COPY packages/provide-uterm-cloudflare/ packages/provide-uterm-cloudflare/
+COPY packages/provide-uterm-client/ packages/provide-uterm-client/
+COPY packages/provide-uterm-server/ packages/provide-uterm-server/
+COPY packages/provide-uterm-annotation/ packages/provide-uterm-annotation/
+COPY packages/provide-uterm-platform/ packages/provide-uterm-platform/
 
 WORKDIR /app/packages/provide-uterm-cloudflare
 
