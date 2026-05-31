@@ -125,6 +125,71 @@ async def test_webhook_idp_sends_signed_headers_not_cleartext_secret():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_webhook_idp_filters_unknown_roles():
+    """Fix 1e: roles returned by the webhook IDP are filtered to the known
+    allow-list — a compromised/MITM'd webhook cannot inject bogus roles
+    (e.g. superuser/root) alongside a legitimate one."""
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url)
+
+    respx.post(url).mock(
+        return_value=httpx.Response(
+            200,
+            json={"subject_id": "x", "roles": ["admin", "superuser", "root"]},
+        )
+    )
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal is not None
+    assert principal.roles == frozenset({"admin"})
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_empty_after_filter_falls_back_to_viewer():
+    """Fix 1e: if every returned role is filtered out, fall back to viewer."""
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url)
+
+    respx.post(url).mock(
+        return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["nonsense"]}),
+    )
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal is not None
+    assert principal.roles == frozenset({"viewer"})
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_idp_keeps_legitimate_role():
+    """Fix 1e: a single legitimate role passes through unchanged."""
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url)
+
+    respx.post(url).mock(
+        return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["operator"]}),
+    )
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal is not None
+    assert principal.roles == frozenset({"operator"})
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_webhook_idp_no_secret_sends_no_signing_headers():
     """When no secret is configured, no signing headers are sent."""
     url = "https://auth.example.com/resolve"

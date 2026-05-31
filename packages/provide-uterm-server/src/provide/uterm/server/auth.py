@@ -36,6 +36,27 @@ __all__ = [
 ]
 
 logger = get_logger(__name__)
+# Canonical RBAC role allow-list. Any role minted from an external/untrusted
+# source (JWT claims, proxy headers, the webhook IDP) MUST be filtered to this
+# set; anything outside it is dropped so a compromised issuer cannot inject a
+# privileged role like ``superuser``/``root``.
+_KNOWN_ROLES = frozenset({"viewer", "operator", "admin"})
+# Fallback role applied when role filtering leaves nothing.
+_DEFAULT_ROLE = "viewer"
+
+
+def _filter_known_roles(roles: Any) -> frozenset[str]:
+    """Filter an arbitrary roles iterable to the known allow-list.
+
+    Cleans each entry (str, stripped, lower-cased), drops any role outside
+    ``_KNOWN_ROLES``, and falls back to ``{_DEFAULT_ROLE}`` when the result is
+    empty. Shared by the JWT, header and webhook-IDP role-resolution paths.
+    """
+    cleaned = {str(role).strip().lower() for role in roles if str(role).strip()}
+    allowed = cleaned & _KNOWN_ROLES
+    return frozenset(allowed) if allowed else frozenset({_DEFAULT_ROLE})
+
+
 # Module-level cache: jwks_url → PyJWKClient instance.
 # PyJWKClient fetches and caches the JWKS document internally; sharing one
 # instance per URL avoids a redundant HTTP round-trip on every token validation.
@@ -199,10 +220,7 @@ class LocalIdentityProvider(IdentityProvider):
             pieces = [str(part).strip().lower() for part in raw if str(part).strip()]
         else:
             pieces = []
-        cleaned = [role for role in pieces if role in {"viewer", "operator", "admin"}]
-        if not cleaned:
-            cleaned = ["viewer"]
-        return frozenset(cleaned)
+        return _filter_known_roles(pieces)
 
     def _scopes_from_claims(self, claims: dict[str, Any]) -> frozenset[str]:
         raw = claims.get(self.auth.jwt_scopes_claim)
@@ -264,8 +282,7 @@ class LocalIdentityProvider(IdentityProvider):
             or "anonymous"
         )
         role_raw = headers.get(self.auth.role_header) or self._cookie_value(cookies, self.auth.role_cookie) or ""
-        role = str(role_raw).strip().lower()
-        roles = frozenset({role}) if role in {"viewer", "operator", "admin"} else frozenset({"viewer"})
+        roles = _filter_known_roles([role_raw])
         return Principal(subject_id=str(principal), roles=roles, scopes=frozenset())
 
     def _principal_from_api_key(self, headers: Any) -> Principal | None:
@@ -397,9 +414,12 @@ class WebhookIdentityProvider(IdentityProvider):
                 resp.raise_for_status()
                 data = resp.json()
 
+                # Filter roles to the known allow-list: a compromised or
+                # MITM'd IDP webhook must not be able to mint a privileged role
+                # (e.g. admin) outside the recognised set.
                 return Principal(
                     subject_id=data["subject_id"],
-                    roles=frozenset(data.get("roles", ["viewer"])),
+                    roles=_filter_known_roles(data.get("roles", [_DEFAULT_ROLE])),
                     scopes=frozenset(data.get("scopes", [])),
                     claims=data.get("claims", {}),
                     display_name=data.get("display_name"),
