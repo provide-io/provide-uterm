@@ -169,6 +169,24 @@ class ControlPlaneConfig(ServerBaseModel):
 
     backend: Literal["memory", "sqlite"] = "memory"
     database_url: str | None = None
+    reap_interval_s: int = 3600  # how often the reaper runs (seconds)
+    reap_retention_s: int = 604800  # keep soft-deleted/expired rows this long before physical delete (7 days)
+
+    @field_validator("reap_interval_s")
+    @classmethod
+    def _validate_reap_interval_s(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError(f"control_plane.reap_interval_s must be > 0, got: {value}")
+        return value
+
+    @field_validator("reap_retention_s")
+    @classmethod
+    def _validate_reap_retention_s(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError(
+                f"control_plane.reap_retention_s must be >= 0 (0 = reap as soon as past expiry), got: {value}"
+            )
+        return value
 
     @model_validator(mode="after")
     def _validate_database_url(self) -> ControlPlaneConfig:

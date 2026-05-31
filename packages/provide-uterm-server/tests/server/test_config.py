@@ -221,6 +221,32 @@ def test_config_from_mapping_rejects_sqlite_control_plane_without_database_url()
         config_from_mapping({"control_plane": {"backend": "sqlite"}})
 
 
+def test_control_plane_reap_interval_must_be_positive() -> None:
+    from provide.uterm.server.models import ControlPlaneConfig
+
+    with pytest.raises(ValueError, match="control_plane\\.reap_interval_s must be > 0"):
+        ControlPlaneConfig(reap_interval_s=0)
+
+
+def test_control_plane_reap_retention_must_be_non_negative() -> None:
+    from provide.uterm.server.models import ControlPlaneConfig
+
+    with pytest.raises(ValueError, match="control_plane\\.reap_retention_s must be >= 0"):
+        ControlPlaneConfig(reap_retention_s=-1)
+
+
+def test_control_plane_reap_defaults_and_valid_overrides() -> None:
+    from provide.uterm.server.models import ControlPlaneConfig
+
+    defaults = ControlPlaneConfig()
+    assert defaults.reap_interval_s == 3600
+    assert defaults.reap_retention_s == 604800
+
+    custom = ControlPlaneConfig(reap_interval_s=1, reap_retention_s=0)
+    assert custom.reap_interval_s == 1
+    assert custom.reap_retention_s == 0
+
+
 def test_jwt_mode_requires_worker_token() -> None:
     config = default_server_config()
     config.auth = AuthConfig(
