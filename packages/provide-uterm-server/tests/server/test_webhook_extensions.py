@@ -325,3 +325,46 @@ async def test_authz_service_fallback_paths() -> None:
     # Since principal has 'operator' role, and MinimalProvider.can_read_session returns True,
     # LocalAuthorizationProvider will return 'operator'.
     assert await authz.resolve_browser_role(principal, session) == "operator"
+
+
+# ---------------------------------------------------------------------------
+# Fix 1c: redact secrets before forwarding keystrokes to the governance webhook
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_policy_gate_redacts_input_data() -> None:
+    """intercept_input must redact the keystroke stream before POSTing it to
+    the governance webhook so secrets do not leak verbatim to an external
+    endpoint."""
+    url = "https://fleet.example.com/policy"
+    gate = WebhookPolicyGate(url=url)
+    route = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+
+    secret = "mysql --password=hunter2supersecret -h db"  # pragma: allowlist secret
+    result = await gate.intercept_input(secret, PolicyContext(worker_id="w1"))
+
+    assert result.action == "allow"
+    payload = json.loads(route.calls.last.request.content)
+    assert "hunter2supersecret" not in payload["data"]
+    assert "[PASSWORD_REDACTED]" in payload["data"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_fanout_gate_redacts_command() -> None:
+    """intercept_fanout must redact the forwarded command the same way."""
+    from provide.uterm.server.bridge.hub.ext import WebhookFanOutPolicyGate
+
+    url = "https://fleet.example.com/fanout"
+    gate = WebhookFanOutPolicyGate(url=url)
+    route = respx.post(url).mock(return_value=Response(200, json={"action": "allow"}))
+
+    secret = "mysql --password=hunter2supersecret -h db"  # pragma: allowlist secret
+    result = await gate.intercept_fanout(secret, PolicyContext(worker_id="w1"), group_id="g1")
+
+    assert result.action == "allow"
+    payload = json.loads(route.calls.last.request.content)
+    assert "hunter2supersecret" not in payload["command"]
+    assert "[PASSWORD_REDACTED]" in payload["command"]
