@@ -136,7 +136,13 @@ class MessageRouter:
             the hub.
     """
 
-    __slots__ = ("_hub", "_keystroke_timestamps")
+    # Content event types whose payloads carry terminal output and must be
+    # redacted at write time before landing in the ring buffer. Other event
+    # types (hijack_*, input_send, worker_status, ...) carry control metadata,
+    # not scraped terminal output, and pass through unredacted.
+    _REDACTED_EVENT_TYPES = frozenset({"term", "snapshot", "analysis"})
+
+    __slots__ = ("_event_redactor", "_hub", "_keystroke_timestamps")
 
     def __init__(self, hub: TermHub) -> None:
         self._hub = hub
@@ -146,6 +152,12 @@ class MessageRouter:
         # property shim so legacy tests that poke this directly
         # continue to work.
         self._keystroke_timestamps: dict[Any, deque[float]] = {}
+        # Server-default redactor applied to event content at WRITE time so the
+        # ring buffer (read by the events API / watch / MCP tools) is never an
+        # unredacted egress for what the live broadcast scrubs. Events are
+        # role-agnostic, so a single shared default-ruleset redactor is correct
+        # and is built once (lazily on first content event, then reused).
+        self._event_redactor: StreamRedactor | None = None
 
     @property
     def keystroke_timestamps(self) -> dict[Any, deque[float]]:
@@ -154,8 +166,40 @@ class MessageRouter:
 
     # -- Event ring buffer -----------------------------------------------
 
+    def _redact_event_payload(self, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Redact terminal-content fields of a content event payload (write-time).
+
+        Treats the payload as a frame by tagging it with ``type`` and reusing
+        :func:`_redact_frame_fields` (so it benefits from the same string-field
+        and structured-value recursion as the broadcast path), then strips the
+        synthetic ``type`` key back off. Uses the server-default ruleset — events
+        are role-agnostic and redacted once. Non-content event types are not
+        passed here.
+
+        A ``term`` event whose ``data`` is not a string (e.g. ``{"data": 42}``)
+        is returned verbatim: ``_redact_frame_fields``' term branch ``str()``-
+        coerces ``data``, which would change the stored type, so we skip it to
+        preserve the legacy ring contract. snapshot/analysis content fields are
+        strings in every real producer, so they always go through the redactor.
+        Never mutates the input payload.
+        """
+        if event_type == "term" and not isinstance(payload.get("data"), str):
+            return payload
+        if self._event_redactor is None:
+            from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
+
+            self._event_redactor = StreamRedactor(default_rules())
+        redacted = _redact_frame_fields({"type": event_type, **payload}, self._event_redactor)
+        return {k: v for k, v in redacted.items() if k != "type"}
+
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         """Append a timestamped event to the worker's event ring buffer and return it.
+
+        Content events (term / snapshot / analysis) have their terminal-output
+        fields redacted with the server-default ruleset BEFORE being stored, so
+        the ring buffer — read by the events API, ``/events/watch`` and the MCP
+        events tools — is never an unredacted egress for what the live broadcast
+        scrubs. Redaction runs before the term-data char cap below.
 
         For ``event_type == "term"`` the stored ring copy's ``data["data"]``
         field is truncated to ``hub.max_event_data_chars``.  This bounds the
@@ -165,6 +209,10 @@ class MessageRouter:
         """
         hub = self._hub
         payload = data or {}
+        # Redact content at write time (before truncation) so a secret near the
+        # truncation boundary is removed regardless of where the cap would cut.
+        if event_type in self._REDACTED_EVENT_TYPES:
+            payload = self._redact_event_payload(event_type, payload)
         if event_type == "term" and isinstance(payload.get("data"), str):
             cap = hub.max_event_data_chars
             raw = payload["data"]
