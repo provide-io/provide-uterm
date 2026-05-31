@@ -397,14 +397,25 @@ async def _handle_resume(
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_malformed")
         return owned_hijack
 
-    session = await store.consume(old_token)
+    # Non-destructive lookup for the validation gates: a wrong-worker or
+    # callback-rejected resume must NOT burn the single-use token, otherwise
+    # the legitimate browser could no longer resume. The token is consumed
+    # only on the success path, just before the new token is issued.
+    session = await store.get(old_token)
     if session is None or session.worker_id != worker_id:
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
         return owned_hijack
 
-    # Optional application-level validation (token already consumed; rejected resume spends the token)
+    # Optional application-level validation (token still live; a rejected
+    # resume leaves it consumable for the legitimate browser).
     if hub._on_resume is not None and not await hub._on_resume(old_token, session):
         logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="callback_rejected")
+        return owned_hijack
+
+    # Atomically burn the token now that all gates have passed. A concurrent
+    # replay loses the race and gets None here, so single-use is preserved.
+    if await store.consume(old_token) is None:
+        logger.warning(EVENT_RESUME_FAILED, worker_id=worker_id, reason="token_invalid")
         return owned_hijack
 
     new_role, can_hijack = await _resolve_resumed_role(hub, ws, worker_id, role, session.role)
