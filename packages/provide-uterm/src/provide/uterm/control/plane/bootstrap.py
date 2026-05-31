@@ -23,6 +23,8 @@ class ControlPlane(Protocol):
 
     async def begin(self) -> Transaction: ...
 
+    async def reap(self, *, now: float, retention_s: int) -> int: ...
+
 
 async def bootstrap_control_plane(config: ControlPlaneConfig) -> ControlPlane:
     if config.backend == "memory":

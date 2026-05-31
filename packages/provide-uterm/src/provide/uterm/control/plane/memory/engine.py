@@ -45,6 +45,10 @@ class MemoryControlPlane:
     async def begin(self) -> MemoryTransaction:
         return MemoryTransaction(self._state, self._lock)
 
+    async def reap(self, *, now: float, retention_s: int) -> int:
+        # Memory hard-deletes; nothing accumulates, so there is nothing to reap.
+        return 0
+
     def session_store(self, tx: MemoryTransaction) -> MemorySessionStore:
         return MemorySessionStore(tx.state, tx)
 
