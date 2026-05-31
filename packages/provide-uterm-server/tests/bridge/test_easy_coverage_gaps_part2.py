@@ -299,6 +299,7 @@ async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -
     import respx
 
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
+    from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
     from provide.uterm.server.webhook_signing import verify_webhook_signature
 
     ctx = PolicyContext(worker_id="w", client_id="c", role="admin", metadata={})
@@ -319,15 +320,15 @@ async def test_webhook_output_policy_gate_returns_rules_and_handles_failures() -
     assert req_ts != ""
     assert verify_webhook_signature("s", route.calls.last.request.content, req_sig, req_ts) is True
 
-    # Non-200 -> empty list
+    # Non-200 -> fail CLOSED to built-in default_rules() (Fix 1b)
     with respx.mock(assert_all_called=False) as r:
         r.post("http://hook.test/output").mock(return_value=httpx.Response(503))
-        assert await gate.get_redaction_rules(ctx) == []
+        assert await gate.get_redaction_rules(ctx) == default_rules()
 
-    # Exception -> empty list
+    # Exception -> fail CLOSED to built-in default_rules() (Fix 1b)
     with respx.mock(assert_all_called=False) as r:
         r.post("http://hook.test/output").mock(side_effect=httpx.ConnectError("network down"))
-        assert await gate.get_redaction_rules(ctx) == []
+        assert await gate.get_redaction_rules(ctx) == default_rules()
 
 
 # ---------------------------------------------------------------------------

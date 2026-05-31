@@ -216,14 +216,18 @@ async def test_webhook_behavioral_audit_gate_metadata_url_fail_open(monkeypatch:
 
 
 @pytest.mark.asyncio
-async def test_webhook_output_policy_gate_metadata_url_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    """WebhookOutputPolicyGate with a metadata-IP URL must return [] (EgressBlockedError caught)."""
+async def test_webhook_output_policy_gate_metadata_url_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebhookOutputPolicyGate with a metadata-IP URL must fail CLOSED: the
+    EgressBlockedError is caught and the built-in default_rules() are returned
+    so redaction continues rather than silently dropping all rules."""
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
+    from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
 
     gate = WebhookOutputPolicyGate(url="https://169.254.169.254/output")
     ctx = PolicyContext(worker_id="w1")
     rules = await gate.get_redaction_rules(ctx)
-    assert rules == []
+    assert rules == default_rules()
+    assert rules
 
 
 @pytest.mark.asyncio
@@ -379,3 +383,65 @@ async def test_webhook_authz_benign_host_posts(monkeypatch: pytest.MonkeyPatch) 
     result = await provider._check(principal, "session.read")
     assert result is True
     assert route.called
+
+
+# ---------------------------------------------------------------------------
+# Fix 1b: WebhookOutputPolicyGate fails CLOSED to default_rules()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_output_policy_gate_non_200_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-200 webhook response must fail CLOSED: return the built-in
+    default_rules() so redaction continues rather than dropping all rules."""
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
+    from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
+
+    url = "https://gov.example.com/output"
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
+    respx.post(url).mock(return_value=Response(503))
+
+    gate = WebhookOutputPolicyGate(url=url)
+    rules = await gate.get_redaction_rules(PolicyContext(worker_id="w1"))
+    assert rules == default_rules()
+    assert rules
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_output_policy_gate_connect_error_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A transport/connect error (except Exception branch) must fail CLOSED to
+    the built-in default_rules()."""
+    import httpx
+
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
+    from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
+
+    url = "https://gov.example.com/output"
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
+    respx.post(url).mock(side_effect=httpx.ConnectError("refused"))
+
+    gate = WebhookOutputPolicyGate(url=url)
+    rules = await gate.get_redaction_rules(PolicyContext(worker_id="w1"))
+    assert rules == default_rules()
+    assert rules
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_output_policy_gate_200_returns_parsed_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 200 response with rules returns exactly those parsed rules (existing
+    behavior preserved — the webhook's rules are NOT replaced by defaults)."""
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.bridge.hub.ext import PolicyContext, RedactionRule, WebhookOutputPolicyGate
+
+    url = "https://gov.example.com/output"
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
+    respx.post(url).mock(return_value=Response(200, json={"rules": [{"pattern": "secret", "replacement": "[X]"}]}))
+
+    gate = WebhookOutputPolicyGate(url=url)
+    rules = await gate.get_redaction_rules(PolicyContext(worker_id="w1"))
+    assert rules == [RedactionRule(pattern="secret", replacement="[X]")]
