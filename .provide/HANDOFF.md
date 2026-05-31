@@ -41,7 +41,12 @@ waves (P0 → P0.5 remaining-highs → P1 resource/resilience → M/L backlog).
     bearer entropy/placeholder floor.
   - **5c MCP path-injection** (`e4abc87`, `12327c8`): `_safe_id` validation in `HijackClient` (`_wp/_hp/_sp`)
     + the `fanout_send`/`session_annotate` MCP tools.
-  - **3c traceparent** (`20eb941f`): W3C `traceparent` injected into outbound webhooks/governance/IDP headers.
+  - **3c traceparent** (`20eb941f`, corrected by `869de5b4`): W3C `traceparent` injected into outbound
+    webhooks/governance/IDP headers. CORRECTION: the original used a raw `opentelemetry.propagate.inject`
+    (undeclared hard dep that broke downstream hub consumers without OTel); now uses
+    `tracing.inject_trace_context()` built on `provide.telemetry.get_trace_context()` — OTel-optional, zero
+    opentelemetry imports anywhere in provide-uterm. **Lesson: use `provide.telemetry`, never raw
+    `opentelemetry`; and verify new imports are DECLARED deps, not just transitively present in the dev venv.**
   - **2b worker cap** (`b43370d0`): generous global `max_workers` cap; rejects new-over-cap with 1008,
     always allows reconnecting existing worker ids.
 - **All HIGH-severity findings from the review are now closed.** Full gate green across every package
