@@ -184,27 +184,27 @@ async def test_sqlite_reaper_error_is_swallowed(monkeypatch: pytest.MonkeyPatch,
 
 
 @pytest.mark.asyncio
-async def test_memory_backend_does_not_schedule_reaper(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The memory backend takes the reap_task is None path: reap() is never called."""
+async def test_memory_backend_schedules_reaper(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The memory backend now does real soft-delete reaping, so the reaper sweep
+    is scheduled unconditionally and reap() is called."""
     config = default_server_config()  # defaults to memory backend
     assert config.control_plane.backend == "memory"
+    config.control_plane.reap_interval_s = 1
 
     app = create_server_app(config, api_only=True)
     _patch_fast_sleep(monkeypatch)
 
-    calls = 0
+    called = asyncio.Event()
 
     async def _spy_reap(self: object, *, now: float, retention_s: int) -> int:
-        nonlocal calls
-        calls += 1
+        called.set()
         return 0
 
     monkeypatch.setattr(type(app.state.uterm_control_plane), "reap", _spy_reap)
 
     with TestClient(app):
-        # Give any scheduled sweeps several fast ticks; the reaper must stay unscheduled.
-        await asyncio.sleep(0.05)
-    assert calls == 0
+        await asyncio.wait_for(called.wait(), timeout=5.0)
+    assert called.is_set()
 
 
 @pytest.mark.asyncio
