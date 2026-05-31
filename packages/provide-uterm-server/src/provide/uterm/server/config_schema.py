@@ -483,6 +483,21 @@ class UtermServerConfig(ServerBaseModel):
     # single authenticated user from exhausting server memory with thousands
     # of open browser tabs.
     max_connections_per_principal: int = 25
+    # Generous GLOBAL cap on the number of distinct worker_ids the hub will
+    # register. Unlike max_connections_per_principal (BROWSER-only), workers
+    # share a static principal, so a per-principal cap would wrongly limit the
+    # whole fleet. This bounds OOM from a single token holder opening thousands
+    # of unique worker_id WS connections; real fleets are large, so the default
+    # is high and only pathological floods hit it. Reconnects of an already-
+    # registered worker_id are never counted against the cap.
+    max_workers: int = 10000
+
+    @field_validator("max_workers")
+    @classmethod
+    def _validate_max_workers(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError(f"max_workers must be >= 1, got: {value}")
+        return value
 
 
 SessionDefinition.model_rebuild()

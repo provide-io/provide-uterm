@@ -32,3 +32,18 @@ def test_default_config():
     assert config.auth.mode == "dev_token"
     assert len(config.sessions) == 1
     assert config.sessions[0].session_id == "provide-shell"
+
+
+def test_max_workers_default_and_valid_value():
+    """Fix 2b: max_workers defaults to a generous global cap and accepts overrides."""
+    config = UtermServerConfig()
+    assert config.max_workers == 10000
+
+    custom = UtermServerConfig(max_workers=5)
+    assert custom.max_workers == 5
+
+
+def test_max_workers_rejects_below_one():
+    """Fix 2b: a max_workers < 1 is rejected by the validator."""
+    with pytest.raises(ValueError, match="max_workers must be >= 1"):
+        UtermServerConfig(max_workers=0)
