@@ -82,6 +82,7 @@ async def test_policy_context_fields() -> None:
     ws.state = MagicMock()
     principal = MagicMock()
     principal.subject_id = "user-123"
+    principal.roles = frozenset({"operator"})
     ws.state.uterm_principal = principal
 
     worker_ws = AsyncMock()
@@ -101,7 +102,9 @@ async def test_policy_context_fields() -> None:
     assert ctx.client_id == "user-123"
     assert ctx.role == "operator"
     assert ctx.action == "input"
-    assert ctx.metadata == {"principal": principal}
+    # M2: metadata carries an allow-listed JSON-safe projection of the principal,
+    # not the raw object (which is not JSON-serializable for the webhook gates).
+    assert ctx.metadata == {"principal": {"subject_id": "user-123", "roles": ["operator"]}}
     assert captured_data == ["ls -la\n"]
 
 
