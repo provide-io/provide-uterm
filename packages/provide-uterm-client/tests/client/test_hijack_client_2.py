@@ -221,6 +221,10 @@ class TestSessionAPI:
 
     async def test_health(self) -> None:
         app = self._make_server_app()
+        # ASGITransport does not run the app lifespan, so mark the app ready to
+        # simulate a server whose startup has completed (uvicorn sets this in
+        # production). Without it, /api/health reports the "starting" 503 state.
+        app.state.uterm_ready = True
         async with self._server_client(app) as c:
             ok, data = await c.health()
         assert ok
