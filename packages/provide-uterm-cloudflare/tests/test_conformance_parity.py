@@ -12,6 +12,7 @@ from provide.uterm.cloudflare.bridge.hijack import HijackCoordinator
 from provide.uterm.cloudflare.config import CloudflareConfig
 from provide.uterm.cloudflare.entry import Default
 from provide.uterm.cloudflare.state.store import SqliteStateStore
+
 from provide.uterm.tunnel.token_hash import hash_token
 
 
@@ -22,7 +23,7 @@ def _make_default(env_attrs: dict[str, object] | None = None) -> Default:
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-        "WORKER_BEARER_TOKEN": "test-worker-token",
+        "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
     }
     if env_attrs:
         attrs.update(env_attrs)

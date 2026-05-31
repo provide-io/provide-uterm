@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import provide.uterm.cloudflare.cf_types  # noqa: F401
+
 from provide.uterm.tunnel.token_hash import hash_token
 
 # ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="test-worker-token",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         )
         return SessionRuntime(ctx, env)
 
@@ -158,7 +159,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="key",
-            WORKER_BEARER_TOKEN="global-bearer",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         )
         rt = SessionRuntime(ctx, env)
         rt._tunnel_worker_token_hash = hash_token("tunnel-secret")
@@ -211,7 +212,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="t",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
             TUNNEL_TOKEN_TRANSPORT="cookie",
         )
         rt = SessionRuntime(ctx, env)
@@ -241,7 +242,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="t",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
             TUNNEL_TOKEN_TRANSPORT="query",
         )
         rt = SessionRuntime(ctx, env)
@@ -271,7 +272,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="t",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
             TUNNEL_IP_BINDING="true",
         )
         rt = SessionRuntime(ctx, env)
@@ -306,7 +307,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="t",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
             TUNNEL_IP_BINDING="true",
         )
         rt = SessionRuntime(ctx, env)
@@ -341,7 +342,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="t",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         )
         rt = SessionRuntime(ctx, env)
         assert rt._issued_ip is None
@@ -364,7 +365,7 @@ class TestSessionRuntimeGaps:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-            WORKER_BEARER_TOKEN="t",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
             TUNNEL_IP_BINDING="true",
         )
         rt = SessionRuntime(ctx, env)

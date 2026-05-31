@@ -43,7 +43,7 @@ def _make_runtime_with_token(token: str | None = None, mode: str = "dev") -> Ses
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": _JWT_KEY,
-        "WORKER_BEARER_TOKEN": token if token is not None else "test-worker-token",
+        "WORKER_BEARER_TOKEN": token if token is not None else "test-worker-token-padded-to-32xyz",
     }
     rt = SessionRuntime(ctx, SimpleNamespace(**env_kwargs))
     rt.config.jwt.mode = mode
@@ -94,7 +94,7 @@ def _fake_js_module() -> ModuleType:
 @pytest.mark.asyncio
 async def test_browser_ws_upgrade_blocked_for_private_session() -> None:
     """Browser WS upgrade to a private session returns 403 for a non-owner viewer."""
-    runtime = _make_runtime_with_token(token="worker-token", mode="jwt")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
     runtime.meta["visibility"] = "private"
     runtime.meta["owner"] = "alice"
 
@@ -115,7 +115,7 @@ async def test_browser_ws_upgrade_blocked_for_private_session() -> None:
 @pytest.mark.asyncio
 async def test_browser_ws_upgrade_allowed_for_operator_visibility_with_operator_role() -> None:
     """Browser WS upgrade to an operator-visibility session succeeds for an operator."""
-    runtime = _make_runtime_with_token(token="worker-token", mode="jwt")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
     runtime.meta["visibility"] = "operator"
     runtime.meta["owner"] = "alice"
 
@@ -135,7 +135,7 @@ async def test_browser_ws_upgrade_allowed_for_operator_visibility_with_operator_
 @pytest.mark.asyncio
 async def test_browser_ws_upgrade_allowed_for_private_session_with_admin_role() -> None:
     """Admin browser WS is allowed through a private session without ownership check."""
-    runtime = _make_runtime_with_token(token="worker-token", mode="jwt")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
     runtime.meta["visibility"] = "private"
     runtime.meta["owner"] = "alice"
 
@@ -155,7 +155,7 @@ async def test_browser_ws_upgrade_allowed_for_private_session_with_admin_role() 
 @pytest.mark.asyncio
 async def test_browser_ws_upgrade_blocked_for_operator_session_with_viewer_role() -> None:
     """Browser WS upgrade to an operator-visibility session returns 403 for a viewer."""
-    runtime = _make_runtime_with_token(token="worker-token", mode="jwt")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
     runtime.meta["visibility"] = "operator"
     runtime.meta["owner"] = "alice"
 
@@ -185,11 +185,11 @@ async def test_raw_ws_upgrade_in_jwt_mode_accepts_bearer_token() -> None:
     Regression: previously /ws/raw/ fell through to JWT resolution, causing
     401 'Not enough segments' when the bearer token was not a valid JWT.
     """
-    runtime = _make_runtime_with_token(token="raw-worker-token", mode="jwt")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
 
     req = _Req(
         "https://example.invalid/ws/raw/test-worker/term",
-        headers={"Upgrade": "websocket", "Authorization": "Bearer raw-worker-token"},
+        headers={"Upgrade": "websocket", "Authorization": "Bearer test-worker-token-padded-to-32xyz"},
     )
 
     sys.modules["js"] = _fake_js_module()
@@ -203,7 +203,7 @@ async def test_raw_ws_upgrade_in_jwt_mode_accepts_bearer_token() -> None:
 @pytest.mark.asyncio
 async def test_raw_ws_upgrade_in_jwt_mode_rejects_wrong_token() -> None:
     """/ws/raw/ with a wrong bearer token returns 403 in JWT mode."""
-    runtime = _make_runtime_with_token(token="correct-token", mode="jwt")
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
 
     req = _Req(
         "https://example.invalid/ws/raw/test-worker/term",

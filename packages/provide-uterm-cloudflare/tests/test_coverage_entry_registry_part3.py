@@ -31,7 +31,7 @@ def _make_default(env_attrs: dict | None = None):
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-        "WORKER_BEARER_TOKEN": "test-worker-token",
+        "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
     }
     force_dev = not (env_attrs and env_attrs.get("AUTH_MODE") == "jwt")
     if env_attrs:
@@ -116,7 +116,7 @@ async def test_route_request_cf_service_token_header_does_not_bypass_jwt() -> No
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="uterm-test-secret-32-byte-minimum-key",
-            WORKER_BEARER_TOKEN="tok",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         )
     )
 

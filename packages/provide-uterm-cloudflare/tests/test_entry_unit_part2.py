@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 from provide.uterm.cloudflare.cf_types import Response
 from provide.uterm.cloudflare.entry import Default
 from provide.uterm.cloudflare.entry.registry import _extract_worker_id
+
 from provide.uterm.tunnel.token_hash import hash_token
 
 # ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ def _make_default(env_attrs: dict | None = None) -> Default:
         "AUTH_MODE": "jwt",
         "JWT_ALGORITHMS": "HS256",
         "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-        "WORKER_BEARER_TOKEN": "test-worker-token",
+        "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
     }
     # Callers that explicitly request jwt mode want real enforcement; otherwise the
     # helper simulates the legacy open-access ("dev") path via direct config mutation.
@@ -305,7 +306,7 @@ def _make_jwt_default() -> Default:
             AUTH_MODE="jwt",
             JWT_ALGORITHMS="HS256",
             JWT_PUBLIC_KEY_PEM="uterm-test-secret-32-byte-minimum-key",
-            WORKER_BEARER_TOKEN="test-worker-token",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         )
     )
 
@@ -452,7 +453,7 @@ async def test_default_fetch_profiles_jwt_mode_no_token() -> None:
             "AUTH_MODE": "jwt",
             "JWT_ALGORITHMS": "HS256",
             "JWT_PUBLIC_KEY_PEM": "test-key",
-            "WORKER_BEARER_TOKEN": "tok",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
             "SESSION_REGISTRY": kv,
         }
     )
@@ -467,7 +468,12 @@ async def test_resolve_principal_id_no_token() -> None:
     from provide.uterm.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+        SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="k",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+        )
     )
     result = await _resolve_principal_id(SimpleNamespace(headers=SimpleNamespace(get=lambda _k, d=None: d)), config)
     assert result == "anonymous"
@@ -479,7 +485,12 @@ async def test_resolve_principal_id_invalid_token() -> None:
     from provide.uterm.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+        SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="k",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+        )
     )
     req = SimpleNamespace(
         headers=SimpleNamespace(get=lambda k, d=None: "Bearer invalid-token" if k.lower() == "authorization" else d)
@@ -497,7 +508,12 @@ async def test_resolve_principal_id_valid_token() -> None:
     secret = "a-sufficiently-long-secret-key-for-hs256"
     token = pyjwt.encode({"sub": "alice", "exp": 9999999999}, secret, algorithm="HS256")
     config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM=secret, WORKER_BEARER_TOKEN="t")
+        SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM=secret,
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+        )
     )
     req = SimpleNamespace(
         headers=SimpleNamespace(get=lambda k, d=None: f"Bearer {token}" if k.lower() == "authorization" else d)
@@ -518,7 +534,12 @@ async def test_resolve_principal_id_cf_access_email_header() -> None:
     from provide.uterm.cloudflare.entry.auth import _resolve_principal_id
 
     config = CloudflareConfig.from_env(
-        SimpleNamespace(AUTH_MODE="jwt", JWT_ALGORITHMS="HS256", JWT_PUBLIC_KEY_PEM="k", WORKER_BEARER_TOKEN="t")
+        SimpleNamespace(
+            AUTH_MODE="jwt",
+            JWT_ALGORITHMS="HS256",
+            JWT_PUBLIC_KEY_PEM="k",
+            WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
+        )
     )
     req = SimpleNamespace(
         headers=SimpleNamespace(

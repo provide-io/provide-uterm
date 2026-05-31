@@ -42,7 +42,7 @@ def _make_env() -> SimpleNamespace:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="test-worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
     )
 
 
@@ -263,7 +263,7 @@ def test_config_from_env_role_map_non_dict_json_ignored() -> None:
     env = SimpleNamespace(
         AUTH_MODE="jwt",
         JWT_PUBLIC_KEY_PEM="pem",
-        WORKER_BEARER_TOKEN="t",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
         JWT_ROLE_MAP='["admin", "operator"]',
     )
     cfg = CloudflareConfig.from_env(env)

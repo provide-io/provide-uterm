@@ -28,7 +28,7 @@ def _make_runtime() -> SessionRuntime:
             "AUTH_MODE": "jwt",
             "JWT_ALGORITHMS": "HS256",
             "JWT_PUBLIC_KEY_PEM": "test-secret-key-32-bytes-minimum!",
-            "WORKER_BEARER_TOKEN": "test-worker-token",
+            "WORKER_BEARER_TOKEN": "test-worker-token-padded-to-32xyz",
         },
     )
     runtime._alarm_calls = alarm_calls  # expose for assertions

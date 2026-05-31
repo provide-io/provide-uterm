@@ -42,7 +42,7 @@ def _make_env(mode: str = "jwt") -> SimpleNamespace:
         AUTH_MODE="jwt",
         JWT_ALGORITHMS="HS256",
         JWT_PUBLIC_KEY_PEM="test-secret-key-32-bytes-minimum!",
-        WORKER_BEARER_TOKEN="test-worker-token",
+        WORKER_BEARER_TOKEN="test-worker-token-padded-to-32xyz",
     )
 
 
