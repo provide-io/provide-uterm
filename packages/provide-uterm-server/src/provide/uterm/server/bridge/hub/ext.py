@@ -10,11 +10,11 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
-from opentelemetry.propagate import inject
 from pydantic import BaseModel, Field
 
 from provide.telemetry import event
 from provide.uterm.server.egress import assert_webhook_target_allowed
+from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhook_signing import build_webhook_signature
 
 
@@ -320,9 +320,9 @@ def _build_webhook_headers(secret: str | None, body: bytes) -> dict[str, str]:
         ts = str(time.time())
         headers["X-Uterm-Timestamp"] = ts
         headers["X-Uterm-Signature"] = build_webhook_signature(secret, body, ts)
-    # Propagate the active W3C trace context (traceparent/tracestate) onto the
-    # outbound governance webhook so distributed traces survive the hop. No-op
-    # when there is no active recording span context. Covers all four gate
-    # classes, which share this builder.
-    inject(headers)
+    # Propagate the active W3C trace context (traceparent) onto the outbound
+    # governance webhook so distributed traces survive the hop. Via
+    # provide.telemetry (OpenTelemetry-optional) — no-op when no span is active.
+    # Covers all four gate classes, which share this builder.
+    inject_trace_context(headers)
     return headers
