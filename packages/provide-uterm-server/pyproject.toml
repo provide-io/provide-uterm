@@ -30,6 +30,10 @@ all = [
     "fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=16.0",
     "textual>=0.50", "httpx>=0.27", "asyncssh>=2.22.0",
     "provide-uterm-annotation>=0.4.0",
+    # core's emulator dep — declared here so `uv sync --extra all` installs it
+    # from the lock instead of a side-channel `uv pip install pyte` that
+    # escapes UV_FROZEN (unpinned, hash-unverified).
+    "pyte>=0.8",
 ]
 dev = [
     "pytest>=9.0",

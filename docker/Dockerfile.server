@@ -67,12 +67,13 @@ COPY packages/provide-uterm-cloudflare/ packages/provide-uterm-cloudflare/
 COPY packages/provide-uterm-platform/ packages/provide-uterm-platform/
 
 # Install the server with all extras (pulls core + client + annotation workspace
-# deps from the lock) NON-editable so the members are baked into /app/.venv and
-# the runtime stage needs only the venv, then add core's `emulator` dep (pyte).
+# deps AND core's `emulator` dep pyte, now declared in server[all], from the
+# lock) NON-editable so the members are baked into /app/.venv and the runtime
+# stage needs only the venv. No side-channel `uv pip install pyte` — that
+# escaped UV_FROZEN (unpinned/hash-unverified); pyte is now in uv.lock.
 # NEEDS-BUILD-VALIDATION: confirm /app/.venv matches the previous
 # `[emulator]`/`[all]` surface and exposes the `uterm` CLI.
-RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all \
-    && uv pip install --python /app/.venv pyte
+RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
 
 # ---- runtime stage ----------------------------------------------------------
 FROM python:3.11-slim AS runtime
