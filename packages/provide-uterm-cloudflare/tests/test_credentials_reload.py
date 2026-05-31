@@ -8,9 +8,9 @@
 Covers every branch:
 - TTL cache: skips KV when loaded recently
 - Loads all four hash fields from KV on first call
-- Revocation: hashes cleared when KV returns null values
+- Revocation: hashes cleared when KV returns a present-but-nulled entry
 - Survives hibernation: loads even when _meta_loaded is True
-- KV entry absent: clears hashes to None
+- KV entry transiently absent: KEEPS last-known hashes (no false revocation)
 - KV binding absent: sets _credentials_loaded_at, no crash
 - KV read raises: exception swallowed, no crash
 """
@@ -200,13 +200,20 @@ async def test_ttl_cache_prevents_redundant_kv_reads() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. KV returns None (missing entry) — clears hashes
+# 5. KV transiently missing (key absent) — KEEPS last-known hashes
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_kv_missing_entry_clears_hashes() -> None:
-    """When KV returns None for the session key, all hashes are set to None."""
+async def test_kv_transient_miss_keeps_last_known_hashes() -> None:
+    """L33: when KV returns None for the session key (a transient miss, not an
+    explicit revoke), the last-known hashes are KEPT — nulling them would cause
+    up to _CREDENTIAL_TTL_S of false revocation for a live session.
+
+    A real revoke writes a *present* entry with nulled hash fields (covered by
+    ``test_revocation_takes_effect_after_ttl_expiry``); only that path nulls the
+    in-memory hashes.
+    """
     rt = _make_runtime("w5")
 
     # Pre-populate hashes as if previously loaded
@@ -218,15 +225,17 @@ async def test_kv_missing_entry_clears_hashes() -> None:
     # Force TTL expiry
     rt._credentials_loaded_at = 0.0
 
-    # KV has no entry for this session
+    # KV has no entry for this session (transient miss / not yet propagated)
     rt.env.SESSION_REGISTRY = _make_fake_kv(None)
 
     await rt._ensure_credentials()
 
-    assert rt._tunnel_worker_token_hash is None
-    assert rt._share_token_hash is None
-    assert rt._control_token_hash is None
-    assert rt._issued_ip is None
+    # Hashes are unchanged — auth keeps working for this session.
+    assert rt._tunnel_worker_token_hash == "stale-worker-hash"
+    assert rt._share_token_hash == "stale-share-hash"
+    assert rt._control_token_hash == "stale-control-hash"
+    assert rt._issued_ip == "9.9.9.9"
+    # The load timestamp is still stamped so the TTL cache works.
     assert rt._credentials_loaded_at is not None
 
 
