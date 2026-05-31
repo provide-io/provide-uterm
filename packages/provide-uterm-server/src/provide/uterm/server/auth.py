@@ -431,6 +431,13 @@ class WebhookIdentityProvider(IdentityProvider):
                 exc,
                 self.on_failure,
             )
+            # Surface the fail-open/attack signal in the structured audit
+            # trail. Deliberately exclude the signing secret and raw request
+            # headers from the detail so they never reach the audit log.
+            audit_event(
+                "auth.webhook_idp_failure",
+                detail={"url": self.url, "on_failure": self.on_failure, "error": str(exc)},
+            )
             if self.on_failure == "viewer":
                 return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
             return None

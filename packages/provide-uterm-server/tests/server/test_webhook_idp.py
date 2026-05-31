@@ -190,6 +190,42 @@ async def test_webhook_idp_keeps_legitimate_role():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_webhook_idp_failure_emits_audit_event(monkeypatch):
+    """Fix 1g: a webhook-IDP failure emits a structured audit event so the
+    fail-open/attack signal lands in the audit trail, not just a log warning."""
+    import provide.uterm.server.auth as auth_mod
+
+    url = "https://auth.example.com/resolve"
+    idp = WebhookIdentityProvider(url=url, on_failure="deny")
+
+    respx.post(url).mock(side_effect=httpx.ConnectError("network down"))
+
+    captured: list[tuple[str, dict]] = []
+
+    def _spy_audit(action: str, **kwargs) -> None:
+        captured.append((action, kwargs))
+
+    monkeypatch.setattr(auth_mod, "audit_event", _spy_audit)
+
+    class MockConnection:
+        headers = {}
+        cookies = {}
+
+    principal = await idp.resolve_principal(MockConnection())
+    assert principal is None
+
+    actions = [a for a, _ in captured]
+    assert "auth.webhook_idp_failure" in actions
+    detail = next(kw["detail"] for a, kw in captured if a == "auth.webhook_idp_failure")
+    assert detail["url"] == url
+    assert detail["on_failure"] == "deny"
+    assert "error" in detail
+    # The signed secret must never appear in the audit detail.
+    assert "secret" not in detail
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_webhook_idp_no_secret_sends_no_signing_headers():
     """When no secret is configured, no signing headers are sent."""
     url = "https://auth.example.com/resolve"
