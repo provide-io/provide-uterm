@@ -189,6 +189,19 @@ def create_server_app(
         "hijack_acquires_total": 0,
         "hijack_releases_total": 0,
         "hijack_steps_total": 0,
+        # Rate-limit drop counters (websocket browser + REST acquire/send/step)
+        "ws_browser_rate_limited_total": 0,
+        "ws_browser_control_rate_limited_total": 0,
+        "rest_acquire_rate_limited_total": 0,
+        "rest_send_rate_limited_total": 0,
+        "rest_step_rate_limited_total": 0,
+        # Webhook delivery failure counters
+        "webhook_delivery_blocked_total": 0,
+        "webhook_auto_unregistered_total": 0,
+        "webhook_delivery_failed_total": 0,
+        "webhook_delivery_giving_up_total": 0,
+        # Event-bus subscriber drop counter
+        "event_bus_subscriber_drop_total": 0,
     }
     # Token state values are heterogeneous (str token values, float expiries,
     # int counters); the registry expects ``dict[str, object]`` per-session.
@@ -484,7 +497,7 @@ def create_server_app(
         on_resume=_on_resume,
         browser_rate_limit_per_sec=config.browser_rate_limit_per_sec,
         max_connections_per_principal=config.max_connections_per_principal,
-        event_bus=EventBus(),
+        event_bus=EventBus(on_metric=_inc_metric),
         policy_gate=policy_gate,
         identity_provider=idp,
         delegate_roles=getattr(config.auth, "delegate_roles", True),
@@ -496,7 +509,10 @@ def create_server_app(
     from provide.uterm.server.bridge.fanout import FanOutController, InMemoryFanOutStore
 
     setattr(hub, "fan_out_controller", FanOutController(hub=hub, store=InMemoryFanOutStore()))  # noqa: B010
-    webhook_manager = WebhookManager(allow_loopback_destinations=config.webhooks.allow_loopback_destinations)
+    webhook_manager = WebhookManager(
+        allow_loopback_destinations=config.webhooks.allow_loopback_destinations,
+        on_metric=_inc_metric,
+    )
     # Annotation detector scans snapshot/send text for security-relevant patterns.
     # Imported lazily — annotation lives in the separate provide-uterm-annotation
     # package (optional extra "annotation"). If a deployment opts out of installing
@@ -688,9 +704,15 @@ def create_server_app(
             from provide.uterm.server.pam_integration import run_pam_integration
 
             pam_task = asyncio.create_task(run_pam_integration(config, registry))
+        # All startup work complete — mark the app as ready so /readyz and
+        # /api/health return 200.  If migrate() raised above (before we reach
+        # here), uterm_ready stays False for the lifetime of the process.
+        _app.state.uterm_ready = True
         try:
             yield
         finally:
+            # Signal draining readiness probes that the pod is going away.
+            _app.state.uterm_ready = False
             if pam_task is not None:
                 pam_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -724,6 +746,10 @@ def create_server_app(
     app.state.uterm_authz = authz
     app.state.uterm_hub = hub
     app.state.uterm_registry = registry
+    # Readiness flag — False until the lifespan finishes migrate() + task creation.
+    # /readyz and /api/health gate on this so a half-initialized pod never passes
+    # a Kubernetes readinessProbe.
+    app.state.uterm_ready = False
     app.state.uterm_metrics = metrics
     app.state.uterm_webhooks = webhook_manager
     app.state.uterm_profile_store = profile_store

@@ -138,7 +138,10 @@ class TestApiKeyAuthIntegration:
 
     @pytest.fixture()
     def api_key_client(self) -> tuple[TestClient, str]:
-        """Create app with API keys enabled in dev mode, return (client, raw_key)."""
+        """Create app with API keys enabled in dev mode, return (client, raw_key).
+
+        Uses context-manager so lifespan runs and uterm_ready=True before tests.
+        """
         config = default_server_config()
         config.auth.mode = "header"
         config.auth.header_mode_acknowledged = True
@@ -147,7 +150,8 @@ class TestApiKeyAuthIntegration:
         app = create_server_app(config)
         store = app.state.uterm_api_key_store
         raw_key, _record = store.create("integration-test", scopes=frozenset({"admin"}))
-        return TestClient(app), raw_key
+        with TestClient(app) as client:
+            yield client, raw_key
 
     def test_api_key_authenticates_request(self, api_key_client: tuple[TestClient, str]) -> None:
         client, raw_key = api_key_client
