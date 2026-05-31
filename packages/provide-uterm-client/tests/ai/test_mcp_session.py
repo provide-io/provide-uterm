@@ -100,6 +100,10 @@ async def _call(mcp: FastMCP, tool: str, args: dict[str, Any] | None = None) -> 
 class TestSessionTools:
     async def test_server_health_fields(self) -> None:
         app = _make_server_app()
+        # ASGITransport does not run the app lifespan, so mark the app ready to
+        # simulate a server whose startup has completed (uvicorn sets this in
+        # production). Without it, /api/health reports the "starting" 503 state.
+        app.state.uterm_ready = True
         mcp = _mcp_for_server(app)
         data = await _call(mcp, "server_health")
         assert data["success"] is True
