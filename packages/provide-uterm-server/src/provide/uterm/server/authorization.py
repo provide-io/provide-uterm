@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 import httpx
 
+from provide.uterm.server.egress import assert_webhook_target_allowed
 from provide.uterm.server.webhook_signing import build_webhook_signature
 
 if TYPE_CHECKING:
@@ -213,6 +214,7 @@ class WebhookAuthorizationProvider:
         }
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:
@@ -227,6 +229,7 @@ class WebhookAuthorizationProvider:
         payload = {"subject_id": principal.subject_id, "action": "capabilities"}
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:
@@ -284,6 +287,7 @@ class WebhookAuthorizationProvider:
         }
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
                 if resp.status_code == 200:

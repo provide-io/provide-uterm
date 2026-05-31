@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from provide.telemetry import event
+from provide.uterm.server.egress import assert_webhook_target_allowed
 from provide.uterm.server.webhook_signing import build_webhook_signature
 
 
@@ -72,6 +73,7 @@ class WebhookPolicyGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
@@ -124,6 +126,7 @@ class WebhookFanOutPolicyGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
@@ -218,6 +221,7 @@ class WebhookBehavioralAuditGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
@@ -263,6 +267,7 @@ class WebhookOutputPolicyGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
+            await assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
