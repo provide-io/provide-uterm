@@ -18,7 +18,7 @@ from __future__ import annotations
 import importlib.resources
 
 from provide.uterm.server.app.assets import _validate_frontend_assets
-from provide.uterm.server.app.auth import _validate_auth_config
+from provide.uterm.server.app.auth import _validate_auth_config, _validate_security_config
 from provide.uterm.server.app.connectors import _register_builtin_connectors
 from provide.uterm.server.app.control_plane import _build_control_plane
 from provide.uterm.server.app.factory import create_server_app
@@ -28,6 +28,7 @@ __all__ = [
     "_register_builtin_connectors",
     "_validate_auth_config",
     "_validate_frontend_assets",
+    "_validate_security_config",
     "create_server_app",
     "importlib",
 ]
