@@ -55,6 +55,10 @@ logger = get_logger(__name__)
 # Delay between FastAPI startup completing and the auto-start session loop
 # beginning.  Gives the event loop time to finish route/middleware init.
 _AUTO_START_DELAY_S = 0.15
+# Cadence for the approval-expiry sweep: time out expired PENDING approvals
+# (firing on_expired so hold buffers drain) and prune old terminal entries.
+# Matches the tunnel-token sweep cadence — both reap short-lived hold state.
+_APPROVAL_SWEEP_INTERVAL_S = 30
 
 # Environment variables that almost-always indicate a multi-replica
 # orchestrator. Their presence alone doesn't *prove* multi-replica
@@ -645,6 +649,17 @@ def create_server_app(
                 tunnel_tokens.pop(sid, None)
                 logger.info("tunnel_token_expired session_id=%s swept=true", sid)
 
+    async def _sweep_expired_approvals() -> None:
+        """Periodically time out expired pending approvals and prune old ones."""
+        while True:
+            await asyncio.sleep(_APPROVAL_SWEEP_INTERVAL_S)
+            try:
+                await hub.approval_store.cleanup_expired()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("approval_sweep_error")
+
     async def _sweep_control_plane_reap() -> None:
         """Periodically physically-delete expired/soft-deleted control-plane rows."""
         while True:
@@ -708,6 +723,7 @@ def create_server_app(
             )
         )
         sweep_task = asyncio.create_task(_sweep_expired_tunnel_tokens())
+        approval_sweep_task = asyncio.create_task(_sweep_expired_approvals())
         idle_sweep_task = asyncio.create_task(_sweep_idle_sessions())
         retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
         recording_retention_sweep_task = asyncio.create_task(_sweep_expired_recordings())
@@ -743,6 +759,7 @@ def create_server_app(
             recording_retention_sweep_task.cancel()
             retention_sweep_task.cancel()
             idle_sweep_task.cancel()
+            approval_sweep_task.cancel()
             sweep_task.cancel()
             boot_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -753,6 +770,8 @@ def create_server_app(
                 await boot_task
             with contextlib.suppress(asyncio.CancelledError):
                 await sweep_task
+            with contextlib.suppress(asyncio.CancelledError):
+                await approval_sweep_task
             with contextlib.suppress(asyncio.CancelledError):
                 await idle_sweep_task
             with contextlib.suppress(asyncio.CancelledError):

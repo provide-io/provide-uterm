@@ -219,3 +219,88 @@ async def test_node_registry_heartbeat_outer_exception_is_logged(monkeypatch: py
         # Allow the heartbeat loop to tick at least once so the exception is hit.
         await asyncio.sleep(0.05)
     # No exception means the outer except path absorbed the error as expected.
+
+
+@pytest.mark.asyncio
+async def test_approval_sweep_invokes_cleanup_expired(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The lifespan schedules _sweep_expired_approvals, which calls
+    hub.approval_store.cleanup_expired() at least once in production."""
+    config = default_server_config()
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    called = asyncio.Event()
+    real_cleanup = app.state.uterm_hub.approval_store.cleanup_expired
+
+    async def _spy_cleanup() -> None:
+        called.set()
+        await real_cleanup()
+
+    monkeypatch.setattr(app.state.uterm_hub.approval_store, "cleanup_expired", _spy_cleanup)
+
+    with TestClient(app):
+        await asyncio.wait_for(called.wait(), timeout=5.0)
+    assert called.is_set()
+
+
+@pytest.mark.asyncio
+async def test_approval_sweep_times_out_expired_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An expired PENDING approval added before startup is transitioned to TIMEOUT
+    by the scheduled approval sweep."""
+    import time
+
+    from provide.uterm.server.bridge.hub.approvals import (
+        ApprovalRequest,
+        ApprovalStatus,
+    )
+
+    config = default_server_config()
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    store = app.state.uterm_hub.approval_store
+    now = time.time()
+    req = ApprovalRequest(
+        id="req-expired",
+        worker_id="w1",
+        submitter_id="s1",
+        command="ls",
+        status=ApprovalStatus.PENDING,
+        created_at=now - 100,
+        expires_at=now - 50,
+    )
+    store.add(req)
+
+    async def _is_timeout() -> bool:
+        while store.get("req-expired").status != ApprovalStatus.TIMEOUT:
+            await asyncio.sleep(0.001)
+        return True
+
+    with TestClient(app):
+        assert await asyncio.wait_for(_is_timeout(), timeout=5.0)
+    assert store.get("req-expired").status == ApprovalStatus.TIMEOUT
+
+
+@pytest.mark.asyncio
+async def test_approval_sweep_error_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cleanup_expired that raises is caught by the sweep's except Exception
+    branch and does not crash the lifespan."""
+    config = default_server_config()
+
+    app = create_server_app(config, api_only=True)
+    _patch_fast_sleep(monkeypatch)
+
+    called = asyncio.Event()
+
+    async def _boom_cleanup() -> None:
+        called.set()
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(app.state.uterm_hub.approval_store, "cleanup_expired", _boom_cleanup)
+
+    with TestClient(app):
+        await asyncio.wait_for(called.wait(), timeout=5.0)
+    # No exception escaping means the except path absorbed the error.
+    assert called.is_set()
