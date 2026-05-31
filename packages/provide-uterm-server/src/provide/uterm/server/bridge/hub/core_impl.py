@@ -579,6 +579,8 @@ class TermHub:
         behavioral_audit_gate: BehavioralAuditGate | None = None,
         behavioral_thresholds: BehavioralThresholds | None = None,
         behavioral_audit_interval_s: float = 30.0,
+        max_buffer_chars: int = 40_000,
+        max_event_data_chars: int = 8192,
     ) -> None:
         self._lock = asyncio.Lock()
         # WorkerRegistry owns the worker map; the legacy ``_workers``
@@ -603,6 +605,8 @@ class TermHub:
         )
         self.max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self.max_input_chars = max(100, int(max_input_chars))
+        self.max_buffer_chars = max(self.max_input_chars, int(max_buffer_chars))
+        self.max_event_data_chars = max(256, int(max_event_data_chars))
         self.browser_rate_limit_per_sec = float(browser_rate_limit_per_sec)
         self.browser_control_rate_limit_per_sec = max(0.1, float(browser_control_rate_limit_per_sec))
         # RateLimiter owns the per-purpose REST token buckets; legacy

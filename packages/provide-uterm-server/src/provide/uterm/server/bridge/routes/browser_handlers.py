@@ -223,7 +223,11 @@ async def _handle_input(
         return
 
     if ws in hub._paused_browsers:
-        hub._hold_buffers[ws] = hub._hold_buffers.get(ws, "") + data
+        new_hold = hub._hold_buffers.get(ws, "") + data
+        if len(new_hold) > hub.max_buffer_chars:
+            await ws.send_text(encode_control(make_error_frame("Input too long.")))
+            return
+        hub._hold_buffers[ws] = new_hold
         return
 
     can_send = await hub.prepare_browser_input(worker_id, ws)

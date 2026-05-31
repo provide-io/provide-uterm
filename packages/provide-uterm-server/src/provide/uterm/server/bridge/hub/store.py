@@ -82,9 +82,18 @@ class StateStore:
     # -- Per-browser line buffer ----------------------------------------
 
     def buffer_and_get_command(self, ws: WebSocket, data: str) -> str | None:
-        """Accumulate input for *ws* and return the command if a newline is received."""
+        """Accumulate input for *ws* and return the command if a newline is received.
+
+        If the cumulative buffer length would exceed ``hub.max_buffer_chars``
+        the buffer is discarded and ``None`` is returned (no command).  This
+        bounds the per-connection memory footprint for clients that send large
+        newline-free payloads.
+        """
         hub = self._hub
         buf = hub._input_buffers.get(ws, "") + data
+        if len(buf) > hub.max_buffer_chars:
+            hub._input_buffers.pop(ws, None)
+            return None
         if "\r" in buf or "\n" in buf:
             hub._input_buffers.pop(ws, None)
             return buf
