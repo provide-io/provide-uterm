@@ -257,6 +257,10 @@ class WebhookOutputPolicyGate:
         self.timeout = timeout_s
 
     async def get_redaction_rules(self, context: PolicyContext) -> list[RedactionRule]:
+        # Imported lazily: redaction_defaults imports RedactionRule from this
+        # module, so a top-level import here would be circular.
+        from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
+
         payload = {
             "worker_id": context.worker_id,
             "client_id": context.client_id,
@@ -273,9 +277,13 @@ class WebhookOutputPolicyGate:
                 if resp.status_code == 200:
                     rules_data = resp.json().get("rules", [])
                     return [RedactionRule(**r) for r in rules_data]
-                return []
+                # Fail CLOSED: a non-200 webhook response must not silently
+                # disable redaction. Fall back to the built-in default ruleset
+                # so secrets keep getting redacted from terminal output.
+                return default_rules()
         except Exception:
-            return []
+            # Fail CLOSED on any transport/egress error — same rationale.
+            return default_rules()
 
 
 def _encode_webhook_payload(payload: dict[str, Any]) -> bytes:
