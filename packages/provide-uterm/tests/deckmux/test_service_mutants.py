@@ -164,3 +164,56 @@ async def test_handle_message_principal_without_subject_id_is_safe() -> None:
         {"type": MSG_PRESENCE_UPDATE, "total_lines": 7},
         principal=_NoSubjectPrincipal(),
     )
+
+
+async def test_presence_update_with_valid_selection_broadcasts() -> None:
+    """A small, well-formed ``selection`` is stored and broadcast."""
+    hub = _FakeHub()
+    ws = _FakeWS()
+    principal = _FakePrincipal(subject_id="sre:alice", display_name="Alice")
+    await hub.deckmux_on_browser_connect("w1", ws, "operator", principal=principal)
+    hub.broadcast.reset_mock()
+
+    sel = {"start": {"row": 1, "col": 2}, "end": {"row": 3, "col": 4}}
+    await hub.deckmux_handle_message(
+        "w1",
+        ws,
+        {"type": MSG_PRESENCE_UPDATE, "selection": sel},
+        principal=principal,
+    )
+
+    assert hub.broadcast.await_count == 1
+    _worker_id, payload = hub.broadcast.await_args.args
+    assert payload["selection"] == sel
+    user = hub._get_presence_store("w1").get("sre:alice")
+    assert user is not None
+    assert user.selection == sel
+
+
+async def test_presence_update_with_oversized_selection_is_dropped() -> None:
+    """An oversized ``selection`` must NOT raise out of the handler and must NOT broadcast.
+
+    The new size validation rejects the value; the service treats the rejected
+    update as a no-op (no store mutation, no broadcast) rather than tearing down
+    the session.
+    """
+    hub = _FakeHub()
+    ws = _FakeWS()
+    principal = _FakePrincipal(subject_id="sre:alice", display_name="Alice")
+    await hub.deckmux_on_browser_connect("w1", ws, "operator", principal=principal)
+    hub.broadcast.reset_mock()
+
+    big = {"blob": "x" * 4096}  # json well over the 2KB cap
+    # Must not raise.
+    await hub.deckmux_handle_message(
+        "w1",
+        ws,
+        {"type": MSG_PRESENCE_UPDATE, "selection": big},
+        principal=principal,
+    )
+
+    # No broadcast and no store mutation.
+    assert hub.broadcast.await_count == 0
+    user = hub._get_presence_store("w1").get("sre:alice")
+    assert user is not None
+    assert user.selection is None

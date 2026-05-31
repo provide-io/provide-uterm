@@ -106,6 +106,84 @@ def test_store_update_rejects_nonexistent_attrs() -> None:
         store.update("u1", nonexistent_field="value")
 
 
+# --- selection / pin shape + size validation (resource-exhaustion guard) ---
+
+
+def test_store_update_accepts_small_selection() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    sel = {"start": {"row": 1, "col": 2}, "end": {"row": 3, "col": 4}}
+    p = store.update("u1", selection=sel)
+    assert p is not None
+    assert p.selection == sel
+
+
+def test_store_update_accepts_small_pin() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    p = store.update("u1", pin={"line": 10})
+    assert p is not None
+    assert p.pin == {"line": 10}
+
+
+def test_store_update_accepts_none_selection() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    p = store.update("u1", selection=None, pin=None)
+    assert p is not None
+    assert p.selection is None
+    assert p.pin is None
+
+
+def test_store_update_rejects_oversized_selection() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    big = {"blob": "x" * 4096}  # json well over the 2KB cap
+    with pytest.raises(ValueError, match="invalid presence selection"):
+        store.update("u1", selection=big)
+    # The bad update must not have mutated stored state.
+    assert store.get("u1").selection is None  # type: ignore[union-attr]
+
+
+def test_store_update_rejects_oversized_pin() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    big = {"blob": "x" * 4096}
+    with pytest.raises(ValueError, match="invalid presence pin"):
+        store.update("u1", pin=big)
+
+
+def test_store_update_rejects_too_many_keys_selection() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    many = {f"k{i}": i for i in range(17)}  # > 16 top-level keys
+    with pytest.raises(ValueError, match="invalid presence selection"):
+        store.update("u1", selection=many)
+
+
+def test_store_update_rejects_non_dict_selection() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    with pytest.raises(ValueError, match="invalid presence selection"):
+        store.update("u1", selection="x")  # type: ignore[arg-type]
+
+
+def test_store_update_rejects_non_dict_pin_list() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    with pytest.raises(ValueError, match="invalid presence pin"):
+        store.update("u1", pin=[1, 2])  # type: ignore[arg-type]
+
+
+def test_store_update_accepts_exactly_max_keys_selection() -> None:
+    store = PresenceStore()
+    store.add("u1", "Alice", "#fff", "admin")
+    exactly = {f"k{i}": i for i in range(16)}  # == 16 top-level keys (boundary)
+    p = store.update("u1", selection=exactly)
+    assert p is not None
+    assert p.selection == exactly
+
+
 def test_store_remove() -> None:
     store = PresenceStore()
     store.add("u1", "Alice", "#fff", "admin")
