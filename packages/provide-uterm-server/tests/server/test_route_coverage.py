@@ -12,7 +12,10 @@ from provide.uterm.server import create_server_app, default_server_config
 def client():
     config = default_server_config()
     app = create_server_app(config)
-    return TestClient(app)
+    # Use context-manager form so the lifespan runs and uterm_ready=True before
+    # any test request.
+    with TestClient(app) as c:
+        yield c
 
 
 def test_api_metrics_route(client):

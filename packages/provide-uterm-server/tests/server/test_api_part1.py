@@ -44,14 +44,19 @@ def _make_token(sub: str = "user1", roles: list[str] | None = None) -> str:
 
 @pytest.fixture()
 def app_client() -> TestClient:
-    """TestClient with dev auth and the default shell session."""
+    """TestClient with dev auth and the default shell session.
+
+    Uses the context-manager form so the lifespan runs and ``uterm_ready``
+    is set to True before any test request is made.
+    """
     config = default_server_config()
     config.auth.mode = "header"
     config.auth.header_mode_acknowledged = True
     config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
     config.recording.directory = Path(tempfile.mkdtemp())
     app = create_server_app(config)
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client  # type: ignore[misc]
 
 
 @pytest.fixture()
@@ -143,6 +148,7 @@ def test_health_shows_startup_time_zero_when_missing() -> None:
 
     bare = FastAPI()
     bare.state.uterm_registry = object()  # type: ignore[assignment]
+    bare.state.uterm_ready = True  # simulate post-lifespan state
     bare.include_router(create_health_router())
     with TestClient(bare) as client:
         r = client.get("/api/health")

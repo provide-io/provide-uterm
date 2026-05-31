@@ -22,7 +22,7 @@ from provide.uterm import __version__
 
 
 def create_health_router() -> APIRouter:
-    """Return a router with ``/api/health`` and ``/healthz``."""
+    """Return a router with ``/api/health``, ``/healthz``, and ``/readyz``."""
     router = APIRouter()
 
     @router.get("/api/health")
@@ -32,6 +32,14 @@ def create_health_router() -> APIRouter:
         if registry is None:
             response.status_code = 503
             return {"status": "unavailable", "ok": False, "ready": False, "service": "uterm-server"}
+
+        # Gate on the readiness flag — set only after migrate() + background tasks
+        # succeed. A pod with registry attached but lifespan not yet finished
+        # (or migrate() failed) stays 503 here even though registry is non-None.
+        uterm_ready: bool = getattr(request.app.state, "uterm_ready", False)
+        if not uterm_ready:
+            response.status_code = 503
+            return {"status": "starting", "ok": False, "ready": False, "service": "uterm-server"}
 
         startup_time: float = getattr(request.app.state, "uterm_startup_time", 0.0)
         uptime_s = round(time.time() - startup_time, 2) if startup_time > 0 else 0.0
@@ -59,7 +67,21 @@ def create_health_router() -> APIRouter:
 
     @router.get("/healthz")
     async def healthz() -> dict[str, str]:
-        """Minimal liveness probe for Kubernetes — no dependencies, fast."""
+        """Minimal liveness probe for Kubernetes — no dependencies, always 200."""
         return {"status": "ok"}
+
+    @router.get("/readyz")
+    async def readyz(request: Request, response: Response) -> dict[str, str]:
+        """Readiness probe — 200 only after lifespan startup completes fully.
+
+        Returns 503 until ``app.state.uterm_ready`` is set True (which happens
+        after ``control_plane.migrate()`` succeeds and all background tasks are
+        created).  Use this for Kubernetes readinessProbe; use ``/healthz`` for
+        livenessProbe.
+        """
+        if getattr(request.app.state, "uterm_ready", False):
+            return {"status": "ready"}
+        response.status_code = 503
+        return {"status": "not_ready"}
 
     return router
