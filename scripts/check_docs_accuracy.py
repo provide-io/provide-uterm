@@ -267,6 +267,26 @@ def _structural_claim_violations(root: Path) -> list[str]:
                     f"{readme}:{line_no}: references removed 'dev' auth mode; current mode is 'dev_token'"
                 )
 
+    # --- 6. Auth modes documented AND implemented ---
+    # The supported auth modes are a security contract. Catch drift in EITHER
+    # direction: each canonical mode must be both documented on CLAUDE.md's
+    # "Auth modes" line and referenced (as a quoted literal) in the server auth
+    # source. Complements check #5 (which guards against the removed `dev`/`none`
+    # modes reappearing).
+    auth_modes = ("dev_token", "jwt", "header", "api_key", "webhook")
+    server_auth_src = root / "packages/provide-uterm-server/src/provide/uterm/server"
+    if claude_md.exists() and server_auth_src.is_dir():
+        claude_text = claude_md.read_text(encoding="utf-8")
+        auth_line = next((ln for ln in claude_text.splitlines() if "Auth modes:" in ln), "")
+        src_blob = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in server_auth_src.rglob("*.py"))
+        for mode in auth_modes:
+            if f"`{mode}`" not in auth_line:
+                violations.append(f"{claude_md}: 'Auth modes' line does not document the '{mode}' auth mode")
+            if f'"{mode}"' not in src_blob and f"'{mode}'" not in src_blob:
+                violations.append(
+                    f"{server_auth_src}: auth mode '{mode}' is documented but not referenced in the server auth source"
+                )
+
     return violations
 
 
