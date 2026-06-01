@@ -167,6 +167,153 @@ class TestAgentRegister:
         assert resp.json()["created"] is False
 
 
+class TestAgentRegisterPrivEsc:
+    """Regression tests for the worker-token register privilege-escalation.
+
+    A low-privilege worker token is accepted on ``POST /agent/{id}/register``
+    (a self-report route). Before the fix, that route merged the FULL
+    attacker-controlled body over ``AgentStatusBase``, letting a worker set
+    operator-authority command-queue fields (``pending_command_*``) — i.e.
+    inject a ``set_goal``/``set_directive`` operator command into ANY agent's
+    queue, which the ``status`` poll then delivers to the agent runtime.
+    """
+
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "pending_command_seq",
+            "pending_command_type",
+            "pending_command_payload",
+            "manager_command_history",
+            "is_hijacked",
+            "hijacked_by",
+            "hijacked_at",
+            "paused",
+        ],
+    )
+    def test_register_rejects_operator_fields(self, client, manager, field):
+        """A worker register that sets any operator-authority field is 422'd."""
+        injected = {
+            "pending_command_seq": 1,
+            "pending_command_type": "set_goal",
+            "pending_command_payload": {"goal": "PWNED"},
+            "manager_command_history": [{"seq": 1}],
+            "is_hijacked": True,
+            "hijacked_by": "attacker",
+            "hijacked_at": 1.0,
+            "paused": True,
+        }[field]
+        resp = client.post("/agent/victim/register", json={"state": "running", field: injected})
+        assert resp.status_code == 422
+        # The agent must NOT have been created from a rejected register.
+        assert "victim" not in manager.agents
+
+    def test_register_command_injection_rejected(self, client, manager):
+        """The full command-injection body (the exploit) is rejected outright."""
+        resp = client.post(
+            "/agent/victim/register",
+            json={
+                "state": "running",
+                "pending_command_type": "set_goal",
+                "pending_command_seq": 1,
+                "pending_command_payload": {"goal": "PWNED"},
+            },
+        )
+        assert resp.status_code == 422
+        assert "victim" not in manager.agents
+
+    def test_register_command_injection_on_existing_agent_rejected(self, client, manager):
+        """Worker register cannot overwrite an existing agent's command queue."""
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post(
+            "/agent/agent_000/register",
+            json={"state": "stopped", "pending_command_type": "set_goal", "pending_command_seq": 1},
+        )
+        assert resp.status_code == 422
+        # Existing record left untouched (no injected command).
+        assert manager.agents["agent_000"].pending_command_type is None
+        assert manager.agents["agent_000"].pending_command_seq == 0
+
+    def test_register_preserves_operator_set_pending_command(self, client, manager):
+        """An operator-set pending command survives a benign worker register.
+
+        ``base_payload`` carries the agent's real ``pending_command_*`` from
+        the stored record; because ``register`` no longer reads those keys from
+        the worker body, a worker self-report that omits them leaves the
+        operator's queued command intact.
+        """
+        agent = AgentStatusBase(agent_id="agent_000", state="running")
+        agent.pending_command_seq = 7
+        agent.pending_command_type = "set_directive"
+        agent.pending_command_payload = {"directive": "hold", "turns": 3}
+        manager.agents["agent_000"] = agent
+        resp = client.post("/agent/agent_000/register", json={"state": "recovering"})
+        assert resp.status_code == 200
+        updated = manager.agents["agent_000"]
+        assert updated.state == "recovering"
+        assert updated.pending_command_seq == 7
+        assert updated.pending_command_type == "set_directive"
+        assert updated.pending_command_payload == {"directive": "hold", "turns": 3}
+
+    def test_legitimate_self_report_still_works(self, client, manager):
+        """A worker register with only allowed self-report fields succeeds."""
+        resp = client.post(
+            "/agent/agent_self/register",
+            json={"state": "running", "session_id": "sess-1", "pid": 4242, "last_action": "trade"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["created"] is True
+        created = manager.agents["agent_self"]
+        assert created.state == "running"
+        assert created.session_id == "sess-1"
+        assert created.pid == 4242
+        assert created.last_action == "trade"
+        # Operator fields default — not set by the worker.
+        assert created.pending_command_seq == 0
+        assert created.pending_command_type is None
+
+    def test_operator_set_goal_still_queues_command(self, client, manager):
+        """The operator set-goal route is unchanged and still queues a command."""
+        manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
+        resp = client.post("/agent/agent_000/set-goal", params={"goal": "explore"})
+        assert resp.status_code == 200
+        agent = manager.agents["agent_000"]
+        assert agent.pending_command_type == "set_goal"
+        assert agent.pending_command_seq == 1
+        assert agent.pending_command_payload == {"goal": "explore"}
+        # And the next status poll delivers it as a manager command.
+        poll = client.post("/agent/agent_000/status", json={"state": "running"})
+        assert poll.json()["manager_command"]["type"] == "set_goal"
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        ["weird id", "bad$char", "with space", "dot.char"],
+    )
+    def test_register_rejects_bad_agent_id(self, client, manager, bad_id):
+        """Non-slash bad chars are 422'd by the agent_id pattern (^[\\w\\-]+$).
+
+        This is parity with the status route, which already had the pattern.
+        """
+        resp = client.post(f"/agent/{bad_id}/register", json={"state": "running"})
+        assert resp.status_code == 422
+        # Parity check: the sibling status route rejects the same id identically.
+        assert client.post(f"/agent/{bad_id}/status", json={"state": "running"}).status_code == 422
+
+    @pytest.mark.parametrize("bad_id", ["a/b", "..%2f..%2fx"])
+    def test_register_rejects_slash_agent_id(self, client, manager, bad_id):
+        """Slash-containing ids never reach the handler (404 at routing), same
+        as the status route — neither path-injects nor auto-creates an agent."""
+        resp = client.post(f"/agent/{bad_id}/register", json={"state": "running"})
+        assert resp.status_code == 404
+        assert manager.agents == {}
+
+    def test_register_accepts_valid_agent_id(self, client, manager):
+        """A well-formed agent_id (word chars + hyphen) is accepted."""
+        resp = client.post("/agent/agent-007_x/register", json={"state": "running"})
+        assert resp.status_code == 200
+        assert "agent-007_x" in manager.agents
+
+
 class TestAgentStatusUpdate:
     def test_update_base_fields(self, client, manager):
         manager.agents["agent_000"] = AgentStatusBase(agent_id="agent_000", state="running")
