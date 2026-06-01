@@ -11,8 +11,6 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal
 
-from provide.uterm.server.bridge.hub import TermHub
-
 from provide.uterm.control_channel import (
     ControlChannelDecoder,
     ControlChannelProtocolError,
@@ -20,6 +18,7 @@ from provide.uterm.control_channel import (
     encode_control,
     encode_data,
 )
+from provide.uterm.server.bridge.hub import TermHub
 
 logger = logging.getLogger(__name__)
 

@@ -16,10 +16,10 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from provide.uterm.server.bridge.hub import TermHub
-from provide.uterm.server.bridge.models import WorkerTermState
 
 from provide.uterm.bridge.coordinator import HijackSession
+from provide.uterm.server.bridge.hub import TermHub
+from provide.uterm.server.bridge.models import WorkerTermState
 
 
 def _make_hub(**kwargs: Any) -> TermHub:

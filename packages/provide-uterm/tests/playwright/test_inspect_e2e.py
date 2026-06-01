@@ -24,10 +24,11 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from playwright.sync_api import Page, expect
+from starlette.responses import HTMLResponse
+
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.tunnel.fastapi_routes import register_tunnel_routes
 from provide.uterm.tunnel.protocol import CHANNEL_HTTP, encode_frame
-from starlette.responses import HTMLResponse
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 

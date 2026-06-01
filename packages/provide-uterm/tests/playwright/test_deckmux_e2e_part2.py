@@ -25,10 +25,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
-from provide.uterm.server.bridge.hub import TermHub
 from starlette.staticfiles import StaticFiles
 
 from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.server.bridge.hub import TermHub
 from tests.conftest import WorkerController
 
 SCREENSHOTS_DIR = Path("packages/provide-uterm/tests/playwright/screenshots")

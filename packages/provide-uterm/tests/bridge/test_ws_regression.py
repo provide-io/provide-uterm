@@ -18,6 +18,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from provide.uterm.client import connect_test_ws
+
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 

@@ -54,6 +54,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from playwright.sync_api import Page
+
 from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 
 if TYPE_CHECKING:

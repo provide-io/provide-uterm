@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
+
 from provide.uterm.server import create_server_app, default_server_config
 
 if TYPE_CHECKING:

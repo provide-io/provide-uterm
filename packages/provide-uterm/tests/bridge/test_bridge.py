@@ -13,7 +13,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from provide.uterm.server.bridge.worker_link import TermBridge, _to_ws_url
-
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 

@@ -18,9 +18,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from provide.uterm.server.bridge.hub import TermHub
-
 from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
+from provide.uterm.server.bridge.hub import TermHub
 from scripts.demos import (
     BASE_OUT,
     BrowserStep,
