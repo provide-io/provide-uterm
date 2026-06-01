@@ -1,6 +1,10 @@
 {
   "name": "provide-uterm-root",
   "private": true,
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  },
   "workspaces": [
     "packages/provide-uterm-frontend",
     "packages/provide-uterm-app"
