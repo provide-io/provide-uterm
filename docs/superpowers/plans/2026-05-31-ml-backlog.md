@@ -1,5 +1,11 @@
 # Enterprise-Hardening M/L Backlog — execution plan
 
+> **STATUS (2026-06-01): COMPLETE — every item below is MERGED, including the design-decision set
+> (1f, 1d, 5a, 5b, 5d) that the body of this doc still describes as "NEEDS DESIGN / pending".** Those five
+> merged after this plan was last edited: 1f/1d `5dbdbbe1`+`895c4fc2`, 5a `bb96a6e4`+`266e6953`+`ef3522cf`,
+> 5b `8a15d62e`+`55e2e798`, 5d `b83caa78`+`28f47c0c`. Full 83-finding coverage matrix (0 open):
+> `docs/coverage-audit-2026-06-01.md`. The text below is retained as the historical execution record.
+>
 > Source: `docs/enterprise-hardening-review-2026-05-29.md` (findings A–K). P0 + P0.5 (remaining highs)
 > + P1 (resource/resilience) are MERGED. This plan tracks the **still-open** items, verified against
 > `main` on 2026-05-31 (audit dedup'd the stale review doc). One TDD branch per cluster; independent

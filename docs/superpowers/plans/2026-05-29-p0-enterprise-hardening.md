@@ -5,6 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # P0 Enterprise-Hardening Remediations Implementation Plan
 
+> **STATUS (2026-06-01): MERGED.** All P0 tasks in this plan are complete on local `main`. Unchecked
+> `- [ ]` boxes below are historical (this plan predates the merge); the authoritative end-state is the
+> coverage matrix `docs/coverage-audit-2026-06-01.md` (0 of 83 findings open).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the seven mechanically-clear, GA-blocking findings from the 2026-05-29 enterprise review (`docs/enterprise-hardening-review-2026-05-29.md`) — each a small, behavior-preserving, fully-testable change.

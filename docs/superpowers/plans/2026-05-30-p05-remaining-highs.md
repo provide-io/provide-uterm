@@ -5,6 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # P0.5 — Remaining Mechanical Highs Implementation Plan
 
+> **STATUS (2026-06-01): MERGED.** All P0.5 remaining-high tasks are complete on local `main`. Unchecked
+> `- [ ]` boxes below are historical; authoritative end-state: `docs/coverage-audit-2026-06-01.md`
+> (all 16 HIGH findings fixed + code-spot-checked, 0 of 83 open).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Close four more high/medium findings from the 2026-05-29 review (`docs/enterprise-hardening-review-2026-05-29.md`) that are mechanical or safely-gated, building on the merged P0 work (`main` @ `6061101`).
