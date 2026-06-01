@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         WebSocketStreamReader,
         WebSocketStreamWriter,
     )
+    from provide.uterm.transports.ws_transport import WebSocketTransport
 
 __all__ = [
     "ChaosTransport",
@@ -36,6 +37,7 @@ __all__ = [
     "TelnetTransport",
     "WebSocketStreamReader",
     "WebSocketStreamWriter",
+    "WebSocketTransport",
     "start_ssh_server",
     "start_telnet_server",
 ]
@@ -53,6 +55,7 @@ def __getattr__(name: str) -> object:
         "start_telnet_server": "provide.uterm.transports.telnet",
         "WebSocketStreamReader": "provide.uterm.transports.websocket",
         "WebSocketStreamWriter": "provide.uterm.transports.websocket",
+        "WebSocketTransport": "provide.uterm.transports.ws_transport",
     }
     module_name = module_by_name.get(name)
     if module_name is None:
