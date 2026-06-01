@@ -211,6 +211,158 @@ async def test_connector_normal_ipv6_public_allowed() -> None:
 
 
 # ---------------------------------------------------------------------------
+# M4: embedded-IPv4-in-IPv6 forms bypass the metadata/private check.
+#
+# egress.py previously normalized ONLY ip.ipv4_mapped (::ffff:a.b.c.d).  Other
+# IPv6 forms that embed an IPv4 address (NAT64 well-known prefix 64:ff9b::/96,
+# 6to4 2002::/16, deprecated IPv4-compatible ::a.b.c.d) passed straight through
+# and were NOT decoded — so 64:ff9b::169.254.169.254 etc. bypassed the metadata
+# check.  In a NAT64-enabled IPv6-only cluster that is a real reachable SSRF.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_mapped() -> None:
+    """_decode_embedded_ipv4 returns the IPv4 for an IPv4-mapped IPv6 (::ffff:a.b.c.d)."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    result = _decode_embedded_ipv4(ipaddress.IPv6Address("::ffff:169.254.169.254"))
+    assert result == ipaddress.IPv4Address("169.254.169.254")
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_sixtofour() -> None:
+    """_decode_embedded_ipv4 returns the IPv4 for a 6to4 IPv6 (2002:a.b.c.d::)."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    result = _decode_embedded_ipv4(ipaddress.IPv6Address("2002:a9fe:a9fe::"))
+    assert result == ipaddress.IPv4Address("169.254.169.254")
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_nat64() -> None:
+    """_decode_embedded_ipv4 returns the IPv4 for the NAT64 well-known prefix (64:ff9b::a.b.c.d)."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    result = _decode_embedded_ipv4(ipaddress.IPv6Address("64:ff9b::169.254.169.254"))
+    assert result == ipaddress.IPv4Address("169.254.169.254")
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_compatible() -> None:
+    """_decode_embedded_ipv4 returns the IPv4 for a deprecated IPv4-compatible IPv6 (::a.b.c.d)."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    result = _decode_embedded_ipv4(ipaddress.IPv6Address("::169.254.169.254"))
+    assert result == ipaddress.IPv4Address("169.254.169.254")
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_loopback_not_decoded() -> None:
+    """::1 (loopback) must NOT be decoded as an embedded IPv4 (low bits are 1)."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    assert _decode_embedded_ipv4(ipaddress.IPv6Address("::1")) is None
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_unspecified_not_decoded() -> None:
+    """:: (unspecified) must NOT be decoded as an embedded IPv4 (low bits are 0)."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    assert _decode_embedded_ipv4(ipaddress.IPv6Address("::")) is None
+
+
+@pytest.mark.asyncio
+async def test_decode_embedded_ipv4_none_for_normal_ipv6() -> None:
+    """A normal global IPv6 has no embedded IPv4 form → None."""
+    import ipaddress
+
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
+    assert _decode_embedded_ipv4(ipaddress.IPv6Address("2606:4700::1111")) is None
+
+
+@pytest.mark.asyncio
+async def test_connector_nat64_metadata_blocked() -> None:
+    """NAT64 well-known-prefix metadata (64:ff9b::169.254.169.254) decodes to the
+    IPv4 metadata IP and must be blocked even with block_private=False."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_connector_target_allowed("64:ff9b::169.254.169.254", block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_connector_sixtofour_metadata_blocked() -> None:
+    """6to4 metadata (2002:a9fe:a9fe:: == 6to4 of 169.254.169.254) decodes and is blocked."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_connector_target_allowed("2002:a9fe:a9fe::", block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_connector_ipv4_compatible_metadata_blocked() -> None:
+    """IPv4-compatible metadata (::169.254.169.254) decodes and is blocked."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_connector_target_allowed("::169.254.169.254", block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_connector_nat64_private_blocked_when_flag() -> None:
+    """NAT64 of a private IPv4 (64:ff9b::10.0.0.1 → 10.0.0.1) is blocked when
+    block_private=True — the decoded IPv4 flows through the private-range check,
+    not just the metadata check."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="internal"):
+        await assert_connector_target_allowed("64:ff9b::10.0.0.1", block_private=True)
+
+
+@pytest.mark.asyncio
+async def test_connector_nat64_public_allowed_by_default() -> None:
+    """NAT64 of a public IPv4 (64:ff9b::8.8.8.8 → 8.8.8.8) is allowed when block_private=False."""
+    from provide.uterm.server.egress import assert_connector_target_allowed
+
+    await assert_connector_target_allowed("64:ff9b::8.8.8.8", block_private=False)
+
+
+# ---------------------------------------------------------------------------
+# DNS resolution failure must fail CLOSED (V-H1 review): an OSError /
+# socket.gaierror from the resolver must become EgressBlockedError, not
+# propagate out (→ HTTP 500) or hang.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connector_resolve_oserror_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A resolution OSError (e.g. socket.gaierror) must raise EgressBlockedError, not propagate."""
+    import socket
+
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+
+    monkeypatch.setattr(egress_mod, "_resolve_host", AsyncMock(side_effect=socket.gaierror("no such host")))
+    with pytest.raises(EgressBlockedError, match="could not resolve"):
+        await assert_connector_target_allowed("hostile-resolver.example.invalid", block_private=False)
+
+
+# ---------------------------------------------------------------------------
 # Route-level integration tests
 # ---------------------------------------------------------------------------
 
