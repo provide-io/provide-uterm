@@ -237,6 +237,62 @@ class TestComputeSecurityPosture:
         posture = compute_security_posture(config)
         assert "auth.webhook_idp_require_signed_response=false" not in posture["dev_opt_outs"]
 
+    def test_idp_response_replay_protected_always_true(self) -> None:
+        """L9: the response replay cache is always on → field is always True."""
+        config = ServerConfig(auth=AuthConfig(mode="dev_token"))
+        posture = compute_security_posture(config)
+        assert posture["idp_response_replay_protected"] is True
+
+    def test_webhook_replay_nonce_warning_when_not_required(self) -> None:
+        """L9: webhook IdP without require_response_nonce → per-instance-cache warning."""
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_secret="uterm-test-secret-32-byte-minimum-key",  # pragma: allowlist secret
+                webhook_idp_require_response_nonce=False,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert any("per-instance" in w.lower() and "nonce" in w.lower() for w in posture["warnings"])
+
+    def test_webhook_replay_nonce_warning_absent_when_required(self) -> None:
+        """L9: enabling require_response_nonce suppresses the per-instance warning."""
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_secret="uterm-test-secret-32-byte-minimum-key",  # pragma: allowlist secret
+                webhook_idp_require_response_nonce=True,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert not any("per-instance" in w.lower() and "nonce" in w.lower() for w in posture["warnings"])
+
+    def test_webhook_replay_nonce_warning_absent_when_local_idp(self) -> None:
+        """L9: the nonce warning only applies to the webhook IdP."""
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="local",
+                webhook_idp_require_response_nonce=False,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert not any("per-instance" in w.lower() and "nonce" in w.lower() for w in posture["warnings"])
+
+    def test_replay_posture_is_json_serializable(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_secret="uterm-test-secret-32-byte-minimum-key",  # pragma: allowlist secret
+                webhook_idp_require_response_nonce=False,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert json.loads(json.dumps(posture)) == posture
+
     def test_webhook_unsigned_posture_is_json_serializable(self) -> None:
         config = ServerConfig(
             auth=AuthConfig(

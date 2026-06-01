@@ -81,6 +81,18 @@ def compute_security_posture(config: ServerConfig) -> dict[str, object]:
         dev_opt_outs.append("auth.webhook_idp_require_signed_response=false")
         warnings.append("webhook IdP responses are not signature-verified — a forged response can mint a principal")
 
+    # L9: webhook-IdP response replay protection. The always-on per-instance
+    # replay cache blocks verbatim replay within a single process, but does NOT
+    # cover HA / multi-node (a captured response can be replayed against another
+    # instance whose cache hasn't seen it). The per-request nonce binding closes
+    # that gap; warn when it's off so HA operators know to enable it.
+    require_response_nonce = bool(getattr(config.auth, "webhook_idp_require_response_nonce", False))
+    if identity_provider == "webhook" and not require_response_nonce:
+        warnings.append(
+            "webhook IdP response replay is blocked only by a per-instance cache (not shared across nodes) — "
+            "enable auth.webhook_idp_require_response_nonce for HA / strict request-binding"
+        )
+
     # header_mode_acknowledged only weakens posture in header auth mode.
     if auth_mode == "header" and config.auth.header_mode_acknowledged:
         dev_opt_outs.append("auth.header_mode_acknowledged")
@@ -122,6 +134,11 @@ def compute_security_posture(config: ServerConfig) -> dict[str, object]:
         # secure-by-default True). Defensive getattr keeps the report JSON-safe
         # for any embedder config object that predates the field.
         "idp_signing_required": getattr(config.auth, "webhook_idp_require_signed_response", None),
+        # L9: the webhook-IdP response replay cache is always on, so verbatim
+        # replay within an instance is always blocked. (The nonce binding —
+        # webhook_idp_require_response_nonce — extends this to HA; surfaced via
+        # the warning above rather than a separate boolean.)
+        "idp_response_replay_protected": True,
         # Compliance: whether the tamper-evident WORM audit chain is enabled.
         "audit_chain_enabled": audit_chain_enabled,
         "warnings": warnings,

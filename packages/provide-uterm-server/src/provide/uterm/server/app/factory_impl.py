@@ -513,6 +513,7 @@ def create_server_app(
             require_signed_response=config.auth.webhook_idp_require_signed_response,
             forward_headers=frozenset(forward_headers),
             forward_cookies=frozenset(forward_cookies),
+            require_response_nonce=config.auth.webhook_idp_require_response_nonce,
         )
     else:
         idp = LocalIdentityProvider(config.auth, api_key_store=api_key_store)

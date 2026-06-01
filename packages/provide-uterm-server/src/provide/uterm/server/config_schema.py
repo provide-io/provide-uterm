@@ -88,6 +88,13 @@ class AuthConfig(ServerBaseModel):
     # so a MITM/compromised transport cannot forge a principal; needs a shared
     # secret (webhook_idp_secret). Set False to trust unsigned responses (legacy).
     webhook_idp_require_signed_response: bool = True
+    # L9 layer 3: require the webhook IdP RESPONSE to echo the per-request nonce
+    # (matching) — cryptographically binding the response to the request. The
+    # always-on per-instance replay cache already blocks verbatim replay within
+    # a single process; this flag adds the binding needed for HA / multi-node
+    # deployments where the cache isn't shared. Default False keeps an IdP that
+    # doesn't echo the nonce working (replay cache remains the defense).
+    webhook_idp_require_response_nonce: bool = False
     # 1d: extra request headers the provider may forward to the external IdP, on
     # top of the always-forwarded auth credentials (authorization, x-api-key,
     # principal/role headers). Operator-extensible; matched case-insensitively.

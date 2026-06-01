@@ -33,3 +33,14 @@ def test_auth_config_default_values():
     assert config.webhook_idp_url is None
     assert config.webhook_idp_secret is None
     assert config.webhook_idp_timeout_s == 2.0
+
+
+def test_auth_config_require_response_nonce_defaults_false():
+    """L9: the enforce flag defaults False (backward-compat)."""
+    assert AuthConfig().webhook_idp_require_response_nonce is False
+
+
+def test_auth_config_require_response_nonce_accepts_true():
+    """L9: the enforce flag can be enabled for HA / strict request-binding."""
+    config = AuthConfig(webhook_idp_require_response_nonce=True)
+    assert config.webhook_idp_require_response_nonce is True
