@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.registry import SessionValidationError
 
 # ---------------------------------------------------------------------------
 # Unit tests for assert_connector_target_allowed
@@ -272,7 +273,7 @@ def test_quick_connect_telnet_metadata_ip_returns_422(connect_client: TestClient
 
 def test_quick_connect_internal_host_allowed_by_default(connect_client: TestClient) -> None:
     """POST /api/connect to an internal SSH host passes the guard when block_private=False (default)."""
-    with patch("provide.uterm.server.routes.tunnels.assert_connector_target_allowed") as mock_guard:
+    with patch("provide.uterm.server.routes.tunnels.assert_session_egress_allowed") as mock_guard:
         mock_guard.return_value = None  # allowed
         # Also mock create_session to avoid a real connector attempt
         with patch("provide.uterm.server.registry.SessionRegistry.create_session") as mock_cs:
@@ -346,3 +347,305 @@ def test_config_block_private_connector_targets_can_be_enabled() -> None:
 
     cfg = SecurityConfig(block_private_connector_targets=True)
     assert cfg.block_private_connector_targets is True
+
+
+# ---------------------------------------------------------------------------
+# V-H1: SSRF chokepoint in SessionRegistry.create_session / update_session.
+#
+# The egress guard previously had ONE call site (/api/connect).  Every other
+# route that creates/updates a session (POST /api/sessions, POST
+# /api/profiles/{id}/connect, restart/connect) reached the connectors WITHOUT
+# any egress validation — so an authenticated low-priv user could POST a
+# metadata IP and reach the cloud-metadata service.  The guard now lives inside
+# the registry chokepoint, covering every route by construction.
+# ---------------------------------------------------------------------------
+
+_METADATA_IP = "169.254.169.254"
+
+
+@pytest.fixture()
+def metadata_block_app() -> tuple[TestClient, str, dict[str, str]]:
+    """TestClient (header auth, operator role) + a created profile id for the
+    bypass tests.  Returns (client, profile_id, headers)."""
+    config = default_server_config()
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+    config.recording.directory = Path(tempfile.mkdtemp())
+    config.profiles.directory = Path(tempfile.mkdtemp())
+    app = create_server_app(config)
+    client = TestClient(app)
+    headers = {"x-uterm-principal": "user1", "x-uterm-role": "operator"}
+    # Create a telnet profile pointing at the metadata IP — the profile-connect
+    # route builds connector_config from this host.
+    r = client.post(
+        "/api/profiles",
+        json={
+            "name": "evil",
+            "connector_type": "telnet",
+            "host": _METADATA_IP,
+            "port": 23,
+        },
+        headers=headers,
+    )
+    assert r.status_code in (200, 201), r.text
+    profile_id = r.json()["profile_id"]
+    return client, profile_id, headers
+
+
+def test_create_session_telnet_metadata_ip_rejected(
+    metadata_block_app: tuple[TestClient, str, dict[str, str]],
+) -> None:
+    """RED proof of the SSRF bypass: POST /api/sessions with a telnet connector
+    targeting the cloud-metadata IP MUST be rejected (422).  Before the registry
+    chokepoint existed this route had no egress guard and the request succeeded,
+    reaching 169.254.169.254."""
+    client, _profile_id, headers = metadata_block_app
+    r = client.post(
+        "/api/sessions",
+        json={
+            "session_id": "ssrf-bypass",
+            "connector_type": "telnet",
+            "connector_config": {"host": _METADATA_IP, "port": 80},
+            "auto_start": True,
+        },
+        headers=headers,
+    )
+    assert r.status_code == 422, r.text
+    assert "metadata" in r.json()["detail"].lower()
+
+
+def test_create_session_websocket_metadata_url_rejected(
+    metadata_block_app: tuple[TestClient, str, dict[str, str]],
+) -> None:
+    """POST /api/sessions with a websocket connector whose url host is the
+    metadata IP must be rejected at the registry chokepoint."""
+    client, _profile_id, headers = metadata_block_app
+    r = client.post(
+        "/api/sessions",
+        json={
+            "session_id": "ssrf-ws",
+            "connector_type": "websocket",
+            "connector_config": {"url": f"ws://{_METADATA_IP}/"},
+            "auto_start": True,
+        },
+        headers=headers,
+    )
+    assert r.status_code == 422, r.text
+    assert "metadata" in r.json()["detail"].lower()
+
+
+def test_create_session_shell_no_host_allowed(
+    metadata_block_app: tuple[TestClient, str, dict[str, str]],
+) -> None:
+    """A shell connector (no user-supplied host) is NOT guarded and succeeds."""
+    client, _profile_id, headers = metadata_block_app
+    r = client.post(
+        "/api/sessions",
+        json={"session_id": "benign-shell", "connector_type": "shell"},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_profile_connect_metadata_ip_rejected(
+    metadata_block_app: tuple[TestClient, str, dict[str, str]],
+) -> None:
+    """POST /api/profiles/{id}/connect to a profile whose host is the metadata
+    IP must be rejected — the same chokepoint covers the profile route."""
+    client, profile_id, headers = metadata_block_app
+    r = client.post(
+        f"/api/profiles/{profile_id}/connect",
+        json={},
+        headers=headers,
+    )
+    assert r.status_code == 422, r.text
+    assert "metadata" in r.json()["detail"].lower()
+
+
+def test_update_session_to_metadata_host_rejected(
+    metadata_block_app: tuple[TestClient, str, dict[str, str]],
+) -> None:
+    """Changing connector_config.host to the metadata IP via PATCH must be
+    rejected by the update_session chokepoint."""
+    client, _profile_id, headers = metadata_block_app
+    # Create a benign telnet session first.
+    created = client.post(
+        "/api/sessions",
+        json={
+            "session_id": "mutate-me",
+            "connector_type": "telnet",
+            "connector_config": {"host": "93.184.216.34", "port": 23},
+        },
+        headers=headers,
+    )
+    assert created.status_code == 200, created.text
+    # Now try to repoint it at the metadata IP.
+    r = client.patch(
+        "/api/sessions/mutate-me",
+        json={"connector_config": {"host": _METADATA_IP, "port": 23}},
+        headers=headers,
+    )
+    assert r.status_code == 422, r.text
+    assert "metadata" in r.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Registry-level unit tests for the chokepoint.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_registry_create_session_blocks_metadata_telnet() -> None:
+    """SessionRegistry.create_session raises SessionValidationError for a telnet
+    connector targeting a metadata IP, regardless of block_private."""
+    from tests.server.test_registry import _make_registry  # local import to reuse harness
+
+    reg = _make_registry()
+    with pytest.raises(SessionValidationError, match="metadata"):
+        await reg.create_session(
+            {
+                "session_id": "reg-metadata",
+                "connector_type": "telnet",
+                "connector_config": {"host": _METADATA_IP, "port": 23},
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_registry_create_session_blocks_mapped_ipv6_metadata() -> None:
+    """An IPv4-mapped IPv6 metadata literal is normalized and blocked."""
+    from tests.server.test_registry import _make_registry
+
+    reg = _make_registry()
+    with pytest.raises(SessionValidationError, match="metadata"):
+        await reg.create_session(
+            {
+                "session_id": "reg-mapped",
+                "connector_type": "ssh",
+                "connector_config": {"host": "::ffff:169.254.169.254", "port": 22},
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_registry_create_session_blocks_private_when_flag() -> None:
+    """With block_private=True a private host is rejected at the chokepoint."""
+    from tests.server.test_registry import _make_registry
+
+    reg = _make_registry(block_private=True)
+    with pytest.raises(SessionValidationError, match="internal"):
+        await reg.create_session(
+            {
+                "session_id": "reg-private",
+                "connector_type": "ssh",
+                "connector_config": {"host": "10.0.0.5", "port": 22},
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_registry_create_session_allows_public_host() -> None:
+    """A benign public host passes the chokepoint (no exception)."""
+    from tests.server.test_registry import _make_registry
+
+    reg = _make_registry()
+    status = await reg.create_session(
+        {
+            "session_id": "reg-public",
+            "connector_type": "ssh",
+            "connector_config": {"host": "93.184.216.34", "port": 22},
+        }
+    )
+    assert status.session_id == "reg-public"
+
+
+@pytest.mark.asyncio
+async def test_registry_create_session_allows_shell_no_host() -> None:
+    """A shell connector (no host) is not guarded and succeeds."""
+    from tests.server.test_registry import _make_registry
+
+    reg = _make_registry()
+    status = await reg.create_session({"session_id": "reg-shell", "connector_type": "shell"})
+    assert status.session_id == "reg-shell"
+
+
+@pytest.mark.asyncio
+async def test_registry_update_session_blocks_metadata_host() -> None:
+    """update_session re-validates a host change to a metadata IP."""
+    from tests.server.test_registry import _make_registry
+
+    reg = _make_registry()
+    await reg.create_session(
+        {
+            "session_id": "reg-update",
+            "connector_type": "telnet",
+            "connector_config": {"host": "93.184.216.34", "port": 23},
+        }
+    )
+    with pytest.raises(SessionValidationError, match="metadata"):
+        await reg.update_session(
+            "reg-update",
+            {"connector_config": {"host": _METADATA_IP, "port": 23}},
+        )
+
+
+# ---------------------------------------------------------------------------
+# assert_session_egress_allowed helper — host-derivation unit tests.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_helper_ssh_derives_host_and_blocks_metadata() -> None:
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_session_egress_allowed("ssh", {"host": _METADATA_IP}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_telnet_derives_host_and_blocks_metadata() -> None:
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_session_egress_allowed("telnet", {"host": _METADATA_IP}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_websocket_derives_host_from_url() -> None:
+    from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_session_egress_allowed("websocket", {"url": f"ws://{_METADATA_IP}/"}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_websocket_no_url_short_circuits() -> None:
+    """websocket connector with no url -> no host derived -> no guard, no raise."""
+    from provide.uterm.server.egress import assert_session_egress_allowed
+
+    await assert_session_egress_allowed("websocket", {}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_ssh_no_host_short_circuits() -> None:
+    """ssh connector with no host key -> short-circuits without guarding."""
+    from provide.uterm.server.egress import assert_session_egress_allowed
+
+    await assert_session_egress_allowed("ssh", {}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_shell_type_short_circuits() -> None:
+    """A connector type with no user-supplied host (shell) is never guarded."""
+    from provide.uterm.server.egress import assert_session_egress_allowed
+
+    await assert_session_egress_allowed("shell", {"host": _METADATA_IP}, block_private=False)
+
+
+@pytest.mark.asyncio
+async def test_helper_allows_benign_public_host() -> None:
+    """A benign public host passes the helper without raising."""
+    from provide.uterm.server.egress import assert_session_egress_allowed
+
+    await assert_session_egress_allowed("ssh", {"host": "93.184.216.34"}, block_private=False)

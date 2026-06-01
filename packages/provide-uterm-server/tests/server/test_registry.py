@@ -35,6 +35,7 @@ def _make_registry(
     *,
     recording: RecordingConfig | None = None,
     tunnel_tokens: dict[str, dict[str, object]] | None = None,
+    block_private: bool = False,
 ) -> SessionRegistry:
     hub = _make_hub()
     recording_cfg = recording or RecordingConfig()
@@ -45,6 +46,7 @@ def _make_registry(
         recording=recording_cfg,
         recording_store=LocalFileRecordingStore(recording_cfg.directory),
         tunnel_tokens=tunnel_tokens,
+        block_private_connector_targets=block_private,
     )
 
 

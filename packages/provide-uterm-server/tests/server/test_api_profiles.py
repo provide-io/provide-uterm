@@ -180,7 +180,10 @@ def test_connect_from_profile_unknown_id_returns_404(app_client: TestClient) -> 
 
 def test_connect_from_profile_forwards_password(app_client: TestClient) -> None:
     """Password is forwarded to session connector_config but not stored in profile."""
-    profile = _create_profile(app_client, connector_type="ssh", host="h", username="u")
+    # Use a literal public IP so the egress SSRF chokepoint (which validates the
+    # connector target host) sees a non-metadata, non-private address with no DNS
+    # lookup — keeping this test focused on password forwarding, not egress.
+    profile = _create_profile(app_client, connector_type="ssh", host="203.0.113.5", username="u")
     r = app_client.post(
         f"/api/profiles/{profile['profile_id']}/connect",
         json={"password": "s3cr3t"},

@@ -59,9 +59,14 @@ class SessionRegistry:
         max_sessions: int | None = None,
         detector: PatternDetector | None = None,
         tunnel_tokens: dict[str, dict[str, object]] | None = None,
+        block_private_connector_targets: bool = False,
     ) -> None:
         self._hub = hub
         self._recording = recording
+        # Egress SSRF posture for connector targets.  Cloud-metadata IPs are
+        # ALWAYS blocked at the chokepoint below; private/internal hosts are
+        # blocked only when this is True (multi-tenant / hosted posture).
+        self._block_private = block_private_connector_targets
 
         if recording_store is None:
             from provide.uterm.recording import LocalFileRecordingStore
@@ -198,11 +203,23 @@ class SessionRegistry:
 
     async def create_session(self, payload: dict[str, Any]) -> SessionRuntimeStatus:
         session_id, connector_type_raw, input_mode_raw, visibility_raw = self._validate_create_payload(payload)
+        connector_config = dict(payload.get("connector_config", {}))
+        # Egress SSRF chokepoint: EVERY route that creates a session funnels
+        # through here, so guarding the connector target once covers them all
+        # (no per-route guard to forget).  Converting to SessionValidationError
+        # reuses each route's existing 422 mapping.  Imported lazily to avoid an
+        # import cycle (egress -> webhooks -> bridge.hub -> egress).
+        from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+        try:
+            await assert_session_egress_allowed(connector_type_raw, connector_config, block_private=self._block_private)
+        except EgressBlockedError as exc:
+            raise SessionValidationError(str(exc)) from exc
         session = SessionDefinition(
             session_id=session_id,
             display_name=str(payload.get("display_name", session_id)),
             connector_type=connector_type_raw,
-            connector_config=dict(payload.get("connector_config", {})),
+            connector_config=connector_config,
             input_mode=cast("InputMode", input_mode_raw),
             auto_start=bool(payload.get("auto_start", False)),
             tags=[str(v) for v in payload.get("tags", [])],
@@ -233,6 +250,20 @@ class SessionRegistry:
                     validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
                 except ValidationError as exc:
                     raise SessionValidationError(validation_error_message(exc)) from exc
+                # Egress chokepoint for mutations: re-validate the EFFECTIVE
+                # (merged) connector target so a host CHANGE to a metadata/blocked
+                # IP is rejected.  connector_type is immutable, so the session's
+                # type is authoritative.  Lazy import avoids an import cycle.
+                from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+
+                try:
+                    await assert_session_egress_allowed(
+                        session.connector_type,
+                        validated.connector_config,
+                        block_private=self._block_private,
+                    )
+                except EgressBlockedError as exc:
+                    raise SessionValidationError(str(exc)) from exc
                 # Apply non-mode fields immediately; input_mode is deferred
                 # to runtime.set_mode() so it only commits after the
                 # connector-side change succeeds.

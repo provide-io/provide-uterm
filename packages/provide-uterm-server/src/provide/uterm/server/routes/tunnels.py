@@ -16,13 +16,12 @@ from __future__ import annotations
 import time
 import uuid
 from typing import Annotated, Any, cast
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
 from provide.telemetry import get_tracer
 from provide.uterm.server.audit import audit_event
-from provide.uterm.server.egress import EgressBlockedError, assert_connector_target_allowed
+from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 from provide.uterm.server.models import model_dump
 from provide.uterm.server.registry import SessionValidationError
 from provide.uterm.server.routes._helpers import (
@@ -109,24 +108,17 @@ def create_tunnels_router() -> APIRouter:
         if payload.get("recording_enabled"):
             session_payload["recording_enabled"] = True
         # Egress guard: block cloud-metadata IPs always; optionally block private
-        # targets (multi-tenant posture).  The guard runs only for connector
-        # types that take a user-supplied host or URL.  The internal tunnel path
-        # (create_tunnel) uses connector_type="websocket" with no url in the
-        # payload, so it is naturally skipped (target_host will be None).
+        # targets (multi-tenant posture).  Host derivation is single-sourced in
+        # assert_session_egress_allowed (also enforced at the registry
+        # chokepoint, so this is defense-in-depth that yields a synchronous 422).
+        # The internal tunnel path (create_tunnel) uses connector_type="websocket"
+        # with no url in the payload, so it is naturally skipped (no host derived).
         _cfg = request.app.state.uterm_config
         _block_private: bool = _cfg.security.block_private_connector_targets
-        target_host: str | None = None
-        if connector_type in {"ssh", "telnet"}:
-            target_host = str(connector_config["host"]) if "host" in connector_config else None
-        elif connector_type == "websocket":
-            _url = connector_config.get("url")
-            if _url is not None:
-                target_host = urlparse(str(_url)).hostname
-        if target_host is not None:
-            try:
-                await assert_connector_target_allowed(target_host, block_private=_block_private)
-            except EgressBlockedError as exc:
-                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        try:
+            await assert_session_egress_allowed(connector_type, connector_config, block_private=_block_private)
+        except EgressBlockedError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         with get_tracer(__name__).start_as_current_span("uterm.session.quick_connect") as span:
             set_span_attrs(
                 span,
