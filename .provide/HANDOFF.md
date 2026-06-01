@@ -26,18 +26,22 @@ shipped gaps — now remediated.
 - Subagent pattern that has held at ~100% first-pass approval: implementer (TDD) → adversarial reviewer
   (verifies the exploit is closed + nothing weakened) → controller runs the gate → ff-merge.
 
-## ⚠️ BLOCKER for the next full-coverage gate / push — stray WIP from another tool
+## Working-tree notes for the next session
 
-The working tree contains **uncommitted WIP that is NOT part of this program**, evidently from a parallel
-tool (`.antigravitycli/`): a modified `packages/provide-uterm-client/.../transports/__init__.py` (adds a
-lazy `WebSocketTransport` `__getattr__` entry) plus two **untracked** new files,
-`packages/provide-uterm-client/.../transports/ws_transport.py` and
-`packages/provide-uterm/.../ws_session.py`. These import cleanly (lazy) and are not imported by any test, so
-they do **not** break test execution — but both packages' coverage config uses `source = [<pkg root>]` with
-`--cov-fail-under=100`, so the two **untracked files sit at 0% and FAIL the core + client coverage gates**.
-Until they are committed (with tests), removed, or git-ignored, `scripts/run_all_tests.py` cannot go fully
-green and the branch cannot be pushed cleanly. This is unrelated to the hardening work and was left
-untouched. **Action for the user:** resolve those three files before the coverage gate / push.
+- **Stray WIP from another tool (unrelated, left untouched).** The working tree carries uncommitted work
+  evidently from a parallel tool (`.antigravitycli/`): a modified
+  `packages/provide-uterm-client/.../transports/__init__.py` (lazy `WebSocketTransport` `__getattr__` entry)
+  plus two **untracked** files `transports/ws_transport.py` and `packages/provide-uterm/.../ws_session.py`.
+  They import cleanly (lazy) and are imported by no test, so they did **not** break the full gate — the
+  2026-05-31 `run_all_tests.py` run reached 100% coverage with them present (coverage did not flag the
+  untracked files). Still, they are unrelated uncommitted WIP and should be committed (with tests) / removed
+  / git-ignored by their owner. Subagents were instructed never to stage them.
+- **Known pre-existing flake (NOT from this work):**
+  `tests/bridge/hub/test_limiter.py::test_send_eviction_never_drops_the_inserting_client` failed once in the
+  full server suite under the random seed, but passes 3/3 in isolation and 18/18 in its file in random order;
+  this branch does not touch `limiter.py`, and 3 earlier full-server runs (4870/4900/4921) passed. It is a
+  cross-test-pollution flake (shared RateLimiter/clock state from an earlier test in the random order) — a
+  reliability follow-up worth a focused de-pollution pass, but unrelated to the hardening changes.
 
 ## Work completed (all merged to local `main`; ~38 commits ahead of origin, UNPUSHED by user's choice)
 
@@ -73,9 +77,10 @@ untouched. **Action for the user:** resolve those three files before the coverag
 
 ## Detailed checklist for next session
 
-- [ ] **Resolve the stray WIP blocker above** (commit/remove/gitignore `transports/ws_transport.py`,
-  `ws_session.py`, `transports/__init__.py`) so the full 100%-coverage gate passes, then re-run
-  `scripts/run_all_tests.py` for a clean green.
+- [ ] **Resolve the stray WIP** (commit/remove/gitignore `transports/ws_transport.py`, `ws_session.py`,
+  `transports/__init__.py`) — unrelated to this program; it did not break the gate but is uncommitted.
+- [ ] **De-pollute the `test_limiter` flake** (`test_send_eviction_never_drops_the_inserting_client`) — find
+  the earlier test in the random order that leaves shared RateLimiter/clock state; a reliability follow-up.
 - [ ] **Deferred verification residuals (task #33)** — focused follow-ups, none remote-unauth exploits:
   - **M7** per-agent worker token = HMAC(secret, agent_id) so a worker can't impersonate another agent's
     self-report (residual is impersonation only; command-injection already closed by V-H2). Needs a
@@ -94,5 +99,5 @@ untouched. **Action for the user:** resolve those three files before the coverag
   docker/docker-compose.yml build` to confirm the uv-managed-venv `Dockerfile.server` (`uv sync --extra all`
   + pyte) and `Dockerfile.cf`.
 - [ ] **Push to origin**: ~38 local commits on `main` are unpushed by the user's explicit choice — confirm
-  before pushing (and only after the stray-WIP blocker is resolved so CI is green).
+  before pushing.
 - [ ] Optional **P2 architecture** (HA): single-active-instance vs shared control plane — design decision.
