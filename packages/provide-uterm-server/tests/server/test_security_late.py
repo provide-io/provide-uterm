@@ -83,6 +83,9 @@ async def test_ssh_connector_start_passes_connect_timeout() -> None:
     mock_process.stdin = MagicMock()
     mock_process.stdout = MagicMock()
     mock_conn = AsyncMock()
+    # Peer-IP egress guard reads conn.get_extra_info("peername") synchronously
+    # post-connect; return a benign public peer so start() proceeds.
+    mock_conn.get_extra_info = MagicMock(return_value=("93.184.216.34", 22))
     mock_conn.create_process = AsyncMock(return_value=mock_process)
 
     with patch("asyncssh.connect", new_callable=AsyncMock, return_value=mock_conn) as mock_connect:

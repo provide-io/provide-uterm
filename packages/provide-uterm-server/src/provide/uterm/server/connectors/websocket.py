@@ -85,9 +85,46 @@ class WebSocketSessionConnector(SessionConnector):
                 "websocket connector requires the 'websocket' extra: pip install 'provide-uterm[websocket]'"
             ) from exc
 
-        self._ws = await websockets.connect(self._url)
+        ws = await websockets.connect(self._url)
+        # M3 (DNS-rebinding) post-connect mitigation: the create-time egress
+        # guard validated the resolved name, but a TTL-0 rebind could flip the
+        # name to a metadata IP for this actual connect.  Validate the REAL
+        # peer IP we reached (no second DNS lookup) before any application data
+        # flows; the TLS handshake already completed using the original
+        # hostname, so SNI / cert validation are untouched.  Abort on a blocked
+        # peer.  Only metadata IPs are enforced here (always-on, no config); the
+        # private-range block is not threaded to connectors.
+        await self._assert_peer_allowed(ws)
+        self._ws = ws
         self._connected = True
         self._banner = f"Connected to {self._url}"
+
+    async def _assert_peer_allowed(self, ws: Any) -> None:
+        """Run the actual connected peer IP through the egress metadata check.
+
+        Closes *ws* and raises ``EgressBlockedError`` if the peer is a blocked
+        target.  A missing peername (None) is treated as "proceed" — the
+        create-time guard already validated the resolved name, and this check
+        only ever ABORTS on a positively-identified blocked peer.
+        """
+        from provide.uterm.server.egress import assert_ip_allowed
+
+        peer = ws.remote_address
+        if not peer:
+            return
+        peer_ip = peer[0]
+        try:
+            assert_ip_allowed(str(peer_ip), block_private=False)
+        except Exception:
+            with contextlib.suppress(Exception):
+                await ws.close()
+            logger.warning(
+                "websocket_connector_peer_blocked session_id=%s url=%s peer_ip=%s — aborting (DNS-rebind guard)",
+                self._session_id,
+                self._url,
+                peer_ip,
+            )
+            raise
 
     async def stop(self) -> None:
         if self._ws is not None:

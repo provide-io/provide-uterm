@@ -42,6 +42,9 @@ class TestWebSocketSessionConnector:
     @pytest.mark.asyncio
     async def test_start_connects(self) -> None:
         mock_ws = AsyncMock()
+        # Peer-IP egress guard reads ws.remote_address post-connect; a benign
+        # public peer must let start() proceed.
+        mock_ws.remote_address = ("93.184.216.34", 443)
         mock_mod = MagicMock()
         mock_mod.connect = AsyncMock(return_value=mock_ws)
         with patch.dict("sys.modules", {"websockets": mock_mod}):

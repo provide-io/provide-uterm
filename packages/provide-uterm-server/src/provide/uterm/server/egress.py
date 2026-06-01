@@ -33,15 +33,22 @@ _resolve_cache: dict[str, tuple[float, tuple[str, ...]]] = {}
 # that IPv4 — so 64:ff9b::169.254.169.254 reaches the v4 metadata service.
 _NAT64_WELL_KNOWN = ipaddress.ip_network("64:ff9b::/96")
 
-# Residual risk — M3 (DNS rebinding), intentionally NOT fully fixed here:
+# Residual risk — M3 (DNS rebinding), partially mitigated:
 #   The connector guard validates the IP a hostname resolves to at *create*
 #   time, but the connector itself re-resolves the hostname at *connect* time.
 #   A name with a TTL-0 record that flips to a metadata / internal IP between
-#   create and connect can still reach it.  A full fix requires resolving once
-#   and pinning the literal IP into connector_config while preserving SNI /
-#   known-hosts — that is connector plumbing out of scope for the egress guard.
+#   create and connect could otherwise reach it.  Pinning the literal IP into
+#   connector_config and connecting to the IP is the WRONG fix: it breaks TLS
+#   SNI (wss://) and SSH host-key/known-hosts verification, silently disabling
+#   MITM protection.  Instead the SSH and WebSocket connectors validate the
+#   *actual* connected peer IP (``assert_ip_allowed``) right after the transport
+#   handshake completes and BEFORE any application/PTY data flows — the handshake
+#   still uses the original hostname, so SNI / host-key verification is intact.
+#   That closes the rebinding window (we validate the IP we actually reached).
+#   The telnet connector cannot reach the peer IP without a public accessor on
+#   its (cross-package) transport, so it remains create-time-only for now.
 #   The webhook path is bounded by the 60s ``_resolve_cache`` TTL above (a
-#   rebind is caught on the next cache miss); the connector path is not pinned.
+#   rebind is caught on the next cache miss).
 
 
 def _decode_embedded_ipv4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
@@ -130,6 +137,57 @@ class EgressBlockedError(ValueError):
     """Raised when a connector target resolves to a forbidden address."""
 
 
+def _check_resolved_ip(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    *,
+    block_private: bool,
+    on_metadata: str,
+    on_private: str,
+) -> None:
+    """Apply the metadata-always / private-when-flag policy to one resolved IP.
+
+    Decodes any embedded-IPv4 IPv6 form (mapped / 6to4 / NAT64 / compat) to its
+    IPv4 so a wrapped metadata/private address can't slip past the membership
+    checks.  Cloud-metadata IPs are ALWAYS blocked (raising ``EgressBlockedError``
+    with the *on_metadata* message); private / loopback / link-local / reserved /
+    multicast / unspecified are blocked only when *block_private* is True (raising
+    with the *on_private* message).
+    """
+    if isinstance(ip, ipaddress.IPv6Address):
+        embedded = _decode_embedded_ipv4(ip)
+        if embedded is not None:
+            ip = embedded
+    if ip in _METADATA_IPS:
+        raise EgressBlockedError(on_metadata)
+    if block_private and (
+        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved
+    ):
+        raise EgressBlockedError(on_private)
+
+
+def assert_ip_allowed(ip_str: str, *, block_private: bool) -> None:
+    """Validate an ALREADY-RESOLVED literal peer IP (no DNS resolution).
+
+    Used by connectors for post-connect peer-IP validation (M3 DNS-rebinding
+    mitigation): after the transport handshake completes — but before any
+    application/PTY data flows — the connector reads the real peer IP and runs
+    it through this check, aborting if it is a blocked target.  Because the IP
+    is already a literal there is no second DNS lookup (and so no rebinding
+    window), and the handshake still used the original hostname, so TLS SNI /
+    cert validation and SSH host-key/known-hosts verification stay intact.
+
+    Cloud-metadata IPs are ALWAYS blocked; private/internal ranges are blocked
+    only when *block_private* is True.
+    """
+    ip = ipaddress.ip_address(ip_str.strip().strip("[]"))
+    _check_resolved_ip(
+        ip,
+        block_private=block_private,
+        on_metadata=f"connector peer {ip_str!r} is a blocked metadata address",
+        on_private=f"connector peer {ip_str!r} is a blocked internal address",
+    )
+
+
 async def assert_connector_target_allowed(host: str, *, block_private: bool) -> None:
     """Validate a connector target host (literal IP or DNS name).
 
@@ -154,26 +212,15 @@ async def assert_connector_target_allowed(host: str, *, block_private: bool) -> 
         if not addresses:
             raise EgressBlockedError(f"could not resolve connector host {host!r}") from None
     for addr in addresses:
-        ip = ipaddress.ip_address(addr)
-        # Decode any embedded-IPv4 IPv6 form (mapped / 6to4 / NAT64 / compat) to
-        # its IPv4 so a wrapped metadata/private address can't slip past the
-        # checks below — the same metadata (always) and private (when
-        # block_private) checks then apply to the decoded IPv4.
-        if isinstance(ip, ipaddress.IPv6Address):
-            embedded = _decode_embedded_ipv4(ip)
-            if embedded is not None:
-                ip = embedded
-        if ip in _METADATA_IPS:
-            raise EgressBlockedError(f"connector target {host!r} resolves to a blocked metadata address")
-        if block_private and (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_unspecified
-            or ip.is_reserved
-        ):
-            raise EgressBlockedError(f"connector target {host!r} resolves to a blocked internal address")
+        # Decode any embedded-IPv4 IPv6 form (mapped / 6to4 / NAT64 / compat) and
+        # apply the metadata (always) / private (when block_private) checks to
+        # each resolved address — shared with the literal-IP ``assert_ip_allowed``.
+        _check_resolved_ip(
+            ipaddress.ip_address(addr),
+            block_private=block_private,
+            on_metadata=f"connector target {host!r} resolves to a blocked metadata address",
+            on_private=f"connector target {host!r} resolves to a blocked internal address",
+        )
 
 
 async def assert_session_egress_allowed(
