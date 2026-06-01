@@ -44,7 +44,7 @@ shipped gaps — now remediated.
   cross-test-pollution flake (shared RateLimiter/clock state from an earlier test in the random order) — a
   reliability follow-up worth a focused de-pollution pass, but unrelated to the hardening changes.
 
-## Work completed (all merged to local `main`; ~51 commits ahead of origin, UNPUSHED by user's choice)
+## Work completed (all merged AND **pushed** to `origin/main` @ `b99245eb`, 2026-06-01)
 
 - **Design-decision items (task #19) — DONE:**
   - **1f/1d** webhook-IdP contract: verify the IdP *response* signature (`webhook_idp_require_signed_response`,
@@ -75,31 +75,41 @@ shipped gaps — now remediated.
     redaction bypass + browser-quota leak (`c74419f6`).
   - **LOW** IdP secret floor + empty-key HMAC (`5183c31c`); posture recon-map authz (`957baef9`); PAM relay
     egress (`44314b7a`); recording symlink/perms (`bf5f8086`).
+- **Deferred residuals (task #33) — DONE & merged:** M7 per-agent worker token = HMAC(secret, agent_id),
+  path-bound + enforce flag (`55e2e798`); L9 IdP-response replay protection = always-on replay cache +
+  optional request-nonce (`895c4fc2`); M3 DNS-rebinding = post-connect peer-IP validation for ssh/ws
+  connectors, no TLS/SSH-verification weakening (`f5169157`); 5d frame-`except` narrowed to builder calls
+  (`28f47c0c`).
+- **DRY session refactor (task #36) — DONE:** extracted a shared `TransportSession` base; `telnet_session`
+  266→119 lines, `ws_session` committed, all three at 100% (`de587e0b`/`4a891163`). End-state with no legacy;
+  `uwarp-space` (editable-symlink consumer) verified against it (43 telnet-session tests green, no changes
+  needed). `ws_transport.py` adopted + hardened for websockets 16.0 (#35, `8e9840e4`).
+- **Coverage audit + doc accuracy — DONE:** `docs/coverage-audit-2026-06-01.md` proves all 83 original
+  findings closed (78 fixed + code-spot-checked, 5 deferred-then-merged, **0 open**); status banners stamped
+  on the review/plan docs. A 16-group doc-accuracy audit found 97 inaccuracies across 36 docs — all fixed
+  over 3 rounds (`427f2826` + the round-2/round-3 commits), one audit false-positive (`PatternDetector`)
+  correctly rejected.
+- **Full gate FULLY GREEN** (post-everything): `run_all_tests.py` → all package suites pass, **100% coverage
+  every package**, 0 failures (the `test_limiter` flake did not recur). Pushed; CI running.
 
 ## Detailed checklist for next session
 
 - [x] **Resolve the stray WIP** — DONE. `transports/ws_transport.py` (+ tests) committed in `8e9840e4`/
   `b2b54e91`, `ws_session.py` (+ tests) tracked, `transports/__init__.py` lazy edit committed. The local
   full-gate coverage failure is resolved.
-- [ ] **De-pollute the `test_limiter` flake** (`test_send_eviction_never_drops_the_inserting_client`) — find
-  the earlier test in the random order that leaves shared RateLimiter/clock state; a reliability follow-up.
-- [ ] **Deferred verification residuals (task #33)** — focused follow-ups, none remote-unauth exploits:
-  - **M7** per-agent worker token = HMAC(secret, agent_id) so a worker can't impersonate another agent's
-    self-report (residual is impersonation only; command-injection already closed by V-H2). Needs a
-    token-distribution design decision.
-  - **L9** bind the IdP response signature to the request (nonce) — currently replayable within the 300s
-    `max_age`. Cross-cutting request/response protocol change.
-  - **M3** DNS-rebinding: pin the resolved IP into `connector_config` (connector re-resolves at connect time).
-    Documented in `egress.py`; needs connector/SNI/known-hosts plumbing.
-  - **5d** narrow the per-frame `except` in `websockets_impl.py` to the builder calls only (don't mask a
-    downstream broadcast/redaction failure as "invalid frame" over partially-mutated state).
-- [ ] **Doc reconciliation (residual #26):** add MERGED/status banners to the older review/plan docs; refresh
-  RELEASE_READINESS + a CHANGELOG section; document the new config fields (`environment`, `audit.chain_*`,
-  `webhook_idp_require_signed_response`, `webhook_idp_forward_headers/cookies`) and the
-  env-profile/posture *advisory-vs-enforcing* asymmetry (noted in the verify doc).
-- [ ] **Docker images** still NEED-BUILD-VALIDATION (can't build locally): `docker compose -f
-  docker/docker-compose.yml build` to confirm the uv-managed-venv `Dockerfile.server` (`uv sync --extra all`
-  + pyte) and `Dockerfile.cf`.
-- [ ] **Push to origin**: ~51 local commits on `main` are unpushed by the user's explicit choice — confirm
-  before pushing.
+- [x] **Deferred residuals (task #33)** — DONE (M7 `55e2e798`, L9 `895c4fc2`, M3 `f5169157`, 5d `28f47c0c`).
+- [x] **Doc reconciliation (#26) + full doc-accuracy audit** — DONE (coverage-audit + status banners + 97
+  inaccuracies fixed across 36 docs).
+- [x] **Push to origin** — DONE (`b99245eb`, 2026-06-01).
+- [ ] **`test_limiter` flake de-pollution + telnet M3 peer-IP guard (#34)** — the genuine remaining
+  reliability follow-up. Flake: find the earlier random-order test leaving shared RateLimiter/clock state.
+  Telnet M3: the ssh/ws connectors got post-connect peer-IP validation (`f5169157`); telnet needs a public
+  peer-IP accessor on `TelnetTransport` (client pkg) then the same guard before first receive.
+- [ ] **Docker images** — VALIDATING (2026-06-01: `docker compose build` run locally + the CI `🐋 Container
+  Scan` job on the push). Confirm the uv-managed-venv `Dockerfile.server` (`uv sync --extra all` + pyte) +
+  `Dockerfile.cf` build clean; watch the CI container-scan result.
+- [ ] **CI watch (post-push)**: memray `test_event_bus_stress` may need a CI-env re-baseline (deselected
+  locally); the `test_limiter` seed flake; the container-scan/Docker build. The scheduled Hostile-Client
+  workflow was already red pre-push (independent of this work).
+- [ ] Optional **`ws_session.py`** is finished/DRY/100% but unused — wire it into a flow when `uwarp` adopts WS.
 - [ ] Optional **P2 architecture** (HA): single-active-instance vs shared control plane — design decision.
