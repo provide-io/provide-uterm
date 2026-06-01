@@ -410,6 +410,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     add_watch_subcommand(sub)
 
+    # ---- audit subcommand (verify tamper-evident WORM audit log) ----
+    from provide.uterm.cli.audit import add_audit_subcommand
+
+    add_audit_subcommand(sub)
+
     # ---- server subcommand ----
     # The reference hosted server is also reachable via the legacy
     # ``uterm-server`` console script, but ``uterm server`` is canonical.
