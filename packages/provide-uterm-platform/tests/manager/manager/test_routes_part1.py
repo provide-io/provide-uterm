@@ -189,6 +189,7 @@ class TestAgentRegisterPrivEsc:
             "hijacked_by",
             "hijacked_at",
             "paused",
+            "config",
         ],
     )
     def test_register_rejects_operator_fields(self, client, manager, field):
@@ -202,6 +203,7 @@ class TestAgentRegisterPrivEsc:
             "hijacked_by": "attacker",
             "hijacked_at": 1.0,
             "paused": True,
+            "config": "/etc/passwd",
         }[field]
         resp = client.post("/agent/victim/register", json={"state": "running", field: injected})
         assert resp.status_code == 422
@@ -254,6 +256,39 @@ class TestAgentRegisterPrivEsc:
         assert updated.pending_command_seq == 7
         assert updated.pending_command_type == "set_directive"
         assert updated.pending_command_payload == {"directive": "hold", "turns": 3}
+
+    def test_register_config_injection_rejected(self, client, manager):
+        """A worker register that sets ``config`` is rejected (restart-spawn poison).
+
+        ``agent.config`` is the YAML spawn-config path. It is manager-owned
+        (set at spawn time in ``process_impl.spawn_agent`` and confined to
+        ``spawn_config_dir`` via ``_validate_config_path``). A later operator
+        ``/restart`` reads ``agent.config`` and re-spawns from it via
+        ``_respawn_after_restart_exit`` → ``manager.spawn_agent(config_path)``
+        — and that respawn path does NOT re-validate the path against the
+        config dir. A worker poisoning ``config`` to an arbitrary path is thus
+        a privilege escalation, so the register body may not set it.
+        """
+        resp = client.post("/agent/victim/register", json={"state": "running", "config": "/tmp/evil.yaml"})
+        assert resp.status_code == 422
+        assert "victim" not in manager.agents
+
+    def test_register_preserves_manager_set_config(self, client, manager):
+        """An existing agent's manager-set ``config`` survives a benign register.
+
+        ``base_payload`` carries the agent's real ``config`` from the stored
+        record; because ``register`` no longer reads ``config`` from the worker
+        body, a worker self-report that omits it leaves the manager's
+        spawn-config path intact.
+        """
+        agent = AgentStatusBase(agent_id="agent_000", state="running")
+        agent.config = "/srv/configs/agent_000.yaml"
+        manager.agents["agent_000"] = agent
+        resp = client.post("/agent/agent_000/register", json={"state": "recovering"})
+        assert resp.status_code == 200
+        updated = manager.agents["agent_000"]
+        assert updated.state == "recovering"
+        assert updated.config == "/srv/configs/agent_000.yaml"
 
     def test_legitimate_self_report_still_works(self, client, manager):
         """A worker register with only allowed self-report fields succeeds."""

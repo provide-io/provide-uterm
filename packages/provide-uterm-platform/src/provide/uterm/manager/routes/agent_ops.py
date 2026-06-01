@@ -36,6 +36,12 @@ logger = get_logger(__name__)
 #     manager; a self-report must not forge a hijack claim.
 #   * paused — operator pause control (status returns agent.paused), not a
 #     worker self-report field.
+#   * config — the YAML spawn-config path, manager-owned (set at spawn time in
+#     process_impl.spawn_agent, confined to spawn_config_dir). It drives
+#     restart-spawn: an operator /restart reads agent.config and re-spawns from
+#     it (_respawn_after_restart_exit → manager.spawn_agent), and that respawn
+#     path does NOT re-validate against the config dir, so a worker poisoning
+#     config to an arbitrary path is a privilege escalation.
 # pid/session_id/state/last_action/error_* are legitimately self-reported and
 # are intentionally NOT in this set (see the status route's allowed fields).
 _OPERATOR_FIELDS: frozenset[str] = frozenset(
@@ -48,6 +54,7 @@ _OPERATOR_FIELDS: frozenset[str] = frozenset(
         "hijacked_by",
         "hijacked_at",
         "paused",
+        "config",
     }
 )
 
