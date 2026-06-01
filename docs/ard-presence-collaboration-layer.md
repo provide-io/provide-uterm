@@ -1,5 +1,22 @@
 # ARD: Presence & Collaboration Layer
 
+> **As-built (2026-06): superseded by DeckMux.** The `BrowserPresence` /
+> `TerminalAnnotation` / `ChatMessage` data model and the
+> `presence_cursor` / `presence_state` / `annotation_*` / `chat_*` WS frames
+> described below were **not** built. The shipped collaboration layer is
+> **DeckMux** (`packages/provide-uterm/src/provide/uterm/deckmux/`): a
+> `UserPresence` dataclass keyed on `user_id` (not a per-connection
+> `browser_id`) carrying `scroll_line` / `scroll_range` / `selection` /
+> `pin` / `typing` / `is_owner` (`_presence.py`), and the frames
+> `presence_update` / `presence_sync` / `presence_leave` /
+> `control_transfer` / `queued_input` / `control_request`
+> (`_protocol.py`). DeckMux tracks scroll/selection/owner and control
+> handover — there is **no** terminal-annotation overlay or in-band chat
+> feature, no `broadcast_presence_state`, and the
+> `session_annotations_list` / `session_chat_send` MCP tools do not exist
+> (only an unrelated recording-annotation tool, `session_annotate`, ships).
+> The design below is retained as the original proposal.
+
 ## Problem
 
 Multiple browsers can observe the same terminal session simultaneously, but they are invisible to each other. There is no awareness of who else is watching, no way to communicate without leaving the terminal, and no mechanism to annotate what is happening on screen — crucial for incident response, pair programming on production, and training scenarios where a senior operator needs to guide a junior one.

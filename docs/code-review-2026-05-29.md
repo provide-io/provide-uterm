@@ -2,6 +2,13 @@
 
 _Reviewed 2026-05-29 against commit `f8db61e` on `main`._
 
+> **Status note (2026-06):** dated point-in-time snapshot, now well behind
+> `main`. Notably, Finding 4's "keep retention/redaction defaults explicit"
+> action has since shipped — default secret-redaction rules
+> (`bridge/hub/redaction_defaults.py`) are on by default
+> (`recording.redact_sensitive=True`) and a `recording.retention_s` reaper
+> exists. Findings below are preserved as reviewed.
+
 ## Findings (ordered by severity)
 
 1. **P1: Server modules are still large and multi-purpose**

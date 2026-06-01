@@ -7,7 +7,7 @@ this file tracks what's been *captured* and where the artifacts live.
 ## Branch and tag
 
 - **Current RC branch:** `rc/0.4.0` (cut from `main` at `e0453a0`).
-- **Latest tag:** `v0.4.0-rc1`.
+- **Latest tag:** `v0.4.0-rc4` (rc1 → rc4 cut over the rc cycle).
 - **Promotion to GA:** blocked on the gaps listed under [Known gaps](#known-gaps) below.
 
 ## Captured evidence
@@ -18,7 +18,7 @@ this file tracks what's been *captured* and where the artifacts live.
 | SBOM (CycloneDX) | `cyclonedx-py environment` | `artifacts/release-governance/sbom.json` | ✅ 214 KB |
 | Build artifacts | `uv build` | `dist/provide_uterm_workspace-0.4.0-{whl,tar.gz}` + per-package wheels | ✅ |
 | Artifact signing (cosign keyless) | Sigstore | uploaded by CI (`.bundle` files) | ✅ runs in GHA via `id-token: write`; local run skips with notice |
-| Quality gate (lint/type/test) | `scripts/run_pytest_gate.py -q` | n/a (output to stdout) | ✅ 3459 passed, 67 skipped, 0 failed (6m47s) |
+| Quality gate (lint/type/test) | `scripts/run_pytest_gate.py -q` | n/a (output to stdout) | ✅ green at rc1 capture (3459 passed, 67 skipped, 6m47s); the suite has since grown well past 4900 tests with the post-rc hardening body — re-run the gate / see the latest CI run for the current figure |
 | Test suite, multi-Python (CI) | `🧪 CI` workflow on `actions-test/main` at `da3cafb` | https://github.com/livingstaccato/provide-uterm-actions-test/actions/runs/26004817487 | ✅ |
 | Release governance (CI) | `🛡️ Release Governance` workflow | green on `rc/0.4.0` push | ✅ |
 | Release pipeline (CI) | `🚀 Release` workflow | fired on `v0.4.0-rc1` tag | ✅ |
@@ -26,11 +26,11 @@ this file tracks what's been *captured* and where the artifacts live.
 | Artifact verification | `scripts/verify_package_artifacts.py` | stdout | ✅ "artifact verification passed (20 frontend files)" |
 | Load profile | `scripts/load_profile.py` | `artifacts/load-profile/load-profile-*.txt` | ✅ 15/15 probes; p99 connect 23.86ms, p99 hello 5.68ms |
 | Rollback drill | `scripts/rollback_drill.py` | `artifacts/rollback-drill/rollback-drill-*.json` | ✅ all 7 steps pass; reconnect 3.13ms; 0 5xx spike |
-| Mutation gate (auth.py, changed-only) | `scripts/run_mutation_gate.py` | `mutants/mutmut-cicd-stats.json` | ⚠ 80.43% (148/184 killed); see Known gaps |
+| Mutation gate (auth.py, changed-only) | `scripts/run_mutation_gate.py` | `mutants/mutmut-cicd-stats.json` | ⚠ 87.50% (161/184 killed); see Known gaps |
 
 ## Security posture additions this RC
 
-Beyond the test gates, these landed during the v0.4.0-rc2 cycle to
+Beyond the test gates, these landed over the v0.4.0-rc2 … rc4 cycle to
 harden the out-of-box posture:
 
 - **`SECURITY.md`** — disclosure channel, 72h ack / 90d coordinated
@@ -114,14 +114,15 @@ module in
 [`provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`](../provide-terminal-monetization/docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md).
 This isn't a GA blocker for the AGPL line; it's a follow-up product.
 
-### WebSocket origin validation (deployment-time)
+### WebSocket origin validation (deployment-time) — RESOLVED
 
-The hub accepts WebSocket upgrade requests from any `Origin`. For
-non-localhost deployments this lets a stale browser tab from any
-domain probe the WS endpoint. Adding an `--allowed-origins` flag
-(comma-separated allowlist; rejects mismatches at the 101 upgrade)
-is straightforward and listed as the next priority item in
-`docs/security-considerations.md` §4.
+Shipped. `WebSocketOriginMiddleware`
+(`packages/provide-uterm-server/src/provide/uterm/server/app/middleware.py`)
+is always installed and closes cross-origin browser upgrades with code
+4403; the `server.allowed_origins` config field
+(`config_schema.py`, empty default = deny-all-cross-origin) drives the
+allowlist. `docs/security-considerations.md` §4 now marks WS origin
+validation as done. No longer a GA blocker.
 
 ## How to refresh evidence locally
 

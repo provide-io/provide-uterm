@@ -1,5 +1,18 @@
 # Design: Deprecate `auth.mode="dev"` / `"none"`
 
+> **Status (2026-06): IMPLEMENTED — Option D + A shipped.** `auth.mode`
+> now hard-rejects `dev`/`none` at startup (`app/auth.py`: *"AUTH_MODE=dev
+> and 'none' have been removed for security reasons. Use 'dev_token' …
+> or 'jwt'"*). The stub-IdP `dev_token` mode exists and is wired:
+> `app/auth.py` handles `mode == "dev_token"` (loopback-gated, sets up the
+> dev IdP, then falls through to `jwt` validation), backed by
+> `server/dev_idp.py` (`setup_dev_idp()` / `read_dev_token()` minting a
+> 0600 JWT under the user cache dir). `header` mode is now gated behind
+> `auth.header_mode_acknowledged` (and a `trusted_proxy_ips` allowlist for
+> non-loopback binds), resolving the open question below. `CLAUDE.md`
+> documents this as the current state. The sections below are the original
+> proposal and are retained for history.
+
 ## Problem
 
 `auth.mode` accepts `"dev"` and `"none"` values that disable authentication entirely (see `packages/provide-uterm-server/src/provide/uterm/server/app/auth.py:74-97`). The current safeguards are: (1) refuse to start if `require_jwt_in_production=true`, and (2) refuse to start if `server.host` is not a loopback address. Any caller that can reach loopback (container sidecar, ssh tunnel, host-mode pod, supply-chain attacker with code exec) silently bypasses auth and can claim any principal/role via `X-Principal` / `X-Role`. The startup warning at `auth.py:92-96` is the only runtime signal.

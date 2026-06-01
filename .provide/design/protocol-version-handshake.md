@@ -1,8 +1,23 @@
 # Design: Bridge Protocol Version Handshake
 
+> **Status (2026-06): IMPLEMENTED — Option B shipped.** Range negotiation
+> is live on `main`. `contracts.py` now declares
+> `MIN_/MAX_/PREFERRED_PROTOCOL_VERSION` (with `CURRENT_PROTOCOL_VERSION`
+> kept as an alias of `PREFERRED`) plus `negotiate_protocol_version()`.
+> `worker_hello` advertises the `{min, max, preferred}` range
+> (`shell/terminal/_output.py`), and all four connectors delegate to it.
+> The server negotiates and closes the WS with code **1002** +
+> `{"type":"error","reason":"protocol_mismatch", …}` on no overlap
+> (`bridge/routes/websockets_impl.py`); `set_worker_hello`
+> (`bridge/hub/connection.py`) persists the negotiated version on the
+> worker entry. The **Problem** and **Files that would change** sections
+> below are the original (pre-implementation) proposal text and are
+> retained for history — note the `websockets.py:NNN` line citations now
+> resolve to the split `websockets_impl.py` (see notes inline).
+
 ## Problem
 
-`CURRENT_PROTOCOL_VERSION = 1` is declared at `packages/provide-uterm/src/provide/uterm/bridge/contracts.py:24` and stamped onto the server's `hello` frame to the browser at `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets.py:317`. However, the value is **never validated** — the server logs the worker's reported version (`websockets.py:156-163`, `hub/connections.py:179-189`) but accepts any value, including `None`. Workers built against the in-tree connectors (`server/connectors/{shell,ssh,telnet,websocket}.py:115/139/74/76`) and `provide/uterm/shell/terminal/_output.py:18-20` send a `worker_hello` that omits `protocol_version` entirely. Browsers don't return a `protocol_version` to the server. Any future bump (e.g. control-frame shape change) will silently mis-parse on older peers.
+`CURRENT_PROTOCOL_VERSION = 1` was declared at `packages/provide-uterm/src/provide/uterm/bridge/contracts.py` and stamped onto the server's `hello` frame to the browser (the hello-frame builder now lives in `bridge/routes/browser_handlers.py:430`; the worker-receive logic that was historically cited as `websockets.py:156-163` / `hub/connections.py:179-189` is now in `bridge/routes/websockets_impl.py` and `bridge/hub/connection.py:196`). At the time of writing the value was **never validated** — the server logged the worker's reported version but accepted any value, including `None`. Workers built against the in-tree connectors (`server/connectors/{shell,ssh,telnet,websocket}.py:115/139/74/76`) and `provide/uterm/shell/terminal/_output.py:18-20` send a `worker_hello` that omits `protocol_version` entirely. Browsers don't return a `protocol_version` to the server. Any future bump (e.g. control-frame shape change) will silently mis-parse on older peers.
 
 ## Options
 
@@ -29,9 +44,9 @@ Server replies in `make_hello_frame(...)` with `"protocol": {"selected": 1, "ser
 
 - `packages/provide-uterm/src/provide/uterm/bridge/contracts.py:24` — replace single `CURRENT_PROTOCOL_VERSION` with `MIN_PROTOCOL_VERSION`, `MAX_PROTOCOL_VERSION`, `PREFERRED_PROTOCOL_VERSION`.
 - `packages/provide-uterm-server/src/provide/uterm/server/bridge/frames.py:100` — extend the WorkerHello typed dict / `make_hello_frame` to include the protocol range field.
-- `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets.py:154-180` — parse client range, negotiate, close on mismatch.
-- `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets.py:301-321` — emit server range in browser hello.
-- `packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/connections.py:179-200` (`set_worker_hello`) — store negotiated version on the worker entry, expose via `WorkerEntry.protocol_version`.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/websockets_impl.py` (negotiation at ~:108-133; `websockets.py` is now only a re-export shim) — parse client range, negotiate, close on mismatch.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/routes/browser_handlers.py:430` (`make_hello_frame`) — emit server range in browser hello.
+- `packages/provide-uterm-server/src/provide/uterm/server/bridge/hub/connection.py:196` (`set_worker_hello`) — store negotiated version on the worker entry, expose via `WorkerEntry.protocol_version`.
 - All worker-hello emitters:
   - `packages/provide-uterm/src/provide/uterm/shell/terminal/_output.py:18-20`
   - `packages/provide-uterm-server/src/provide/uterm/server/connectors/shell.py:115`

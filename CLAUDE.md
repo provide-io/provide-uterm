@@ -66,7 +66,7 @@ docker compose -f docker/docker-compose.yml up
 | Package | Role |
 |---------|------|
 | `provide-uterm` | Core library: ansi, screen, emulator, protocols, detection, deckmux, shell, render, replay |
-| `provide-uterm-server` | Server stack: bridge hub, FastAPI server, CLI (`uterm`, `uterm-server`), tunnel, gateway |
+| `provide-uterm-server` | Server stack: bridge hub, FastAPI server, CLI (`uterm`, incl. the `uterm server` subcommand), tunnel, gateway |
 | `provide-uterm-client` | Consumer libraries: HTTP/WS client, transports (telnet/SSH/WS), AI/MCP (`uterm-mcp`) |
 | `provide-uterm-platform` | Platform targets: PTY connector, PAM, LD_PRELOAD capture, External Management Tier (`uterm-manager`) |
 | `provide-uterm-cloudflare` | CF Worker + Durable Object adapter |

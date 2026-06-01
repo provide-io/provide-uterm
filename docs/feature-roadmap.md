@@ -12,7 +12,7 @@ pending human approval via Slack/webhook/REST.
 
 ### 2. Session Replay with AI Annotation (Proprietary / Enterprise)
 Automatic summarization of terminal sessions using LLMs. Generates searchable "Chapters" and "Key Actions" for long audit logs.
-*   **Status:** **Pattern-Based Annotation Done (2026-04-08)** — JSONL recording, replay viewer, raw stream rebuilder, `PatternDetector` with 16 built-in detection rules (credentials, escalation, destructive commands, connections, lifecycle), `Annotation`/`AnnotationSpan` data models, REST endpoint (`POST /api/sessions/{id}/annotate`), and `session_annotate` MCP tool (tool 21 of 21) all implemented and tested.
+*   **Status:** **Pattern-Based Annotation Done (2026-04-08)** — JSONL recording, replay viewer, raw stream rebuilder, `PatternDetector` with 20 built-in detection rules (credentials, escalation, destructive commands, connections, lifecycle), `Annotation`/`AnnotationSpan` data models, REST endpoint (`POST /api/sessions/{id}/annotate`), and `session_annotate` MCP tool (tool 21 of 21) all implemented and tested.
 *   **Parked:** LLM-based summarization pipeline (auto-generated "Chapters" and "Key Actions") has no implementation or active development. The annotation system uses regex pattern detection only — no LLM integration exists in the annotation or recording modules.
 
 ### 3. Multi-Session Fan-Out (Proprietary / Enterprise)
@@ -24,7 +24,7 @@ Managed fleet control UI. Broadcast input to N sessions simultaneously with grou
 
 ### 4. Real-Time Anomaly Detection
 Pattern-matching on terminal output for credential leaks, privilege escalation, and destructive commands.
-*   **Status:** **Done (2026-04-04)** — `PromptDetector` (cursor-aware prompt region scanning with two-pass detection), `DetectionEngine` (rule-based prompt detection + KV extraction with buffering and idle detection), `PatternDetector` (annotation-layer hot-path scanner with per-category dedup), `BehavioralAuditGate` protocol (CPS/jitter anomaly detection with webhook delegation). 16 built-in detection rules across 5 categories.
+*   **Status:** **Done (2026-04-04)** — `PromptDetector` (cursor-aware prompt region scanning with two-pass detection), `DetectionEngine` (rule-based prompt detection + KV extraction with buffering and idle detection), `PatternDetector` (annotation-layer hot-path scanner with per-category dedup), `BehavioralAuditGate` protocol (CPS/jitter anomaly detection with webhook delegation). 20 built-in detection rules across 5 categories.
 
 ### 5. Security Headers Middleware
 CSP, HSTS, X-Frame-Options with configurable strict/dev modes.
