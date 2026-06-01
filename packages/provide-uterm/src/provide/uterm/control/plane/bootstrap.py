@@ -25,6 +25,23 @@ class ControlPlane(Protocol):
 
     async def reap(self, *, now: float, retention_s: int) -> int: ...
 
+    async def get_audit_head(self) -> tuple[int, str] | None:
+        """Return the persisted audit-chain head ``(seq, record_hash)``, or
+        ``None`` if no head has been recorded yet (genesis)."""
+        ...
+
+    async def set_audit_head(self, seq: int, record_hash: str) -> None:
+        """Persist the audit-chain head MONOTONICALLY.
+
+        If a head already exists with ``existing_seq >= seq`` the call is a
+        NO-OP — the head never moves backwards.  This is the anti-rollback
+        guard: a buggy or malicious lower-seq write must not roll the persisted
+        head back.  The chain only ever advances, so legitimate writes always
+        carry a strictly greater seq; an equal seq is treated as
+        already-recorded.
+        """
+        ...
+
 
 async def bootstrap_control_plane(config: ControlPlaneConfig) -> ControlPlane:
     if config.backend == "memory":

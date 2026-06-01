@@ -8,11 +8,12 @@ import time
 from typing import TYPE_CHECKING
 
 from provide.uterm.control.plane.sqlite.schema.v0001_initial import SQL as V0001_SQL
+from provide.uterm.control.plane.sqlite.schema.v0002_audit_head import SQL as V0002_SQL
 
 if TYPE_CHECKING:
     import aiosqlite
 
-MIGRATIONS: tuple[tuple[int, str], ...] = ((1, V0001_SQL),)
+MIGRATIONS: tuple[tuple[int, str], ...] = ((1, V0001_SQL), (2, V0002_SQL))
 
 
 class SqliteMigrationError(RuntimeError):

@@ -37,4 +37,5 @@ async def test_sqlite_migrate_bootstraps_schema(tmp_path: Path) -> None:
     assert "cp_resume_tokens" in tables
     assert "cp_approvals" in tables
     assert "cp_leases" in tables
-    assert version_rows == [(1,)]
+    assert "cp_audit_head" in tables
+    assert version_rows == [(1,), (2,)]

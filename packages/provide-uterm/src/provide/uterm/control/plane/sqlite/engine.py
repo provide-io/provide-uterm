@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -114,6 +115,41 @@ class SqliteControlPlane:
             assert self._conn is not None
             await self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         return deleted
+
+    async def get_audit_head(self) -> tuple[int, str] | None:
+        """Return the persisted audit-chain head ``(seq, record_hash)``, or
+        ``None`` if no head has been recorded yet (genesis).  Durable across
+        restarts — this is the cross-restart anti-rollback high-water mark."""
+        await self.open()
+        assert self._conn is not None
+        async with self._tx_lock:
+            cursor = await self._conn.execute("SELECT seq, record_hash FROM cp_audit_head WHERE id = 1")
+            row = await cursor.fetchone()
+            await cursor.close()
+        if row is None:
+            return None
+        return (int(row[0]), str(row[1]))
+
+    async def set_audit_head(self, seq: int, record_hash: str) -> None:
+        """Persist the audit-chain head MONOTONICALLY in its own transaction.
+
+        The ``WHERE excluded.seq > cp_audit_head.seq`` clause on the upsert makes
+        a lower-or-equal seq a NO-OP, so the persisted head never moves backwards
+        (anti-rollback guard).  Commits on success; rolls back on error."""
+        tx = await self.begin()
+        try:
+            assert self._conn is not None
+            await self._conn.execute(
+                "INSERT INTO cp_audit_head(id, seq, record_hash, updated_at) VALUES (1, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET "
+                "seq = excluded.seq, record_hash = excluded.record_hash, updated_at = excluded.updated_at "
+                "WHERE excluded.seq > cp_audit_head.seq",
+                (seq, record_hash, time.time()),
+            )
+            await tx.commit()
+        except Exception:
+            await tx.rollback()
+            raise
 
     def session_store(self, tx: SqliteTransaction) -> SqliteSessionStore:
         return SqliteSessionStore(tx)
