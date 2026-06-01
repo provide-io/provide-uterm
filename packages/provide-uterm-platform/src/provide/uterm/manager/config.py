@@ -42,6 +42,14 @@ class ManagerConfig(BaseModel):
     # worker-self-report routes (POST /agent/{id}/status + /register). Unset =>
     # those routes still require the operator token (backward compatible).
     auth_worker_token_env_var: str = "UTERM_MANAGER_WORKER_TOKEN"  # noqa: S105
+    # When True, the manager rejects the raw fleet-shared worker token on the
+    # self-report routes and accepts ONLY the per-agent token derived from the
+    # worker secret (HMAC-SHA256 over the agent_id), blocking cross-agent
+    # impersonation. When False (default) the raw fleet token is also accepted
+    # for backward compatibility with un-migrated workers, but the derived
+    # per-agent token remains bound to the request path either way. Production
+    # deployments should enable this.
+    enforce_per_agent_worker_token: bool = False
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:2272"])
 
     # Dashboard

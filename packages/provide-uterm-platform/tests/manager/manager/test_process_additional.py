@@ -84,7 +84,7 @@ class TestAdditionalCoverage:
     def test_build_worker_env_sets_name_base(self, pm):
         pm._spawn_name_style = "random"
         pm._spawn_name_base = "alpha"
-        env = pm._build_worker_env("UTERM_WORKER_", None, FakeWorkerPlugin(), {})
+        env = pm._build_worker_env("UTERM_WORKER_", None, FakeWorkerPlugin(), {}, "agent_000")
         assert env["UTERM_WORKER_NAME_BASE"] == "alpha"
 
     def test_spawn_process_rotates_old_log_and_handles_popen_error(self, pm, tmp_path):
