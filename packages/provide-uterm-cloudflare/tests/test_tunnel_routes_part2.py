@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from provide.uterm.tunnel.token_hash import hash_token
 
 
