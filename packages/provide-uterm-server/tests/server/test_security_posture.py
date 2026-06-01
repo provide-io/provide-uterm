@@ -375,6 +375,31 @@ class TestStartupPostureLog:
 # ---------------------------------------------------------------------------
 
 
+class TestSecurityPostureCoarseFallback:
+    """L10: when the authz service is unavailable on app.state, the endpoint
+    fails closed to the coarse summary rather than leaking the full recon map.
+
+    Exercises the production app (``create_server_app``) with the ``uterm_authz``
+    service removed from app.state, so ``_posture_caller_is_privileged`` cannot
+    resolve a privileged role and falls back to the coarse response.
+    """
+
+    def test_missing_authz_service_returns_coarse(self) -> None:
+        config, token = _jwt_production_config(roles=["operator"])
+        config.auth.webhook_idp_on_failure = "deny"
+        app = create_server_app(config, api_only=True)
+        with TestClient(app, headers={"Authorization": f"Bearer {token}"}) as client:
+            # Drop the authz service so the privilege check fails closed.
+            app.state.uterm_authz = None
+            r = client.get("/api/security-posture")
+        assert r.status_code == 200
+        body = r.json()
+        # Coarse summary only — the full weakness map is withheld.
+        assert "dev_opt_outs" not in body
+        assert "warnings" not in body
+        assert set(body) == {"environment", "secure"}
+
+
 class TestSecurityPostureEndpoint:
     def test_anonymous_denied(self) -> None:
         # jwt mode → no token → anonymous → 401.
@@ -406,3 +431,34 @@ class TestSecurityPostureEndpoint:
         ):
             assert field in body
         assert body["auth_mode"] == "jwt"
+
+    def test_admin_gets_full_posture(self) -> None:
+        # Admin (most privileged) gets the full reconnaissance map.
+        config, token = _jwt_production_config(roles=["admin"])
+        config.auth.webhook_idp_on_failure = "deny"
+        app = create_server_app(config, api_only=True)
+        with TestClient(app, headers={"Authorization": f"Bearer {token}"}) as client:
+            r = client.get("/api/security-posture")
+        assert r.status_code == 200
+        body = r.json()
+        assert "dev_opt_outs" in body
+        assert "warnings" in body
+
+    def test_viewer_gets_coarse_posture_without_recon_map(self) -> None:
+        # L10: a lower-priv authenticated principal (viewer) must NOT see the
+        # full dev_opt_outs / warnings reconnaissance map — only a coarse
+        # environment + secure summary.
+        config, token = _jwt_production_config(roles=["viewer"])
+        config.auth.webhook_idp_on_failure = "deny"
+        app = create_server_app(config, api_only=True)
+        with TestClient(app, headers={"Authorization": f"Bearer {token}"}) as client:
+            r = client.get("/api/security-posture")
+        assert r.status_code == 200
+        body = r.json()
+        # Coarse response: environment + secure only.
+        assert body["environment"] == "production"
+        assert "secure" in body
+        # The full security weakness map must be withheld from a viewer.
+        assert "dev_opt_outs" not in body
+        assert "warnings" not in body
+        assert "auth_mode" not in body

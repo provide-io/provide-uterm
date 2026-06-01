@@ -15,6 +15,16 @@ effective security config, so it is gated behind the supplied
 ``require_authenticated`` dependency (mirroring how the ``/api/metrics``
 operational endpoint is gated) and is registered only when that dependency is
 provided.
+
+L10: the full posture report (the ``dev_opt_outs`` + ``warnings``
+reconnaissance map of the deployment's security weaknesses) is restricted to
+operator/admin principals. A lower-privileged authenticated principal (e.g. a
+viewer) receives only a coarse ``{"environment", "secure"}`` summary. The
+health router carries no operator-level dependency (only
+``require_authenticated``), so the role split is enforced inside the endpoint
+using the per-request ``uterm_principal`` (set by ``require_authenticated``)
+and the app's ``uterm_authz`` service — rather than re-plumbing an
+operator dependency through the router signature.
 """
 
 from __future__ import annotations
@@ -114,8 +124,33 @@ def create_health_router(
             Reveals the active dev opt-outs and ``secure`` summary, so it is
             never anonymous-public — the route exists only because a
             ``require_authenticated`` dependency was supplied at wiring time.
+
+            L10: the full report (``dev_opt_outs`` + ``warnings`` — a
+            reconnaissance map of the deployment's security weaknesses) is only
+            returned to an operator/admin principal. A lower-privileged
+            authenticated principal (e.g. a viewer) receives only a coarse
+            ``{"environment", "secure"}`` summary, so it cannot enumerate the
+            deployment's relaxed controls.
             """
             config = request.app.state.uterm_config
-            return compute_security_posture(config)
+            posture = compute_security_posture(config)
+            if await _posture_caller_is_privileged(request):
+                return posture
+            # Coarse summary for a non-operator authenticated principal.
+            return {"environment": posture["environment"], "secure": posture["secure"]}
+
+        async def _posture_caller_is_privileged(request: Request) -> bool:
+            """True iff the per-request principal is an operator or admin.
+
+            ``require_authenticated`` has already stored the resolved principal
+            on ``request.state``. Authorization is delegated to the app's
+            ``uterm_authz`` service (operator role or global admin), mirroring
+            the role checks the operator-only ``/api/approvals`` router uses.
+            """
+            principal = getattr(request.state, "uterm_principal", None)
+            authz = getattr(request.app.state, "uterm_authz", None)
+            if principal is None or authz is None:
+                return False
+            return await authz.is_admin(principal) or await authz.has_role(principal, "operator")
 
     return router
