@@ -68,7 +68,12 @@ ARG FRONTEND_DIR
 # Install Python + uv. The node:26-slim base is Debian trixie, whose `python3`
 # is 3.13 (there is no `python3.11` apt package on this base) — that satisfies
 # the project's requires-python >=3.11, and uv resolves the lock against it.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `apt-get upgrade` pulls the base's latest security point-releases (libssl /
+# libc / etc.) so the Trivy HIGH/CRITICAL gate isn't tripped by an unpatched
+# base — same rationale as Dockerfile.server's builder/runtime stages.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         python3 python3-dev curl ca-certificates \
     && curl -LsSf https://astral.sh/uv/install.sh | sh \
     && rm -rf /var/lib/apt/lists/*
