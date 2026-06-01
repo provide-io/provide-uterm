@@ -625,12 +625,58 @@ class MessageRouter:
             role: str | None = st.browsers.get(ws)
             return role
 
-    async def get_last_snapshot(self, worker_id: str) -> dict[str, Any] | None:
-        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered."""
+    async def redact_snapshot_for_recipient(
+        self, worker_id: str, snapshot: dict[str, Any], recipient: Any
+    ) -> dict[str, Any]:
+        """Return a recipient-role-redacted COPY of *snapshot* (M5 read-path parity).
+
+        Applies the SAME output-redaction policy as the live broadcast path
+        (:meth:`broadcast`), scoped to *recipient*'s role via
+        ``prepare_policy_context`` + ``get_redaction_rules``. *recipient* is the
+        connecting browser ``ws`` (WS initial_snapshot) or the requesting
+        ``Request`` (REST ``/snapshot``) — both expose the principal that
+        ``prepare_policy_context`` resolves.
+
+        Returns *snapshot* unchanged when the output gate is inactive or yields
+        no rules; otherwise returns a redacted copy built by
+        :func:`_redact_frame_fields`. The input *snapshot* is never mutated, so
+        the stored ``last_snapshot`` is safe to redact-on-read repeatedly with
+        different recipient roles. Callers must only invoke this when the gate
+        is active (it re-checks defensively).
+        """
+        hub = self._hub
+        gate = hub._output_policy_gate
+        if gate is None:  # pragma: no cover — callers guard on gate; defensive
+            return snapshot
+        context = await hub.prepare_policy_context(recipient, worker_id, action="output")
+        rules = await gate.get_redaction_rules(context)
+        if not rules:
+            return snapshot
+        # Force the snapshot frame type so _redact_frame_fields' field map fires
+        # even if a stored snapshot somehow lacks an explicit ``type`` key (the
+        # redactor only redacts frames whose ``type`` is ``"snapshot"``). This is
+        # a copy — the stored last_snapshot is never mutated. Setting the key
+        # when it is already "snapshot" is a harmless idempotent overwrite.
+        to_redact = {**snapshot, "type": "snapshot"}
+        return _redact_frame_fields(to_redact, StreamRedactor(rules))
+
+    async def get_last_snapshot(self, worker_id: str, recipient: Any = None) -> dict[str, Any] | None:
+        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered.
+
+        When *recipient* is provided AND an output-redaction policy is active,
+        the returned snapshot is a role-scoped REDACTED copy (M5: the REST
+        ``/snapshot`` and WS initial-snapshot reads must not bypass the policy
+        the broadcast path enforces). With no recipient or no gate the raw
+        stored snapshot is returned (broadcast source / no-policy default). The
+        stored ``last_snapshot`` is never mutated.
+        """
         hub = self._hub
         async with hub._lock:
             st = hub.registry.get(worker_id)
-            return None if st is None else st.last_snapshot
+            snapshot = None if st is None else st.last_snapshot
+        if snapshot is None or recipient is None or hub._output_policy_gate is None:
+            return snapshot
+        return await self.redact_snapshot_for_recipient(worker_id, snapshot, recipient)
 
     async def browser_count(self, worker_id: str) -> int:
         """Return the number of browser WebSockets currently connected for *worker_id*."""

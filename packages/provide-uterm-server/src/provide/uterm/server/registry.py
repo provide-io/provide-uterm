@@ -356,8 +356,11 @@ class SessionRegistry:
             runtime = self._runtime_for(session)
         return await runtime.analyze()
 
-    async def last_snapshot(self, session_id: str) -> dict[str, Any] | None:
-        return await self._hub.get_last_snapshot(session_id)
+    async def last_snapshot(self, session_id: str, recipient: Any = None) -> dict[str, Any] | None:
+        # ``recipient`` (the requesting Request) lets the hub apply the same
+        # role-scoped output redaction as the live broadcast path so the REST
+        # /snapshot read does not bypass a configured policy (M5).
+        return await self._hub.get_last_snapshot(session_id, recipient=recipient)
 
     async def events(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
         return await self._hub.get_recent_events(session_id, limit)

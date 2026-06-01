@@ -439,9 +439,20 @@ class TermHub:
         """Return the role assigned to *ws* for *worker_id*, or ``None`` if not found."""
         return await self.router.get_worker_browser_role(worker_id, ws)
 
-    async def get_last_snapshot(self, worker_id: str) -> dict[str, Any] | None:
-        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered."""
-        return await self.router.get_last_snapshot(worker_id)
+    async def get_last_snapshot(self, worker_id: str, recipient: Any = None) -> dict[str, Any] | None:
+        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered.
+
+        When *recipient* is supplied and an output-redaction policy is active,
+        the snapshot is role-scoped redacted (M5). See
+        :meth:`MessageRouter.get_last_snapshot`.
+        """
+        return await self.router.get_last_snapshot(worker_id, recipient)
+
+    async def redact_snapshot_for_recipient(
+        self, worker_id: str, snapshot: dict[str, Any], recipient: Any
+    ) -> dict[str, Any]:
+        """Return a recipient-role-redacted copy of *snapshot* (M5). Delegates to the router."""
+        return await self.router.redact_snapshot_for_recipient(worker_id, snapshot, recipient)
 
     async def browser_count(self, worker_id: str) -> int:
         """Return the number of browser WebSockets currently connected for *worker_id*."""
