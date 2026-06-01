@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import ipaddress
 import time
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from provide.uterm.server.webhooks import _METADATA_IPS, _resolve_host
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # TTL for the per-host DNS cache used by assert_webhook_target_allowed.
 _EGRESS_DNS_TTL_S: float = 60.0
@@ -104,3 +108,40 @@ async def assert_connector_target_allowed(host: str, *, block_private: bool) -> 
             or ip.is_reserved
         ):
             raise EgressBlockedError(f"connector target {host!r} resolves to a blocked internal address")
+
+
+async def assert_session_egress_allowed(
+    connector_type: str,
+    connector_config: Mapping[str, Any],
+    *,
+    block_private: bool,
+) -> None:
+    """Egress-guard a session's connector target, given its type and config.
+
+    This is the single source of truth for deriving the outbound host from a
+    connector type + config and applying ``assert_connector_target_allowed``.
+    Called from the SessionRegistry chokepoint (so every create/update path is
+    covered) and from the /api/connect route (defense-in-depth + synchronous
+    422 mapping).
+
+    Host derivation:
+      * ssh / telnet  -> ``connector_config["host"]``
+      * websocket     -> ``urlparse(connector_config["url"]).hostname`` (when a
+                         ``url`` is present)
+
+    Connector types that take no user-supplied host or URL (shell / local /
+    pty / the internal tunnel websocket with no url) yield no host and are
+    intentionally left unguarded — there is nothing attacker-controlled to
+    validate.  When a host IS derived it is passed to
+    ``assert_connector_target_allowed`` which raises ``EgressBlockedError``.
+    """
+    target_host: str | None = None
+    if connector_type in {"ssh", "telnet"}:
+        host = connector_config.get("host")
+        target_host = str(host) if host is not None else None
+    elif connector_type == "websocket":
+        url = connector_config.get("url")
+        if url is not None:
+            target_host = urlparse(str(url)).hostname
+    if target_host is not None:
+        await assert_connector_target_allowed(target_host, block_private=block_private)

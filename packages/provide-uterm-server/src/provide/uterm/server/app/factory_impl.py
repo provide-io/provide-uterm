@@ -608,6 +608,7 @@ def create_server_app(
         max_sessions=config.server.max_sessions,
         detector=detector,
         tunnel_tokens=tunnel_tokens,
+        block_private_connector_targets=config.security.block_private_connector_targets,
     )
     profile_store = FileProfileStore(config.profiles.directory)
 
