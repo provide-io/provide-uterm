@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -16,16 +17,38 @@ from provide.telemetry import get_logger
 
 logger = get_logger(__name__)
 
+# Worker-self-report routes: a low-privilege worker token (when configured) is
+# accepted ONLY on these. Everything else is operator-only. Path params are
+# matched as a single non-slash segment and the pattern is fully anchored so a
+# trailing/leading segment (e.g. ``/agent/x/statusfoo`` or a nested id) never
+# slips through. Keep these in sync with manager/routes/status.py (status) and
+# manager/routes/agent_ops.py (register).
+_WORKER_SELF_REPORT_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("POST", re.compile(r"/agent/[^/]+/status")),
+    ("POST", re.compile(r"/agent/[^/]+/register")),
+)
+
 
 class TokenAuthMiddleware:
     """ASGI middleware that enforces a bearer token.
+
+    Two static tokens are supported. The operator ``token`` authorizes every
+    route. The optional low-privilege ``worker_token`` authorizes ONLY the
+    worker-self-report routes (``POST /agent/{id}/status`` and
+    ``POST /agent/{id}/register``); it is rejected on operator routes (spawn,
+    kill, delete, restart, prune, GET reads, …). When ``worker_token`` is unset
+    the self-report routes still require the operator token (backward compatible
+    for operator-only deployments).
 
     Parameters
     ----------
     app:
         The inner ASGI application.
     token:
-        The expected token value.
+        The expected operator token value (authorizes everything).
+    worker_token:
+        Optional low-privilege token accepted ONLY on the worker-self-report
+        routes. ``None`` disables the second token entirely.
     public_paths:
         Exact paths that bypass auth.
     public_prefixes:
@@ -37,17 +60,38 @@ class TokenAuthMiddleware:
         app: Any,
         token: str,
         *,
+        worker_token: str | None = None,
         public_paths: frozenset[str] | None = None,
         public_prefixes: tuple[str, ...] | None = None,
     ) -> None:
         self._app = app
         self._token = token
+        self._worker_token = worker_token
         self._public_paths = public_paths or frozenset()
         self._public_prefixes = public_prefixes or ()
 
     def _is_public_path(self, path: str) -> bool:
         """Return True if *path* is exempt from token authentication."""
         return path in self._public_paths or any(path.startswith(p) for p in self._public_prefixes)
+
+    def _is_worker_self_report_route(self, path: str, method: str) -> bool:
+        """Return True only for the low-privilege worker-self-report routes."""
+        return any(method == m and pattern.fullmatch(path) is not None for m, pattern in _WORKER_SELF_REPORT_ROUTES)
+
+    def _is_authorized(self, provided: str, path: str, method: str) -> bool:
+        """Return True if *provided* token may access (*method*, *path*).
+
+        The operator token authorizes everything (timing-safe). The worker
+        token, when configured, additionally authorizes ONLY the
+        worker-self-report routes — never an operator route.
+        """
+        if hmac.compare_digest(provided, self._token):
+            return True
+        return bool(
+            self._worker_token is not None
+            and self._is_worker_self_report_route(path, method)
+            and hmac.compare_digest(provided, self._worker_token)
+        )
 
     def _extract_request_token(self, scope: Any) -> tuple[str, bool]:
         """Extract bearer token from scope. Returns (token, pass_through).
@@ -83,7 +127,8 @@ class TokenAuthMiddleware:
             await self._app(scope, receive, send)
             return
 
-        if not hmac.compare_digest(provided, self._token):
+        method: str = scope.get("method", "")
+        if not self._is_authorized(provided, path, method):
             if scope_type == "websocket":
                 await receive()  # consume websocket.connect
                 await send({"type": "websocket.accept"})
@@ -158,13 +203,19 @@ def setup_auth(app: Any, *, env_var: str = "UTERM_MANAGER_API_TOKEN", config: An
         )
     public_paths: frozenset[str] = frozenset()
     public_prefixes: tuple[str, ...] = ()
+    worker_env_var = "UTERM_MANAGER_WORKER_TOKEN"
     if config is not None:
         public_paths = frozenset(config.auth_public_paths)
         public_prefixes = tuple(config.auth_public_prefixes)
-    logger.info("api_token_auth_enabled")
+        worker_env_var = getattr(config, "auth_worker_token_env_var", worker_env_var)
+    # Optional low-privilege worker token. When unset (or whitespace-only) the
+    # self-report routes still require the operator token (backward compatible).
+    worker_token = os.environ.get(worker_env_var, "").strip() or None
+    logger.info("api_token_auth_enabled", worker_token_scoped=worker_token is not None)
     app.add_middleware(
         TokenAuthMiddleware,
         token=token,
+        worker_token=worker_token,
         public_paths=public_paths,
         public_prefixes=public_prefixes,
     )

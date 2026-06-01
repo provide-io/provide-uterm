@@ -186,6 +186,7 @@ class TestSetupAuth:
         config = MagicMock()
         config.auth_public_paths = ["/dashboard"]
         config.auth_public_prefixes = ["/static/"]
+        config.auth_worker_token_env_var = "UTERM_MANAGER_WORKER_TOKEN"
         with patch.dict(os.environ, {"MY_TOK": "val"}):
             setup_auth(app, env_var="MY_TOK", config=config)
         app.add_middleware.assert_called_once()
@@ -244,6 +245,7 @@ class TestSetupAuthBindHostGuard:
         config.host = "0.0.0.0"
         config.auth_public_paths = []
         config.auth_public_prefixes = []
+        config.auth_worker_token_env_var = "UTERM_MANAGER_WORKER_TOKEN"
         os.environ["UTERM_MANAGER_API_TOKEN"] = "sekrit"
         setup_auth(app, env_var="UTERM_MANAGER_API_TOKEN", config=config)
         app.add_middleware.assert_called_once()

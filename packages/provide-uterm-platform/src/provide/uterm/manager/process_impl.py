@@ -233,6 +233,7 @@ class AgentProcessManager:
     ) -> dict[str, str]:
         """Build the environment dict for a worker subprocess."""
         env = {k: v for k, v in os.environ.items() if k.startswith(env_prefix) or k in _WORKER_ENV_PASSTHROUGH}
+        self._scope_worker_tokens(env)
         if self._spawn_name_style:
             env[f"{env_prefix}NAME_STYLE"] = self._spawn_name_style
         if self._spawn_name_base:
@@ -240,6 +241,26 @@ class AgentProcessManager:
         if agent_entry is not None:
             registry_entry.configure_worker_env(env, agent_entry, self.manager, raw_config=raw_config)
         return env
+
+    def _scope_worker_tokens(self, env: dict[str, str]) -> None:
+        """Down-scope the manager tokens in a worker subprocess environment.
+
+        A worker only needs to self-report; it must never inherit the omnipotent
+        operator token (a compromised worker could then spawn/kill the fleet).
+        When a low-privilege worker token is configured, rewrite the manager API
+        token the worker's client reads so it carries ONLY the worker token, and
+        strip the raw worker-token var so it isn't leaked downstream. When no
+        worker token is configured, behaviour is unchanged (operator token
+        forwarded), preserving backward compatibility.
+        """
+        config = self.manager.config
+        operator_var = config.auth_token_env_var
+        worker_var = getattr(config, "auth_worker_token_env_var", "UTERM_MANAGER_WORKER_TOKEN")
+        worker_token = os.environ.get(worker_var, "").strip()
+        if worker_token:
+            env[operator_var] = worker_token
+        # The raw worker-token var is a manager-side secret; never forward it.
+        env.pop(worker_var, None)
 
     async def spawn_agent(self, config_path: str, agent_id: str) -> str:
         self.note_agent_id(agent_id)
