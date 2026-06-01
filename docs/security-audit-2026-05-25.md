@@ -1,5 +1,14 @@
 # Security Audit Notes - 2026-05-25
 
+> **Superseded (2026-06-01):** This is a point-in-time snapshot. The
+> post-2026-05-25 hardening body closed "Remaining Priority Work" items 2
+> (hostile-client ingress tests — `.github/workflows/hostile-client.yml`)
+> and 3 (default recording-redaction ruleset, on by default) and added
+> further controls (sha256 WORM audit chain, connector-egress/SSRF
+> chokepoint, webhook-IdP response-signature + replay protection). See
+> [`docs/security-considerations.md`](security-considerations.md) for the
+> current posture; the notes below are preserved as-of their date.
+
 Scope: repository-local review for high-priority security vectors, stale
 security documentation, and inexpensive hardening that can be implemented
 without changing public runtime APIs.

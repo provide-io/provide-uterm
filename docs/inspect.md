@@ -118,8 +118,9 @@ Client (curl/browser/agent)
        │ Control channel WS
        ▼
 ┌──────────────────┐
-│  Browser UI      │  inspect-view.ts
-│  (inspect page)  │  Shows traffic, intercept toggles, action buttons
+│  Browser UI      │  provide-uterm-app: components/inspect/* +
+│  (inspect page)  │  useInspectWs.ts + stores/inspectStore.ts
+│                  │  Shows traffic, intercept toggles, action buttons
 └──────────────────┘
 ```
 

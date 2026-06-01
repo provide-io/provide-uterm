@@ -18,9 +18,9 @@ Browser UI for the [provide-uterm](../../README.md) platform. Vanilla TypeScript
 | Component | Purpose |
 |-----------|---------|
 | `hijack.ts` | HijackWidget — xterm.js terminal with hijack controls |
-| `inspect-view.ts` | HTTP inspection UI with intercept toggle, action bar, modify editor |
-| `deckmux/` | DeckMux overlay — avatar bar, edge indicators, control transfer |
-| `app-header.ts` | Navigation header with session status |
+| `terminal.ts` | Terminal rendering and page wiring |
+| `app/widgets/hijack-widget-host.ts` | Hosts the hijack widget and wires control-transfer events |
+| `app/deckmux/` | DeckMux overlay — avatar bar, edge indicators, control transfer |
 
 ## Build
 

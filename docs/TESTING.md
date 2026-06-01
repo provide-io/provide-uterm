@@ -44,13 +44,13 @@ Tests are organized by markers, which allow selective execution:
 
 - **`mutant`** - Mutation testing and mutmut-focused tests
   - Run with: `uv run pytest -m mutant` or `uv run python scripts/run_mutation_gate.py --min-mutation-score 100`
-  - Files: `tests_mutation/`, mutation-specific test files
+  - Files: `*_mutmut.py` modules under `packages/provide-uterm/tests/` (and the `[tool.mutmut].tests_dir` list)
   - Time: 5-15 minutes per test
   - Coverage: Validates test suite quality by checking test failure on code mutations
 
 - **`memray`** - Memory profiling and allocation stress tests
-  - Run with: `uv run pytest tests/memray/ -m memray -v --no-cov`
-  - Files: `tests/memray/`
+  - Run with: `uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --no-cov`
+  - Files: `packages/provide-uterm/tests/memray/`
   - Time: ~15-30 minutes total
   - Coverage: Monitors memory allocations across hot paths
 
@@ -83,13 +83,13 @@ Memory profiling uses [memray](https://github.com/bloomberg/memray) to detect al
 Run all memray tests:
 
 ```bash
-uv run pytest tests/memray/ -m memray -v --no-cov
+uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --no-cov
 ```
 
 Run a single stress test:
 
 ```bash
-uv run pytest tests/memray/test_ansi_stress.py -m memray -v --no-cov
+uv run pytest packages/provide-uterm/tests/memray/test_ansi_stress.py -m memray -v --no-cov
 ```
 
 ### Analyzing Memray Output
@@ -106,14 +106,14 @@ python -m memray flamegraph memray-output/ansi_stress.bin
 
 ### Baseline Management
 
-Baseline allocation counts are stored in `tests/memray/baselines.json`.
+Baseline allocation counts are stored in `packages/provide-uterm/tests/memray/baselines.json`.
 
 #### First Run (Establishing Baseline)
 
 On the first run, memray tests will record allocation counts and pass without comparison:
 
 ```bash
-uv run pytest tests/memray/ -m memray -v --no-cov
+uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --no-cov
 ```
 
 #### Subsequent Runs (Regression Detection)
@@ -129,10 +129,10 @@ AssertionError: ANSI allocation 5200000 exceeds baseline 4500000 by 15.6% (toler
 After intentional optimizations, update baselines:
 
 ```bash
-MEMRAY_UPDATE_BASELINE=1 uv run pytest tests/memray/ -m memray -v --no-cov
+MEMRAY_UPDATE_BASELINE=1 uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --no-cov
 ```
 
-This updates `tests/memray/baselines.json` with new allocation counts.
+This updates `packages/provide-uterm/tests/memray/baselines.json` with new allocation counts.
 
 #### Baseline File Format
 
@@ -159,7 +159,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) includes:
 
 **Trigger:** Nightly schedule (2 AM UTC) or manual `workflow_dispatch`
 
-**Command:** `uv run pytest tests/memray/ -m memray -v --tb=short --no-cov`
+**Command:** `uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --tb=short --no-cov`
 
 **Artifacts:** Uploaded memray `.bin` files for 30 days
 
@@ -214,7 +214,7 @@ uv run python scripts/run_pytest_gate.py -q
 uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 
 # 3. Run memray tests locally (optional, ~15-30 min)
-MEMRAY_UPDATE_BASELINE=1 uv run pytest tests/memray/ -m memray -v --no-cov
+MEMRAY_UPDATE_BASELINE=1 uv run pytest packages/provide-uterm/tests/memray/ -m memray -v --no-cov
 ```
 
 ### Playwright Tests

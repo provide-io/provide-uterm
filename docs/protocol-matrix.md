@@ -158,15 +158,20 @@ Real-time collaborative presence for terminal sessions. Enabled per session with
 | Browser -> Server | `presence_update` | `scroll_line`, `scroll_range`, `selection`, `pin`, `typing` |
 | Browser -> Server | `queued_input` | `keys` (buffered keystrokes from non-owner) |
 | Browser -> Server | `control_request` | `target` (user to request control from) |
-| Browser -> Server | `control_handover` | `to` (user to hand control to) |
-| Browser -> Server | `control_deny` | `requester` (user whose request is denied) |
 | Server -> Browser | `presence_update` | `user_id`, `name`, `color`, `role`, scroll/selection/pin state |
 | Server -> Browser | `presence_sync` | `users` (full state array), `config` |
 | Server -> Browser | `presence_leave` | `user_id` |
 | Server -> Browser | `control_transfer` | `from_user_id`, `to_user_id`, `reason`, `queued_keys` |
-| Server -> Browser | `control_request_notification` | `from` (requesting user) |
-| Server -> Browser | `control_denied` | (empty) |
 | Server -> Browser | `auto_transfer_warning` | `seconds_remaining` |
+
+These are the seven message types defined in
+`packages/provide-uterm/src/provide/uterm/deckmux/_protocol.py`. Control is
+*requested* via a `control_request` and *granted* via a single
+`control_transfer` whose `reason` is one of `handover`, `auto_idle`,
+`admin_takeover`, or `lease_expired`; there are no separate
+handover/deny/notification/denied message types — those flows are handled by the
+hijack lease system. `auto_transfer_warning` is the only idle-warning
+Server -> Browser message.
 
 All messages use the existing control channel (DLE+STX JSON framing). 200ms client-side debounce on presence updates. The deckmux module is part of the `provide-uterm` core package.
 
