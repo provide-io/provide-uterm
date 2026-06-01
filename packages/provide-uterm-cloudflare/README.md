@@ -40,12 +40,16 @@ uv run pywrangler deploy
 
 ## Auth modes
 
-Set `AUTH_MODE` in `wrangler.toml` or `.dev.vars`:
+Set `AUTH_MODE` in `wrangler.toml` or `.dev.vars`. `jwt` is the **only**
+supported value — the worker is always internet-facing, so any other mode
+(`dev`/`none` are removed) raises a `ValueError` at config load.
 
 | Mode | Behavior |
 |---|---|
-| `dev` | No auth checks; all requests accepted. |
-| `jwt` | Validates CF Access JWT; role from claim or `JWT_DEFAULT_ROLE`. CF Access service tokens (with `common_name` claim) are also accepted and get admin role. |
+| `jwt` | Validates CF Access JWT; role from claim or `JWT_DEFAULT_ROLE`. CF Access service-token JWTs (with a `common_name` claim and no human `email` claim) are accepted, but are only granted the admin role when `JWT_SERVICE_TOKEN_ADMIN=1` is set (defaults off); otherwise they get their roles from the normal claim/scope/default-role path. |
+
+`WORKER_BEARER_TOKEN` is also required and must clear a 32-character /
+non-placeholder entropy floor.
 
 ## Current gaps
 

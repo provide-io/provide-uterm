@@ -1,8 +1,15 @@
 # Beyond the test suite: security considerations for v0.4.0
 
-Last verified: 2026-05-25. See
+Last verified: 2026-06-01. See
 [`docs/security-audit-2026-05-25.md`](security-audit-2026-05-25.md) for the
 evidence-backed sweep that updated this checklist.
+
+> **Status (2026-06-01):** A post-2026-05-25 enterprise-hardening body
+> landed several controls this checklist previously listed as deferred or
+> spec'd: a default recording-redaction ruleset (on by default), a sha256
+> WORM audit chain + `uterm audit verify` CLI, a connector-egress/SSRF
+> chokepoint, and webhook-IdP response-signature verification + replay
+> protection. The affected rows below have been updated.
 
 Tests prove behaviour is correct in expected inputs. They don't tell you
 whether the **deployment posture** is correct, whether a **supply-chain
@@ -61,6 +68,8 @@ The columns map to:
 | Password / kbd-interactive fallback policy | ✅ | `--require-authorized-keys` opt-in rejects unknown pubkeys outright. |
 | Anonymous mode | ✅ | Server-side `auth.mode="dev"` and `"none"` are removed. Local development uses `dev_token`, which mints a local JWT and still exercises JWT auth. |
 | Command approval workflow (dangerous-command gate) | ✅ | Buffered hold + resume implemented; webhook approval delegated. |
+| Webhook-IdP response-signature verification | ✅ | `WebhookIdentityProvider` verifies the IdP response HMAC by default (`auth.webhook_idp_require_signed_response=true`); fails closed at config-load without a secret. |
+| Webhook-IdP response replay protection | ✅ | Always-on bounded per-instance replay cache, plus optional per-request nonce binding (`auth.webhook_idp_require_response_nonce`, default off). |
 
 ## 4. Transport security
 
@@ -75,6 +84,7 @@ The columns map to:
 | Permissions-Policy | ✅ | camera / mic / geolocation denied. |
 | CORS allowlist | ⚠ | Confirm: are cross-origin browser clients in scope? If yes, document the allowlist; if no, ensure CORS is closed by default. |
 | WebSocket origin validation | ✅ | `WebSocketOriginMiddleware` enforces same-origin by default and denies cross-origin browser upgrades unless explicitly allowed. |
+| Connector egress / SSRF filtering | ✅ | Connector-target validation is centralised at the `SessionRegistry` chokepoint via `assert_session_egress_allowed` (`server/egress.py`), blocking private/loopback/link-local/metadata targets (incl. IPv4-mapped IPv6 `169.254.169.254`). Gated on `security.block_private_connector_targets` (default off). |
 | Subresource Integrity (SRI) on CDN assets | ✅ | `tests/test_frontend_sri.py` verifies. |
 | TLS cert pinning | ❌ | Not implemented. Standard PKI is enough for most deployments; opt-in pinning could be a future feature. |
 
@@ -96,12 +106,12 @@ The columns map to:
 | Item | Current | Note |
 |---|:---:|---|
 | Session recording (JSONL) | ✅ | `provide.uterm.recording`. |
-| Pattern-based annotation (anomaly detection) | ✅ | 16 built-in rules; `PatternDetector`. |
+| Pattern-based annotation (anomaly detection) | ✅ | 20 built-in rules (`BUILTIN_RULES`); `PatternDetector`. |
 | Credential leak detection in output | ✅ | Bandit rules + redaction patterns in `redaction` module. |
-| Recording PII redaction | ⚠ | Redaction is opt-in via patterns; ship a default ruleset for known secret formats (AWS keys, GitHub tokens, JWTs, etc.). |
+| Recording PII redaction | ✅ | A default secret-redaction ruleset (AWS access/secret keys, GitHub/Slack tokens, JWTs, etc.) ships in `bridge/hub/redaction_defaults.py` (`default_rules()`) and is enabled by default via `recording.redact_sensitive=True`; operators opt out explicitly. |
 | Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
 | Recording retention policy | ⚠ | Local store supports `recording.retention_s` sweep; non-local stores still depend on backend-specific retention controls. |
-| Tamper-evident audit log | 📋 spec'd | Open-source library writes plain audit events through `audit_event()` to whatever sink the operator configures. Enterprise-tier tamper-evidence (hash-chain + optional HMAC + optional ed25519 signing, configurable) is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-tamper-evident-audit-log-design.md`) — ships with an `audit-verify` CLI for post-fact verification. |
+| Tamper-evident audit log | ✅ | A sha256 hash-chain WORM audit log ships in `server/audit_chain.py` (`AuditChain`, `GENESIS_HASH`, `verify_records`/`verify_audit_log`) with a `uterm audit verify <path>` CLI (`cli/audit.py`) for post-fact verification. The optional HMAC / ed25519 signing tier remains the enterprise spec in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-tamper-evident-audit-log-design.md`). |
 | Immutable storage hooks | ⚠ | Cloudflare DO + SQLite at the edge; on-prem reference server stores locally. |
 
 ## 7. Disclosure / response
@@ -157,10 +167,10 @@ The columns map to:
 
 If you can only do five things before GA:
 
-1. **Wire default redaction rules into the recording pipeline by default** (or an explicit secure mode) so secrets are not persisted in plaintext.
+1. ~~**Wire default redaction rules into the recording pipeline by default** (or an explicit secure mode) so secrets are not persisted in plaintext.~~ *Done — `default_rules()` is enabled by default via `recording.redact_sensitive=True`.*
 2. **Add signed SBOM artifacts** (cosign on SBOM) alongside existing wheel/sdist signing.
 3. **Ship SLSA provenance attestations** for release artifacts.
 4. **Document production branch protections** for the canonical repo (`main` and `rc/**`) and enforce them.
 5. **Codify SLOs/runbooks** from existing perf/load artifacts in a dedicated operations doc.
 
-After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`) and SBOM signing — both shipped — and codifying the SLO doc. The two heaviest remaining items (tamper-evident audit log and worker-process seccomp confinement) have been moved to the `provide-terminal-monetization` repository as enterprise-tier specs; see the table rows above for the file paths.
+After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`) and SBOM signing — both shipped — and codifying the SLO doc. A tamper-evident audit log has since shipped as a sha256 WORM chain (`server/audit_chain.py` + `uterm audit verify`); the remaining heaviest items (the optional HMAC/ed25519 audit-signing tier and worker-process seccomp confinement) have been moved to the `provide-terminal-monetization` repository as enterprise-tier specs; see the table rows above for the file paths.

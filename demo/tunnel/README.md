@@ -12,6 +12,7 @@ connects to the live session, proving the Cloudflare path is fully operational e
 
 | File | Description |
 |------|-------------|
-| [browser.mp4](browser.mp4) | Full browser recording |
-| [browser_trim.mp4](browser_trim.mp4) | Highlight clip |
+| [control.mp4](control.mp4) | Operator/control browser perspective (can type) |
+| [share.mp4](share.mp4) | Viewer/share browser perspective (read-only) |
+| [control_trim.mp4](control_trim.mp4) | Highlight clip |
 | [terminal.cast](terminal.cast) | Terminal session (asciinema) |

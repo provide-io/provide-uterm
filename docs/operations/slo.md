@@ -82,11 +82,11 @@ trap 'kill $SERVER_PID' EXIT
 
 # Wait for /api/health = 200, then:
 uv run python scripts/load_profile.py \
-  --base-url http://127.0.0.1:27780 \
+  --base-url http://127.0.0.1:8780 \
   --worker-id provide-shell --concurrency 5 --rounds 5
 
 uv run python scripts/rollback_drill.py \
-  --base-url http://127.0.0.1:27780 \
+  --base-url http://127.0.0.1:8780 \
   --session-id provide-shell \
   --out-dir artifacts/rollback-drill
 ```
