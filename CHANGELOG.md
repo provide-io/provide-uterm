@@ -46,6 +46,38 @@ A multi-wave security/compliance hardening pass landed after the
   slow-loris probes.
 - **`/readyz` readiness gate** added alongside the existing health/liveness
   probes for orchestrator integration.
+- **Hostile-client probe asserts _survival_, not connection-success.** The
+  burst / oversized-frame / slow-loris probes (`scripts/hostile_profile.py`)
+  now classify each attempt (refused / completed / hung / error) and pass
+  when the server stays healthy and refuses or bounds every attempt — the
+  correct signal against the fail-closed auth posture (an unauthenticated WS
+  connect refused at the 403 boundary is healthy, not a failure). The
+  auth-gated probes flag a _completed_ unauthenticated handshake as an auth
+  bypass (`--require-refused`).
+- **Deterministic CI.** De-flaked the worker-disconnect frame-ordering tests
+  (two racing broadcast tasks → assert on frame membership, not arrival
+  order, in both the core and server test copies) and replaced the PTY
+  throughput test's hardcoded fps target with a regression floor. Two
+  `connection.py` `async with` exit-arcs carry `# pragma: no branch` — a
+  coverage.py-on-Python-3.11 arc-attribution quirk, not an untested branch.
+
+### Build / dependencies
+
+- **All Python + JS/TS dependencies upgraded to latest** and re-locked
+  (`uv.lock` / `package-lock.json`): includes `provide-telemetry` 0.4.7,
+  Starlette 1.2.x, Pydantic 2.13.x, `websockets` 16.x, Ruff 0.15.x, Vite 8.x.
+- **Single-source Node toolchain.** `.nvmrc` pins the Node major; CI and both
+  Dockerfiles read it (`node-version-file` / `ARG NODE_IMAGE`) so they cannot
+  drift; root `package.json` declares `engines`.
+- **Multi-stage container images.** `docker/Dockerfile.server` and
+  `docker/Dockerfile.cf` build the browser UI in-image (frontend assets are
+  no longer committed) and strip build tooling from the runtime images so the
+  Trivy HIGH/CRITICAL gate passes on both. `container-scan.yml` now scans the
+  Cloudflare image as well, and Dependabot covers the npm + docker ecosystems
+  alongside pip + github-actions.
+- **DRY transport sessions.** `telnet_session.py` and `ws_session.py` share a
+  `TransportSession` base (`provide/uterm/transport_session.py`);
+  `TelnetTransport` now explicitly implements the `ConnectionTransport` ABC.
 
 ## [0.5.0-dev] — 2026-04-20
 
