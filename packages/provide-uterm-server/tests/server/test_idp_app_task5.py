@@ -32,6 +32,34 @@ def test_create_server_app_instantiates_correct_idp():
     assert app.state.uterm_hub.identity_provider.url == "http://localhost:8080/auth"
 
 
+def test_create_server_app_wires_require_response_nonce_flag():
+    """L9: the factory-built provider carries webhook_idp_require_response_nonce."""
+    # Default False is wired through.
+    config = ServerConfig(
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
+    )
+    app = create_server_app(config, api_only=True)
+    assert app.state.uterm_hub.identity_provider.require_response_nonce is False
+
+    # True is wired through.
+    config = ServerConfig(
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+            webhook_idp_require_response_nonce=True,
+        )
+    )
+    app = create_server_app(config, api_only=True)
+    assert app.state.uterm_hub.identity_provider.require_response_nonce is True
+
+
 async def test_webhook_idp_is_used_by_auth_dependency(monkeypatch) -> None:
     from fastapi.routing import APIRoute
     from starlette.requests import HTTPConnection
