@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+"""Hostile-client resilience probe for the uterm server.
+
+Each probe floods one attack vector — connection burst, oversized WS frame,
+slowloris header drip — and classifies every attempt into a *survival*
+outcome. The suite asserts the server SURVIVES hostile traffic (it stays
+healthy and either refuses or bounds every attempt), NOT that hostile
+connections succeed.
+
+Against the default fail-closed server every unauthenticated WS connect is
+correctly refused at the auth boundary (the browser route's
+``Depends(require_authenticated)`` rejects the upgrade pre-accept, surfaced by
+websockets as ``InvalidStatus`` HTTP 403). That clean rejection is the
+expected, healthy behavior — not a failure. A *completed* unauthenticated
+handshake, by contrast, would be an auth bypass, so the auth-gated probes pass
+``--require-refused`` to flag it.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -6,18 +27,20 @@ import asyncio
 import contextlib
 import json
 import time
-from dataclasses import dataclass
+from collections import Counter
 from urllib.parse import urlparse
 
 import httpx
 import websockets
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
-
-@dataclass(slots=True)
-class ProbeSummary:
-    attempted: int = 0
-    succeeded: int = 0
-    failed: int = 0
+# ---------------------------------------------------------------------------
+# Survival outcomes for a single hostile attempt.
+# ---------------------------------------------------------------------------
+REFUSED = "refused"  # server cleanly declined (auth 401/403, 1008 close, TCP reset)
+COMPLETED = "completed"  # handshake fully succeeded (under fail-closed: an auth leak)
+HUNG = "hung"  # attempt exceeded the timeout budget (a liveness / DoS signal)
+ERROR = "error"  # server error (5xx / 1011) or an unexpected probe failure
 
 
 async def _health(base_url: str, timeout_s: float) -> bool:
@@ -35,14 +58,64 @@ def _ws_url(base_url: str, worker_id: str) -> str:
     return f"{proto}{host}/ws/browser/{worker_id}/term"
 
 
-async def _slowloris_once(base_url: str, header_bytes_per_chunk: int, delay_s: float, timeout_s: float) -> bool:
+def _classify_ws_failure(exc: BaseException) -> str:
+    """Map a websockets / asyncio connect failure to a survival outcome."""
+    if isinstance(exc, InvalidStatus):
+        # Pre-accept handshake rejection — the fail-closed browser-route shape.
+        return REFUSED if exc.response.status_code in (401, 403) else ERROR
+    if isinstance(exc, ConnectionClosed):
+        # Accept-then-close: 1008 (policy / auth) is a clean refusal; else a fault.
+        return REFUSED if exc.code == 1008 else ERROR
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return HUNG
+    if isinstance(exc, OSError):
+        # TCP refused / reset — the server declined the connection, not a crash.
+        return REFUSED
+    return ERROR
+
+
+async def _burst_ws_once(ws_url: str, timeout_s: float) -> str:
+    try:
+        async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
+            await ws.send(json.dumps({"type": "input", "data": "echo burst\n"}))
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(ws.recv(), timeout=1.0)
+            return COMPLETED
+    except Exception as exc:
+        return _classify_ws_failure(exc)
+
+
+async def _oversized_ws_frame_once(ws_url: str, payload_bytes: int, timeout_s: float) -> str:
+    giant = "A" * payload_bytes
+    msg = {"type": "input", "data": giant}
+    try:
+        async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
+            await ws.send(json.dumps(msg))
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(ws.recv(), timeout=1.0)
+            # NOTE: under a fail-closed server the connect is refused BEFORE this
+            # runs, so the server's max_ws_message_bytes guard is not exercised in
+            # that posture (this cell then asserts refusal, like burst). The guard
+            # itself is covered by the server unit tests; an authenticated lane
+            # could exercise it end-to-end in future.
+            return COMPLETED
+    except Exception as exc:
+        return _classify_ws_failure(exc)
+
+
+async def _slowloris_once(base_url: str, header_bytes_per_chunk: int, delay_s: float, timeout_s: float) -> str:
     parsed = urlparse(base_url)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     if parsed.scheme == "https":
-        return False  # raw TLS slowloris is intentionally out of scope for this helper
+        return REFUSED  # raw TLS slowloris is intentionally out of scope for this helper
 
-    _reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout_s)
+    try:
+        _reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout_s)
+    except TimeoutError:
+        return HUNG
+    except OSError:
+        return REFUSED
     try:
         req = (
             "GET /ws/browser/provide-shell/term HTTP/1.1\r\n"
@@ -57,39 +130,15 @@ async def _slowloris_once(base_url: str, header_bytes_per_chunk: int, delay_s: f
             writer.write(req[i : i + header_bytes_per_chunk])
             await writer.drain()
             await asyncio.sleep(delay_s)
-        # If we reach here without reset/timeout, treat as "accepted slow drip".
-        return True
-    except Exception:
-        return False
+        return COMPLETED  # server tolerated the slow drip without resetting
+    except TimeoutError:
+        return HUNG
+    except OSError:
+        return REFUSED  # server reset the slow client — a bounded, healthy defense
     finally:
         writer.close()
         with contextlib.suppress(Exception):
             await writer.wait_closed()
-
-
-async def _oversized_ws_frame_once(ws_url: str, payload_bytes: int, timeout_s: float) -> bool:
-    giant = "A" * payload_bytes
-    msg = {"type": "input", "data": giant}
-    try:
-        async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
-            await ws.send(json.dumps(msg))
-            # The server may close, emit error, or ignore. Any non-crash behavior counts as success.
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(ws.recv(), timeout=1.0)
-            return True
-    except Exception:
-        return True
-
-
-async def _burst_ws_once(ws_url: str, timeout_s: float) -> bool:
-    try:
-        async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
-            await ws.send(json.dumps({"type": "input", "data": "echo burst\n"}))
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(ws.recv(), timeout=1.0)
-            return True
-    except Exception:
-        return False
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -99,7 +148,6 @@ async def run(args: argparse.Namespace) -> int:
         return 2
 
     ws_url = _ws_url(args.base_url, args.worker_id)
-    summary = ProbeSummary()
     started = time.perf_counter()
 
     if args.mode == "slowloris":
@@ -114,54 +162,53 @@ async def run(args: argparse.Namespace) -> int:
 
     sem = asyncio.Semaphore(args.concurrency)
 
-    async def _bounded(coro):
+    async def _bounded(coro: object) -> str:
         async with sem:
-            return await coro
+            return await coro  # type: ignore[no-any-return]
 
-    for ok in await asyncio.gather(*[_bounded(c) for c in coros], return_exceptions=True):
-        summary.attempted += 1
-        if ok is True:
-            summary.succeeded += 1
-        else:
-            summary.failed += 1
+    outcomes: Counter[str] = Counter()
+    for result in await asyncio.gather(*[_bounded(c) for c in coros], return_exceptions=True):
+        outcomes[result if isinstance(result, str) else ERROR] += 1
 
     after = await _health(args.base_url, args.timeout_s)
     duration_s = time.perf_counter() - started
+    attempted = sum(outcomes.values())
+
+    # Survival verdict: the server stayed healthy AND no attempt hung or errored.
+    # With --require-refused (the auth-gated WS probes) a COMPLETED unauthenticated
+    # connect is an auth bypass and also fails; slowloris omits it (a tolerated
+    # slow drip is acceptable as long as nothing hangs or crashes).
+    survived = after and outcomes[HUNG] == 0 and outcomes[ERROR] == 0
+    if args.require_refused:
+        survived = survived and outcomes[COMPLETED] == 0
+    verdict = "PASS" if survived else "FAIL"
+
     print(
-        f"mode={args.mode} attempted={summary.attempted} succeeded={summary.succeeded} "
-        f"failed={summary.failed} duration_s={duration_s:.2f} healthy_after={after}"
+        f"mode={args.mode} attempted={attempted} refused={outcomes[REFUSED]} "
+        f"completed={outcomes[COMPLETED]} hung={outcomes[HUNG]} error={outcomes[ERROR]} "
+        f"duration_s={duration_s:.2f} healthy_after={after} require_refused={args.require_refused} "
+        f"-> {verdict}"
     )
-    failure_rate = (summary.failed / summary.attempted) if summary.attempted else 1.0
-    success_rate = (summary.succeeded / summary.attempted) if summary.attempted else 0.0
-    print(
-        f"success_rate={success_rate:.4f} failure_rate={failure_rate:.4f} "
-        f"min_success_rate={args.min_success_rate:.4f} max_failure_rate={args.max_failure_rate:.4f}"
-    )
-    if not after:
-        print("health check failed after probes")
-        return 1
-    if success_rate < args.min_success_rate:
-        print("success rate below threshold")
-        return 1
-    if failure_rate > args.max_failure_rate:
-        print("failure rate above threshold")
-        return 1
-    return 0
+    return 0 if survived else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Hostile-client probe for uterm server.")
-    parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8400")
+    parser = argparse.ArgumentParser(description="Hostile-client survival probe for the uterm server.")
+    parser.add_argument("--base-url", required=True, help="Server base URL, e.g. http://127.0.0.1:8780")
     parser.add_argument("--worker-id", default="provide-shell", help="Session/worker ID")
-    parser.add_argument("--mode", choices=("slowloris", "oversized", "burst"), default="oversized")
+    parser.add_argument("--mode", choices=("slowloris", "oversized", "burst"), default="burst")
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--concurrency", type=int, default=25)
     parser.add_argument("--timeout-s", type=float, default=5.0)
     parser.add_argument("--payload-bytes", type=int, default=2_000_000, help="oversized mode payload size")
     parser.add_argument("--header-bytes-per-chunk", type=int, default=8, help="slowloris chunk size")
     parser.add_argument("--delay-s", type=float, default=0.15, help="slowloris delay between chunks")
-    parser.add_argument("--min-success-rate", type=float, default=0.5)
-    parser.add_argument("--max-failure-rate", type=float, default=0.5)
+    parser.add_argument(
+        "--require-refused",
+        action="store_true",
+        help="Fail if any attempt completes a handshake. Set for auth-gated probes: a completed "
+        "unauthenticated connect against a fail-closed server is an auth bypass.",
+    )
     return parser
 
 
