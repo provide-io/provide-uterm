@@ -854,6 +854,10 @@ def create_server_app(
                 with contextlib.suppress(asyncio.CancelledError):
                     await pam_task
             if audit_checkpoint_task is not None:
+                # The task and the chain are created together in the startup
+                # block above, so the task being set implies the chain is too
+                # (narrows AuditChain | None for the head flush below).
+                assert audit_chain is not None
                 audit_checkpoint_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await audit_checkpoint_task
