@@ -64,12 +64,22 @@ class WebSocketTransport(ConnectionTransport):
             self._ws = None
 
     async def send(self, data: bytes) -> None:
-        """Send raw bytes."""
+        """Send bytes as a WebSocket TEXT frame.
+
+        The ``websockets`` library maps ``str`` -> TEXT (opcode 1) and ``bytes``
+        -> BINARY (opcode 2). The uterm control plane and the text-based
+        Cloudflare Worker speak TEXT frames, so the incoming UTF-8 bytes (already
+        encoded by ``TransportSession.send`` with ``errors="replace"``) are
+        decoded back to ``str`` here to force a TEXT frame — a BINARY frame
+        arrives at the worker as a ``JsProxy`` and is silently dropped.
+        ``errors="replace"`` keeps the decode total for any direct-bytes caller.
+        Telnet stays BINARY via its own (byte-protocol) transport.
+        """
         if not self._connected or not self._ws:
             raise ConnectionError("Not connected")
 
         try:
-            await self._ws.send(data)
+            await self._ws.send(data.decode("utf-8", errors="replace"))
         except ConnectionClosed as exc:
             await self.disconnect()
             raise ConnectionError("Connection closed") from exc
