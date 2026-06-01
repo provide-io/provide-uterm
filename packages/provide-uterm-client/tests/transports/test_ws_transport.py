@@ -141,7 +141,22 @@ class TestSend:
         await t.connect("h", 1)
 
         await t.send(b"hello")
-        ws.send.assert_awaited_once_with(b"hello")
+        # WS must emit a TEXT frame: the websockets lib maps str -> TEXT,
+        # bytes -> BINARY, so send() decodes to str. Asserting the str (not
+        # b"hello") pins TEXT-frame behavior and fails if send() regresses to
+        # passing raw bytes (a binary frame the text server would drop).
+        ws.send.assert_awaited_once_with("hello")
+
+    async def test_send_decodes_utf8_to_text_frame(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ws = _make_ws()
+        monkeypatch.setattr("websockets.connect", AsyncMock(return_value=ws))
+        t = WebSocketTransport()
+        await t.connect("h", 1)
+
+        # "café" -> UTF-8 bytes; send() must decode back to the str so the frame
+        # is TEXT and the codec is UTF-8 (latin-1 would mojibake the é).
+        await t.send("café".encode())
+        ws.send.assert_awaited_once_with("café")
 
     async def test_send_connection_closed_disconnects_and_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ws = _make_ws()
