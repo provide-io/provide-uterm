@@ -12,7 +12,7 @@ Sorted by severity. "Regression?" = introduced or worsened by this hardening bod
 
 | Sev | Issue | Location | Fix | Regression? |
 |-----|-------|----------|-----|-------------|
-| **H** | `Dockerfile.server` build fails: `uv sync --extra all` needs `provide-uterm-annotation`, never COPYed into context (CI-gated by container-scan.yml) | docker/Dockerfile.server:67 | Add `COPY packages/provide-uterm-annotation/ ...` before the `uv sync` RUN; remove stale `NEEDS-BUILD-VALIDATION` comment | **Yes** (build broken; CI fails) |
+| **H** | `Dockerfile.server` build fails: `uv sync --extra all` needs `provide-uterm-annotation`, which is never copied into the build context (CI-gated by container-scan.yml) | docker/Dockerfile.server:67 | Add `COPY packages/provide-uterm-annotation/ ...` before the `uv sync` RUN; remove stale `NEEDS-BUILD-VALIDATION` comment | **Yes** (build broken; CI fails) |
 | **M** | `Dockerfile.cf` unbuildable: `uv sync --frozen` needs server+client workspace members, COPY set omits both | docker/Dockerfile.cf:46-48,54 | Add `COPY` for `provide-uterm-client/` and `provide-uterm-server/`; fix misleading line-45 comment | **Yes** (documented build command broken; not CI-gated) |
 | **M** | Governance webhook gates crash (uncaught `TypeError`) when a `Principal` is in metadata; tears down WS session on every keystroke when governance enabled. Latent claim-leak if a serializer is ever added | store.py:256; ext.py:77/132/227/277 | Project Principal to allow-listed `{subject_id, roles}` at store.py:256 (do **not** add a dataclass encoder); regression test | **Yes** (governance webhook path made reachable) |
 | **M** | `_redact_frame_fields` skips non-string `analysis.raw` and never redacts `snapshot.prompt_detected` → secrets reach lower-priv viewers despite active output gate | router_impl.py:58-81; websockets_impl.py:399 | Recurse into structured values (mirror `_redact_value`); add `prompt_detected` to redacted fields; tests on both broadcast + connect-time paths | **Yes** (redaction gap in new redaction pass) |
@@ -60,7 +60,7 @@ The code is in good shape; the docs were only partially reconciled and now misle
 
 **Fix now (blocking — broken builds + active runtime defect):**
 1. **Dockerfile.server (H):** add the `provide-uterm-annotation` COPY — this is a hard CI failure on the container-scan job; every `docker/**` or server PR is currently red until fixed.
-2. **Dockerfile.cf (M):** add the `provide-uterm-client` + `provide-uterm-server` COPYs — the documented `pywrangler dev` image cannot build.
+2. **Dockerfile.cf (M):** add the `provide-uterm-client` + `provide-uterm-server` COPY instructions — the documented `pywrangler dev` image cannot build.
 3. **Governance Principal crash (M):** project the Principal to `{subject_id, roles}` at store.py:256 — with governance enabled today, every authenticated keystroke crashes the gate and tears down the session. Closes the latent claim-leak too.
 
 **Fix soon (security/availability — gaps the hardening created or worsened):**
