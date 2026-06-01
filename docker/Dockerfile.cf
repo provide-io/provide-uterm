@@ -22,8 +22,48 @@
 # NOTE: wrangler dev performs KV/DO isolation using local SQLite storage.
 # State persists in the container's /tmp — it is NOT written to Cloudflare.
 #
+# The browser UI is built IN-IMAGE (frontend-build stage) and is no longer
+# committed to the source tree; the worker's static dir is populated by a
+# COPY --from=frontend-build below.
+#
 
+# ---- shared build args ------------------------------------------------------
+# Node base image tag — keep in sync with .nvmrc (single source of truth for the
+# Node major used to build the frontend). Same value is used by Dockerfile.server.
+ARG NODE_IMAGE=node:20-slim
+# Canonical location of the compiled frontend inside the SERVER package source
+# tree (where `npm run build:frontend` emits). Defined ONCE here and mirrored by
+# Dockerfile.server so the two images can't drift.
+ARG FRONTEND_DIR=packages/provide-uterm-server/src/provide/uterm/server/frontend
+
+# ---- frontend-build stage: compile the browser UI ---------------------------
+FROM ${NODE_IMAGE} AS frontend-build
+
+WORKDIR /src
+
+# Copy the npm workspace manifests + lockfile first so `npm ci` is layer-cached
+# independently of source changes.
+COPY package.json package-lock.json ./
+COPY packages/provide-uterm-frontend/package.json packages/provide-uterm-frontend/package.json
+COPY packages/provide-uterm-app/package.json packages/provide-uterm-app/package.json
+
+# Reproducible install from the committed lockfile (no re-resolution).
+RUN npm ci
+
+# Bring in the rest of the workspace needed to build (frontend/app source +
+# build scripts; the build emits into the server package dir under /src).
+COPY scripts/ scripts/
+COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
+COPY packages/provide-uterm-app/ packages/provide-uterm-app/
+
+# Compile widgets (tsc + copy) and the app bundle (vite build). Output lands in
+# ${FRONTEND_DIR} under /src.
+RUN npm run build:frontend
+
+# ---- runtime stage ----------------------------------------------------------
 FROM node:26-slim
+
+ARG FRONTEND_DIR
 
 # Install Python + uv. The node:26-slim base is Debian trixie, whose `python3`
 # is 3.13 (there is no `python3.11` apt package on this base) — that satisfies
@@ -62,11 +102,11 @@ WORKDIR /app/packages/provide-uterm-cloudflare
 RUN uv sync --frozen --extra dev
 
 # Populate the CF package's static dir with the compiled frontend assets so the
-# worker can serve the UI at runtime. The build output lives in the SERVER
-# package's frontend dir (committed by `npm run build:frontend`) — the old
-# `provide-uterm/.../frontend/` path was removed in the namespace refactor.
-RUN mkdir -p src/provide_uterm_cloudflare/ui/static \
-    && cp -r /app/packages/provide-uterm-server/src/provide/uterm/server/frontend/. \
+# worker can serve the UI at runtime. The assets come straight from the
+# frontend-build stage (built in-image, not committed to git). The source path
+# (${FRONTEND_DIR}) is the canonical build-output dir shared with Dockerfile.server.
+RUN mkdir -p src/provide_uterm_cloudflare/ui/static
+COPY --from=frontend-build /src/${FRONTEND_DIR}/ \
         src/provide_uterm_cloudflare/ui/static/
 
 EXPOSE 27788
