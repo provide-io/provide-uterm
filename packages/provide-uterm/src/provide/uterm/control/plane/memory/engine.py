@@ -81,6 +81,24 @@ class MemoryControlPlane:
             after = len(s.resume_tokens) + len(s.session_tokens) + len(s.sessions) + len(s.leases) + len(s.approvals)
             return before - after
 
+    async def get_audit_head(self) -> tuple[int, str] | None:
+        """Return the in-memory audit-chain head ``(seq, record_hash)``, or
+        ``None`` if none recorded yet.  NON-DURABLE: the memory backend loses the
+        head on restart (consistent with this backend's documented volatility),
+        so cross-restart anti-rollback only holds for the sqlite backend."""
+        async with self._lock:
+            return self._state.audit_head
+
+    async def set_audit_head(self, seq: int, record_hash: str) -> None:
+        """Persist the audit-chain head MONOTONICALLY.
+
+        A lower-or-equal seq is a NO-OP, so the head never moves backwards
+        (anti-rollback guard).  NON-DURABLE — see ``get_audit_head``."""
+        async with self._lock:
+            if self._state.audit_head is not None and self._state.audit_head[0] >= seq:
+                return
+            self._state.audit_head = (seq, record_hash)
+
     def session_store(self, tx: MemoryTransaction) -> MemorySessionStore:
         return MemorySessionStore(tx.state, tx)
 

@@ -29,6 +29,8 @@ class MemoryState:
     sessions: dict[str, SessionRecord] = field(default_factory=dict)
     approvals: dict[str, ApprovalRecord] = field(default_factory=dict)
     leases: dict[str, LeaseRecord] = field(default_factory=dict)
+    # Latest audit-chain head (seq, record_hash); None until first set. Non-durable.
+    audit_head: tuple[int, str] | None = None
 
 
 def _copy_state(state: MemoryState) -> MemoryState:
