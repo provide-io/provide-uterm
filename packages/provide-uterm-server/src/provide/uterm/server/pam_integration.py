@@ -51,6 +51,15 @@ async def _forward_to_relay(event_json: dict[str, object], relay_url: str, relay
     try:
         import httpx
 
+        from provide.uterm.server.egress import assert_webhook_target_allowed
+
+        # L11: guard the outbound POST against SSRF/exfiltration before sending —
+        # a relay_url pointing at a cloud-metadata IP (or a rebound internal host)
+        # would otherwise leak PAM event data + the relay bearer token. On a
+        # blocked target this raises EgressBlockedError, which the except below
+        # already swallows (log + skip the POST), so the PAM loop never crashes.
+        await assert_webhook_target_allowed(relay_url)
+
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.post(
                 url,
@@ -68,6 +77,14 @@ async def _create_relay_tunnel(
     url = relay_url.rstrip("/") + "/api/tunnels"
     try:
         import httpx
+
+        from provide.uterm.server.egress import assert_webhook_target_allowed
+
+        # L11: same egress guard as _forward_to_relay — refuse to POST tunnel
+        # provisioning (which carries the relay bearer token) to a metadata IP or
+        # rebound internal host. EgressBlockedError lands in the except below,
+        # which logs and returns None — the existing failure path for this call.
+        await assert_webhook_target_allowed(relay_url)
 
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(
