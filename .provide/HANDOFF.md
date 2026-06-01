@@ -1,6 +1,6 @@
 # Handoff: Enterprise Hardening & Reliability Program
 
-_Last updated: 2026-06-01 (verify-remediation wave + ws_transport.py adoption). Supersedes the prior hardening handoff._
+_Last updated: 2026-06-01 (build-infra overhaul + CI fully green + hostile-probe rewrite @ `4b200b60`). Supersedes the prior hardening handoff._
 
 ## Problem / request
 
@@ -92,6 +92,35 @@ shipped gaps — now remediated.
 - **Full gate FULLY GREEN** (post-everything): `run_all_tests.py` → all package suites pass, **100% coverage
   every package**, 0 failures (the `test_limiter` flake did not recur). Pushed; CI running.
 
+## Build-infra overhaul + CI fully green (2026-06-01, later session @ `4b200b60`)
+
+Validating the push exposed that **🧪 CI had been red on `main` for 6+ commits** — a cascade hidden behind
+one early-failing `quality` step (`check_max_loc`). Root-caused and fixed the whole cascade plus a build-infra
+overhaul. **All five workflows are now green** on `4b200b60`: 🧪 CI · 🔬 CodeQL · 🐋 Container Scan ·
+🛡️ Hostile Client · 🛡️ Release Governance.
+
+- **Dependencies + toolchain:** all Python + JS/TS deps upgraded to latest and re-locked; Node pinned via
+  `.nvmrc` (single source for CI + both Dockerfiles); root `package.json` `engines`.
+- **Multi-stage Docker + Trivy green (both images):** the browser UI is built in-image (frontend assets no
+  longer committed). The real Trivy HIGH/CRITICAL hits were build tooling in the **base image's system Python**
+  (`/usr/local/...`), NOT the uv venv I had pruned — stripped in the runtime stages with a self-verifying
+  `find`; the CF runtime base is now `apt-get upgrade`d. `container-scan.yml` scans the CF image too; Dependabot
+  extended to npm + docker. The Phase-4 `lock-consistency` gate was **removed** (redundant with `npm ci` +
+  `uv sync --frozen`, per YAGNI).
+- **Hidden quality-job cascade (all fixed):** stale max-loc baseline (8 files); 28 missing SPDX headers; 49
+  ruff import-sorts (ruff 0.15 bump); a strict-mypy regression from the `TransportSession` refactor
+  (`TelnetTransport` now declares the `ConnectionTransport` ABC); machine-local absolute doc links; codespell
+  typos.
+- **Flake/quirk fixes:** worker-disconnect frame-ordering (the tests are duplicated in BOTH the core and
+  server packages — both copies fixed); PTY throughput floor; and the server-quality(3.11) "coverage flake"
+  that was actually a **coverage.py 7.14 `async with` exit-arc attribution quirk on Python 3.11**
+  (`# pragma: no branch` on two `connection.py` lines + positive/negative tests that also satisfy the
+  `--changed-only` mutation gate). NOT reproducible locally except in a faithful frozen-3.11 env.
+- **Hostile-client probe rewrite (YAGNI-minimal):** asserts *survival* (server stays healthy + refuses or
+  bounds every attempt), not connection-success — the correct signal against the fail-closed posture (a 403
+  refusal is healthy). Auth-gated probes flag a completed unauthenticated handshake as an auth bypass. Verified
+  locally (burst 200/200 refused, oversized 120/120, slowloris survives) and green in CI.
+
 ## Detailed checklist for next session
 
 - [x] **Resolve the stray WIP** — DONE. `transports/ws_transport.py` (+ tests) committed in `8e9840e4`/
@@ -105,12 +134,12 @@ shipped gaps — now remediated.
   reliability follow-up. Flake: find the earlier random-order test leaving shared RateLimiter/clock state.
   Telnet M3: the ssh/ws connectors got post-connect peer-IP validation (`f5169157`); telnet needs a public
   peer-IP accessor on `TelnetTransport` (client pkg) then the same guard before first receive.
-- [ ] **Docker images** — VALIDATING (2026-06-01: `docker compose build` run locally + the CI `🐋 Container
-  Scan` job on the push). Confirm the uv-managed-venv `Dockerfile.server` (`uv sync --extra all` + pyte) +
-  `Dockerfile.cf` build clean; watch the CI container-scan result.
-- [ ] **CI watch (post-push)**: memray `test_event_bus_stress` may need a CI-env re-baseline (deselected
-  locally); the `test_limiter` seed flake; the container-scan/Docker build. The scheduled Hostile-Client
-  workflow was already red pre-push (independent of this work).
+- [x] **Docker images — DONE.** Both `Dockerfile.server` and `Dockerfile.cf` build clean (multi-stage,
+  in-image UI build) and the CI `🐋 Container Scan` Trivy HIGH/CRITICAL gate is **green on both images**
+  (build tooling stripped from the runtime stages).
+- [x] **CI fully green — DONE.** All five workflows pass on `4b200b60`. The previously-red 🛡️ Hostile Client
+  workflow is fixed by the survival-semantics probe rewrite. (The memray `test_event_bus_stress` is still
+  deselected locally as a known dev-machine flake — it is not gating CI.)
 - [x] **`ws_session.py` / `ws_transport.py` — DONE** (#35/#36): adopted, hardened for websockets 16.0,
   refactored onto the shared `TransportSession` base, 100% covered, committed. The *file* is complete; it
   simply has no consumer yet (the WS sibling of the telnet session `uwarp` uses). Wiring it into a flow is an
