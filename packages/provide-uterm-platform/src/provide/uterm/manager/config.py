@@ -38,6 +38,10 @@ class ManagerConfig(BaseModel):
 
     # Auth
     auth_token_env_var: str = "UTERM_MANAGER_API_TOKEN"  # noqa: S105
+    # Optional low-privilege worker token: when set, authorizes ONLY the
+    # worker-self-report routes (POST /agent/{id}/status + /register). Unset =>
+    # those routes still require the operator token (backward compatible).
+    auth_worker_token_env_var: str = "UTERM_MANAGER_WORKER_TOKEN"  # noqa: S105
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:2272"])
 
     # Dashboard

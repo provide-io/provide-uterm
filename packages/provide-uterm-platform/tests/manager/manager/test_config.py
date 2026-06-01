@@ -16,6 +16,7 @@ class TestManagerConfig:
         assert cfg.log_level == "info"
         assert cfg.worker_env_prefix == "UTERM_"
         assert cfg.auth_token_env_var == "UTERM_MANAGER_API_TOKEN"
+        assert cfg.auth_worker_token_env_var == "UTERM_MANAGER_WORKER_TOKEN"
         assert len(cfg.auth_public_paths) > 0
         assert len(cfg.auth_public_prefixes) > 0
 

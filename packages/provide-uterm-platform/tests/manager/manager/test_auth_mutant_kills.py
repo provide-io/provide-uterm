@@ -315,6 +315,7 @@ class TestSetupAuth:
         app.add_middleware.assert_called_once_with(
             TokenAuthMiddleware,
             token="mytoken",
+            worker_token=None,
             public_paths=frozenset(),
             public_prefixes=(),
         )
@@ -332,6 +333,7 @@ class TestSetupAuth:
         config = MagicMock()
         config.auth_public_paths = ["/health", "/ready"]
         config.auth_public_prefixes = ["/public/"]
+        config.auth_worker_token_env_var = "UTERM_MANAGER_WORKER_TOKEN"
         with patch.dict(os.environ, {"TEST_TOKEN_VAR": "tok"}):
             setup_auth(app, env_var="TEST_TOKEN_VAR", config=config)
         call = app.add_middleware.call_args
