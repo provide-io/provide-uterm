@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, cast
 
-from fastapi import Depends, Request
+from fastapi import Depends, Path, Request
 from fastapi.responses import JSONResponse
 from provide.telemetry import get_logger
 from pydantic import ValidationError
@@ -21,6 +21,35 @@ if TYPE_CHECKING:
     from provide.uterm.manager.models import AgentStatusBase
 
 logger = get_logger(__name__)
+
+
+# Operator-authority fields a worker self-report (POST /agent/{id}/register)
+# must NEVER set. A low-privilege worker token is accepted on /register, so the
+# attacker-controlled body is constrained against these to prevent privilege
+# escalation (e.g. injecting a set_goal/set_directive operator command into an
+# agent's queue, claiming hijack/pause state, or forging command history):
+#   * pending_command_seq/_type/_payload — the operator command queue, set only
+#     by the set-goal/set-directive operator routes and delivered to the agent
+#     runtime by the status poll. A worker setting these is the priv-esc.
+#   * manager_command_history — operator/manager-owned audit trail of commands.
+#   * is_hijacked/hijacked_by/hijacked_at — hijack-lease state owned by the
+#     manager; a self-report must not forge a hijack claim.
+#   * paused — operator pause control (status returns agent.paused), not a
+#     worker self-report field.
+# pid/session_id/state/last_action/error_* are legitimately self-reported and
+# are intentionally NOT in this set (see the status route's allowed fields).
+_OPERATOR_FIELDS: frozenset[str] = frozenset(
+    {
+        "pending_command_seq",
+        "pending_command_type",
+        "pending_command_payload",
+        "manager_command_history",
+        "is_hijacked",
+        "hijacked_by",
+        "hijacked_at",
+        "paused",
+    }
+)
 
 
 # --- Command history helpers ---
@@ -204,8 +233,22 @@ async def agent_session_data(agent_id: str, request: Request) -> Any:
 
 
 @router.post("/agent/{agent_id}/register")
-async def register_agent(agent_id: str, data: dict[str, Any], manager: AgentManager = Depends(require_manager)) -> Any:  # noqa: B008
+async def register_agent(
+    data: dict[str, Any],
+    agent_id: str = Path(pattern=r"^[\w\-]+$"),
+    manager: AgentManager = Depends(require_manager),  # noqa: B008
+) -> Any:
     now = time.time()
+    # Strict-reject (not silent-strip): a worker self-report has no legitimate
+    # reason to send operator-authority fields, so a body containing any is
+    # 422'd loudly. This makes a privilege-escalation attempt visible/auditable
+    # rather than silently swallowed (V-H2).
+    rejected = _OPERATOR_FIELDS.intersection(data)
+    if rejected:
+        return JSONResponse(
+            {"error": f"register may not set operator-authority fields: {sorted(rejected)}"},
+            status_code=422,
+        )
     created = agent_id not in manager.agents
     if created and len(manager.agents) >= manager.max_agents:
         # Auto-create must honor max_agents so any token holder cannot grow the
@@ -214,6 +257,9 @@ async def register_agent(agent_id: str, data: dict[str, Any], manager: AgentMana
             {"error": f"Max agents ({manager.max_agents}) reached"},
             status_code=429,
         )
+    # An EXISTING agent's base_payload carries its real operator-field values, so
+    # omitting them from the body preserves them (a worker can't overwrite); a
+    # NEW agent gets the model defaults.
     base_payload: dict[str, Any] = {"agent_id": agent_id} if created else manager.agents[agent_id].model_dump()
     try:
         merged = manager._agent_status_class.model_validate(
