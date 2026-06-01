@@ -12,26 +12,26 @@ _Reviewed 2026-05-29 against commit `f8db61e` on `main`._
 ## Findings (ordered by severity)
 
 1. **P1: Server modules are still large and multi-purpose**
-   - [runtime.py](/Volumes/data/pyv/provide-uterm/packages/provide-uterm-server/src/provide/uterm/server/runtime.py)
-   - [webhooks.py](/Volumes/data/pyv/provide-uterm/packages/provide-uterm-server/src/provide/uterm/server/webhooks.py)
-   - [registry.py](/Volumes/data/pyv/provide-uterm/packages/provide-uterm-server/src/provide/uterm/server/registry.py)
+   - [runtime.py](../packages/provide-uterm-server/src/provide/uterm/server/runtime.py)
+   - [webhooks.py](../packages/provide-uterm-server/src/provide/uterm/server/webhooks.py)
+   - [registry.py](../packages/provide-uterm-server/src/provide/uterm/server/registry.py)
    - Impact: raises regression risk, makes ownership unclear, and slows security review velocity.
    - Action: continue extraction into focused modules with behavior-preserving tests.
 
 2. **P1: Release-readiness and quality claims can drift**
-   - [README.md](/Volumes/data/pyv/provide-uterm/README.md)
-   - [RELEASE_READINESS.md](/Volumes/data/pyv/provide-uterm/RELEASE_READINESS.md)
+   - [README.md](../README.md)
+   - [RELEASE_READINESS.md](../RELEASE_READINESS.md)
    - Impact: operational confusion and potential false confidence when docs and gates disagree.
    - Action: add CI check to enforce consistency between documented quality/security claims and current artifacts.
 
 3. **P2: Mutation debt still exists in tracked auth gate**
-   - [RELEASE_READINESS.md](/Volumes/data/pyv/provide-uterm/RELEASE_READINESS.md)
+   - [RELEASE_READINESS.md](../RELEASE_READINESS.md)
    - Impact: hidden logic defects in critical auth helpers can survive despite coverage.
    - Action: finish planned auth mutation kill-rate uplift and set fail threshold to 100% for scoped gate once complete.
 
 4. **P2: Recording/security posture is strong but still operationally sensitive**
-   - [security-considerations.md](/Volumes/data/pyv/provide-uterm/docs/security-considerations.md)
-   - [recording.py](/Volumes/data/pyv/provide-uterm/packages/provide-uterm/src/provide/uterm/recording.py)
+   - [security-considerations.md](../docs/security-considerations.md)
+   - [recording.py](../packages/provide-uterm/src/provide/uterm/recording.py)
    - Impact: single-operator deployment lowers user-risk, but local secret/retention hygiene still matters for incident response and backups.
    - Action: keep retention/redaction defaults explicit and validated by config tests.
 
@@ -81,8 +81,8 @@ _Reviewed 2026-05-29 against commit `f8db61e` on `main`._
 ## Tech debt actions already completed in this pass
 
 1. Extracted reusable webhook-signing helpers from server webhook manager:
-   - [webhook_signing.py](/Volumes/data/pyv/provide-uterm/packages/provide-uterm-server/src/provide/uterm/server/webhook_signing.py)
-   - [webhooks.py](/Volumes/data/pyv/provide-uterm/packages/provide-uterm-server/src/provide/uterm/server/webhooks.py)
+   - [webhook_signing.py](../packages/provide-uterm-server/src/provide/uterm/server/webhook_signing.py)
+   - [webhooks.py](../packages/provide-uterm-server/src/provide/uterm/server/webhooks.py)
 2. Kept import compatibility for existing callers/tests by reusing exported names from `webhooks.py`.
 
 ## Recommended next steps
