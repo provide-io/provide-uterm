@@ -93,6 +93,16 @@ def compute_security_posture(config: ServerConfig) -> dict[str, object]:
     if not config.security.block_private_connector_targets:
         dev_opt_outs.append("security.block_private_connector_targets=false (connectors may reach internal hosts)")
 
+    # Compliance posture: the tamper-evident WORM audit chain. Defensive getattr
+    # keeps the report working for embedder configs predating the ``audit`` field.
+    audit_chain_enabled = bool(getattr(getattr(config, "audit", None), "chain_enabled", False))
+    if not audit_chain_enabled:
+        # Not a dev opt-out (it doesn't relax a control) — a compliance note: the
+        # audit log is only a plain log stream, not integrity-chained.
+        warnings.append(
+            "audit log is not tamper-evident (audit.chain_enabled=false) — enable the WORM chain for compliance"
+        )
+
     dev_opt_outs.sort()
 
     # ``secure`` is True iff this is a declared production deployment AND no
@@ -112,6 +122,8 @@ def compute_security_posture(config: ServerConfig) -> dict[str, object]:
         # secure-by-default True). Defensive getattr keeps the report JSON-safe
         # for any embedder config object that predates the field.
         "idp_signing_required": getattr(config.auth, "webhook_idp_require_signed_response", None),
+        # Compliance: whether the tamper-evident WORM audit chain is enabled.
+        "audit_chain_enabled": audit_chain_enabled,
         "warnings": warnings,
         "secure": secure,
     }

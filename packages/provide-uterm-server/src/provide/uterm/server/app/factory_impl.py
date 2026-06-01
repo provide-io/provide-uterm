@@ -13,6 +13,7 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
@@ -34,6 +35,8 @@ from provide.uterm.server.app.middleware import (
 )
 from provide.uterm.server.app.posture import compute_security_posture
 from provide.uterm.server.app.routes_wiring import install_routers, mount_frontend_assets
+from provide.uterm.server.audit import audit_event, configure_audit_chain
+from provide.uterm.server.audit_chain import GENESIS_HASH, AuditChain, verify_audit_log
 from provide.uterm.server.auth import (
     LocalIdentityProvider,
     WebhookIdentityProvider,
@@ -716,6 +719,23 @@ def create_server_app(
             except Exception:
                 logger.exception("control_plane_reap_error")
 
+    async def _checkpoint_audit_head(chain: AuditChain) -> None:
+        """Periodically checkpoint the audit-chain head into the control plane.
+
+        Cheap atomic reads of ``chain.seq``/``chain.last_hash`` (no awaits in the
+        synchronous append path) flushed to the durable control-plane head, which
+        is the cross-restart anti-rollback anchor. ``set_audit_head`` is monotonic
+        so a checkpoint can never move the head backwards.
+        """
+        while True:
+            await asyncio.sleep(config.control_plane.reap_interval_s)
+            try:
+                await control_plane.set_audit_head(chain.seq, chain.last_hash)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("audit_head_checkpoint_error")
+
     async def _node_registry_heartbeat() -> None:
         """Periodically announce Node status to the External Management Tier."""
         discovery_provider: DiscoveryProvider
@@ -757,6 +777,46 @@ def create_server_app(
             await registry.start_auto_start_sessions()
 
         await control_plane.migrate()
+
+        # WORM audit chain (opt-in). Resume the chain from the on-disk head,
+        # verifying it against the persisted control-plane head, then start the
+        # periodic head checkpoint. The append path stays fully synchronous; only
+        # the checkpoint task touches the (async) control plane.
+        audit_chain: AuditChain | None = None
+        audit_checkpoint_task: asyncio.Task[None] | None = None
+        if config.audit.chain_enabled and config.audit.chain_file:
+            cp_head = await control_plane.get_audit_head()
+            # Startup integrity check: verify the on-disk log against the head.
+            result = verify_audit_log(config.audit.chain_file, expected_head=cp_head)
+            # Alarm predicate: a brand-new deployment (no persisted head AND no
+            # file yet) is the legitimate genesis case — verify reports ok=False
+            # only because the file is absent, so don't false-alarm. Alarm when
+            # the control-plane head exists (rollback/truncation possible) OR the
+            # file exists but is internally broken.
+            file_exists = Path(config.audit.chain_file).exists()
+            if not result.ok and (cp_head is not None or file_exists):
+                # LOUD alarm — tamper or end-truncation/rollback detected. Boot
+                # anyway (refusing to boot would let an attacker DoS by corrupting
+                # the log), but emit a CRITICAL log + an audit event so monitoring
+                # fires.
+                logger.critical(
+                    "audit_chain_integrity_alarm reason=%s first_bad_seq=%s",
+                    result.reason,
+                    result.first_bad_seq,
+                )
+                audit_event(
+                    "audit.chain_integrity_alarm",
+                    detail={"reason": result.reason, "first_bad_seq": result.first_bad_seq},
+                )
+            # Resume from the file's ACTUAL head so the forward chain stays valid.
+            resume_seq = result.head_seq or 0
+            resume_hash = result.head_hash or GENESIS_HASH
+            audit_chain = AuditChain(config.audit.chain_file, seq=resume_seq, last_hash=resume_hash)
+            configure_audit_chain(audit_chain)
+            # Re-checkpoint the resumed head (monotonic — a no-op if it's behind).
+            await control_plane.set_audit_head(resume_seq, resume_hash)
+            audit_checkpoint_task = asyncio.create_task(_checkpoint_audit_head(audit_chain))
+
         boot_task = asyncio.create_task(_delayed_boot())
         boot_task.add_done_callback(
             lambda t: (
@@ -793,6 +853,17 @@ def create_server_app(
                 pam_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await pam_task
+            if audit_checkpoint_task is not None:
+                audit_checkpoint_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await audit_checkpoint_task
+                # Flush the latest head on clean shutdown so the persisted
+                # anti-rollback anchor reflects every record written this run.
+                with contextlib.suppress(Exception):
+                    await control_plane.set_audit_head(audit_chain.seq, audit_chain.last_hash)
+                # Reset the module global so a re-created app in the same process
+                # starts clean (no stale chain).
+                configure_audit_chain(None)
             reap_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await reap_task
