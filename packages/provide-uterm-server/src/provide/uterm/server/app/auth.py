@@ -122,6 +122,23 @@ def _validate_no_placeholder_auth_values(config: ServerConfig, mode: str) -> Non
             "to an asymmetric algorithm (RS256/ES256)."
         )
 
+    # L8b: webhook_idp_secret is a primary auth root-of-trust (it authenticates
+    # the external IdP's response). Route it through the SAME placeholder +
+    # length floor as the worker bearer token / JWT HMAC secret so a value like
+    # "changeme" cannot load in a production-like webhook-IdP deployment. Only
+    # applies when the webhook IdP is selected and a secret is configured.
+    if config.auth.identity_provider == "webhook" and config.auth.webhook_idp_secret:
+        if _is_placeholder_auth_value(config.auth.webhook_idp_secret):
+            raise ValueError(
+                "auth.webhook_idp_secret uses a known placeholder value. Set a high-entropy runtime secret."
+            )
+        if _is_low_entropy_bearer(config.auth.webhook_idp_secret):
+            raise ValueError(
+                f"auth.webhook_idp_secret is shorter than {_MIN_BEARER_TOKEN_CHARS} characters when "
+                "auth.identity_provider='webhook' on a non-loopback host. Use at least 32 chars of "
+                "high-entropy material (e.g. `python -c 'import secrets; print(secrets.token_urlsafe(32))'`)."
+            )
+
 
 def _validate_auth_config(config: ServerConfig) -> None:
     mode = str(config.auth.mode).strip().lower()

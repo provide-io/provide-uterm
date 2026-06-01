@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 from provide.uterm.server.auth import WebhookIdentityProvider
 from provide.uterm.server.models import AuthConfig, ServerConfig
-from provide.uterm.server.webhook_signing import build_webhook_signature
+from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
 
 _SECRET = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
 _URL = "https://auth.example.com/resolve"
@@ -118,6 +118,76 @@ async def test_expired_response_signature_denied() -> None:
         )
     )
     principal = await idp.resolve_principal(_Conn())
+    assert principal is None
+
+
+# ---------------------------------------------------------------------------
+# L8a — verifying with an EMPTY key must be impossible (fail closed)
+# ---------------------------------------------------------------------------
+
+
+def test_verify_webhook_signature_empty_string_secret_is_false() -> None:
+    """A signature crafted with an empty HMAC key must not validate.
+
+    Without this guard, ``verify_webhook_signature("", ...)`` HMACs with an
+    empty key — an attacker who knows the body + timestamp can forge a valid
+    signature. With no key there is nothing to authenticate against, so the
+    function must fail closed regardless of caller.
+    """
+    import time
+
+    body = b'{"subject_id":"x"}'
+    ts = str(time.time())
+    # A signature an attacker can compute knowing only the body + timestamp.
+    forged = build_webhook_signature("", body, ts)
+    assert verify_webhook_signature("", body, forged, ts) is False
+
+
+def test_verify_webhook_signature_none_secret_is_false() -> None:
+    """``secret=None`` (no key configured) also fails closed."""
+    import time
+
+    body = b'{"subject_id":"x"}'
+    ts = str(time.time())
+    forged = build_webhook_signature("", body, ts)
+    assert verify_webhook_signature(None, body, forged, ts) is False  # type: ignore[arg-type]
+
+
+def test_verify_webhook_signature_whitespace_secret_is_false() -> None:
+    """A whitespace-only secret has no usable key material → fail closed."""
+    import time
+
+    body = b'{"subject_id":"x"}'
+    ts = str(time.time())
+    forged = build_webhook_signature("   ", body, ts)
+    assert verify_webhook_signature("   ", body, forged, ts) is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_provider_with_no_secret_rejects_forged_signed_response() -> None:
+    """A provider built directly with secret=None + require_signed_response=True
+    must REJECT a response carrying an attacker-forged empty-key signature.
+
+    This is the non-config construction path (test/embedder) where the config
+    validator never ran; the security-critical function must defend itself.
+    """
+    idp = WebhookIdentityProvider(url=_URL, secret=None, require_signed_response=True, on_failure="deny")
+    import time
+
+    body = json.dumps({"subject_id": "attacker", "roles": ["admin"]}, separators=(",", ":")).encode()
+    ts = str(time.time())
+    # Attacker forges a signature with an empty key (what self.secret or "" would use).
+    forged = build_webhook_signature("", body, ts)
+    respx.post(_URL).mock(
+        return_value=httpx.Response(
+            200,
+            content=body,
+            headers={"X-Uterm-Timestamp": ts, "X-Uterm-Signature": forged},
+        )
+    )
+    principal = await idp.resolve_principal(_Conn())
+    # Forged response lands in the on_failure (deny) path → None, NOT an admin.
     assert principal is None
 
 

@@ -21,7 +21,7 @@ def build_webhook_signature(secret: str, body: bytes, timestamp: str) -> str:
 
 
 def verify_webhook_signature(
-    secret: str,
+    secret: str | None,
     body: bytes,
     signature_header: str | None,
     timestamp_header: str | None,
@@ -30,6 +30,14 @@ def verify_webhook_signature(
     now: float | None = None,
 ) -> bool:
     """Verify ``X-Uterm-Signature`` over ``ts.body`` and that the timestamp is fresh."""
+    # L8a: fail closed when there is no signing key. A signature cannot be
+    # authenticated without a shared secret — verifying with an empty key would
+    # HMAC over an empty key, which any attacker who knows the body+timestamp
+    # can forge. Reject before touching the signature so an empty-key HMAC can
+    # never validate, regardless of how this function is reached (a directly
+    # constructed WebhookIdentityProvider bypasses the config validator).
+    if not (secret or "").strip():
+        return False
     if not signature_header or not timestamp_header:
         return False
     try:

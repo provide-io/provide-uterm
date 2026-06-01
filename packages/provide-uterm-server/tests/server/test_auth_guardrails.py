@@ -184,6 +184,95 @@ class TestLowEntropyCredentialGuardrails:
         _validate_auth_config(config)
 
 
+class TestWebhookIdpSecretFloor:
+    """L8b: webhook_idp_secret is a primary auth root-of-trust — it must pass
+    the SAME placeholder/entropy floor as the JWT/bearer secrets.
+
+    A value like 'changeme' (placeholder) or a too-short string must be
+    rejected at config-load for a production-like webhook IdP config; a
+    non-webhook provider, or no secret, is unaffected.
+    """
+
+    def _webhook_config(self, secret: str | None) -> ServerConfig:
+        return ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+                identity_provider="webhook",
+                webhook_idp_url="https://idp.example.com/resolve",
+                webhook_idp_secret=secret,
+            )
+        )
+
+    def test_placeholder_webhook_idp_secret_rejected(self) -> None:
+        config = self._webhook_config("changeme")
+        with pytest.raises(ValueError, match="placeholder"):
+            _validate_auth_config(config)
+
+    def test_short_webhook_idp_secret_rejected(self) -> None:
+        config = self._webhook_config("abc12345")  # 8 chars, not a known placeholder
+        with pytest.raises(ValueError, match="32 characters"):
+            _validate_auth_config(config)
+
+    def test_strong_webhook_idp_secret_allowed(self) -> None:
+        config = self._webhook_config("uterm-test-webhook-idp-secret-32-bytes")
+        _validate_auth_config(config)  # must not raise
+
+    def test_non_webhook_provider_secret_unaffected(self) -> None:
+        # identity_provider='local' → the webhook_idp_secret floor must not fire
+        # even if a weak value is present.
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+                identity_provider="local",
+                webhook_idp_secret="changeme",  # pragma: allowlist secret
+            )
+        )
+        _validate_auth_config(config)  # must not raise
+
+    def test_webhook_provider_no_secret_unaffected(self) -> None:
+        # No webhook_idp_secret + require_signed_response=False → nothing to floor.
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=True,
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+                identity_provider="webhook",
+                webhook_idp_url="https://idp.example.com/resolve",
+                webhook_idp_secret=None,
+                webhook_idp_require_signed_response=False,
+            )
+        )
+        _validate_auth_config(config)  # must not raise
+
+    def test_weak_webhook_idp_secret_allowed_on_loopback(self) -> None:
+        # Backward compatibility: on loopback (not production-like) the floor is
+        # skipped, mirroring the JWT/bearer entropy behaviour.
+        config = ServerConfig(
+            server=ServerBindConfig(host="127.0.0.1"),
+            auth=AuthConfig(
+                mode="jwt",
+                require_jwt_in_production=False,
+                jwt_public_key_pem="uterm-test-hs256-secret-32-byte-minimum",
+                jwt_algorithms=["HS256"],
+                worker_bearer_token="uterm-test-worker-bearer-value-32-bytes",
+                identity_provider="webhook",
+                webhook_idp_url="https://idp.example.com/resolve",
+                webhook_idp_secret="changeme",  # pragma: allowlist secret
+            ),
+        )
+        _validate_auth_config(config)  # must not raise
+
+
 # ---------------------------------------------------------------------------
 # security.mode='dev' non-loopback guardrail (mirrors auth.mode='dev_token')
 # ---------------------------------------------------------------------------
