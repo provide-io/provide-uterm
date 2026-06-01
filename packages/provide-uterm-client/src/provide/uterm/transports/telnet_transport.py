@@ -297,6 +297,22 @@ class TelnetTransport(ConnectionTransport):
         """Return ``True`` if the connection is active."""
         return self._writer is not None and not self._writer.is_closing()
 
+    def peer_ip(self) -> str | None:
+        """Return the connected peer's IP address, or None if unavailable.
+
+        Reads ``get_extra_info("peername")`` from the underlying asyncio
+        transport (the real IP we connected to, NOT the original hostname) for
+        post-connect peer-IP egress validation (M3 DNS-rebinding mitigation).
+        Returns None when there is no writer or no peername (closed/half-open) —
+        callers treat None as "proceed", never fail-closed.
+        """
+        if self._writer is None:
+            return None
+        peer = self._writer.get_extra_info("peername")
+        if not peer:
+            return None
+        return str(peer[0])
+
     async def set_size(self, cols: int, rows: int) -> None:
         """Update terminal size and send NAWS subnegotiation.
 

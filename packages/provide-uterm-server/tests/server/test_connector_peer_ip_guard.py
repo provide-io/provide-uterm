@@ -162,6 +162,71 @@ async def test_websocket_missing_peername_proceeds() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Telnet connector — peer-IP validation after the TCP handshake.
+# ---------------------------------------------------------------------------
+
+
+def _make_telnet_connector(config: dict[str, Any] | None = None) -> Any:
+    from provide.uterm.server.connectors.telnet import TelnetSessionConnector
+
+    return TelnetSessionConnector("tn-sess", "TN", config or {"host": "benign.example.com", "port": 23})
+
+
+def _stub_telnet_transport(c: Any, peer_ip: str | None) -> MagicMock:
+    """Replace the connector's transport with a MagicMock reporting *peer_ip*."""
+    transport = MagicMock()
+    transport.connect = AsyncMock()
+    transport.disconnect = AsyncMock()
+    transport.peer_ip = MagicMock(return_value=peer_ip)
+    transport.is_connected = MagicMock(return_value=True)
+    c._transport = transport
+    return transport
+
+
+@pytest.mark.asyncio
+async def test_telnet_aborts_on_metadata_peer() -> None:
+    """A rebind to a metadata peer IP aborts BEFORE the connector is marked live."""
+    c = _make_telnet_connector()
+    transport = _stub_telnet_transport(c, _METADATA_IP)
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await c.start()
+    transport.disconnect.assert_awaited()
+    assert c._connected is False
+
+
+@pytest.mark.asyncio
+async def test_telnet_proceeds_on_benign_peer() -> None:
+    """A benign (public) peer IP lets the connection proceed normally."""
+    c = _make_telnet_connector()
+    transport = _stub_telnet_transport(c, _PUBLIC_IP)
+    await c.start()
+    assert c._connected is True
+    transport.disconnect.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_telnet_missing_peer_ip_proceeds() -> None:
+    """If the transport exposes no peer IP (None), the connection proceeds —
+    the create-time guard already validated the resolved name."""
+    c = _make_telnet_connector()
+    transport = _stub_telnet_transport(c, None)
+    await c.start()
+    assert c._connected is True
+    transport.disconnect.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_telnet_aborts_on_mapped_ipv6_metadata_peer() -> None:
+    """An IPv4-mapped IPv6 metadata peer literal decodes and is blocked."""
+    c = _make_telnet_connector()
+    transport = _stub_telnet_transport(c, "::ffff:169.254.169.254")
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await c.start()
+    transport.disconnect.assert_awaited()
+    assert c._connected is False
+
+
+# ---------------------------------------------------------------------------
 # SSH connector — peer-IP validation after the SSH handshake, before the PTY.
 # ---------------------------------------------------------------------------
 

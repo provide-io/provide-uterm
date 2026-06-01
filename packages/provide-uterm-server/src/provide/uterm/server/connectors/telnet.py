@@ -79,8 +79,38 @@ class TelnetSessionConnector(SessionConnector):
 
         return _worker_hello(self._input_mode)
 
+    async def _assert_peer_allowed(self) -> None:
+        """Run the actual connected peer IP through the egress metadata check.
+
+        Disconnects the transport and raises ``EgressBlockedError`` if the peer
+        is a blocked target. A missing peer IP (None) is treated as "proceed" —
+        the create-time guard already validated the resolved name, and this
+        check only ever ABORTS on a positively-identified blocked peer.
+        """
+        from provide.uterm.server.egress import assert_ip_allowed
+
+        peer_ip = self._transport.peer_ip()
+        if not peer_ip:
+            return
+        try:
+            assert_ip_allowed(peer_ip, block_private=False)
+        except Exception:
+            with contextlib.suppress(Exception):
+                await self._transport.disconnect()
+            logger.warning(
+                "telnet_connector_peer_blocked session_id=%s host=%s peer_ip=%s — aborting (DNS-rebind guard)",
+                self._session_id,
+                self._host,
+                peer_ip,
+            )
+            raise
+
     async def start(self) -> None:
         await self._transport.connect(self._host, self._port)
+        # M3 (DNS-rebinding) post-connect mitigation: validate the REAL peer IP
+        # we reached before marking the connector live.  Aborts on a blocked
+        # (cloud-metadata) peer; only metadata IPs are enforced (always-on).
+        await self._assert_peer_allowed()
         self._connected = True
 
     async def stop(self) -> None:
