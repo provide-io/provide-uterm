@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Keep Docker build contexts small and deterministic: never ship local installs,
+# venvs, caches, or build artifacts into a stage. The frontend is built IN-IMAGE
+# (frontend-build stage runs `npm ci` from the committed package-lock.json), so a
+# stray local node_modules / compiled frontend dir must NOT leak into the context.
+
+# Node installs (workspace root + members) — rebuilt in-image via `npm ci`.
+node_modules/
+**/node_modules/
+
+# Python venvs / caches — the builder stage creates its own venv via `uv sync`.
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Compiled frontend (build artifact) — produced by the frontend-build stage.
+packages/provide-uterm-server/src/provide/uterm/server/frontend/
+packages/provide-uterm/src/provide/uterm/frontend/
+
+# VCS + local tooling state
+.git/
+.github/
+.claude/
+.worktrees/
+
+# Coverage / test artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage.json
+
+# OS / editor noise
+.DS_Store
+.idea/

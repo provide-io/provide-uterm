@@ -24,9 +24,49 @@
 # Dependencies are installed by uv into a managed virtualenv (/app/.venv),
 # pinned to the committed uv.lock (UV_FROZEN=1) — never into system site-packages.
 #
+# The browser UI is built IN-IMAGE (frontend-build stage) and is no longer
+# committed to the source tree; the Python builder bakes it into the venv via
+# setuptools package-data (provide-uterm-server/pyproject.toml -> "frontend/**").
+#
+
+# ---- shared build args ------------------------------------------------------
+# Node base image tag — keep in sync with .nvmrc (single source of truth for the
+# Node major used to build the frontend). Same value is used by Dockerfile.cf.
+ARG NODE_IMAGE=node:20-slim
+# Canonical location of the compiled frontend inside the SERVER package source
+# tree. The server serves these at runtime via
+# importlib.resources.files("provide.uterm.server")/"frontend". Defined ONCE here
+# and mirrored by Dockerfile.cf so the two images can't drift.
+ARG FRONTEND_DIR=packages/provide-uterm-server/src/provide/uterm/server/frontend
+
+# ---- frontend-build stage: compile the browser UI ---------------------------
+FROM ${NODE_IMAGE} AS frontend-build
+
+WORKDIR /src
+
+# Copy the npm workspace manifests + lockfile first so `npm ci` is layer-cached
+# independently of source changes.
+COPY package.json package-lock.json ./
+COPY packages/provide-uterm-frontend/package.json packages/provide-uterm-frontend/package.json
+COPY packages/provide-uterm-app/package.json packages/provide-uterm-app/package.json
+
+# Reproducible install from the committed lockfile (no re-resolution).
+RUN npm ci
+
+# Bring in the rest of the workspace needed to build (frontend/app source +
+# build scripts; the build emits into the server package dir under /src).
+COPY scripts/ scripts/
+COPY packages/provide-uterm-frontend/ packages/provide-uterm-frontend/
+COPY packages/provide-uterm-app/ packages/provide-uterm-app/
+
+# Compile widgets (tsc + copy) and the app bundle (vite build). Output lands in
+# ${FRONTEND_DIR} (the server package dir) under /src.
+RUN npm run build:frontend
 
 # ---- builder stage: resolve + install into a uv-managed venv ----------------
 FROM python:3.11-slim AS builder
+
+ARG FRONTEND_DIR
 
 ENV PYTHONUNBUFFERED=1
 
@@ -66,14 +106,32 @@ COPY packages/provide-uterm-annotation/ packages/provide-uterm-annotation/
 COPY packages/provide-uterm-cloudflare/ packages/provide-uterm-cloudflare/
 COPY packages/provide-uterm-platform/ packages/provide-uterm-platform/
 
+# Drop the compiled frontend into the server package source tree BEFORE the
+# install. setuptools' package-data ("frontend/**") bakes it into the venv during
+# the --no-editable build, so the runtime stage needs only the venv. The frontend
+# is no longer committed to git — it comes solely from the frontend-build stage.
+COPY --from=frontend-build /src/${FRONTEND_DIR}/ ${FRONTEND_DIR}/
+
 # Install the server with all extras (pulls core + client + annotation workspace
 # deps AND core's `emulator` dep pyte, now declared in server[all], from the
 # lock) NON-editable so the members are baked into /app/.venv and the runtime
 # stage needs only the venv. No side-channel `uv pip install pyte` — that
 # escaped UV_FROZEN (unpinned/hash-unverified); pyte is now in uv.lock.
-# NEEDS-BUILD-VALIDATION: confirm /app/.venv matches the previous
-# `[emulator]`/`[all]` surface and exposes the `uterm` CLI.
 RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
+
+# Strip build backends from the runtime venv. uv resolves the build deps
+# (pip / setuptools / wheel / jaraco.* / etc.) into the env to build the
+# --no-editable workspace wheels, but they are NOT needed to RUN the server and
+# Trivy flags them (e.g. wheel / jaraco.context HIGH CVEs). Remove them so the
+# runtime image's venv carries only runtime-required packages.
+RUN uv pip uninstall --python /app/.venv/bin/python \
+        pip setuptools wheel \
+    ; rm -rf /app/.venv/lib/python*/site-packages/jaraco* \
+             /app/.venv/lib/python*/site-packages/pkg_resources \
+             /app/.venv/lib/python*/site-packages/_distutils_hack \
+             /app/.venv/lib/python*/site-packages/distutils-precedence.pth \
+             /app/.venv/bin/pip* \
+             /app/.venv/bin/wheel*
 
 # ---- runtime stage ----------------------------------------------------------
 FROM python:3.11-slim AS runtime
@@ -87,9 +145,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy the uv-managed venv. With --no-editable the workspace packages are baked
-# into the venv's site-packages, so no source tree is needed at runtime. The
-# venv's interpreter is the base image's python, present in this stage too.
+# Copy the uv-managed venv. With --no-editable the workspace packages (incl. the
+# baked-in frontend assets) are inside the venv's site-packages, so no source
+# tree is needed at runtime. The venv's interpreter is the base image's python,
+# present in this stage too.
 COPY --from=builder /app/.venv /app/.venv
 
 # Default config is fail-closed: JWT/header secrets are placeholders rejected
