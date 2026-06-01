@@ -130,6 +130,22 @@ class AuthConfig(ServerBaseModel):
         return self
 
 
+class AuditConfig(ServerBaseModel):
+    """Tamper-evident WORM audit-chain settings (opt-in, default disabled)."""
+
+    # Opt-in: enable the hash-chained, append-only WORM audit log sink.
+    chain_enabled: bool = False
+    # Append-only 0600 JSONL path the chain writes to; REQUIRED when enabled.
+    chain_file: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_chain_file(self) -> AuditConfig:
+        # A chain with nowhere to write is a misconfiguration, not a silent no-op.
+        if self.chain_enabled and not str(self.chain_file or "").strip():
+            raise ValueError("audit.chain_enabled requires audit.chain_file (the append-only WORM log path)")
+        return self
+
+
 class UiConfig(ServerBaseModel):
     """UI mount paths for the server application."""
 
@@ -493,6 +509,7 @@ class UtermServerConfig(ServerBaseModel):
     webhooks: WebhooksConfig = Field(default_factory=WebhooksConfig)
     pam: PamConfig = Field(default_factory=PamConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
+    audit: AuditConfig = Field(default_factory=AuditConfig)
     sessions: list[SessionDefinition] = Field(
         default_factory=lambda: [
             SessionDefinition(
