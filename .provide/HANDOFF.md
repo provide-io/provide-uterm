@@ -30,12 +30,16 @@ shipped gaps — now remediated.
 
 - **Stray WIP from another tool (unrelated, left untouched).** The working tree carries uncommitted work
   evidently from a parallel tool (`.antigravitycli/`): a modified
-  `packages/provide-uterm-client/.../transports/__init__.py` (lazy `WebSocketTransport` `__getattr__` entry)
-  plus two **untracked** files `transports/ws_transport.py` and `packages/provide-uterm/.../ws_session.py`.
-  They import cleanly (lazy) and are imported by no test, so they did **not** break the full gate — the
-  2026-05-31 `run_all_tests.py` run reached 100% coverage with them present (coverage did not flag the
-  untracked files). Still, they are unrelated uncommitted WIP and should be committed (with tests) / removed
-  / git-ignored by their owner. Subagents were instructed never to stage them.
+  `packages/provide-uterm-client/.../transports/__init__.py` (lazy `WebSocketTransport` `__getattr__` entry,
+  100% covered) plus two **untracked** files `transports/ws_transport.py` and
+  `packages/provide-uterm/.../ws_session.py`. As of the 2026-06-01 `run_all_tests.py` run, `ws_transport.py`
+  has grown to **62 statements at 0% coverage**, which drops the **client** package to 95.82% →
+  `FAILED: provide-uterm-client`. This is the ONLY failure in the full local gate — every hardening package
+  is 100% (server 10213 stmts, core/cf/annotation, platform 1113 passed). **Important:** these files are
+  UNTRACKED, so they are NOT in committed history — `git push` and CI would NOT see them (CI checks out
+  commits, not the working tree), so they do **not** block the push or CI. They only break the *local*
+  full-gate run. Their owner should commit-with-tests / remove / git-ignore them for a clean local gate.
+  Subagents were instructed never to stage them.
 - **Known pre-existing flake (NOT from this work):**
   `tests/bridge/hub/test_limiter.py::test_send_eviction_never_drops_the_inserting_client` failed once in the
   full server suite under the random seed, but passes 3/3 in isolation and 18/18 in its file in random order;
