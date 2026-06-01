@@ -3,16 +3,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Drive the hostile-client resilience suite (scripts/hostile_profile.py) against
-# a locally-running uterm server. Each subcommand runs one tuned probe; the
-# base URL is defined once here so the workflow never hardcodes a host/port.
+# a locally-running uterm server started in its DEFAULT fail-closed posture (no
+# --config). Each subcommand runs one tuned probe and asserts the server
+# SURVIVES the hostile traffic (stays healthy, refuses/bounds every attempt) —
+# not that hostile connections succeed. The base URL is defined once here so the
+# workflow never hardcodes a host/port.
 #
-# Usage: ci/hostile_probe.sh <start|wait-health|burst|oversized|slowloris>
+# Usage: ci/hostile_probe.sh <start|wait-health|burst|oversized|slowloris|stop>
 set -euo pipefail
 
-# Single source of truth for where the hostile suite reaches the server.
-# Override with HOSTILE_BASE_URL=... when running against a different bind;
-# the `start` subcommand derives the bind host/port from this same value.
-HOSTILE_BASE_URL="${HOSTILE_BASE_URL:-http://127.0.0.1:8400}"
+# Single source of truth for where the suite reaches the server. The default
+# host/port come from TerminalDefaults (no hardcoded port — CLAUDE.md). Override
+# with HOSTILE_BASE_URL=... ; `start` derives the bind from this same value.
+HOSTILE_BASE_URL="${HOSTILE_BASE_URL:-$(uv run python -c 'from provide.uterm.defaults import TerminalDefaults as T; print(f"http://{T.SERVER_HOST}:{T.SERVER_PORT}")')}"
 WORKER_ID="${HOSTILE_WORKER_ID:-provide-shell}"
 SERVER_LOG="/tmp/uterm-hostile.log"
 SERVER_PID_FILE="/tmp/uterm-hostile.pid"
@@ -21,7 +24,7 @@ probe() {
   uv run python scripts/hostile_profile.py --base-url "${HOSTILE_BASE_URL}" "$@"
 }
 
-case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris>}" in
+case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|stop>}" in
   start)
     hostport="${HOSTILE_BASE_URL#*://}"
     host="${hostport%%:*}"
@@ -41,33 +44,41 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris>
     exit 1
     ;;
   burst)
+    # Connection-burst flood. Auth-gated WS endpoint: every unauthenticated
+    # connect must be refused (a completed connect would be an auth bypass).
     probe \
       --worker-id "${WORKER_ID}" \
       --mode burst \
       --iterations 200 \
       --concurrency 40 \
-      --min-success-rate 0.95 \
-      --max-failure-rate 0.05
+      --require-refused
     ;;
   oversized)
+    # Oversized-frame flood. Same auth-gated endpoint, so under the fail-closed
+    # posture this also asserts clean refusal (--require-refused).
     probe \
       --worker-id "${WORKER_ID}" \
       --mode oversized \
       --iterations 120 \
       --concurrency 20 \
       --payload-bytes 2000000 \
-      --min-success-rate 0.90 \
-      --max-failure-rate 0.10
+      --require-refused
     ;;
   slowloris)
+    # Slow header-drip lives below the WS/auth layer (raw TCP), so it is
+    # posture-agnostic: the server must bound the drip without hanging/crashing.
     probe \
       --mode slowloris \
       --iterations 80 \
       --concurrency 10 \
       --header-bytes-per-chunk 8 \
-      --delay-s 0.2 \
-      --min-success-rate 0.80 \
-      --max-failure-rate 0.20
+      --delay-s 0.2
+    ;;
+  stop)
+    if [ -f "${SERVER_PID_FILE}" ]; then
+      kill "$(cat "${SERVER_PID_FILE}")" 2>/dev/null || true
+      rm -f "${SERVER_PID_FILE}"
+    fi
     ;;
   *)
     echo "unknown probe: ${1}" >&2
