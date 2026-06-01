@@ -117,7 +117,7 @@ class PTYConnector:
         pam_env: dict[str, str] = {}
 
         if self._username and self._password:
-            if os.geteuid() != 0:  # nosec B101 — deliberate privilege check
+            if os.geteuid() != 0:  # nosec B101  # deliberate privilege check
                 raise PermissionError("user-switching via PAM requires the server to run as root")
             self._pam = PamSession()
             self._pam.authenticate(self._username, self._password)
@@ -170,7 +170,7 @@ class PTYConnector:
         attrs[3] &= ~termios.ECHO  # lflags: clear ECHO bit
         termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
-        pid = os.fork()  # nosec B110 — deliberate fork for PTY supervision
+        pid = os.fork()  # nosec B110  # deliberate fork for PTY supervision
         if pid == 0:  # pragma: no cover - fork-child path (coverage runs in parent only)
             # ── child ──────────────────────────────────────────────────────
             self._child_exec(master_fd, slave_fd, resolved, env)
@@ -208,12 +208,12 @@ class PTYConnector:
                 os.close(slave_fd)
 
             if resolved:
-                os.setgid(resolved.gid)  # nosec B104 — deliberate privilege drop
+                os.setgid(resolved.gid)  # nosec B104  # deliberate privilege drop
                 os.initgroups(resolved.name, resolved.gid)
-                os.setuid(resolved.uid)  # nosec B104 — deliberate privilege drop
+                os.setuid(resolved.uid)  # nosec B104  # deliberate privilege drop
 
             argv = [self._command, *self._args]
-            os.execve(self._command, argv, env)  # noqa: S606  # nosec B606 — validated absolute path
+            os.execve(self._command, argv, env)  # noqa: S606  # nosec B606  # validated absolute path
         except BaseException:
             os._exit(127)
         os._exit(127)  # pragma: no cover - post-execve fallback (unreachable on success)
@@ -338,7 +338,7 @@ class PTYConnector:
             "cursor": {"row": 0, "col": 0},
             "cols": self._cols,
             "rows": self._rows,
-            "screen_hash": hashlib.md5(screen.encode()).hexdigest(),  # noqa: S324  # nosec B324 — non-crypto change-detection hash
+            "screen_hash": hashlib.md5(screen.encode()).hexdigest(),  # noqa: S324  # nosec B324  # non-crypto change-detection hash
             "cursor_at_end": True,
             "has_trailing_space": False,
             "prompt_detected": False,

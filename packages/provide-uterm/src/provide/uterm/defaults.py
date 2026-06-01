@@ -23,7 +23,7 @@ class TerminalDefaults:
     GATEWAY_TELNET_PORT: int = 2112
     GATEWAY_SSH_PORT: int = 2222
 
-    BIND_ALL: str = "0.0.0.0"  # nosec B104 — bind-all for gateway/proxy
+    BIND_ALL: str = "0.0.0.0"  # nosec B104  # bind-all for gateway/proxy
     PROXY_PORT: int = 8765  # uterm proxy default HTTP listen port
     PROXY_WS_PATH: str = "/ws/terminal"  # uterm proxy default WebSocket path
     SERVER_HOST: str = "127.0.0.1"  # provide-uterm-server default bind host

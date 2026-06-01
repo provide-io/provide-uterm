@@ -41,7 +41,7 @@ class ChaosTransport(ConnectionTransport):
         label: str = "chaos",
     ) -> None:
         self._inner = inner
-        self._rng = random.Random(int(seed))  # nosec B311 — chaos testing, not crypto
+        self._rng = random.Random(int(seed))  # nosec B311  # chaos testing, not crypto
         self._disconnect_n = int(disconnect_every_n_receives or 0)
         self._timeout_n = int(timeout_every_n_receives or 0)
         self._max_jitter_ms = int(max_jitter_ms or 0)
