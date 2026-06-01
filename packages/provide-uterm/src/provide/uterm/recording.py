@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import stat
 import time
 from collections import deque
 from pathlib import Path
@@ -24,16 +25,53 @@ if TYPE_CHECKING:
     from io import TextIOWrapper
 
 
+def _ensure_owner_only_dir(directory: Path) -> None:
+    """Create ``directory`` (and parents) 0o700, re-tightening if it pre-exists.
+
+    L13: ``mkdir(mode=0o700, exist_ok=True)`` only applies the mode when it
+    *creates* the directory — a pre-existing 0o755 recordings dir would stay
+    group/world-readable (session filenames enumerable by other local users).
+    The explicit ``chmod`` after the mkdir enforces 0o700 whether or not the
+    directory already existed.
+    """
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    directory.chmod(0o700)
+
+
 def _open_append_owner_only(path: Path) -> TextIOWrapper:
-    """Open ``path`` for append with owner-only (0o600) permissions, atomically.
+    """Open ``path`` for append, symlink-safe, with owner-only (0o600) perms.
 
     Creating the file via ``os.open(..., 0o600)`` and wrapping the fd avoids the
     TOCTOU window of ``open()`` then ``chmod()`` (where the file is briefly
     world/group-readable). The mode only applies on creation and is subject to
     umask — but umask can only *remove* bits, and 0o600 has no group/world bits
     for umask to clear, so the result is always exactly 0o600.
+
+    L12 hardening:
+
+    * ``O_NOFOLLOW`` refuses to open a symlink at the target path — an attacker
+      who pre-creates a symlink there cannot redirect our writes through to the
+      link target. The open raises ``OSError`` (ELOOP) instead; a symlinked
+      recording path is an attack/misconfig, so failing loudly is correct.
+    * The create-mode arg only applies on *creation*, so a PRE-EXISTING loose
+      file would keep its mode (e.g. a world-readable 0o644 file). ``fchmod`` on
+      the just-opened fd re-tightens it to 0o600 with no TOCTOU race (we target
+      the fd, not the path).
+    * A regular-file check (``S_ISREG``) rejects a fifo/device pre-created at the
+      path — there is no legitimate non-regular recording sink, and refusing
+      closes a residual write-blocking / observation vector.
     """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError(f"Refusing to open non-regular recording sink: {path}")
+        # Re-tighten a pre-existing loose-perm file (mode arg only applies on
+        # create). Targets the fd to avoid a TOCTOU path-swap race.
+        os.fchmod(fd, 0o600)
+    except BaseException:
+        os.close(fd)
+        raise
     return os.fdopen(fd, "a", encoding="utf-8")
 
 
@@ -148,7 +186,7 @@ class LocalFileRecordingStore(RecordingStore):
     async def start_session(self, session_id: str, metadata: dict[str, Any]) -> None:
         async with self._get_lock(session_id):
             path = self._get_path(session_id)
-            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            _ensure_owner_only_dir(path.parent)
             f = _open_append_owner_only(path)
             self._files[session_id] = f
             event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
@@ -160,7 +198,7 @@ class LocalFileRecordingStore(RecordingStore):
             f = self._files.get(session_id)
             if not f:
                 path = self._get_path(session_id)
-                path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                _ensure_owner_only_dir(path.parent)
                 f = _open_append_owner_only(path)
                 self._files[session_id] = f
 
