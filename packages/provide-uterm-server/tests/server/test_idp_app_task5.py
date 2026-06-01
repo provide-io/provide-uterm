@@ -20,7 +20,12 @@ def test_create_server_app_instantiates_correct_idp():
 
     # Webhook IDP
     config = ServerConfig(
-        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
     )
     app = create_server_app(config, api_only=True)
     assert isinstance(app.state.uterm_hub.identity_provider, WebhookIdentityProvider)
@@ -32,7 +37,12 @@ async def test_webhook_idp_is_used_by_auth_dependency(monkeypatch) -> None:
     from starlette.requests import HTTPConnection
 
     config = ServerConfig(
-        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
     )
     app = create_server_app(config, api_only=True)
 
@@ -69,7 +79,12 @@ async def test_webhook_idp_is_used_by_auth_dependency(monkeypatch) -> None:
 
 def test_webhook_idp_route_level_failure_modes_require_auth(monkeypatch) -> None:
     config = ServerConfig(
-        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
     )
 
     # deny-mode semantics: resolver failure / None principal should 401.
@@ -96,7 +111,14 @@ def test_webhook_idp_route_level_failure_modes_require_auth(monkeypatch) -> None
 @respx.mock
 def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
     webhook_url = "https://idp.example.test/resolve"
-    config = ServerConfig(auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url=webhook_url))
+    config = ServerConfig(
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url=webhook_url,
+            webhook_idp_require_signed_response=False,
+        )
+    )
 
     app = create_server_app(config, api_only=True)
     with TestClient(app) as client:
@@ -134,7 +156,12 @@ async def test_resolve_browser_role_webhook_idp_none_principal_denied(monkeypatc
     from fastapi import WebSocketException
 
     config = ServerConfig(
-        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
     )
     app = create_server_app(config, api_only=True)
     hub = app.state.uterm_hub
@@ -156,7 +183,12 @@ async def test_resolve_browser_role_webhook_idp_principal_role_honored(monkeypat
     from types import SimpleNamespace
 
     config = ServerConfig(
-        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
     )
     app = create_server_app(config, api_only=True)
     hub = app.state.uterm_hub
@@ -177,7 +209,12 @@ async def test_resolve_browser_role_adhoc_non_admin_denied_by_default(monkeypatc
     from fastapi import WebSocketException
 
     config = ServerConfig(
-        auth=AuthConfig(identity_provider="webhook", mode="dev_token", webhook_idp_url="http://localhost:8080/auth")
+        auth=AuthConfig(
+            identity_provider="webhook",
+            mode="dev_token",
+            webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
+        )
     )
     app = create_server_app(config, api_only=True)
     hub = app.state.uterm_hub
@@ -200,6 +237,7 @@ async def test_resolve_browser_role_adhoc_viewer_allowed_when_opted_in(monkeypat
             identity_provider="webhook",
             mode="dev_token",
             webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
             allow_adhoc_browser_observers=True,
         )
     )
@@ -223,6 +261,7 @@ async def test_resolve_browser_role_adhoc_operator_allowed_when_opted_in(monkeyp
             identity_provider="webhook",
             mode="dev_token",
             webhook_idp_url="http://localhost:8080/auth",
+            webhook_idp_require_signed_response=False,
             allow_adhoc_browser_observers=True,
         )
     )

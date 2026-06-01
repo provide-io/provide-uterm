@@ -83,6 +83,18 @@ class AuthConfig(ServerBaseModel):
     # so the request fails authn (411).  ``viewer`` restores the old fail-open
     # behaviour for callers who explicitly want it.
     webhook_idp_on_failure: Literal["deny", "viewer"] = "deny"
+    # 1f: require the webhook IdP to sign its RESPONSE (secure-by-default). When
+    # True the provider verifies X-Uterm-Signature over the raw response bytes
+    # so a MITM/compromised transport cannot forge a principal; needs a shared
+    # secret (webhook_idp_secret). Set False to trust unsigned responses (legacy).
+    webhook_idp_require_signed_response: bool = True
+    # 1d: extra request headers the provider may forward to the external IdP, on
+    # top of the always-forwarded auth credentials (authorization, x-api-key,
+    # principal/role headers). Operator-extensible; matched case-insensitively.
+    webhook_idp_forward_headers: list[str] = Field(default_factory=list)
+    # 1d: extra request cookies forwarded to the external IdP, on top of the
+    # always-forwarded token/principal/role cookies. Operator-extensible.
+    webhook_idp_forward_cookies: list[str] = Field(default_factory=list)
 
     # When a worker has no registered SessionDefinition (ad-hoc), browser
     # observers are denied by default -- only a global admin may observe. Set
@@ -100,6 +112,21 @@ class AuthConfig(ServerBaseModel):
     def _validate_outbound_url_schemes(self) -> AuthConfig:
         _require_secure_url(self.webhook_idp_url, "auth.webhook_idp_url")
         _require_secure_url(self.jwt_jwks_url, "auth.jwt_jwks_url")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_webhook_idp_signing(self) -> AuthConfig:
+        # 1f: verifying the IdP response signature is impossible without a shared
+        # secret, so refuse the unsatisfiable combination at config-load time.
+        if (
+            self.identity_provider == "webhook"
+            and self.webhook_idp_require_signed_response
+            and not str(self.webhook_idp_secret or "").strip()
+        ):
+            raise ValueError(
+                "requiring a signed IdP response needs auth.webhook_idp_secret; set the secret or "
+                "set auth.webhook_idp_require_signed_response=false to disable verification"
+            )
         return self
 
 

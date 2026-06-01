@@ -213,12 +213,18 @@ def _validate_security_config(config: ServerConfig) -> None:
 
 
 def _validate_environment_profile(config: ServerConfig) -> None:
-    """Production assertion: refuse fail-open IDP fallback on a routable bind.
+    """Production assertion: refuse fail-open / unsigned-response IDP on a routable bind.
 
-    When ``environment='production'`` and the bind is NON-loopback, the
-    ungated ``auth.webhook_idp_on_failure='viewer'`` opt-out (which fails open
-    to an anonymous viewer when the webhook IdP errors) is refused — it is the
-    one security-weakening dev opt-out that the existing
+    When ``environment='production'`` and the bind is NON-loopback, two
+    security-weakening webhook-IdP opt-outs are refused:
+
+      * ``auth.webhook_idp_on_failure='viewer'`` — fails open to an anonymous
+        viewer when the webhook IdP errors; and
+      * ``auth.identity_provider='webhook'`` with
+        ``auth.webhook_idp_require_signed_response=false`` — trusts an unsigned
+        IdP response that a MITM/compromised transport could forge.
+
+    These are the security-weakening dev opt-outs that the existing
     ``_validate_auth_config`` / ``_validate_security_config`` validators do not
     already loopback-gate. The dev_token and security.mode=dev cases are
     already refused on non-loopback by those validators, so we do not
@@ -239,6 +245,18 @@ def _validate_environment_profile(config: ServerConfig) -> None:
             "viewer principal whenever the webhook IdP errors (timeout, HTTP error, "
             "network down). Use auth.webhook_idp_on_failure='deny', or set "
             "environment='dev' to intentionally accept the fail-open behaviour."
+        )
+    # 1f: an unauthenticated IdP RESPONSE on a routable bind is a forgeable-
+    # principal risk — a MITM/compromised transport could mint any principal.
+    identity_provider = str(getattr(config.auth, "identity_provider", "local")).strip().lower()
+    require_signed = bool(getattr(config.auth, "webhook_idp_require_signed_response", True))
+    if identity_provider == "webhook" and not require_signed:
+        raise ValueError(
+            "environment='production' on a non-loopback bind refuses "
+            "auth.identity_provider='webhook' with auth.webhook_idp_require_signed_response=false: "
+            "an unsigned IdP response can be forged in transit to mint any principal. Set "
+            "auth.webhook_idp_require_signed_response=true (with auth.webhook_idp_secret), or set "
+            "environment='dev' to intentionally accept the unverified-response behaviour."
         )
 
 

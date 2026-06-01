@@ -189,18 +189,64 @@ class TestComputeSecurityPosture:
         # secure requires environment=="production".
         assert posture["secure"] is False
 
-    def test_idp_signing_required_defensive_getattr(self) -> None:
+    def test_idp_signing_required_reflects_real_field_default_true(self) -> None:
         config = ServerConfig(auth=AuthConfig(mode="dev_token"))
         posture = compute_security_posture(config)
-        # Field 1f/1d may not exist yet → None via defensive getattr.
-        assert posture["idp_signing_required"] is None
+        # 1f/1d: the field is now real and defaults to True (secure-by-default).
+        assert posture["idp_signing_required"] is True
 
     def test_idp_signing_required_picked_up_when_present(self) -> None:
         config = ServerConfig(auth=AuthConfig(mode="dev_token"))
-        # Simulate the 1f/1d field landing on the AuthConfig instance.
-        object.__setattr__(config.auth, "webhook_idp_require_signed_response", True)
         posture = compute_security_posture(config)
         assert posture["idp_signing_required"] is True
+
+    def test_webhook_unsigned_response_in_opt_outs_and_warnings(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_require_signed_response=False,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert posture["idp_signing_required"] is False
+        assert "auth.webhook_idp_require_signed_response=false" in posture["dev_opt_outs"]
+        assert any("forged response" in w.lower() or "not signature-verified" in w.lower() for w in posture["warnings"])
+
+    def test_webhook_unsigned_opt_out_absent_when_local_idp(self) -> None:
+        # require_signed_response=False is only a posture opt-out for the webhook IdP.
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="local",
+                webhook_idp_require_signed_response=False,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert "auth.webhook_idp_require_signed_response=false" not in posture["dev_opt_outs"]
+
+    def test_webhook_signed_response_not_in_opt_outs(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_secret="uterm-test-secret-32-byte-minimum-key",  # pragma: allowlist secret
+                webhook_idp_require_signed_response=True,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert "auth.webhook_idp_require_signed_response=false" not in posture["dev_opt_outs"]
+
+    def test_webhook_unsigned_posture_is_json_serializable(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_require_signed_response=False,
+            ),
+        )
+        posture = compute_security_posture(config)
+        assert json.loads(json.dumps(posture)) == posture
 
     def test_json_serializable(self) -> None:
         config = ServerConfig(auth=AuthConfig(mode="dev_token", webhook_idp_on_failure="viewer"))
@@ -263,6 +309,47 @@ class TestValidateEnvironmentProfile:
     def test_default_local_config_boots(self) -> None:
         # production + loopback + dev_token is the default local dev posture.
         config = ServerConfig(auth=AuthConfig(mode="dev_token"))
+        _validate_environment_profile(config)
+
+    # -- 1f: unsigned-response IdP refusal on a routable production bind -----
+
+    def test_production_non_loopback_webhook_unsigned_response_raises(self) -> None:
+        config, _ = _jwt_production_config(roles=["operator"])
+        config.auth.identity_provider = "webhook"
+        object.__setattr__(config.auth, "webhook_idp_require_signed_response", False)
+        with pytest.raises(ValueError, match="webhook_idp_require_signed_response"):
+            _validate_environment_profile(config)
+
+    def test_production_loopback_webhook_unsigned_response_allowed(self) -> None:
+        config = ServerConfig(
+            auth=AuthConfig(
+                mode="dev_token",
+                identity_provider="webhook",
+                webhook_idp_require_signed_response=False,
+            ),
+        )
+        # Loopback default host → allowed (no raise).
+        _validate_environment_profile(config)
+
+    def test_dev_environment_webhook_unsigned_response_allowed(self) -> None:
+        config, _ = _jwt_production_config(roles=["operator"])
+        config.environment = "dev"
+        config.auth.identity_provider = "webhook"
+        object.__setattr__(config.auth, "webhook_idp_require_signed_response", False)
+        # environment=dev bypasses the production assertion.
+        _validate_environment_profile(config)
+
+    def test_production_non_loopback_webhook_signed_response_allowed(self) -> None:
+        config, _ = _jwt_production_config(roles=["operator"])
+        config.auth.identity_provider = "webhook"
+        # require_signed_response True (default) → no raise on a routable bind.
+        _validate_environment_profile(config)
+
+    def test_production_non_loopback_local_idp_unsigned_field_allowed(self) -> None:
+        # The unsigned-response refusal only applies to identity_provider=webhook.
+        config, _ = _jwt_production_config(roles=["operator"])
+        config.auth.identity_provider = "local"
+        object.__setattr__(config.auth, "webhook_idp_require_signed_response", False)
         _validate_environment_profile(config)
 
 

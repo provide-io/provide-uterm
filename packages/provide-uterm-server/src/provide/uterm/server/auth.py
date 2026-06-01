@@ -370,6 +370,9 @@ class WebhookIdentityProvider(IdentityProvider):
         secret: str | None = None,
         timeout_s: float = 2.0,
         on_failure: str = "deny",
+        require_signed_response: bool = True,
+        forward_headers: frozenset[str] | None = None,
+        forward_cookies: frozenset[str] | None = None,
     ):
         self.url = url
         self.secret = secret
@@ -381,6 +384,14 @@ class WebhookIdentityProvider(IdentityProvider):
         if on_failure not in {"deny", "viewer"}:
             raise ValueError(f"on_failure must be 'deny' or 'viewer'; got {on_failure!r}")
         self.on_failure = on_failure
+        # 1f: when True, the webhook's RESPONSE must carry a valid HMAC signature
+        # (over the raw response bytes) or the resolution falls into ``on_failure``.
+        self.require_signed_response = require_signed_response
+        # 1d: only these request headers/cookies are forwarded to the external
+        # IdP — never the full request set. Empty = forward nothing (secure
+        # default); the factory passes the curated auth-credential allow-list.
+        self.forward_headers = forward_headers if forward_headers is not None else frozenset()
+        self.forward_cookies = forward_cookies if forward_cookies is not None else frozenset()
 
     async def resolve_principal(self, connection: Request | WebSocket) -> Principal | None:
         import json
@@ -388,10 +399,17 @@ class WebhookIdentityProvider(IdentityProvider):
 
         import httpx
 
-        from provide.uterm.server.webhook_signing import build_webhook_signature
+        from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
 
-        headers = dict(getattr(connection, "headers", {}))
-        cookies = dict(getattr(connection, "cookies", {}))
+        all_headers = dict(getattr(connection, "headers", {}))
+        all_cookies = dict(getattr(connection, "cookies", {}))
+
+        # 1d: forward only the curated allow-list of credentials. Header keys are
+        # matched case-insensitively (Starlette/httpx lower-case keys, but a
+        # mixed-case mapping may reach us in tests/embedders); cookies match by
+        # exact name.
+        headers = {k: v for k, v in all_headers.items() if k.lower() in self.forward_headers}
+        cookies = {k: v for k, v in all_cookies.items() if k in self.forward_cookies}
 
         payload = {
             "headers": headers,
@@ -417,7 +435,22 @@ class WebhookIdentityProvider(IdentityProvider):
             async with httpx.AsyncClient(timeout=self.timeout_s) as client:
                 resp = await client.post(self.url, content=body, headers=req_headers)
                 resp.raise_for_status()
-                data = resp.json()
+
+                # 1f: authenticate the RESPONSE itself. Verify the HMAC signature
+                # over the RAW response bytes (resp.content) BEFORE trusting any
+                # of its fields — a MITM/compromised transport could otherwise
+                # forge a principal. A failed check raises into the except below
+                # so the on_failure (deny/viewer) + audit path fires. The
+                # principal is then built from json.loads(resp.content) so the
+                # parsed data and the verified bytes can never diverge.
+                if self.require_signed_response and not verify_webhook_signature(
+                    self.secret or "",
+                    resp.content,
+                    resp.headers.get("X-Uterm-Signature"),
+                    resp.headers.get("X-Uterm-Timestamp"),
+                ):
+                    raise ValueError("webhook IdP response signature verification failed")
+                data = json.loads(resp.content)
 
                 # Filter roles to the known allow-list: a compromised or
                 # MITM'd IDP webhook must not be able to mint a privileged role

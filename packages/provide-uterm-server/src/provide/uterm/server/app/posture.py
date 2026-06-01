@@ -73,6 +73,14 @@ def compute_security_posture(config: ServerConfig) -> dict[str, object]:
         dev_opt_outs.append("auth.webhook_idp_on_failure=viewer")
         warnings.append("anonymous-viewer IDP fallback is enabled (webhook_idp_on_failure=viewer)")
 
+    # 1f: webhook IdP without response-signature verification → a forged response
+    # can mint a principal. Only a weakening opt-out for the webhook provider.
+    identity_provider = str(getattr(config.auth, "identity_provider", "local")).strip().lower()
+    require_signed_response = bool(getattr(config.auth, "webhook_idp_require_signed_response", True))
+    if identity_provider == "webhook" and not require_signed_response:
+        dev_opt_outs.append("auth.webhook_idp_require_signed_response=false")
+        warnings.append("webhook IdP responses are not signature-verified — a forged response can mint a principal")
+
     # header_mode_acknowledged only weakens posture in header auth mode.
     if auth_mode == "header" and config.auth.header_mode_acknowledged:
         dev_opt_outs.append("auth.header_mode_acknowledged")
@@ -100,8 +108,9 @@ def compute_security_posture(config: ServerConfig) -> dict[str, object]:
         "is_loopback": is_loopback,
         "auth_mode": auth_mode,
         "dev_opt_outs": dev_opt_outs,
-        # 1f/1d field: whether webhook-IDP response signing is required. May not
-        # exist yet — read defensively so this doesn't break before it lands.
+        # 1f/1d: whether webhook-IDP response signing is required (real field,
+        # secure-by-default True). Defensive getattr keeps the report JSON-safe
+        # for any embedder config object that predates the field.
         "idp_signing_required": getattr(config.auth, "webhook_idp_require_signed_response", None),
         "warnings": warnings,
         "secure": secure,
