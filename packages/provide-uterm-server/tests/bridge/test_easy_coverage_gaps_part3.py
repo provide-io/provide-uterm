@@ -69,6 +69,23 @@ async def test_worker_hello_without_protocol_version_applies_mode() -> None:
     applied = await hub.set_worker_hello("w1", "open")
     assert applied is True
     assert hub._workers["w1"].input_mode == "open"
+    # Negative direction: the version is NOT recorded (kills the `is None` mutant
+    # together with the positive test below).
+    assert hub._workers["w1"].protocol_version is None
+
+
+async def test_worker_hello_records_provided_protocol_version() -> None:
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
+
+    hub = TermHub()
+    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    # Positive direction (222->223): a provided version IS recorded.
+    applied = await hub.set_worker_hello("w1", "open", protocol_version=2)
+    assert applied is True
+    assert hub._workers["w1"].protocol_version == 2
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +102,20 @@ async def test_set_worker_tunnel_flag_noop_for_unknown_worker() -> None:
     # No worker registered -> st is None -> early exit, no exception, no state created.
     await hub.connection_mgr.set_worker_tunnel_flag("ghost", value=True)
     assert hub.registry.get("ghost") is None
+
+
+async def test_set_worker_tunnel_flag_sets_flag_for_known_worker() -> None:
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
+
+    hub = TermHub()
+    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    # Positive direction (193->194): a registered worker has its flag set (kills
+    # the `is None` mutant together with the unknown-worker no-op test above).
+    await hub.connection_mgr.set_worker_tunnel_flag("w1", value=True)
+    assert hub._workers["w1"].is_tunnel_worker is True
 
 
 # ---------------------------------------------------------------------------
