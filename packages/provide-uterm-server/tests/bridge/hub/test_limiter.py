@@ -15,6 +15,8 @@ service.
 
 from __future__ import annotations
 
+import time
+
 from provide.uterm.server.bridge.hub.limiter import (
     REST_CLIENT_CACHE_MAX,
     REST_CLIENT_EVICT_COUNT,
@@ -24,8 +26,20 @@ from provide.uterm.server.bridge.ratelimit import TokenBucket
 
 
 def _drain(bucket: TokenBucket) -> None:
-    """Force a bucket to be empty so the next ``allow()`` returns False."""
+    """Force a bucket empty *and* freeze its refill clock so the next ``allow()``
+    deterministically returns False.
+
+    ``TokenBucket.allow()`` refills ``_tokens`` by ``elapsed * rate`` where
+    ``elapsed = time.monotonic() - _last_refill``. Zeroing only ``_tokens``
+    leaves ``_last_refill`` at construction time, so under a slow/loaded suite
+    enough wall-time elapses for a high-rate bucket (e.g. 20/sec) to refill a
+    full token and wrongly admit the request — the source of the rare
+    ``test_send_eviction_never_drops_the_inserting_client`` flake. Pinning
+    ``_last_refill`` into the future makes ``elapsed`` non-positive, so the
+    drained state holds regardless of the real-time gap before ``allow()``.
+    """
     bucket._tokens = 0.0
+    bucket._last_refill = time.monotonic() + 3600.0
 
 
 def test_init_clamps_rates_to_minimum() -> None:
