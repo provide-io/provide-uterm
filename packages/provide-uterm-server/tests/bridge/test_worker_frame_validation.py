@@ -287,6 +287,139 @@ def test_term_data_hot_path_unaffected() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Finding 5d-narrowing: a DOWNSTREAM (post-build) failure must NOT be
+# mis-isolated as an "invalid worker frame". The per-frame validation guard
+# wraps ONLY the frame builder; ``update_last_snapshot`` / ``broadcast`` /
+# ``append_event`` run OUTSIDE it so a genuine server-side bug propagates to
+# the outer handler instead of being swallowed + miscounted, and so no partial
+# state (snapshot stored but never broadcast/recorded) is left behind.
+# ---------------------------------------------------------------------------
+
+
+def test_downstream_broadcast_failure_propagates_not_miscounted() -> None:
+    """A snapshot whose BUILDER succeeds but whose ``broadcast`` raises one of
+    the caught validation types (here ``ValueError``) must NOT be treated as an
+    invalid worker frame.
+
+    Under the OLD shared-try code the downstream ValueError was caught as an
+    "invalid frame": ``ws_worker_frame_invalid_total`` incremented and (drop
+    policy) the session SURVIVED via ``continue`` — masking a real server-side
+    bug. Under the narrowed code the I/O runs outside the builder guard, so the
+    exception PROPAGATES to the outer handler and the worker session is torn
+    down, and the invalid metric is NOT incremented for it.
+    """
+    import asyncio
+
+    hub, metrics = _make_hub_with_metrics()
+    app = _make_app(hub)
+
+    orig_broadcast = hub.broadcast
+
+    async def _exploding_broadcast(worker_id: str, msg: Any) -> None:
+        # Only the snapshot frame's broadcast blows up; the connect-time
+        # worker_connected broadcast (and everything else) goes through.
+        if isinstance(msg, dict) and msg.get("type") == "snapshot":
+            raise ValueError("simulated downstream bug")
+        await orig_broadcast(worker_id, msg)
+
+    hub.broadcast = _exploding_broadcast  # type: ignore[method-assign]
+
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        connect_test_ws(client, "/ws/worker/w1/term") as worker,
+    ):
+        _read_worker_snapshot_req(worker)
+        worker.send_json(_GOOD_SNAPSHOT)
+        # The downstream failure propagates to the outer handler, which tears
+        # the worker session down (deregister). Poll the registry for the
+        # session to disappear — under the old 'drop+continue' code the worker
+        # would still be registered. Bounded so it can never hang.
+        torn_down = False
+        for _ in range(100):
+            if "w1" not in hub.registry:
+                torn_down = True
+                break
+            time.sleep(0.02)
+        assert torn_down, "downstream failure must propagate + tear the worker session down, not be swallowed"
+
+    # The crucial assertion: a downstream bug is NOT counted as a bad worker
+    # frame. Under the old shared-try code this would have been 1.
+    assert metrics.get("ws_worker_frame_invalid_total", 0) == 0
+    # Sanity: no lingering snapshot from this torn-down session.
+    assert asyncio.run(hub.get_last_snapshot("w1")) is None
+
+
+def test_builder_failure_leaves_no_partial_state() -> None:
+    """When the snapshot BUILDER raises, ``update_last_snapshot`` must NOT have
+    run — there is no half-applied state (snapshot stored but never broadcast).
+    ``st.last_snapshot`` stays unchanged across the bad frame."""
+    import asyncio
+
+    hub, metrics = _make_hub_with_metrics()
+    app = _make_app(hub)
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        connect_test_ws(client, "/ws/worker/w1/term") as worker,
+    ):
+        _read_worker_snapshot_req(worker)
+        # No snapshot has been stored yet.
+        assert asyncio.run(hub.get_last_snapshot("w1")) is None
+        worker.send_json(_BAD_SNAPSHOT)
+        # Drive a follow-up good frame so we can synchronise on the loop having
+        # processed the bad one (drop policy keeps the session alive).
+        worker.send_json(_GOOD_SNAPSHOT)
+        snap = None
+        for _ in range(50):
+            snap = asyncio.run(hub.get_last_snapshot("w1"))
+            if snap is not None and snap.get("screen") == "after-bad":
+                break
+            time.sleep(0.02)
+        # The ONLY snapshot ever stored is the good one — the bad frame never
+        # mutated last_snapshot (builder raised before update_last_snapshot).
+        assert snap is not None and snap.get("screen") == "after-bad"
+    assert metrics.get("ws_worker_frame_invalid_total", 0) == 1
+
+
+def test_analysis_success_path_broadcasts() -> None:
+    """A valid ``analysis`` frame builds and broadcasts to a viewer (success
+    path of the analysis branch — I/O runs outside the narrow builder try)."""
+    hub, metrics = _make_hub_with_metrics()
+    app = _make_app(hub)
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        connect_test_ws(client, "/ws/worker/w1/term") as worker,
+    ):
+        _read_worker_snapshot_req(worker)
+        with connect_test_ws(client, "/ws/browser/w1/term") as browser:
+            worker.send_json({"type": "analysis", "formatted": "analysis-ok", "ts": 1.0})
+            got = _drain_browser_until(browser, ftype="analysis")
+            assert got.get("formatted") == "analysis-ok"
+    assert metrics.get("ws_worker_frame_invalid_total", 0) == 0
+
+
+def test_status_success_path_broadcasts() -> None:
+    """A valid ``status`` frame coerces and broadcasts to a viewer (success
+    path of the status branch — I/O runs outside the narrow builder try).
+
+    ``coerce_worker_status_frame`` stamps ``type='status'`` on the broadcast
+    frame; the ``worker_status`` name is the append_event event type, not the
+    wire frame type.
+    """
+    hub, metrics = _make_hub_with_metrics()
+    app = _make_app(hub)
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        connect_test_ws(client, "/ws/worker/w1/term") as worker,
+    ):
+        _read_worker_snapshot_req(worker)
+        with connect_test_ws(client, "/ws/browser/w1/term") as browser:
+            worker.send_json({"type": "status", "state": "running", "ts": 1.0})
+            got = _drain_browser_until(browser, ftype="status")
+            assert got.get("state") == "running"
+    assert metrics.get("ws_worker_frame_invalid_total", 0) == 0
+
+
+# ---------------------------------------------------------------------------
 # Config flag validation
 # ---------------------------------------------------------------------------
 
