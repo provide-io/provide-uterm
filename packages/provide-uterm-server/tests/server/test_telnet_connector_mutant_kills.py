@@ -22,6 +22,8 @@ def _make_transport(connected: bool = True, recv_data: bytes = b"") -> MagicMock
     t.send = AsyncMock()
     t.receive = AsyncMock(return_value=recv_data)
     t.is_connected = MagicMock(return_value=connected)
+    # start() runs the M3 peer-IP egress guard; a benign public IP lets it proceed.
+    t.peer_ip = MagicMock(return_value="93.184.216.34")
     return t
 
 

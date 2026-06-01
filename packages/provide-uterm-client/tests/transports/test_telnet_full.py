@@ -8,6 +8,7 @@ connect branches, server handshake, and TelnetClient API tests."""
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -340,6 +341,36 @@ class TestTelnetTransportConnectBranches:
             # Second connect — should disconnect first, then reconnect
             await t.connect("127.0.0.1", port)
             assert t.is_connected()
+            await t.disconnect()
+        finally:
+            server.close()
+
+
+# ---------------------------------------------------------------------------
+# TelnetTransport.peer_ip() — M3 DNS-rebinding post-connect peer-IP read
+# ---------------------------------------------------------------------------
+
+
+class TestTelnetTransportPeerIp:
+    def test_peer_ip_no_writer_returns_none(self) -> None:
+        """A fresh transport has no writer, so peer_ip() returns None."""
+        t = TelnetTransport()
+        assert t.peer_ip() is None
+
+    def test_peer_ip_no_peername_returns_none(self) -> None:
+        """A present writer with a falsy peername returns None."""
+        t = TelnetTransport()
+        t._writer = MagicMock()
+        t._writer.get_extra_info = MagicMock(return_value=None)
+        assert t.peer_ip() is None
+
+    async def test_peer_ip_real_loopback_returns_ip(self) -> None:
+        """A real loopback connection reports 127.0.0.1 as the peer IP."""
+        server, port = await _make_server_that_sends(b"")
+        try:
+            t = TelnetTransport()
+            await t.connect("127.0.0.1", port)
+            assert t.peer_ip() == "127.0.0.1"
             await t.disconnect()
         finally:
             server.close()
