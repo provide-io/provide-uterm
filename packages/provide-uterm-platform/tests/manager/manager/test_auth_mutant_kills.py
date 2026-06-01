@@ -316,6 +316,8 @@ class TestSetupAuth:
             TokenAuthMiddleware,
             token="mytoken",
             worker_token=None,
+            worker_secret=None,
+            enforce_per_agent_worker_token=False,
             public_paths=frozenset(),
             public_prefixes=(),
         )

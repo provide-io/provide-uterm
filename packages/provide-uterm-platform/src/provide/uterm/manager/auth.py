@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import os
 import re
@@ -18,15 +19,49 @@ from provide.telemetry import get_logger
 logger = get_logger(__name__)
 
 # Worker-self-report routes: a low-privilege worker token (when configured) is
-# accepted ONLY on these. Everything else is operator-only. Path params are
-# matched as a single non-slash segment and the pattern is fully anchored so a
+# accepted ONLY on these. Everything else is operator-only. The agent_id is
+# captured as a single non-slash segment and the pattern is fully anchored so a
 # trailing/leading segment (e.g. ``/agent/x/statusfoo`` or a nested id) never
-# slips through. Keep these in sync with manager/routes/status.py (status) and
-# manager/routes/agent_ops.py (register).
+# slips through. The captured agent_id binds the presented per-agent token to
+# the path (see ``derive_agent_token``). Keep these in sync with
+# manager/routes/status.py (status) and manager/routes/agent_ops.py (register).
 _WORKER_SELF_REPORT_ROUTES: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("POST", re.compile(r"/agent/[^/]+/status")),
-    ("POST", re.compile(r"/agent/[^/]+/register")),
+    ("POST", re.compile(r"/agent/(?P<agent_id>[^/]+)/status")),
+    ("POST", re.compile(r"/agent/(?P<agent_id>[^/]+)/register")),
 )
+
+
+def derive_agent_token(secret: str, agent_id: str) -> str:
+    """Derive the per-agent worker token bound to *agent_id*.
+
+    The manager's configured fleet ``worker_token`` is used as an HMAC-SHA256
+    secret (it never leaves the manager — ``_scope_worker_tokens`` strips the
+    raw value and injects only the derived token into each worker's env). The
+    derivation is one-way: a worker holding ``HMAC(secret, A)`` cannot compute
+    ``HMAC(secret, B)``, so a worker can only authenticate as its own agent_id.
+
+    Format (stable wire contract — do not change without migrating workers)::
+
+        "sha256=" + HMAC-SHA256(secret, agent_id).hexdigest()
+    """
+    digest = hmac.new(secret.encode("utf-8"), agent_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"sha256={digest}"
+
+
+def _extract_self_report_agent_id(path: str, method: str) -> str | None:
+    """Return the agent_id for a worker-self-report (*method*, *path*), else None.
+
+    Uses the fully-anchored ``fullmatch`` of the self-report patterns so a
+    near-miss/nested path never yields an agent_id (and therefore never
+    qualifies for the per-agent / fleet-token acceptance branch).
+    """
+    for m, pattern in _WORKER_SELF_REPORT_ROUTES:
+        if method != m:
+            continue
+        match = pattern.fullmatch(path)
+        if match is not None:
+            return match.group("agent_id")
+    return None
 
 
 class TokenAuthMiddleware:
@@ -47,8 +82,22 @@ class TokenAuthMiddleware:
     token:
         The expected operator token value (authorizes everything).
     worker_token:
-        Optional low-privilege token accepted ONLY on the worker-self-report
-        routes. ``None`` disables the second token entirely.
+        Optional low-privilege fleet-shared token. It is accepted on the
+        worker-self-report routes ONLY when
+        ``enforce_per_agent_worker_token`` is False (backward compatible for
+        un-migrated workers). ``None`` disables raw fleet-token acceptance.
+    worker_secret:
+        Optional HMAC secret used to derive/verify the per-agent worker token
+        (see ``derive_agent_token``). On a self-report route the presented
+        token is compared against ``derive_agent_token(secret, agent_id)`` for
+        the agent_id captured from the path, binding the token to the path.
+        ``None`` disables per-agent verification.
+    enforce_per_agent_worker_token:
+        When True, the raw fleet-shared ``worker_token`` is REJECTED on
+        self-report routes — only the correct per-agent derived token (or the
+        operator token) is accepted, fully blocking cross-agent impersonation.
+        When False (default) the raw fleet token is ALSO accepted for backward
+        compatibility, but the derived token remains path-bound either way.
     public_paths:
         Exact paths that bypass auth.
     public_prefixes:
@@ -61,12 +110,16 @@ class TokenAuthMiddleware:
         token: str,
         *,
         worker_token: str | None = None,
+        worker_secret: str | None = None,
+        enforce_per_agent_worker_token: bool = False,
         public_paths: frozenset[str] | None = None,
         public_prefixes: tuple[str, ...] | None = None,
     ) -> None:
         self._app = app
         self._token = token
         self._worker_token = worker_token
+        self._worker_secret = worker_secret
+        self._enforce_per_agent = enforce_per_agent_worker_token
         self._public_paths = public_paths or frozenset()
         self._public_prefixes = public_prefixes or ()
 
@@ -76,22 +129,31 @@ class TokenAuthMiddleware:
 
     def _is_worker_self_report_route(self, path: str, method: str) -> bool:
         """Return True only for the low-privilege worker-self-report routes."""
-        return any(method == m and pattern.fullmatch(path) is not None for m, pattern in _WORKER_SELF_REPORT_ROUTES)
+        return _extract_self_report_agent_id(path, method) is not None
 
     def _is_authorized(self, provided: str, path: str, method: str) -> bool:
         """Return True if *provided* token may access (*method*, *path*).
 
-        The operator token authorizes everything (timing-safe). The worker
-        token, when configured, additionally authorizes ONLY the
-        worker-self-report routes — never an operator route.
+        The operator token authorizes everything (timing-safe). On a
+        worker-self-report route the per-agent derived token (bound to the
+        agent_id captured from the path) is accepted; the raw fleet-shared
+        ``worker_token`` is additionally accepted unless per-agent enforcement
+        is enabled. Operator routes never accept the worker tokens.
         """
         if hmac.compare_digest(provided, self._token):
             return True
-        return bool(
-            self._worker_token is not None
-            and self._is_worker_self_report_route(path, method)
-            and hmac.compare_digest(provided, self._worker_token)
-        )
+        agent_id = _extract_self_report_agent_id(path, method)
+        if agent_id is None:
+            return False
+        # Per-agent derived token, bound to the agent_id in the path.
+        if self._worker_secret is not None:
+            expected = derive_agent_token(self._worker_secret, agent_id)
+            if hmac.compare_digest(provided, expected):
+                return True
+        # Backward-compat: accept the raw fleet token unless enforcement is on.
+        if not self._enforce_per_agent and self._worker_token is not None:
+            return hmac.compare_digest(provided, self._worker_token)
+        return False
 
     def _extract_request_token(self, scope: Any) -> tuple[str, bool]:
         """Extract bearer token from scope. Returns (token, pass_through).
@@ -204,18 +266,31 @@ def setup_auth(app: Any, *, env_var: str = "UTERM_MANAGER_API_TOKEN", config: An
     public_paths: frozenset[str] = frozenset()
     public_prefixes: tuple[str, ...] = ()
     worker_env_var = "UTERM_MANAGER_WORKER_TOKEN"
+    enforce_per_agent = False
     if config is not None:
         public_paths = frozenset(config.auth_public_paths)
         public_prefixes = tuple(config.auth_public_prefixes)
         worker_env_var = getattr(config, "auth_worker_token_env_var", worker_env_var)
-    # Optional low-privilege worker token. When unset (or whitespace-only) the
-    # self-report routes still require the operator token (backward compatible).
+        enforce_per_agent = bool(getattr(config, "enforce_per_agent_worker_token", False))
+    # Optional low-privilege fleet-shared worker token. When unset (or
+    # whitespace-only) the self-report routes still require the operator token
+    # (backward compatible). The same value doubles as the HMAC secret from
+    # which each worker's per-agent token is derived (it never leaves the
+    # manager — see process_impl._scope_worker_tokens), so we pass it as both
+    # ``worker_token`` (raw acceptance, gated by ``enforce_per_agent``) and
+    # ``worker_secret`` (per-agent derivation/verification).
     worker_token = os.environ.get(worker_env_var, "").strip() or None
-    logger.info("api_token_auth_enabled", worker_token_scoped=worker_token is not None)
+    logger.info(
+        "api_token_auth_enabled",
+        worker_token_scoped=worker_token is not None,
+        enforce_per_agent_worker_token=enforce_per_agent,
+    )
     app.add_middleware(
         TokenAuthMiddleware,
         token=token,
         worker_token=worker_token,
+        worker_secret=worker_token,
+        enforce_per_agent_worker_token=enforce_per_agent,
         public_paths=public_paths,
         public_prefixes=public_prefixes,
     )

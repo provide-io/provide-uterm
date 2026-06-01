@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
+from provide.uterm.manager.auth import derive_agent_token
 from provide.uterm.manager.config import ManagerConfig
 from provide.uterm.manager.core import AgentManager
 from provide.uterm.manager.process import AgentProcessManager
@@ -63,24 +64,37 @@ def pm(manager, tmp_path):
     return pm
 
 
-def _build(pm, manager):
+def _build(pm, manager, agent_id="agent_000"):
     env_prefix = manager.config.worker_env_prefix
-    return pm._build_worker_env(env_prefix, None, FakeWorkerPlugin(), {})
+    return pm._build_worker_env(env_prefix, None, FakeWorkerPlugin(), {}, agent_id)
 
 
 class TestWorkerEnvTokenScoping:
-    def test_worker_token_set_rewrites_api_token_and_strips_worker_var(self, pm, manager) -> None:
+    def test_worker_token_set_injects_derived_per_agent_token(self, pm, manager) -> None:
         with patch.dict(
             os.environ,
             {OPERATOR_VAR: "operator-secret", WORKER_VAR: "worker-secret"},
             clear=False,
         ):
-            env = _build(pm, manager)
-        # The child sees only the low-priv token under the API-token name.
-        assert env[OPERATOR_VAR] == "worker-secret"
+            env = _build(pm, manager, agent_id="agent_042")
+        # The child receives the DERIVED per-agent token (HMAC of the fleet
+        # secret over its agent_id) — NOT the raw fleet secret and NOT the
+        # operator token.
+        assert env[OPERATOR_VAR] == derive_agent_token("worker-secret", "agent_042")
+        assert env[OPERATOR_VAR] != "worker-secret"
         assert env[OPERATOR_VAR] != "operator-secret"
         # The raw worker-token var is not leaked into the child.
         assert WORKER_VAR not in env
+
+    def test_derived_token_differs_per_agent(self, pm, manager) -> None:
+        with patch.dict(
+            os.environ,
+            {OPERATOR_VAR: "operator-secret", WORKER_VAR: "worker-secret"},
+            clear=False,
+        ):
+            env_a = _build(pm, manager, agent_id="agent_A")
+            env_b = _build(pm, manager, agent_id="agent_B")
+        assert env_a[OPERATOR_VAR] != env_b[OPERATOR_VAR]
 
     def test_worker_token_unset_leaves_operator_token_in_env(self, pm, manager) -> None:
         """Backward compat: no worker token configured → operator token forwarded as before."""
