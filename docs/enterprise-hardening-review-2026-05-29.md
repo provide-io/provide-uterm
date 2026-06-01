@@ -36,6 +36,7 @@ findings below were additionally spot-checked by hand against the source.
 | **Total** | **83** | **20** | **8** |
 
 Confirmed severity mix (post-verification re-grade): **0 critical · 16 high · 36 medium · 31 low.**
+(Note: only 15 findings carry an explicit `**H**` table row; the 16th HIGH is the broadcast head-of-line / per-send-timeout finding, which appears below as the ungraded `—` "Independently noted" lease-HOL row in section E rather than as its own `**H**` row. It is split out as HIGH row 9 in `docs/coverage-audit-2026-06-01.md`. Both fixes — the telnet cap and `_BROADCAST_SEND_TIMEOUT_S` in `router_impl.py` — are present in code.)
 
 ---
 

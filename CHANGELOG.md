@@ -2,6 +2,51 @@
 
 All notable changes to provide-uterm are documented in this file.
 
+## [Unreleased] — enterprise-hardening body (2026-05-06 … 2026-06-01)
+
+A multi-wave security/compliance hardening pass landed after the
+`0.5.0-dev` snapshot below. Highlights:
+
+### Security
+
+- **Tamper-evident WORM audit chain.** `server/audit_chain.py` writes a
+  sha256 hash-chain (genesis-anchored, durable head + anti-rollback) over
+  audit events, verifiable post-fact via the `uterm audit verify <path>`
+  CLI subcommand (`cli/audit.py`). The optional HMAC/ed25519 signing tier
+  remains a deferred enterprise spec; the shipped chain is sha256-only.
+- **Connector-egress SSRF guard.** Session creation/update now flow through
+  a `SessionRegistry` chokepoint (`assert_session_egress_allowed`,
+  `server/egress.py`) that can block private/loopback/cloud-metadata
+  targets (including IPv4-mapped/NAT64/6to4 IPv6 forms), gated on
+  `security.block_private_connector_targets` (default `False`). The same
+  guard covers the PAM relay and webhook destinations.
+- **Webhook-IdP response integrity.** `WebhookIdentityProvider` verifies the
+  IdP response HMAC signature by default
+  (`auth.webhook_idp_require_signed_response`, default `True`; fails closed
+  at config-load if no secret is configured) and adds replay protection
+  (bounded replay cache + optional response-nonce binding via
+  `auth.webhook_idp_require_response_nonce`).
+- **Per-agent manager worker tokens.** The External Management Tier can bind
+  worker tokens to their `agent_id` (`enforce_per_agent_worker_token`,
+  default `False`) and constrains self-reported register fields to block
+  worker-token privilege escalation on `/register`.
+- **Default recording redaction.** A built-in secret-redaction ruleset
+  (AWS keys, GitHub/Slack tokens, JWTs, etc.) ships in
+  `bridge/hub/redaction_defaults.py` and is enabled by default via
+  `recording.redact_sensitive=True`; operators opt out explicitly.
+- **Transport / file-permission hardening.** Recording files are created
+  0o600 with TOCTOU-safe open flags; telnet/SSH/WS connectors validate the
+  post-connect peer IP (DNS-rebind mitigation); `WebSocketTransport` is
+  hardened for the `websockets` 16.x API.
+
+### Testing / CI
+
+- **Resource-exhaustion (hostile-client) workflow** —
+  `.github/workflows/hostile-client.yml` runs burst, oversized-frame, and
+  slow-loris probes.
+- **`/readyz` readiness gate** added alongside the existing health/liveness
+  probes for orchestrator integration.
+
 ## [0.5.0-dev] — 2026-04-20
 
 ### Breaking Changes
@@ -106,10 +151,14 @@ All notable changes to provide-uterm are documented in this file.
   detection engine.
 - **`bridge/contracts.py` added to mutmut `paths_to_mutate`** — the
   `negotiate_protocol_version` boundary is now mutation-covered on full
-  gate runs. Server-side files (`bridge/models.py`, `tunnel/token_hash.py`,
-  `tunnel/intercept.py`) remain blocked by a cross-package namespace
-  collision between mutants/ tree and uv editable installs; see
-  `docs/mutmut-survivors-triage.md` for the planned fix.
+  gate runs. The server-side files (`bridge/models.py`,
+  `tunnel/token_hash.py`, `tunnel/intercept.py`) are now also in the
+  perimeter (`[tool.mutmut].paths_to_mutate`), reached via the
+  `src/provide/uterm/server` symlink so derived mutant module names bind
+  to `provide.uterm.server...`; matching mutmut suites
+  (`test_hijack_lease.py`, `test_token_hash.py`, `test_intercept_gate.py`)
+  are enumerated in `tests_dir`. The earlier cross-package namespace
+  collision is resolved.
 
 ## [0.4.0] — 2026-04-08
 

@@ -2,6 +2,17 @@
 
 Date: 2026-05-28
 
+> **Status (2026-06): COMPLETED — recommended shape shipped.** Core
+> `provide.uterm.bridge` now owns `HijackableMixin` + `HijackCoordinator`
+> (+ contracts/schemas); there is **no** duplicate server-owned
+> `provide/uterm/bridge/__init__.py` (item #4 done); `TermHub` lives at
+> `provide.uterm.server.bridge.hub.TermHub` (the server-package `bridge`
+> `__init__` sets `__all__ = []`, so import it from `…bridge.hub`). The
+> related review decisions also landed: the `make quality` target exists
+> (Makefile) and the `--allow-unauthenticated-ssh` opt-in flag exists
+> (`server/cli/__init__.py`). Retained below as the historical decision
+> record.
+
 ## Goal
 
 Resolve the duplicate `provide.uterm.bridge` package ownership so imports are deterministic, type checkers can reason about package boundaries, and long-term developer experience is clear.
@@ -15,10 +26,11 @@ Target imports:
 ```python
 # Lightweight, safe in core-only installs.
 from provide.uterm.bridge import HijackableMixin, HijackCoordinator
-from provide.uterm.bridge.schemas import BrowserFrame, WorkerFrame
+from provide.uterm.bridge.schemas import TermFrame, InputFrame, SnapshotFrame
 
 # Runtime/server implementation, requires provide-uterm-server.
-from provide.uterm.server.bridge import TermHub
+# (TermHub lives in the `.hub` submodule; `…server.bridge` exports nothing.)
+from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.routes import register_ws_routes
 ```
 

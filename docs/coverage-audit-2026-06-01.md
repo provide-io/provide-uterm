@@ -59,7 +59,9 @@ report itself marked "uncertain — needs a human trust-model call"; not asserte
 ## Beyond the original 83
 
 Two later independent re-verifications drove additional fixes on top of the 83:
-- `rereview-2026-05-31-hardening-body.md` → remediation waves R1–R5 (7 M + 11 L).
+- `rereview-2026-05-31-hardening-body.md` → remediation waves R1–R5. Its confirmed-issues table totals
+  1 H + 8 M + 14 L (the 1 H = the `Dockerfile.server` build break, since fixed); of those, ~7 M + 11 L drove
+  the R1–R5 remediation work, the remainder being negative / pre-existing-latent / "clean" rows.
 - `verify-hardening-body-2026-05-31.md` → 13 confirmed findings (2 HIGH: the connector-SSRF chokepoint
   gap + a manager `register` operator-command-injection priv-esc) — all remediated; see that report's
   remediation-status table.

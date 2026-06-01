@@ -48,6 +48,15 @@ class FanOutGroup:
 
 Groups are ephemeral by default (in-memory, discarded on hub restart). A `SqliteFanOutStore` provides persistence.
 
+> **As-built (2026-06):** the shipped `FanOutGroup`
+> (`server/bridge/fanout/_models.py`) uses `quiesce_ms`/`max_response_ms`
+> (not `response_window_ms`) and adds a `grants: list[str]` field for shared
+> access. `divergence_threshold` is a `difflib.SequenceMatcher` ratio, not a
+> Levenshtein ratio. Persistence was **not** built: the only store is the
+> `FanOutStore` Protocol plus the in-memory `InMemoryFanOutStore`
+> (`server/bridge/fanout/_store.py`); there is no `SqliteFanOutStore`. Groups
+> are in-memory only.
+
 ### Fan-Out Controller
 
 ```python
@@ -98,6 +107,18 @@ After sending input, the controller subscribes each target session to a temporar
 
 Divergence is detected by computing pairwise Levenshtein similarity between all session output deltas and comparing against `group.divergence_threshold`. Sessions below the threshold are added to `divergent_sessions`.
 
+> **As-built (2026-06):** `OutputCollector`
+> (`server/bridge/fanout/_collector.py`) subscribes to the EventBus `term`
+> and `snapshot` events for a session and concatenates `term`-event deltas
+> (falling back to the last `snapshot.screen` for snapshot-only connectors) —
+> it does not diff snapshot lines. Collection is bounded by an adaptive
+> `quiesce_ms` (silence window) plus a hard `max_response_ms` cap, not a fixed
+> `response_window_ms`. Divergence
+> (`server/bridge/fanout/_divergence.py:compute_divergence`) uses
+> `difflib.SequenceMatcher(None, a, b).ratio()` (gestalt pattern matching),
+> **not** Levenshtein, and compares each output against the single "majority"
+> output (highest average similarity to all others) rather than all pairwise.
+
 ### REST API
 
 ```
@@ -121,6 +142,17 @@ GET /api/fanout/groups/{group_id}/history?limit=20
 
 All endpoints require admin role. `created_by` is set from the resolved `Principal`.
 
+> **As-built (2026-06):** the shipped routes
+> (`server/bridge/fanout/_routes.py`) are `POST/GET /api/fanout/groups`,
+> `DELETE /api/fanout/groups/{group_id}`,
+> `POST /api/fanout/groups/{group_id}/send`, and
+> `POST /api/fanout/groups/{group_id}/grants` (grant a principal access to a
+> group). There is **no** `/history` route. `POST groups` returns
+> `{group_id, name, session_count}` and `GET groups` returns
+> `[{group_id, name, session_count, mode}]` — not full `FanOutGroup` objects.
+> The send body carries `quiesce_ms`/`max_response_ms`, not
+> `response_window_ms`.
+
 ### Browser WS Protocol
 
 A controlling admin browser can initiate fan-out via WS (in addition to REST):
@@ -135,6 +167,13 @@ A controlling admin browser can initiate fan-out via WS (in addition to REST):
 // Hub → all browsers watching a target session (so observers know input came from fan-out)
 {"type": "fanout_input", "group_id": "fleet-prod", "send_id": "...", "command": "uptime\n", "from_principal": "alice"}
 ```
+
+> **As-built (2026-06):** only the `fanout_send` → `fanout_result` exchange
+> shipped. The WS handler (`bridge/routes/websockets_impl.py`) handles
+> `fanout_send` and replies `fanout_result` **to the initiating browser
+> only**. There is no `fanout_input` observer-broadcast frame anywhere in the
+> codebase; observers on a target session do not receive a distinct
+> fan-out-origin notification.
 
 ### Sequential Mode
 
@@ -151,6 +190,13 @@ hub.fan_out_controller = controller
 ```
 
 No changes to `TermHub.__init__` signature. The REST and WS routes check `hub.fan_out_controller is not None` before handling fan-out frames.
+
+> **As-built (2026-06):** the `hub.fan_out_controller`-attribute pattern
+> shipped as designed, but `SqliteFanOutStore` does not exist —
+> `FanOutController` defaults to `InMemoryFanOutStore()` when no `store=` is
+> passed (`server/bridge/fanout/_controller.py`), and that is what the factory
+> wires (`app/factory_impl.py`). The constructor's `store` argument is
+> keyword-only and accepts any `FanOutStore` Protocol implementation.
 
 ---
 
@@ -181,6 +227,18 @@ This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operat
 - The `fanout_input` broadcast to observer browsers includes `from_principal` so operators watching a session can see that input came from a fan-out operation, not from a local hijack.
 - Groups may not contain sessions to which the creating principal does not have `can_read_session` access. This is enforced at group creation time by checking `authz.can_read_session(principal, session_def)` for each `worker_id`.
 - Maximum group size is configurable (default 50 sessions) to prevent inadvertent fleet-wide destructive commands.
+
+> **As-built (2026-06):** the role split diverged. In the MCP authz policy
+> (`provide-uterm-client/.../ai/policy.py`), `fanout_group_create` is an
+> **operator**-level tool while `fanout_send` is admin — so operators *can*
+> create groups; only broadcasting input is admin-gated. The
+> `fanout_input` observer broadcast was not built (see Browser WS Protocol
+> note above). The per-worker `can_read_session` check at group-creation time
+> was **not** implemented: `FanOutController.create_group`
+> (`server/bridge/fanout/_controller.py`) enforces only `max_group_size` and
+> `error_pattern` regex validation — no per-`worker_id` read-authz check. The
+> non-spoofable `created_by` and configurable max group size shipped as
+> described.
 
 ---
 

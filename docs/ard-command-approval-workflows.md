@@ -71,6 +71,18 @@ class ApprovalEvent:
     duration_s: float
 ```
 
+> **As-built (2026-06):** the shipped model is leaner. There is no
+> `ApprovalPolicy`, `ApprovalEvent`, or `ApprovalEventSink`. Policy gating is
+> done by the `PolicyGate` protocol returning a `PolicyDecision`
+> (`action` ∈ `{allow, deny, hold}`, plus `request_id`, `timeout_s`,
+> `reason`) over a `PolicyContext`, all in `server/bridge/hub/ext.py` — not by
+> per-policy regex `ApprovalPolicy` objects. The shipped `ApprovalRequest`
+> (`server/bridge/hub/approvals.py`) has fields
+> `id, worker_id, submitter_id, command, status, created_at, expires_at,
+> group_id, is_fanout` — not the
+> `request_id`/`policy_id`/`session_id`/`principal`/`role`/`submitted_at`/
+> `approver`/`decided_at` shown here. `status` is the `ApprovalStatus` enum.
+
 ### Approval Gate
 
 ```python
@@ -103,6 +115,14 @@ On a policy match, `intercept()`:
 
 Non-matching commands return `True` immediately (zero overhead path).
 
+> **As-built (2026-06):** there is no `CommandApprovalGate` class. The shipped
+> interception interface is `PolicyGate.intercept_input(self, data, context:
+> PolicyContext) -> PolicyDecision` (`server/bridge/hub/ext.py`), with
+> implementations `NoOpPolicyGate` (default, allows everything) and
+> `WebhookPolicyGate` (delegates to an external webhook). A `hold` decision
+> creates an `ApprovalRequest` and pauses; the `deny`/`allow` actions
+> short-circuit. There is no regex `policies=[...]` list construction.
+
 ### REST Callback Endpoints
 
 ```
@@ -122,6 +142,16 @@ GET /api/approvals?session_id=...&status=pending
 ```
 
 These endpoints require admin role. `require_different_user` is enforced server-side by comparing `approver` against `request.principal`.
+
+> **As-built (2026-06):** the shipped routes (`server/routes/approvals.py`) are
+> `POST /api/approvals/{request_id}/approve` and `.../reject`, plus
+> `GET /api/approvals` which lists **pending** requests only (no `session_id`
+> or `status` query filters). A double-decide on a non-pending request returns
+> **400** ("Approval request is not pending"), not 409. There is no
+> single-resource `GET /api/approvals/{request_id}`. The `approve` handler
+> takes no request body / `approver` field; `reject` takes only an optional
+> `?reason` query param. `require_different_user` is **not** implemented — no
+> self-approval check exists.
 
 ### Browser WS Protocol
 
@@ -165,6 +195,14 @@ async def _handle_input(hub, ws, worker_id, msg_b):
     ...
 ```
 
+> **As-built (2026-06):** `browser_handlers.py` uses `gate = hub._policy_gate`
+> (there is no `hub._approval_gate`) and calls
+> `decision = await gate.intercept_input(data, context)` returning a
+> `PolicyDecision` (not a bool); `context` is a `PolicyContext`, not an
+> `ApprovalContext`. The `_is_noop_policy_gate(gate)` check short-circuits the
+> zero-overhead path before any context is built. On `decision.action ==
+> "hold"` the handler constructs the `ApprovalRequest` and pauses the browser.
+
 ### TermHub Constructor
 
 ```python
@@ -187,9 +225,23 @@ hub = TermHub(
 )
 ```
 
+> **As-built (2026-06):** `TermHub.__init__`
+> (`server/bridge/hub/core_impl.py`) takes a `policy_gate: PolicyGate | None`
+> parameter (not `approval_gate`), defaulting to `NoOpPolicyGate()`. There is
+> no `CommandApprovalGate`, no `policies=[...]` regex list, and no
+> `HubEventApprovalSink`. To delegate approvals, pass a `WebhookPolicyGate`.
+
 ### Approval State Store
 
 Pending requests are held in an in-memory `dict[str, ApprovalRequest]` with a TTL-based cleanup task (same pattern as `InMemoryResumeStore`). A `SqliteApprovalStore` is provided for the CF backend and for deployments requiring durability across restarts.
+
+> **As-built (2026-06):** the hub's command-approval state lives in
+> `InMemoryApprovalStore` (`server/bridge/hub/approvals.py`), wired
+> unconditionally in `TermHub.__init__`; it is **not** durable (the durability
+> ADR lists `approvals` as process-local). A `SqliteApprovalStore` does exist
+> (`provide-uterm/.../control/plane/sqlite/approval_store.py`) but it is the
+> distinct **control-plane** approval-*record* store (persisting
+> `ApprovalRecord`) and is not wired into the command-approval gate here.
 
 ---
 
@@ -202,6 +254,10 @@ async def intercept_input(self, data: str, *, ws: CFWebSocket) -> bool: ...
 ```
 
 CF approval callbacks hit the DO's HTTP fetch handler at `POST /api/approvals/{request_id}/approve`.
+
+> **As-built (2026-06):** the CF `RuntimeProtocol` (`cloudflare/contracts.py`)
+> gained no `intercept_input` method — this CF-side approval-gate parity was
+> not implemented.
 
 ---
 

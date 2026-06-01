@@ -74,7 +74,7 @@ graph TB
 ### Embed a terminal in FastAPI
 
 ```python
-from provide.uterm.fastapi import mount_terminal_ui
+from provide.uterm.fastapi_utils import mount_terminal_ui
 app = FastAPI()
 mount_terminal_ui(app)  # serves at /terminal
 ```
@@ -202,7 +202,7 @@ Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, times
 | Entry Point | Purpose |
 |-------------|---------|
 | `uterm` | Terminal proxy, sharing, tunneling, inspection |
-| `uterm-server` | Hosted reference server with sessions, auth, UI |
+| `uterm server` | Hosted reference server with sessions, auth, UI (subcommand of `uterm`) |
 | `uterm-mcp` | MCP server for AI agents |
 | `uterm-manager` | Agent swarm orchestration |
 
@@ -224,7 +224,7 @@ Process lifecycle, heartbeat monitoring, auto-respawn, fleet pause/resume, times
 ```bash
 pip install provide-uterm                  # core only
 pip install 'provide-uterm[emulator]'      # + pyte screen emulation
-pip install 'provide-uterm-server[cli]'    # CLI tools (uterm, uterm-server)
+pip install 'provide-uterm-server[cli]'    # CLI tools (uterm, incl. `uterm server`)
 pip install 'provide-uterm-server[server]' # hosted server
 pip install 'provide-uterm-client[all]'    # client + MCP tools
 ```
@@ -255,7 +255,7 @@ pip install 'provide-uterm-client[all]'    # client + MCP tools
 ```mermaid
 graph LR
     subgraph "Self-Hosted"
-        FA["FastAPI Server<br/><code>uterm-server</code>"]
+        FA["FastAPI Server<br/><code>uterm server</code>"]
     end
 
     subgraph "Edge"
@@ -320,7 +320,7 @@ All Python packages at 100% branch+line coverage. 8760+ tests total.
 - [Testing Guide](https://github.com/provide-io/provide-uterm/blob/main/docs/TESTING.md)
 - [Operations Runbook](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/runbook.md)
 - [Service SLOs](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/slo.md)
-- [Production Readiness Gates](https://github.com/provide-io/provide-uterm/blob/main/docs/production-readiness-pass2.md)
+- [Enterprise Hardening & Reliability Review](https://github.com/provide-io/provide-uterm/blob/main/docs/enterprise-hardening-review-2026-05-29.md)
 - [Release Governance](https://github.com/provide-io/provide-uterm/blob/main/docs/release-governance.md)
 - [Architecture Diagrams](https://github.com/provide-io/provide-uterm/tree/main/docs/diagrams) (PlantUML)
 - [Cloudflare Workers](https://github.com/provide-io/provide-uterm/blob/main/packages/provide-uterm-cloudflare/README.md)

@@ -2,6 +2,13 @@
 
 Adversarial multi-agent sweep over 26 commits (24 shipped + 5a-1/5a-2). 13 findings confirmed after per-finding refutation; 18 refuted.
 
+> **Snapshot scope (read first):** this table and the body below are a
+> 2026-05-31 branch snapshot. The four `deferred` rows and the body's
+> "CONFIRMED OPEN" assertions were subsequently closed on `main` (#7
+> per-agent token, #9 IdP replay binding, #3 DNS-rebind peer-IP check, #11
+> PAM-relay egress, #4 IPv6 embedded forms, 5d `except` narrowing) — see
+> `docs/coverage-audit-2026-06-01.md` for the current MERGED status.
+>
 > **Remediation status (2026-05-31, branch `harden/verify-remediation`).** 11 of the 13 confirmed findings — plus the NEW manager `register` priv-esc the completeness critic surfaced and the worker-settable `config` restart-spawn poison — are FIXED below (each TDD'd, independently adversarially reviewed, and verified at 100% line+branch coverage on its changed modules). Four lower-risk / more-invasive residuals are tracked for focused follow-up (none are remote-unauthenticated exploits after the fixes here).
 >
 > | Finding | Sev | Status | Commit |

@@ -41,6 +41,18 @@ class RecordingStore(Protocol):
 
 Implementations: `InMemoryRecordingStore` (tests), `FileRecordingStore` (JSONL on disk), `S3RecordingStore` (pluggable via boto3 or httpx), `SqliteRecordingStore` (embedded, no deps).
 
+> **As-built (2026-06):** the shipped `RecordingStore` Protocol
+> (`provide-uterm/src/provide/uterm/recording.py`) is **async** with the
+> methods `start_session(session_id, metadata)`,
+> `append_events(session_id, events)`, `end_session(session_id)`,
+> `recording_meta(session_id)`, `get_entries(session_id, ...)` and
+> `get_path(session_id)` — not the sync `write_event`/`get_events`/`finalize`/
+> `get_meta` shown here. The implementations are `LocalFileRecordingStore`
+> (JSONL on disk; the `FileRecordingStore` name above is not used),
+> `InMemoryRecordingStore`, `NullRecordingStore`, and
+> `WebhookRecordingStore` (`server/recording.py`). The proposed
+> `S3RecordingStore` and `SqliteRecordingStore` were never built.
+
 ### Event Schema
 
 ```python
@@ -55,6 +67,11 @@ class RecordingEvent:
     hmac: str              # HMAC-SHA256(seq|ts|kind|data, signing_key) for tamper evidence
 ```
 
+> **As-built (2026-06):** recording events are plain dicts shaped
+> `{ts, event, data, session_id}` (`recording.py`), with no
+> `seq`/`kind`/`principal`/`role`/`hmac` fields. The per-event HMAC tamper
+> scheme was not built into recordings (see Tamper Evidence below).
+
 ### Hot Path Integration
 
 Recording hooks are registered on `TermHub` at construction time:
@@ -67,6 +84,15 @@ hub = TermHub(
 )
 ```
 
+> **As-built (2026-06):** recording is **not** wired through the `TermHub`
+> constructor — `TermHub.__init__` (`server/bridge/hub/core_impl.py`) has no
+> `recording_store` or `recording_signing_key` parameter. Instead the
+> `recording_store` is passed to the `SessionRegistry`/session runtime
+> (`server/registry.py`, `server/runtime.py`), and the concrete store is
+> selected in `app/factory_impl.py` (`WebhookRecordingStore` /
+> `InMemoryRecordingStore` / `NullRecordingStore` / `LocalFileRecordingStore`
+> per `RecordingConfig`). No `recording_signing_key` is plumbed anywhere.
+
 Two hook points in the existing WS pipeline:
 
 1. **Worker → browser** (`ws_worker_term` inner loop): after `hub.broadcast(worker_id, frame)`, call `store.write_event(session_id, output_event)` in a fire-and-forget `asyncio.create_task`.
@@ -77,6 +103,14 @@ Both calls are non-blocking (task-based). Store implementations must be thread-s
 ### Tamper Evidence
 
 Each event is HMAC-SHA256 signed over `f"{seq}:{ts:.6f}:{kind}:{data}"` using a per-deployment signing key. A separate `verify_recording(session_id, store, signing_key)` utility checks the full chain and reports the first broken link.
+
+> **As-built (2026-06):** the per-event HMAC scheme and `verify_recording`
+> utility were not built — recordings carry no signatures. Tamper-evidence
+> shipped instead as a separate **sha256 hash-chain** WORM audit log
+> (`server/audit_chain.py`: `AuditChain`, `GENESIS_HASH`, `verify_records`,
+> `verify_audit_log`), verified via the `uterm audit verify <path>` CLI. This
+> is a distinct subsystem from the recording store, not a property of
+> individual recording events.
 
 ### Replay API
 
@@ -93,6 +127,15 @@ GET /api/sessions/{session_id}/recording/export?format=asciinema
 
 The asciinema export converts output events to `[delay, "o", data]` frames and is playable in standard asciinema player or `asciinema play`.
 
+> **As-built (2026-06):** the shipped replay routes (`server/routes/sessions.py`)
+> are `GET /api/sessions/{id}/recording` (meta),
+> `GET /api/sessions/{id}/recording/entries` (paginated entries) and
+> `GET /api/sessions/{id}/recording/download` (full JSONL). There is no
+> `/recording/events` route and no `/recording/export` route. asciinema export
+> was **not** implemented anywhere in the codebase. The Cloudflare backend
+> mirrors the same `/recording`, `/recording/entries`, `/recording/download`
+> trio (`cloudflare/.../http_routes/_recording.py`).
+
 ### Retention & Lifecycle
 
 `RecordingMeta` tracks `started_at`, `finalized_at`, `size_bytes`, `event_count`. Finalization happens on session disconnect or explicit `DELETE /api/sessions/{id}`. A background `retention_days` policy can auto-expire old recordings.
@@ -108,6 +151,14 @@ def record_event(self, kind: str, data: str, *, principal: str | None = None) ->
 ```
 
 Export endpoints are added to `http_routes.py`.
+
+> **As-built (2026-06):** no dedicated `recordings` table was added — the CF
+> backend exposes the pre-existing `session_events` table
+> (`cloudflare/state/store.py`) through recording-compatible routes in
+> `cloudflare/.../http_routes/_recording.py` (`/recording`,
+> `/recording/entries`, `/recording/download`). `RuntimeProtocol`
+> (`cloudflare/contracts.py`) gained no `record_event` method, and no
+> asciinema export endpoints were added.
 
 ---
 

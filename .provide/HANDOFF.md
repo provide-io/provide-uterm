@@ -1,6 +1,6 @@
 # Handoff: Enterprise Hardening & Reliability Program
 
-_Last updated: 2026-05-31 (verify-remediation wave). Supersedes the prior hardening handoff._
+_Last updated: 2026-06-01 (verify-remediation wave + ws_transport.py adoption). Supersedes the prior hardening handoff._
 
 ## Problem / request
 
@@ -28,18 +28,15 @@ shipped gaps — now remediated.
 
 ## Working-tree notes for the next session
 
-- **Stray WIP from another tool (unrelated, left untouched).** The working tree carries uncommitted work
-  evidently from a parallel tool (`.antigravitycli/`): a modified
-  `packages/provide-uterm-client/.../transports/__init__.py` (lazy `WebSocketTransport` `__getattr__` entry,
-  100% covered) plus two **untracked** files `transports/ws_transport.py` and
-  `packages/provide-uterm/.../ws_session.py`. As of the 2026-06-01 `run_all_tests.py` run, `ws_transport.py`
-  has grown to **62 statements at 0% coverage**, which drops the **client** package to 95.82% →
-  `FAILED: provide-uterm-client`. This is the ONLY failure in the full local gate — every hardening package
-  is 100% (server 10213 stmts, core/cf/annotation, platform 1113 passed). **Important:** these files are
-  UNTRACKED, so they are NOT in committed history — `git push` and CI would NOT see them (CI checks out
-  commits, not the working tree), so they do **not** block the push or CI. They only break the *local*
-  full-gate run. Their owner should commit-with-tests / remove / git-ignore them for a clean local gate.
-  Subagents were instructed never to stage them.
+- **Stray WIP from another tool — RESOLVED (committed with tests).** The formerly-untracked
+  `transports/ws_transport.py` was adopted and hardened for the websockets 16.0 API and **committed with
+  its test suite** (`8e9840e4` *feat(client): harden WebSocketTransport for websockets 16.0*, plus the
+  `b2b54e91` test tidy; test at `packages/provide-uterm-client/tests/transports/test_ws_transport.py`).
+  `packages/provide-uterm/.../ws_session.py` is likewise now tracked (with
+  `tests/terminal/test_ws_session.py`), and the lazy `transports/__init__.py` `__getattr__` edit is
+  committed. The 0%-coverage gate failure that dropped the client package to 95.82% no longer applies —
+  the working tree is clean for these files. (Task #35 *Adopt + harden ws_transport.py* and #36 *shared
+  TransportSession base* are both completed.)
 - **Known pre-existing flake (NOT from this work):**
   `tests/bridge/hub/test_limiter.py::test_send_eviction_never_drops_the_inserting_client` failed once in the
   full server suite under the random seed, but passes 3/3 in isolation and 18/18 in its file in random order;
@@ -47,7 +44,7 @@ shipped gaps — now remediated.
   cross-test-pollution flake (shared RateLimiter/clock state from an earlier test in the random order) — a
   reliability follow-up worth a focused de-pollution pass, but unrelated to the hardening changes.
 
-## Work completed (all merged to local `main`; ~38 commits ahead of origin, UNPUSHED by user's choice)
+## Work completed (all merged to local `main`; ~51 commits ahead of origin, UNPUSHED by user's choice)
 
 - **Design-decision items (task #19) — DONE:**
   - **1f/1d** webhook-IdP contract: verify the IdP *response* signature (`webhook_idp_require_signed_response`,
@@ -81,8 +78,9 @@ shipped gaps — now remediated.
 
 ## Detailed checklist for next session
 
-- [ ] **Resolve the stray WIP** (commit/remove/gitignore `transports/ws_transport.py`, `ws_session.py`,
-  `transports/__init__.py`) — unrelated to this program; it did not break the gate but is uncommitted.
+- [x] **Resolve the stray WIP** — DONE. `transports/ws_transport.py` (+ tests) committed in `8e9840e4`/
+  `b2b54e91`, `ws_session.py` (+ tests) tracked, `transports/__init__.py` lazy edit committed. The local
+  full-gate coverage failure is resolved.
 - [ ] **De-pollute the `test_limiter` flake** (`test_send_eviction_never_drops_the_inserting_client`) — find
   the earlier test in the random order that leaves shared RateLimiter/clock state; a reliability follow-up.
 - [ ] **Deferred verification residuals (task #33)** — focused follow-ups, none remote-unauth exploits:
@@ -102,6 +100,6 @@ shipped gaps — now remediated.
 - [ ] **Docker images** still NEED-BUILD-VALIDATION (can't build locally): `docker compose -f
   docker/docker-compose.yml build` to confirm the uv-managed-venv `Dockerfile.server` (`uv sync --extra all`
   + pyte) and `Dockerfile.cf`.
-- [ ] **Push to origin**: ~38 local commits on `main` are unpushed by the user's explicit choice — confirm
+- [ ] **Push to origin**: ~51 local commits on `main` are unpushed by the user's explicit choice — confirm
   before pushing.
 - [ ] Optional **P2 architecture** (HA): single-active-instance vs shared control plane — design decision.

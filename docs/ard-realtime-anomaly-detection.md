@@ -1,5 +1,26 @@
 # ARD: Real-Time Anomaly Detection
 
+> **As-built (2026-06):** the `provide.uterm.detection` module / `TerminalDetector`
+> / `DetectionEvent` / `DetectionSink` design below was **not** built as
+> specified. The shipped pattern-detection feature is the
+> **`provide-uterm-annotation`** package (`provide.uterm.annotation`):
+> `PatternDetector.detect(event_type, text, seq) -> list[Annotation]`
+> over a recording-oriented `DetectionRule` (`rule_id`, `label`,
+> `pattern: re.Pattern`, `severity`, `description_template`, `event_types`,
+> `category`) that produces `Annotation`/`AnnotationSpan` tied to recording
+> `seq` numbers — *not* hot-path `DetectionEvent`s posted to webhook sinks.
+> The severity scale is `info | high | critical` (no `warn`), built-in rule
+> IDs are dotted (`cred.aws_access_key`, `esc.sudo`, `dest.rm_rf`, …), there
+> are **20** built-in rules, and the AWS pattern is `AKIA[0-9A-Z]{12}`.
+> Separately, the **enforcing** real-time governance layer that did ship is
+> the fail-closed `WebhookBehavioralAuditGate` (`bridge/hub/ext.py`): on
+> webhook error/timeout it returns `PolicyDecision(action="deny")` unless
+> `fail_open=True`, and `GovernanceConfig.behavioral_fail_open` defaults to
+> `False` — i.e. it *blocks*, contrary to the emit-only Non-Goal below.
+> The `detection_rules_list` / `detection_events_recent` MCP tools were not
+> built. The rule table and sink design below are retained as the original
+> proposal.
+
 ## Problem
 
 Terminal sessions in privileged environments can expose credentials, trigger privilege escalation, or execute destructive commands — and no one finds out until after the fact. SIEM and log-aggregation tools operate on finalized logs with minutes-to-hours of lag. EDR tools live on the host, not the proxy.

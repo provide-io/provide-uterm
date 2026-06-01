@@ -2,13 +2,13 @@
 
 ## Problem
 
-`packages/provide-uterm-server/src/provide/uterm/server/runtime.py` (442 LOC, class `HostedSessionRuntime` at `runtime.py:54`) and `packages/provide-uterm-server/src/provide/uterm/server/registry.py` (439 LOC, class `SessionRegistry` at `registry.py:47`) carry the full session lifecycle as two large classes. The hottest method, `HostedSessionRuntime._run()` at `runtime.py:386-442`, mixes connector startup, WebSocket connect-with-backoff, permanent-vs-transient error classification (`runtime.py:404-434`), and shutdown bookkeeping in a single 57-line loop. `_bridge_session()` at `runtime.py:325-384` interleaves outbound queue draining, inbound recv polling, connector polling, and backoff for empty polls.
+`packages/provide-uterm-server/src/provide/uterm/server/runtime.py` (488 LOC, class `HostedSessionRuntime` at `runtime.py:89`) and `packages/provide-uterm-server/src/provide/uterm/server/registry.py` (473 LOC, class `SessionRegistry`) carry the full session lifecycle as two large classes. The hottest method, `HostedSessionRuntime._run()` at `runtime.py:427`, mixes connector startup, WebSocket connect-with-backoff, permanent-vs-transient error classification, and shutdown bookkeeping in a single loop. `_bridge_session()` at `runtime.py:366` interleaves outbound queue draining, inbound recv polling, connector polling, and backoff for empty polls. *(Decomposition has not been done; the line numbers here are as of 2026-06 and drift as the files change — treat them as approximate.)*
 
 ## Concerns currently mixed in `HostedSessionRuntime`
 
-- Connector ownership (`_start_connector` `runtime.py:204-222`, `_stop_connector` `runtime.py:224`).
-- WebSocket transport + auth header + backoff (`_run` `runtime.py:386-442`).
-- Bidirectional message pumping (`_bridge_session` `runtime.py:325-384`).
+- Connector ownership (`_start_connector` `runtime.py:240`, `_stop_connector` `runtime.py:261`).
+- WebSocket transport + auth header + backoff (`_run` `runtime.py:427`).
+- Bidirectional message pumping (`_bridge_session` `runtime.py:366`).
 - Recording / event logging (`_log_*` family at `runtime.py:235-272`).
 - Public lifecycle facade (`start`/`stop`/`restart`/`set_mode`/`clear`/`analyze` at `runtime.py:124-179`).
 
@@ -49,7 +49,7 @@ Avoid **B** unless there's a feature (e.g. a second non-WebSocket transport) tha
 For option C (the recommended first step):
 
 - `packages/provide-uterm-server/src/provide/uterm/server/runtime.py:325-442` — split `_bridge_session` and `_run` as described.
-- `packages/provide-uterm-server/src/provide/uterm/server/runtime.py:184-202` (`_enqueue_messages`) — move buffer accounting (`_queue_bytes` at `runtime.py:189-201`) into a small `OutboundBuffer` helper near top of file.
+- `packages/provide-uterm-server/src/provide/uterm/server/runtime.py:220` (`_enqueue_messages`) — move buffer accounting (`_queue_bytes`) into a small `OutboundBuffer` helper near top of file.
 - `packages/provide-uterm-server/tests/test_runtime*.py` — add cases per extracted method; current tests mostly assert via end-to-end paths and will benefit from finer hooks.
 
 For option A (follow-up):
