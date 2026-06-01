@@ -1,6 +1,6 @@
 # Handoff: Enterprise Hardening & Reliability Program
 
-_Last updated: 2026-06-01 (build-infra overhaul + CI fully green + hostile-probe rewrite @ `4b200b60`). Supersedes the prior hardening handoff._
+_Last updated: 2026-06-01 (#34 reliability follow-ups + uwarp WS text-frame fix + mutation-gate bug fix; all five workflows green @ `c4a8ba62`). Supersedes the prior hardening handoff._
 
 ## Problem / request
 
@@ -121,6 +121,34 @@ overhaul. **All five workflows are now green** on `4b200b60`: 🧪 CI · 🔬 Co
   refusal is healthy). Auth-gated probes flag a completed unauthenticated handshake as an auth bypass. Verified
   locally (burst 200/200 refused, oversized 120/120, slowloris survives) and green in CI.
 
+## Reliability follow-ups (#34) + uwarp WS fix + mutation-gate bug (2026-06-01 @ `c4a8ba62`)
+
+Closed the last tracked reliability item (#34) and an external consumer's handoff; all five
+workflows green on `c4a8ba62` (🧪 CI · 🔬 CodeQL · 🐋 Container Scan · 🛡️ Hostile Client ·
+🛡️ Release Governance).
+
+- **#34a — telnet M3 post-connect peer-IP guard (`610c84ef`):** added `peer_ip()` to
+  `TelnetTransport` (client) + `_assert_peer_allowed()` in the telnet connector `start()`,
+  mirroring the ssh/ws guard (`block_private=False`, aborts on a cloud-metadata peer before the
+  connector goes live). Patched the 2 MagicMock `.start()` test sites. Client + server both 100%.
+- **#34b — `test_limiter` flake (`b5e32a5a`):** the diagnosis OVERTURNED the "cross-test-pollution"
+  hypothesis — it was a self-contained **real-time-clock race**: `_drain` zeroed `TokenBucket._tokens`
+  but left `_last_refill` at construction, so a slow/loaded suite let the bucket refill and wrongly
+  admit. Froze `_last_refill` 3600s ahead; flaky test 10/10. Test-only.
+- **uwarp WS binary→text (`6f051849`):** `WebSocketTransport.send` now decodes bytes→`str` so
+  `websockets` emits a TEXT frame — the uwarp CF worker was receiving a BINARY frame as a `JsProxy`
+  and dropping keystrokes. Localized to the WS transport (telnet stays binary; the
+  `ConnectionTransport.send(bytes)` contract + ChaosTransport untouched). Client suite 100%. The uwarp
+  handoff note is RESOLVED on their side (`undef-games/uwarp-space` `9df149ae8`); their `_coerce_ws_text`
+  worker coercion is kept as defense-in-depth.
+- **Mutation-gate bug fix (`c4a8ba62`):** the telnet guard exposed a real bug — `run_mutation_gate.py`
+  `--changed-only` force-mutated changed *non-perimeter* server-src files (the fallback returned the
+  original path), so `connectors/telnet.py` (deliberately outside `paths_to_mutate`) became a target
+  with `total=0` mutants → spurious `score=0.00` failure. (The ssh/ws guard escaped this only because
+  it also touched `egress.py`, a perimeter file.) Fixed so changed-only path-matches the perimeter and
+  skips non-perimeter files. Diagnose this class via the log line `mutation gate targets (N): [...]`
+  + `total: 0` — a non-perimeter file got targeted, not a real survivor.
+
 ## Detailed checklist for next session
 
 - [x] **Resolve the stray WIP** — DONE. `transports/ws_transport.py` (+ tests) committed in `8e9840e4`/
@@ -130,10 +158,10 @@ overhaul. **All five workflows are now green** on `4b200b60`: 🧪 CI · 🔬 Co
 - [x] **Doc reconciliation (#26) + full doc-accuracy audit** — DONE (coverage-audit + status banners + 97
   inaccuracies fixed across 36 docs).
 - [x] **Push to origin** — DONE (`b99245eb`, 2026-06-01).
-- [ ] **`test_limiter` flake de-pollution + telnet M3 peer-IP guard (#34)** — the genuine remaining
-  reliability follow-up. Flake: find the earlier random-order test leaving shared RateLimiter/clock state.
-  Telnet M3: the ssh/ws connectors got post-connect peer-IP validation (`f5169157`); telnet needs a public
-  peer-IP accessor on `TelnetTransport` (client pkg) then the same guard before first receive.
+- [x] **`test_limiter` flake + telnet M3 peer-IP guard (#34) — DONE.** Telnet guard `610c84ef`
+  (`peer_ip()` accessor + `_assert_peer_allowed`, mirroring ssh/ws, both packages 100%). Limiter flake
+  `b5e32a5a` — diagnosis overturned the shared-state hypothesis; it was a real-time-clock race in `_drain`
+  (froze `_last_refill`). See the "Reliability follow-ups (#34)" section above.
 - [x] **Docker images — DONE.** Both `Dockerfile.server` and `Dockerfile.cf` build clean (multi-stage,
   in-image UI build) and the CI `🐋 Container Scan` Trivy HIGH/CRITICAL gate is **green on both images**
   (build tooling stripped from the runtime stages).
