@@ -61,9 +61,12 @@ WORKDIR /app/packages/provide-uterm-cloudflare
 # pywrangler) from the committed lock (UV_FROZEN=1 above).
 RUN uv sync --frozen --extra dev
 
-# Populate the CF package's static dir with compiled frontend assets so the
-# worker can serve the UI without needing the provide-uterm package at runtime.
-RUN cp -r /app/packages/provide-uterm/src/provide/uterm/frontend/. \
+# Populate the CF package's static dir with the compiled frontend assets so the
+# worker can serve the UI at runtime. The build output lives in the SERVER
+# package's frontend dir (committed by `npm run build:frontend`) — the old
+# `provide-uterm/.../frontend/` path was removed in the namespace refactor.
+RUN mkdir -p src/provide_uterm_cloudflare/ui/static \
+    && cp -r /app/packages/provide-uterm-server/src/provide/uterm/server/frontend/. \
         src/provide_uterm_cloudflare/ui/static/
 
 EXPOSE 27788
