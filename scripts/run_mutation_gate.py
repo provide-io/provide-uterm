@@ -165,9 +165,24 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
         except OSError:
             continue
 
-    # Fallback: return original path (the original always works if mutmut is run
-    # from the package root where the path_to_mutate resides)
-    return path
+    # Inode lookup failed (e.g. the configured ``src/`` symlink is not resolvable
+    # in this checkout). Fall back to a PATH match against the perimeter — but
+    # ONLY return a target when the changed file actually corresponds to a
+    # configured ``paths_to_mutate`` entry. A changed file OUTSIDE the perimeter
+    # (e.g. a connector, deliberately not in ``paths_to_mutate``) must be SKIPPED,
+    # not force-mutated: mutmut has no bound test suite for it, so it yields
+    # ``total=0`` and spuriously fails the gate (changed-only must never widen the
+    # mutation surface beyond the full gate's perimeter).
+    marker = "src/provide/uterm/"
+    idx = path.find(marker)
+    if idx == -1:
+        return None
+    suffix = path[idx:]
+    for entry in configured:
+        normalized = str(entry).rstrip("/")
+        if suffix == normalized or suffix.startswith(normalized + "/"):
+            return str(entry)
+    return None
 
 
 def _prepend_mutant_source_roots(env: dict[str, str], existing_pythonpath: str | None) -> None:
