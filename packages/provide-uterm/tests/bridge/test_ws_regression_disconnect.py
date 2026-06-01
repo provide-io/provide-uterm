@@ -59,6 +59,18 @@ def _read_worker_connected(browser) -> dict:
     return msg
 
 
+def _recv_disconnect_frames(browser) -> set[str]:
+    """Return the types of the two frames a browser gets on a hijacked worker's disconnect.
+
+    When a worker holding an active hijack disconnects, the hub fires two
+    independent ``asyncio.create_task`` broadcasts — ``worker_disconnected`` and
+    an ownership-cleared ``hijack_state`` — whose arrival order over the socket
+    is not deterministic (it raced only under some pytest-random seeds). Read
+    both and let callers assert on membership instead of position.
+    """
+    return {browser.receive_json()["type"], browser.receive_json()["type"]}
+
+
 # ---------------------------------------------------------------------------
 # Critical 1+2 regressions — worker disconnect: browser notification + stale
 # lease clearing
@@ -135,8 +147,9 @@ def test_worker_disconnect_clears_ws_hijack_owner() -> None:
             assert st is not None and st.hijack_owner is not None, "hijack_owner should be set"
             # worker exits → finally block clears hijack_owner
 
-        msg = browser.receive_json()
-        assert msg["type"] == "worker_disconnected"
+        # worker_disconnected + ownership-cleared hijack_state race here; assert
+        # on membership of both frames rather than the first one's type.
+        assert "worker_disconnected" in _recv_disconnect_frames(browser)
 
         st = hub._workers.get("bot1")
         assert st is not None, "state should still exist while browser is connected"

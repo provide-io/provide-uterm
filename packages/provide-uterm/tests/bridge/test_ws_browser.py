@@ -53,6 +53,18 @@ def _read_worker_connected(browser) -> dict:
     return msg
 
 
+def _recv_disconnect_frames(browser) -> set[str]:
+    """Return the types of the two frames a browser gets on a hijacked worker's disconnect.
+
+    When a worker holding an active hijack disconnects, the hub fires two
+    independent ``asyncio.create_task`` broadcasts — ``worker_disconnected`` and
+    an ownership-cleared ``hijack_state`` — whose arrival order over the socket
+    is not deterministic (it raced only under some pytest-random seeds). Read
+    both and let callers assert on membership instead of position.
+    """
+    return {browser.receive_json()["type"], browser.receive_json()["type"]}
+
+
 # ---------------------------------------------------------------------------
 # Browser — invalid JSON, ownership lease touch, no-worker error paths
 # ---------------------------------------------------------------------------
@@ -154,9 +166,10 @@ def test_browser_loses_ownership_on_worker_disconnect() -> None:
             assert hub._workers["bot1"].hijack_owner is not None
 
         # Worker disconnected: browser must receive worker_disconnected and
-        # lose ownership — hijack_owner is cleared in the finally block.
-        msg = browser.receive_json()
-        assert msg["type"] == "worker_disconnected"
+        # lose ownership — hijack_owner is cleared in the finally block. The
+        # ownership-cleared hijack_state races the disconnect frame, so assert
+        # on membership of both frames rather than the first one's type.
+        assert "worker_disconnected" in _recv_disconnect_frames(browser)
         st = hub._workers.get("bot1")
         assert st is not None, "state must exist while browser is still connected"
         assert st.hijack_owner is None, "hijack_owner must be cleared on worker disconnect"
@@ -177,9 +190,9 @@ def test_browser_input_no_worker() -> None:
             worker.receive_json()  # pause
             browser.receive_json()  # hijack_state
 
-        # Worker disconnected — browser receives worker_disconnected and is no longer owner.
-        msg = browser.receive_json()
-        assert msg["type"] == "worker_disconnected"
+        # Worker disconnected — browser receives worker_disconnected (plus a
+        # racing ownership-cleared hijack_state); assert on membership, not order.
+        assert "worker_disconnected" in _recv_disconnect_frames(browser)
 
         # Send input as (former) owner: ownership was cleared at worker disconnect,
         # so _touch_if_owner returns None and input is silently ignored.
