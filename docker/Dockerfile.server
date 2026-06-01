@@ -119,20 +119,6 @@ COPY --from=frontend-build /src/${FRONTEND_DIR}/ ${FRONTEND_DIR}/
 # escaped UV_FROZEN (unpinned/hash-unverified); pyte is now in uv.lock.
 RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
 
-# Strip build backends from the runtime venv. uv resolves the build deps
-# (pip / setuptools / wheel / jaraco.* / etc.) into the env to build the
-# --no-editable workspace wheels, but they are NOT needed to RUN the server and
-# Trivy flags them (e.g. wheel / jaraco.context HIGH CVEs). Remove them so the
-# runtime image's venv carries only runtime-required packages.
-RUN uv pip uninstall --python /app/.venv/bin/python \
-        pip setuptools wheel \
-    ; rm -rf /app/.venv/lib/python*/site-packages/jaraco* \
-             /app/.venv/lib/python*/site-packages/pkg_resources \
-             /app/.venv/lib/python*/site-packages/_distutils_hack \
-             /app/.venv/lib/python*/site-packages/distutils-precedence.pth \
-             /app/.venv/bin/pip* \
-             /app/.venv/bin/wheel*
-
 # ---- runtime stage ----------------------------------------------------------
 FROM python:3.11-slim AS runtime
 
@@ -142,6 +128,25 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
+# Strip build tooling from the base image's SYSTEM site-packages. python:3.11-slim
+# ships pip / setuptools / wheel in /usr/local/lib/python3.11/site-packages — and
+# setuptools vendors its own copy of jaraco.context + wheel under _vendor/. The
+# server runs entirely from /app/.venv (which uv builds with isolation, so it
+# carries none of this), making the system build tooling dead weight that Trivy
+# flags (wheel CVE-2026-24049, vendored jaraco.context CVE-2026-23949). Remove it
+# so the runtime image carries only runtime-required packages. The strip verifies
+# itself: the build fails if any matching dist-info survives.
+RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
+           /usr/local/lib/python3.11/site-packages/pkg_resources* \
+           /usr/local/lib/python3.11/site-packages/_distutils_hack* \
+           /usr/local/lib/python3.11/site-packages/distutils-precedence.pth \
+           /usr/local/lib/python3.11/site-packages/wheel* \
+           /usr/local/lib/python3.11/site-packages/pip* \
+           /usr/local/bin/pip* /usr/local/bin/wheel* \
+    && ! find /usr/local/lib/python3.11/site-packages \
+         \( -iname 'setuptools*' -o -iname 'wheel*' -o -iname 'jaraco*' -o -iname 'pip*' \) \
+         -print | grep -q .
 
 WORKDIR /app
 
