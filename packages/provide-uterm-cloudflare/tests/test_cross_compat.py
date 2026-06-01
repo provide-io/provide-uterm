@@ -111,9 +111,10 @@ async def _cf_call(runtime: _CfRuntime, method: str, path: str, body: dict | Non
 
 def _make_fastapi_client():
     """Create a FastAPI TestClient with one auto-start shell session."""
+    from starlette.testclient import TestClient
+
     from provide.uterm.server.app import create_server_app
     from provide.uterm.server.config import config_from_mapping
-    from starlette.testclient import TestClient
 
     cfg = config_from_mapping(
         {

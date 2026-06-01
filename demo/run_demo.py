@@ -49,11 +49,12 @@ for _p in [
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from provide.uterm.server.app import create_server_app  # noqa: E402
-from provide.uterm.server.config import config_from_mapping  # noqa: E402
 from provide.uterm.transports.telnet_server import (  # noqa: E402
     _build_telnet_handshake,  # type: ignore[attr-defined]
 )
+
+from provide.uterm.server.app import create_server_app  # noqa: E402
+from provide.uterm.server.config import config_from_mapping  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Port constants — change here rather than inline

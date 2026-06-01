@@ -23,6 +23,7 @@ import urllib.error
 import urllib.request
 
 import pytest
+
 from provide.uterm.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_control, encode_frame
 
 _HTTP_UA = "provide-uterm-e2e-tunnel/1.0"

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import provide.uterm.cloudflare.cf_types  # noqa: F401
+
 from provide.uterm.tunnel.token_hash import hash_token
 
 # ---------------------------------------------------------------------------
