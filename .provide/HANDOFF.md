@@ -111,5 +111,8 @@ shipped gaps — now remediated.
 - [ ] **CI watch (post-push)**: memray `test_event_bus_stress` may need a CI-env re-baseline (deselected
   locally); the `test_limiter` seed flake; the container-scan/Docker build. The scheduled Hostile-Client
   workflow was already red pre-push (independent of this work).
-- [ ] Optional **`ws_session.py`** is finished/DRY/100% but unused — wire it into a flow when `uwarp` adopts WS.
+- [x] **`ws_session.py` / `ws_transport.py` — DONE** (#35/#36): adopted, hardened for websockets 16.0,
+  refactored onto the shared `TransportSession` base, 100% covered, committed. The *file* is complete; it
+  simply has no consumer yet (the WS sibling of the telnet session `uwarp` uses). Wiring it into a flow is an
+  optional FUTURE step when WS is actually needed — not pending work on the module itself.
 - [ ] Optional **P2 architecture** (HA): single-active-instance vs shared control plane — design decision.
