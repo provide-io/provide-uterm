@@ -207,6 +207,43 @@ async def test_webhook_empty_resolve_blocked(monkeypatch: pytest.MonkeyPatch) ->
 
 
 # ---------------------------------------------------------------------------
+# M4: embedded-IPv4-in-IPv6 forms (webhook guard).  The webhook guard is
+# metadata-only; an embedded-IPv4 form that decodes to a metadata IP must be
+# blocked.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_nat64_metadata_literal_blocked() -> None:
+    """A NAT64 well-known-prefix metadata literal in the webhook URL must be
+    blocked — it decodes to the IPv4 metadata IP before the membership check."""
+    from provide.uterm.server.egress import EgressBlockedError, assert_webhook_target_allowed
+
+    with pytest.raises(EgressBlockedError, match="metadata"):
+        await assert_webhook_target_allowed("https://[64:ff9b::169.254.169.254]/")
+
+
+# ---------------------------------------------------------------------------
+# DNS resolution failure must fail CLOSED (V-H1 review): an OSError /
+# socket.gaierror from the resolver must become EgressBlockedError, not
+# propagate out of the webhook guard.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_resolve_oserror_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A resolution OSError from the (cached) resolver must raise EgressBlockedError."""
+    import socket
+
+    from provide.uterm.server import egress as egress_mod
+    from provide.uterm.server.egress import EgressBlockedError, assert_webhook_target_allowed
+
+    monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(side_effect=socket.gaierror("no such host")))
+    with pytest.raises(EgressBlockedError, match="could not be resolved"):
+        await assert_webhook_target_allowed("https://hostile-resolver.example.invalid/hook")
+
+
+# ---------------------------------------------------------------------------
 # Gate integration: EgressBlockedError → fail-closed behaviour
 # ---------------------------------------------------------------------------
 

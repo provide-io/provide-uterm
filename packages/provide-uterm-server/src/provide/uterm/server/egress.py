@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import time
 from typing import TYPE_CHECKING, Any
@@ -18,8 +19,56 @@ if TYPE_CHECKING:
 
 # TTL for the per-host DNS cache used by assert_webhook_target_allowed.
 _EGRESS_DNS_TTL_S: float = 60.0
+# Bound the per-host DNS resolution so a slow / hostile resolver can't hang a
+# session-create or webhook evaluation.  ``_resolve_host`` itself sets no
+# timeout, so we wrap it in ``asyncio.wait_for`` at the guard call sites; the
+# resulting ``TimeoutError`` is an ``OSError`` subclass and so flows through the
+# fail-closed ``except OSError`` branch below.
+_EGRESS_RESOLVE_TIMEOUT_S: float = 5.0
 # host → (timestamp, resolved_addresses)
 _resolve_cache: dict[str, tuple[float, tuple[str, ...]]] = {}
+
+# NAT64 well-known prefix (RFC 6052).  Any address in this /96 carries an IPv4
+# in its low 32 bits and, in a NAT64-enabled cluster, is actually translated to
+# that IPv4 — so 64:ff9b::169.254.169.254 reaches the v4 metadata service.
+_NAT64_WELL_KNOWN = ipaddress.ip_network("64:ff9b::/96")
+
+# Residual risk — M3 (DNS rebinding), intentionally NOT fully fixed here:
+#   The connector guard validates the IP a hostname resolves to at *create*
+#   time, but the connector itself re-resolves the hostname at *connect* time.
+#   A name with a TTL-0 record that flips to a metadata / internal IP between
+#   create and connect can still reach it.  A full fix requires resolving once
+#   and pinning the literal IP into connector_config while preserving SNI /
+#   known-hosts — that is connector plumbing out of scope for the egress guard.
+#   The webhook path is bounded by the 60s ``_resolve_cache`` TTL above (a
+#   rebind is caught on the next cache miss); the connector path is not pinned.
+
+
+def _decode_embedded_ipv4(ip: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """Return the IPv4 address embedded in *ip*, for any embedding form, else None.
+
+    Covers every IPv6 form that carries a reachable IPv4 so the metadata /
+    private membership checks can be applied to the *decoded* address rather
+    than the (membership-check-evading) IPv6 wrapper:
+
+      * IPv4-mapped     ``::ffff:a.b.c.d``   -> ``ip.ipv4_mapped``
+      * 6to4            ``2002:AABB:CCDD::``  -> ``ip.sixtofour``
+      * NAT64 well-known ``64:ff9b::a.b.c.d`` -> low 32 bits (RFC 6052)
+      * IPv4-compatible ``::a.b.c.d``         -> low 32 bits (deprecated)
+
+    The deprecated IPv4-compatible form excludes ``::`` (unspecified) and
+    ``::1`` (loopback), whose low bits are 0 / 1 and are handled by the normal
+    IPv6 loopback / unspecified branches instead.
+    """
+    if ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    if ip.sixtofour is not None:
+        return ip.sixtofour
+    if ip in _NAT64_WELL_KNOWN:
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    if (int(ip) >> 32) == 0 and (int(ip) & 0xFFFFFFFF) not in (0, 1):
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
 
 
 async def _resolve_cached(host: str) -> tuple[str, ...]:
@@ -34,7 +83,7 @@ async def _resolve_cached(host: str) -> tuple[str, ...]:
     cached = _resolve_cache.get(host)
     if cached is not None and (now - cached[0]) < _EGRESS_DNS_TTL_S:
         return cached[1]
-    addrs = tuple(await _resolve_host(host))
+    addrs = tuple(await asyncio.wait_for(_resolve_host(host), _EGRESS_RESOLVE_TIMEOUT_S))
     _resolve_cache[host] = (now, addrs)
     return addrs
 
@@ -54,17 +103,25 @@ async def assert_webhook_target_allowed(url: str) -> None:
     try:
         addresses: tuple[str, ...] = (str(ipaddress.ip_address(h)),)
     except ValueError:
-        addresses = await _resolve_cached(h)
+        # A resolution OSError (incl. socket.gaierror / timeout) must fail closed
+        # rather than propagate out as an HTTP 500 / hang the request.
+        try:
+            addresses = await _resolve_cached(h)
+        except OSError:
+            raise EgressBlockedError(f"webhook target {url!r} could not be resolved") from None
         # An empty resolve must fail closed (parity with the connector guard);
         # otherwise the loop below never runs and the URL is silently allowed.
         if not addresses:
             raise EgressBlockedError(f"webhook target {url!r} could not be resolved") from None
     for addr in addresses:
         ip = ipaddress.ip_address(addr)
-        # Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) to its IPv4
-        # form so a mapped metadata address can't slip past the membership check.
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-            ip = ip.ipv4_mapped
+        # Decode any embedded-IPv4 IPv6 form (mapped / 6to4 / NAT64 / compat) to
+        # its IPv4 so a wrapped metadata address can't slip past the membership
+        # check.  In a NAT64 cluster 64:ff9b::169.254.169.254 is reachable.
+        if isinstance(ip, ipaddress.IPv6Address):
+            embedded = _decode_embedded_ipv4(ip)
+            if embedded is not None:
+                ip = embedded
         if ip in _METADATA_IPS:
             raise EgressBlockedError(f"webhook target {url!r} resolves to a blocked metadata address")
 
@@ -87,16 +144,25 @@ async def assert_connector_target_allowed(host: str, *, block_private: bool) -> 
     try:
         addresses: tuple[str, ...] = (str(ipaddress.ip_address(h)),)
     except ValueError:
-        resolved = await _resolve_host(h)
+        # A resolution OSError (incl. socket.gaierror / timeout) must fail closed
+        # → EgressBlockedError (registry maps it to 422), not propagate as a 500.
+        try:
+            resolved = await asyncio.wait_for(_resolve_host(h), _EGRESS_RESOLVE_TIMEOUT_S)
+        except OSError:
+            raise EgressBlockedError(f"could not resolve connector host {host!r}") from None
         addresses = tuple(resolved)
         if not addresses:
             raise EgressBlockedError(f"could not resolve connector host {host!r}") from None
     for addr in addresses:
         ip = ipaddress.ip_address(addr)
-        # Normalize IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) to its IPv4
-        # form so a mapped metadata/private address can't slip past the checks.
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-            ip = ip.ipv4_mapped
+        # Decode any embedded-IPv4 IPv6 form (mapped / 6to4 / NAT64 / compat) to
+        # its IPv4 so a wrapped metadata/private address can't slip past the
+        # checks below — the same metadata (always) and private (when
+        # block_private) checks then apply to the decoded IPv4.
+        if isinstance(ip, ipaddress.IPv6Address):
+            embedded = _decode_embedded_ipv4(ip)
+            if embedded is not None:
+                ip = embedded
         if ip in _METADATA_IPS:
             raise EgressBlockedError(f"connector target {host!r} resolves to a blocked metadata address")
         if block_private and (
