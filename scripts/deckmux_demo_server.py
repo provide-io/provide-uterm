@@ -30,6 +30,7 @@ import uvicorn
 sys.path.insert(0, "packages/provide-uterm/src")
 
 import provide.uterm.server.connectors.ssh  # noqa: F401  — registers "ssh" connector
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from provide.uterm.server import create_server_app
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.models import (
@@ -39,8 +40,6 @@ from provide.uterm.server.models import (
     ServerConfig,
     SessionDefinition,
 )
-
-from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 
 SESSION_ID = "ubuntu"
 

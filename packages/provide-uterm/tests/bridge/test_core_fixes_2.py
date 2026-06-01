@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
-
 from tests.bridge.control_channel_helpers import decode_control_payloads
 
 

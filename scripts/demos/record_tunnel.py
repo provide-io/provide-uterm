@@ -92,6 +92,7 @@ def _start_echo_worker(base_url: str, tunnel_id: str, worker_token: str) -> thre
 
     async def _run() -> None:
         import websockets  # local import keeps the demo script import-light
+
         from provide.uterm.tunnel.protocol import (
             CHANNEL_DATA,
             encode_control,

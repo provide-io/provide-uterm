@@ -26,6 +26,7 @@ def _decode_msg(raw: str) -> dict:
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from provide.uterm.client import connect_test_ws
+
 from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.bridge.routes.browser_handlers import (

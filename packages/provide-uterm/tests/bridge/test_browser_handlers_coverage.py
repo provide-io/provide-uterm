@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.bridge.routes.browser_handlers import handle_browser_message
-
 from tests.bridge.control_channel_helpers import decode_control_payload
 
 
