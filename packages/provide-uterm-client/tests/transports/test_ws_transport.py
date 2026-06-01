@@ -81,6 +81,7 @@ class TestConnect:
             await t.connect("host", 1)
 
         assert t._connected is False
+        assert t._ws is None  # no dangling socket left after a failed connect
 
 
 # ── is_connected ─────────────────────────────────────────────────────────
@@ -187,10 +188,6 @@ class TestReceive:
 
     async def test_receive_timeout_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         ws = _make_ws()
-
-        async def _never() -> bytes:
-            raise TimeoutError
-
         ws.recv = AsyncMock(side_effect=TimeoutError)
         monkeypatch.setattr("websockets.connect", AsyncMock(return_value=ws))
         t = WebSocketTransport()
