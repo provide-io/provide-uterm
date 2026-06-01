@@ -374,3 +374,84 @@ async def test_on_open_bridge_start_failure_cleans_up() -> None:
     assert "pam-alice-0" not in bridges
     # bridge.stop() called to clean up partial state
     bridge_mock.stop.assert_awaited_once()
+
+
+# ── L11: relay egress guard ───────────────────────────────────────────────────
+
+
+async def test_forward_to_relay_blocked_for_metadata_ip_no_post() -> None:
+    """A relay_url whose host is a cloud-metadata IP must be blocked before the
+    POST — exfiltrating PAM event data + the relay bearer token to 169.254.169.254
+    is refused by the egress guard, and the PAM loop does not crash."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from provide.uterm.server.pam_integration import _forward_to_relay
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = AsyncMock()
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        # Literal metadata IP → assert_webhook_target_allowed raises EgressBlockedError.
+        await _forward_to_relay({"event": "open"}, "https://169.254.169.254/", "tok")  # must not raise
+
+    # Egress guard fired before the POST → no event/token left the host.
+    mock_client.post.assert_not_awaited()
+
+
+async def test_forward_to_relay_allows_benign_url_posts() -> None:
+    """A benign relay_url passes the egress guard and the POST proceeds."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from provide.uterm.server.pam_integration import _forward_to_relay
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = AsyncMock()
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        await _forward_to_relay({"event": "open"}, "https://cf.example.com", "tok")
+
+    mock_client.post.assert_awaited_once()
+
+
+async def test_create_relay_tunnel_blocked_for_metadata_ip_returns_none() -> None:
+    """A metadata-IP relay_url blocks the tunnel POST and returns None, mirroring
+    the existing failure handling — the loop does not crash."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from provide.uterm.server.pam_integration import _create_relay_tunnel
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = AsyncMock()
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await _create_relay_tunnel("https://169.254.169.254/", "tok", "s1", "name")
+
+    assert result is None
+    mock_client.post.assert_not_awaited()
+
+
+async def test_create_relay_tunnel_allows_benign_url() -> None:
+    """A benign relay_url passes the egress guard; the tunnel POST proceeds."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from provide.uterm.server.pam_integration import _create_relay_tunnel
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json = MagicMock(return_value={"worker_token": "wt", "ws_endpoint": "wss://x"})
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
+        result = await _create_relay_tunnel("https://cf.example.com", "tok", "s1", "name")
+
+    assert result == ("wt", "wss://x")
+    mock_client.post.assert_awaited_once()
