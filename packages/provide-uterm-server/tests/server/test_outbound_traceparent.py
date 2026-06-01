@@ -144,7 +144,11 @@ async def test_webhook_delivery_includes_traceparent_end_to_end() -> None:
 @respx.mock
 async def test_webhook_idp_includes_traceparent() -> None:
     url = "https://auth.example.com/resolve"
-    idp = WebhookIdentityProvider(url=url, secret="uterm-test-secret-32-byte-minimum-key")  # pragma: allowlist secret
+    idp = WebhookIdentityProvider(
+        url=url,
+        secret="uterm-test-secret-32-byte-minimum-key",  # pragma: allowlist secret
+        require_signed_response=False,  # this test asserts outbound traceparent, not response signing
+    )
 
     route = respx.post(url).mock(return_value=httpx.Response(200, json={"subject_id": "user-123", "roles": ["viewer"]}))
 

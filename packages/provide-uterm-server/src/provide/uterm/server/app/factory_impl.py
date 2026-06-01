@@ -487,11 +487,29 @@ def create_server_app(
     api_key_store = ApiKeyStore()
 
     if config.auth.identity_provider == "webhook" and config.auth.webhook_idp_url:
+        # 1d: curate the request headers/cookies forwarded to the external IdP —
+        # the always-needed auth credentials plus any operator extensions. Header
+        # keys are lower-cased (Starlette/httpx lower-case them); cookies match
+        # by exact name.
+        forward_headers = {
+            "authorization",
+            "x-api-key",
+            config.auth.principal_header.lower(),
+            config.auth.role_header.lower(),
+        } | {h.lower() for h in config.auth.webhook_idp_forward_headers}
+        forward_cookies = {
+            config.auth.token_cookie,
+            config.auth.principal_cookie,
+            config.auth.role_cookie,
+        } | set(config.auth.webhook_idp_forward_cookies)
         idp: IdentityProvider = WebhookIdentityProvider(
             url=config.auth.webhook_idp_url,
             secret=config.auth.webhook_idp_secret,
             timeout_s=config.auth.webhook_idp_timeout_s,
             on_failure=getattr(config.auth, "webhook_idp_on_failure", "deny"),
+            require_signed_response=config.auth.webhook_idp_require_signed_response,
+            forward_headers=frozenset(forward_headers),
+            forward_cookies=frozenset(forward_cookies),
         )
     else:
         idp = LocalIdentityProvider(config.auth, api_key_store=api_key_store)

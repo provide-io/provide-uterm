@@ -31,7 +31,13 @@ def test_filter_known_roles_case_folds_admin(raw):
 @respx.mock
 async def test_webhook_idp_resolve_success():
     url = "https://auth.example.com/resolve"
-    idp = WebhookIdentityProvider(url=url, secret="uterm-test-secret-32-byte-minimum-key")
+    # This test predates 1f response-signature verification and mocks an
+    # unsigned response; opt out so it keeps exercising the happy-path mapping.
+    idp = WebhookIdentityProvider(
+        url=url,
+        secret="uterm-test-secret-32-byte-minimum-key",  # pragma: allowlist secret
+        require_signed_response=False,
+    )
 
     respx.post(url).mock(
         return_value=httpx.Response(
@@ -147,7 +153,7 @@ async def test_webhook_idp_filters_unknown_roles():
     allow-list — a compromised/MITM'd webhook cannot inject bogus roles
     (e.g. superuser/root) alongside a legitimate one."""
     url = "https://auth.example.com/resolve"
-    idp = WebhookIdentityProvider(url=url)
+    idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
     respx.post(url).mock(
         return_value=httpx.Response(
@@ -170,7 +176,7 @@ async def test_webhook_idp_filters_unknown_roles():
 async def test_webhook_idp_empty_after_filter_falls_back_to_viewer():
     """Fix 1e: if every returned role is filtered out, fall back to viewer."""
     url = "https://auth.example.com/resolve"
-    idp = WebhookIdentityProvider(url=url)
+    idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
     respx.post(url).mock(
         return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["nonsense"]}),
@@ -190,7 +196,7 @@ async def test_webhook_idp_empty_after_filter_falls_back_to_viewer():
 async def test_webhook_idp_keeps_legitimate_role():
     """Fix 1e: a single legitimate role passes through unchanged."""
     url = "https://auth.example.com/resolve"
-    idp = WebhookIdentityProvider(url=url)
+    idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
     respx.post(url).mock(
         return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["operator"]}),
@@ -212,7 +218,7 @@ async def test_webhook_idp_case_folds_mixed_case_admin_role():
     resolves to an admin Principal — the role is case-folded to the canonical
     ``admin`` allow-list entry rather than dropped as unknown."""
     url = "https://auth.example.com/resolve"
-    idp = WebhookIdentityProvider(url=url)
+    idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
     respx.post(url).mock(
         return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["Admin"]}),

@@ -13,8 +13,9 @@ def test_auth_config_idp_validation():
     config = AuthConfig(identity_provider="local")
     assert config.identity_provider == "local"
 
-    # Valid webhook
-    config = AuthConfig(identity_provider="webhook")
+    # Valid webhook. 1f: a webhook IdP now requires a signing secret (to verify
+    # the signed response) unless response verification is explicitly disabled.
+    config = AuthConfig(identity_provider="webhook", webhook_idp_require_signed_response=False)
     assert config.identity_provider == "webhook"
 
     # Invalid

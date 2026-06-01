@@ -406,7 +406,8 @@ async def test_webhook_idp_benign_host_posts(monkeypatch: pytest.MonkeyPatch) ->
         headers: dict = {}
         cookies: dict = {}
 
-    idp = WebhookIdentityProvider(url=url)
+    # This test asserts egress allow-listing, not 1f response signing.
+    idp = WebhookIdentityProvider(url=url, require_signed_response=False)
     result = await idp.resolve_principal(MockConn())
     assert result is not None
     assert result.subject_id == "user-1"
