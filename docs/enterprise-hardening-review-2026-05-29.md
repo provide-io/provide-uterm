@@ -5,6 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Enterprise Hardening & Reliability Review — provide-uterm
 
+> **STATUS (2026-06-01): ALL 83 findings closed.** 78 fixed (commit-confirmed; all 16 HIGH spot-checked in
+> code) + 5 deferred-by-design (1f/1d, 5a, 5b, 5d) since merged + **0 open**. The HA/horizontal-scaling
+> ceiling is an architectural limitation ACCEPTED via ADR (`ha_safe=False` + multi-replica startup error),
+> with the overstated durability advertisement corrected. Full finding→commit matrix:
+> `docs/coverage-audit-2026-06-01.md`. Two later independent re-verifications drove additional fixes on top
+> of these 83 — see `docs/rereview-2026-05-31-hardening-body.md` and
+> `docs/verify-hardening-body-2026-05-31.md`.
+
 _Reviewed 2026-05-29 against `main` @ `63854f5`. Scope: all eight `packages/provide-uterm*`
 (~49k LOC Python + ~13.5k LOC TypeScript), CI/build, and deployment posture._
 
