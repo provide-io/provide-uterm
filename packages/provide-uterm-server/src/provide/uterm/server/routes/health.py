@@ -8,21 +8,42 @@
 control-plane backend).  ``/healthz`` is a minimal liveness probe suitable for
 Kubernetes readiness/liveness checks.
 
-Both endpoints are mounted **without** authentication dependencies so that
-external load balancers and orchestrators can reach them unconditionally.
+The health/liveness/readiness endpoints are mounted **without** authentication
+dependencies so that external load balancers and orchestrators can reach them
+unconditionally.  ``/api/security-posture`` is the exception: it reveals the
+effective security config, so it is gated behind the supplied
+``require_authenticated`` dependency (mirroring how the ``/api/metrics``
+operational endpoint is gated) and is registered only when that dependency is
+provided.
 """
 
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 
 from provide.uterm import __version__
+from provide.uterm.server.app.posture import compute_security_posture
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from starlette.requests import HTTPConnection
 
 
-def create_health_router() -> APIRouter:
-    """Return a router with ``/api/health``, ``/healthz``, and ``/readyz``."""
+def create_health_router(
+    require_authenticated: Callable[[HTTPConnection], Awaitable[None]] | None = None,
+) -> APIRouter:
+    """Return a router with ``/api/health``, ``/healthz``, and ``/readyz``.
+
+    When ``require_authenticated`` is supplied, the router also exposes an
+    auth-gated ``GET /api/security-posture`` endpoint that returns
+    ``compute_security_posture(app.state.uterm_config)``.  The dependency is
+    required (the endpoint must never be anonymous-public) so the route is
+    omitted entirely when no dependency is provided.
+    """
     router = APIRouter()
 
     @router.get("/api/health")
@@ -83,5 +104,18 @@ def create_health_router() -> APIRouter:
             return {"status": "ready"}
         response.status_code = 503
         return {"status": "not_ready"}
+
+    if require_authenticated is not None:
+
+        @router.get("/api/security-posture", dependencies=[Depends(require_authenticated)])
+        async def security_posture(request: Request) -> dict[str, object]:
+            """Auth-gated effective-security-posture self-report.
+
+            Reveals the active dev opt-outs and ``secure`` summary, so it is
+            never anonymous-public — the route exists only because a
+            ``require_authenticated`` dependency was supplied at wiring time.
+            """
+            config = request.app.state.uterm_config
+            return compute_security_posture(config)
 
     return router

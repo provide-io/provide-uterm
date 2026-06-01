@@ -20,7 +20,11 @@ from starlette.requests import HTTPConnection  # noqa: TC002
 
 from provide.telemetry import get_logger
 from provide.uterm.server.api_keys import ApiKeyStore
-from provide.uterm.server.app.auth import _validate_auth_config, _validate_security_config
+from provide.uterm.server.app.auth import (
+    _validate_auth_config,
+    _validate_environment_profile,
+    _validate_security_config,
+)
 from provide.uterm.server.app.connectors import _register_builtin_connectors
 from provide.uterm.server.app.control_plane import _build_control_plane, _build_durability_capabilities
 from provide.uterm.server.app.hub_authz import build_require_hub_route_authz
@@ -28,6 +32,7 @@ from provide.uterm.server.app.middleware import (
     install_cors_security_telemetry,
     install_request_logging_middleware,
 )
+from provide.uterm.server.app.posture import compute_security_posture
 from provide.uterm.server.app.routes_wiring import install_routers, mount_frontend_assets
 from provide.uterm.server.auth import (
     LocalIdentityProvider,
@@ -125,9 +130,24 @@ def create_server_app(
     _register_builtin_connectors(config)
     _validate_auth_config(config)
     _validate_security_config(config)
+    _validate_environment_profile(config)
     _api_only_env = os.environ.get("UTERM_API_ONLY", "").strip().lower() in {"1", "true", "yes"}
     if not api_only and not _api_only_env:
         _app_pkg._validate_frontend_assets()
+
+    # One structured startup line summarizing the effective security posture
+    # (declared environment, bind host, auth mode, active dev opt-outs, and the
+    # single ``secure`` boolean) so operators see in one glance whether a config
+    # copied between environments still represents a hardened deployment.
+    _posture = compute_security_posture(config)
+    logger.info(
+        "security_posture environment=%s bind=%s auth_mode=%s dev_opt_outs=%s secure=%s",
+        _posture["environment"],
+        _posture["bind_host"],
+        _posture["auth_mode"],
+        _posture["dev_opt_outs"],
+        _posture["secure"],
+    )
 
     durability_capabilities = _build_durability_capabilities(config).as_dict()
 

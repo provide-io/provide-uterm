@@ -451,6 +451,10 @@ class GovernanceConfig(ServerBaseModel):
 class UtermServerConfig(ServerBaseModel):
     """Top-level application config for the standalone server."""
 
+    # Declared deployment intent. Secure-by-default = production; drives the
+    # production assertion (_validate_environment_profile) and the startup
+    # security-posture self-report (compute_security_posture).
+    environment: Literal["dev", "production"] = "production"
     server: ServerBindConfig = Field(default_factory=ServerBindConfig)
     auth: AuthConfig = Field(default_factory=lambda: AuthConfig(mode="dev_token"))
     control_plane: ControlPlaneConfig = Field(default_factory=ControlPlaneConfig)
