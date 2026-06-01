@@ -50,6 +50,44 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
 
 
 # ---------------------------------------------------------------------------
+# bridge/hub/connection.py:222->224 — set_worker_hello with protocol_version
+# omitted (None) applies the mode and returns True without recording a version.
+# Covered deterministically here (was only incidentally covered, so it dropped
+# out of coverage under some pytest-randomly seeds → flaky server-quality 99%).
+# ---------------------------------------------------------------------------
+
+
+async def test_worker_hello_without_protocol_version_applies_mode() -> None:
+    from unittest.mock import AsyncMock
+
+    from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.bridge.models import WorkerTermState
+
+    hub = TermHub()
+    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    # protocol_version omitted -> None -> skip the version-record branch (222->224).
+    applied = await hub.set_worker_hello("w1", "open")
+    assert applied is True
+    assert hub._workers["w1"].input_mode == "open"
+
+
+# ---------------------------------------------------------------------------
+# bridge/hub/connection.py:193->exit — set_worker_tunnel_flag on an
+# unregistered worker is a silent no-op (the `st is None` early-exit branch).
+# Also only incidentally covered before; pin it deterministically.
+# ---------------------------------------------------------------------------
+
+
+async def test_set_worker_tunnel_flag_noop_for_unknown_worker() -> None:
+    from provide.uterm.server.bridge.hub import TermHub
+
+    hub = TermHub()
+    # No worker registered -> st is None -> early exit, no exception, no state created.
+    await hub.connection_mgr.set_worker_tunnel_flag("ghost", value=True)
+    assert hub.registry.get("ghost") is None
+
+
+# ---------------------------------------------------------------------------
 # bridge/hub/semantics.py:16 — CommandSplitter.split("") -> []
 # ---------------------------------------------------------------------------
 
