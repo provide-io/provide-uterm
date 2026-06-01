@@ -2,6 +2,28 @@
 
 Adversarial multi-agent sweep over 26 commits (24 shipped + 5a-1/5a-2). 13 findings confirmed after per-finding refutation; 18 refuted.
 
+> **Remediation status (2026-05-31, branch `harden/verify-remediation`).** 11 of the 13 confirmed findings — plus the NEW manager `register` priv-esc the completeness critic surfaced and the worker-settable `config` restart-spawn poison — are FIXED below (each TDD'd, independently adversarially reviewed, and verified at 100% line+branch coverage on its changed modules). Four lower-risk / more-invasive residuals are tracked for focused follow-up (none are remote-unauthenticated exploits after the fixes here).
+>
+> | Finding | Sev | Status | Commit |
+> |---|---|---|---|
+> | Manager `register` operator-command injection (critic NEW) | high | **fixed** — `_OPERATOR_FIELDS` reject + `agent_id` pattern | `8c925c18` |
+> | `register` worker-settable `config` (restart-spawn poison) | high | **fixed** — `config` added to `_OPERATOR_FIELDS` | `c9004c75` |
+> | #1/#2 egress SSRF bypass (`/api/sessions`, `/api/profiles/connect`) | high | **fixed** — guard moved to `SessionRegistry` chokepoint | `a38ff2e5` |
+> | #4 embedded-IPv4 IPv6 forms (NAT64/6to4/compat) | med | **fixed** — `_decode_embedded_ipv4` in both guards | `ed836e02` |
+> | egress DNS resolution fail-open / hang (V-H1 review) | med | **fixed** — `OSError`→`EgressBlockedError`, 5s timeout | `ed836e02` |
+> | #5 `/snapshot` + WS `initial_snapshot` redaction bypass | med | **fixed** — role-scoped redaction on read paths | `c74419f6` |
+> | #6 browser-quota slot leak → 1008 lockout | med | **fixed** — atomic increment rollback | `c74419f6` |
+> | #8 IdP secret floor + empty-key HMAC | low | **fixed** — fail-closed + entropy/placeholder floor | `5183c31c` |
+> | #10 `/api/security-posture` recon-map disclosure | low | **fixed** — full map operator/admin-only, else coarse | `957baef9` |
+> | #11 PAM relay egress gap | low | **fixed** — `assert_webhook_target_allowed` before POST | `44314b7a` |
+> | #12/#13 recording file/dir perms (symlink, re-tighten) | low | **fixed** — `O_NOFOLLOW`+`fchmod`+`chmod` | `bf5f8086` |
+> | #7 per-agent worker-token binding (impersonation) | med | **deferred** → token-distribution design decision | — |
+> | #3 DNS-rebinding (connector re-resolves at connect) | med | **deferred** (documented in `egress.py`) — needs connector/SNI plumbing | — |
+> | #9 IdP response signature not request-bound (replay <300s) | low | **deferred** — cross-cutting nonce protocol change | — |
+> | 5d frame-isolation `except` too broad over partial state | low | **deferred** — hot-path refactor, code-quality | — |
+>
+> **env-profile / posture asymmetry (critic note):** `_validate_environment_profile` fails the boot closed on only two opt-outs (`webhook_idp_on_failure=viewer`, `webhook`+`require_signed_response=false`), while `compute_security_posture` additionally reports `secure=false` for `allow_adhoc_browser_observers` and `block_private_connector_targets=false`. So `environment=production` is *enforcing* for the former two and *advisory* (self-reported, non-fatal) for the latter two — by design, but operators should not read `environment=production` as fail-closed on every weakening opt-out.
+
 All load-bearing claims re-confirmed against committed code:
 - `assert_connector_target_allowed`: 1 call site (tunnels.py:127); `sessions.py` create path has none.
 - egress.py:62 normalizes only `ipv4_mapped`; NAT64/6to4/IPv4-compat not decoded.

@@ -1,86 +1,98 @@
 # Handoff: Enterprise Hardening & Reliability Program
 
-_Last updated: 2026-05-31. Supersedes the prior "Test-Suite Resilience Sweep" handoff (that flake fix shipped long ago)._
+_Last updated: 2026-05-31 (verify-remediation wave). Supersedes the prior hardening handoff._
 
 ## Problem / request
 
 "Perform a comprehensive code review and detailed architectural analysis … It is vital that this is
-'enterprise hardened' and 'reliable.'" The review produced
-`docs/enterprise-hardening-review-2026-05-29.md` (83 code-confirmed findings: 0 critical, 16 high, 36
-medium, 31 low). The ask evolved into a full review → remediate → verify program executed in priority
-waves (P0 → P0.5 remaining-highs → P1 resource/resilience → M/L backlog).
+'enterprise hardened' and 'reliable.'" Executed as a review → remediate → verify → re-review → re-remediate
+program. The latest milestone closed the four design-decision items, added a unified environment profile,
+then ran an **independent multi-agent re-verification of the whole hardening body** which found real
+shipped gaps — now remediated.
 
-## Approach / reasoning (the operating contract — keep following it)
+## Approach / operating contract (keep following it)
 
-- **Per item:** TDD (test first, RED, implement, GREEN) → **independent adversarial subagent review**
-  (spec + quality + security) → appropriate **gate** → **fast-forward merge** to local `main`.
-- **Gating ("smarter gating"):** leaf change → that package's suite; **cross-cutting change**
-  (auth, redaction, `/api/health`, frame schemas, config validation, lifespan) → **full**
-  `uv run python scripts/run_all_tests.py`. NEVER trust the wrapper exit code — grep the output for
-  `FAILED` / `not reached`. To exclude the flaky memray test from the full gate, use
-  `--deselect "packages/provide-uterm/tests/memray/test_event_bus_stress.py::test_event_bus_stress"`
-  (node-id). **Do NOT pass a global `-m`** to `run_all_tests.py` — it clobbers each suite's own marker
-  selection and re-enables e2e tests (one run produced 2001 false failures).
-- **Commits:** one logical unit per commit; conventional messages; **NO AI/Claude trailers**
-  (subagents' harness adds `Co-Authored-By: Claude`; strip via
-  `git rebase main --exec 'm=$(git log -1 --format=%B | grep -v "^Co-Authored-By: Claude"); git commit --amend -m "$m"'`
-  then verify `git diff OLD HEAD` is empty before merging). **No git rollbacks/resets** (auto-commit env).
-- detect-secrets pre-commit hook re-stamps `.secrets.baseline` line numbers on test edits — `git add` it and re-commit.
+- **Per item:** TDD (test first, RED → implement → GREEN) → **independent adversarial subagent review**
+  (sonnet) → appropriate **gate** → **fast-forward merge** to local `main`. For a confirmed vulnerability,
+  the first test PROVES the exploit (RED) before the fix closes it.
+- **Gating:** leaf change → that package's suite; **cross-cutting** (auth, egress, redaction, config
+  validation, lifespan, control-plane) → **full** `uv run python scripts/run_all_tests.py`. NEVER trust the
+  wrapper exit code — grep the output for `FAILED` / `not reached`. Exclude the flaky memray test by
+  **node-id**: `--deselect "packages/provide-uterm/tests/memray/test_event_bus_stress.py::test_event_bus_stress"`.
+  **Do NOT pass a global `-m`** to `run_all_tests.py` (it clobbers each suite's marker selection → mass false
+  failures).
+- **Commits:** one logical unit per commit; conventional messages; **NO AI/Claude trailers**; subagents
+  stage only their own files (**no `git add -A`**). **No git rollbacks/resets** (auto-commit env).
+- Subagent pattern that has held at ~100% first-pass approval: implementer (TDD) → adversarial reviewer
+  (verifies the exploit is closed + nothing weakened) → controller runs the gate → ff-merge.
 
-## Work completed (all merged to local `main`; 54 commits ahead of origin, UNPUSHED)
+## ⚠️ BLOCKER for the next full-coverage gate / push — stray WIP from another tool
 
-- **P0 security program** + **P0.5 remaining-highs** + **P1 resource/resilience** (readiness `/readyz` +
-  `uterm_ready`, 10 metrics counters, buffer/event-ring/tunnel caps, per-principal browser quota,
-  control-plane reaper + WAL truncate, CF `_queue_bytes` finally-release + JWKS stale-fallback).
-- **M/L backlog (this session) — Clusters 1-3 + 5c, each reviewed + full-gated + merged:**
-  - **C1 data-protection** (`d6e6df9`..`979dbc5`): 1a approval-expiry sweep (was the last open **HIGH**),
-    1b output-redaction fails closed, 1c keystroke/command redaction before governance webhooks,
-    1e webhook-IDP role allow-list, 1g IDP-failure audit.
-  - **C2 resource caps** (`4ea612d`, `9f006bd`): 2a `expect_regex` ReDoS guard, 2c DeckMux selection/pin bound.
-  - **C3 config hardening** (`1c7890a`, `9a5ff99`): 3a refuse `security.mode=dev` on non-loopback, 3b CF
-    bearer entropy/placeholder floor.
-  - **5c MCP path-injection** (`e4abc87`, `12327c8`): `_safe_id` validation in `HijackClient` (`_wp/_hp/_sp`)
-    + the `fanout_send`/`session_annotate` MCP tools.
-  - **3c traceparent** (`20eb941f`, corrected by `869de5b4`): W3C `traceparent` injected into outbound
-    webhooks/governance/IDP headers. CORRECTION: the original used a raw `opentelemetry.propagate.inject`
-    (undeclared hard dep that broke downstream hub consumers without OTel); now uses
-    `tracing.inject_trace_context()` built on `provide.telemetry.get_trace_context()` — OTel-optional, zero
-    opentelemetry imports anywhere in provide-uterm. **Lesson: use `provide.telemetry`, never raw
-    `opentelemetry`; and verify new imports are DECLARED deps, not just transitively present in the dev venv.**
-  - **2b worker cap** (`b43370d0`): generous global `max_workers` cap; rejects new-over-cap with 1008,
-    always allows reconnecting existing worker ids.
-- **All HIGH-severity findings from the review are now closed.** Full gate green across every package
-  (Python 100% coverage + TS typecheck/vitest) — last full run after 3c+2b merge.
+The working tree contains **uncommitted WIP that is NOT part of this program**, evidently from a parallel
+tool (`.antigravitycli/`): a modified `packages/provide-uterm-client/.../transports/__init__.py` (adds a
+lazy `WebSocketTransport` `__getattr__` entry) plus two **untracked** new files,
+`packages/provide-uterm-client/.../transports/ws_transport.py` and
+`packages/provide-uterm/.../ws_session.py`. These import cleanly (lazy) and are not imported by any test, so
+they do **not** break test execution — but both packages' coverage config uses `source = [<pkg root>]` with
+`--cov-fail-under=100`, so the two **untracked files sit at 0% and FAIL the core + client coverage gates**.
+Until they are committed (with tests), removed, or git-ignored, `scripts/run_all_tests.py` cannot go fully
+green and the branch cannot be pushed cleanly. This is unrelated to the hardening work and was left
+untouched. **Action for the user:** resolve those three files before the coverage gate / push.
+
+## Work completed (all merged to local `main`; ~38 commits ahead of origin, UNPUSHED by user's choice)
+
+- **Design-decision items (task #19) — DONE:**
+  - **1f/1d** webhook-IdP contract: verify the IdP *response* signature (`webhook_idp_require_signed_response`,
+    default on) + curate the headers/cookies forwarded to the IdP (allow-list).
+  - **5a** FULL WORM/compliance audit build (3 sub-tasks): tamper-evident sha256 hash-chain + monotonic seq +
+    append-only `O_NOFOLLOW`/0600 fsync file sink + `uterm audit verify` CLI; durable control-plane chain-head
+    with a monotonic anti-rollback guard (sqlite migration v0002); lifespan wiring (resume + startup
+    integrity alarm + periodic/shutdown checkpoint) + posture field + `docs/worm-audit.md` (documents the
+    immutable-sink ops requirement).
+  - **5b** manager scoped worker tokens (self-report routes only).
+  - **5d** inbound worker-frame validation (`worker_frame_on_invalid` drop/reject).
+- **Unified environment profile (task #25) — DONE:** top-level `environment: dev|production` (default
+  production), `compute_security_posture()` self-report, `_validate_environment_profile` production
+  assertion, startup posture log, and an operator/admin-gated `/api/security-posture`.
+- **Independent re-verification (read-only, 43 agents over 26 commits):** report in
+  `docs/verify-hardening-body-2026-05-31.md`. 13 confirmed / 18 refuted, plus the completeness critic
+  surfaced a NEW high-severity manager priv-esc.
+- **Verification remediation wave (task #29-#32) — DONE & merged.** 11 confirmed findings + 2 critic findings
+  closed (table in the verify doc). Highlights:
+  - **HIGH** egress SSRF was wired into only `/api/connect`; `POST /api/sessions` + `/api/profiles/{id}/connect`
+    reached connectors unguarded → moved the guard into the `SessionRegistry.create_session/update_session`
+    **chokepoint** so every route is covered by construction (`a38ff2e5`).
+  - **HIGH** manager `POST /agent/{id}/register` merged a free-form body over the full status class → a
+    worker token could inject `pending_command_*` (operator command queue) into any agent; also `config`
+    (restart-spawn path) and missing `agent_id` pattern. Closed with an `_OPERATOR_FIELDS` reject-list +
+    `^[\w\-]+$` pattern (`8c925c18`, `c9004c75`).
+  - **MED** embedded-IPv4 IPv6 egress forms (NAT64/6to4/compat) + DNS fail-closed (`ed836e02`); `/snapshot`
+    redaction bypass + browser-quota leak (`c74419f6`).
+  - **LOW** IdP secret floor + empty-key HMAC (`5183c31c`); posture recon-map authz (`957baef9`); PAM relay
+    egress (`44314b7a`); recording symlink/perms (`bf5f8086`).
 
 ## Detailed checklist for next session
 
-**Tracking is in `docs/superpowers/plans/2026-05-31-ml-backlog.md` (authoritative, checkboxes ticked).**
-
-**4a + uv-consistency — MERGED** (`38cdf153` CI, `83d728ee` Docker), but **NEEDS USER VALIDATION**:
-- CI: `uv sync --frozen` everywhere + pty-unit lock-bypass fixed (YAML valid; lock `--frozen`-consistent).
-  → confirm green on the next CI run.
-- Docker: `Dockerfile.server` rewritten to a multi-stage uv-managed venv (no `--system`, no `pip install
-  uv`), pinned to lock; `Dockerfile.cf` `UV_FROZEN=1`. → `docker compose -f docker/docker-compose.yml build`
-  to validate (uv-workspace extra resolution + venv/stage copy can't be checked by inspection; the
-  Dockerfile.server `uv sync --package provide-uterm-server --extra all` + `pyte` install is the part to
-  watch — confirm the `uterm` CLI + `[emulator]`/`[all]` surface match the old image).
-- NOT done (deliberate / follow-up): `.python-version` would break the 4-version CI matrix (interpreter
-  stays setup-python — uv manages the env, which is correct for a matrix); pin `uvx` reuse/twine versions;
-  drop the redundant `pip-audit` install (`release-governance.yml:39`, verify the gov script provisions it
-  via `uv run --with` first); modernize `release.yml` dry-run (bare pip → uvx twine).
-
-Items needing a design decision from the user before coding (task #19):
-- [ ] **1f / 1d** IDP webhook contract: verify the IDP *response* signature inbound + minimize which
-  headers/cookies are forwarded to it (the IDP legitimately needs the auth credential — decide the allow-list).
-- [ ] **5a** Audit log monotonic sequence + hash-chain (which tamper-resistance scheme?). Server.
-- [ ] **5b** Manager scoped tokens — split worker-self-report vs operator authority (token model?). Platform.
-- [ ] **5d** Validate inbound worker frames through `AnyFrame` (drop-bad-frame vs reject-session?). Server.
-
-Separate / operational:
-- [ ] **memray flaky baseline**: `test_event_bus_stress` baseline 71997, tol 0.15 (cutoff ~82796); this
-  dev machine produces ~83670 so it tips over intermittently. Re-baseline in **CI's** environment (not
-  blindly to dev) OR widen tolerance — its own small change, not bundled with feature work.
-- [ ] **Push to origin**: 54 local commits on `main` are unpushed by the user's explicit choice. Confirm
-  before pushing.
-- [ ] Optional **P2 architecture** (HA): single-active-instance enforcement vs shared control plane —
-  needs a design decision.
+- [ ] **Resolve the stray WIP blocker above** (commit/remove/gitignore `transports/ws_transport.py`,
+  `ws_session.py`, `transports/__init__.py`) so the full 100%-coverage gate passes, then re-run
+  `scripts/run_all_tests.py` for a clean green.
+- [ ] **Deferred verification residuals (task #33)** — focused follow-ups, none remote-unauth exploits:
+  - **M7** per-agent worker token = HMAC(secret, agent_id) so a worker can't impersonate another agent's
+    self-report (residual is impersonation only; command-injection already closed by V-H2). Needs a
+    token-distribution design decision.
+  - **L9** bind the IdP response signature to the request (nonce) — currently replayable within the 300s
+    `max_age`. Cross-cutting request/response protocol change.
+  - **M3** DNS-rebinding: pin the resolved IP into `connector_config` (connector re-resolves at connect time).
+    Documented in `egress.py`; needs connector/SNI/known-hosts plumbing.
+  - **5d** narrow the per-frame `except` in `websockets_impl.py` to the builder calls only (don't mask a
+    downstream broadcast/redaction failure as "invalid frame" over partially-mutated state).
+- [ ] **Doc reconciliation (residual #26):** add MERGED/status banners to the older review/plan docs; refresh
+  RELEASE_READINESS + a CHANGELOG section; document the new config fields (`environment`, `audit.chain_*`,
+  `webhook_idp_require_signed_response`, `webhook_idp_forward_headers/cookies`) and the
+  env-profile/posture *advisory-vs-enforcing* asymmetry (noted in the verify doc).
+- [ ] **Docker images** still NEED-BUILD-VALIDATION (can't build locally): `docker compose -f
+  docker/docker-compose.yml build` to confirm the uv-managed-venv `Dockerfile.server` (`uv sync --extra all`
+  + pyte) and `Dockerfile.cf`.
+- [ ] **Push to origin**: ~38 local commits on `main` are unpushed by the user's explicit choice — confirm
+  before pushing (and only after the stray-WIP blocker is resolved so CI is green).
+- [ ] Optional **P2 architecture** (HA): single-active-instance vs shared control plane — design decision.
