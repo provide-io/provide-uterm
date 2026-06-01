@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Terminals",
     "Framework :: FastAPI",
 ]
-dependencies = ["provide-telemetry>=0.4.4", "aiosqlite>=0.20"]
+dependencies = ["provide-telemetry>=0.4.7", "aiosqlite>=0.22"]
 
 [project.urls]
 Homepage = "https://github.com/provide-io/provide-uterm"
