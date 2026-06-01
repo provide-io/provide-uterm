@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   trivy:
-    name: Trivy image scan
+    name: Trivy image scan (server)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -66,7 +66,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
         with:
           sarif_file: trivy-results.sarif
-          category: trivy
+          category: trivy-server
 
       # Gate: this step fails the workflow on HIGH/CRITICAL findings.
       # ignore-unfixed=true so we don't block on CVEs the base image hasn't
@@ -76,6 +76,48 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: provide-uterm-server:scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+  trivy-cf:
+    name: Trivy image scan (cloudflare)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      # Build the Cloudflare Worker image locally (not pushed) so Trivy can scan it
+      - name: Build CF image
+        run: ci/build_cf_image.sh provide-uterm-cf:scan
+
+      # SARIF report uploaded to GitHub's Security tab under its own category so
+      # CF findings don't collide with the server scan's dismissals.
+      - name: Trivy scan (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: provide-uterm-cf:scan
+          format: sarif
+          output: trivy-results-cf.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0      # don't fail the SARIF stage; fail in the gate below
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
+        with:
+          sarif_file: trivy-results-cf.sarif
+          category: trivy-cf
+
+      # Gate: fails the workflow on HIGH/CRITICAL findings in the CF image.
+      # Same ignore-unfixed rationale as the server scan above.
+      - name: Trivy gate (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: provide-uterm-cf:scan
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true

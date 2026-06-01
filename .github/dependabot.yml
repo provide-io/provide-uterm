@@ -32,6 +32,33 @@ updates:
           - "patch"
           - "minor"
 
+  # npm: workspace root. Covers the root package.json devDependencies plus the
+  # shared package-lock.json, so transitive bumps for the whole npm workspace
+  # (frontend + app) and base-tooling deps land here. Per-workspace entries
+  # below still target their own package.json direct deps.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      transitive:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
   # npm: frontend bundle in packages/provide-uterm-app.
   - package-ecosystem: "npm"
     directory: "/packages/provide-uterm-app"
@@ -89,9 +116,14 @@ updates:
       prefix: "ci"
       include: "scope"
 
-  # Docker base image bumps for the reference server.
+  # Docker base-image (digest) bumps for the reference server image
+  # (docker/Dockerfile.server) and the Cloudflare Worker image
+  # (docker/Dockerfile.cf). Both Dockerfiles live under docker/, so the
+  # docker ecosystem scanning this directory picks up every FROM in both —
+  # keeping node:* / python:* base tags current as new CVE-fix images ship.
   - package-ecosystem: "docker"
-    directory: "/docker"
+    directories:
+      - "/docker"
     schedule:
       interval: "weekly"
       day: "monday"
