@@ -15,7 +15,7 @@ class ResolvedUser:
     uid: int
     gid: int
     home: str
-    shell: str  # nosec B604 — dataclass field, not subprocess shell=True
+    shell: str  # nosec B604  # dataclass field, not subprocess shell=True
     name: str  # OS username (used for os.initgroups)
 
 
@@ -69,7 +69,7 @@ class UidMap:
         gid = run_as_gid if run_as_gid is not None else pw.pw_gid
         self._check_privilege(pw.pw_uid, gid)
 
-        return ResolvedUser(  # nosec B604 — shell= is a dataclass field, not subprocess
+        return ResolvedUser(  # nosec B604  # shell= is a dataclass field, not subprocess
             uid=pw.pw_uid,
             gid=gid,
             home=pw.pw_dir,
@@ -88,7 +88,7 @@ class UidMap:
         try:
             pw = pwd.getpwuid(uid)
             resolved_gid = gid if gid is not None else pw.pw_gid
-            return ResolvedUser(  # nosec B604 — shell= is a dataclass field
+            return ResolvedUser(  # nosec B604  # shell= is a dataclass field
                 uid=pw.pw_uid,
                 gid=resolved_gid,
                 home=pw.pw_dir,
@@ -97,7 +97,7 @@ class UidMap:
             )
         except KeyError:
             resolved_gid = gid if gid is not None else uid
-            return ResolvedUser(  # nosec B604 — shell= is a dataclass field
+            return ResolvedUser(  # nosec B604  # shell= is a dataclass field
                 uid=uid,
                 gid=resolved_gid,
                 home="/",
@@ -124,7 +124,7 @@ class UidMap:
             raise UidMapError(f"no such OS user: {spec!r}") from err
         gid = run_as_gid if run_as_gid is not None else pw.pw_gid
         self._check_privilege(pw.pw_uid, gid)
-        return ResolvedUser(  # nosec B604 — shell= is a dataclass field
+        return ResolvedUser(  # nosec B604  # shell= is a dataclass field
             uid=pw.pw_uid,
             gid=gid,
             home=pw.pw_dir,

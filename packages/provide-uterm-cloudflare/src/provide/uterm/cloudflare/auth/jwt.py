@@ -98,7 +98,7 @@ async def _request_jwks(url: str) -> dict[str, Any]:
         if not (url.startswith(("http://", "https://"))):
             raise ValueError(f"JWKS URL must be http(s), got: {url!r}") from None
         _req = urllib.request.Request(url, headers={"User-Agent": "provide-uterm/1.0"})  # noqa: S310
-        with urllib.request.urlopen(_req, timeout=5) as resp:  # noqa: S310  # nosec B310 — scheme validated above
+        with urllib.request.urlopen(_req, timeout=5) as resp:  # noqa: S310  # nosec B310  # scheme validated above
             data: dict[str, Any] = json.loads(resp.read())
             return data
 

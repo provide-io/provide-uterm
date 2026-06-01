@@ -352,7 +352,7 @@ class SqliteStateStore:
             assert offset is not None
             params.append(max(0, offset))
 
-        # nosec B608 — `where` is built from string-literal fragments above
+        # nosec B608  # `where` is built from string-literal fragments above
         # (no user data) and every user value (session_id, event, limit,
         # offset) goes through `?` placeholders in `params`. The f-string
         # only stitches static SQL together.
