@@ -266,6 +266,7 @@ class TestStartMutations:
     async def test_start_sets_banner_with_connected_message(self) -> None:
         """mutmut_8: banner must say 'Connected to' after start."""
         mock_ws = AsyncMock()
+        mock_ws.remote_address = ("93.184.216.34", 443)
         mock_mod = MagicMock()
         mock_mod.connect = AsyncMock(return_value=mock_ws)
         with patch.dict("sys.modules", {"websockets": mock_mod}):
@@ -278,6 +279,7 @@ class TestStartMutations:
     async def test_start_sets_connected_true(self) -> None:
         """mutmut_2: _connected must be True after start."""
         mock_ws = AsyncMock()
+        mock_ws.remote_address = ("93.184.216.34", 443)
         mock_mod = MagicMock()
         mock_mod.connect = AsyncMock(return_value=mock_ws)
         with patch.dict("sys.modules", {"websockets": mock_mod}):

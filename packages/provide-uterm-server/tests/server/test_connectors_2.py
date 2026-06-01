@@ -416,6 +416,9 @@ class TestSshSessionConnector:
         mock_process.stdin = MagicMock()
         mock_process.stdout = MagicMock()
         mock_conn = MagicMock()
+        # Peer-IP egress guard reads conn.get_extra_info("peername") post-connect;
+        # a benign public peer must let start() proceed to create_process().
+        mock_conn.get_extra_info = MagicMock(return_value=("93.184.216.34", 22))
         mock_conn.create_process = AsyncMock(return_value=mock_process)
         with patch.object(asyncssh, "connect", new=AsyncMock(return_value=mock_conn)):
             await c.start()

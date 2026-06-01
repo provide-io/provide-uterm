@@ -140,6 +140,34 @@ class SshSessionConnector(SessionConnector):
 
         return _worker_hello(self._input_mode)
 
+    async def _assert_peer_allowed(self, conn: asyncssh.SSHClientConnection) -> None:
+        """Run the actual connected peer IP through the egress metadata check.
+
+        Closes *conn* and raises ``EgressBlockedError`` if the peer is a blocked
+        target.  A missing peername (None) is treated as "proceed" — the
+        create-time guard already validated the resolved name, and this check
+        only ever ABORTS on a positively-identified blocked peer.
+        """
+        from provide.uterm.server.egress import assert_ip_allowed
+
+        peer = conn.get_extra_info("peername")
+        if not peer:
+            return
+        peer_ip = peer[0]
+        try:
+            assert_ip_allowed(str(peer_ip), block_private=False)
+        except Exception:
+            conn.close()
+            with contextlib.suppress(Exception):
+                await conn.wait_closed()
+            logger.warning(
+                "ssh_connector_peer_blocked session_id=%s host=%s peer_ip=%s — aborting (DNS-rebind guard)",
+                self._session_id,
+                self._host,
+                peer_ip,
+            )
+            raise
+
     async def start(self) -> None:
         conn = await asyncssh.connect(
             self._host,
@@ -152,6 +180,14 @@ class SshSessionConnector(SessionConnector):
             encoding=None,
             connect_timeout=30,
         )
+        # M3 (DNS-rebinding) post-connect mitigation: validate the REAL peer IP
+        # we reached BEFORE opening the PTY (create_process) — i.e. before any
+        # application data.  The SSH handshake (incl. host-key/known-hosts
+        # verification) already completed against the original hostname, so this
+        # touches no verification; it only reads the connected peer IP.  Aborts
+        # on a blocked (cloud-metadata) peer.  Only metadata IPs are enforced
+        # (always-on, no config); private-range blocking is not threaded here.
+        await self._assert_peer_allowed(conn)
         process = await conn.create_process(term_type="ansi", term_size=(_COLS, _ROWS), encoding=None)
         self._conn = conn
         self._process = process
