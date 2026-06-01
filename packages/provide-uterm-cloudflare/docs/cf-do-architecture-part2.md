@@ -68,8 +68,8 @@ uterm watch <id-or-url>        # TUI viewer for existing tunnel (read-only, Text
 | `cli/inspect.py` | `uterm inspect` CLI |
 | CF `api/tunnel_routes.py` | DO binary frame handler |
 | CF `api/_tunnel_api.py` | `POST /api/tunnels`, share URL auth |
-| CF `entry.py` | Route registration: `/tunnel/`, `/s/`, `/api/tunnels`, `/app/inspect/` |
-| Frontend `inspect-view.ts` | Live HTTP request list + detail pane |
+| CF `entry/` | Route registration package: `/tunnel/`, `/s/`, `/api/tunnels`, `/app/inspect/` (dispatch in `entry/handlers.py` + `entry/registry.py`) |
+| Frontend `provide-uterm-app` inspect UI (`components/inspect/*` + `useInspectWs.ts` + `stores/inspectStore.ts`) | Live HTTP request list + detail pane |
 
 ### Pyodide Runtime Fixes
 

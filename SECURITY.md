@@ -64,7 +64,7 @@ In scope:
 - All code under `packages/provide-uterm*/`.
 - The reference server (`uterm server`), its REST/WebSocket surface, and
   the bundled frontend.
-- The MCP server (`uterm mcp`).
+- The MCP server (`uterm-mcp`).
 - The Cloudflare Worker / Durable Object adapter.
 - The `provide-uterm-platform` PTY, PAM, and LD_PRELOAD capture surfaces.
 

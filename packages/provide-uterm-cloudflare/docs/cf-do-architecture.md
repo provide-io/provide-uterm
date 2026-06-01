@@ -17,7 +17,7 @@ graph LR
     DO <-->|KV.put/delete| KV[(SESSION_REGISTRY KV)]
     DO <-->|SQLite| DB[(DO SQLite)]
     subgraph DO[SessionRuntime DO]
-        SR[session_runtime.py]
+        SR[session_runtime/]
         SS[SqliteStateStore]
         HC[HijackCoordinator]
     end
@@ -51,13 +51,13 @@ sequenceDiagram
 
 | File | Role |
 |------|------|
-| `do/session_runtime.py` | Main DO class: lifecycle, auth, routing |
-| `do/ws_helpers.py` | `_WsHelperMixin`: socket keying, role resolution, send helpers |
+| `do/session_runtime/` | Main DO class package (`runtime.py` + `fetch.py`/`lifecycle.py`/`io.py`/`auth.py`/`ws_helpers.py`): lifecycle, auth, routing |
+| `do/session_runtime/ws_helpers.py` | `_WsHelperMixin`: socket keying, role resolution, send helpers |
 | `do/persistence.py` | `persist_lease()` / `clear_lease()` module-level functions |
 | `state/store.py` | `SqliteStateStore`: all SQLite I/O |
 | `state/registry.py` | `update_kv_session()` / `list_kv_sessions()`: KV fleet registry |
 | `api/ws_routes.py` | `handle_socket_message()`: browser/worker frame dispatch |
-| `api/http_routes.py` | REST hijack routes (acquire/send/release/step/snapshot) |
+| `api/http_routes/` | REST hijack routes package (`_dispatch.py`/`_hijack.py`/`_recording.py`/`_session.py`/`_shared.py`): acquire/send/release/step/snapshot |
 | `bridge/hijack.py` | `HijackCoordinator` + `HijackSession` (in-memory lease state) |
 
 ---
@@ -379,8 +379,10 @@ message. `_handle_resume()` in `ws_routes.py`:
 Invalid or expired tokens are silently ignored — the browser keeps its fresh
 anonymous session from the initial hello.
 
-Token TTL defaults to 300s (5 minutes). Set `resume_ttl_s` in `CloudflareConfig`
-to override.
+Token TTL is fixed at 300s (5 minutes). The value is read via
+`getattr(self.config, "resume_ttl_s", 300)`, but `CloudflareConfig` has no
+`resume_ttl_s` field, so the 300s default always applies — there is currently
+no config field or env var to override it.
 
 ---
 
@@ -400,15 +402,21 @@ and raw sockets.
 fetch(request)
   ├── /ws/worker/…  → compare_digest(token, worker_bearer_token)   [constant-time]
   └── everything else → _resolve_principal(request)
-        ├── mode=dev/none → (None, None)  [no auth]
         └── mode=jwt      → decode_jwt() → JWKS fetch → principal or 401
 ```
 
 `browser_role_for_request()` is called after auth passes to derive the role
-from the JWT claim. In `dev`/`none` mode it returns `"admin"` unconditionally.
+from the JWT claim.
 
 Worker connections use a shared secret (`WORKER_BEARER_TOKEN`) rather than a JWT.
 In `jwt` mode, `from_env()` raises `ValueError` if this secret is not set.
+
+> **As-built:** `jwt` is the only reachable auth mode. `config.from_env()`
+> raises `ValueError` for any `AUTH_MODE` other than `jwt` (the worker is
+> always internet-facing), so the legacy `dev`/`none` branches that still
+> exist in `do/session_runtime/auth.py` (`_resolve_principal` and
+> `browser_role_for_request` returning `"admin"`) are dead code no valid
+> config can reach.
 
 ---
 

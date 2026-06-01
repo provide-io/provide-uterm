@@ -27,7 +27,7 @@ uv run python -m scripts.demos.reel
 | [Annotations](annotation/README.md) | Label sessions with metadata; auto-detect 20 security patterns | `annotation/` |
 | [SSH Connector](ssh/README.md) | Connect to remote hosts over SSH | `ssh/` |
 | [Telnet Connector](telnet/README.md) | Legacy telnet sessions with full terminal emulation | `telnet/` |
-| [Tunnel Sharing](tunnel/README.md) | Share sessions via Cloudflare Worker tunnel URL | `tunnel/` |
+| [Tunnel Sharing](tunnel/README.md) | Share sessions via bearer-token control/share URLs (no inbound port needed) | `tunnel/` |
 | [HTTP Inspection](http_inspect/README.md) | Intercept and inspect HTTP traffic in real time | `http_inspect/` |
 | [MCP Integration](mcp/README.md) | 21 AI agent tools via Model Context Protocol | `mcp/` |
 | [Session Hijack](hijack/README.md) | Viewer watches while operator takes exclusive control | `hijack/` |
