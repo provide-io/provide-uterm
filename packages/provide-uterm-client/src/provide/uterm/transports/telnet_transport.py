@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 
+from provide.uterm.transports.base import ConnectionTransport
+
 if TYPE_CHECKING:
     from asyncio import StreamReader, StreamWriter
 
@@ -49,7 +51,7 @@ OPT_SGA_OPT: int = SGA
 OPT_NAWS: int = NAWS
 
 
-class TelnetTransport:
+class TelnetTransport(ConnectionTransport):
     """Full RFC 854 telnet client implementing the ConnectionTransport interface.
 
     Unlike :class:`TelnetClient`, this class:
