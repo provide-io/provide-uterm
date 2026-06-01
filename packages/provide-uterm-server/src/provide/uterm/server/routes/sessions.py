@@ -373,7 +373,10 @@ def create_sessions_router() -> APIRouter:
         definition = await session_definition(request, session_id)
         if not await az.can_read_session(p, definition):
             raise HTTPException(status_code=403, detail="insufficient privileges")
-        return await registry(request).last_snapshot(session_id)
+        # Pass the Request as the redaction recipient so a configured output
+        # policy redacts the snapshot to the requester's role (M5) — the same
+        # treatment the live broadcast and WS initial-snapshot paths apply.
+        return await registry(request).last_snapshot(session_id, recipient=request)
 
     @router.get("/sessions/{session_id}/events")
     async def events(

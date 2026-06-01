@@ -305,22 +305,46 @@ class ConnectionManager:
                     hub._principal_browser_counts[subject_id] = current + 1
                     hub._ws_principal[ws] = subject_id
                 # -----------------------------------------------------------
-                # Mint the resume token only once the quota gate has passed.
-                if hub._resume_store is not None:
-                    resume_token = await hub._resume_store.create(worker_id, role, hub._resume_ttl_s)
-                    hub._ws_to_resume_token[ws] = resume_token
-                st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
-                st.browsers[ws] = role
-                if defer_broadcast:
-                    hub._startup_pending_browsers.add(ws)
-                initial_state = {
-                    "is_hijacked": hub.is_hijacked(st),
-                    "hijacked_by_me": hub.is_dashboard_hijack_active(st) and st.hijack_owner is ws,
-                    "worker_online": st.worker_ws is not None,
-                    "input_mode": st.input_mode,
-                    "initial_snapshot": st.last_snapshot,
-                    "resume_token": resume_token,
-                }
+                # Everything past the increment is wrapped so a raise here
+                # (e.g. ``resume_store.create()`` throwing an sqlite IO error or
+                # CancelledError) does NOT leak the per-principal quota slot.
+                # ``register_browser`` is awaited OUTSIDE the WS route's
+                # try/finally, so a raise here would otherwise skip the paired
+                # decrement in ``cleanup_browser_disconnect`` and — with no
+                # reaper for ``_principal_browser_counts`` — eventually lock the
+                # principal out at 1008. On ANY exception we roll the increment
+                # back (mirroring ``_update_lock_state``'s decrement) and re-raise.
+                try:
+                    # Mint the resume token only once the quota gate has passed.
+                    if hub._resume_store is not None:
+                        resume_token = await hub._resume_store.create(worker_id, role, hub._resume_ttl_s)
+                        hub._ws_to_resume_token[ws] = resume_token
+                    st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
+                    st.browsers[ws] = role
+                    if defer_broadcast:
+                        hub._startup_pending_browsers.add(ws)
+                    initial_state = {
+                        "is_hijacked": hub.is_hijacked(st),
+                        "hijacked_by_me": hub.is_dashboard_hijack_active(st) and st.hijack_owner is ws,
+                        "worker_online": st.worker_ws is not None,
+                        "input_mode": st.input_mode,
+                        "initial_snapshot": st.last_snapshot,
+                        "resume_token": resume_token,
+                    }
+                except BaseException:
+                    self._rollback_browser_quota(ws)
+                    raise
+            # Redact the connect-time snapshot OUTSIDE the lock (the policy
+            # context build re-acquires hub._lock). This is the same role-scoped
+            # output-redaction the broadcast path applies; without it the initial
+            # snapshot would ship raw screen/raw_tail/prompt_detected to the
+            # browser, bypassing the policy (M5). redact_snapshot_for_recipient
+            # returns a COPY, so the stored st.last_snapshot is not mutated.
+            _snapshot = initial_state["initial_snapshot"]
+            if _snapshot is not None and hub._output_policy_gate is not None:
+                initial_state["initial_snapshot"] = await hub.redact_snapshot_for_recipient(
+                    worker_id, cast("dict[str, Any]", _snapshot), ws
+                )
             logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="browser", role=role)
             return initial_state
 
@@ -333,6 +357,30 @@ class ConnectionManager:
                 st is not None and ws in st.browsers
             ):  # pragma: no branch — race window during browser disconnect; defensive
                 hub._startup_pending_browsers.discard(ws)
+
+    def _rollback_browser_quota(self, ws: Any) -> None:
+        """Undo the per-principal quota increment for *ws* (M6 atomicity).
+
+        Called from :meth:`register_browser` when a setup line raises after the
+        increment. Pops ``_ws_principal[ws]`` and decrements
+        ``_principal_browser_counts`` for that subject, popping it to zero —
+        the exact inverse of the increment and a mirror of the decrement in
+        :meth:`_update_lock_state`. Net effect: a failed register leaves the
+        count exactly as it was before the attempt. Must run under ``hub._lock``
+        (the caller already holds it).
+        """
+        hub = self._hub
+        # Also drop any resume-token map entry minted before the raise so it
+        # doesn't orphan in memory (the route's disconnect cleanup, which
+        # normally pops it, never runs when register_browser itself raises).
+        hub._ws_to_resume_token.pop(ws, None)
+        subject_id = hub._ws_principal.pop(ws, None)
+        if subject_id is not None:
+            remaining = hub._principal_browser_counts.get(subject_id, 0) - 1
+            if remaining <= 0:
+                hub._principal_browser_counts.pop(subject_id, None)
+            else:
+                hub._principal_browser_counts[subject_id] = remaining
 
     @staticmethod
     def _scan_events_for_resume(st: Any) -> bool:
