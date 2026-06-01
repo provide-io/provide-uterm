@@ -212,6 +212,36 @@ def _validate_security_config(config: ServerConfig) -> None:
     )
 
 
+def _validate_environment_profile(config: ServerConfig) -> None:
+    """Production assertion: refuse fail-open IDP fallback on a routable bind.
+
+    When ``environment='production'`` and the bind is NON-loopback, the
+    ungated ``auth.webhook_idp_on_failure='viewer'`` opt-out (which fails open
+    to an anonymous viewer when the webhook IdP errors) is refused — it is the
+    one security-weakening dev opt-out that the existing
+    ``_validate_auth_config`` / ``_validate_security_config`` validators do not
+    already loopback-gate. The dev_token and security.mode=dev cases are
+    already refused on non-loopback by those validators, so we do not
+    re-check them here.
+
+    A loopback bind (the local-default deployment) is exempt: the listener is
+    not remotely reachable, so the default ``dev_token`` + default
+    ``production`` config still boots on 127.0.0.1.
+    """
+    if str(config.environment).strip().lower() != "production":
+        return
+    if _is_loopback_host(config.server.host):
+        return
+    if str(getattr(config.auth, "webhook_idp_on_failure", "deny")).strip().lower() == "viewer":
+        raise ValueError(
+            "environment='production' on a non-loopback bind refuses "
+            "auth.webhook_idp_on_failure='viewer': this fails open to an anonymous "
+            "viewer principal whenever the webhook IdP errors (timeout, HTTP error, "
+            "network down). Use auth.webhook_idp_on_failure='deny', or set "
+            "environment='dev' to intentionally accept the fail-open behaviour."
+        )
+
+
 # JWT signing algorithm families. HMAC (HS*) is symmetric: verification uses
 # the same shared secret as signing. Asymmetric families verify with a public
 # key. Accepting both at once is the classic alg-confusion vulnerability: an

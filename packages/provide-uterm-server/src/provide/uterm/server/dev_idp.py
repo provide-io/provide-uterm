@@ -84,6 +84,11 @@ def setup_dev_idp(
         raise RuntimeError("pyjwt is required for dev_token mode") from exc
 
     secret = secrets.token_urlsafe(48)  # ~384 bits, well above the 32-char floor
+    # Record the declared mode before we collapse it to "jwt" so the
+    # security-posture self-report (compute_security_posture) can still
+    # surface "auth.mode=dev_token" as the active dev opt-out even though the
+    # effective signing path is now a regular JWT validator.
+    object.__setattr__(auth, "_declared_auth_mode", str(auth.mode))
     auth.mode = "jwt"
     auth.jwt_public_key_pem = secret
     auth.jwt_algorithms = ["HS256"]

@@ -18,17 +18,24 @@ from __future__ import annotations
 import importlib.resources
 
 from provide.uterm.server.app.assets import _validate_frontend_assets
-from provide.uterm.server.app.auth import _validate_auth_config, _validate_security_config
+from provide.uterm.server.app.auth import (
+    _validate_auth_config,
+    _validate_environment_profile,
+    _validate_security_config,
+)
 from provide.uterm.server.app.connectors import _register_builtin_connectors
 from provide.uterm.server.app.control_plane import _build_control_plane
 from provide.uterm.server.app.factory import create_server_app
+from provide.uterm.server.app.posture import compute_security_posture
 
 __all__ = [
     "_build_control_plane",
     "_register_builtin_connectors",
     "_validate_auth_config",
+    "_validate_environment_profile",
     "_validate_frontend_assets",
     "_validate_security_config",
+    "compute_security_posture",
     "create_server_app",
     "importlib",
 ]

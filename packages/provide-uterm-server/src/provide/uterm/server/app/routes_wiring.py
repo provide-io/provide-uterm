@@ -48,7 +48,10 @@ def install_routers(
         hub.create_router(extra_route_registrars=[register_tunnel_routes, register_fanout_routes]),
         dependencies=[Depends(require_authenticated), Depends(require_hub_route_authz)],
     )
-    app.include_router(create_health_router())
+    # Health/liveness/readiness routes stay anonymous; the security-posture
+    # route inside this router is gated by ``require_authenticated`` (passed
+    # through) because it reveals the effective security config.
+    app.include_router(create_health_router(require_authenticated=require_authenticated))
     app.include_router(create_api_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(create_profiles_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(create_approvals_router(), dependencies=[Depends(require_authenticated)])
