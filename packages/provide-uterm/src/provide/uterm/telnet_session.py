@@ -30,16 +30,14 @@ Example::
 from __future__ import annotations
 
 from provide.uterm.transport_session import TransportSession
+
+# ``TelnetTransport`` is imported here (not only inside the base) because it is
+# the transport constructed in ``TelnetSession.__init__`` — so patching
+# ``provide.uterm.telnet_session.TelnetTransport`` intercepts construction, the
+# target downstream test suites (e.g. uwarp-space) rely on.
 from provide.uterm.transports.telnet_transport import TelnetTransport
 
-# Re-exported so the historical patch targets
-# ``provide.uterm.telnet_session.{TelnetTransport,TerminalEmulator}`` remain
-# importable for downstream test suites (e.g. uwarp-space) that
-# ``monkeypatch.setattr`` them. ``TelnetTransport`` is the one used at
-# construction; ``TerminalEmulator`` is built inside ``TransportSession``.
-from provide.uterm.emulator import TerminalEmulator
-
-__all__ = ["TelnetSession", "TelnetTransport", "TerminalEmulator", "connect_telnet"]
+__all__ = ["TelnetSession", "TelnetTransport", "connect_telnet"]
 
 
 async def connect_telnet(

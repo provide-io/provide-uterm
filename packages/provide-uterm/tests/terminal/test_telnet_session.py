@@ -112,13 +112,9 @@ async def test_async_context_manager() -> None:
 
 
 async def test_connect_telnet_factory() -> None:
-    with (
-        patch("provide.uterm.telnet_session.TelnetTransport") as mock_transport_cls,
-        patch("provide.uterm.telnet_session.TerminalEmulator") as mock_emulator_cls,
-    ):
+    with patch("provide.uterm.telnet_session.TelnetTransport") as mock_transport_cls:
         mock_t = _mock_transport()
         mock_transport_cls.return_value = mock_t
-        mock_emulator_cls.return_value = _mock_emulator()
 
         session = await connect_telnet("bbs.example.com", 2102, cols=120, rows=40, term="VT100")
 
