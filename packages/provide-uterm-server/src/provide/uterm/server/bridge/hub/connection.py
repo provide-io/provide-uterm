@@ -190,7 +190,11 @@ class ConnectionManager:
         hub = self._hub
         async with hub._lock:
             st = hub.registry.get(worker_id)
-            if st is not None:
+            # The False arc here exits the async-with directly; coverage.py 7.14
+            # mis-attributes that __aexit__ arc on Python 3.11 (3.12+ tracks it
+            # fine), so it falsely reports the branch as partial. The branch IS
+            # exercised — see test_set_worker_tunnel_flag_noop_for_unknown_worker.
+            if st is not None:  # pragma: no branch
                 st.is_tunnel_worker = value
 
     async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
@@ -219,7 +223,11 @@ class ConnectionManager:
                 )
                 return False
             st.input_mode = mode
-            if protocol_version is not None:
+            # Same Python-3.11 coverage.py async-with __aexit__ arc quirk as in
+            # set_worker_tunnel_flag: the False arc (no protocol_version) falls
+            # through to the post-with `return True`; 3.11 mis-attributes it. The
+            # branch IS exercised — see test_worker_hello_without_protocol_version_*.
+            if protocol_version is not None:  # pragma: no branch
                 st.protocol_version = protocol_version
         return True
 
