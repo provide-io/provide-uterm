@@ -310,22 +310,15 @@ paths_to_mutate = [
     # each service live under tests/bridge/hub/test_<name>.py.
     "src/provide/uterm/server/bridge/hub/registry.py",
     "src/provide/uterm/server/bridge/hub/limiter.py",
-    # lease.py — PROVEN killed==100 (489/489, 0 survived, 0 no_tests) locally + via
-    # the real changed-only gate, but CI-enforcement is DEFERRED. The dedicated
-    # suites (test_lease.py + the ownership/atomic suites + the five
-    # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) ARE wired into
-    # tests_dir below and keep the file at 100% line coverage; the sole
-    # equivalent-class mutant was removed via the `= ...` Protocol-stub default.
-    # The blocker is NOT coverage — it is a mutmut-internal CRASH that only
-    # reproduces in CI: mutmut's read_one_child_exit_status (mutmut/__main__.py)
-    # raises KeyError on a worker PID (its fork/child-reaping bookkeeping loses a
-    # child — most likely asyncio's child watcher reaping mutmut's fork worker
-    # first, since the lease tests drive asyncio), which mass-reports every mutant
-    # not_checked (score 0). The root-conftest logging-off-stdout hardening (which
-    # DID remove the correlated "I/O operation on closed file" noise) is kept but
-    # does not resolve this. Re-enable once the mutmut child-reaping interaction is
-    # fixed (likely a mutmut-version bump or an asyncio child-watcher guard).
-    # "src/provide/uterm/server/bridge/hub/lease.py",
+    # lease.py — RE-ENABLED at killed==100 (489/489, 0 survived, 0 no_tests). The
+    # dedicated suites (test_lease.py + the ownership/atomic suites + the five
+    # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) are wired into
+    # tests_dir below; the sole equivalent-class mutant (the _LeaseHubCallbacks
+    # .metric Protocol-stub default) was removed via `= ...`. The CI mutmut
+    # KeyError that previously mass-reported not_checked here was traced to the
+    # subprocess-spawning test_process.py leaking worker children into mutmut's
+    # fork-loop os.wait() — that suite is now removed from tests_dir (above).
+    "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
     # connection.py — DEFERRED (2026-06-02). Same enumerated-but-under-wired class
     # as lease.py was; its dedicated kill-suites aren't written/wired yet. Re-add
@@ -423,7 +416,16 @@ tests_dir = [
     # "packages/provide-uterm-server/tests/server/test_sse_registry.py",
     # "packages/provide-uterm-server/tests/server/test_coverage_gaps_part2.py",
     # "packages/provide-uterm-server/tests/server/test_coverage2.py",
-    "packages/provide-uterm-platform/tests/manager/manager/test_process.py",
+    # test_process.py (manager process supervisor) — REMOVED from tests_dir
+    # (2026-06-02). It covers ONLY manager/process.py + manager/config.py, both
+    # DEFERRED from paths_to_mutate above, so it bound nothing — and it is the only
+    # wired suite that spawns real OS subprocesses (subprocess.Popen / spawn()).
+    # Its leftover worker children get reaped by mutmut's fork-loop os.wait()
+    # (read_one_child_exit_status, mutmut/__main__.py), whose result dict is keyed
+    # only by mutmut's OWN fork PIDs -> KeyError -> every mutant of the file under
+    # test reported not_checked (score 0). That crash was the real blocker to
+    # enforcing server perimeter files (e.g. lease.py). Re-add ONLY when manager is
+    # re-enabled, and with a child-reaping guard for its subprocesses.
     # RateLimiter (hub/limiter.py) LRU eviction — without this the
     # --changed-only gate finds limiter.py mutants but binds zero tests and
     # reports them all as ``no_tests`` (2026-05-28 remediation, lane A4).
