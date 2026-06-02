@@ -399,8 +399,6 @@ tests_dir = [
     "packages/provide-uterm-server/tests/tunnel/test_token_hash.py",
     "packages/provide-uterm-server/tests/tunnel/test_token_hash_hypothesis.py",
     "packages/provide-uterm-server/tests/tunnel/test_intercept_gate.py",
-    "packages/provide-uterm-server/tests/server/test_config.py",
-    "packages/provide-uterm-server/tests/server/test_app_coverage.py",
     # SessionRegistry (server/registry.py) dedicated mutmut suite — PRESERVED but
     # commented out in lockstep with registry.py's deferral from paths_to_mutate
     # above (2026-06-01). Wiring these takes registry.py from ~14% (no bound
@@ -435,6 +433,17 @@ tests_dir = [
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_dashboard_ws.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_expiry_sweep.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_events_dead.py",
+    # Full-app (create_server_app) suites LAST. mutmut's stats phase runs the
+    # whole tests_dir with ``-x`` (stop on first failure); these TestClient/
+    # full-app tests are intermittently fragile in the mutants tree (a stray
+    # "I/O operation on closed file" logging error during lifespan teardown can
+    # fail test_loaded_max_sessions_is_enforced_by_app). Keeping them last means a
+    # flake here aborts stats AFTER every pure-unit perimeter suite (incl. the
+    # lease suites above) has already bound its coverage — so it can no longer
+    # mass-report earlier targets as no_tests/not_checked. They remain the bound
+    # suites for app/factory.py's mutants.
+    "packages/provide-uterm-server/tests/server/test_config.py",
+    "packages/provide-uterm-server/tests/server/test_app_coverage.py",
 ]
 also_copy = [
     "src",
