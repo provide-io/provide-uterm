@@ -1,7 +1,7 @@
 # Architectural Analysis and Code Review Specification
 
 ## Scope
-This document outlines the focus and structure for a comprehensive architectural analysis and code review of the `provide-uterm` repository. To ensure depth and actionability, the review focuses on six critical subsystems.
+This document outlines the focus and structure for a comprehensive architectural analysis and code review of the `provide-uterm` repository. To ensure depth and actionability, the review focuses on eight critical subsystems.
 
 ## Target Subsystems
 
@@ -18,6 +18,10 @@ This document outlines the focus and structure for a comprehensive architectural
    - Location: `packages/provide-uterm-client/` (MCP server and tools)
 6. **Platform Targets & External Management Tier**
    - Location: `packages/provide-uterm-platform/`
+7. **Desktop/Native App Wrappers**
+   - Location: `packages/provide-uterm-app/`
+8. **Annotation Layer**
+   - Location: `packages/provide-uterm-annotation/`
 ## Analysis Lenses
 The review of both subsystems will be conducted and structured through four specific lenses:
 
