@@ -10,18 +10,18 @@
 
 ---
 
-### Task 1: Research & Write Cloudflare Workers & Edge Architecture
+## Task 1: Research & Write Cloudflare Workers & Edge Architecture
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
 
 - [ ] **Step 1: Read and analyze CF Worker code**
   Read the files in `packages/provide-uterm-cloudflare/`. Focus on Durable Object state modeling, KV consistency for the session registry, and WebSocket hibernation efficiency.
-  
+
 - [ ] **Step 2: Append Part 3 of the Report**
   Write Part 3 of the report and append it to the end of `artifacts/2026-06-02-code-review-report.md`. Ensure consistency with the 4-lens format.
 
-### Task 2: Research & Write Frontend Application & xterm.js Integration
+## Task 2: Research & Write Frontend Application & xterm.js Integration
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
@@ -32,7 +32,7 @@
 - [ ] **Step 2: Append Part 4 of the Report**
   Write Part 4 and append it to the report artifact.
 
-### Task 3: Research & Write AI & MCP Tooling Integration
+## Task 3: Research & Write AI & MCP Tooling Integration
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
@@ -43,7 +43,7 @@
 - [ ] **Step 2: Append Part 5 of the Report**
   Write Part 5 and append it to the report artifact.
 
-### Task 4: Research & Write Platform Targets & Agent Swarm Management
+## Task 4: Research & Write Platform Targets & Agent Swarm Management
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
@@ -54,7 +54,7 @@
 - [ ] **Step 2: Append Part 6 of the Report**
   Write Part 6 and append it to the report artifact.
 
-### Task 5: Finalize and Commit Phase 2
+## Task 5: Finalize and Commit Phase 2
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`

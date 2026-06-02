@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Research & Write Core Bridge System (`TermHub`)
+## Task 1: Research & Write Core Bridge System (`TermHub`)
 
 **Files:**
 - Create: `artifacts/2026-06-02-code-review-report.md`
@@ -22,7 +22,7 @@
 - [ ] **Step 2: Write Part 1 of the Report**
   Draft the findings for Part 1 (Core Bridge System) and save it to the report artifact file.
 
-### Task 2: Research & Write Server Transports & Protocol Gateways
+## Task 2: Research & Write Server Transports & Protocol Gateways
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
@@ -34,7 +34,7 @@
 - [ ] **Step 2: Write Part 2 of the Report**
   Append the findings for Part 2 (Server Transports & Gateways) to the report artifact file.
 
-### Task 3: Finalize and Polish Report
+## Task 3: Finalize and Polish Report
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
