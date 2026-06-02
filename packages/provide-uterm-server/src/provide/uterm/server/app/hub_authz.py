@@ -79,9 +79,21 @@ def build_require_hub_route_authz(
         principal = getattr(connection.state, "uterm_principal", None)
         if principal is None:  # pragma: no cover — _require_authenticated always sets this first
             raise HTTPException(status_code=401, detail="authentication required")
+
+        async def _emit_denied(status: int, reason: str) -> None:
+            _hub = getattr(connection.app.state, "uterm_hub", None)
+            if _hub is not None:
+                await _hub.emit_telemetry(
+                    "auth.denied",
+                    worker_id=session_id,
+                    principal=str(principal),
+                    metadata={"status": status, "reason": reason},
+                )
+
         authz_service = cast("AuthorizationService", connection.app.state.uterm_authz)
         if require_admin:
             if not await authz_service.is_admin(principal):
+                await _emit_denied(403, "admin_required")
                 raise HTTPException(status_code=403, detail="admin role required")
             return
         # ``required`` is bound by the matcher loop above whenever
@@ -91,12 +103,15 @@ def build_require_hub_route_authz(
         registry = registry_getter()
         session = await registry.get_definition(session_id) if registry is not None else None
         if session is None:
+            await _emit_denied(404, "unknown_session")
             raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
         if cap_required == "session.read":
             if not await authz_service.can_read_session(principal, session):
+                await _emit_denied(403, "read_denied")
                 raise HTTPException(status_code=403, detail="insufficient privileges")
         else:
             if not await authz_service.can_mutate_session(principal, session, cap_required):
+                await _emit_denied(403, "mutate_denied")
                 raise HTTPException(status_code=403, detail="insufficient privileges")
 
     return _require_hub_route_authz

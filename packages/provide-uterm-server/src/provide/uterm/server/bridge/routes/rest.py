@@ -119,6 +119,11 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         if not hub.allow_rest_acquire_for(_client_id):
             hub.metric("rest_acquire_rate_limited_total")
             logger.warning("rest_acquire_rate_limited client=%s worker_id=%s", _client_id, worker_id)
+            await hub.emit_telemetry(
+                "rate_limit.triggered",
+                worker_id=worker_id,
+                metadata={"client_id": _client_id, "limit_type": "rest_acquire"},
+            )
             return JSONResponse({"error": "rate_limited"}, status_code=429)
         if request is None:
             request = HijackAcquireRequest.model_validate({})
@@ -316,6 +321,11 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             logger.warning(
                 "rest_send_rate_limited worker_id=%s hijack_id=%s client=%s", worker_id, hijack_id, _client_id
             )
+            await hub.emit_telemetry(
+                "rate_limit.triggered",
+                worker_id=worker_id,
+                metadata={"client_id": _client_id, "limit_type": "rest_send"},
+            )
             return JSONResponse({"error": "rate_limited"}, status_code=429)
         hs = await hub.get_rest_session(worker_id, hijack_id)
         if hs is None:
@@ -394,6 +404,11 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             hub.metric("rest_step_rate_limited_total")
             logger.warning(
                 "rest_step_rate_limited worker_id=%s hijack_id=%s client=%s", worker_id, hijack_id, _client_id
+            )
+            await hub.emit_telemetry(
+                "rate_limit.triggered",
+                worker_id=worker_id,
+                metadata={"client_id": _client_id, "limit_type": "rest_step"},
             )
             return JSONResponse({"error": "rate_limited"}, status_code=429)
         hs = await hub.get_rest_session(worker_id, hijack_id)
