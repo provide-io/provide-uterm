@@ -33,3 +33,77 @@ Codec-name case flip: hashlib.blake2b(plain.encode("utf-8")) -> encode("UTF-8").
 Python's codec registry lookup is case-insensitive (encodings.normalize_encoding), \
 so "utf-8" and "UTF-8" select the identical codec and produce byte-identical output. \
 No test can distinguish them — behaviorally equivalent."""
+
+# --- connection.py (ConnectionManager) ------------------------------------
+# typing.cast(type_str, value) is a RUNTIME NO-OP: it returns `value` unchanged
+# and ignores the type argument entirely (cast exists only for static checkers).
+# Mutating the cast type-string therefore has zero runtime effect — unkillable.
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_30"
+reason = "cast(None, make_worker_disconnected_frame(...)) — typing.cast is a runtime no-op; the type arg is ignored, value returned unchanged."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_34"
+reason = 'cast("XXdict[str, Any]XX", ...) — typing.cast runtime no-op; the (mangled) type string is ignored at runtime.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_35"
+reason = 'cast("dict[str, any]", ...) — typing.cast runtime no-op; type-string case has no runtime effect.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_36"
+reason = 'cast("DICT[STR, ANY]", ...) — typing.cast runtime no-op; type-string case has no runtime effect.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_85"
+reason = "cast(None, _snapshot) — typing.cast runtime no-op; value returned unchanged."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_89"
+reason = 'cast("XXdict[str, Any]XX", _snapshot) — typing.cast runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_90"
+reason = 'cast("dict[str, any]", _snapshot) — typing.cast runtime no-op.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_91"
+reason = 'cast("DICT[STR, ANY]", _snapshot) — typing.cast runtime no-op.'
+
+# Dead initial values: `browser_count = -1` is ALWAYS overwritten by
+# `len(st.browsers)` when st is not None, and when st IS None it is only ever
+# read in `if browser_count == 0` — where -1, None, +1 and -2 are all `!= 0`, so
+# every variant takes the same (no on_worker_empty) branch.
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁcleanup_browser_disconnect__mutmut_10"
+reason = "browser_count initial -1 -> None: only consumed by `== 0`; None==0 and -1==0 are both False -> same branch. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁcleanup_browser_disconnect__mutmut_11"
+reason = "browser_count initial -1 -> +1: only consumed by `== 0`; 1==0 and -1==0 both False -> same branch. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁcleanup_browser_disconnect__mutmut_12"
+reason = "browser_count initial -1 -> -2: only consumed by `== 0`; both `!= 0` -> same branch. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_2"
+reason = 'ws initial `None` -> "": ws is reassigned to st.worker_ws before any read (the st-None/worker_ws-None early return happens first), so the initial is dead. Equivalent.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁforce_release_hijack__mutmut_5"
+reason = "had_hijack initial False -> None: only consumed by `if not had_hijack`; not False and not None are both True -> same return. Equivalent."
+
+# Argument value equals its default / unreachable default.
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_42"
+reason = "notify_hijack_changed(worker_id, enabled=False, owner=None) -> drop owner=None. owner's signature default IS None, so omitting it passes the identical value. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁcleanup_browser_disconnect__mutmut_48"
+reason = 'getattr(hub, "on_worker_empty", None) -> getattr(hub, "on_worker_empty"). TermHub.__init__ ALWAYS sets self.on_worker_empty (default None), so the attribute always exists and the getattr default is never reached. Equivalent.'
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁ_rollback_browser_quota__mutmut_16"
+reason = "_principal_browser_counts.get(subject_id, 0) -> get(subject_id, 1). The default is only reached in inconsistent state (subject in _ws_principal, absent from counts); then 1-1=0 and 0-1=-1 both satisfy `remaining <= 0` -> the same pop branch with the same (no-op) result. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁ_update_lock_state__mutmut_24"
+reason = "Same as _rollback_browser_quota__mutmut_16 but in _update_lock_state's per-principal decrement: get(subject_id, 0) -> get(subject_id, 1); 1-1=0 and 0-1=-1 both hit `<= 0` -> identical pop outcome. Equivalent."
+
+# mutmut TRAMPOLINE-MASKED default-argument mutation (the documented auth.py class):
+# the generated trampoline keeps the ORIGINAL signature `defer_broadcast: bool = False`,
+# binds kwargs = {'defer_broadcast': defer_broadcast} using that original default, then
+# forwards them EXPLICITLY to the __mutmut_1 variant — so the variant's mutated default
+# (`= True`) is dead code that no caller ever reaches. Unkillable by construction.
+# (The real False-default behaviour IS regression-tested by
+# test_connection_kill_iter2.py::TestRegisterBrowserDefaultDeferBroadcast.)
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_1"
+reason = "Default-argument mutation defer_broadcast=False->True. mutmut's trampoline keeps the original default and forwards the bound kwarg explicitly to the variant, so the mutated default is never exercised — unkillable trampoline artifact, not a real behaviour gap (the default IS regression-tested)."
