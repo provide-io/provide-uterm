@@ -258,13 +258,34 @@ class TestBrowserWasOwnerRecheckHijackedPatched:
                 _drain_worker_until(worker, "pause")
                 browser.receive_json()  # hijack_state
 
-                # Browser disconnects: was_owner=True, _do_resume=True initially
-                # but check_still_hijacked (patched True) → _do_resume=False (line 307)
-                # → line 308 False branch → 332 (broadcast_hijack_state)
-                # → line 333 False branch → 335 (append_event)
+                # Browser disconnects (block exit below): was_owner=True,
+                # _do_resume=True initially, but check_still_hijacked (patched
+                # True) flips _do_resume=False (websockets_impl.py:632) → the
+                # 633->657 and 658->660 False branches → append hijack_released.
 
-            # Browser disconnected; worker should NOT have received a resume
-            # (patched check_still_hijacked returned True)
+            # The disconnect handler runs asynchronously, so WAIT for its terminal
+            # side-effect (the hijack_released event appended only AFTER line 632
+            # ran) instead of racing test teardown. Without this sync the branch is
+            # only covered when the handler happens to finish first — the source of
+            # the intermittent 3.14 coverage flake.
+            deadline = time.monotonic() + 5.0
+            released: dict | None = None
+            while time.monotonic() < deadline:
+                st = hub.registry.get("w1")
+                if st is not None:
+                    released = next(
+                        (
+                            e
+                            for e in list(st.events)
+                            if e.get("type") == "hijack_released"
+                            and e.get("data", {}).get("owner") == "dashboard_ws_disconnect"
+                        ),
+                        None,
+                    )
+                if released is not None:
+                    break
+                time.sleep(0.02)
+            assert released is not None, "owner disconnect did not record hijack_released (line 632 path uncovered)"
 
 
 # ---------------------------------------------------------------------------
