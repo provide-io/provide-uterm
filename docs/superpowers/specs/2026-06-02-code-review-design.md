@@ -1,7 +1,7 @@
 # Architectural Analysis and Code Review Specification
 
 ## Scope
-This document outlines the focus and structure for a comprehensive architectural analysis and code review of the `provide-uterm` repository. To ensure depth and actionability, the review focuses strictly on two critical backend subsystems.
+This document outlines the focus and structure for a comprehensive architectural analysis and code review of the `provide-uterm` repository. To ensure depth and actionability, the review focuses on six critical subsystems.
 
 ## Target Subsystems
 
@@ -10,7 +10,14 @@ This document outlines the focus and structure for a comprehensive architectural
    - Worker-side location: `packages/provide-uterm/src/provide/uterm/bridge/`
 2. **Server Transports & Protocol Gateways**
    - Location: `packages/provide-uterm-server/src/provide/uterm/server/gateway/` and related connector modules.
-
+3. **Cloudflare Workers / Durable Objects Backend**
+   - Location: `packages/provide-uterm-cloudflare/`
+4. **Frontend Application & xterm.js Integration**
+   - Location: `packages/provide-uterm-frontend/`
+5. **AI / MCP Tooling Integration**
+   - Location: `packages/provide-uterm-client/` (MCP server and tools)
+6. **Platform Targets & External Management Tier**
+   - Location: `packages/provide-uterm-platform/`
 ## Analysis Lenses
 The review of both subsystems will be conducted and structured through four specific lenses:
 
