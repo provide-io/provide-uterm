@@ -339,15 +339,7 @@ class SessionRegistry:
             if session is None:
                 return None
             runtime = self._runtime_for(session)
-            runtime_any = cast("Any", runtime)
-            runtime_any._connected = connected
-            if connected:
-                runtime_any._state = "running"
-                runtime_any._last_error = None
-                runtime_any._stopped_at = None
-            else:
-                runtime_any._state = "stopped"
-                runtime_any._stopped_at = time.time()
+            runtime.set_tunnel_state(connected)
         return runtime.status()
 
     async def analyze_session(self, session_id: str) -> str:
@@ -445,8 +437,8 @@ class SessionRegistry:
     async def _flush_runtime_recording(self, session_id: str) -> None:
         async with self._lock:
             runtime = self._runtimes.get(session_id)
-        if runtime is not None and runtime._logger is not None:
-            await runtime._logger.flush()
+        if runtime is not None:
+            await runtime.flush_recording()
 
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
         async with self._lock:

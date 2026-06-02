@@ -215,6 +215,47 @@ class TestLogMethods:
 
 
 # ---------------------------------------------------------------------------
+# set_tunnel_state / flush_recording — encapsulated mutations the registry
+# previously poked into via private-attribute writes
+# ---------------------------------------------------------------------------
+
+
+class TestTunnelStateAndFlush:
+    def test_set_tunnel_state_connected_marks_running(self) -> None:
+        rt = _make_runtime()
+        rt._state = "stopped"
+        rt._stopped_at = 123.0
+        rt._last_error = "boom"
+        rt.set_tunnel_state(True)
+        assert rt._connected is True
+        assert rt._state == "running"
+        assert rt._last_error is None
+        assert rt._stopped_at is None
+
+    def test_set_tunnel_state_disconnected_marks_stopped(self) -> None:
+        rt = _make_runtime()
+        rt._connected = True
+        rt._state = "running"
+        rt._stopped_at = None
+        rt.set_tunnel_state(False)
+        assert rt._connected is False
+        assert rt._state == "stopped"
+        assert rt._stopped_at is not None
+
+    async def test_flush_recording_noop_without_logger(self) -> None:
+        rt = _make_runtime()
+        rt._logger = None
+        await rt.flush_recording()  # should not raise
+
+    async def test_flush_recording_with_logger(self) -> None:
+        rt = _make_runtime()
+        mock_logger = AsyncMock()
+        rt._logger = mock_logger
+        await rt.flush_recording()
+        mock_logger.flush.assert_awaited_once_with()
+
+
+# ---------------------------------------------------------------------------
 # _start_connector with recording enabled
 # ---------------------------------------------------------------------------
 
