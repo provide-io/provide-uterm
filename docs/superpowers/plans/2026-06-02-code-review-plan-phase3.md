@@ -8,18 +8,18 @@
 
 ---
 
-### Task 1: Research & Write Desktop/Native App Wrappers
+## Task 1: Research & Write Desktop/Native App Wrappers
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
 
 - [ ] **Step 1: Read and analyze App Wrapper code**
   Read the files in `packages/provide-uterm-app/`. Focus on IPC security boundaries, local filesystem access, and desktop-specific performance. Evaluate deeply against the 4 lenses.
-  
+
 - [ ] **Step 2: Append Part 7 of the Report**
   Write Part 7 of the report and append it to the end of `artifacts/2026-06-02-code-review-report.md`. Ensure consistency with the 4-lens format.
 
-### Task 2: Research & Write Annotation Layer
+## Task 2: Research & Write Annotation Layer
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
@@ -30,7 +30,7 @@
 - [ ] **Step 2: Append Part 8 of the Report**
   Write Part 8 and append it to the report artifact.
 
-### Task 3: Finalize and Commit Phase 3
+## Task 3: Finalize and Commit Phase 3
 
 **Files:**
 - Modify: `artifacts/2026-06-02-code-review-report.md`
