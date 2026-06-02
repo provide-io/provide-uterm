@@ -74,7 +74,25 @@ class _SessionRuntimeIoMixin:
         worker_id: str
         max_buffer_bytes: int
         _queue_bytes: int
+        store: Any
+        ctx: Any
+        meta: Any
+        _meta_loaded: bool
+        _deleted_at: float
+        lifecycle_state: str
+        hijack: Any
+        input_mode: str
+        browser_sockets: Any
+        browser_hijack_owner: Any
+        worker_ws: Any
+        _ushell: Any
+        raw_sockets: Any
+        env: Any
+        last_snapshot: Any
 
+        def ws_key(self, ws: Any) -> Any: ...
+        def _socket_role(self, ws: Any) -> str: ...
+        async def _send_text(self, ws: Any, text: str) -> None: ...
         async def send_ws(self, ws: CFWebSocket, frame: dict[str, object]) -> None: ...
 
     # ------------------------------------------------------------------
@@ -121,7 +139,7 @@ class _SessionRuntimeIoMixin:
     # Request helpers
     # ------------------------------------------------------------------
 
-    async def request_json(self, request: object) -> dict[str, Any]:
+    async def request_json(self, request: Any) -> dict[str, Any]:
         body = await request.text()  # type: ignore[attr-defined]
         if not body:
             return {}
