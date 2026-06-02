@@ -12,10 +12,12 @@ from typing import Any, Protocol, runtime_checkable
 import httpx
 from pydantic import BaseModel, Field
 
-from provide.telemetry import event
+from provide.telemetry import event, get_logger
 from provide.uterm.server.egress import assert_webhook_target_allowed
 from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhook_signing import build_webhook_signature
+
+_sink_logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -235,6 +237,63 @@ class WebhookBehavioralAuditGate:
                 return PolicyDecision(action="allow" if self.fail_open else "deny")
         except Exception:
             return PolicyDecision(action="allow" if self.fail_open else "deny")
+
+
+class TelemetryEvent(BaseModel):
+    """Lifecycle telemetry event emitted by the AGPL node to a Fleet Manager sink."""
+
+    event_type: str
+    worker_id: str
+    principal: str | None = None
+    role: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # Caller supplies the timestamp via time.time() — models stay pure (no
+    # side-effectful defaults) so they can be constructed deterministically
+    # in tests without patching time.
+    timestamp: float
+
+
+@runtime_checkable
+class TelemetrySink(Protocol):
+    """Protocol for the upward Node→Fleet-Manager telemetry channel."""
+
+    async def emit(self, event: TelemetryEvent) -> None:
+        """Emit a lifecycle event to the sink. Must never raise."""
+        ...
+
+
+class NoOpTelemetrySink:
+    """Default telemetry sink that discards all events."""
+
+    async def emit(self, event: TelemetryEvent) -> None:
+        _ = event  # no-op sink; event intentionally discarded
+        return
+
+
+class WebhookTelemetrySink:
+    """Telemetry sink that POSTs signed events to an external webhook.
+
+    Telemetry is always **fail-open**: any transport or egress error is
+    swallowed and logged at DEBUG level so a misbehaving or unreachable
+    Fleet Manager endpoint can never block terminal I/O or alter control flow.
+    """
+
+    def __init__(self, url: str, secret: str | None = None, timeout_s: float = 2.0) -> None:
+        self.url = url
+        self.secret = secret
+        self.timeout = timeout_s
+
+    async def emit(self, event: TelemetryEvent) -> None:
+        payload = event.model_dump()
+        body = _encode_webhook_payload(payload)
+        headers = _build_webhook_headers(self.secret, body)
+        try:
+            await assert_webhook_target_allowed(self.url)
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                await client.post(self.url, content=body, headers=headers)
+        except Exception as exc:
+            # Fail-open: telemetry must never raise into the hub or block I/O.
+            _sink_logger.debug("telemetry_sink_error url=%s: %s", self.url, exc)
 
 
 # Standardized DAS Events for Terminal Sessions
