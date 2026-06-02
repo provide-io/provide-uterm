@@ -287,15 +287,19 @@ paths_to_mutate = [
     # here (and uncomment the suite below) once that async mutation-determinism
     # work lands.
     # "src/provide/uterm/server/registry.py",
-    # config_schema.py — DEFERRED from the strict gate (2026-06-02). Its Pydantic
-    # @model_validator methods trip mutmut's trampoline: when config_schema.py is the
-    # mutation target the BASELINE (unmutated) collection itself fails
-    # (test_config.py::test_default_server_config_has_demo_session ->
-    # MutmutProgrammaticFailException), so every mutant reports no_tests (score 0.00) —
-    # a structural mutmut/@model_validator incompatibility, NOT a real survivor. The
-    # config validators (incl. the _require_secure_url SSRF checks) stay fully tested
-    # via test_config.py; re-add once the trampoline interaction is pragma'd.
-    # "src/provide/uterm/server/config_schema.py",
+    # config_schema.py — RE-ENABLED at killed==100 (2026-06-02). The prior "baseline
+    # aborts / @model_validator trips the trampoline" deferral was WRONG: a measured
+    # run produces a clean 34-mutant baseline with ZERO no_tests. mutmut SKIPS every
+    # decorated function by design (@model_validator/@field_validator/@classmethod —
+    # see _skip_node_and_children in mutmut/file_mutation.py), and class-body field
+    # defaults aren't inside a function, so the file's only mutable surface is its two
+    # UNDECORATED module-level helpers: _clean_path and the _require_secure_url SSRF
+    # guard. All 34 mutants are bound + killed by test_models_mutation_killing.py
+    # (wired into tests_dir) EXCEPT one documented equivalent
+    # (_require_secure_url__mutmut_14, the unreachable-fallback string) excused via
+    # mutation_equivalents.toml. The decorated Pydantic validators stay line/branch +
+    # unit tested via test_config.py (mutmut cannot reach them in any file).
+    "src/provide/uterm/server/config_schema.py",
     "src/provide/uterm/server/app/factory.py",
     # manager/process.py + config.py — measured total:0 ("could not find any test case
     #   for any mutant") even with all four test_process_mutation_killing*.py + the
@@ -459,6 +463,12 @@ tests_dir = [
     "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_hijack_clearing.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_ratelimit_force.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_iter2.py",
+    # config_schema.py kill-suite: binds the two undecorated module-level helpers
+    # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
+    # (it skips every @model_validator/@field_validator/@classmethod by design).
+    # Imports them via the normal `from ...config_schema import ...` path so the
+    # mutated trampoline (not the original source) is exercised.
+    "packages/provide-uterm-server/tests/server/test_models_mutation_killing.py",
     # Full-app (create_server_app) suites LAST. mutmut's stats phase runs the
     # whole tests_dir with ``-x`` (stop on first failure); these TestClient/
     # full-app tests are intermittently fragile in the mutants tree (a stray

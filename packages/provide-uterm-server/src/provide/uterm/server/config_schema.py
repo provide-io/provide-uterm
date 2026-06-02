@@ -2,7 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Canonical configuration schema for the hosted terminal server application."""
+"""Canonical configuration schema for the hosted terminal server application.
+
+Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). mutmut only
+mutates this module's two undecorated module-level helpers (``_clean_path`` and the
+``_require_secure_url`` SSRF guard) — it skips every ``@model_validator`` /
+``@field_validator`` / ``@classmethod`` by design — so those two functions carry the
+behaviour-pinning kill-tests in ``tests/server/test_models_mutation_killing.py``.
+"""
 
 from __future__ import annotations
 
