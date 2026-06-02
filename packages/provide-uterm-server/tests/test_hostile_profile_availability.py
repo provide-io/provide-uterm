@@ -209,3 +209,11 @@ class TestRunAvailabilityVerdict:
         monkeypatch.setattr(hp, "_burst_ws_once", AsyncMock(side_effect=[hp.REFUSED, hp.ERROR, hp.REFUSED]))
         monkeypatch.setattr(hp, "_authenticated_session_once", AsyncMock(return_value=(hp.COMPLETED, 0.1)))
         assert await hp.run(_ns()) == 1
+
+    async def test_hostile_hung_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._patch_common(monkeypatch)
+        # A hostile attempt that HANGS (no timely refusal) is a liveness/DoS
+        # signal distinct from a completed bypass — it must also fail the probe.
+        monkeypatch.setattr(hp, "_burst_ws_once", AsyncMock(side_effect=[hp.REFUSED, hp.HUNG, hp.REFUSED]))
+        monkeypatch.setattr(hp, "_authenticated_session_once", AsyncMock(return_value=(hp.COMPLETED, 0.1)))
+        assert await hp.run(_ns()) == 1
