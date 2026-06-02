@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -285,7 +286,12 @@ class TestRunLoop:
             bridge = TermBridge(bot, "bot1", f"http://127.0.0.1:{port}")
             bridge._send_q.put_nowait({"type": "status", "hijacked": False, "ts": 0.0})
             await bridge.start()
-            await asyncio.sleep(0.2)
+            # Wait deterministically for the frame to be received rather than a fixed
+            # sleep — the fixed delay raced on slow/loaded CI runners (the connect +
+            # send + server-side recv could exceed 0.2s, yielding 0 frames).
+            deadline = time.monotonic() + 5.0
+            while not received_frames and time.monotonic() < deadline:
+                await asyncio.sleep(0.01)
             await bridge.stop()
 
         assert len(received_frames) >= 1
