@@ -310,16 +310,22 @@ paths_to_mutate = [
     # each service live under tests/bridge/hub/test_<name>.py.
     "src/provide/uterm/server/bridge/hub/registry.py",
     "src/provide/uterm/server/bridge/hub/limiter.py",
-    # lease.py — RE-ENABLED at killed==100 (489/489, 0 survived, 0 no_tests). The
-    # dedicated suites (test_lease.py + the ownership/atomic suites + the five
-    # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) are wired into
-    # tests_dir below; the sole equivalent-class mutant (the _LeaseHubCallbacks
-    # .metric Protocol-stub default) was removed via `= ...`. The CI mutmut harness
-    # previously mass-reported not_checked here because application stdlib-logging
-    # polluted mutmut's stdout worker-IPC ("I/O operation on closed file" ->
-    # KeyError); the root conftest now keeps StreamHandler logging off stdout under
-    # mutmut, which unblocks server perimeter files generally.
-    "src/provide/uterm/server/bridge/hub/lease.py",
+    # lease.py — PROVEN killed==100 (489/489, 0 survived, 0 no_tests) locally + via
+    # the real changed-only gate, but CI-enforcement is DEFERRED. The dedicated
+    # suites (test_lease.py + the ownership/atomic suites + the five
+    # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) ARE wired into
+    # tests_dir below and keep the file at 100% line coverage; the sole
+    # equivalent-class mutant was removed via the `= ...` Protocol-stub default.
+    # The blocker is NOT coverage — it is a mutmut-internal CRASH that only
+    # reproduces in CI: mutmut's read_one_child_exit_status (mutmut/__main__.py)
+    # raises KeyError on a worker PID (its fork/child-reaping bookkeeping loses a
+    # child — most likely asyncio's child watcher reaping mutmut's fork worker
+    # first, since the lease tests drive asyncio), which mass-reports every mutant
+    # not_checked (score 0). The root-conftest logging-off-stdout hardening (which
+    # DID remove the correlated "I/O operation on closed file" noise) is kept but
+    # does not resolve this. Re-enable once the mutmut child-reaping interaction is
+    # fixed (likely a mutmut-version bump or an asyncio child-watcher guard).
+    # "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
     # connection.py — DEFERRED (2026-06-02). Same enumerated-but-under-wired class
     # as lease.py was; its dedicated kill-suites aren't written/wired yet. Re-add
