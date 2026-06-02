@@ -232,3 +232,67 @@ This section of the code review focuses on the Platform code located in `package
   **Recommendation:** Replace the pure string buffer with a `collections.deque(maxlen=65536)` of string fragments (joining only upon snapshot request) or a pre-allocated circular bytearray to eliminate per-frame allocations.
 - **Swarm Process Bottlenecks:** `AgentManager` maintains its swarm using localized `subprocess.Popen` handles. While effective for single-node scaling, this architecture is strictly bounded by the host OS process and file descriptor limits.
   **Recommendation:** For horizontal scaling beyond a single node, introduce a distributed job scheduler abstraction (e.g., Celery, Kubernetes Jobs) instead of purely local subprocesses.
+
+## Part 7: Desktop/Native App Wrappers
+
+This section of the code review focuses on the App Wrapper code located in `packages/provide-uterm-app/`. We evaluate the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling, assessing its current implementation as a web application and evaluating its readiness for a native shell.
+
+### 1. Architecture & General Health (Data Flow, Composition)
+
+**Findings:**
+- **App Wrapper Architecture:** The analysis of `packages/provide-uterm-app/` reveals that it is not a native desktop wrapper (e.g., Electron or Tauri) but rather a standard React web application bootstrapped via Vite (`vite.config.ts`). The frontend gets built into a static web artifact (`provide-uterm-server/src/provide/uterm/server/frontend`) and is served dynamically.
+- **IPC Boundaries:** Because there is no desktop wrapper framework in use, there are no native Inter-Process Communication (IPC) boundaries to secure. All communication is strictly handled via standard HTTP requests (`fetch` in `client.ts`) and WebSockets proxied via `vite.config.ts` to `localhost:27780`.
+
+### 2. Maintainability & Structural Design
+
+**Findings:**
+- **Component Routing:** `App.tsx` utilizes a safe, data-driven bootstrap mechanism (`readBootstrap()` in `bootstrap.ts`). By relying on an injected `#app-bootstrap` script payload containing `page_kind`, it bypasses complex client-side routing libraries, streamlining maintainability for single-page feature views like `dashboard`, `session`, and `connect`.
+- **Type Safety:** The `bootstrap.ts` runtime parser enforces that `page_kind` is verified against the `VALID_PAGE_KINDS` set, ensuring type-safe structural bootstrapping prior to rendering components.
+
+### 3. Security & Concurrency Robustness
+
+**Findings:**
+- **Local Filesystem Access:** 
+  **Risk:** Given that this is a browser-based web frontend, the application inherently lacks direct access to the local user's filesystem (outside of standard browser sandboxing). Any filesystem interactions must occur via the server-side API proxy.
+  **Recommendation:** If native desktop capabilities (such as direct file logging, native OS notifications, or deep filesystem integration) are required in the future, migrating `provide-uterm-app` to Tauri or Electron with strictly locked-down IPC channels and bounded `fs` scope capabilities will be necessary.
+- **Context Isolation:** As a web application, the app relies on standard browser context isolation. No node integration risks exist because there is no node integration in the browser context.
+
+### 4. Performance & Scaling
+
+**Findings:**
+- **Desktop-Specific Performance:** 
+  **Risk:** Without a native desktop shell, the application relies entirely on browser-based optimizations. High-throughput terminal streaming (especially collaborative multiplexing) will be constrained by the browser's single-threaded V8 DOM limits and WebGL backend.
+  **Recommendation:** For a dedicated, high-performance desktop experience, investigate using a WebView2/Tauri shell wrapped around this frontend to reduce memory overhead compared to a full Chromium-based browser tab. Alternatively, continue leveraging `xterm.js` WebGL renderers inside the standard browser.
+
+## Part 8: Annotation Layer
+
+This section of the code review focuses on the Annotation code located in `packages/provide-uterm-annotation/`, analyzing its type-safety, telemetry schemas, event structures, and data privacy guarantees. We evaluate the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling.
+
+### 1. Architecture & General Health (Data Flow, Composition)
+
+**Findings:**
+- **Lightweight Model Architecture:** The data models (`_models.py`) are explicitly defined using Python's `@dataclass(slots=True)`. This ensures a small memory footprint and avoids dictionary creation overhead, which is excellent for a high-volume event processing pipeline.
+- **Hot-Path Optimization:** The `PatternDetector` (`_detector.py`) class operates efficiently by immediately returning when `text` is empty and preventing unnecessary object allocations when no rules match.
+
+### 2. Maintainability & Structural Design
+
+**Findings:**
+- **Clean Rule Separation:** The built-in regular expressions and detection rules (e.g., `cred.aws_access_key`, `dest.rm_rf`) are cleanly separated into `_rules.py` with explicitly typed `frozenset` objects and compiled `re.Pattern` structures.
+- **Stream Chunk Fragmentation:** Terminal output is often fragmented into small chunks of arbitrary size depending on network conditions or process writes. `PatternDetector.detect()` receives this text sequentially without buffering lines or maintaining state across calls.
+  **Risk:** Multi-character regex rules (like AWS keys or full URLs) will silently fail to match if a sequence happens to be split across two separate `detect()` payload chunks.
+  **Recommendation:** Implement a line buffer or a sliding window mechanism that accumulates terminal text across events until a newline or size boundary is reached before applying regex rules.
+
+### 3. Security & Concurrency Robustness
+
+**Findings:**
+- **Secure Telemetry Defaults:** `Annotation` schemas correctly default to a `principal="system"` identifying the source securely.
+- **Data Privacy & Secret Leakage:** In `_detector.py`, `description_template.format` is wrapped in a `try...except` block. If a rule's template formatting fails (due to a `KeyError` or `IndexError`), the system falls back to `description = f"{rule.label}: {match_text}"`.
+  **Risk:** Because `match_text` contains the direct regular expression match, if the pattern matched an actual secret (such as a GitHub token or password), this fallback will inadvertently embed the plaintext secret directly into the telemetry/annotation `description`.
+  **Recommendation:** Do not default to including `match_text` in the fallback description. Explicitly redact `match_text` or enforce strict schema validation on `description_template` at initialization time to prevent formatting errors from causing a privacy breach.
+
+### 4. Performance & Scaling
+
+**Findings:**
+- **CPU Overhead and Regex Denial of Service (ReDoS):** `PatternDetector.detect()` sequentially evaluates 20+ regex patterns on every single terminal event chunk. Some patterns, such as `\bcurl\b.*https?://`, use unbounded greedy matching (`.*`).
+  **Risk:** Evaluating these on every fragment can cause severe performance degradation and CPU blocking on large non-matching inputs.
+  **Recommendation:** Optimize the hot path by compiling a single combined regex using alternation (e.g., `re.compile(r"AKIA|gh[psourx]|curl|sudo|...")`) as a rapid pre-filter, or use an Aho-Corasick automaton. Only execute specific, expensive regexes when the pre-filter confirms a candidate match. Replace greedy `.*` sequences with strictly bounded or lazy patterns.
