@@ -19,9 +19,11 @@ this file tracks what's been *captured* and where the artifacts live.
 > found three that do **not**: `auth.py` tops out at **94.02%** (11 mutants proven
 > equivalent/unkillable), `registry.py` is **deferred** from the strict gate (its async
 > paths — SSE heartbeat, `__init__`, background tasks — produce non-deterministic
-> timeout/segfault mutants), and `routes/`, `webhooks.py`, `manager/*` are *enumerated
-> without a bound mutmut suite* (a changed-only run on them currently fails, it does not
-> pass). See [Known gaps](#known-gaps). Remaining non-mutation items are deferred-by-design
+> timeout/segfault mutants), and `routes/`, `webhooks.py`, `manager/process.py` +
+> `manager/config.py` are also **deferred** — measured this cycle and found
+> mutation-infeasible (webhooks 307/406 segfaults; manager `total:0` via subprocess
+> execution; routes async/SSE), now commented out of the perimeter rather than left as a
+> footgun. See [Known gaps](#known-gaps). Remaining non-mutation items are deferred-by-design
 > (recording encryption → enterprise tier; `ty` type-drift → tracked, non-gating). The
 > live-server load/rollback drills were re-captured 2026-06-01 after adding header-mode
 > `--principal/--role` auth to both (they previously sent no auth and 401'd against every
@@ -51,7 +53,7 @@ this file tracks what's been *captured* and where the artifacts live.
 | Artifact verification | `scripts/verify_package_artifacts.py` | stdout | ✅ "artifact verification passed (20 frontend files)" |
 | Load profile | `scripts/load_profile.py` | `artifacts/load-profile/load-profile-*.txt` | ✅ re-captured 2026-06-01 (drill given header-mode `--principal/--role` auth): **15/15 probes**, p99 connect 11.63ms, p99 hello 0.90ms |
 | Rollback drill | `scripts/rollback_drill.py` | `artifacts/rollback-drill/rollback-drill-*.json` | ✅ re-captured 2026-06-01 (drill given header-mode auth): **all 7 steps pass**, reconnect 2.18ms, 0 5xx spike |
-| Mutation gate (curated perimeter, changed-only) | `scripts/run_mutation_gate.py` | CI `mutation-gate` job (green) | ⚠️ enforced `killed==100` changed-only; **not universal** — `auth.py` = 94.02% (11 equivalents), `registry.py` deferred (async-unstable), `routes/`/`webhooks.py`/`manager/*` enumerated without a bound suite. See Known gaps |
+| Mutation gate (curated perimeter, changed-only) | `scripts/run_mutation_gate.py` | CI `mutation-gate` job (green) | ⚠️ enforced `killed==100` changed-only; **not universal** — `auth.py` = 94.02% (11 equivalents); `registry.py`, `routes/`, `webhooks.py`, `manager/process.py` + `manager/config.py` all **deferred** (measured mutation-infeasible: async timeout/segfault, webhooks 307/406 segfaults, manager `total:0` subprocess binding). See Known gaps |
 
 ## Security posture additions this RC
 
@@ -125,13 +127,21 @@ of file that cannot pass a strict, deterministic `killed==100`:
   (run-to-run variance), so it cannot reach a stable `killed==100`. Commented out of the
   perimeter with the suite preserved as a re-enablable block; re-add once the async
   mutation-determinism work lands.
-- **`routes/`, `webhooks.py`, `manager/process.py`, `manager/config.py` — enumerated
-  without a bound suite.** They sit in `paths_to_mutate` as aspirational targets but have
-  no dedicated tests in `tests_dir`, so a changed-only run on them currently **fails**
-  (`no_tests` / survivors), it does not pass. The prior "safe to keep enumerated even
-  before dedicated mutmut suites exist" comment was incorrect and has been fixed in
-  `pyproject.toml`. Building these suites (or removing the files from the perimeter) is a
-  tracked follow-up.
+- **`routes/`, `webhooks.py`, `manager/process.py`, `manager/config.py` — DEFERRED
+  (measured mutation-infeasible, 2026-06-01).** Each was measured with its covering tests
+  wired and **none reaches a stable `killed==100`**: `webhooks.py` = 21% with the 8
+  `test_webhooks_part*.py` suites wired, **307/406 mutants segfault** (reproducible
+  single-worker — the DNS resolvers, SSRF guards, and asyncio `_delivery_loop` crash the
+  worker under mutation); `manager/process.py` + `config.py` = **`total:0`** ("could not
+  find any test case for any mutant") even with all four `test_process_mutation_killing*.py`
+  wired, because process.py drives worker **subprocesses** whose mutated code runs in
+  children the in-process trampoline never instruments; `routes/` is a 2049-LOC async
+  handler surface (incl. `routes/sse.py`) in the same timeout/segfault class. All four are
+  now **commented out of `paths_to_mutate`** with per-file obstacle notes + a re-enable
+  path, so a changed-only run on them is correctly skipped (the prior "safe to keep
+  enumerated" comment was wrong and is fixed). `config_schema.py` + `app/factory.py` keep
+  their bound suites and stay enforced; all files remain 100% line/branch covered.
+  Re-enabling needs mutation-determinism / binding-infra work (tracked follow-ups).
 
 Net: the curated perimeter delivers strong, real mutation enforcement on its
 synchronous, suite-backed files, but it does **not** guarantee a universal 100% — treat

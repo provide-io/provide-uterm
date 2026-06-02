@@ -221,10 +221,18 @@ enforce universal 100%** — `--changed-only` masked it. All five workflows gree
   consumption for `watch_session_events`; tame the background-task timeout/segfault mutants), then
   uncomment registry.py in `[tool.mutmut].paths_to_mutate` + its suite block in `tests_dir`
   (both carry the re-enable note). Target: stable `killed==100`.
-- [ ] **routes/ · webhooks.py · manager/process.py · manager/config.py — build mutmut suites or
-  remove from `paths_to_mutate`.** They're enumerated as aspirational targets with no bound suite, so
-  a changed-only run on them currently FAILS (`no_tests`/survivors). Same class of footgun as
-  registry.py was — decide per file: build the suite (and re-validate) or drop from the perimeter.
+- [x] **routes/ · webhooks.py · manager/process.py · manager/config.py — DONE (deferred, measured
+  infeasible, `22aa7bb4`).** Measured each with its covering tests wired; none reaches a stable
+  `killed==100`: webhooks.py 21% with 307/406 segfaults (DNS/SSRF/asyncio `_delivery_loop`);
+  manager `total:0` (process.py runs mutated code in worker subprocesses the in-process trampoline
+  can't instrument); routes/ async/SSE by pattern. All commented out of `paths_to_mutate` with
+  per-file obstacle notes; `config_schema.py` + `app/factory.py` stay enforced. Re-enable follow-ups
+  below. The footgun (a changed-only run on these spuriously failing) is removed — they now skip.
+- [ ] **Re-enable the deferred mutation files once their obstacle is resolved** (registry.py + the four
+  above): tame the async timeout/segfault mutants (bounded SSE consumption, fail-fast `__init__`
+  assertions, mock the webhooks DNS/socket layer so SSRF-guard mutants don't crash), and fix the
+  manager mutmut binding so subprocess-driven code is instrumented (or restructure those paths to be
+  in-process-testable). Each carries a re-enable note in `pyproject.toml`.
 - [x] **Load/rollback drill auth — DONE.** Added `--principal`/`--role` (header-mode) to both
   `scripts/load_profile.py` (WS-handshake `additional_headers`) and `scripts/rollback_drill.py` (REST
   headers). Re-captured 2026-06-01 against a header-mode loopback server: rollback all 7 steps pass
