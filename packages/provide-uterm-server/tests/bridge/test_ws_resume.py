@@ -59,6 +59,21 @@ def _read_worker_snapshot_req(worker) -> dict:
     return msg
 
 
+def _read_worker_control(worker, max_frames: int = 6) -> dict:
+    """Return the next worker ``control`` frame, skipping any ``snapshot_req``.
+
+    A browser reconnect/resume enqueues a ``snapshot_req`` to the worker whose
+    ordering relative to the hijack control frame is not guaranteed; draining
+    past it keeps the assertion deterministic instead of racing frame order
+    (the source of a 3.14-only flake: ``assert 'snapshot_req' == 'control'``).
+    """
+    for _ in range(max_frames):
+        msg = worker.receive_json()
+        if msg.get("type") != "snapshot_req":
+            return msg
+    raise AssertionError("no worker control frame after draining snapshot_req frames")
+
+
 # ---------------------------------------------------------------------------
 # Tests: Token issuance
 # ---------------------------------------------------------------------------
@@ -298,7 +313,7 @@ class TestResumeHijackReclaim:
                 snapshot2 = ws2.receive_json()
                 assert snapshot2["type"] == "snapshot"
                 ws2.send_json({"type": "resume", "token": token})
-                pause = worker.receive_json()
+                pause = _read_worker_control(worker)
                 assert pause["type"] == "control"
                 assert pause["action"] == "pause"
                 resumed = ws2.receive_json()
@@ -325,14 +340,14 @@ class TestResumeHijackReclaim:
                 snapshot = ws.receive_json()
                 assert snapshot["type"] == "snapshot"
                 ws.send_json({"type": "hijack_request"})
-                pause = worker.receive_json()
+                pause = _read_worker_control(worker)
                 assert pause["type"] == "control"
                 assert pause["action"] == "pause"
                 state = ws.receive_json()
                 assert state["type"] == "hijack_state"
                 assert state["owner"] == "me"
 
-            released = worker.receive_json()
+            released = _read_worker_control(worker)
             assert released["type"] == "control"
             assert released["action"] == "resume"
 
@@ -341,7 +356,7 @@ class TestResumeHijackReclaim:
                 snapshot2 = ws2.receive_json()
                 assert snapshot2["type"] == "snapshot"
                 ws2.send_json({"type": "resume", "token": token})
-                reparsed_pause = worker.receive_json()
+                reparsed_pause = _read_worker_control(worker)
                 assert reparsed_pause["type"] == "control"
                 assert reparsed_pause["action"] == "pause"
                 resumed = ws2.receive_json()

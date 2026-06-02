@@ -57,6 +57,20 @@ def _read_worker_snapshot_req(worker) -> dict:
     return msg
 
 
+def _read_worker_control(worker, max_frames: int = 6) -> dict:
+    """Return the next worker ``control`` frame, skipping any ``snapshot_req``.
+
+    A browser connect/resume enqueues a ``snapshot_req`` to the worker whose
+    ordering relative to the hijack control frame is not guaranteed; draining
+    past it keeps the assertion deterministic instead of racing frame order.
+    """
+    for _ in range(max_frames):
+        msg = worker.receive_json()
+        if msg.get("type") != "snapshot_req":
+            return msg
+    raise AssertionError("no worker control frame after draining snapshot_req frames")
+
+
 # ---------------------------------------------------------------------------
 # Tests: No store configured
 # ---------------------------------------------------------------------------
@@ -398,7 +412,7 @@ class TestResumeHijackReclaimBroadcast:
                     ws_a2.send_json({"type": "resume", "token": token_a})
 
                     # Worker receives pause
-                    pause = worker.receive_json()
+                    pause = _read_worker_control(worker)
                     assert pause["action"] == "pause"
 
                     # A gets resumed hello
