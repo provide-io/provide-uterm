@@ -113,6 +113,39 @@ reason = "Default-argument mutation defer_broadcast=False->True. mutmut's trampo
 # helpers (mutmut skips every @model_validator/@field_validator/@classmethod by
 # design). 33 of its 34 mutants are killed by test_models_mutation_killing.py;
 # this is the sole genuine equivalent.
+# --- webhooks.py (SSRF guard + EventBus delivery) -------------------------
+# Re-enabled at killed==100 via a fully network-mocked kill suite
+# (test_webhooks_mutation_killing.py): the real socket.getaddrinfo / httpx are
+# never driven in a mutmut-forked child, which removes the 307/406-mutant
+# segfault that deferred this file. Six residual equivalents:
+#
+# (a) Four trampoline-masked default-arg mutations (the documented auth.py class):
+# the generated dispatcher keeps the ORIGINAL `allow_loopback_destinations=False`
+# signature, binds it, and forwards it EXPLICITLY to the variant, so the variant's
+# mutated `=True` default is dead code no caller reaches. (The real False default IS
+# regression-tested — e.g. localhost denied by default / _address_allowed("127.0.0.1")
+# is False.)
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x_validate_webhook_url__mutmut_1"
+reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True; the dispatcher forwards the bound False default, so the variant default is never reached. Real default tested (localhost denied by default)."
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.xǁWebhookManagerǁ__init____mutmut_1"
+reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True in WebhookManager.__init__; dispatcher forwards the bound False. Real default tested (WebhookManager()._allow_loopback_destinations is False)."
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x__delivery_url_allowed__mutmut_1"
+reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True in _delivery_url_allowed; dispatcher forwards the bound False. Real default tested (loopback denied without the flag)."
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_1"
+reason = "Trampoline-masked default-arg mutation allow_loopback_destinations=False->True in _address_allowed; dispatcher forwards the bound False. Real default tested (_address_allowed('127.0.0.1') is False)."
+# (b) rstrip char-set mutation on an ALWAYS-lowercase value:
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x_validate_webhook_url__mutmut_25"
+reason = "parsed.hostname.rstrip('.') -> rstrip('XX.XX'). urlparse always lowercases the hostname, so the extra uppercase 'X' chars in the mutated strip-set never match; both strip only trailing '.' — byte-identical result. Equivalent."
+# (c) dead OR-operand: an IP is never link-local-without-being-private:
+[[equivalent]]
+mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_10"
+reason = "(is_loopback or is_link_local) -> (is_loopback and is_link_local) in the deny chain. is_loopback is always False here (the earlier `if ip.is_loopback: return` short-circuits), and EVERY link-local address also satisfies is_private (the first operand) — verified no ip has is_link_local and not is_private — so the mutated sub-expression can never change the chain's result. Equivalent."
+
 [[equivalent]]
 mutant = "provide.uterm.server.config_schema.x__require_secure_url__mutmut_14"
 reason = """\
