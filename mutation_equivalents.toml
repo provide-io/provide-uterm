@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Documented equivalent-mutant allowlist for the strict mutation gate.
+#
+# scripts/run_mutation_gate.py enforces killed==100 (every mutant killed). Some
+# mutants are *equivalent* — the mutated code is behaviorally identical to the
+# original, so NO test can ever distinguish them (e.g. swapping an operand that
+# is never read before it is overwritten, or a codec-name case flip on an ASCII
+# string). Such mutants survive forever and would pin an otherwise-perfect file
+# below 100%, which is exactly why several perimeter files were deferred.
+#
+# Each [[equivalent]] entry below is SUBTRACTED from the killed==N denominator,
+# so a file whose ONLY residual survivors are documented equivalents can still be
+# enforced (every NON-equivalent mutant must still be killed). Rules:
+#   - `mutant` MUST be the id exactly as `mutmut results` prints it
+#     (e.g. "provide.uterm.server.bridge.hub.lease.x_<method>__mutmut_12").
+#   - `reason` MUST justify WHY the mutation is behaviorally equivalent. "I could
+#     not write a test" is NOT a reason — that is a missing test, not equivalence.
+#   - Only `survived`/`suspicious` mutants are excusable; never a `no tests`
+#     (coverage gap) or `timeout`/`skipped` (infra) mutant.
+#   - A stale entry (its mutant was later killed, or renumbered by a source edit)
+#     is reported as a WARNING by the gate; it never weakens enforcement, because
+#     a renumbered equivalent reappears as a new unexcused survivor.
+#
+# Add entries as files are re-enabled into [tool.mutmut].paths_to_mutate. Keep the
+# justification specific enough that a reviewer can confirm the equivalence.
+
+[[equivalent]]
+mutant = "provide.uterm.tunnel.token_hash.x_hash_token__mutmut_9"
+reason = """\
+Codec-name case flip: hashlib.blake2b(plain.encode("utf-8")) -> encode("UTF-8"). \
+Python's codec registry lookup is case-insensitive (encodings.normalize_encoding), \
+so "utf-8" and "UTF-8" select the identical codec and produce byte-identical output. \
+No test can distinguish them — behaviorally equivalent."""

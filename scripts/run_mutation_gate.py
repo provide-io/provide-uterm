@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import subprocess  # nosec
+import tomllib
 from pathlib import Path
 from typing import Final
 
@@ -28,6 +29,20 @@ BAD_MUTANT_STATES: Final[tuple[str, ...]] = (
     "timeout",
     "skipped",
 )
+
+# Mutant states a documented-equivalent allowlist entry may excuse. Equivalent
+# mutants survive (the mutated code is behaviorally identical), so only these
+# states are excusable — never "no tests" (a coverage gap) or "timeout"/"skipped"
+# (an infra problem), which must still be fixed, not excused.
+EXCUSABLE_STATES: Final[tuple[str, ...]] = (
+    "survived",
+    "suspicious",
+)
+
+# Allowlist of documented equivalent mutants (mutant id -> justification),
+# excluded from the killed==N denominator so a file with genuinely-unkillable
+# equivalent mutants can still be enforced. See _load_equivalent_allowlist.
+DEFAULT_EQUIVALENTS_FILE: Final[str] = "mutation_equivalents.toml"
 
 CONFIG_FILES: Final[tuple[str, ...]] = (
     "pyproject.toml",
@@ -134,10 +149,6 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
     never hard-code package prefixes.
     """
     try:
-        import tomllib  # Python 3.11+
-    except ImportError:
-        import tomli as tomllib  # type: ignore[no-reuse-def]
-    try:
         cfg = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
         configured = cfg.get("tool", {}).get("mutmut", {}).get("paths_to_mutate", [])
     except Exception:
@@ -153,7 +164,7 @@ def _resolve_to_mutmut_path(path: str) -> str | None:
         try:
             # Direct match (file entry)
             if ep.is_file() and ep.stat().st_ino == target_inode:
-                return entry
+                return str(entry)
             # Directory entry — walk for a matching file
             if ep.is_dir():
                 for child in ep.rglob("*.py"):
@@ -250,20 +261,75 @@ def _mutation_score(stats: dict[str, int]) -> float:
     return (killed / total) * 100.0
 
 
-def _results_state_counts(python_version: str | None, env: dict[str, str]) -> dict[str, int]:
+def _results_per_mutant(python_version: str | None, env: dict[str, str]) -> list[tuple[str, str]]:
+    """Return ``(mutant_name, state)`` for every mutant from ``mutmut results``."""
     cmd = _uv_mutmut_cmd(python_version, "results", "--all", "true")
-    completed = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)  # nosec
     if completed.returncode != 0:
         raise RuntimeError(f"failed to read mutmut results ({completed.returncode})")
-    counts: dict[str, int] = {}
+    mutants: list[tuple[str, str]] = []
     for raw in completed.stdout.splitlines():
         line = raw.strip()
         if not line or ":" not in line:
             continue
-        _name, state = line.rsplit(":", 1)
-        key = state.strip()
-        counts[key] = counts.get(key, 0) + 1
+        name, state = line.rsplit(":", 1)
+        mutants.append((name.strip(), state.strip()))
+    return mutants
+
+
+def _state_counts_from(mutants: list[tuple[str, str]]) -> dict[str, int]:
+    """Tally mutant ``(name, state)`` pairs into a ``state -> count`` mapping."""
+    counts: dict[str, int] = {}
+    for _name, state in mutants:
+        counts[state] = counts.get(state, 0) + 1
     return counts
+
+
+def _load_equivalent_allowlist(path: str | Path = DEFAULT_EQUIVALENTS_FILE) -> dict[str, str]:
+    """Load the documented equivalent-mutant allowlist (``mutant id -> reason``).
+
+    Each ``[[equivalent]]`` entry MUST carry a non-empty ``mutant`` id (exactly as
+    ``mutmut results`` prints it) and a ``reason`` justifying why the mutation is
+    behaviorally equivalent and therefore unkillable. A missing file yields an
+    empty allowlist (no exclusions — identical to the historical strict gate).
+    """
+    file_path = Path(path)
+    if not file_path.exists():
+        return {}
+    data = tomllib.loads(file_path.read_text(encoding="utf-8"))
+    allowlist: dict[str, str] = {}
+    for entry in data.get("equivalent", []):
+        mutant = entry.get("mutant")
+        reason = entry.get("reason")
+        if not mutant or not reason:
+            raise RuntimeError(f"equivalent-mutant entry needs non-empty 'mutant' and 'reason': {entry!r}")
+        allowlist[mutant] = reason
+    return allowlist
+
+
+def _apply_equivalent_allowlist(
+    mutants: list[tuple[str, str]], allowlist: dict[str, str]
+) -> tuple[list[tuple[str, str]], list[str], list[str]]:
+    """Partition mutants against the equivalent-mutant allowlist.
+
+    Returns ``(effective, excused, stale)``:
+      - ``effective``: mutants that still count toward the gate (allowlisted
+        survivors/suspicious removed from the denominator).
+      - ``excused``: allowlisted mutant ids that genuinely survived this run.
+      - ``stale``: allowlisted ids that did NOT match a surviving mutant this run
+        (killed since, or renumbered by a source edit) — reported so the
+        allowlist stays honest. A renumbered equivalent simply reappears as a new
+        unexcused survivor and fails the gate, so stale entries never weaken it.
+    """
+    excused: list[str] = []
+    effective: list[tuple[str, str]] = []
+    for name, state in mutants:
+        if name in allowlist and state in EXCUSABLE_STATES:
+            excused.append(name)
+        else:
+            effective.append((name, state))
+    stale = sorted(set(allowlist) - set(excused))
+    return effective, excused, stale
 
 
 def run_mutation_gate(
@@ -278,6 +344,7 @@ def run_mutation_gate(
     mutation_env = dict(os.environ)
     existing_pythonpath = mutation_env.get("PYTHONPATH")
     _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
+    equivalents = _load_equivalent_allowlist()
 
     # mutmut reads paths_to_mutate from the ROOT pyproject.toml (not mutants/).
     # When --changed-only narrows the targets, rewrite the root config temporarily.
@@ -311,7 +378,13 @@ def run_mutation_gate(
                 root_pyproject.write_text(root_original, encoding="utf-8")
         if mutmut_result.returncode > 1:
             raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
-        state_counts = _results_state_counts(python_version, mutation_env)
+        per_mutant = _results_per_mutant(python_version, mutation_env)
+        effective, excused, stale = _apply_equivalent_allowlist(per_mutant, equivalents)
+        for name in stale:
+            print(f"WARNING: stale equivalent-allowlist entry (no surviving mutant matched): {name}")
+        if excused:
+            print(f"excused {len(excused)} documented-equivalent mutant(s) via {DEFAULT_EQUIVALENTS_FILE}")
+        state_counts = _state_counts_from(effective)
         total = sum(state_counts.values())
         killed = int(state_counts.get("killed", 0))
         score = (killed / total * 100.0) if total > 0 else 0.0
