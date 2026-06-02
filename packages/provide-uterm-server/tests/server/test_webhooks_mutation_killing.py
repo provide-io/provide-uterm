@@ -550,8 +550,13 @@ class TestRegistryCrud:
             cfg = await mgr.register("s1", _URL, event_bus=MagicMock())
             await asyncio.wait_for(started.wait(), timeout=1.0)
             task = mgr._tasks[cfg.webhook_id]
-            # bounded so a gather-hang mutant fails fast rather than stalling the worker
-            await asyncio.wait_for(mgr.shutdown(), timeout=5.0)
+            # NB: NOT wrapped in wait_for. The _brief task self-completes in 0.05s so no
+            # mutant can hang shutdown's gather; and crucially, wait_for would add an
+            # event-loop yield that lets a cancel-requested task settle — which would mask
+            # `gather(*tasks)` → `gather()` (mutmut_5: drops the await, leaving the task
+            # cancel-requested-but-not-awaited). Asserting cancelled() with no intervening
+            # yield keeps that mutant killable.
+            await mgr.shutdown()
         assert task.cancelled()
         assert mgr.list_webhooks("s1") == []
         assert mgr._tasks == {}
