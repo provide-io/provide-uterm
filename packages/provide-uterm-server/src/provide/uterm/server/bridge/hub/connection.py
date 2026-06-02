@@ -33,6 +33,12 @@ Scope:
   follow-up ``resume`` control frame plus a hijack-state broadcast via
   the hub facade.
 
+This module is mutation-enforced at killed==100 (483 killed + 18 documented
+equivalents in ``mutation_equivalents.toml``): the ``tests/bridge/hub/
+test_connection_kill_*.py`` suites pin every return value, state mutation,
+quota-counter update, and observability call, so a surviving non-equivalent
+mutant means a behaviour went unasserted. Keep that bar when editing.
+
 Hot-path note: ``register_browser`` / ``cleanup_browser_disconnect`` are
 called per-session (browser attach / detach) — not in the per-frame hot
 path. The mixin shim cost is therefore irrelevant at this layer. Lock
