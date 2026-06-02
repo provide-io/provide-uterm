@@ -89,3 +89,33 @@ if _mutants_src.exists():
             pass
 
     os.register_at_fork(after_in_child=_noop_setproctitle_in_child)
+
+
+# --- mutmut: keep application logging off stdout ---------------------------
+# When pytest runs from the mutants/ tree (ANY mutmut phase — stats, clean, or a
+# mutant), structlog/stdlib-logging StreamHandlers write application logs to
+# stdout. mutmut multiplexes its worker results over stdout, so a stray log line
+# — or the "--- Logging error ---" report stdlib logging prints when a handler's
+# stream is already closed (``ValueError: I/O operation on closed file`` during
+# lifespan/teardown) — corrupts mutmut's bookkeeping and crashes it (observed:
+# ``KeyError`` -> every mutant reported ``not_checked`` -> score 0). This hit
+# server perimeter files (heavy create_server_app logging) once their gate
+# actually ran. Patch ``StreamHandler.emit`` to skip stdout and swallow
+# closed-stream errors so stdout stays a clean IPC channel. ``caplog`` writes to
+# a ``StringIO`` (not stdout), so log capture is unaffected.
+if Path(__file__).resolve().parent.name == "mutants" and (Path(__file__).resolve().parent / "src").exists():
+    import logging as _logging
+
+    _logging.raiseExceptions = False
+    _orig_stream_emit = _logging.StreamHandler.emit
+
+    def _mutmut_safe_emit(self: _logging.StreamHandler, record: _logging.LogRecord) -> None:  # type: ignore[type-arg]
+        _stream = getattr(self, "stream", None)
+        if _stream in (sys.stdout, getattr(sys, "__stdout__", None)):
+            return
+        try:
+            _orig_stream_emit(self, record)
+        except (ValueError, OSError):
+            pass
+
+    _logging.StreamHandler.emit = _mutmut_safe_emit  # type: ignore[method-assign]
