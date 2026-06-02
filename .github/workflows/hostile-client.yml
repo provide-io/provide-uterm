@@ -73,6 +73,11 @@ jobs:
       - name: Slowloris probe
         run: ci/hostile_probe.sh slowloris
 
+      # Availability under attack: legit authenticated sessions must stay served
+      # while the unauthenticated flood is refused (DoS-starvation resistance)
+      - name: Availability probe
+        run: ci/hostile_probe.sh availability
+
       - name: Upload server log
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

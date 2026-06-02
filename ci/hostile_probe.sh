@@ -9,7 +9,7 @@
 # not that hostile connections succeed. The base URL is defined once here so the
 # workflow never hardcodes a host/port.
 #
-# Usage: ci/hostile_probe.sh <start|wait-health|burst|oversized|slowloris|stop>
+# Usage: ci/hostile_probe.sh <start|wait-health|burst|oversized|slowloris|availability|stop>
 set -euo pipefail
 
 # Single source of truth for where the suite reaches the server. The default
@@ -20,11 +20,18 @@ WORKER_ID="${HOSTILE_WORKER_ID:-provide-shell}"
 SERVER_LOG="/tmp/uterm-hostile.log"
 SERVER_PID_FILE="/tmp/uterm-hostile.pid"
 
+# The availability lane authenticates legit sessions with the dev JWT the server
+# mints at startup. Pin its path so `start` (the server process) and
+# `availability` (the probe process) agree on where it lives. This is a file
+# PATH, not a secret (CLAUDE.md: no hardcoded secrets); the JWT itself is
+# generated per-run and written 0600 by the server's dev IdP.
+export UTERM_DEV_TOKEN_PATH="${UTERM_DEV_TOKEN_PATH:-/tmp/uterm-hostile-dev-token}"
+
 probe() {
   uv run python scripts/hostile_profile.py --base-url "${HOSTILE_BASE_URL}" "$@"
 }
 
-case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|stop>}" in
+case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|availability|stop>}" in
   start)
     hostport="${HOSTILE_BASE_URL#*://}"
     host="${hostport%%:*}"
@@ -73,6 +80,19 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
       --concurrency 10 \
       --header-bytes-per-chunk 8 \
       --delay-s 0.2
+    ;;
+  availability)
+    # Availability under attack: legitimate AUTHENTICATED sessions must keep
+    # getting served (receive their hello frame within budget) WHILE an
+    # unauthenticated flood is refused. Proves DoS-starvation resistance, not
+    # merely survival. Reads the dev JWT from UTERM_DEV_TOKEN_PATH (above).
+    probe \
+      --worker-id "${WORKER_ID}" \
+      --mode availability \
+      --iterations 200 \
+      --concurrency 40 \
+      --auth-sessions 10 \
+      --latency-budget-s 5.0
     ;;
   stop)
     if [ -f "${SERVER_PID_FILE}" ]; then
