@@ -1,6 +1,6 @@
 # Handoff: Enterprise Hardening & Reliability Program
 
-_Last updated: 2026-06-01 (#34 reliability follow-ups + uwarp WS text-frame fix + mutation-gate bug fix; all five workflows green @ `c4a8ba62`). Supersedes the prior hardening handoff._
+_Last updated: 2026-06-01 (mutation-perimeter honesty audit + #1–#6 polish + GA-evidence re-capture; all five workflows green @ `7fc3b800`). Supersedes the prior hardening handoff._
 
 ## Problem / request
 
@@ -149,6 +149,49 @@ workflows green on `c4a8ba62` (🧪 CI · 🔬 CodeQL · 🐋 Container Scan · 
   skips non-perimeter files. Diagnose this class via the log line `mutation gate targets (N): [...]`
   + `total: 0` — a non-perimeter file got targeted, not a real survivor.
 
+## Mutation-perimeter honesty audit + #1–#6 polish + GA-evidence re-capture (2026-06-01 @ `7fc3b800`)
+
+A polish pass (#1 GA evidence, #2 auth mutation, #4 encapsulation, #5 quality-gate, #6 dedup)
+turned into the session's most important finding: **the curated mutation perimeter does NOT
+enforce universal 100%** — `--changed-only` masked it. All five workflows green @ `7fc3b800`.
+
+- **Main was RED again — fixed (`ebb7d807`).** The bandit-nosec reformat touched the perimeter
+  file `pty/connector.py`, which fired the changed-only gate and exposed a **latent** bug: the
+  `mutation-gate` CI job never built frontend assets, so mutmut's stats-collection run aborted on
+  a full-app integration test (`missing required frontend assets`) → every mutant `not checked` →
+  score 0.00. Fixed by adding `setup-node` + `npm ci` + `npm run build:frontend` to the job
+  (mirrors quality/server-quality). The `quality (3.11)` "failure" was just a fail-fast cancel.
+- **#2 — `auth.py` is 94.02%, NOT 100% (`f9d4ed21`).** A full-gate run found 13 survivors, not the
+  claimed 0. Two were genuinely killable (exact-message pinning — `pytest.raises(match=)` does a
+  *substring* match, so the `XX…XX`-wrapped mutant message still matched); the **other 11 are
+  provably equivalent** (codec-case flips, `split` maxsplit on an unread tail, falsy-default swaps;
+  the mutmut trampoline also hides the body from source inspection). Documented as `pytest.skip`.
+- **#4 + registry.py deferral (`dd7ccd8e` + `7fc3b800`).** #4 encapsulated tunnel-state +
+  recording-flush into `HostedSessionRuntime.set_tunnel_state()`/`flush_recording()` (dropping the
+  `cast("Any", runtime)` private-attr pokes). Landing it required building registry.py's mutmut
+  suite, which exposed that **registry.py was enumerated in `paths_to_mutate` with no bound test
+  file** (14%, 257/415 `no_tests`). Wiring `test_registry.py` + the SSE/coverage suites lifts it to
+  ~53% (219/415), but the residual is dominated by async paths — `watch_session_events` (SSE
+  heartbeat), `__init__`, background tasks — whose mutants **hang (timeout)** or **crash the worker
+  (segfault)** non-deterministically (run-to-run variance), so it can't reach a stable `killed==100`.
+  Per the user's explicit "enforce honestly" decision: **deferred registry.py from the perimeter**
+  (commented out, full suite preserved as a re-enablable block), and corrected the misleading "safe
+  to keep enumerated even before dedicated mutmut suites exist" comment (touching a no-suite
+  perimeter file *fails* the gate, it does not skip). The exclusion works because
+  `_resolve_to_mutmut_path` returns `None` for paths not in `paths_to_mutate` → gate skips them.
+- **#5 (`6945c35f`):** extended `check_docs_accuracy.py` with an auth-mode consistency check
+  (CLAUDE.md auth modes ↔ server src). #6 was judged already-satisfied (no near-duplicate kill tests
+  worth consolidating).
+- **#1 GA evidence re-captured against `main`.** Governance (`pip-audit` = no known vulns, SBOM
+  211 KB, `uv build` wheel+sdist) + rc-baseline (**4846 passed**, ruff+bandit clean; mypy/`ty` =
+  documented type-drift) refreshed 2026-06-01. `RELEASE_READINESS.md` + `CLAUDE.md` corrected: the
+  "perimeter enforces 100%" overclaim → honest status (auth.py 94% / registry.py deferred /
+  routes·webhooks·manager enumerated-without-suite). **Load + rollback drills are STALE** — they
+  send no auth and predate the `none`/`dev` mode removal, so they 401 against every current auth
+  mode (load_profile additionally needs WS-handshake auth); rc-cycle artifacts retained, fixing the
+  drills' auth is a tracked follow-up. (`artifacts/` is gitignored — evidence is local/regenerable;
+  the durable record is the readiness table.)
+
 ## Detailed checklist for next session
 
 - [x] **Resolve the stray WIP** — DONE. `transports/ws_transport.py` (+ tests) committed in `8e9840e4`/
@@ -173,3 +216,16 @@ workflows green on `c4a8ba62` (🧪 CI · 🔬 CodeQL · 🐋 Container Scan · 
   simply has no consumer yet (the WS sibling of the telnet session `uwarp` uses). Wiring it into a flow is an
   optional FUTURE step when WS is actually needed — not pending work on the module itself.
 - [ ] Optional **P2 architecture** (HA): single-active-instance vs shared control plane — design decision.
+- [ ] **registry.py mutation determinism → re-enable in the strict perimeter.** Make the async-path
+  mutants deterministic (fail-fast direct-attribute assertions for `__init__`; bounded SSE-heartbeat
+  consumption for `watch_session_events`; tame the background-task timeout/segfault mutants), then
+  uncomment registry.py in `[tool.mutmut].paths_to_mutate` + its suite block in `tests_dir`
+  (both carry the re-enable note). Target: stable `killed==100`.
+- [ ] **routes/ · webhooks.py · manager/process.py · manager/config.py — build mutmut suites or
+  remove from `paths_to_mutate`.** They're enumerated as aspirational targets with no bound suite, so
+  a changed-only run on them currently FAILS (`no_tests`/survivors). Same class of footgun as
+  registry.py was — decide per file: build the suite (and re-validate) or drop from the perimeter.
+- [ ] **Load/rollback drill auth — unbreak the GA perf/resilience evidence.** `scripts/load_profile.py`
+  + `scripts/rollback_drill.py` send no auth (written for the removed `none`/`dev` mode) and 401 against
+  every current auth mode. Add `--principal`/`--role` (header mode) or a token to both — REST for
+  rollback, WS-handshake auth for load_profile — then re-capture `artifacts/{load-profile,rollback-drill}`.
