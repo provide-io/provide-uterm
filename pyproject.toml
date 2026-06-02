@@ -320,10 +320,12 @@ paths_to_mutate = [
     # fork-loop os.wait() — that suite is now removed from tests_dir (above).
     "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
-    # connection.py — DEFERRED (2026-06-02). Same enumerated-but-under-wired class
-    # as lease.py was; its dedicated kill-suites aren't written/wired yet. Re-add
-    # once its survivors are killed (tracked follow-up; lease.py is the template).
-    # "src/provide/uterm/server/bridge/hub/connection.py",
+    # connection.py — ConnectionManager (register/deregister worker + browser,
+    # disconnect, cleanup). Kill-suites wired in tests_dir below (the dedicated
+    # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
+    # suites). Enforced at killed==100 now that the mutmut child-reaping crash is
+    # fixed (test_process.py removed from tests_dir).
+    "src/provide/uterm/server/bridge/hub/connection.py",
     "src/provide/uterm/server/bridge/hub/presence.py",
     "src/provide/uterm/server/bridge/hub/store.py",
     "src/provide/uterm/server/bridge/hub/polling_service.py",
@@ -444,6 +446,19 @@ tests_dir = [
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_dashboard_ws.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_expiry_sweep.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_events_dead.py",
+    # ConnectionManager (hub/connection.py) — dedicated covering suites + the
+    # behaviour-pinning kill-suites.
+    "packages/provide-uterm-server/tests/bridge/test_connections_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/test_connections_fixes.py",
+    "packages/provide-uterm-server/tests/bridge/test_connections_fixes_2.py",
+    "packages/provide-uterm-server/tests/bridge/test_register_browser_rollback_m6.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_register_browser.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_worker_lifecycle.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_worker_state.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_browser_disconnect.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_hijack_clearing.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_ratelimit_force.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_iter2.py",
     # Full-app (create_server_app) suites LAST. mutmut's stats phase runs the
     # whole tests_dir with ``-x`` (stop on first failure); these TestClient/
     # full-app tests are intermittently fragile in the mutants tree (a stray
