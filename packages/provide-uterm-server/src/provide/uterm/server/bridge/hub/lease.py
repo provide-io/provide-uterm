@@ -15,10 +15,13 @@ FastAPI hub needs:
   cleanup.
 * Lease-expiry sweep that emits resume frames when *both* slots go idle.
 
-This module is mutation-enforced at killed==100 (``[tool.mutmut].paths_to_mutate``);
-its dedicated ``tests/bridge/hub/test_lease_kill_*.py`` suites pin every return
-value, state mutation, control frame, and observability call, so a surviving
-mutant means a behaviour went unasserted. Keep that bar when editing.
+This module is mutation-tested at killed==100 (489/489): its dedicated
+``tests/bridge/hub/test_lease_kill_*.py`` suites pin every return value, state
+mutation, control frame, and observability call, so a surviving mutant means a
+behaviour went unasserted. Keep that bar when editing. (CI strict-gate
+enforcement is currently deferred — see the lease.py note in
+``[tool.mutmut].paths_to_mutate`` — pending a fix to the mutmut harness's
+server-test baseline instability, not for any coverage gap.)
 
 Lock semantics are unchanged from the pre-refactor mixin: every public
 method that needs cross-field atomicity acquires the shared

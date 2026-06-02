@@ -310,13 +310,19 @@ paths_to_mutate = [
     # each service live under tests/bridge/hub/test_<name>.py.
     "src/provide/uterm/server/bridge/hub/registry.py",
     "src/provide/uterm/server/bridge/hub/limiter.py",
-    # lease.py — RE-ENABLED (2026-06-02). Genuine killed==100 (489/489, 0 survived,
-    # 0 no_tests): the dedicated suites (test_lease.py + the ownership/atomic
-    # mutation-killing suites + the five test_lease_kill_*.py behaviour-pinning
-    # suites) are wired into tests_dir below. The only equivalent-class mutant (the
-    # _LeaseHubCallbacks.metric Protocol-stub default literal) was removed by
-    # switching it to `= ...` rather than allowlisted.
-    "src/provide/uterm/server/bridge/hub/lease.py",
+    # lease.py — PROVEN killed==100 (489/489, 0 survived, 0 no_tests) locally and
+    # via the real changed-only gate, but CI-enforcement is DEFERRED (2026-06-02).
+    # The dedicated suites (test_lease.py + the ownership/atomic suites + the five
+    # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) ARE wired into
+    # tests_dir below and keep the file at 100% line coverage. The blocker is NOT
+    # coverage: CI's mutmut harness intermittently crashes on the server-test
+    # baseline (stdlib-logging "I/O operation on closed file" during teardown ->
+    # the log records pollute mutmut's stdout worker-IPC -> KeyError -> every
+    # mutant reported not_checked, score 0). This is a pre-existing mutmut-in-CI
+    # instability that surfaces for ANY server perimeter file (the gate has been
+    # *skipping* server files, masking it); lease.py just made it actually run.
+    # Re-enable once the mutmut harness logging/IPC instability is fixed.
+    # "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
     # connection.py — DEFERRED (2026-06-02). Same enumerated-but-under-wired class
     # as lease.py was; its dedicated kill-suites aren't written/wired yet. Re-add
