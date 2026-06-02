@@ -162,7 +162,12 @@ async def test_deliver_posts_to_url() -> None:
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ hello"})
-        await asyncio.sleep(0.2)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if len(received) >= 1:
+                break
+            await asyncio.sleep(0.01)
 
     assert len(received) >= 1
     payload = received[0]
@@ -195,7 +200,12 @@ async def test_deliver_adds_hmac_signature() -> None:
         await manager.register("s1", "https://example.com/hook", secret=secret, event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ signed"})
-        await asyncio.sleep(0.2)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if len(captured_headers) >= 1:
+                break
+            await asyncio.sleep(0.01)
 
     assert len(captured_headers) >= 1
     sig_header = captured_headers[0].get("X-Uterm-Signature", "")
@@ -221,7 +231,12 @@ async def test_deliver_no_signature_when_no_secret() -> None:
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ unsigned"})
-        await asyncio.sleep(0.2)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if len(captured_headers) >= 1:
+                break
+            await asyncio.sleep(0.01)
 
     assert len(captured_headers) >= 1
     assert "X-Uterm-Signature" not in captured_headers[0]
@@ -252,7 +267,12 @@ async def test_hmac_signature_is_correct() -> None:
         await manager.register("s1", "https://example.com/hook", secret=secret, event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ check"})
-        await asyncio.sleep(0.2)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if captured:
+                break
+            await asyncio.sleep(0.01)
 
     assert captured
     body, sig_header, ts_header = captured[0]
@@ -292,7 +312,12 @@ async def test_deliver_retries_on_5xx() -> None:
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ retry"})
-        await asyncio.sleep(0.3)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if call_count >= 3:
+                break
+            await asyncio.sleep(0.01)
 
     assert call_count == 3
     await manager.shutdown()
@@ -319,7 +344,12 @@ async def test_deliver_gives_up_after_max_retries() -> None:
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ fail"})
-        await asyncio.sleep(1.0)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if call_count >= 4:
+                break
+            await asyncio.sleep(0.01)
 
     # for attempt, delay in enumerate((*_RETRY_DELAYS, None)) → 4 iterations
     assert call_count == 4
@@ -348,7 +378,12 @@ async def test_deliver_retries_on_network_error() -> None:
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ error"})
-        await asyncio.sleep(0.3)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if call_count >= 3:
+                break
+            await asyncio.sleep(0.01)
 
     assert call_count == 3
     await manager.shutdown()
@@ -437,7 +472,12 @@ async def test_event_types_filter_drops_unmatched() -> None:
         await asyncio.sleep(0.1)
         # hijack_acquired should pass
         await hub.append_event("s1", "hijack_acquired", {"hijack_id": "abc"})
-        await asyncio.sleep(0.2)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if len(received_types) >= 1:
+                break
+            await asyncio.sleep(0.01)
 
     assert received_types == ["hijack_acquired"]
     await manager.shutdown()
@@ -477,7 +517,12 @@ async def test_pattern_filter_drops_non_matching() -> None:
         await asyncio.sleep(0.1)
         # matching
         await hub.append_event("s1", "snapshot", {"screen": "root@host:~$ "})
-        await asyncio.sleep(0.2)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if len(received_screens) >= 1:
+                break
+            await asyncio.sleep(0.01)
 
     assert received_screens == ["root@host:~$ "]
     await manager.shutdown()
@@ -563,7 +608,12 @@ async def test_multiple_webhooks_both_receive_events() -> None:
         await manager.register("s1", "https://example.com/b", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ both"})
-        await asyncio.sleep(0.3)
+        # Deterministic wait for the background delivery — replaces a fixed sleep
+        # that races the delivery task under CI load.
+        for _ in range(500):
+            if len(received_a) >= 1:
+                break
+            await asyncio.sleep(0.01)
 
     assert len(received_a) >= 1
     assert len(received_b) >= 1
