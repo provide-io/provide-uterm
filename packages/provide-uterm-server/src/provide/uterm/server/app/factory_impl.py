@@ -476,6 +476,7 @@ def create_server_app(
         BehavioralThresholds,
         WebhookBehavioralAuditGate,
         WebhookPolicyGate,
+        WebhookTelemetrySink,
     )
 
     policy_gate = None
@@ -530,6 +531,14 @@ def create_server_app(
         min_jitter=config.governance.behavioral_min_jitter,
     )
 
+    telemetry_sink = None
+    if config.governance.telemetry_webhook_url:
+        telemetry_sink = WebhookTelemetrySink(
+            url=config.governance.telemetry_webhook_url,
+            secret=config.governance.telemetry_webhook_secret,
+            timeout_s=config.governance.telemetry_webhook_timeout_s,
+        )
+
     control_plane = _build_control_plane(config)
     # The shared ``ControlPlane`` Protocol intentionally omits the resume-only
     # ``token_store`` method (kept out of the public Protocol so embedders can
@@ -555,6 +564,7 @@ def create_server_app(
         behavioral_audit_gate=behavioral_audit_gate,
         behavioral_thresholds=behavioral_thresholds,
         behavioral_audit_interval_s=config.governance.behavioral_audit_interval_s,
+        telemetry_sink=telemetry_sink,
     )
     # Attach the fan-out controller so routes and WS dispatch can find it.
     from provide.uterm.server.bridge.fanout import FanOutController, InMemoryFanOutStore

@@ -487,6 +487,10 @@ class GovernanceConfig(ServerBaseModel):
     behavioral_min_jitter: float | None = None
     behavioral_fail_open: bool = False
 
+    telemetry_webhook_url: str | None = None
+    telemetry_webhook_secret: str | None = None
+    telemetry_webhook_timeout_s: float = 2.0
+
     external_connectors: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -495,6 +499,7 @@ class GovernanceConfig(ServerBaseModel):
         _require_secure_url(self.registry_webhook_url, "governance.registry_webhook_url")
         _require_secure_url(self.authz_webhook_url, "governance.authz_webhook_url")
         _require_secure_url(self.behavioral_audit_url, "governance.behavioral_audit_url")
+        _require_secure_url(self.telemetry_webhook_url, "governance.telemetry_webhook_url")
         return self
 
 

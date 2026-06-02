@@ -35,6 +35,8 @@ from provide.uterm.server.bridge.hub.ext import (
     OutputPolicyGate,
     PolicyDecision,
     PolicyGate,
+    TelemetryEvent,
+    TelemetrySink,
 )
 from provide.uterm.server.bridge.hub.lease import HijackLeaseManager
 from provide.uterm.server.bridge.hub.limiter import RateLimiter
@@ -591,6 +593,7 @@ class TermHub:
         behavioral_audit_gate: BehavioralAuditGate | None = None,
         behavioral_thresholds: BehavioralThresholds | None = None,
         behavioral_audit_interval_s: float = 30.0,
+        telemetry_sink: TelemetrySink | None = None,
         max_buffer_chars: int = 40_000,
         max_event_data_chars: int = 8192,
         max_connections_per_principal: int = 25,
@@ -666,6 +669,7 @@ class TermHub:
         self._behavioral_audit_gate = behavioral_audit_gate or NoOpBehavioralAuditGate()
         self._behavioral_thresholds = behavioral_thresholds or BehavioralThresholds()
         self._behavioral_audit_interval_s = max(1.0, float(behavioral_audit_interval_s))
+        self._telemetry_sink: TelemetrySink | None = telemetry_sink
         # Per-principal browser connection quota (BROWSER-only; workers exempt).
         # Only concrete, non-anonymous principals are counted; the count is
         # decremented on browser disconnect so the dict never grows unboundedly.
@@ -815,6 +819,39 @@ class TermHub:
         if mode not in ("hijack", "open"):
             raise ValueError(f"invalid input mode: {mode!r}")
         return await self.set_worker_hello(worker_id, mode)  # type: ignore[arg-type]
+
+    async def emit_telemetry(
+        self,
+        event_type: str,
+        *,
+        worker_id: str,
+        principal: str | None = None,
+        role: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Emit a lifecycle telemetry event to the configured sink.
+
+        Strictly additive and fail-open: if no sink is configured or the
+        sink raises, this method silently returns. It must never alter
+        control flow, block terminal I/O, or propagate exceptions.
+        """
+        if self._telemetry_sink is None:
+            return
+        evt = TelemetryEvent(
+            event_type=event_type,
+            worker_id=worker_id,
+            principal=principal,
+            role=role,
+            metadata=metadata or {},
+            timestamp=time.time(),
+        )
+        try:
+            await self._telemetry_sink.emit(evt)
+        except Exception:
+            # Defensive: WebhookTelemetrySink is already fail-open, but any
+            # other sink implementation might raise; absorb it here so
+            # emit_telemetry is unconditionally safe to call from lifecycle hooks.
+            pass
 
     # -- Approval flow (Phase 7b: ex-HubApprovalFlowMixin) ------------------
     # The orchestration logic that surrounds the approval-store CRUD
