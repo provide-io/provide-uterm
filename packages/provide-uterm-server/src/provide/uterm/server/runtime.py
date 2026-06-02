@@ -209,6 +209,26 @@ class HostedSessionRuntime:
             return
         await self._enqueue_messages(await self._connector.clear())
 
+    def set_tunnel_state(self, connected: bool) -> None:
+        """Update tunnel-backed liveness fields from the raw /tunnel websocket path.
+
+        Encapsulates the lifecycle mutations the registry previously poked into
+        via private-attribute writes. Mirrors that behavior exactly.
+        """
+        self._connected = connected
+        if connected:
+            self._state = "running"
+            self._last_error = None
+            self._stopped_at = None
+        else:
+            self._state = "stopped"
+            self._stopped_at = time.time()
+
+    async def flush_recording(self) -> None:
+        """Flush the active recording logger, if any (no-op when not recording)."""
+        if self._logger is not None:
+            await self._logger.flush()
+
     async def analyze(self) -> str:
         if self._connector is None:
             return "connector offline"
