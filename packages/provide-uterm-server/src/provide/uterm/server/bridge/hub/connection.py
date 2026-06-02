@@ -169,9 +169,6 @@ class ConnectionManager:
                     st.hijack_owner_expires_at = None
                 st.worker_ws = ws
             logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="worker")
-            await self._hub.emit_telemetry(
-                "session.registered", worker_id=worker_id, metadata={"session_type": "worker"}
-            )
             return prev_was_hijacked
 
     async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
@@ -357,12 +354,6 @@ class ConnectionManager:
                     worker_id, cast("dict[str, Any]", _snapshot), ws
                 )
             logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="browser", role=role)
-            await self._hub.emit_telemetry(
-                "session.registered",
-                worker_id=worker_id,
-                role=role,
-                metadata={"session_type": "browser"},
-            )
             return initial_state
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
@@ -479,9 +470,6 @@ class ConnectionManager:
                 hub._background_tasks.add(task)
                 task.add_done_callback(hub._background_tasks.discard)
             logger.info(EVENT_SESSION_DISCONNECTED, worker_id=worker_id, session_type="browser")
-            await self._hub.emit_telemetry(
-                "session.disconnected", worker_id=worker_id, metadata={"session_type": "browser"}
-            )
             return {
                 "was_owner": was_owner,
                 "rest_still_active": rest_still_active,

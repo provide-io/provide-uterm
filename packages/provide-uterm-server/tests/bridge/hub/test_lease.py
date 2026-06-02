@@ -73,18 +73,6 @@ class _FakeHub:
     async def prune_if_idle(self, worker_id: str) -> None:
         self.prune_calls.append(worker_id)
 
-    async def emit_telemetry(
-        self,
-        event_type: str,
-        *,
-        worker_id: str,
-        principal: str | None = None,
-        role: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        # No-op stub — telemetry is always fail-open and not under test here.
-        _ = (event_type, worker_id, principal, role, metadata)
-
     async def _recheck_and_resume(self, worker_id: str, now: float) -> None:
         # Forward to the real manager so existing test expectations (worker
         # ``send_worker`` resume frame, ``notify_hijack_changed`` callback)
