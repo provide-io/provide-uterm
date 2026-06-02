@@ -2,7 +2,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Session registry for the hosted terminal server."""
+"""Session registry for the hosted terminal server.
+
+Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). The bound suite
+is tests/server/test_registry_mutation_killing.py — a SELF-CONTAINED, fully-mocked
+suite (patches HostedSessionRuntime / connectors.registered_types / egress /
+asyncio.sleep and drives the EventBus queue with mocks, consuming the SSE generators
+under a per-step asyncio.wait_for bound). That keeps external connector-registry state
+and real async streaming/timers out of mutmut's forked workers, which is what made the
+existing test_registry.py suites abort/timeout/segfault in the mutants tree.
+"""
 
 from __future__ import annotations
 

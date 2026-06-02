@@ -155,3 +155,95 @@ scheme=="http" branch). In that case host becomes "" (orig) or "xxxx" (mutant) a
 .lower(); NEITHER is in _LOOPBACK_HOSTS and neither ends with ".localhost", so both \
 take the identical final `raise ValueError(... must use https://...)`. The fallback \
 value is never observable downstream — behaviorally equivalent."""
+
+# --- registry.py (SessionRegistry) ----------------------------------------
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ__init____mutmut_1"
+reason = "block_private_connector_targets=False->True — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁrecording_entries__mutmut_1"
+reason = "limit=200->201 — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁevents__mutmut_1"
+reason = "limit=100->101 — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_1"
+reason = "timeout_ms=5000->5001 — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_2"
+reason = "max_events=50->51 — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁstream_session_events__mutmut_1"
+reason = "heartbeat_s=15.0->16.0 — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁset_mode__mutmut_4"
+reason = "mode='python'->None — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁset_mode__mutmut_5"
+reason = "mode='python'->'XXpythonXX' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁset_mode__mutmut_6"
+reason = "mode='python'->'PYTHON' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_7"
+reason = "mode='python'->None — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_8"
+reason = "mode='python'->'XXpythonXX' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁupdate_session__mutmut_9"
+reason = "mode='python'->'PYTHON' — model_dump(mode=...) is a serialization-format switch only; the result is fed straight back to model_validate (which accepts both python and json shapes), and pydantic treats any non-'json' mode as python — VERIFIED that 'PYTHON'/'XXpythonXX'/None all dump+validate identically. The mode value is never observable in set_mode/update_session."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_49"
+reason = "cast(None, input_mode_raw) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_53"
+reason = "cast('XXInputModeXX', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_54"
+reason = "cast('inputmode', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_55"
+reason = "cast('INPUTMODE', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_87"
+reason = "cast(None, visibility_raw) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_91"
+reason = "cast('XXVisibilityXX', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_92"
+reason = "cast('visibility', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_93"
+reason = "cast('VISIBILITY', ...) — typing.cast(type_str, value) is a RUNTIME NO-OP — it returns value unchanged and ignores the type argument entirely. Mutating the cast type-string has zero runtime effect."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_58"
+reason = "bool(get('auto_start', None)) — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_60"
+reason = "bool(get('auto_start'))  # drop default — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_96"
+reason = "bool(get('ephemeral', None)) — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_98"
+reason = "bool(get('ephemeral'))  # drop default — bool(payload.get(key, <default>)) where the default is only used when the key is ABSENT, and bool(None) == bool(False) == False — so dropping the default or swapping False->None yields the identical False. VERIFIED bool(None)==bool(False)."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ_on_worker_empty__mutmut_15"
+reason = "_sessions.pop(session_id, None)->pop(session_id) — dict.pop(key, None) -> dict.pop(key) where the key is ALWAYS present at this point: the preceding `if self._sessions.get(session_id) is not session: return` identity guard (held under the lock) proves the key exists, so the missing-key default is never reached."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_8"
+reason = "drop getattr default — getattr(self._hub, 'event_bus', None) -> getattr(self._hub, 'event_bus') (drop default). TermHub ALWAYS exposes an event_bus attribute (VERIFIED hasattr(TermHub(), 'event_bus')), so the getattr default is never reached."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁstream_session_events__mutmut_7"
+reason = "drop getattr default — getattr(self._hub, 'event_bus', None) -> getattr(self._hub, 'event_bus') (drop default). TermHub ALWAYS exposes an event_bus attribute (VERIFIED hasattr(TermHub(), 'event_bus')), so the getattr default is never reached."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_33"
+reason = "dropped=0->None — Dead initial value: `dropped = 0` is UNCONDITIONALLY overwritten by `dropped = sub.dropped` at the end of the `async with` body (always reached), so the initial 0/None/1 is never read."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_34"
+reason = "dropped=0->1 — Dead initial value: `dropped = 0` is UNCONDITIONALLY overwritten by `dropped = sub.dropped` at the end of the `async with` body (always reached), so the initial 0/None/1 is never read."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_44"
+reason = "remaining <= 0 -> remaining < 0 — `remaining <= 0` -> `remaining < 0` on the deadline-exceeded guard. `remaining = deadline - time.monotonic()` and deadline = monotonic()+timeout_s; the monotonic clock ALWAYS advances between those two reads, so when timeout_s makes the branch reachable, remaining is strictly < 0 (never exactly 0) — `<= 0` and `< 0` take the identical branch. Equivalent."
