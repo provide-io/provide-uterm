@@ -225,121 +225,7 @@ max_modules = "D"
 max_average = "A"
 
 [tool.mutmut]
-paths_to_mutate = [
-    "src/provide/uterm/pty/connector.py",
-    "src/provide/uterm/control_channel.py",
-    "src/provide/uterm/control_channel_builders.py",
-    "src/provide/uterm/control_channel_patterns.py",
-    "src/provide/uterm/auth.py",
-    "src/provide/uterm/detection/detector.py",
-    "src/provide/uterm/detection/engine.py",
-    "src/provide/uterm/io.py",
-    "src/provide/uterm/recording.py",
-    # Bridge protocol negotiation — boundary-heavy, security-relevant.
-    # Covered by tests/test_protocol_negotiation.py.
-    "src/provide/uterm/bridge/contracts.py",
-    # Server-package paths. These MUST be addressed through the workspace-root
-    # ``src/`` symlink tree (``src/provide/uterm/server/...``), NOT the real
-    # ``packages/provide-uterm-server/src/...`` path. mutmut derives a mutant's
-    # name from ``str(path).replace(os.sep, ".")`` after stripping a leading
-    # ``src.`` prefix (see ``get_mutant_name`` in mutmut/__main__.py). The
-    # trampoline that records test→mutant coverage keys on the imported
-    # module's ``__module__`` (``provide.uterm.server.bridge.hub.limiter``).
-    # A ``packages/...`` path yields the name
-    # ``packages.provide-uterm-server.src.provide.uterm.server...`` which never
-    # matches ``__module__`` — so EVERY server mutant reported ``no_tests``.
-    # The ``src/provide/uterm/server`` symlink (-> the server package's source)
-    # makes the derived name equal ``provide.uterm.server...`` and binding
-    # works. The matching test files are in ``tests_dir`` below.
-    #
-    # HijackLease.expire boundary + lease arithmetic.
-    "src/provide/uterm/server/bridge/models.py",
-    # Tunnel token hashing — constant-time compare, security-critical.
-    "src/provide/uterm/tunnel/token_hash.py",
-    # HTTP intercept header denylist + gating policy.
-    "src/provide/uterm/tunnel/intercept.py",
-    # Server security-relevant request handling. config_schema.py + app/factory.py
-    # (below) have bound suites (test_config.py / test_app_coverage.py) and stay
-    # enforced. routes/, webhooks.py, and manager/{process,config}.py were enumerated
-    # here, but a 2026-06-01 audit — measuring each with its covering tests wired —
-    # found NONE can reach a stable killed==100, so each is DEFERRED (commented) with
-    # its specific obstacle. A --changed-only run on a deferred file is then correctly
-    # skipped (not a false pass). Re-add each once its obstacle is resolved.
-    #
-    # routes/ — async FastAPI handler surface (2049 LOC incl. routes/sse.py, an SSE
-    #   streaming generator); same async timeout/segfault class as registry.py /
-    #   webhooks.py. Deferred by pattern.
-    # "src/provide/uterm/server/routes/",
-    #
-    # webhooks.py — measured 21% with the 8 test_webhooks_part*.py suites wired:
-    #   307/406 mutants SEGFAULT (reproducible single-worker), across every method
-    #   (_deliver, the DNS resolvers, the SSRF guards, the asyncio _delivery_loop).
-    #   Mutating its network/DNS/async-delivery path crashes the worker.
-    # "src/provide/uterm/server/webhooks.py",
-    # registry.py — DEFERRED from the strict killed==100 gate (2026-06-01). It is
-    # 100% line/branch covered and a dedicated mutmut suite is wired below
-    # (test_registry.py + test_runtime.py + the SSE/coverage suites), which reaches
-    # ~53% kill (219/415). The residual is dominated by async paths —
-    # watch_session_events (SSE heartbeat generator), __init__ async setup, and
-    # background tasks — whose mutants hang (timeout) or crash the worker
-    # (segfault) non-deterministically (run-to-run variance), so registry.py
-    # cannot deterministically reach killed==100 under the strict gate. Re-add
-    # here (and uncomment the suite below) once that async mutation-determinism
-    # work lands.
-    # "src/provide/uterm/server/registry.py",
-    # config_schema.py — RE-ENABLED at killed==100 (2026-06-02). The prior "baseline
-    # aborts / @model_validator trips the trampoline" deferral was WRONG: a measured
-    # run produces a clean 34-mutant baseline with ZERO no_tests. mutmut SKIPS every
-    # decorated function by design (@model_validator/@field_validator/@classmethod —
-    # see _skip_node_and_children in mutmut/file_mutation.py), and class-body field
-    # defaults aren't inside a function, so the file's only mutable surface is its two
-    # UNDECORATED module-level helpers: _clean_path and the _require_secure_url SSRF
-    # guard. All 34 mutants are bound + killed by test_models_mutation_killing.py
-    # (wired into tests_dir) EXCEPT one documented equivalent
-    # (_require_secure_url__mutmut_14, the unreachable-fallback string) excused via
-    # mutation_equivalents.toml. The decorated Pydantic validators stay line/branch +
-    # unit tested via test_config.py (mutmut cannot reach them in any file).
-    "src/provide/uterm/server/config_schema.py",
-    "src/provide/uterm/server/app/factory.py",
-    # manager/process.py + config.py — measured total:0 ("could not find any test case
-    #   for any mutant") even with all four test_process_mutation_killing*.py + the
-    #   config suite wired: process.py drives worker SUBPROCESSES, so its mutated code
-    #   runs in children the in-process mutmut trampoline never instruments — the
-    #   binding is non-functional here. (The kill-test files show it worked at some
-    #   past point; this is a binding-infra follow-up, not a strict-gate target now.)
-    # "src/provide/uterm/manager/process.py",
-    # "src/provide/uterm/manager/config.py",
-    # Refactor #16 service classes — state-machine + dispatch logic split
-    # out of the former TermHub mixin pile. High mutation value; tests for
-    # each service live under tests/bridge/hub/test_<name>.py.
-    "src/provide/uterm/server/bridge/hub/registry.py",
-    "src/provide/uterm/server/bridge/hub/limiter.py",
-    # lease.py — RE-ENABLED at killed==100 (489/489, 0 survived, 0 no_tests). The
-    # dedicated suites (test_lease.py + the ownership/atomic suites + the five
-    # test_lease_kill_*.py behaviour-pinning suites, ~188 tests) are wired into
-    # tests_dir below; the sole equivalent-class mutant (the _LeaseHubCallbacks
-    # .metric Protocol-stub default) was removed via `= ...`. The CI mutmut
-    # KeyError that previously mass-reported not_checked here was traced to the
-    # subprocess-spawning test_process.py leaking worker children into mutmut's
-    # fork-loop os.wait() — that suite is now removed from tests_dir (above).
-    "src/provide/uterm/server/bridge/hub/lease.py",
-    "src/provide/uterm/server/bridge/hub/router.py",
-    # connection.py — ConnectionManager (register/deregister worker + browser,
-    # disconnect, cleanup). Kill-suites wired in tests_dir below (the dedicated
-    # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
-    # suites). Enforced at killed==100 now that the mutmut child-reaping crash is
-    # fixed (test_process.py removed from tests_dir).
-    "src/provide/uterm/server/bridge/hub/connection.py",
-    "src/provide/uterm/server/bridge/hub/presence.py",
-    "src/provide/uterm/server/bridge/hub/store.py",
-    "src/provide/uterm/server/bridge/hub/polling_service.py",
-    # Pydantic frame schemas — single source of truth for wire format.
-    "src/provide/uterm/bridge/schemas.py",
-    # HijackCoordinator (moved to core in #15) — lease state machine.
-    "src/provide/uterm/bridge/coordinator.py",
-    # DeckMux presence service — split out of DeckMuxMixin in #6 follow-up.
-    "src/provide/uterm/deckmux/_service.py",
-]
+paths_to_mutate = ["src/provide/uterm/server/webhooks.py"]
 tests_dir = [
     "packages/provide-uterm/tests/shell/test_shell_render.py",
     "packages/provide-uterm/tests/deckmux/test_presence.py",
@@ -469,6 +355,12 @@ tests_dir = [
     # Imports them via the normal `from ...config_schema import ...` path so the
     # mutated trampoline (not the original source) is exercised.
     "packages/provide-uterm-server/tests/server/test_models_mutation_killing.py",
+    # webhooks.py kill-suite: fully network-mocked (autouse getaddrinfo MagicMock +
+    # patched httpx) so mutmut's forked workers NEVER drive the real C resolver/HTTP
+    # — that real-DNS-in-a-forked-child path is what segfaulted 307/406 mutants and
+    # deferred this file. The 7 test_webhooks_part*.py suites stay the normal-pytest
+    # coverage suite (real DNS is safe without forking) and are NOT wired here.
+    "packages/provide-uterm-server/tests/server/test_webhooks_mutation_killing.py",
     # Full-app (create_server_app) suites LAST. mutmut's stats phase runs the
     # whole tests_dir with ``-x`` (stop on first failure); these TestClient/
     # full-app tests are intermittently fragile in the mutants tree (a stray
