@@ -218,7 +218,24 @@ class TermHub:
 
     async def cleanup_expired_hijack(self, worker_id: str) -> bool:
         """Expire stale REST/dashboard leases; emit resume if fully released."""
-        return await self.lease.cleanup_expired(worker_id)
+        # Capture a pre-cleanup snapshot (lock-free; telemetry is fail-open)
+        # so we know which hijack_type(s) to report when cleanup returns True.
+        now = time.monotonic()
+        st = self._workers.get(worker_id)
+        had_rest = st is not None and st.hijack_session is not None and st.hijack_session.lease_expires_at <= now
+        had_dashboard = (
+            st is not None
+            and st.hijack_owner is not None
+            and st.hijack_owner_expires_at is not None
+            and st.hijack_owner_expires_at <= now
+        )
+        cleaned = await self.lease.cleanup_expired(worker_id)
+        if cleaned:
+            if had_rest:
+                await self.emit_telemetry("hijack.expired", worker_id=worker_id, metadata={"hijack_type": "rest"})
+            if had_dashboard:
+                await self.emit_telemetry("hijack.expired", worker_id=worker_id, metadata={"hijack_type": "dashboard"})
+        return cleaned
 
     async def get_rest_session(self, worker_id: str, hijack_id: str) -> HijackSession | None:
         """Return the active REST session for *hijack_id* or None."""
@@ -235,11 +252,28 @@ class TermHub:
         now: float,
     ) -> tuple[bool, str | None]:
         """Atomically check availability and create a REST hijack session."""
-        return await self.lease.try_acquire_rest(worker_id, owner=owner, lease_s=lease_s, hijack_id=hijack_id, now=now)
+        ok, err = await self.lease.try_acquire_rest(
+            worker_id, owner=owner, lease_s=lease_s, hijack_id=hijack_id, now=now
+        )
+        if ok:
+            await self.emit_telemetry(
+                "hijack.acquired",
+                worker_id=worker_id,
+                principal=owner,
+                metadata={"hijack_type": "rest", "lease_s": lease_s},
+            )
+        return ok, err
 
     async def try_acquire_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
         """Atomically check availability and set the dashboard WS hijack owner."""
-        return await self.lease.try_acquire_ws(worker_id, ws)
+        ok, err = await self.lease.try_acquire_ws(worker_id, ws)
+        if ok:
+            await self.emit_telemetry(
+                "hijack.acquired",
+                worker_id=worker_id,
+                metadata={"hijack_type": "dashboard", "lease_s": self.lease.dashboard_hijack_lease_s},
+            )
+        return ok, err
 
     async def touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
         """Extend the dashboard WS hijack lease."""
@@ -251,7 +285,10 @@ class TermHub:
 
     async def try_release_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
         """Atomically verify ownership and clear in a single lock block."""
-        return await self.lease.try_release_ws(worker_id, ws)
+        ok, rest_active = await self.lease.try_release_ws(worker_id, ws)
+        if ok:
+            await self.emit_telemetry("hijack.released", worker_id=worker_id, metadata={"hijack_type": "dashboard"})
+        return ok, rest_active
 
     async def extend_hijack_lease(
         self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float
@@ -320,7 +357,9 @@ class TermHub:
 
     async def register_worker(self, worker_id: str, ws: WebSocket) -> bool:
         """Register *ws* as the active worker for *worker_id*."""
-        return await self.connection_mgr.register_worker(worker_id, ws)
+        result = await self.connection_mgr.register_worker(worker_id, ws)
+        await self.emit_telemetry("session.registered", worker_id=worker_id, metadata={"session_type": "worker"})
+        return result
 
     async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
         """Return True if *ws* is still the registered worker for *worker_id*."""
@@ -342,7 +381,14 @@ class TermHub:
         self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
     ) -> dict[str, Any]:
         """Register *ws* as a browser for *worker_id* and return initial state."""
-        return await self.connection_mgr.register_browser(worker_id, ws, role, defer_broadcast=defer_broadcast)
+        result = await self.connection_mgr.register_browser(worker_id, ws, role, defer_broadcast=defer_broadcast)
+        await self.emit_telemetry(
+            "session.registered",
+            worker_id=worker_id,
+            role=role,
+            metadata={"session_type": "browser"},
+        )
+        return result
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
         """Allow broadcasts to a browser after its startup frames have been sent."""
@@ -521,7 +567,9 @@ class TermHub:
         self._input_buffers.pop(ws, None)
         self._hold_buffers.pop(ws, None)
         self._paused_browsers.discard(ws)
-        return await self.connection_mgr.cleanup_browser_disconnect(worker_id, ws, owned_hijack)
+        result = await self.connection_mgr.cleanup_browser_disconnect(worker_id, ws, owned_hijack)
+        await self.emit_telemetry("session.disconnected", worker_id=worker_id, metadata={"session_type": "browser"})
+        return result
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
         """Clear input buffers for dead browsers and call into the lease manager."""

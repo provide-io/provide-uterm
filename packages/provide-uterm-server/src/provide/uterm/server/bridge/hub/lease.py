@@ -70,15 +70,6 @@ class _LeaseHubCallbacks(Protocol):
     ) -> dict[str, Any]: ...
     async def prune_if_idle(self, worker_id: str) -> None: ...
     async def _recheck_and_resume(self, worker_id: str, now: float) -> None: ...
-    async def emit_telemetry(
-        self,
-        event_type: str,
-        *,
-        worker_id: str,
-        principal: str | None = None,
-        role: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None: ...
 
 
 class HijackLeaseManager:
@@ -191,11 +182,9 @@ class HijackLeaseManager:
         if rest_expired:
             await self._hub.append_event(worker_id, "hijack_lease_expired")
             logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="rest")
-            await self._hub.emit_telemetry("hijack.expired", worker_id=worker_id, metadata={"hijack_type": "rest"})
         if dashboard_expired:
             await self._hub.append_event(worker_id, "hijack_owner_expired")
             logger.info(EVENT_HIJACK_EXPIRED, worker_id=worker_id, hijack_type="dashboard")
-            await self._hub.emit_telemetry("hijack.expired", worker_id=worker_id, metadata={"hijack_type": "dashboard"})
         await self._hub.broadcast_hijack_state(worker_id)
         await self._hub.prune_if_idle(worker_id)
         return True
@@ -276,12 +265,6 @@ class HijackLeaseManager:
                     last_heartbeat=now,
                 )
             logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
-            await self._hub.emit_telemetry(
-                "hijack.acquired",
-                worker_id=worker_id,
-                principal=owner,
-                metadata={"hijack_type": "rest", "lease_s": lease_s},
-            )
             return True, None
 
     async def try_acquire_ws(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
@@ -297,11 +280,6 @@ class HijackLeaseManager:
                 st.hijack_owner = ws
                 st.hijack_owner_expires_at = time.monotonic() + ttl
             logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="dashboard", lease_s=ttl)
-            await self._hub.emit_telemetry(
-                "hijack.acquired",
-                worker_id=worker_id,
-                metadata={"hijack_type": "dashboard", "lease_s": ttl},
-            )
             return True, None
 
     # -- Touch / heartbeat -------------------------------------------------
@@ -338,7 +316,6 @@ class HijackLeaseManager:
             st.hijack_owner_expires_at = None
             rest_active = self._hub.has_valid_rest_lease(st)
         logger.info(EVENT_HIJACK_RELEASED, worker_id=worker_id, hijack_type="dashboard")
-        await self._hub.emit_telemetry("hijack.released", worker_id=worker_id, metadata={"hijack_type": "dashboard"})
         return True, rest_active
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
