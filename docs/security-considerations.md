@@ -1,8 +1,6 @@
 # Beyond the test suite: security considerations for v0.4.0
 
-Last verified: 2026-06-01. See
-[`docs/security-audit-2026-05-25.md`](security-audit-2026-05-25.md) for the
-evidence-backed sweep that updated this checklist.
+Last verified: 2026-06-01.
 
 > **Status (2026-06-01):** A post-2026-05-25 enterprise-hardening body
 > landed several controls this checklist previously listed as deferred or
@@ -46,7 +44,7 @@ The columns map to:
 |---|:---:|---|
 | Ruff (E/W/F/I/N/UP/B/C4/SIM/TCH/PTH/DTZ/S/ARG/RUF) | ✅ | Clean on source tree as of `59fa664`. |
 | Bandit at `-ll` (medium+) | ✅ | Two flagged issues resolved at the source in `f6e0080` (MD5 `usedforsecurity=False`, JWKS scheme preflight). |
-| mypy strict | ⚠ | Clean on `provide-uterm`. ~186 pre-existing errors on `provide-uterm-server` (mostly missing `__all__` exports, untyped async wrappers, deprecated `Any` returns). Tracked in `RELEASE_READINESS.md`. |
+| mypy strict | ⚠ | Clean on `provide-uterm`. ~186 pre-existing errors on `provide-uterm-server` (mostly missing `__all__` exports, untyped async wrappers, deprecated `Any` returns). Tracked as known tech debt. |
 | ty (additional type checker) | ✅ | Clean after the `setattr`/`cast` fixes in `provide.uterm.ai.auth`. |
 | Mutation testing (mutmut) | ⚠ | 87.50% kill rate on `auth.py` after this RC pass (up from 70.65%). 23 survivors remain; need `mutmut show <id>` inspection. |
 | Semgrep / CodeQL / Sonar | ✅ | CodeQL is wired in `.github/workflows/codeql.yml` for Python + JavaScript/TypeScript with the `security-and-quality` query pack. |
@@ -95,7 +93,7 @@ The columns map to:
 | PTY isolation | ✅ | Per-session PTY; UID mapping via `provide.uterm.platform.uid_map`. |
 | PAM integration for credential check | ✅ | Optional, off by default; documented in `ard-pty-architecture`. |
 | Capability drop after spawn | ⚠ | Confirm `setuid`/`setgid` boundaries on the worker process before connecting the master fd. |
-| seccomp profile for worker subprocess | 📋 spec'd | Open-source library spawns workers with the host's full syscall surface by design (portable across macOS/Linux/Windows, debuggable with stock tools). Enterprise-tier seccomp confinement of connector + agent subprocesses is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-seccomp-worker-filter-design.md`) — per-connector JSON profiles + `log`/`enforce` modes + post-exec health probe. |
+| seccomp profile for worker subprocess | 📋 spec'd | Open-source library spawns workers with the host's full syscall surface by design (portable across macOS/Linux/Windows, debuggable with stock tools). Enterprise-tier seccomp confinement of connector + agent subprocesses (per-connector JSON profiles + `log`/`enforce` modes + post-exec health probe) is a planned commercial feature. |
 | Resource limits (memory, file descriptors) | ⚠ | The server has memory baseline calibration; per-session memory caps aren't enforced via `setrlimit`. |
 | LD_PRELOAD capture security | ⚠ | The platform-tier `LD_PRELOAD` integration captures stdout/stderr; verify it can't be turned into an exfil channel by a compromised worker. |
 | Docker base image (Dockerfile.server) | ⚠ | Currently uses `python:3.11-slim`. Distroless or `gcr.io/distroless/python3-debian12` would shrink attack surface. |
@@ -109,9 +107,9 @@ The columns map to:
 | Pattern-based annotation (anomaly detection) | ✅ | 20 built-in rules (`BUILTIN_RULES`); `PatternDetector`. |
 | Credential leak detection in output | ✅ | Bandit rules + redaction patterns in `redaction` module. |
 | Recording PII redaction | ✅ | A default secret-redaction ruleset (AWS access/secret keys, GitHub/Slack tokens, JWTs, etc.) ships in `bridge/hub/redaction_defaults.py` (`default_rules()`) and is enabled by default via `recording.redact_sensitive=True`; operators opt out explicitly. |
-| Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. Enterprise-tier encrypted-at-rest module is spec'd in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-18-recording-encryption-at-rest-design.md`) — AES-GCM + KMS-backed key resolution + FIPS-mode toggle. |
+| Recording encryption at rest | 📋 spec'd | Open-source library writes plaintext JSONL by design. An encrypted-at-rest module (AES-GCM + KMS-backed key resolution + FIPS-mode toggle) is a planned commercial / enterprise-tier feature. |
 | Recording retention policy | ⚠ | Local store supports `recording.retention_s` sweep; non-local stores still depend on backend-specific retention controls. |
-| Tamper-evident audit log | ✅ | A sha256 hash-chain WORM audit log ships in `server/audit_chain.py` (`AuditChain`, `GENESIS_HASH`, `verify_records`/`verify_audit_log`) with a `uterm audit verify <path>` CLI (`cli/audit.py`) for post-fact verification. The optional HMAC / ed25519 signing tier remains the enterprise spec in the `provide-terminal-monetization` repository (`docs/superpowers/specs/2026-05-19-tamper-evident-audit-log-design.md`). |
+| Tamper-evident audit log | ✅ | A sha256 hash-chain WORM audit log ships in `server/audit_chain.py` (`AuditChain`, `GENESIS_HASH`, `verify_records`/`verify_audit_log`) with a `uterm audit verify <path>` CLI (`cli/audit.py`) for post-fact verification. The optional HMAC / ed25519 signing tier is a planned commercial / enterprise-tier feature. |
 | Immutable storage hooks | ⚠ | Cloudflare DO + SQLite at the edge; on-prem reference server stores locally. |
 
 ## 7. Disclosure / response
@@ -146,7 +144,7 @@ The columns map to:
 |---|:---:|---|
 | GHA workflow permissions least-privilege | ✅ | Release Governance: `id-token: write` + `contents: read`. Confirm CI workflow has minimal permissions too. |
 | OIDC for cloud auth | ✅ | Sigstore uses GHA OIDC; if you ever push to AWS/GCP/Azure from CI, prefer OIDC over long-lived secrets. |
-| Branch protection on main / rc/** | ⚠ | Currently `actions-test` repo is a test fork; the canonical repo should require PR + green CI + signed commits on main. |
+| Branch protection on main / rc/** | ⚠ | The canonical repo should require PR + green CI + signed commits on main. |
 | Required reviewers on rc/** | ⚠ | Promote rc/** to be a protected branch with code-owner approval. |
 | GHA workflow pinning by SHA | ✅ | Workflows pin third-party actions by full commit SHA. Dependabot keeps action updates current. |
 | Restricted GitHub Actions allowlist | ⚠ | Org-level: limit which third-party actions can run. |
@@ -173,4 +171,4 @@ If you can only do five things before GA:
 4. **Document production branch protections** for the canonical repo (`main` and `rc/**`) and enforce them.
 5. **Codify SLOs/runbooks** from existing perf/load artifacts in a dedicated operations doc.
 
-After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`) and SBOM signing — both shipped — and codifying the SLO doc. A tamper-evident audit log has since shipped as a sha256 WORM chain (`server/audit_chain.py` + `uterm audit verify`); the remaining heaviest items (the optional HMAC/ed25519 audit-signing tier and worker-process seccomp confinement) have been moved to the `provide-terminal-monetization` repository as enterprise-tier specs; see the table rows above for the file paths.
+After those, the next tier is reproducible builds (`SOURCE_DATE_EPOCH`) and SBOM signing — both shipped — and codifying the SLO doc. A tamper-evident audit log has since shipped as a sha256 WORM chain (`server/audit_chain.py` + `uterm audit verify`); the remaining heaviest items (the optional HMAC/ed25519 audit-signing tier and worker-process seccomp confinement) are planned commercial / enterprise-tier features; see the table rows above.

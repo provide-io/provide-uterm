@@ -88,5 +88,5 @@ if exposing SSH, and route recordings through an encrypted-at-rest store if
 they may contain credentials.
 The reference recording module writes plaintext JSONL by design (it's
 the operator-friendly default for the AGPL build); enterprise
-encrypted-storage hooks are spec'd in the sibling
-`provide-terminal-monetization` repo.
+encrypted-storage hooks are a planned commercial / enterprise-tier
+feature.

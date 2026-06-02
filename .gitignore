@@ -93,3 +93,7 @@ demo/recordings/
 demo/**/*.cast.stderr
 artifacts/
 .worktrees/
+
+# Internal dev-process artifacts (kept in the external archive, not the public repo)
+.provide/HANDOFF.md
+docs/superpowers/
