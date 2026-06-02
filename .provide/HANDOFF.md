@@ -225,7 +225,8 @@ enforce universal 100%** — `--changed-only` masked it. All five workflows gree
   remove from `paths_to_mutate`.** They're enumerated as aspirational targets with no bound suite, so
   a changed-only run on them currently FAILS (`no_tests`/survivors). Same class of footgun as
   registry.py was — decide per file: build the suite (and re-validate) or drop from the perimeter.
-- [ ] **Load/rollback drill auth — unbreak the GA perf/resilience evidence.** `scripts/load_profile.py`
-  + `scripts/rollback_drill.py` send no auth (written for the removed `none`/`dev` mode) and 401 against
-  every current auth mode. Add `--principal`/`--role` (header mode) or a token to both — REST for
-  rollback, WS-handshake auth for load_profile — then re-capture `artifacts/{load-profile,rollback-drill}`.
+- [x] **Load/rollback drill auth — DONE.** Added `--principal`/`--role` (header-mode) to both
+  `scripts/load_profile.py` (WS-handshake `additional_headers`) and `scripts/rollback_drill.py` (REST
+  headers). Re-captured 2026-06-01 against a header-mode loopback server: rollback all 7 steps pass
+  (reconnect 2.18ms, 0 5xx), load 15/15 probes (p99 connect 11.63ms / hello 0.90ms). `--role admin`
+  carries the restart permission the rollback drill needs.

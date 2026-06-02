@@ -23,7 +23,9 @@ this file tracks what's been *captured* and where the artifacts live.
 > without a bound mutmut suite* (a changed-only run on them currently fails, it does not
 > pass). See [Known gaps](#known-gaps). Remaining non-mutation items are deferred-by-design
 > (recording encryption → enterprise tier; `ty` type-drift → tracked, non-gating). The
-> live-server load/rollback drills are **stale** (see table).
+> live-server load/rollback drills were re-captured 2026-06-01 after adding header-mode
+> `--principal/--role` auth to both (they previously sent no auth and 401'd against every
+> current auth mode).
 
 ## Branch and tag
 
@@ -47,8 +49,8 @@ this file tracks what's been *captured* and where the artifacts live.
 | Release pipeline (CI) | `🚀 Release` workflow | fired on `v0.4.0-rc1` tag | ✅ |
 | Baseline capture | `scripts/capture_rc_baseline.sh` | `artifacts/rc-baseline/` | ✅ re-captured 2026-06-01: pytest 4846 passed, ruff + bandit rc=0; mypy/`ty` rc=1 = documented type-drift (non-gating, see Known gaps) |
 | Artifact verification | `scripts/verify_package_artifacts.py` | stdout | ✅ "artifact verification passed (20 frontend files)" |
-| Load profile | `scripts/load_profile.py` | `artifacts/load-profile/load-profile-*.txt` | ⚠️ **stale** — rc-cycle artifact (p99 connect 23.86ms / hello 5.68ms) retained; live re-run blocked: the script sends no auth and predates the `none`/`dev` mode removal, so WS probes 401 against all current auth modes. Follow-up: add header/token auth to the drill |
-| Rollback drill | `scripts/rollback_drill.py` | `artifacts/rollback-drill/rollback-drill-*.json` | ⚠️ **stale** — rc-cycle artifact (reconnect 3.13ms, 0 5xx) retained; same root cause as load profile (`/api/*` returns 401 with no auth header). Follow-up: add header/token auth to the drill |
+| Load profile | `scripts/load_profile.py` | `artifacts/load-profile/load-profile-*.txt` | ✅ re-captured 2026-06-01 (drill given header-mode `--principal/--role` auth): **15/15 probes**, p99 connect 11.63ms, p99 hello 0.90ms |
+| Rollback drill | `scripts/rollback_drill.py` | `artifacts/rollback-drill/rollback-drill-*.json` | ✅ re-captured 2026-06-01 (drill given header-mode auth): **all 7 steps pass**, reconnect 2.18ms, 0 5xx spike |
 | Mutation gate (curated perimeter, changed-only) | `scripts/run_mutation_gate.py` | CI `mutation-gate` job (green) | ⚠️ enforced `killed==100` changed-only; **not universal** — `auth.py` = 94.02% (11 equivalents), `registry.py` deferred (async-unstable), `routes/`/`webhooks.py`/`manager/*` enumerated without a bound suite. See Known gaps |
 
 ## Security posture additions this RC
@@ -179,11 +181,16 @@ bash scripts/release_governance_check.sh
 # Baseline snapshot (ruff/mypy/ty/bandit/pytest with per-tool rc codes).
 bash scripts/capture_rc_baseline.sh
 
-# Live-server-required gates (start `uterm server --config ...` first).
+# Live-server-required gates. Start a server first with `auth.mode = "header"` on a
+# loopback bind (+ `header_mode_acknowledged = true`, a `worker_bearer_token`, and an
+# auto_start `provide-shell` shell session), then pass --principal/--role so the drills
+# authenticate (all current auth modes reject unauthenticated requests):
 uv run python scripts/rollback_drill.py --base-url http://127.0.0.1:27780 \
-  --session-id provide-shell --out-dir artifacts/rollback-drill
+  --session-id provide-shell --principal drill-operator --role admin \
+  --out-dir artifacts/rollback-drill
 uv run python scripts/load_profile.py --base-url http://127.0.0.1:27780 \
-  --worker-id provide-shell --concurrency 5 --rounds 3
+  --worker-id provide-shell --principal drill-operator --role admin \
+  --concurrency 5 --rounds 3
 
 # Mutation gate on changed files (auth.py during this cycle).
 uv run python scripts/run_mutation_gate.py --python-version 3.13 \

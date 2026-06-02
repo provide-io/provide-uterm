@@ -29,6 +29,22 @@ def _percentile(values: list[float], p: float) -> float:
     return sorted(values)[idx]
 
 
+def _auth_headers(principal: str | None, role: str | None) -> dict[str, str] | None:
+    """Header-mode auth headers (``x-uterm-principal`` / ``x-uterm-role``).
+
+    The reference server's ``header`` auth mode reads these from the request / WS
+    handshake (defaults match ``auth.principal_header`` / ``auth.role_header``).
+    Returns None when no principal is given — the original unauthenticated behaviour
+    (valid only against the long-removed ``none``/``dev`` modes).
+    """
+    if not principal:
+        return None
+    headers = {"x-uterm-principal": principal}
+    if role:
+        headers["x-uterm-role"] = role
+    return headers
+
+
 def _parse_control_frame(raw: str) -> dict | None:
     """Decode a single control frame from the DLE/STX-framed WS stream.
 
@@ -55,12 +71,16 @@ def _parse_control_frame(raw: str) -> dict | None:
         return None
 
 
-async def _probe_ws(base_url: str, worker_id: str, timeout_s: float) -> ProbeResult:
+async def _probe_ws(
+    base_url: str, worker_id: str, timeout_s: float, headers: dict[str, str] | None = None
+) -> ProbeResult:
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
     ws_url = f"{ws_url}/ws/browser/{worker_id}/term"
     start = time.perf_counter()
     try:
-        async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
+        async with websockets.connect(
+            ws_url, additional_headers=headers, open_timeout=timeout_s, close_timeout=timeout_s
+        ) as ws:
             connected = time.perf_counter()
             # The first frame is a hello control frame. The browser channel
             # can interleave snapshots and PTY bytes before/after, so loop
@@ -92,24 +112,33 @@ async def _probe_ws(base_url: str, worker_id: str, timeout_s: float) -> ProbeRes
         return ProbeResult(connect_ms=0.0, hello_ms=0.0, ok=False, error=str(exc))
 
 
-async def _health_check(base_url: str, timeout_s: float) -> bool:
+async def _health_check(base_url: str, timeout_s: float, headers: dict[str, str] | None = None) -> bool:
     try:
-        async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as client:
+        async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers) as client:
             resp = await client.get("/api/health")
             return resp.status_code == 200
     except Exception:
         return False
 
 
-async def run(base_url: str, worker_id: str, concurrency: int, rounds: int, timeout_s: float) -> int:
-    if not await _health_check(base_url, timeout_s):
+async def run(
+    base_url: str,
+    worker_id: str,
+    concurrency: int,
+    rounds: int,
+    timeout_s: float,
+    headers: dict[str, str] | None = None,
+) -> int:
+    if not await _health_check(base_url, timeout_s, headers):
         print("health check failed")
         return 2
 
     results: list[ProbeResult] = []
     failures = 0
     for _ in range(rounds):
-        batch = await asyncio.gather(*[_probe_ws(base_url, worker_id, timeout_s=timeout_s) for _ in range(concurrency)])
+        batch = await asyncio.gather(
+            *[_probe_ws(base_url, worker_id, timeout_s=timeout_s, headers=headers) for _ in range(concurrency)]
+        )
         results.extend(batch)
         failures += sum(1 for r in batch if not r.ok)
 
@@ -142,8 +171,13 @@ def main() -> int:
     parser.add_argument("--concurrency", type=int, default=20, help="Concurrent WS probes per round")
     parser.add_argument("--rounds", type=int, default=25, help="Number of rounds")
     parser.add_argument("--timeout-s", type=float, default=5.0, help="Per-probe timeout seconds")
+    parser.add_argument(
+        "--principal", default=None, help="x-uterm-principal for header-mode auth (required by all current auth modes)"
+    )
+    parser.add_argument("--role", default="admin", help="x-uterm-role for header-mode auth (default: admin)")
     args = parser.parse_args()
-    return asyncio.run(run(args.base_url, args.worker_id, args.concurrency, args.rounds, args.timeout_s))
+    headers = _auth_headers(args.principal, args.role)
+    return asyncio.run(run(args.base_url, args.worker_id, args.concurrency, args.rounds, args.timeout_s, headers))
 
 
 if __name__ == "__main__":
