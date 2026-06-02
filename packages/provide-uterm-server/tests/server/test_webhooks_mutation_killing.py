@@ -521,7 +521,10 @@ class TestRegistryCrud:
             cfg = await mgr.register("s1", _URL, event_bus=MagicMock())
             await asyncio.wait_for(started.wait(), timeout=1.0)
             task = mgr._tasks[cfg.webhook_id]
-            assert await mgr.unregister(cfg.webhook_id) is True
+            # wait_for guard: a mutant that breaks the cancel path would make the
+            # internal `await task` hang forever — bound it so it fails fast (TimeoutError
+            # = a kill) instead of stalling the whole mutmut worker past the 30s timeout.
+            assert await asyncio.wait_for(mgr.unregister(cfg.webhook_id), timeout=5.0) is True
             assert task.cancelled()
 
     async def test_unregister_clears_blocked_count(self) -> None:
@@ -547,7 +550,8 @@ class TestRegistryCrud:
             cfg = await mgr.register("s1", _URL, event_bus=MagicMock())
             await asyncio.wait_for(started.wait(), timeout=1.0)
             task = mgr._tasks[cfg.webhook_id]
-            await mgr.shutdown()
+            # bounded so a gather-hang mutant fails fast rather than stalling the worker
+            await asyncio.wait_for(mgr.shutdown(), timeout=5.0)
         assert task.cancelled()
         assert mgr.list_webhooks("s1") == []
         assert mgr._tasks == {}
@@ -592,7 +596,11 @@ class TestDeliveryLoop:
             secret=None,
         )
         with patch.object(mgr, "_deliver", _record):
-            await mgr._delivery_loop(cfg, bus)
+            # wait_for guard: the `if item is None: return` sentinel mutated to
+            # `is not None` makes the loop consume the sentinel, deliver, then block on
+            # an empty queue.get() forever. Bound it so that hang fails fast (a kill)
+            # rather than stalling the mutmut worker past its 30s timeout.
+            await asyncio.wait_for(mgr._delivery_loop(cfg, bus), timeout=5.0)
         # delivered the queued event AND passed the real cfg (kills _deliver(None, item))
         assert delivered == [(cfg, ev)]
         bus.watch.assert_called_once_with("sess-X", event_types=["snapshot"], pattern=r"\$")
@@ -608,7 +616,9 @@ class TestDeliveryLoop:
         watch_cm.__aexit__ = AsyncMock(return_value=False)
         bus = MagicMock()
         bus.watch = MagicMock(return_value=watch_cm)
-        await mgr._delivery_loop(_cfg(), bus)  # cfg.event_types is None
+        # bounded: the `is None`→`is not None` sentinel mutant would hang here on the
+        # now-empty queue; wait_for turns that into a fast TimeoutError kill.
+        await asyncio.wait_for(mgr._delivery_loop(_cfg(), bus), timeout=5.0)  # cfg.event_types is None
         bus.watch.assert_called_once_with("s1", event_types=None, pattern=None)
 
 
