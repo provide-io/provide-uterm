@@ -310,17 +310,17 @@ paths_to_mutate = [
     # each service live under tests/bridge/hub/test_<name>.py.
     "src/provide/uterm/server/bridge/hub/registry.py",
     "src/provide/uterm/server/bridge/hub/limiter.py",
-    # lease.py + connection.py — DEFERRED (2026-06-02). Measured under a clean
-    # changed-only run they score only ~20% (221 killed / 406 survived / 468
-    # no_tests): their dedicated suites (tests/bridge/hub/test_lease.py,
-    # test_connection.py) are NOT wired into tests_dir below — only
-    # tests/bridge/test_hijack_lease.py is — so most mutants bind no test. This is
-    # the same enumerated-but-under-wired gap as registry.py (the changed-only gate
-    # rarely fired on them, so it stayed latent until the TelemetrySink work touched
-    # them). Genuine enforcement needs their suites wired + the residual survivors
-    # killed — tracked follow-up. Re-add once that lands.
-    # "src/provide/uterm/server/bridge/hub/lease.py",
+    # lease.py — RE-ENABLED (2026-06-02). Genuine killed==100 (489/489, 0 survived,
+    # 0 no_tests): the dedicated suites (test_lease.py + the ownership/atomic
+    # mutation-killing suites + the five test_lease_kill_*.py behaviour-pinning
+    # suites) are wired into tests_dir below. The only equivalent-class mutant (the
+    # _LeaseHubCallbacks.metric Protocol-stub default literal) was removed by
+    # switching it to `= ...` rather than allowlisted.
+    "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
+    # connection.py — DEFERRED (2026-06-02). Same enumerated-but-under-wired class
+    # as lease.py was; its dedicated kill-suites aren't written/wired yet. Re-add
+    # once its survivors are killed (tracked follow-up; lease.py is the template).
     # "src/provide/uterm/server/bridge/hub/connection.py",
     "src/provide/uterm/server/bridge/hub/presence.py",
     "src/provide/uterm/server/bridge/hub/store.py",
@@ -421,6 +421,20 @@ tests_dir = [
     # --changed-only gate finds limiter.py mutants but binds zero tests and
     # reports them all as ``no_tests`` (2026-05-28 remediation, lane A4).
     "packages/provide-uterm-server/tests/bridge/hub/test_limiter.py",
+    # HijackLeaseManager (hub/lease.py) — dedicated pure-unit suite + the
+    # ownership/atomic mutation-killing suites that drive the lease state machine
+    # through the hub facade (together they bind ~all of lease.py's mutants).
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_ownership_mutations.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_ownership_mutations_2.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_ownership_mutations_3.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_atomic.py",
+    # Dedicated behaviour-pinning mutation-killing suites for lease.py.
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_acquire_rest.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_rest_lifecycle.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_dashboard_ws.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_expiry_sweep.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_events_dead.py",
 ]
 also_copy = [
     "src",
