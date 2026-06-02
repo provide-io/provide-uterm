@@ -2,7 +2,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Mutation-killing tests for server/models.py — _clean_path, model_dump, validation_error_message."""
+"""Mutation-killing tests for server config_schema/models helpers.
+
+Covers the two *undecorated* module-level functions in ``config_schema.py``
+that mutmut actually mutates (it skips every ``@model_validator`` /
+``@field_validator`` / ``@classmethod`` by design — see
+``_skip_node_and_children`` in mutmut's ``file_mutation.py``): ``_clean_path``
+and the SSRF guard ``_require_secure_url``. Also covers ``models.py``'s
+``model_dump`` / ``validation_error_message``.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +19,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from provide.uterm.server.config_schema import _clean_path
+from provide.uterm.server.config_schema import _clean_path, _require_secure_url
 from provide.uterm.server.models import (
     SessionDefinition,
     model_dump,
@@ -150,3 +158,77 @@ class TestValidationErrorMessage:
         assert len(result) > 0
         # Must NOT be 'None' (which mutmut_11 would produce via str(None))
         assert result != "None", f"Fallback should not be 'None', got {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# _require_secure_url — the outbound-URL SSRF guard
+#
+# urlparse() lowercases both the scheme and the hostname, so every case-flip
+# mutation on the "https"/"http"/".localhost" literals changes behaviour (the
+# mutated literal can never match the always-lowercase parsed value). Each test
+# names the mutant ids it distinguishes; together they leave only the one
+# documented-equivalent mutant (mutmut_14, the unreachable-fallback string),
+# which is excused in mutation_equivalents.toml.
+# ---------------------------------------------------------------------------
+
+
+class TestRequireSecureUrl:
+    FIELD = "auth.webhook_idp_url"
+
+    def test_none_and_empty_are_noops(self) -> None:
+        """Falsy url short-circuits before any parsing — must not raise."""
+        assert _require_secure_url(None, self.FIELD) is None
+        assert _require_secure_url("", self.FIELD) is None
+
+    def test_https_is_always_allowed(self) -> None:
+        """An https:// url returns None with no parsing/scheme errors.
+
+        Kills mutmut_2 (parsed=None → AttributeError), mutmut_3
+        (urlparse(None)), mutmut_4 (== → !=), mutmut_5 ("XXhttpsXX"),
+        mutmut_6 ("HTTPS" — scheme is always lowercased so it never matches).
+        """
+        assert _require_secure_url("https://example.com/jwks", self.FIELD) is None
+
+    def test_http_loopback_ip_is_allowed(self) -> None:
+        """Cleartext http:// to 127.0.0.1 is permitted (local dev).
+
+        Kills mutmut_7 (!= → ==), mutmut_8 ("XXhttpXX"), mutmut_9 ("HTTP"),
+        mutmut_11 (host=None → AttributeError), mutmut_13 (hostname or "" →
+        hostname and "" → empty host raises), mutmut_15 (or → and),
+        mutmut_16 (in → not in).
+        """
+        assert _require_secure_url("http://127.0.0.1:8080/cb", self.FIELD) is None
+
+    def test_http_localhost_name_is_allowed(self) -> None:
+        """Cleartext http:// to the literal host 'localhost' is permitted.
+
+        Kills mutmut_12 (.lower() → .upper(): the uppercased host no longer
+        matches the lowercase _LOOPBACK_HOSTS membership, so it would raise).
+        """
+        assert _require_secure_url("http://localhost/cb", self.FIELD) is None
+
+    def test_http_dot_localhost_suffix_is_allowed(self) -> None:
+        """Cleartext http:// to a *.localhost host is permitted via endswith.
+
+        Kills mutmut_18 ("XX.localhostXX") and mutmut_19 (".LOCALHOST" — host
+        is always lowercase so the uppercased suffix never matches).
+        """
+        assert _require_secure_url("http://api.localhost/cb", self.FIELD) is None
+
+    def test_non_http_scheme_rejected_with_specific_message(self) -> None:
+        """A non-http(s) scheme raises ValueError carrying the field + reason.
+
+        Kills mutmut_10 (ValueError(None) — its 'None' text fails the match).
+        """
+        with pytest.raises(ValueError, match=r"auth\.webhook_idp_url must use http\(s\)"):
+            _require_secure_url("ftp://files.example.com", self.FIELD)
+
+    def test_routable_http_rejected_as_valueerror_with_message(self) -> None:
+        """Cleartext http:// to a routable host raises ValueError (not None/loopback).
+
+        Kills mutmut_16 (in → not in would *allow* the routable host — no raise),
+        mutmut_17 (endswith(None) → TypeError, not ValueError) and mutmut_20
+        (ValueError(None) — its 'None' text fails the match).
+        """
+        with pytest.raises(ValueError, match=r"auth\.webhook_idp_url must use https://"):
+            _require_secure_url("http://evil.example.com/steal", self.FIELD)

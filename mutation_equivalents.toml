@@ -107,3 +107,18 @@ reason = "Same as _rollback_browser_quota__mutmut_16 but in _update_lock_state's
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_1"
 reason = "Default-argument mutation defer_broadcast=False->True. mutmut's trampoline keeps the original default and forwards the bound kwarg explicitly to the variant, so the mutated default is never exercised — unkillable trampoline artifact, not a real behaviour gap (the default IS regression-tested)."
+
+# --- config_schema.py (_require_secure_url SSRF guard) --------------------
+# config_schema.py's only mutable surface is its two UNDECORATED module-level
+# helpers (mutmut skips every @model_validator/@field_validator/@classmethod by
+# design). 33 of its 34 mutants are killed by test_models_mutation_killing.py;
+# this is the sole genuine equivalent.
+[[equivalent]]
+mutant = "provide.uterm.server.config_schema.x__require_secure_url__mutmut_14"
+reason = """\
+(parsed.hostname or "") -> (parsed.hostname or "XXXX"): the fallback string is read \
+ONLY when parsed.hostname is falsy (a URL with no host, reachable solely via the \
+scheme=="http" branch). In that case host becomes "" (orig) or "xxxx" (mutant) after \
+.lower(); NEITHER is in _LOOPBACK_HOSTS and neither ends with ".localhost", so both \
+take the identical final `raise ValueError(... must use https://...)`. The fallback \
+value is never observable downstream — behaviorally equivalent."""
