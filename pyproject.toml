@@ -258,14 +258,24 @@ paths_to_mutate = [
     "src/provide/uterm/tunnel/token_hash.py",
     # HTTP intercept header denylist + gating policy.
     "src/provide/uterm/tunnel/intercept.py",
-    # Server routes/webhooks/registry — security-relevant request handling.
-    # NOTE: these are *aspirational* mutation targets. Several lack a dedicated
-    # mutmut suite in tests_dir, so a --changed-only run that targets them
-    # currently FAILS (no_tests / survivors), it does not pass — touching them
-    # means building the suite first. (Tracked in RELEASE_READINESS "mutation
-    # perimeter"; the earlier "safe to keep enumerated" note was incorrect.)
-    "src/provide/uterm/server/routes/",
-    "src/provide/uterm/server/webhooks.py",
+    # Server security-relevant request handling. config_schema.py + app/factory.py
+    # (below) have bound suites (test_config.py / test_app_coverage.py) and stay
+    # enforced. routes/, webhooks.py, and manager/{process,config}.py were enumerated
+    # here, but a 2026-06-01 audit — measuring each with its covering tests wired —
+    # found NONE can reach a stable killed==100, so each is DEFERRED (commented) with
+    # its specific obstacle. A --changed-only run on a deferred file is then correctly
+    # skipped (not a false pass). Re-add each once its obstacle is resolved.
+    #
+    # routes/ — async FastAPI handler surface (2049 LOC incl. routes/sse.py, an SSE
+    #   streaming generator); same async timeout/segfault class as registry.py /
+    #   webhooks.py. Deferred by pattern.
+    # "src/provide/uterm/server/routes/",
+    #
+    # webhooks.py — measured 21% with the 8 test_webhooks_part*.py suites wired:
+    #   307/406 mutants SEGFAULT (reproducible single-worker), across every method
+    #   (_deliver, the DNS resolvers, the SSRF guards, the asyncio _delivery_loop).
+    #   Mutating its network/DNS/async-delivery path crashes the worker.
+    # "src/provide/uterm/server/webhooks.py",
     # registry.py — DEFERRED from the strict killed==100 gate (2026-06-01). It is
     # 100% line/branch covered and a dedicated mutmut suite is wired below
     # (test_registry.py + test_runtime.py + the SSE/coverage suites), which reaches
@@ -279,8 +289,14 @@ paths_to_mutate = [
     # "src/provide/uterm/server/registry.py",
     "src/provide/uterm/server/config_schema.py",
     "src/provide/uterm/server/app/factory.py",
-    "src/provide/uterm/manager/process.py",
-    "src/provide/uterm/manager/config.py",
+    # manager/process.py + config.py — measured total:0 ("could not find any test case
+    #   for any mutant") even with all four test_process_mutation_killing*.py + the
+    #   config suite wired: process.py drives worker SUBPROCESSES, so its mutated code
+    #   runs in children the in-process mutmut trampoline never instruments — the
+    #   binding is non-functional here. (The kill-test files show it worked at some
+    #   past point; this is a binding-infra follow-up, not a strict-gate target now.)
+    # "src/provide/uterm/manager/process.py",
+    # "src/provide/uterm/manager/config.py",
     # Refactor #16 service classes — state-machine + dispatch logic split
     # out of the former TermHub mixin pile. High mutation value; tests for
     # each service live under tests/bridge/hub/test_<name>.py.
