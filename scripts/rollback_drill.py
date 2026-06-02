@@ -26,6 +26,23 @@ from pathlib import Path
 import httpx
 
 
+def _auth_headers(principal: str | None, role: str | None) -> dict[str, str] | None:
+    """Header-mode auth headers (``x-uterm-principal`` / ``x-uterm-role``).
+
+    The reference server's ``header`` auth mode reads these from the request
+    (defaults match ``auth.principal_header`` / ``auth.role_header``). Returns None
+    when no principal is given — the original unauthenticated behaviour (valid only
+    against the long-removed ``none``/``dev`` modes). ``restart`` needs an operator/
+    admin role, so the default role is ``admin``.
+    """
+    if not principal:
+        return None
+    headers = {"x-uterm-principal": principal}
+    if role:
+        headers["x-uterm-role"] = role
+    return headers
+
+
 async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s: float) -> float:
     start = time.perf_counter()
     deadline = start + timeout_s
@@ -37,7 +54,9 @@ async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s:
     raise TimeoutError(f"session {session_id} did not reach connected state within {timeout_s}s")
 
 
-async def run(base_url: str, session_id: str, out_dir: Path, timeout_s: float) -> int:
+async def run(
+    base_url: str, session_id: str, out_dir: Path, timeout_s: float, headers: dict[str, str] | None = None
+) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     artifact_path = out_dir / f"rollback-drill-{stamp}.json"
@@ -58,7 +77,7 @@ async def run(base_url: str, session_id: str, out_dir: Path, timeout_s: float) -
         status = "PASS" if result == "pass" else "FAIL"
         print(f"[{status}] {name}" + (f": {detail}" if detail else ""))
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as client:
+    async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers) as client:
         # --- Pre-flight ---
         health = await client.get("/api/health")
         if health.status_code != 200:
@@ -130,8 +149,17 @@ def main() -> int:
     parser.add_argument("--session-id", default="provide-shell", help="Session to use for the drill")
     parser.add_argument("--out-dir", default="artifacts/rollback-drill", help="Output directory for drill artifact")
     parser.add_argument("--timeout-s", type=float, default=30.0, help="Reconnect timeout in seconds")
+    parser.add_argument(
+        "--principal", default=None, help="x-uterm-principal for header-mode auth (required by all current auth modes)"
+    )
+    parser.add_argument(
+        "--role",
+        default="admin",
+        help="x-uterm-role for header-mode auth (default: admin; restart needs operator/admin)",
+    )
     args = parser.parse_args()
-    return asyncio.run(run(args.base_url, args.session_id, Path(args.out_dir), args.timeout_s))
+    headers = _auth_headers(args.principal, args.role)
+    return asyncio.run(run(args.base_url, args.session_id, Path(args.out_dir), args.timeout_s, headers))
 
 
 if __name__ == "__main__":
