@@ -18,7 +18,17 @@ from tests.memray.conftest import assert_allocation_within_threshold
 @pytest.mark.memray
 @pytest.mark.slow
 def test_event_bus_stress(memray_output_dir: Path, memray_baseline: dict[str, int]) -> None:
-    """Stress test EventBus fanout: 100 subscribers x 10k events on one worker."""
+    """Stress test EventBus fanout: 100 subscribers x 10k events on one worker.
+
+    ``eventbus_total_allocations`` in baselines.json is the *whole-subprocess*
+    allocation count (interpreter start + import graph + fanout), so it is
+    sensitive to import-graph growth, not just the fanout hot path. It is an
+    empirically derived value (median of a 20-run sample, run-to-run stdev ~12
+    on the reference machine), and the 15% upper-bound tolerance absorbs
+    cross-environment spread. Re-baseline (not widen tolerance) when an
+    intentional import-graph change shifts the floor; a >15% jump above the
+    baseline still flags a genuine fanout-path allocation regression.
+    """
     script_path = Path(__file__).parent.parent.parent / "scripts" / "memray_event_bus_stress.py"
     output_bin = memray_output_dir / "event_bus_stress.bin"
 
