@@ -5,10 +5,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/ci.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/release-governance.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/release-governance.yml/badge.svg" alt="Release Governance"></a>
-  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/codeql.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
-  <a href="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/container-scan.yml"><img src="https://github.com/livingstaccato/provide-uterm-actions-test/actions/workflows/container-scan.yml/badge.svg" alt="Container Scan"></a>
+  <a href="https://github.com/provide-io/provide-uterm/actions/workflows/ci.yml"><img src="https://github.com/provide-io/provide-uterm/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/provide-io/provide-uterm/actions/workflows/release-governance.yml"><img src="https://github.com/provide-io/provide-uterm/actions/workflows/release-governance.yml/badge.svg" alt="Release Governance"></a>
+  <a href="https://github.com/provide-io/provide-uterm/actions/workflows/codeql.yml"><img src="https://github.com/provide-io/provide-uterm/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://github.com/provide-io/provide-uterm/actions/workflows/container-scan.yml"><img src="https://github.com/provide-io/provide-uterm/actions/workflows/container-scan.yml/badge.svg" alt="Container Scan"></a>
   <a href="SECURITY.md"><img src="https://img.shields.io/badge/security-policy-blue.svg" alt="Security Policy"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg" alt="Python 3.11–3.14"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-green.svg" alt="License: AGPL-3.0"></a>
@@ -320,7 +320,6 @@ All Python packages at 100% branch+line coverage. 8760+ tests total.
 - [Testing Guide](https://github.com/provide-io/provide-uterm/blob/main/docs/TESTING.md)
 - [Operations Runbook](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/runbook.md)
 - [Service SLOs](https://github.com/provide-io/provide-uterm/blob/main/docs/operations/slo.md)
-- [Enterprise Hardening & Reliability Review](https://github.com/provide-io/provide-uterm/blob/main/docs/enterprise-hardening-review-2026-05-29.md)
 - [Release Governance](https://github.com/provide-io/provide-uterm/blob/main/docs/release-governance.md)
 - [Architecture Diagrams](https://github.com/provide-io/provide-uterm/tree/main/docs/diagrams) (PlantUML)
 - [Cloudflare Workers](https://github.com/provide-io/provide-uterm/blob/main/packages/provide-uterm-cloudflare/README.md)
