@@ -16,7 +16,7 @@ import json
 import logging
 import secrets
 import time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
 
 from provide.telemetry import get_tracer
@@ -59,8 +59,30 @@ class _FetchMixin:
 
     if TYPE_CHECKING:
         worker_id: str
+        config: Any
+        env: Any
+        ctx: Any
+        meta: dict[str, Any]
+        store: Any
+        hijack: Any
+        input_mode: str
+        worker_ws: Any
+        browser_resume_tokens: dict[str, str]
+        _deleted_at: float | None
+        _tunnel_worker_token_hash: str | None
+        _ushell: Any
 
-    def _lazy_init_worker_id(self, request: object) -> None:
+        # Methods from other mixins
+        async def _ensure_meta(self) -> None: ...
+        async def _ensure_credentials(self) -> None: ...
+        async def resolve_principal(self, request: Any) -> tuple[Any, Response | None]: ...
+        async def browser_role_for_request(self, request: Any) -> str: ...
+        async def browser_subject_for_request(self, request: Any) -> str | None: ...
+        def _register_socket(self, ws: Any, role: str) -> None: ...
+        def ws_key(self, ws: Any) -> str: ...
+        async def _maybe_send_presence_sync(self, ws: Any, *, exclude_self: bool = False) -> None: ...
+
+    def _lazy_init_worker_id(self, request: Any) -> None:
         """Update worker_id from the request URL when ctx.id.name() returned 'default'.
 
         Called at the start of fetch() so KV writes and state operations use
@@ -69,7 +91,7 @@ class _FetchMixin:
         if self.worker_id != "default":
             return
         try:
-            path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
+            path = urlparse(str(request.url)).path
         except Exception:
             return
         for prefix in ("/ws/worker/", "/ws/browser/", "/ws/raw/", "/tunnel/", "/worker/", "/api/sessions/"):
@@ -79,16 +101,16 @@ class _FetchMixin:
                     self.worker_id = segment
                     return
 
-    async def fetch(self, request: object) -> Response:
+    async def fetch(self, request: Any) -> Response:
         with tracer.start_as_current_span("uterm.cloudflare.fetch"):
             return await self._fetch_impl(request)
 
-    async def _fetch_impl(self, request: object) -> Response:
+    async def _fetch_impl(self, request: Any) -> Response:
         # Resolve worker_id from URL when ctx.id.name() is unavailable (CF Python runtime bug).
         self._lazy_init_worker_id(request)
-        if self._deleted_at is not None:  # type: ignore[attr-defined]
+        if self._deleted_at is not None:
             return Response(
-                json.dumps({"error": "not_found", "path": urlparse(str(request.url)).path}, ensure_ascii=True),  # type: ignore[attr-defined]
+                json.dumps({"error": "not_found", "path": urlparse(str(request.url)).path}, ensure_ascii=True),
                 status=404,
                 headers={"content-type": "application/json"},
             )
@@ -96,8 +118,8 @@ class _FetchMixin:
         await self._ensure_credentials()  # type: ignore[attr-defined]
 
         # Parse URL once — reused for worker WS check and socket role routing.
-        upgrade_header = str(request.headers.get("Upgrade") or "").lower()  # type: ignore[attr-defined]
-        path = urlparse(str(request.url)).path  # type: ignore[attr-defined]
+        upgrade_header = str(request.headers.get("Upgrade") or "").lower()
+        path = urlparse(str(request.url)).path
 
         # Worker WS connections authenticate with a bearer token, not JWT.
         # When worker_bearer_token is None (dev/none mode), this block is
@@ -105,21 +127,17 @@ class _FetchMixin:
         # which permits all callers in those modes.  In JWT mode, from_env()
         # guarantees worker_bearer_token is set (ValueError otherwise).
         _is_worker_ws = upgrade_header == "websocket" and path.startswith(("/ws/worker/", "/tunnel/", "/ws/raw/"))
-        if _is_worker_ws and self.config.worker_bearer_token:  # type: ignore[attr-defined]
+        if _is_worker_ws and self.config.worker_bearer_token:
             token = extract_bearer_or_cookie(request)
             valid_worker_token = False
             auth_type = "none"
-            if token and secrets.compare_digest(token, self.config.worker_bearer_token):  # type: ignore[attr-defined]
+            if token and secrets.compare_digest(token, self.config.worker_bearer_token):
                 valid_worker_token = True
                 auth_type = "global_bearer"
             # Constant-time hash compare against the stored BLAKE2b digest.
             from provide.uterm.tunnel.token_hash import verify_token
 
-            if (
-                token
-                and self._tunnel_worker_token_hash  # type: ignore[attr-defined]
-                and verify_token(token, self._tunnel_worker_token_hash)  # type: ignore[attr-defined]
-            ):
+            if token and self._tunnel_worker_token_hash and verify_token(token, self._tunnel_worker_token_hash):
                 valid_worker_token = True
                 auth_type = "tunnel_session"
             if not valid_worker_token:
@@ -138,7 +156,7 @@ class _FetchMixin:
         else:
             _principal, auth_error = await self.resolve_principal(request)  # type: ignore[attr-defined]
             if auth_error is not None:
-                return cast("Response", auth_error)
+                return auth_error
         if upgrade_header == "websocket":
             from js import WebSocketPair  # type: ignore[import-not-found]
 
@@ -157,10 +175,10 @@ class _FetchMixin:
                 browser_role = await self.browser_role_for_request(request)  # type: ignore[attr-defined]
                 # Enforce session visibility before upgrading browser WebSockets.
                 # Only browser sockets carry a JWT and require visibility checks.
-                visibility = str(self.meta.get("visibility") or "public")  # type: ignore[attr-defined]
+                visibility = str(self.meta.get("visibility") or "public")
                 if visibility != "public" and browser_role != "admin":
                     subject = await self.browser_subject_for_request(request)  # type: ignore[attr-defined]
-                    owner = self.meta.get("owner")  # type: ignore[attr-defined]
+                    owner = self.meta.get("owner")
                     permitted = subject is not None and subject == owner
                     if not permitted and visibility == "operator":
                         permitted = browser_role == "operator"
@@ -171,7 +189,7 @@ class _FetchMixin:
                             headers={"content-type": "application/json"},
                         )
 
-            client, server = WebSocketPair.new().object_values()
+            client, server = WebSocketPair.new().object_values()  # type: ignore[union-attr]
             self.ctx.acceptWebSocket(server)  # type: ignore[attr-defined]
             try:
                 # Encode socket type, browser role, and worker_id for hibernation safety.
@@ -188,7 +206,7 @@ class _FetchMixin:
                 server._ut_browser_role = browser_role
             # Register here so the role is available if fetch() is re-entered
             # before webSocketOpen() fires (hibernation-restore path).
-            self._register_socket(server, socket_role)  # type: ignore[attr-defined]
+            self._register_socket(server, socket_role)  # type: ignore[attr-defined]  # server is Any from WebSocketPair
 
             # For worker connections, write KV registration eagerly in fetch() before
             # returning 101. In CF hibernation mode, async operations in webSocketOpen()
@@ -196,12 +214,12 @@ class _FetchMixin:
             if socket_role == "worker":
                 try:
                     await update_kv_session(
-                        self.env,  # type: ignore[attr-defined]
+                        self.env,
                         self.worker_id,
                         connected=True,
-                        hijacked=self.hijack.session is not None,  # type: ignore[attr-defined]
-                        input_mode=self.input_mode,  # type: ignore[attr-defined]
-                        meta=self.meta,  # type: ignore[attr-defined]
+                        hijacked=self.hijack.session is not None,
+                        input_mode=self.input_mode,
+                        meta=self.meta,
                     )
                 except Exception as exc:
                     logger.warning("kv register worker in fetch() failed: %s", exc)
@@ -212,24 +230,24 @@ class _FetchMixin:
                 init_ushell(self)
                 # Issue a resume token for this browser session
                 resume_token = secrets.token_urlsafe(32)
-                resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))  # type: ignore[attr-defined]
-                self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)  # type: ignore[attr-defined]
-                self.browser_resume_tokens[self.ws_key(server)] = resume_token  # type: ignore[attr-defined]
+                resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
+                self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
+                self.browser_resume_tokens[self.ws_key(server)] = resume_token  # type: ignore[attr-defined]  # server is Any
                 try:
                     server.send(
                         encode_control(
                             {
                                 "type": "hello",
                                 "worker_id": self.worker_id,
-                                "worker_online": self.worker_ws is not None or self._ushell is not None,  # type: ignore[attr-defined]
+                                "worker_online": self.worker_ws is not None or self._ushell is not None,
                                 "can_hijack": browser_role == "admin",
-                                "input_mode": self.input_mode,  # type: ignore[attr-defined]
+                                "input_mode": self.input_mode,
                                 "role": browser_role,
                                 "hijack_control": "rest",
                                 "hijack_step_supported": True,
                                 "resume_supported": True,
                                 "resume_token": resume_token,
-                                "presence_enabled": bool(self.meta.get("presence")),  # type: ignore[attr-defined]
+                                "presence_enabled": bool(self.meta.get("presence")),
                                 "protocol_version": CURRENT_PROTOCOL_VERSION,
                                 "protocol": {
                                     "selected": PREFERRED_PROTOCOL_VERSION,

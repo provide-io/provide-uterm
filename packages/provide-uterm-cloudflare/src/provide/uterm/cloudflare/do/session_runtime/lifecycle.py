@@ -51,6 +51,34 @@ class _LifecycleMixin:
 
     if TYPE_CHECKING:
         worker_ws: CFWebSocket | None
+        _deleted_at: float | None
+        ws_key: Any
+        _socket_role: Any
+        browser_sockets: dict[str, CFWebSocket]
+        _register_socket: Any
+        broadcast_worker_frame: Any
+        worker_id: str
+        env: Any
+        hijack: Any
+        input_mode: str
+        meta: dict[str, Any]
+        raw_sockets: dict[str, CFWebSocket]
+        last_snapshot: dict[str, Any] | None
+        _send_text: Any
+        config: Any
+        store: Any
+        browser_resume_tokens: dict[str, str]
+        send_ws: Any
+        _maybe_send_presence_sync: Any
+        send_hijack_state: Any
+        _ushell: Any
+        _socket_browser_role: Any
+        lifecycle_state: str
+        _socket_worker_id: Any
+        _remove_ws: Any
+        broadcast_to_browsers: Any
+        browser_hijack_owner: dict[str, str]
+        push_worker_input: Any
 
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
         if self._deleted_at is not None:  # type: ignore[attr-defined]
