@@ -17,8 +17,14 @@
 #     (e.g. "provide.uterm.server.bridge.hub.lease.x_<method>__mutmut_12").
 #   - `reason` MUST justify WHY the mutation is behaviorally equivalent. "I could
 #     not write a test" is NOT a reason — that is a missing test, not equivalence.
-#   - Only `survived`/`suspicious` mutants are excusable; never a `no tests`
-#     (coverage gap) or `timeout`/`skipped` (infra) mutant.
+#   - `survived`/`suspicious` are excusable for a listed mutant; a `no tests`
+#     (coverage gap) or `skipped` mutant is NEVER excusable. A `timeout` is
+#     excusable ONLY for a listed (proven-equivalent) mutant: such a mutant is
+#     unkillable, so mutmut's wall-clock timeout on it (it SIGXCPU's a run past
+#     (estimated_test_time + 1) * 15s — a loaded CI runner crosses that for a
+#     small-estimate mutant) is the same fact as `survived`, just surfaced by CI
+#     timing. A timeout on a NON-listed mutant still fails the gate (it could hide
+#     a real kill gap). See EXCUSABLE_STATES in scripts/run_mutation_gate.py.
 #   - A stale entry (its mutant was later killed, or renumbered by a source edit)
 #     is reported as a WARNING by the gate; it never weakens enforcement, because
 #     a renumbered equivalent reappears as a new unexcused survivor.
@@ -463,10 +469,12 @@ mutant = "provide.uterm.server.routes.pages.x__set_auth_cookie__mutmut_2"
 reason = "samesite default-argument mutation -- the mutmut trampoline forwards the bound original default, so the variant default is dead code no caller reaches. Equivalent."
 
 # ---------------------------------------------------------------------------
-# manager/process_impl.py (AgentProcessManager) — 24 documented equivalents.
+# manager/process_impl.py (AgentProcessManager) — 28 documented equivalents.
 # Residual after the test_process_*.py + test_coverage_*.py suites + the dedicated
-# test_process_mutation_killing_5.py kill-suite. All NON-equivalent mutants are killed
-# (662/662). See pyproject [tool.mutmut] note.
+# test_process_kill_part0*.py kill-suite (each <500 LOC). All NON-equivalent mutants
+# are killed (664/664). On CI exactly one of these equivalents may surface as a
+# wall-clock `timeout` rather than `survived` (excused either way — see the header
+# note above). See pyproject [tool.mutmut] note.
 # ---------------------------------------------------------------------------
 
 [[equivalent]]

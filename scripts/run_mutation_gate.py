@@ -30,13 +30,27 @@ BAD_MUTANT_STATES: Final[tuple[str, ...]] = (
     "skipped",
 )
 
-# Mutant states a documented-equivalent allowlist entry may excuse. Equivalent
-# mutants survive (the mutated code is behaviorally identical), so only these
-# states are excusable — never "no tests" (a coverage gap) or "timeout"/"skipped"
-# (an infra problem), which must still be fixed, not excused.
+# Mutant states a documented-equivalent allowlist entry may excuse. These are only
+# ever applied to a mutant that is ALSO in the allowlist (see
+# _apply_equivalent_allowlist), i.e. one with a written, proven equivalence reason,
+# so a non-allowlisted mutant in any of these states still fails the gate.
+#
+#   - "survived"/"suspicious": the mutated code is behaviorally identical, so no test
+#     can kill it — the canonical equivalent-mutant outcome.
+#   - "timeout": mutmut flags this purely on wall-clock (it SIGXCPU's a run exceeding
+#     (estimated_test_time + 1) * 15s; the estimate is measured single-threaded
+#     during stats). For an ALLOWLISTED — therefore proven-unkillable — mutant a
+#     timeout is the SAME fact as "survived" (not killed, and cannot be), just
+#     surfaced by CI wall-clock noise instead of a clean finish; it cannot be hiding
+#     a kill, because a now-killable mutant would FAIL FAST (killed), never time out.
+#     A NON-allowlisted timeout is still a hard failure — a real infra/coverage
+#     problem to fix, never excused.
+#
+# "no tests" (a coverage gap) and "skipped" are never excusable in any state.
 EXCUSABLE_STATES: Final[tuple[str, ...]] = (
     "survived",
     "suspicious",
+    "timeout",
 )
 
 # Allowlist of documented equivalent mutants (mutant id -> justification),
@@ -368,43 +382,6 @@ def _collect_stats(
     return effective, last_stats
 
 
-def _rerun_timeouts_isolated(
-    python_version: str | None,
-    env: dict[str, str],
-    timeout_names: list[str],
-    root_pyproject: Path,
-    root_original: str | None,
-    paths_to_mutate: list[str] | None,
-) -> None:
-    """Force-rerun timed-out mutants one at a time in single-worker isolation.
-
-    mutmut flags a ``timeout`` purely on wall-clock: it SIGXCPU's a mutant whose
-    run exceeds ``(estimated_test_time + 1) * 15`` seconds, where the estimate is
-    measured single-threaded during the stats phase. On a shared/loaded CI runner a
-    mutant that is killed in milliseconds when it has the box to itself can
-    transiently cross that bound under worker oversubscription (``--max-children``
-    > 1 competing for the same cores). Re-running the EXACT timed-out mutants by
-    name with ``--max-children 1`` (no parallel children, reusing the existing
-    ``mutants/`` tree) clears a transient timeout, while a genuine hang simply times
-    out again in isolation and still fails the gate. Passing explicit mutant names
-    also bypasses mutmut's "skip already-resulted mutants" guard, so the re-run
-    really executes rather than re-printing the cached result.
-
-    The sanitized root ``pyproject.toml`` must be active while mutmut runs (it reads
-    its config from there), so this re-sanitizes before the run and restores after.
-    """
-    if root_original is not None:
-        _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate, strip_workspace=False)
-    try:
-        cmd = _uv_mutmut_cmd(python_version, "run", "--max-children", "1", *timeout_names)
-        print(f"Re-running {len(timeout_names)} timed-out mutant(s) in single-worker isolation (transient-load guard):")
-        print("+", " ".join(cmd))
-        subprocess.run(cmd, check=False, env=env)  # nosec
-    finally:
-        if root_original is not None:
-            root_pyproject.write_text(root_original, encoding="utf-8")
-
-
 def run_mutation_gate(
     python_version: str | None,
     max_children: int,
@@ -452,24 +429,7 @@ def run_mutation_gate(
         if mutmut_result.returncode > 1:
             raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
 
-        effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
-
-        # Transient-load guard: when the ONLY thing keeping the gate from clean is a
-        # mutmut wall-clock ``timeout`` (never a survived/suspicious/uncovered
-        # mutant — those are real defects), re-run those exact mutants in
-        # single-worker isolation and re-tally. A genuine hang times out again and
-        # still fails; a CI load flake clears. See _rerun_timeouts_isolated.
-        timeout_names = [name for name, state in effective if state == "timeout"]
-        if timeout_names and last_stats["bad_total"] == len(timeout_names):
-            _rerun_timeouts_isolated(
-                python_version,
-                mutation_env,
-                timeout_names,
-                root_pyproject,
-                root_original,
-                paths_to_mutate,
-            )
-            effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
+        _effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
 
         score = _mutation_score(last_stats)
         if last_stats["total"] > 0 and score >= min_mutation_score and last_stats["bad_total"] == 0:

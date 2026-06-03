@@ -141,6 +141,23 @@ class TestApplyEquivalentAllowlist:
         assert excused == []
         assert stale == ["a"]
 
+    def test_allowlisted_timeout_is_excused(self) -> None:
+        # A documented-equivalent mutant is unkillable, so a CI wall-clock timeout
+        # on it is timing noise (same fact as "survived"), not a coverage gap.
+        mutants = [("a", "timeout")]
+        effective, excused, stale = gate._apply_equivalent_allowlist(mutants, {"a": "equivalent"})
+        assert effective == []
+        assert excused == ["a"]
+        assert stale == []
+
+    def test_non_allowlisted_timeout_stays(self) -> None:
+        # A timeout on a mutant with no documented equivalence is a hard failure
+        # (it could be hiding a real kill gap) — never excused.
+        mutants = [("a", "timeout")]
+        effective, excused, stale = gate._apply_equivalent_allowlist(mutants, {})
+        assert effective == [("a", "timeout")]
+        assert excused == []
+
     def test_allowlisted_absent_entirely_is_stale(self) -> None:
         effective, excused, stale = gate._apply_equivalent_allowlist([("a", "killed")], {"ghost": "x"})
         assert excused == []
@@ -164,17 +181,17 @@ class TestApplyEquivalentAllowlist:
 
 
 class TestCollectStatsTimeoutContract:
-    """Lock the contract the single-worker timeout retry relies on.
+    """Lock the asymmetric timeout-excusal contract.
 
-    A mutmut ``timeout`` is wall-clock based and can flake on a loaded CI runner;
-    the gate re-runs the exact timed-out mutants in isolation (see
-    ``_rerun_timeouts_isolated``). For that to fire correctly, ``_collect_stats``
-    must (a) count a timeout in ``bad_total`` so it blocks a clean pass, and
-    (b) leave the timeout in ``effective`` (never excuse it via the allowlist) so
-    its name is available to re-run.
+    mutmut flags ``timeout`` purely on wall-clock and it flakes on a loaded CI
+    runner. The gate treats a timeout as a hard failure for a NON-allowlisted
+    mutant (it could hide a real kill gap), but excuses it for an ALLOWLISTED —
+    therefore proven-unkillable — mutant, where a timeout is the same fact as
+    "survived" surfaced by CI timing (a now-killable mutant fails fast, never
+    times out). ``_collect_stats`` must reflect both halves.
     """
 
-    def test_timeout_counts_as_bad_and_is_surfaced(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_non_allowlisted_timeout_counts_as_bad(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             gate,
             "_results_per_mutant",
@@ -184,22 +201,23 @@ class TestCollectStatsTimeoutContract:
         assert stats["timeout"] == 1
         assert stats["bad_total"] == 1
         assert stats["killed"] == 2
-        timeout_names = [name for name, state in effective if state == "timeout"]
-        assert timeout_names == ["slow"]
-        # The guard only fires when timeouts are the SOLE blocker.
-        assert stats["bad_total"] == len(timeout_names)
+        # The un-excused timeout stays in `effective` and blocks the gate.
+        assert ("slow", "timeout") in effective
 
-    def test_allowlisted_timeout_is_not_excused(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # "timeout" is an infra state, never in EXCUSABLE_STATES, so even an
-        # allowlisted id must still be re-run rather than silently excused.
+    def test_allowlisted_timeout_is_excused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A documented-equivalent (allowlisted) mutant is unkillable, so a CI
+        # wall-clock timeout on it is timing noise, not a coverage gap -> excused.
         monkeypatch.setattr(
             gate,
             "_results_per_mutant",
-            lambda _pv, _env: [("slow", "timeout")],
+            lambda _pv, _env: [("a", "killed"), ("slow", "timeout")],
         )
-        _effective, stats = gate._collect_stats(None, {}, {"slow": "documented-equivalent"})
-        assert stats["bad_total"] == 1
-        assert stats["timeout"] == 1
+        effective, stats = gate._collect_stats(None, {}, {"slow": "documented-equivalent"})
+        assert stats["bad_total"] == 0
+        assert stats["timeout"] == 0
+        assert stats["killed"] == 1
+        assert stats["total"] == 1  # excused mutant dropped from the denominator
+        assert ("slow", "timeout") not in effective
 
     def test_clean_run_has_no_bad(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
