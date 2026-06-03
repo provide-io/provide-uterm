@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -324,3 +324,59 @@ class TestUserPatternBounds:
         )
         assert data["success"] is False
         assert data["error"] == "invalid_pattern"
+
+    async def test_session_subscribe_rejects_catastrophic_pattern(self) -> None:
+        # Short pathological pattern (within the length cap) that the structural
+        # guard must reject before any compile/match work happens.
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        data = await _call(
+            mcp,
+            "session_subscribe",
+            {"session_id": "s1", "pattern": "(a+)+$"},
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_pattern"
+
+    async def test_session_watch_rejects_catastrophic_pattern(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        data = await _call(
+            mcp,
+            "session_watch",
+            {"session_id": "s1", "pattern": "(a+)+$"},
+        )
+        assert data["success"] is False
+        assert data["error"] == "invalid_pattern"
+
+
+# ---------------------------------------------------------------------------
+# MCP-watch-clamp: session_watch must clamp max_events symmetrically with
+# session_subscribe (an unclamped value lets an LLM force a large collection).
+# ---------------------------------------------------------------------------
+
+
+class TestSessionWatchMaxEventsClamp:
+    async def test_watch_clamps_max_events_min(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_watch", {"session_id": "s1", "max_events": 0})
+        assert mock_watch.call_args.kwargs["max_events"] == 1  # min 1
+
+    async def test_watch_clamps_max_events_max(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_watch", {"session_id": "s1", "max_events": 10000})
+        assert mock_watch.call_args.kwargs["max_events"] == 50  # watch ceiling
+
+    async def test_watch_preserves_in_range_max_events(self) -> None:
+        hub, app = _make_hub_app()
+        mcp = _mcp_for(app)
+        mock_watch = AsyncMock(return_value=(True, {"events": [], "dropped_count": 0, "timed_out": True}))
+        with patch("provide.uterm.client.hijack.HijackClient.watch_session_events", new=mock_watch):
+            await _call(mcp, "session_watch", {"session_id": "s1", "max_events": 20})
+        assert mock_watch.call_args.kwargs["max_events"] == 20
