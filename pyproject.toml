@@ -328,13 +328,22 @@ paths_to_mutate = [
     #   earlier "process.py drives subprocesses the trampoline can't instrument" comment
     #   was a MISDIAGNOSIS. Intentionally NOT listed (a 0-mutant entry fails `total>0`).
     #   The REAL process-management logic + mutation value lives in manager/process_impl.py
-    #   (686 mutants, in-process AgentProcessManager — mockable via patched subprocess.Popen).
-    #   It is a large, unstable, multi-session target: the existing 99%-COVERAGE process
-    #   suites kill only ~48% (≈350 survivors), the run is reaper-unstable on its
-    #   subprocess/platform-forked paths, and _spawn_platform_kwargs / _build_preexec_rlimit_fn
-    #   need both os.name=="nt" and posix branches. Re-target HERE (not at the shim) when
-    #   tackling it; wire the mocked test_process_mutation_killing*.py suites (NOT
-    #   test_process.py — its 1 real Popen leaks children into mutmut's reaper).
+    #   (686 mutants, in-process AgentProcessManager) — RE-ENABLED at killed==100 below.
+    #
+    # process_impl.py — RE-ENABLED at killed==100 (2026-06-03). The "reaper-unstable"
+    #   deferral was the SAME test_process.py child-reaping crash as lease.py: that suite's
+    #   one real subprocess.Popen test leaks children into mutmut's os.wait() reaper. Fix:
+    #   (1) it is NOT wired here; (2) a manager-dir conftest.py autouse fixture blanket-mocks
+    #   subprocess.Popen / os.killpg / os.getpgid ONLY during mutation runs (keyed on
+    #   MUTANT_UNDER_TEST), so a guard-defeat mutant in spawn_agent/_stop_process_tree can
+    #   never spawn a real child. With that, the run is fully stable (0 timeout/0 not_checked).
+    #   662/662 killed + 24 documented equivalents (mutation_equivalents.toml): 12 trampoline-
+    #   masked default-args, 4 suppress(OSError, ProcessLookupError|TimeoutError) subclass
+    #   no-ops, 4 getattr-config-field-always-set, 2 `or 'default'`-masked .get defaults,
+    #   1 int(None or 0)==0 getattr, 1 `% 360` sign-flip. The 14 mocked manager suites
+    #   (test_process_mutation_killing{,_2..5}.py + test_process_*/_coverage_*) are wired in
+    #   tests_dir below; test_process.py stays UNWIRED (real Popen).
+    "src/provide/uterm/manager/process_impl.py",
     # Refactor #16 service classes — state-machine + dispatch logic split
     # out of the former TermHub mixin pile. High mutation value; tests for
     # each service live under tests/bridge/hub/test_<name>.py.
@@ -505,6 +514,28 @@ tests_dir = [
     # deferred this file. The 7 test_webhooks_part*.py suites stay the normal-pytest
     # coverage suite (real DNS is safe without forking) and are NOT wired here.
     "packages/provide-uterm-server/tests/server/test_webhooks_mutation_killing.py",
+    # manager/process_impl.py (AgentProcessManager) — the 14 reaper-SAFE manager suites
+    # (test_process.py is EXCLUDED: its one real subprocess.Popen test leaks children into
+    # mutmut's os.wait() reaper -> KeyError -> mass not_checked). The manager-dir conftest.py
+    # (copied via also_copy) blanket-mocks subprocess.Popen/os.killpg/os.getpgid during
+    # mutation runs so guard-defeat mutants can't spawn a real child. test_process_mutation_
+    # killing_5.py is the dedicated survivor kill-suite written for the late async/platform
+    # methods (_stop_process_tree/spawn_agent/_build_preexec_rlimit_fn/spawn_swarm/...).
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_2.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_3.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_4.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_mutation_killing_5.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_additional.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_extra.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_process_worker_token_scope.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_process.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_process_windows.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_monitor.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_ext_policy.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_agent_ops_mutation_killing.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_agent_ops_mutation_killing_2.py",
+    "packages/provide-uterm-platform/tests/manager/manager/test_coverage_gaps.py",
     # Full-app (create_server_app) suites LAST. mutmut's stats phase runs the
     # whole tests_dir with ``-x`` (stop on first failure); these TestClient/
     # full-app tests are intermittently fragile in the mutants tree (a stray

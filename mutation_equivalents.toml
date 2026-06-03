@@ -461,3 +461,124 @@ reason = "samesite default-argument mutation -- the mutmut trampoline forwards t
 [[equivalent]]
 mutant = "provide.uterm.server.routes.pages.x__set_auth_cookie__mutmut_2"
 reason = "samesite default-argument mutation -- the mutmut trampoline forwards the bound original default, so the variant default is dead code no caller reaches. Equivalent."
+
+# ---------------------------------------------------------------------------
+# manager/process_impl.py (AgentProcessManager) — 24 documented equivalents.
+# Residual after the test_process_*.py + test_coverage_*.py suites + the dedicated
+# test_process_mutation_killing_5.py kill-suite. All NON-equivalent mutants are killed
+# (662/662). See pyproject [tool.mutmut] note.
+# ---------------------------------------------------------------------------
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ__init____mutmut_1"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_1"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_2"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_3"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_4"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_5"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_6"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_load_worker_type__mutmut_12"
+reason = "raw.get('worker_type', 'default') default mutated/dropped, but the value is wrapped in str(... or 'default'), so a None/absent worker_type collapses back to 'default' — identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_load_worker_type__mutmut_14"
+reason = "raw.get('worker_type', 'default') default mutated/dropped, but the value is wrapped in str(... or 'default'), so a None/absent worker_type collapses back to 'default' — identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_scope_worker_tokens__mutmut_6"
+reason = "getattr(config, 'auth_worker_token_env_var', <default>): ManagerConfig always defines auth_worker_token_env_var (Pydantic field, config.py:44), so the getattr default is never reached; mutating or dropping it is dead code."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_scope_worker_tokens__mutmut_9"
+reason = "getattr(config, 'auth_worker_token_env_var', <default>): ManagerConfig always defines auth_worker_token_env_var (Pydantic field, config.py:44), so the getattr default is never reached; mutating or dropping it is dead code."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_scope_worker_tokens__mutmut_12"
+reason = "getattr(config, 'auth_worker_token_env_var', <default>): ManagerConfig always defines auth_worker_token_env_var (Pydantic field, config.py:44), so the getattr default is never reached; mutating or dropping it is dead code."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_scope_worker_tokens__mutmut_13"
+reason = "getattr(config, 'auth_worker_token_env_var', <default>): ManagerConfig always defines auth_worker_token_env_var (Pydantic field, config.py:44), so the getattr default is never reached; mutating or dropping it is dead code."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_20"
+reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): ProcessLookupError is a subclass of OSError, so suppressing OSError already catches it — identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_42"
+reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): ProcessLookupError is a subclass of OSError, so suppressing OSError already catches it — identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_63"
+reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): ProcessLookupError is a subclass of OSError, so suppressing OSError already catches it — identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_71"
+reason = "contextlib.suppress(TimeoutError, OSError, RuntimeError) -> (OSError, RuntimeError): TimeoutError is a subclass of OSError (Python 3.10+), so it is still suppressed by OSError — behaviorally identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_1"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_2"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_3"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_4"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_5"
+reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁkill_agent__mutmut_14"
+reason = "getattr(agent, 'pid', 0) -> getattr(agent, 'pid', None): when agent is None, int(getattr(None,'pid',None) or 0) == int(getattr(None,'pid',0) or 0) == 0; when agent is present its pid attribute is read directly — identical."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁmonitor_processes__mutmut_12"
+reason = "_monitor_iter += 1 -> -= 1: _monitor_iter is consumed ONLY by `_monitor_iter % 360 == 0`; -360 % 360 == 0 just like 360 % 360, so the hourly log cleanup still fires every 360 iterations of the infinite loop — observably identical."
+
+# allocate_agent_id defensive-bound equivalents (added 2026-06-03 with the
+# iteration cap that kills the infinite-loop mutants).
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁallocate_agent_id__mutmut_5"
+reason = "Bound margin '+ 1' -> '+ 2'. sync_next_agent_index() returns an index past every known id, so the loop ALWAYS returns on iteration 1; the range() bound is never the deciding factor, so +1 vs +2 attempts is unobservable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁallocate_agent_id__mutmut_16"
+reason = "raise RuntimeError('agent id allocation exhausted') -> RuntimeError(None). The raise is unreachable (# pragma: no cover): the bounded loop always returns first. Only an inverted-membership mutant reaches it, and that mutant is killed by the RuntimeError being raised at all, not by its message — so mutating the message is unobservable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁallocate_agent_id__mutmut_17"
+reason = "raise RuntimeError message string-mangled (XX..XX) on the unreachable exhaustion path; see __mutmut_16 — the raise never executes in any reachable/testable state, so the message is unobservable."
+
+[[equivalent]]
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁallocate_agent_id__mutmut_18"
+reason = "raise RuntimeError message upper-cased on the unreachable exhaustion path; see __mutmut_16 — the raise never executes in any reachable/testable state, so the message is unobservable."
