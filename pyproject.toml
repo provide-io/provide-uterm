@@ -584,7 +584,13 @@ also_copy = [
     "conftest.py",
 ]
 pytest_add_cli_args = [
-    "--timeout=30",
+    # 90s (not 30s): mutmut forks ~16 workers onto GitHub's 2-core runners, so a
+    # covering test that is <1s locally can be far slower under that contention and tip
+    # a borderline mutant into a flaky ``timeout`` (CI-only, varies run-to-run; see the
+    # manager/process_impl.py async methods). The generous budget absorbs the load
+    # variance — real hangs are already prevented by bounded tests + the manager
+    # conftest's subprocess/sleep mocks, so this adds headroom, not steady-state latency.
+    "--timeout=90",
     # The mutants/ tree copies two ``tests`` packages (core +
     # provide-uterm-server), both exposing a ``tests.conftest`` dotted name.
     # pytest's default prepend import-mode registers the first under that name
