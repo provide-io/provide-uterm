@@ -12,8 +12,16 @@ so a guard-defeat mutant can never spawn a real child into mutmut's os.wait() re
 zero-delay-yielding asyncio.sleep so spawn_swarm/monitor mutants fail fast (no busy-spin)
 instead of timing out. The dedicated kill-suite is split across
 tests/manager/manager/test_process_kill_part0*.py (each <500 LOC); 28 documented
-equivalents are excused via mutation_equivalents.toml. The mutmut pytest timeout is 90s
-(not 30s) to absorb GitHub-runner contention on these async methods (see
+equivalents are excused via mutation_equivalents.toml.
+
+mutmut classifies a mutant as ``timeout`` purely on wall-clock — it SIGXCPU's a run that
+exceeds ``(estimated_test_time + 1) * 15``s, where the estimate is measured single-threaded
+during the stats phase. On a loaded GitHub runner a mutant that is killed in milliseconds
+when it owns the box can transiently cross that bound under worker oversubscription, so a
+clean perimeter still occasionally flakes to one ``timeout``. scripts/run_mutation_gate.py
+absorbs that by re-running the exact timed-out mutants in single-worker isolation (a genuine
+hang times out again and still fails). The 90s pytest --timeout is a secondary backstop that
+turns a truly-hung covering test into a fast failure instead of stalling the worker (see
 [tool.mutmut].pytest_add_cli_args).
 """
 
