@@ -30,6 +30,9 @@ _QUEUE_MAXSIZE = 4096
 
 # Owner-only permissions for the listening Unix socket.
 _SOCKET_MODE = 0o600
+# umask that yields 0o600 at file creation (0o777 & ~0o177 == 0o600). Set around
+# the bind so the socket is owner-only the instant it appears — see start().
+_BIND_UMASK = 0o177
 
 
 @dataclass
@@ -52,9 +55,22 @@ class CaptureSocket:
         self._queue: asyncio.Queue[CaptureFrame] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
 
     async def start(self) -> None:
-        self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
         # Restrict the listening socket to the owner so other local users can't
-        # connect and inject/observe captured terminal traffic.
+        # connect and inject/observe captured terminal traffic. Set the umask
+        # *before* the bind so the socket is created 0o600 atomically: a
+        # post-bind chmod would leave a window where the socket exists with
+        # default-umask perms (e.g. srwxr-xr-x) that any local user could
+        # connect to. Restore the previous umask in finally so it always
+        # happens.
+        # NOTE: os.umask is process-global and not async-safe — keep the
+        # set→bind→restore window as tight as possible (only the bind call).
+        prev_umask = os.umask(_BIND_UMASK)
+        try:
+            self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
+        finally:
+            os.umask(prev_umask)
+        # Belt-and-suspenders: enforce 0o600 even if the platform ignored the
+        # umask for AF_UNIX sockets. With the umask in place this is a no-op.
         os.chmod(self._path, _SOCKET_MODE)  # noqa: PTH101 — chmod the just-bound socket fd path
 
     async def stop(self) -> None:

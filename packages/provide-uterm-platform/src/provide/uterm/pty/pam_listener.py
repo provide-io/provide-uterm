@@ -42,6 +42,9 @@ logger = logging.getLogger(__name__)
 
 _MAX_LINE = 4096  # bytes — guard against runaway senders
 _NOTIFY_SOCKET_MODE = 0o600
+# umask that yields 0o600 at file creation (0o777 & ~0o177 == 0o600). Set around
+# the bind so the socket is owner-only the instant it appears — see start().
+_NOTIFY_BIND_UMASK = 0o177
 
 
 @dataclass
@@ -99,10 +102,22 @@ class PamNotifyListener:
         if self._server is not None:
             raise RuntimeError("PamNotifyListener already started")
         self._handler = handler
-        self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
         # Restrict the notify socket to the owner so other local users cannot
-        # forge login events that drive root-side session creation. Mirrors
-        # CaptureSocket.start() in pty/capture.py.
+        # forge login events that drive root-side session creation. Set the
+        # umask *before* the bind so the socket is created 0o600 atomically:
+        # a post-bind chmod would leave a window where the socket exists with
+        # default-umask perms (e.g. srwxr-xr-x) that any local user could
+        # connect to. Restore the previous umask in finally so it always
+        # happens. Mirrors CaptureSocket.start() in pty/capture.py.
+        # NOTE: os.umask is process-global and not async-safe — keep the
+        # set→bind→restore window as tight as possible (only the bind call).
+        prev_umask = os.umask(_NOTIFY_BIND_UMASK)
+        try:
+            self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
+        finally:
+            os.umask(prev_umask)
+        # Belt-and-suspenders: enforce 0o600 even if the platform ignored the
+        # umask for AF_UNIX sockets. With the umask in place this is a no-op.
         os.chmod(self._path, _NOTIFY_SOCKET_MODE)  # noqa: PTH101 — chmod the just-bound socket fd path
         logger.info("pam_notify_listener started socket=%s", self._path)
 
