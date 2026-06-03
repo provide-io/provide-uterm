@@ -12,7 +12,8 @@ so a guard-defeat mutant can never spawn a real child into mutmut's os.wait() re
 zero-delay-yielding asyncio.sleep so spawn_swarm/monitor mutants fail fast (no busy-spin)
 instead of timing out. The dedicated kill-suite is
 tests/manager/manager/test_process_mutation_killing_5.py; 28 documented equivalents are
-excused via mutation_equivalents.toml.
+excused via mutation_equivalents.toml. The mutmut pytest timeout is 90s (not 30s) to
+absorb GitHub-runner contention on these async methods (see [tool.mutmut].pytest_add_cli_args).
 """
 
 from __future__ import annotations
