@@ -1,8 +1,16 @@
 # Mutmut survivor triage
 
+> **Status (2026-06-03):** waves 1–6 below are a HISTORICAL log of *absolute*-score
+> reduction on the **original core perimeter** (2026-05-19 … 2026-05-28). They are
+> **superseded** by the server-perimeter enablement that followed — see **Wave 7**
+> at the bottom. The absolute counts in the mid-document snapshot predate that work
+> (the perimeter has since roughly tripled: `process_impl.py` alone is 692 mutants).
+> The live source of truth is the `[tool.mutmut]` comments in `pyproject.toml`, the
+> documented-equivalent allowlist `mutation_equivalents.toml`, and `MUTATION_PATTERNS.md`.
+
 **Snapshot:** 2026-05-23 after the detector long-tail sweep.
 
-Five attack waves landed:
+Six attack waves landed (the first five are listed here; wave 6 is appended below):
 
 1. **Surgical-killer pass (2026-05-19).** Killed 161 mutants, dropping
    survivors from ~408 to 247. Kill rate 60.69% → 70.19%.
@@ -133,6 +141,13 @@ Five attack waves landed:
    completeness* gap, not a binding-mechanism gap, and is tracked
    separately. The `--changed-only` CI gate only fires on the perimeter
    files a PR actually touches, so it stays green for unrelated PRs.
+
+   > **Update (2026-06-03):** this "test completeness gap" is closed. The
+   > hub services and the rest of the deferred server perimeter were
+   > subsequently wired + killed to 100% — `limiter`, `lease`, `connection`,
+   > and `registry` are all proven `killed==100`; `router`/`presence`/
+   > `store`/`polling_service` are enumerated with their kill-suites wired.
+   > See Wave 7.
 5. **Detector long-tail sweep (2026-05-23).** Targeted the ~130
    pre-existing detector.py survivors carried over since wave 1.
    Result: **90 killed**, dropping detector survivors 133 → 43 and the
@@ -334,6 +349,12 @@ about the *absolute* score, which is informational only.
 
 ## Absolute-score snapshot (post-wave-5)
 
+> **Superseded (2026-06-03).** These counts are the 2026-05-23 core-perimeter
+> picture. The perimeter has since grown by the entire server stack + manager
+> (lease, connection, registry, config_schema, webhooks, routes, process_impl,
+> …), each enforced at `killed==100` with documented equivalents excused. Do
+> not treat the numbers below as current; see Wave 7.
+
 - Total mutants: 1741
 - Killed: 1364 (78.35%)
 - Survived: 121
@@ -419,3 +440,60 @@ auth.py (13):
 These 23 do not fire the `--changed-only` CI gate for unrelated PRs; they
 fire only on PRs that touch auth.py/recording.py, where they are the
 intentional EQUIV ceiling.
+
+## Wave 7 — full server/manager perimeter enablement (2026-05-28 … 2026-06-03)
+
+The waves above chipped at *absolute* score on the original core perimeter.
+Wave 7 was a different goal: take every **deferred** perimeter file to a strict
+`killed==100` (every non-equivalent mutant killed) so the `--changed-only` gate
+genuinely enforces those files when a PR touches them. The blocker that made
+this possible — and the per-file playbook — are recorded in
+`MUTATION_PATTERNS.md`; the per-file obstacle notes live in the
+`[tool.mutmut]` comments in `pyproject.toml`. Highlights:
+
+- **The mutmut `os.wait()` child-reaping crash was root-caused and fixed.** A
+  `tests_dir` suite that spawned a real `subprocess.Popen` (`test_process.py`)
+  leaked worker children into mutmut's fork-loop reaper → `KeyError` → every
+  server mutant `not_checked`/score 0. Removing that one suite (it bound
+  nothing — it covered only the 0-mutant `manager/process.py` shim) unblocked
+  the whole server perimeter.
+- **A documented-equivalent allowlist now exists** (`mutation_equivalents.toml`,
+  154 entries). Genuinely-equivalent mutants (trampoline-masked default args,
+  codec case-folds, `typing.cast` no-ops, dead-initial-value reassignments,
+  subclass-redundant `suppress(...)`, …) are subtracted from the `killed==N`
+  denominator instead of pinning a file below 100. This is what makes
+  `auth.py`-class files enforceable.
+- **Files taken to `killed==100`** (dates = enablement commit): `limiter` →
+  `lease` (489/489) → `connection` → `config_schema` → `webhooks` (network-
+  mocked kill suite) → `registry` (async/SSE bounded by per-step `wait_for`) →
+  `routes/` (decorated handlers are mutmut-skipped; the real surface is sync
+  helpers) → `manager/process_impl.py` (692 mutants — the biggest file in the
+  repo; mocked spawn/kill conftest + zero-delay sleep). `manager/process.py` +
+  `config.py` were found to be **0-mutant** (re-export shim + Pydantic model)
+  and dropped as non-targets, not deferrals.
+- **CI timeout class is handled honestly.** mutmut flags a wall-clock
+  `timeout` purely on `(estimated_test_time + 1) × 15`s; on a loaded runner a
+  *documented-equivalent* mutant can surface as `timeout` instead of
+  `survived`. Since an allowlisted mutant is proven-unkillable, `timeout` is now
+  excusable **only** for allowlisted mutants (a non-allowlisted timeout still
+  fails). See `EXCUSABLE_STATES` in `scripts/run_mutation_gate.py`.
+
+### Wave 7 tail — `lease.py` two-phase reserve + `models.py` (2026-06-03)
+
+Landing the bridge code-review remediation (`bridge/hub/lease.py`
+`try_acquire_rest` now sends the worker-pause frame outside the hub lock via a
+`hijack_pending` reservation) re-ran the lease perimeter and added a dedicated
+kill suite (`test_lease_kill_acquire_rest_pending.py`) pinning the lock-free
+send + reservation rollback paths. Editing `models.py` to add the reservation
+field pulled it into the changed-only gate, which surfaced `_safe_int` /
+`_safe_float` as latently uncovered ("enumerated ≠ enforced" again) — a focused
+`test_models_safe_numeric_kill.py` now covers them. Combined result:
+`lease.py` + `models.py` **521/521 killed**. Two `async with` exit-arcs carry
+`# pragma: no branch` for the coverage.py-on-3.11 arc-attribution quirk (both
+arcs are tested and every mutant on them is killed).
+
+**Net:** the original "test completeness gap" tracked in waves 4–6 is closed.
+The deferred-file list in `[tool.mutmut]` is empty — every perimeter entry is
+active. The remaining *documented-equivalent* survivors (per
+`mutation_equivalents.toml`) are the intentional ceiling, and the
+`--changed-only` gate enforces `killed==100` on whatever a PR touches.
