@@ -16,13 +16,15 @@ equivalents are excused via mutation_equivalents.toml.
 
 mutmut classifies a mutant as ``timeout`` purely on wall-clock — it SIGXCPU's a run that
 exceeds ``(estimated_test_time + 1) * 15``s, where the estimate is measured single-threaded
-during the stats phase. On a loaded GitHub runner a mutant that is killed in milliseconds
-when it owns the box can transiently cross that bound under worker oversubscription, so a
-clean perimeter still occasionally flakes to one ``timeout``. scripts/run_mutation_gate.py
-absorbs that by re-running the exact timed-out mutants in single-worker isolation (a genuine
-hang times out again and still fails). The 90s pytest --timeout is a secondary backstop that
-turns a truly-hung covering test into a fast failure instead of stalling the worker (see
-[tool.mutmut].pytest_add_cli_args).
+during the stats phase. On a loaded GitHub runner one of these documented-equivalent mutants
+reliably crosses that bound (its covering pytest run is dominated by fixed startup/import
+overhead relative to a tiny estimate), surfacing on CI as one ``timeout`` instead of the
+``survived`` it shows locally. Because that mutant is PROVEN unkillable, the timeout is the
+same fact as ``survived`` (not killed, and cannot be) surfaced by CI timing — so
+scripts/run_mutation_gate.py excuses ``timeout`` for ALLOWLISTED mutants only (a
+non-allowlisted timeout, which could hide a real kill gap, still fails the gate). The 90s
+pytest --timeout is a secondary backstop that turns a truly-hung covering test into a fast
+failure instead of stalling the worker (see [tool.mutmut].pytest_add_cli_args).
 """
 
 from __future__ import annotations
