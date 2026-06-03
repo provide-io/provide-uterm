@@ -2508,3 +2508,33 @@ class TestSpawnSwarmTimeoutKills:
         ):
             await pm.spawn_swarm(cfgs, group_size=2, group_delay=0.0)
         assert spawn.await_count == len(cfgs)
+
+
+# ---- monitor_processes sleep-arg kill (mutmut_20) ----
+class TestMonitorSleepArgKill:
+    _PI = "provide.uterm.manager.process_impl"
+
+    async def test_loop_does_not_crash_on_normal_iteration_sleep(self, pm):
+        """Kills monitor_processes mutmut_20: ``asyncio.sleep(health_check_interval)``
+        -> ``asyncio.sleep(None)``. Real (and the conftest's min-clamped) asyncio.sleep
+        raises TypeError on None, so the mutant crashes the monitor task on iteration 1;
+        the original keeps looping. We assert the task is still running (not crashed)
+        after a few scheduler turns.
+        """
+        with patch.multiple(
+            self._PI,
+            _handle_exited_processes=AsyncMock(),
+            _handle_heartbeat_timeouts=AsyncMock(),
+            _handle_stale_queued=MagicMock(),
+            _handle_bust_respawn=AsyncMock(),
+            _handle_desired_state=AsyncMock(),
+        ):
+            pm.manager.health_check_interval = 0
+            task = asyncio.create_task(pm.monitor_processes())
+            for _ in range(5):
+                await asyncio.sleep(0)
+            crashed = task.done()
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        assert not crashed
