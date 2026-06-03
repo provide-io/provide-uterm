@@ -10,10 +10,11 @@ instance methods. A manager-dir conftest.py autouse fixture blanket-mocks
 subprocess.Popen / os.killpg / os.getpgid during mutation runs (keyed on MUTANT_UNDER_TEST)
 so a guard-defeat mutant can never spawn a real child into mutmut's os.wait() reaper, and a
 zero-delay-yielding asyncio.sleep so spawn_swarm/monitor mutants fail fast (no busy-spin)
-instead of timing out. The dedicated kill-suite is
-tests/manager/manager/test_process_mutation_killing_5.py; 28 documented equivalents are
-excused via mutation_equivalents.toml. The mutmut pytest timeout is 90s (not 30s) to
-absorb GitHub-runner contention on these async methods (see [tool.mutmut].pytest_add_cli_args).
+instead of timing out. The dedicated kill-suite is split across
+tests/manager/manager/test_process_kill_part0*.py (each <500 LOC); 28 documented
+equivalents are excused via mutation_equivalents.toml. The mutmut pytest timeout is 90s
+(not 30s) to absorb GitHub-runner contention on these async methods (see
+[tool.mutmut].pytest_add_cli_args).
 """
 
 from __future__ import annotations
