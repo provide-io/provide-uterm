@@ -156,3 +156,58 @@ class TestApplyEquivalentAllowlist:
         assert total == 1
         assert killed == 1
         assert killed == total  # would be the killed==100 pass condition
+
+
+# ---------------------------------------------------------------------------
+# _collect_stats + the transient-timeout guard contract
+# ---------------------------------------------------------------------------
+
+
+class TestCollectStatsTimeoutContract:
+    """Lock the contract the single-worker timeout retry relies on.
+
+    A mutmut ``timeout`` is wall-clock based and can flake on a loaded CI runner;
+    the gate re-runs the exact timed-out mutants in isolation (see
+    ``_rerun_timeouts_isolated``). For that to fire correctly, ``_collect_stats``
+    must (a) count a timeout in ``bad_total`` so it blocks a clean pass, and
+    (b) leave the timeout in ``effective`` (never excuse it via the allowlist) so
+    its name is available to re-run.
+    """
+
+    def test_timeout_counts_as_bad_and_is_surfaced(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            gate,
+            "_results_per_mutant",
+            lambda _pv, _env: [("a", "killed"), ("b", "killed"), ("slow", "timeout")],
+        )
+        effective, stats = gate._collect_stats(None, {}, {})
+        assert stats["timeout"] == 1
+        assert stats["bad_total"] == 1
+        assert stats["killed"] == 2
+        timeout_names = [name for name, state in effective if state == "timeout"]
+        assert timeout_names == ["slow"]
+        # The guard only fires when timeouts are the SOLE blocker.
+        assert stats["bad_total"] == len(timeout_names)
+
+    def test_allowlisted_timeout_is_not_excused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # "timeout" is an infra state, never in EXCUSABLE_STATES, so even an
+        # allowlisted id must still be re-run rather than silently excused.
+        monkeypatch.setattr(
+            gate,
+            "_results_per_mutant",
+            lambda _pv, _env: [("slow", "timeout")],
+        )
+        _effective, stats = gate._collect_stats(None, {}, {"slow": "documented-equivalent"})
+        assert stats["bad_total"] == 1
+        assert stats["timeout"] == 1
+
+    def test_clean_run_has_no_bad(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            gate,
+            "_results_per_mutant",
+            lambda _pv, _env: [("a", "killed"), ("b", "killed")],
+        )
+        _effective, stats = gate._collect_stats(None, {}, {})
+        assert stats["bad_total"] == 0
+        assert stats["killed"] == 2
+        assert stats["total"] == 2

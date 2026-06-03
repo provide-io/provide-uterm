@@ -332,6 +332,79 @@ def _apply_equivalent_allowlist(
     return effective, excused, stale
 
 
+def _collect_stats(
+    python_version: str | None,
+    env: dict[str, str],
+    equivalents: dict[str, str],
+) -> tuple[list[tuple[str, str]], dict[str, int]]:
+    """Read ``mutmut results``, apply the equivalent allowlist, and tally stats.
+
+    Returns ``(effective, last_stats)`` where ``effective`` is the per-mutant
+    ``(name, state)`` list that still counts toward the gate (allowlisted
+    equivalents removed) and ``last_stats`` is the score-bearing summary dict.
+    """
+    per_mutant = _results_per_mutant(python_version, env)
+    effective, excused, stale = _apply_equivalent_allowlist(per_mutant, equivalents)
+    for name in stale:
+        print(f"WARNING: stale equivalent-allowlist entry (no surviving mutant matched): {name}")
+    if excused:
+        print(f"excused {len(excused)} documented-equivalent mutant(s) via {DEFAULT_EQUIVALENTS_FILE}")
+    state_counts = _state_counts_from(effective)
+    total = sum(state_counts.values())
+    killed = int(state_counts.get("killed", 0))
+    score = (killed / total * 100.0) if total > 0 else 0.0
+    last_stats = {
+        "total": total,
+        "killed": killed,
+        "survived": int(state_counts.get("survived", 0)),
+        "suspicious": int(state_counts.get("suspicious", 0)),
+        "timeout": int(state_counts.get("timeout", 0)),
+        "skipped": int(state_counts.get("skipped", 0)),
+        "not_checked": int(state_counts.get("not checked", 0)),
+        "bad_total": sum(int(state_counts.get(state, 0)) for state in BAD_MUTANT_STATES),
+    }
+    print(f"mutation_score={score:.2f}")
+    print(json.dumps(state_counts, indent=2, sort_keys=True))
+    return effective, last_stats
+
+
+def _rerun_timeouts_isolated(
+    python_version: str | None,
+    env: dict[str, str],
+    timeout_names: list[str],
+    root_pyproject: Path,
+    root_original: str | None,
+    paths_to_mutate: list[str] | None,
+) -> None:
+    """Force-rerun timed-out mutants one at a time in single-worker isolation.
+
+    mutmut flags a ``timeout`` purely on wall-clock: it SIGXCPU's a mutant whose
+    run exceeds ``(estimated_test_time + 1) * 15`` seconds, where the estimate is
+    measured single-threaded during the stats phase. On a shared/loaded CI runner a
+    mutant that is killed in milliseconds when it has the box to itself can
+    transiently cross that bound under worker oversubscription (``--max-children``
+    > 1 competing for the same cores). Re-running the EXACT timed-out mutants by
+    name with ``--max-children 1`` (no parallel children, reusing the existing
+    ``mutants/`` tree) clears a transient timeout, while a genuine hang simply times
+    out again in isolation and still fails the gate. Passing explicit mutant names
+    also bypasses mutmut's "skip already-resulted mutants" guard, so the re-run
+    really executes rather than re-printing the cached result.
+
+    The sanitized root ``pyproject.toml`` must be active while mutmut runs (it reads
+    its config from there), so this re-sanitizes before the run and restores after.
+    """
+    if root_original is not None:
+        _sanitize_mutants_pyproject(root_pyproject, paths_to_mutate=paths_to_mutate, strip_workspace=False)
+    try:
+        cmd = _uv_mutmut_cmd(python_version, "run", "--max-children", "1", *timeout_names)
+        print(f"Re-running {len(timeout_names)} timed-out mutant(s) in single-worker isolation (transient-load guard):")
+        print("+", " ".join(cmd))
+        subprocess.run(cmd, check=False, env=env)  # nosec
+    finally:
+        if root_original is not None:
+            root_pyproject.write_text(root_original, encoding="utf-8")
+
+
 def run_mutation_gate(
     python_version: str | None,
     max_children: int,
@@ -378,30 +451,28 @@ def run_mutation_gate(
                 root_pyproject.write_text(root_original, encoding="utf-8")
         if mutmut_result.returncode > 1:
             raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
-        per_mutant = _results_per_mutant(python_version, mutation_env)
-        effective, excused, stale = _apply_equivalent_allowlist(per_mutant, equivalents)
-        for name in stale:
-            print(f"WARNING: stale equivalent-allowlist entry (no surviving mutant matched): {name}")
-        if excused:
-            print(f"excused {len(excused)} documented-equivalent mutant(s) via {DEFAULT_EQUIVALENTS_FILE}")
-        state_counts = _state_counts_from(effective)
-        total = sum(state_counts.values())
-        killed = int(state_counts.get("killed", 0))
-        score = (killed / total * 100.0) if total > 0 else 0.0
-        last_stats = {
-            "total": total,
-            "killed": killed,
-            "survived": int(state_counts.get("survived", 0)),
-            "suspicious": int(state_counts.get("suspicious", 0)),
-            "timeout": int(state_counts.get("timeout", 0)),
-            "skipped": int(state_counts.get("skipped", 0)),
-            "not_checked": int(state_counts.get("not checked", 0)),
-            "bad_total": sum(int(state_counts.get(state, 0)) for state in BAD_MUTANT_STATES),
-        }
-        print(f"mutation_score={score:.2f}")
-        print(json.dumps(state_counts, indent=2, sort_keys=True))
 
-        if total > 0 and score >= min_mutation_score and last_stats["bad_total"] == 0:
+        effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
+
+        # Transient-load guard: when the ONLY thing keeping the gate from clean is a
+        # mutmut wall-clock ``timeout`` (never a survived/suspicious/uncovered
+        # mutant — those are real defects), re-run those exact mutants in
+        # single-worker isolation and re-tally. A genuine hang times out again and
+        # still fails; a CI load flake clears. See _rerun_timeouts_isolated.
+        timeout_names = [name for name, state in effective if state == "timeout"]
+        if timeout_names and last_stats["bad_total"] == len(timeout_names):
+            _rerun_timeouts_isolated(
+                python_version,
+                mutation_env,
+                timeout_names,
+                root_pyproject,
+                root_original,
+                paths_to_mutate,
+            )
+            effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
+
+        score = _mutation_score(last_stats)
+        if last_stats["total"] > 0 and score >= min_mutation_score and last_stats["bad_total"] == 0:
             return last_stats
         if attempt < attempts:
             print("Mutation gate not clean; retrying in single-worker mode.")
