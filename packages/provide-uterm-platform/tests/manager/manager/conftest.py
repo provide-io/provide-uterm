@@ -29,7 +29,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _mutation_blanket_process_mock(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+def _mutation_blanket_process_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     if not os.environ.get("MUTANT_UNDER_TEST"):
         return
 
@@ -51,18 +51,25 @@ def _mutation_blanket_process_mock(monkeypatch: pytest.MonkeyPatch, request: pyt
         AsyncMock(return_value=fake_async_proc),
         raising=False,
     )
-    # spawn_swarm's inter-group ``await asyncio.sleep(group_delay)`` is unreached by
-    # the ORIGINAL code in single-group tests, but group-math mutants (e.g. ``+``->``-``
-    # / ``<``->``<=``) DO reach it and would sleep the real group_delay (often the 60s
-    # default) -> mutmut ``timeout`` instead of a clean kill. Replace process_impl's
-    # asyncio.sleep with a zero-DELAY sleep that STILL YIELDS (``await real_sleep(0)``)
-    # so task scheduling keeps working (a plain no-op mock breaks tests that sleep to
-    # yield). EXCLUDE the monitor tests: they drive ``monitor_processes`` as a real
-    # background task and rely on real elapsed time / multiple scheduler slices.
-    if "monitor" not in request.node.nodeid.lower():
-        _real_sleep = asyncio.sleep
+    # Replace process_impl's asyncio.sleep with a zero-DELAY sleep that STILL YIELDS
+    # (``await real_sleep(0)``) for EVERY manager test during a mutation run. Two
+    # timeout-class hazards this removes: (1) spawn_swarm's inter-group
+    # ``asyncio.sleep(group_delay)`` — unreached by the original in single-group tests
+    # but reached by group-math mutants, which would sleep the real (often 60s) delay
+    # -> mutmut ``timeout``; (2) monitor_processes' loop runs with health_check_interval
+    # 0, i.e. a ``sleep(0)`` busy-spin that its covering tests drive for a REAL 0.05s
+    # window (``create_task`` + ``await asyncio.sleep(0.05)`` + ``cancel``) — cheap
+    # locally but CPU-starved/slow on a loaded CI runner, so a borderline mutant flaked
+    # to ``timeout`` there (passed locally). The zero-delay-but-yielding sleep makes the
+    # monitor loop run a single deterministic iteration (its ``_handle_*`` mocks still
+    # fire once) and the test return immediately, killing the flakiness. It is NOT a
+    # no-op mock (that would break tests that sleep to yield, e.g. start_spawn_swarm).
+    # ``min(delay, 0)`` clamps the real (positive) delay to 0 — instant — WHILE keeping
+    # asyncio.sleep's real type semantics: a sleep-arg mutant like ``sleep(None)`` still
+    # raises TypeError (min(None, 0) raises), so it stays killable rather than masked.
+    _real_sleep = asyncio.sleep
 
-        async def _zero_delay_sleep(_delay: float = 0, *args: object, **kwargs: object) -> None:
-            await _real_sleep(0)
+    async def _zero_delay_sleep(_delay: float = 0, *args: object, **kwargs: object) -> None:
+        await _real_sleep(min(_delay, 0))
 
-        monkeypatch.setattr("provide.uterm.manager.process_impl.asyncio.sleep", _zero_delay_sleep)
+    monkeypatch.setattr("provide.uterm.manager.process_impl.asyncio.sleep", _zero_delay_sleep)
