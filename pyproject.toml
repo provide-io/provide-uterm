@@ -266,10 +266,18 @@ paths_to_mutate = [
     # its specific obstacle. A --changed-only run on a deferred file is then correctly
     # skipped (not a false pass). Re-add each once its obstacle is resolved.
     #
-    # routes/ — async FastAPI handler surface (2049 LOC incl. routes/sse.py, an SSE
-    #   streaming generator); same async timeout/segfault class as registry.py /
-    #   webhooks.py. Deferred by pattern.
-    # "src/provide/uterm/server/routes/",
+    # routes/ — RE-ENABLED at killed==100 (2026-06-02). The "async timeout/segfault by
+    #   pattern" deferral was overcautious: mutmut SKIPS every @router.get/@router.post
+    #   handler (incl. sse.py's StreamingResponse handler), so routes/ has NO async-hang
+    #   surface at all — its 459 mutants are pure/sync UNDECORATED code (the _helpers.py
+    #   accessors, per-module _registry/_authz/_principal accessors, create_*_router
+    #   bodies, and NESTED undecorated helpers like health's _posture_caller_is_privileged).
+    #   The dedicated suite test_routes_mutation_killing.py (wired into tests_dir) builds
+    #   each router with mocked app-state, pulls the handler endpoints off router.routes,
+    #   and calls them directly with a mocked Request (no TestClient/full-app lifespan).
+    #   390 killed + 69 documented equivalents (64 typing.cast no-ops across the accessors
+    #   + 5 pages default-value no-ops) excused via mutation_equivalents.toml.
+    "src/provide/uterm/server/routes/",
     #
     # webhooks.py — RE-ENABLED at killed==100 (2026-06-02). The deferral was a REAL
     #   obstacle: with the 8 test_webhooks_part*.py suites wired it measured 21% because
@@ -431,6 +439,10 @@ tests_dir = [
     # HostedSessionRuntime / registered_types / egress / asyncio.sleep / EventBus
     # so no external registry state or real async streaming reaches a forked worker).
     "packages/provide-uterm-server/tests/server/test_registry_mutation_killing.py",
+    # routes/ self-contained mocked kill-suite (mutmut skips the @router.* handlers;
+    # this binds the undecorated helpers + create_*_router bodies via router-endpoint
+    # extraction with mocked Request — no TestClient/full-app lifespan).
+    "packages/provide-uterm-server/tests/server/test_routes_mutation_killing.py",
     # test_process.py (manager process supervisor) — REMOVED from tests_dir
     # (2026-06-02). It covers ONLY manager/process.py + manager/config.py, both
     # DEFERRED from paths_to_mutate above, so it bound nothing — and it is the only

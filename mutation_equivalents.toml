@@ -247,3 +247,217 @@ reason = "dropped=0->1 — Dead initial value: `dropped = 0` is UNCONDITIONALLY 
 [[equivalent]]
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁwatch_session_events__mutmut_44"
 reason = "remaining <= 0 -> remaining < 0 — `remaining <= 0` -> `remaining < 0` on the deadline-exceeded guard. `remaining = deadline - time.monotonic()` and deadline = monotonic()+timeout_s; the monotonic clock ALWAYS advances between those two reads, so when timeout_s makes the branch reachable, remaining is strictly < 0 (never exactly 0) — `<= 0` and `< 0` take the identical branch. Equivalent."
+
+# --- routes/ (server API route helpers) -----------------------------------
+# route handlers are decorator-skipped; the mutable surface is the undecorated
+# accessors + create_*_router bodies. typing.cast(type, value) is a runtime
+# no-op, so each accessor cast yields 4 unkillable type-string mutants.
+[[equivalent]]
+mutant = "provide.uterm.server.routes.approvals.x_create_approvals_router__mutmut_28"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.approvals.x_create_approvals_router__mutmut_32"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.approvals.x_create_approvals_router__mutmut_33"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.approvals.x_create_approvals_router__mutmut_34"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__registry__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__registry__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__registry__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__registry__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__authz__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__authz__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__authz__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.sse.x__authz__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__principal__mutmut_17"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__principal__mutmut_21"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__principal__mutmut_22"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__principal__mutmut_23"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__authz__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__authz__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__authz__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.api_keys.x__authz__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__registry__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__registry__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__registry__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__registry__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__authz__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__authz__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__authz__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__authz__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__principal__mutmut_17"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__principal__mutmut_21"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__principal__mutmut_22"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__principal__mutmut_23"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__webhook_manager__mutmut_17"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__webhook_manager__mutmut_21"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__webhook_manager__mutmut_22"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.webhooks.x__webhook_manager__mutmut_23"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__store__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__store__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__store__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__store__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__authz__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__authz__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__authz__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__authz__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__registry__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__registry__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__registry__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__registry__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__principal__mutmut_17"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__principal__mutmut_21"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__principal__mutmut_22"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.profiles.x__principal__mutmut_23"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_registry__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_registry__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_registry__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_registry__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_authz__mutmut_1"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_authz__mutmut_5"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_authz__mutmut_6"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_authz__mutmut_7"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_principal__mutmut_17"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_principal__mutmut_21"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_principal__mutmut_22"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_principal__mutmut_23"
+reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
+
+# pages.py default-value mutations that cannot change observable behaviour:
+[[equivalent]]
+mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_5"
+reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_7"
+reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_10"
+reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.pages.x__set_auth_cookie__mutmut_1"
+reason = "samesite default-argument mutation -- the mutmut trampoline forwards the bound original default, so the variant default is dead code no caller reaches. Equivalent."
+[[equivalent]]
+mutant = "provide.uterm.server.routes.pages.x__set_auth_cookie__mutmut_2"
+reason = "samesite default-argument mutation -- the mutmut trampoline forwards the bound original default, so the variant default is dead code no caller reaches. Equivalent."
