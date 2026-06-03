@@ -190,6 +190,50 @@ async def test_socket_file_has_restrictive_perms() -> None:
         await cap.stop()
 
 
+async def test_socket_umask_constrains_bind_and_is_restored(monkeypatch) -> None:
+    """The socket is created 0o600 atomically (umask before bind), not via a
+    post-bind chmod that leaves a permission window.
+
+    Regression for the bind-then-chmod race: any local user could connect in
+    the gap between bind (default umask perms, e.g. srwxr-xr-x) and the chmod.
+    start() must set a restrictive umask (0o177) *before* the bind and restore
+    the caller's umask afterward, so the socket never exists world-accessible.
+    """
+    import asyncio as _asyncio
+    import os
+    import stat
+
+    observed_umask: list[int] = []
+    real_bind = _asyncio.start_unix_server
+
+    async def _spy_bind(*args, **kwargs):
+        # Capture the umask in effect at the moment of bind by reading and
+        # immediately restoring it (os.umask has no read-only variant).
+        cur = os.umask(0o022)
+        os.umask(cur)
+        observed_umask.append(cur)
+        return await real_bind(*args, **kwargs)
+
+    monkeypatch.setattr(_asyncio, "start_unix_server", _spy_bind)
+
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        prev = os.umask(0o000)  # most permissive — surfaces any window
+        try:
+            cap = CaptureSocket(path)
+            await cap.start()
+            # The bind itself must have run under a 0o177 umask (atomic 0o600).
+            assert observed_umask == [0o177]
+            mode = stat.S_IMODE(Path(path).stat().st_mode)
+            assert mode == 0o600
+            # And the caller's umask must be restored once start() returns.
+            current = os.umask(0o022)
+            assert current == 0o000
+            await cap.stop()
+        finally:
+            os.umask(prev)
+
+
 async def test_handle_connection_wait_closed_exception_ignored() -> None:
     """_handle_connection() suppresses exceptions from writer.wait_closed()."""
     with tempfile.TemporaryDirectory() as td:

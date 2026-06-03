@@ -340,6 +340,52 @@ async def test_notify_socket_is_owner_only(tmp_path) -> None:
         await listener.stop()
 
 
+async def test_notify_socket_umask_constrains_bind_and_is_restored(tmp_path, monkeypatch) -> None:
+    """The socket is created 0o600 atomically (umask before bind), not via a
+    post-bind chmod that leaves a permission window.
+
+    Regression for the bind-then-chmod race: any local user could connect in
+    the gap between bind (default umask perms, e.g. srwxr-xr-x) and the chmod —
+    and forge login events that drive root-side session creation. start() must
+    set a restrictive umask (0o177) *before* the bind and restore the caller's
+    umask afterward, so the socket never exists world-accessible.
+    """
+    import asyncio as _asyncio
+    import os
+    import stat
+
+    observed_umask: list[int] = []
+    real_bind = _asyncio.start_unix_server
+
+    async def _spy_bind(*args, **kwargs):
+        # Capture the umask in effect at the moment of bind by reading and
+        # immediately restoring it (os.umask has no read-only variant).
+        cur = os.umask(0o022)
+        os.umask(cur)
+        observed_umask.append(cur)
+        return await real_bind(*args, **kwargs)
+
+    monkeypatch.setattr(_asyncio, "start_unix_server", _spy_bind)
+
+    sock = tmp_path / "notify.sock"
+    prev = os.umask(0o000)  # most permissive — surfaces any window
+    try:
+        listener = PamNotifyListener(str(sock))
+        await listener.start(AsyncMock())
+        try:
+            # The bind itself must have run under a 0o177 umask (atomic 0o600).
+            assert observed_umask == [0o177]
+            mode = stat.S_IMODE(sock.stat().st_mode)
+            assert mode == 0o600
+            # And the caller's umask must be restored once start() returns.
+            current = os.umask(0o022)
+            assert current == 0o000
+        finally:
+            await listener.stop()
+    finally:
+        os.umask(prev)
+
+
 # ── peer-uid auth (Fix 2) ─────────────────────────────────────────────────────
 
 
