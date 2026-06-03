@@ -30,23 +30,16 @@ BAD_MUTANT_STATES: Final[tuple[str, ...]] = (
     "skipped",
 )
 
-# Mutant states a documented-equivalent allowlist entry may excuse. These are only
-# ever applied to a mutant that is ALSO in the allowlist (see
-# _apply_equivalent_allowlist), i.e. one with a written, proven equivalence reason,
-# so a non-allowlisted mutant in any of these states still fails the gate.
-#
-#   - "survived"/"suspicious": the mutated code is behaviorally identical, so no test
-#     can kill it — the canonical equivalent-mutant outcome.
-#   - "timeout": mutmut flags this purely on wall-clock (it SIGXCPU's a run exceeding
-#     (estimated_test_time + 1) * 15s; the estimate is measured single-threaded
-#     during stats). For an ALLOWLISTED — therefore proven-unkillable — mutant a
-#     timeout is the SAME fact as "survived" (not killed, and cannot be), just
-#     surfaced by CI wall-clock noise instead of a clean finish; it cannot be hiding
-#     a kill, because a now-killable mutant would FAIL FAST (killed), never time out.
-#     A NON-allowlisted timeout is still a hard failure — a real infra/coverage
-#     problem to fix, never excused.
-#
-# "no tests" (a coverage gap) and "skipped" are never excusable in any state.
+# Mutant states a documented-equivalent allowlist entry may excuse. Only ever applied
+# to a mutant that is ALSO allowlisted (see _apply_equivalent_allowlist), i.e. one
+# with a written, proven equivalence reason — so a non-allowlisted mutant in any of
+# these states still fails the gate. "survived"/"suspicious" are the canonical
+# equivalent outcome (no test can kill behaviorally-identical code). "timeout" is
+# mutmut's wall-clock signal (it SIGXCPU's a run past (estimated_test_time + 1) * 15s;
+# a loaded CI runner crosses that for a small-estimate mutant): for a proven-unkillable
+# mutant it is the SAME fact as "survived" surfaced by CI timing — it cannot hide a
+# kill (a now-killable mutant FAILS FAST, never times out), so it is excusable too;
+# a NON-allowlisted timeout still fails. "no tests"/"skipped" are never excusable.
 EXCUSABLE_STATES: Final[tuple[str, ...]] = (
     "survived",
     "suspicious",
@@ -353,9 +346,8 @@ def _collect_stats(
 ) -> tuple[list[tuple[str, str]], dict[str, int]]:
     """Read ``mutmut results``, apply the equivalent allowlist, and tally stats.
 
-    Returns ``(effective, last_stats)`` where ``effective`` is the per-mutant
-    ``(name, state)`` list that still counts toward the gate (allowlisted
-    equivalents removed) and ``last_stats`` is the score-bearing summary dict.
+    Returns ``(effective, last_stats)``: the per-mutant ``(name, state)`` list still
+    counting toward the gate (allowlisted equivalents removed), and the summary dict.
     """
     per_mutant = _results_per_mutant(python_version, env)
     effective, excused, stale = _apply_equivalent_allowlist(per_mutant, equivalents)
