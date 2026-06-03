@@ -232,8 +232,54 @@ class MessageRouter:
 
     # -- Broadcast / send hot path --------------------------------------
 
+    async def _payloads_by_role(
+        self,
+        worker_id: str,
+        msg: dict[str, Any],
+        browsers_with_roles: list[tuple[WebSocket, str]],
+        encoded_default: str,
+    ) -> dict[str | None, str]:
+        """Pre-resolve the encoded payload for every DISTINCT role, once each.
+
+        Redaction rules are role-scoped, so the policy context + redacted payload
+        only need to be built once per distinct viewer role per frame — not once
+        per browser. This caps the per-frame ``prepare_policy_context`` calls
+        (each re-acquires ``hub._lock``) and ``get_redaction_rules`` calls at the
+        number of distinct roles, instead of letting N viewers trigger N policy
+        builds + N lock acquisitions.
+
+        Resolved SEQUENTIALLY and up front (rather than lazily inside the per-
+        browser loop) precisely so the concurrent send fan-out in
+        :meth:`broadcast` reads an immutable mapping rather than racing on a
+        shared lazy cache and triggering duplicate policy builds.
+        """
+        from provide.uterm.server.bridge.hub.core import _encode_browser_frame
+
+        hub = self._hub
+        by_role: dict[str | None, str] = {}
+        for ws, role in browsers_with_roles:
+            if role in by_role:
+                continue
+            context = await hub.prepare_policy_context(ws, worker_id, action="output")
+            rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]
+            if (
+                rules
+            ):  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
+                by_role[role] = _encode_browser_frame(_redact_frame_fields(msg, StreamRedactor(rules)))
+            else:
+                by_role[role] = encoded_default
+        return by_role
+
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
-        """Send *msg* to all browser WebSockets registered for *worker_id*."""
+        """Send *msg* to all browser WebSockets registered for *worker_id*.
+
+        Sends are fanned out CONCURRENTLY (``asyncio.gather``) so a slow browser
+        only consumes its own ``_BROADCAST_SEND_TIMEOUT_S`` budget instead of
+        head-of-line-blocking every later browser by up to that timeout. Role-
+        scoped redaction payloads are pre-computed up front (see
+        :meth:`_payloads_by_role`) so the concurrent tasks read an immutable
+        mapping rather than racing on a lazy cache.
+        """
         from provide.uterm.server.bridge.hub.core import _encode_browser_frame
 
         hub = self._hub
@@ -245,38 +291,45 @@ class MessageRouter:
                 (ws, role) for ws, role in st.browsers.items() if ws not in hub._startup_pending_browsers
             ]
 
-        dead: set[WebSocket] = set()
-
-        # Pre-encode for all browsers (except when redaction is needed)
+        # Pre-encode for all browsers (except when redaction is needed).
         encoded_default = _encode_browser_frame(msg)
 
-        # Redaction rules are role-scoped, so the policy context + redacted
-        # payload only need to be built once per distinct viewer role per
-        # frame — not once per browser. This caps the per-frame
-        # prepare_policy_context calls (each re-acquires hub._lock) and
-        # get_redaction_rules calls at the number of distinct roles, instead
-        # of letting N viewers trigger N policy builds + N lock acquisitions.
         gate_active = bool(hub._output_policy_gate) and msg.get("type") in {"term", "snapshot", "analysis"}
-        payload_by_role: dict[str | None, str] = {}
+        # When the gate is active, _payloads_by_role resolves an entry for every
+        # role present in browsers_with_roles, so the per-send lookup below is a
+        # total mapping (no default needed). When inactive, every browser gets
+        # the single shared default payload.
+        payload_by_role = (
+            await self._payloads_by_role(worker_id, msg, browsers_with_roles, encoded_default) if gate_active else {}
+        )
 
-        for ws, role in browsers_with_roles:
-            try:
-                final_payload = encoded_default
-                if gate_active:
-                    cached = payload_by_role.get(role)
-                    if cached is None:
-                        context = await hub.prepare_policy_context(ws, worker_id, action="output")
-                        rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]
-                        if rules:  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
-                            redactor = StreamRedactor(rules)
-                            cached = _encode_browser_frame(_redact_frame_fields(msg, redactor))
-                        else:
-                            cached = encoded_default
-                        payload_by_role[role] = cached
-                    final_payload = cached
-                await asyncio.wait_for(ws.send_text(final_payload), timeout=_BROADCAST_SEND_TIMEOUT_S)
-            except Exception as exc:
-                logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, exc)
+        async def _send(ws: WebSocket, role: str) -> None:
+            payload = payload_by_role[role] if gate_active else encoded_default
+            await asyncio.wait_for(ws.send_text(payload), timeout=_BROADCAST_SEND_TIMEOUT_S)
+
+        # 0/1 browser: a single send has no head-of-line problem, so await it
+        # directly. This skips gather()'s extra event-loop turn and keeps the
+        # post-broadcast ordering identical to the legacy sequential path. With
+        # 2+ browsers we fan out concurrently so one slow viewer never delays
+        # the others by up to _BROADCAST_SEND_TIMEOUT_S.
+        if len(browsers_with_roles) <= 1:
+            results: list[BaseException | None] = []
+            for ws, role in browsers_with_roles:
+                try:
+                    await _send(ws, role)
+                    results.append(None)
+                except Exception as exc:
+                    # Mirror gather(return_exceptions=True): capture, don't raise.
+                    results.append(exc)
+        else:
+            results = list(
+                await asyncio.gather(*(_send(ws, role) for ws, role in browsers_with_roles), return_exceptions=True)
+            )
+
+        dead: set[WebSocket] = set()
+        for (ws, _role), result in zip(browsers_with_roles, results, strict=True):
+            if isinstance(result, Exception):
+                logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, result)
                 dead.add(ws)
         if dead:
             changed = await hub.remove_dead_browsers(worker_id, dead)
