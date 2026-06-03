@@ -132,7 +132,7 @@ The columns map to:
 | SLO doc | ⚠ | Numbers exist in artifacts; codify in `docs/operations/slo.md` so on-call knows the thresholds. |
 | Alerting on hijack-conflict rate | ⚠ | Metrics emit `hijack_conflicts_total`; wire to your monitoring (Prometheus alertmanager / Datadog / Grafana). |
 | Rate limiting on hijack acquire | ⚠ | Confirm bucket size + refill rate in the rate limit module. |
-| DoS posture | ⚠ | Browser WS hello loop is cheap (5.68ms p99); confirm no unbounded buffers in control channel processing. |
+| DoS posture | ⚠ | Browser WS hello loop is cheap (5.68ms p99). REST-hijack acquire no longer holds the global hub lock across the worker-pause send, so one backpressured worker can't stall all sessions (`bridge/hub/lease.py`); MCP user/LLM regex is screened for catastrophic backtracking before compile (`ai/patterns.py`). Still confirm no unbounded buffers in control-channel processing. |
 | Health endpoint | ✅ | `/api/health` returns 200 with `{"status": "ok"}`. |
 | Readiness endpoint | ✅ | Distinct from health; reports `ready: true` only when sessions are loaded. |
 | Graceful shutdown | ✅ | Sessions disconnect cleanly on SIGTERM (verified via rollback drill). |

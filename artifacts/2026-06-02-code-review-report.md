@@ -1,5 +1,25 @@
 # provide-uterm Code Review & Architecture Analysis - Part 1: Core Bridge System (TermHub)
 
+> **Resolution status (2026-06-03).** Every claim below was fact-checked against
+> the code; findings are factually accurate but severity was generally
+> overstated. Actionable findings have been resolved (commits
+> `cf9c47fa..eba6394e`, CI-green); see `CHANGELOG.md` `[Unreleased]`.
+>
+> | Finding | Status |
+> |---------|--------|
+> | P1 §3 — I/O under the global lock (`try_acquire_rest`) | **Fixed** — two-phase reserve (`cf9c47fa`) |
+> | P1 §4 — sequential broadcast fan-out | **Fixed** — concurrent `gather` (`707300d4`) |
+> | P1 §4 — shard the global lock | **N/A** — defused by removing I/O from the lock; the lock now wraps only µs in-memory ops |
+> | P2 §2 — SSH `asyncssh` private-attr access | **Acknowledged** — already guarded (`contextlib.suppress` + fallback); not actioned |
+> | P3 §3 — ≤60 s credential-revocation window (CF) | **Acknowledged** — documented intentional trade-off |
+> | P5 §3 — MCP regex ReDoS | **Fixed** — catastrophic-construct guard + `session_watch` clamp (`fd480ade`) |
+> | P5 §3 — SSRF / DNS-rebinding in `session_create` | **Already mitigated** — DNS-resolving egress guard at the `SessionRegistry` chokepoint (`server/egress.py`); the MCP text-check is a cheap first pass, not the control |
+> | P6 §3 — `capture.c` multi-thread framing race | **Fixed** — single-syscall frame (`8bde10de`) |
+> | P6 §3 — `pam_listener` socket permission race | **Fixed** — umask-before-bind (`b9bf8fa7`) |
+> | P8 §2 — annotation stream fragmentation | **Deferred** — cross-call buffering breaks the one-event-per-`seq` model; needs design buy-in |
+> | P8 §3 — annotation fallback leaks raw match | **Fixed** — label-only fallback (`a4296f46`) |
+> | P1 §2 — back-compat `@property` shims | **Acknowledged** — intentional refactor-#16 migration scaffolding |
+
 This section of the code review focuses on the Core Bridge System, analyzing the `TermHub` composition (Hub Services) and the `WorkerLink` bridge mechanism. We evaluate the codebase against four critical lenses: Architecture, Maintainability, Security & Concurrency, and Performance & Scaling.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
