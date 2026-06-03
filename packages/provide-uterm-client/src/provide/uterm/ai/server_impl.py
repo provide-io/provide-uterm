@@ -44,6 +44,7 @@ from provide.uterm.ai.constants import (
     MAX_KEYSTROKE_BYTES,
     MAX_USER_PATTERN_LEN,
 )
+from provide.uterm.ai.patterns import has_catastrophic_construct
 from provide.uterm.ai.policy import is_allowed_connector
 from provide.uterm.client.hijack import HijackClient, _safe_id
 from provide.uterm.client.mcp_tools import _ok
@@ -92,14 +93,27 @@ def _is_internal_host(host: str) -> bool:
 
 
 def _compile_user_pattern(pattern: str) -> re.Pattern[str]:
-    """Compile an attacker-supplied regex with a length cap (ReDoS mitigation).
+    """Compile an attacker-supplied regex behind a length + structural guard.
 
-    The length cap removes the cheap amplification path; it does not bound
-    catastrophic backtracking for short pathological patterns — true time
-    bounds need a ``regex``/``re2`` engine. Residual risk is documented here.
+    Two ReDoS mitigations run before ``re.compile``:
+
+    * a length cap (:data:`MAX_USER_PATTERN_LEN`) removes the cheap
+      amplification path; and
+    * a structural denylist (:func:`~provide.uterm.ai.patterns.has_catastrophic_construct`)
+      rejects nested quantifiers (``(a+)+``) and quantified backreferences
+      (``\\1+``) — the classic exponential-backtracking shapes that a short,
+      under-the-cap pattern can still trigger.
+
+    ``re2``/``regex`` (linear-time engines) are not project dependencies, so we
+    do not bound matching time directly. Residual risk: the structural guard
+    does not catch every ReDoS shape (e.g. overlapping alternations like
+    ``(a|a)*``); see the :mod:`~provide.uterm.ai.patterns` module docstring.
     """
     if len(pattern) > MAX_USER_PATTERN_LEN:
         msg = f"pattern too long (max {MAX_USER_PATTERN_LEN} chars)"
+        raise ValueError(msg)
+    if has_catastrophic_construct(pattern):
+        msg = "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
         raise ValueError(msg)
     try:
         return re.compile(pattern)
@@ -606,17 +620,22 @@ def create_mcp_app(
         timeout_s:
             How long to wait for events before returning (clamped to 30 s).
         max_events:
-            Maximum events to collect before returning early.
+            Maximum events to collect before returning early (clamped to
+            1-50).
         """
         rejection = _reject_bad_pattern(pattern)
         if rejection is not None:
             return rejection
+        # Clamp max_events symmetrically with session_subscribe so an LLM
+        # cannot ask the server to collect an unbounded number of events.
+        # Watch is the short-lived tool, so its ceiling matches the default.
+        clamped_max_events = min(max(max_events, 1), 50)
         ok, data = await client.watch_session_events(
             session_id,
             event_types=event_types,
             pattern=pattern,
             timeout_ms=int(min(max(timeout_s, 0.1), 30) * 1000),
-            max_events=max_events,
+            max_events=clamped_max_events,
         )
         return _ok(ok, data)
 
