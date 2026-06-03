@@ -37,7 +37,35 @@ A multi-wave security/compliance hardening pass landed after the
 - **Transport / file-permission hardening.** Recording files are created
   0o600 with TOCTOU-safe open flags; telnet/SSH/WS connectors validate the
   post-connect peer IP (DNS-rebind mitigation); `WebSocketTransport` is
-  hardened for the `websockets` 16.x API.
+  hardened for the `websockets` 16.x API. The PAM-notify and capture
+  unix-domain sockets now set a restrictive umask **before** bind, so they
+  are created 0o600 with no permission window (was bind-then-`chmod`).
+- **Code-review remediation (2026-06-02 bridge/transport/platform/MCP review).**
+  - **Hijack acquire no longer holds the global hub lock across worker I/O.**
+    `try_acquire_rest` reserved the slot under `TermHub._lock` and sent the
+    worker-pause frame *while holding it*, so one backpressured worker could
+    stall every hub operation (an availability hazard). It now reserves
+    (`hijack_pending`), sends the pause lock-free, then finalises under the
+    lock (`bridge/hub/lease.py`).
+  - **MCP regex ReDoS guard.** User/LLM-supplied patterns for
+    `session_watch`/`session_subscribe` are screened for catastrophic-
+    backtracking constructs before `re.compile`, and `session_watch` now
+    clamps `max_events` like `session_subscribe` (`ai/patterns.py`,
+    `ai/server_impl.py`).
+  - **Atomic capture framing.** The native interposer (`capture.c`) emits
+    each frame's header+payload in a single syscall, closing a
+    multi-threaded framing-corruption race on the shared capture fd.
+  - **Annotation fallback no longer leaks matches.** A rule whose
+    `description_template` fails to format falls back to a label-only
+    description, never embedding the raw regex match (defense-in-depth
+    against a misconfigured rule leaking a matched secret to telemetry).
+
+### Reliability / performance
+
+- **Concurrent browser broadcast.** `MessageRouter.broadcast` fans out the
+  per-browser sends with `asyncio.gather` (roles pre-resolved to avoid a
+  redaction-cache race) instead of awaiting each in series, so one slow
+  viewer no longer delays the rest (`bridge/hub/router_impl.py`).
 
 ### Testing / CI
 
@@ -57,9 +85,16 @@ A multi-wave security/compliance hardening pass landed after the
 - **Deterministic CI.** De-flaked the worker-disconnect frame-ordering tests
   (two racing broadcast tasks → assert on frame membership, not arrival
   order, in both the core and server test copies) and replaced the PTY
-  throughput test's hardcoded fps target with a regression floor. Two
-  `connection.py` `async with` exit-arcs carry `# pragma: no branch` — a
-  coverage.py-on-Python-3.11 arc-attribution quirk, not an untested branch.
+  throughput test's hardcoded fps target with a regression floor. Several
+  `connection.py` and `lease.py` `async with` exit-arcs carry
+  `# pragma: no branch` — a coverage.py-on-Python-3.11 arc-attribution
+  quirk, not an untested branch.
+- **Mutation perimeter — lease.py + models.py at killed==100.** The
+  two-phase hijack reserve is pinned by a dedicated kill suite (lock-free
+  during send; reservation/rollback on failure, cancellation, vanished or
+  superseded worker). Editing `models.py` surfaced `_safe_int`/`_safe_float`
+  as latently uncovered in the perimeter ("enumerated ≠ enforced"); a
+  focused kill suite now covers them. Both files: 521/521 mutants killed.
 
 ### Build / dependencies
 
