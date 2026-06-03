@@ -80,11 +80,38 @@ def admin_client(jwt_app) -> TestClient:  # type: ignore[return]
         yield client  # type: ignore[misc]
 
 
+class _HeaderClient:
+    """Issue requests through an ALREADY-STARTED TestClient with override auth headers.
+
+    admin_client and viewer_client must share ONE app+registry (to test cross-principal
+    access), but two separate ``with TestClient(jwt_app)`` blocks run two lifespans in
+    two event loops — and the shared SessionRegistry's ``asyncio.Lock`` then gets used
+    across loops, which Python 3.14 rejects ("bound to a different event loop"). Routing
+    the viewer through the admin client's single portal/loop avoids that.
+    """
+
+    def __init__(self, client: TestClient, headers: dict[str, str]) -> None:
+        self._client = client
+        self._headers = headers
+
+    def _request(self, method: str, url: str, **kwargs: Any) -> Any:
+        kwargs["headers"] = {**self._headers, **(kwargs.get("headers") or {})}
+        return getattr(self._client, method)(url, **kwargs)
+
+    def get(self, url: str, **kwargs: Any) -> Any:
+        return self._request("get", url, **kwargs)
+
+    def post(self, url: str, **kwargs: Any) -> Any:
+        return self._request("post", url, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:  # delegate .app / .delete / etc. to the real client
+        return getattr(self._client, name)
+
+
 @pytest.fixture()
-def viewer_client(jwt_app) -> TestClient:  # type: ignore[return]
+def viewer_client(admin_client) -> _HeaderClient:  # type: ignore[no-untyped-def]
     headers = {"Authorization": f"Bearer {_make_token(sub='viewer-user', roles=['viewer'])}"}
-    with TestClient(jwt_app, headers=headers) as client:
-        yield client  # type: ignore[misc]
+    return _HeaderClient(admin_client, headers)
 
 
 def _private_session_payload(session_id: str = "priv-sess", owner: str = "other-user") -> dict[str, Any]:
