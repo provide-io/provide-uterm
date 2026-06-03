@@ -2,7 +2,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Agent process management for the generic swarm manager."""
+"""Agent process management for the generic swarm manager.
+
+Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). The 6 @staticmethod
+helpers are mutmut-skipped (decorator skip); the mutable surface is the undecorated
+instance methods. A manager-dir conftest.py autouse fixture blanket-mocks
+subprocess.Popen / os.killpg / os.getpgid during mutation runs (keyed on MUTANT_UNDER_TEST)
+so a guard-defeat mutant can never spawn a real child into mutmut's os.wait() reaper. The
+dedicated kill-suite is tests/manager/manager/test_process_mutation_killing_5.py; 24
+documented equivalents are excused via mutation_equivalents.toml.
+"""
 
 from __future__ import annotations
 
@@ -158,12 +167,18 @@ class AgentProcessManager:
 
     def allocate_agent_id(self) -> str:
         idx = self.sync_next_agent_index()
-        while True:
+        # Bounded so the allocator can never spin forever on inconsistent state:
+        # sync_next_agent_index() returns an index past every known id, so the very
+        # first candidate is free, and at most one attempt per already-known id is
+        # ever needed. The +1 margin keeps the first attempt available even when no
+        # ids are known.
+        for _ in range(len(self.manager.agents) + len(self.manager.processes) + 1):
             candidate = f"agent_{idx:03d}"
             if candidate not in self.manager.agents and candidate not in self.manager.processes:
                 self._next_agent_index = idx + 1
                 return candidate
             idx += 1  # pragma: no cover - requires concurrent mutation between sync/allocate
+        raise RuntimeError("agent id allocation exhausted")  # pragma: no cover
 
     async def cancel_spawn(self) -> bool:
         tasks = [t for t in self._spawn_tasks if not t.done()]
