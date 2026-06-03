@@ -8,9 +8,11 @@ Mutation-enforced at killed==100 (see [tool.mutmut].paths_to_mutate). The 6 @sta
 helpers are mutmut-skipped (decorator skip); the mutable surface is the undecorated
 instance methods. A manager-dir conftest.py autouse fixture blanket-mocks
 subprocess.Popen / os.killpg / os.getpgid during mutation runs (keyed on MUTANT_UNDER_TEST)
-so a guard-defeat mutant can never spawn a real child into mutmut's os.wait() reaper. The
-dedicated kill-suite is tests/manager/manager/test_process_mutation_killing_5.py; 24
-documented equivalents are excused via mutation_equivalents.toml.
+so a guard-defeat mutant can never spawn a real child into mutmut's os.wait() reaper, and a
+zero-delay-yielding asyncio.sleep so spawn_swarm/monitor mutants fail fast (no busy-spin)
+instead of timing out. The dedicated kill-suite is
+tests/manager/manager/test_process_mutation_killing_5.py; 28 documented equivalents are
+excused via mutation_equivalents.toml.
 """
 
 from __future__ import annotations
