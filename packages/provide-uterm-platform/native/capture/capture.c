@@ -40,6 +40,14 @@
 #define CHANNEL_STDIN   0x02
 #define CHANNEL_CONNECT 0x03
 
+/* 1B channel + 4B big-endian length. */
+#define FRAME_HEADER_LEN 5
+
+/* Frames whose combined size (header + payload) fits this cap are assembled on
+ * the stack; larger ones fall back to malloc.  Sized to cover typical terminal
+ * write()s without heap traffic while keeping stack usage bounded. */
+#define FRAME_STACK_CAP 4096
+
 static int g_capture_fd = -1;
 
 typedef ssize_t (*fn_write)(int, const void *, size_t);
@@ -90,26 +98,41 @@ static void capture_disable(void) {
 
 static void send_frame(uint8_t channel, const void *data, size_t len) {
     if (g_capture_fd < 0 || !g_real_write) return;
-    uint8_t header[5];
+
+    /* Header [1B channel][4B big-endian length] and payload are concatenated
+     * into one buffer and emitted with a SINGLE write() so the framing cannot
+     * be torn apart by a concurrent send_frame() on another thread.  Two
+     * separate syscalls (header, then payload) on the shared, unlocked
+     * g_capture_fd would let one thread's header interleave with another's
+     * payload, corrupting the length-prefixed framing the Python reader
+     * (CaptureSocket) relies on.  A single write() is the atomic unit here. */
     uint32_t n = (uint32_t)len;
-    header[0] = channel;
-    header[1] = (n >> 24) & 0xff;
-    header[2] = (n >> 16) & 0xff;
-    header[3] = (n >>  8) & 0xff;
-    header[4] = (n      ) & 0xff;
+    size_t total = FRAME_HEADER_LEN + len;
+
+    uint8_t stack_buf[FRAME_STACK_CAP];
+    uint8_t *frame = stack_buf;
+    if (total > FRAME_STACK_CAP) {
+        frame = (uint8_t *)malloc(total);
+        if (!frame) return;  /* drop frame rather than risk a partial write */
+    }
+
+    frame[0] = channel;
+    frame[1] = (n >> 24) & 0xff;
+    frame[2] = (n >> 16) & 0xff;
+    frame[3] = (n >>  8) & 0xff;
+    frame[4] = (n      ) & 0xff;
+    memcpy(frame + FRAME_HEADER_LEN, data, len);
+
     /* Call real write directly (g_capture_fd > 2 so no recursion even if
      * g_real_write ended up as our hook — but it won't, per the above).
      * If the capture socket is dead, disable capture permanently so we
      * don't spin-loop on failing syscalls. */
-    ssize_t rc = g_real_write(g_capture_fd, header, 5);
-    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
-        capture_disable();
-        return;
-    }
-    rc = g_real_write(g_capture_fd, data, len);
+    ssize_t rc = g_real_write(g_capture_fd, frame, total);
     if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
         capture_disable();
     }
+
+    if (frame != stack_buf) free(frame);
 }
 
 __attribute__((constructor))
@@ -184,25 +207,40 @@ static fn_connect orig_connect;
 
 static void send_frame(uint8_t channel, const void *data, size_t len) {
     if (g_capture_fd < 0 || !orig_write) return;
-    uint8_t header[5];
+
+    /* Header [1B channel][4B big-endian length] and payload are concatenated
+     * into one buffer and emitted with a SINGLE send() so the framing cannot
+     * be torn apart by a concurrent send_frame() on another thread.  Two
+     * separate syscalls (header, then payload) on the shared, unlocked
+     * g_capture_fd would let one thread's header interleave with another's
+     * payload, corrupting the length-prefixed framing the Python reader
+     * (CaptureSocket) relies on.  A single send() is the atomic unit here. */
     uint32_t n = (uint32_t)len;
-    header[0] = channel;
-    header[1] = (n >> 24) & 0xff;
-    header[2] = (n >> 16) & 0xff;
-    header[3] = (n >>  8) & 0xff;
-    header[4] = (n      ) & 0xff;
+    size_t total = FRAME_HEADER_LEN + len;
+
+    uint8_t stack_buf[FRAME_STACK_CAP];
+    uint8_t *frame = stack_buf;
+    if (total > FRAME_STACK_CAP) {
+        frame = (uint8_t *)malloc(total);
+        if (!frame) return;  /* drop frame rather than risk a partial write */
+    }
+
+    frame[0] = channel;
+    frame[1] = (n >> 24) & 0xff;
+    frame[2] = (n >> 16) & 0xff;
+    frame[3] = (n >>  8) & 0xff;
+    frame[4] = (n      ) & 0xff;
+    memcpy(frame + FRAME_HEADER_LEN, data, len);
+
     /* Use send() with MSG_NOSIGNAL instead of write() to suppress SIGPIPE
      * per-call rather than globally — avoids changing signal handling for the
      * entire host process. */
-    ssize_t rc = send(g_capture_fd, header, 5, MSG_NOSIGNAL);
-    if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
-        capture_disable();
-        return;
-    }
-    rc = send(g_capture_fd, data, len, MSG_NOSIGNAL);
+    ssize_t rc = send(g_capture_fd, frame, total, MSG_NOSIGNAL);
     if (rc < 0 && (errno == EPIPE || errno == ECONNRESET || errno == EBADF)) {
         capture_disable();
     }
+
+    if (frame != stack_buf) free(frame);
 }
 
 __attribute__((constructor))
