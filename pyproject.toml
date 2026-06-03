@@ -485,6 +485,8 @@ tests_dir = [
     "packages/provide-uterm-server/tests/bridge/test_hub_atomic.py",
     # Dedicated behaviour-pinning mutation-killing suites for lease.py.
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_acquire_rest.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_acquire_rest_pending.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_models_safe_numeric_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_rest_lifecycle.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_dashboard_ws.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_lease_kill_expiry_sweep.py",

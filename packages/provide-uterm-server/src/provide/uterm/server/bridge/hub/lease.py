@@ -228,25 +228,40 @@ class HijackLeaseManager:
         hijack_id: str,
         now: float,
     ) -> tuple[bool, str | None]:
-        """Atomically check availability and create a REST hijack session."""
+        """Reserve a REST hijack, pause the worker, then finalise the lease.
+
+        The worker-pause ``send_text`` runs OUTSIDE the hub lock: holding the single
+        global lock across the send would let one backpressured worker stall every
+        other hub operation. The slot is reserved under the lock (``hijack_pending``)
+        so concurrent acquires still see it as taken, the pause is sent lock-free, the
+        lease is finalised under the lock, and the ``finally`` rolls the reservation
+        back on send failure / cancellation / a worker that vanished mid-send.
+        """
         with tracer.start_as_current_span(
             "uterm.hijack.acquire.rest", attributes={"worker_id": worker_id, "owner": owner}
         ):
+            from provide.uterm.server.bridge.hub.core import _encode_worker_frame
+
+            # Phase 1 — reserve under the lock (in-memory only).
             async with self._lock:
                 st = self._registry._workers.get(worker_id)
                 if st is None or st.worker_ws is None:
                     return False, "no_worker"
                 if st.input_mode == "open":
                     return False, "open_mode"
-                if self._hub.is_dashboard_hijack_active(st) or self._hub.has_valid_rest_lease(st):
+                if (
+                    self._hub.is_dashboard_hijack_active(st)
+                    or self._hub.has_valid_rest_lease(st)
+                    or st.hijack_pending is not None
+                ):
                     return False, "already_hijacked"
+                worker_ws = st.worker_ws
+                st.hijack_pending = hijack_id
 
-                # Send pause while holding the lock to ensure the worker is notified
-                # atomically with the session creation.
+            try:
+                # Phase 2 — pause the worker OUTSIDE the lock.
                 try:
-                    from provide.uterm.server.bridge.hub.core import _encode_worker_frame
-
-                    await st.worker_ws.send_text(
+                    await worker_ws.send_text(
                         _encode_worker_frame(
                             {
                                 "type": "control",
@@ -259,16 +274,35 @@ class HijackLeaseManager:
                     )
                 except Exception as exc:
                     logger.debug("pause_worker_failed worker_id=%s: %s", worker_id, exc)
-                    st.worker_ws = None
+                    async with self._lock:
+                        st = self._registry._workers.get(worker_id)
+                        if st is not None and st.worker_ws is worker_ws:
+                            st.worker_ws = None
                     return False, "no_worker"
 
-                st.hijack_session = HijackSession(
-                    hijack_id=hijack_id,
-                    owner=owner,
-                    acquired_at=now,
-                    lease_expires_at=now + lease_s,
-                    last_heartbeat=now,
-                )
+                # Phase 3 — finalise under the lock (unless cancelled / superseded).
+                async with self._lock:
+                    st = self._registry._workers.get(worker_id)
+                    if st is None or st.hijack_pending != hijack_id:
+                        return False, "no_worker"
+                    st.hijack_session = HijackSession(
+                        hijack_id=hijack_id,
+                        owner=owner,
+                        acquired_at=now,
+                        lease_expires_at=now + lease_s,
+                        last_heartbeat=now,
+                    )
+                    st.hijack_pending = None
+            finally:
+                # Roll back a still-outstanding reservation (send failure, cancellation,
+                # or a worker that vanished mid-send). On success phase 3 already cleared
+                # it, so this is a no-op; a concurrent acquire's reservation (different
+                # hijack_id) is left untouched.
+                async with self._lock:
+                    st = self._registry._workers.get(worker_id)
+                    if st is not None and st.hijack_pending == hijack_id:
+                        st.hijack_pending = None
+
             logger.info(EVENT_HIJACK_ACQUIRED, worker_id=worker_id, hijack_type="rest", owner=owner, lease_s=lease_s)
             return True, None
 

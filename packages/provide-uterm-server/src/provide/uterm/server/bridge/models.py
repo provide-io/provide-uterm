@@ -137,6 +137,12 @@ class WorkerTermState:
     hijack_owner: WebSocket | None = None  # dashboard WS that holds the lease
     hijack_owner_expires_at: float | None = None
     hijack_session: HijackSession | None = None  # REST lease
+    # Transient REST-acquire reservation. Set under the hub lock while a REST
+    # acquire pauses the worker OUTSIDE the lock, then cleared when the lease is
+    # finalised (or rolled back). Makes the acquire mutually exclusive without
+    # holding the hub lock across the worker-pause send. See
+    # ``HijackLeaseManager.try_acquire_rest``.
+    hijack_pending: str | None = None
     input_mode: InputMode = "hijack"
     last_snapshot: dict[str, Any] | None = None
     events: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=2000))
