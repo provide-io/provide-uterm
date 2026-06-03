@@ -10,6 +10,9 @@ from provide.uterm.annotation._models import Annotation, AnnotationSpan, Detecti
 from provide.uterm.annotation._rules import BUILTIN_RULES
 
 _DESCRIPTION_TRUNCATE = 80
+# Placeholder used in the fallback description so the raw match (a potential
+# secret) is never embedded when a description_template fails to format.
+_FALLBACK_PLACEHOLDER = "<unavailable>"
 
 
 class PatternDetector:
@@ -54,7 +57,9 @@ class PatternDetector:
             try:
                 description = rule.description_template.format(match=match_text, event_type=event_type)
             except (KeyError, IndexError):
-                description = f"{rule.label}: {match_text}"
+                # A malformed template must not leak the raw match (a potential
+                # secret) into the description, which flows to telemetry/logs.
+                description = f"{rule.label}: {_FALLBACK_PLACEHOLDER}"
             results.append(
                 Annotation(
                     label=rule.label,
