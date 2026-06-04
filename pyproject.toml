@@ -453,6 +453,10 @@ tests_dir = [
     # zero tests and reports them all as ``no_tests``.
     "packages/provide-uterm/tests/terminal/test_recording_stores.py",
     "packages/provide-uterm/tests/terminal/test_recording_local.py",
+    # recording.py kill-suite: the store suites exercise behaviour but can't pin
+    # the security-bearing syscall args (dir/file modes, O_NOFOLLOW, S_ISREG,
+    # utf-8 encoding) that chmod/fchmod otherwise mask; this wraps them to assert.
+    "packages/provide-uterm/tests/terminal/test_recording_kill.py",
     # Server-package coverage — matches the server-package paths_to_mutate
     # entries above. Without these the gate finds the mutants but binds
     # to zero tests and reports them all as ``no_tests``.
