@@ -34,7 +34,7 @@ def _make_ws() -> MagicMock:
 
 async def _register_worker(hub: TermHub, worker_id: str, worker_ws: Any | None = None) -> WorkerTermState:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         if worker_ws is not None:
             st.worker_ws = worker_ws
         return st
@@ -135,7 +135,7 @@ class TestExpireLeasesUnderLock:
 
         await hub._expire_leases_under_lock("w1", now)
         async with hub._lock:
-            assert hub._workers["w1"].hijack_owner_expires_at is None
+            assert hub.registry._workers["w1"].hijack_owner_expires_at is None
 
     async def test_should_resume_requires_all_cleared(self) -> None:
         """mutmut_27,28: should_resume requires BOTH owner and session cleared."""

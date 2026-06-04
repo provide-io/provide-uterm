@@ -94,8 +94,8 @@ def test_worker_registers_in_hub() -> None:
     app, hub = make_app()
     with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
-        assert hub._workers.get("bot1") is not None
-        assert hub._workers["bot1"].worker_ws is not None
+        assert hub.registry._workers.get("bot1") is not None
+        assert hub.registry._workers["bot1"].worker_ws is not None
 
 
 def test_worker_disconnect_clears_ws() -> None:
@@ -103,7 +103,7 @@ def test_worker_disconnect_clears_ws() -> None:
     with TestClient(app) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
     # After context exits worker_ws must be cleared
-    st = hub._workers.get("bot1")
+    st = hub.registry._workers.get("bot1")
     if st is not None:
         assert st.worker_ws is None
 
@@ -153,8 +153,8 @@ def test_worker_snapshot_updates_hub_state() -> None:
             assert msg["screen"] == "Welcome to the server"
 
             # Hub state updated while connections are still live.
-            assert hub._workers["bot1"].last_snapshot is not None
-            assert hub._workers["bot1"].last_snapshot["screen"] == "Welcome to the server"
+            assert hub.registry._workers["bot1"].last_snapshot is not None
+            assert hub.registry._workers["bot1"].last_snapshot["screen"] == "Welcome to the server"
 
 
 def test_worker_snapshot_appends_event() -> None:
@@ -183,7 +183,7 @@ def test_worker_snapshot_appends_event() -> None:
             msg = browser.receive_json()
             assert msg["type"] == "snapshot"
 
-            st = hub._workers.get("bot1")
+            st = hub.registry._workers.get("bot1")
             assert st is not None
             types = [e["type"] for e in st.events]
             assert "snapshot" in types

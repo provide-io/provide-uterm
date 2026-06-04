@@ -31,7 +31,7 @@ def _make_hub_app() -> tuple[TermHub, FastAPI]:
 def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
     mock_ws = AsyncMock()
     mock_ws.send_text = AsyncMock()
-    hub._workers[worker_id] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers[worker_id] = WorkerTermState(worker_ws=mock_ws)
     return mock_ws
 
 
@@ -137,7 +137,7 @@ class TestHijackReadOutputModes:
         mcp = _mcp_for(app)
         hid = await _acquire(mcp)
 
-        hub._workers[WID].last_snapshot = {
+        hub.registry._workers[WID].last_snapshot = {
             "screen": "\x1b[32mtest\x1b[0m output",
             "cursor": {"row": 0, "col": 11},
             "cols": 80,
@@ -169,7 +169,7 @@ class TestHijackReadOutputModes:
         mcp = _mcp_for(app)
         hid = await _acquire(mcp)
 
-        hub._workers[WID].last_snapshot = {
+        hub.registry._workers[WID].last_snapshot = {
             "screen": "\x1b[32mtest\x1b[0m output",
             "cursor": {"row": 0, "col": 11},
             "cols": 80,
@@ -201,7 +201,7 @@ class TestHijackReadOutputModes:
         mcp = _mcp_for(app)
         hid = await _acquire(mcp)
 
-        hub._workers[WID].last_snapshot = {
+        hub.registry._workers[WID].last_snapshot = {
             "screen": "\x1b[32mtest\x1b[0m output",
             "cursor": {"row": 0, "col": 11},
             "cols": 80,
@@ -251,7 +251,7 @@ class TestHijackReadOutputModes:
         mcp = _mcp_for(app)
         hid = await _acquire(mcp)
 
-        hub._workers[WID].last_snapshot = {
+        hub.registry._workers[WID].last_snapshot = {
             "screen": "line1\nline2\nline3\nline4\nline5",
             "cursor": {"row": 4, "col": 0},
             "cols": 80,

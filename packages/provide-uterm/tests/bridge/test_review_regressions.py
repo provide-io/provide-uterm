@@ -46,7 +46,7 @@ class TestRestHijackOpenModeRejection:
         worker_ws = _make_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.input_mode = "open"
 
@@ -63,7 +63,7 @@ class TestRestHijackOpenModeRejection:
         worker_ws = _make_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.input_mode = "hijack"
 
@@ -80,7 +80,7 @@ class TestRestHijackOpenModeRejection:
         worker_ws = _make_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
 
         # Default is hijack mode — acquire works
@@ -91,7 +91,7 @@ class TestRestHijackOpenModeRejection:
 
         # Release the session
         async with hub._lock:
-            st = hub._workers["w1"]
+            st = hub.registry._workers["w1"]
             st.hijack_session = None
 
         # Switch to open mode
@@ -131,7 +131,7 @@ class TestLastActivityAtMonotonicDefault:
         hub = _make_hub()
 
         async with hub._lock:
-            st = hub._workers.setdefault("idle1", WorkerTermState())
+            st = hub.registry._workers.setdefault("idle1", WorkerTermState())
             # Simulate worker that connected 10 seconds ago
             st.last_activity_at = time.monotonic() - 10
 
@@ -144,7 +144,7 @@ class TestLastActivityAtMonotonicDefault:
         hub = _make_hub()
 
         async with hub._lock:
-            st = hub._workers.setdefault("active1", WorkerTermState())
+            st = hub.registry._workers.setdefault("active1", WorkerTermState())
             st.last_activity_at = time.monotonic() - 1
 
         candidates = await hub.get_idle_candidates(timeout_s=5)
@@ -166,7 +166,7 @@ class TestBroadcastLeaseExpiresAtWallClock:
 
         mono_now = time.monotonic()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = _make_ws()
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = mono_now + 60
@@ -194,7 +194,7 @@ class TestBroadcastLeaseExpiresAtWallClock:
 
         mono_now = time.monotonic()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = _make_ws()
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = mono_now + 45
@@ -229,7 +229,7 @@ class TestBroadcastLeaseExpiresAtWallClock:
 
         mono_now = time.monotonic()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = _make_ws()
             st.hijack_session = HijackSession(
                 hijack_id="hj1",
@@ -268,7 +268,7 @@ class TestOpenModeRejectionSendsResume:
         worker_ws.send_text = AsyncMock(return_value=None)
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.input_mode = "open"
 
@@ -304,20 +304,20 @@ class TestRateLimitEvaluationOrder:
 
         hub = _make_hub()
         # Give global bucket plenty of tokens
-        hub._rest_acquire_bucket = TokenBucket(100)
-        hub._rest_acquire_bucket._tokens = 100.0
+        hub.limiter.rest_acquire_bucket = TokenBucket(100)
+        hub.limiter.rest_acquire_bucket._tokens = 100.0
 
         # Exhaust per-client bucket
         client = "abuser"
-        hub._rest_acquire_per_client[client] = TokenBucket(0.001)
-        hub._rest_acquire_per_client[client]._tokens = 0.0
+        hub.limiter.rest_acquire_per_client[client] = TokenBucket(0.001)
+        hub.limiter.rest_acquire_per_client[client]._tokens = 0.0
 
-        global_before = hub._rest_acquire_bucket._tokens
+        global_before = hub.limiter.rest_acquire_bucket._tokens
         result = hub.allow_rest_acquire_for(client)
 
         assert result is False
-        assert hub._rest_acquire_bucket._tokens == global_before, (
-            f"Global tokens should be unchanged ({global_before}), got {hub._rest_acquire_bucket._tokens}"
+        assert hub.limiter.rest_acquire_bucket._tokens == global_before, (
+            f"Global tokens should be unchanged ({global_before}), got {hub.limiter.rest_acquire_bucket._tokens}"
         )
 
     def test_exhausted_per_client_does_not_drain_global_send(self) -> None:
@@ -325,15 +325,15 @@ class TestRateLimitEvaluationOrder:
         from provide.uterm.server.bridge.ratelimit import TokenBucket
 
         hub = _make_hub()
-        hub._rest_send_bucket = TokenBucket(100)
-        hub._rest_send_bucket._tokens = 100.0
+        hub.limiter.rest_send_bucket = TokenBucket(100)
+        hub.limiter.rest_send_bucket._tokens = 100.0
 
         client = "abuser"
-        hub._rest_send_per_client[client] = TokenBucket(0.001)
-        hub._rest_send_per_client[client]._tokens = 0.0
+        hub.limiter.rest_send_per_client[client] = TokenBucket(0.001)
+        hub.limiter.rest_send_per_client[client]._tokens = 0.0
 
-        global_before = hub._rest_send_bucket._tokens
+        global_before = hub.limiter.rest_send_bucket._tokens
         result = hub.allow_rest_send_for(client)
 
         assert result is False
-        assert hub._rest_send_bucket._tokens == global_before
+        assert hub.limiter.rest_send_bucket._tokens == global_before

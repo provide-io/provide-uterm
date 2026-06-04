@@ -40,7 +40,7 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
     caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)

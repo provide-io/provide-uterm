@@ -182,7 +182,7 @@ class TestHubCoreBranches:
         await hub.register_worker("w1", ws)
         # Set last_activity to past
         async with hub._lock:
-            st = hub._workers["w1"]
+            st = hub.registry._workers["w1"]
             st.last_activity_at = time.monotonic() - 1000
         result = await hub.get_idle_candidates(timeout_s=10)
         assert len(result) >= 1
@@ -211,7 +211,7 @@ class TestHubCoreBranches:
         await hub.touch_activity("w1")
         # Verify the timestamp was updated
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None
             assert st.last_activity_at > 0
 

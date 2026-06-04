@@ -120,7 +120,7 @@ def test_worker_disconnects_on_idle_timeout() -> None:
         # Don't send anything — let the server-side timeout fire.
         time.sleep(0.2)
     # After the context exits the worker should be deregistered.
-    st = hub._workers.get("bot1")
+    st = hub.registry._workers.get("bot1")
     if st is not None:
         assert st.worker_ws is None
 
@@ -140,7 +140,7 @@ def test_browser_disconnects_on_idle_timeout() -> None:
         _read_initial_browser_messages(browser)
         time.sleep(0.2)
     # After context exits, browser should be cleaned up.
-    st = hub._workers.get("bot1")
+    st = hub.registry._workers.get("bot1")
     if st is not None:
         assert len(st.browsers) == 0
 

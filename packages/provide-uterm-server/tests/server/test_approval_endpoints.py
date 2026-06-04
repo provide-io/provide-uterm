@@ -43,7 +43,7 @@ def test_list_approvals_with_request(client):
         created_at=time.time(),
         expires_at=time.time() + 60,
     )
-    hub._approval_store.add(req)
+    hub.approval_store.add(req)
 
     response = client.get("/api/approvals", headers=ADMIN_H)
     assert response.status_code == 200
@@ -70,13 +70,13 @@ def test_approve_request(client):
         created_at=time.time(),
         expires_at=time.time() + 60,
     )
-    hub._approval_store.add(req)
+    hub.approval_store.add(req)
 
     response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
     assert response.status_code == 200
     assert response.json() == {"status": "approved"}
 
-    updated_req = hub._approval_store.get(req_id)
+    updated_req = hub.approval_store.get(req_id)
     assert updated_req.status == ApprovalStatus.APPROVED
 
 
@@ -92,13 +92,13 @@ def test_reject_request(client):
         created_at=time.time(),
         expires_at=time.time() + 60,
     )
-    hub._approval_store.add(req)
+    hub.approval_store.add(req)
 
     response = client.post(f"/api/approvals/{req_id}/reject", headers=ADMIN_H)
     assert response.status_code == 200
     assert response.json() == {"status": "rejected"}
 
-    updated_req = hub._approval_store.get(req_id)
+    updated_req = hub.approval_store.get(req_id)
     assert updated_req.status == ApprovalStatus.REJECTED
 
 
@@ -122,7 +122,7 @@ def test_approve_already_resolved_returns_400(client):
         created_at=time.time(),
         expires_at=time.time() + 60,
     )
-    hub._approval_store.add(req)
+    hub.approval_store.add(req)
 
     response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
     assert response.status_code == 400
@@ -143,7 +143,7 @@ def test_reject_already_resolved_returns_400(client):
         created_at=time.time(),
         expires_at=time.time() + 60,
     )
-    hub._approval_store.add(req)
+    hub.approval_store.add(req)
 
     response = client.post(f"/api/approvals/{req_id}/reject", headers=ADMIN_H)
     assert response.status_code == 400

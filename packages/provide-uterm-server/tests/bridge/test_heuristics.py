@@ -18,11 +18,11 @@ async def test_heuristics_cps_calculation():
     now = time.monotonic()
     for i in range(11):
         # Manually inject timestamps to avoid sleeping in test
-        if ws not in hub._keystroke_timestamps:
+        if ws not in hub.router.keystroke_timestamps:
             from collections import deque
 
-            hub._keystroke_timestamps[ws] = deque(maxlen=50)
-        hub._keystroke_timestamps[ws].append(now + (i * 0.1))
+            hub.router.keystroke_timestamps[ws] = deque(maxlen=50)
+        hub.router.keystroke_timestamps[ws].append(now + (i * 0.1))
 
     h = hub._get_heuristics(ws)
     assert 9.9 <= h["cps"] <= 10.1
@@ -39,11 +39,11 @@ async def test_heuristics_jitter_high_variance():
     # Intervals: 0.1, 0.5, 0.1, 0.5 ... (High jitter)
     ts = now
     for i in range(10):
-        if ws not in hub._keystroke_timestamps:
+        if ws not in hub.router.keystroke_timestamps:
             from collections import deque
 
-            hub._keystroke_timestamps[ws] = deque(maxlen=50)
-        hub._keystroke_timestamps[ws].append(ts)
+            hub.router.keystroke_timestamps[ws] = deque(maxlen=50)
+        hub.router.keystroke_timestamps[ws].append(ts)
         ts += 0.1 if i % 2 == 0 else 0.5
 
     h = hub._get_heuristics(ws)
@@ -56,9 +56,9 @@ async def test_heuristics_cleanup_on_disconnect():
     ws = "fake_ws"
 
     hub._record_keystroke(ws)
-    assert ws in hub._keystroke_timestamps
+    assert ws in hub.router.keystroke_timestamps
 
     # cleanup_browser_disconnect is async in some mixins but we can call it
     # We need a worker_id but it does not matter for our mock
     await hub.cleanup_browser_disconnect("any", ws, False)
-    assert ws not in hub._keystroke_timestamps
+    assert ws not in hub.router.keystroke_timestamps

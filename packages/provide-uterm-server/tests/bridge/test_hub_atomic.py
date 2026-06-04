@@ -28,15 +28,15 @@ async def test_try_release_ws_hijack_clears_owner() -> None:
     hub = TermHub()
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.monotonic() + 60
 
     released, rest_active = await hub.try_release_ws_hijack("bot1", ws)
     assert released is True
     assert rest_active is False
-    assert hub._workers["bot1"].hijack_owner is None
-    assert hub._workers["bot1"].hijack_owner_expires_at is None
+    assert hub.registry._workers["bot1"].hijack_owner is None
+    assert hub.registry._workers["bot1"].hijack_owner_expires_at is None
 
 
 async def test_try_release_ws_hijack_rejects_non_owner() -> None:
@@ -45,14 +45,14 @@ async def test_try_release_ws_hijack_rejects_non_owner() -> None:
     ws_owner = AsyncMock()
     ws_other = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = time.monotonic() + 60
 
     released, rest_active = await hub.try_release_ws_hijack("bot1", ws_other)
     assert released is False
     # Owner must be untouched
-    assert hub._workers["bot1"].hijack_owner is ws_owner
+    assert hub.registry._workers["bot1"].hijack_owner is ws_owner
 
 
 async def test_try_release_ws_hijack_noop_when_no_bot() -> None:
@@ -69,7 +69,7 @@ async def test_try_release_ws_hijack_noop_when_expired() -> None:
     hub = TermHub()
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.monotonic() - 1  # already expired
 
@@ -87,7 +87,7 @@ async def test_touch_if_owner_returns_expiry_for_active_owner() -> None:
     hub = TermHub()
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.monotonic() + 60
 
@@ -102,7 +102,7 @@ async def test_touch_if_owner_returns_none_for_non_owner() -> None:
     ws_owner = AsyncMock()
     ws_other = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = time.monotonic() + 60
 
@@ -123,14 +123,14 @@ async def test_touch_if_owner_returns_none_after_owner_cleared() -> None:
     hub = TermHub()
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.monotonic() + 60
 
     assert await hub.touch_if_owner("bot1", ws) is not None
 
     async with hub._lock:
-        hub._workers["bot1"].hijack_owner = None
+        hub.registry._workers["bot1"].hijack_owner = None
 
     assert await hub.touch_if_owner("bot1", ws) is None
 
@@ -144,7 +144,7 @@ async def test_get_rest_session_returns_session_when_valid() -> None:
     """Round-6 fix: _get_rest_session returns the session for a valid hijack_id."""
     hub = TermHub()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_session = HijackSession(
             hijack_id="abc123",
             owner="test",
@@ -162,7 +162,7 @@ async def test_get_rest_session_returns_none_for_wrong_hijack_id() -> None:
     """Round-6 fix: _get_rest_session returns None when hijack_id doesn't match (checked under lock)."""
     hub = TermHub()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_session = HijackSession(
             hijack_id="abc123",
             owner="test",
@@ -201,7 +201,7 @@ async def test_hijack_state_msg_for_rest_session_returns_other() -> None:
     hub = TermHub()
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_session = HijackSession(
             hijack_id="s1",
             owner="tester",
@@ -220,7 +220,7 @@ async def test_try_release_ws_hijack_returns_rest_active_when_rest_session_prese
     hub = TermHub()
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.monotonic() + 60
         st.hijack_session = HijackSession(
@@ -246,7 +246,7 @@ async def test_cleanup_expired_hijack_increments_metric_counter() -> None:
     hub = TermHub(on_metric=_metric)
     ws = AsyncMock()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.worker_ws = ws
         st.hijack_owner = ws
         st.hijack_owner_expires_at = time.monotonic() - 1
@@ -278,7 +278,7 @@ async def test_broadcast_does_not_iterate_live_set() -> None:
     ws2 = AsyncMock()
 
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.browsers[ws1] = "operator"
         st.browsers[ws2] = "operator"
 
@@ -286,7 +286,7 @@ async def test_broadcast_does_not_iterate_live_set() -> None:
     # a concurrent disconnect happening between sends.
     async def _send_and_remove(payload: str) -> None:
         async with hub._lock:
-            st2 = hub._workers.get("bot1")
+            st2 = hub.registry._workers.get("bot1")
             if st2 is not None:
                 st2.browsers.pop(ws2, None)
 
@@ -305,39 +305,39 @@ async def test_prune_if_idle_removes_fully_disconnected_bot() -> None:
     """A bot with no worker, no browsers, and no hijack is removed from _bots."""
     hub = TermHub()
     await hub._get("bot1")
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
     await hub.prune_if_idle("bot1")
 
-    assert "bot1" not in hub._workers
+    assert "bot1" not in hub.registry._workers
 
 
 async def test_prune_if_idle_keeps_bot_with_active_worker() -> None:
     hub = TermHub()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.worker_ws = AsyncMock()
 
     await hub.prune_if_idle("bot1")
 
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
 
 async def test_prune_if_idle_keeps_bot_with_browser() -> None:
     hub = TermHub()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.browsers[AsyncMock()] = "operator"
 
     await hub.prune_if_idle("bot1")
 
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
 
 async def test_prune_if_idle_keeps_bot_with_active_rest_session() -> None:
     hub = TermHub()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_session = HijackSession(
             hijack_id="x",
             owner="test",
@@ -348,18 +348,18 @@ async def test_prune_if_idle_keeps_bot_with_active_rest_session() -> None:
 
     await hub.prune_if_idle("bot1")
 
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
 
 async def test_prune_if_idle_keeps_bot_with_dashboard_owner() -> None:
     hub = TermHub()
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.hijack_owner = AsyncMock()
 
     await hub.prune_if_idle("bot1")
 
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
 
 async def test_prune_if_idle_noop_for_unknown_bot() -> None:
@@ -384,13 +384,13 @@ async def test_append_event_after_prune_does_not_resurrect_worker() -> None:
     """
     hub = TermHub()
     await hub._get("bot1")
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
     # Prune immediately (no connections, no leases)
     await hub.prune_if_idle("bot1")
-    assert "bot1" not in hub._workers, "worker should have been pruned"
+    assert "bot1" not in hub.registry._workers, "worker should have been pruned"
 
     # Appending an event must not resurrect the entry
     evt = await hub.append_event("bot1", "test_event", {"x": 1})
-    assert "bot1" not in hub._workers, "worker must not be resurrected by _append_event"
+    assert "bot1" not in hub.registry._workers, "worker must not be resurrected by _append_event"
     assert evt["seq"] == 0, "dropped event must return seq=0 sentinel"

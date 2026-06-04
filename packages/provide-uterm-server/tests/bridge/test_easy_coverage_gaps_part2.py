@@ -40,7 +40,7 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
     caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
@@ -148,7 +148,7 @@ async def test_approvals_router_error_paths() -> None:
     # 404 — request not found (covers line 56)
     store = InMemoryApprovalStore()
     hub = MagicMock()
-    hub._approval_store = store
+    hub.approval_store = store
 
     async def _is_admin(_p: object) -> bool:
         return True
@@ -363,7 +363,7 @@ async def test_handle_input_hold_decision_creates_approval_and_notifies_browsers
     await _handle_input(hub, ws_a, worker_id, {"type": "input", "data": "rm -rf /"})
 
     # An ApprovalRequest must be in the store, PENDING.
-    pending = [r for r in hub._approval_store._requests.values() if r.status == ApprovalStatus.PENDING]
+    pending = [r for r in hub.approval_store._requests.values() if r.status == ApprovalStatus.PENDING]
     assert len(pending) == 1
     assert pending[0].worker_id == worker_id
     assert pending[0].command == "rm -rf /"

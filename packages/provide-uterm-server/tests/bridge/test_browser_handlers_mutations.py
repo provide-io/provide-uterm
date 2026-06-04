@@ -55,7 +55,7 @@ async def _register(
     worker_ws: Any | None = None,
 ) -> WorkerTermState:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
         if worker_ws is not None:
             st.worker_ws = worker_ws
@@ -142,7 +142,7 @@ class TestHijackRequestWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "admin", {"type": "hijack_request"}, False)
         ws.send_text.assert_called_once()
         payload = _decode_msg(ws.send_text.call_args[0][0])
@@ -192,7 +192,7 @@ class TestHijackRequestWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "admin", wws)
         async with hub._lock:
-            st = hub._workers["w1"]
+            st = hub.registry._workers["w1"]
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = time.time() + 60
@@ -379,7 +379,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
         wws.send_text.assert_called()
         # Input uses raw data encoding — NOT a control frame
@@ -393,7 +393,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
         raw = wws.send_text.call_args[0][0]
         assert raw == "hello"
@@ -405,7 +405,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
         wws.send_text.assert_called_once()
 
@@ -417,7 +417,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "toolong"}, False)
         ws.send_text.assert_called()
         payload = _decode_msg(ws.send_text.call_args[0][0])
@@ -432,7 +432,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         # Exactly at max — should NOT be rejected
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "abcde"}, False)
         ws.send_text.assert_not_called()
@@ -446,7 +446,7 @@ class TestHandleInputWorkerMessage:
         wws.send_text = AsyncMock(side_effect=Exception("disconnected"))
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hi"}, False)
         ws.send_text.assert_called()
         payload = _decode_msg(ws.send_text.call_args[0][0])
@@ -460,7 +460,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "viewer", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         # Viewer cannot send in open mode
         await handle_browser_message(hub, ws, "w1", "viewer", {"type": "input", "data": "hi"}, False)
         wws.send_text.assert_not_called()
@@ -472,7 +472,7 @@ class TestHandleInputWorkerMessage:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "hello"}, False)
         raw = wws.send_text.call_args[0][0]
         assert raw == "hello"

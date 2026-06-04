@@ -197,12 +197,12 @@ class TestForceReleaseHijack:
         hub = TermHub()
         mocks = _instrument_hub(hub)
         async with hub._lock:
-            hub._workers["w1"] = WorkerTermState()
+            hub.registry._workers["w1"] = WorkerTermState()
 
         result = await hub.connection_mgr.force_release_hijack("w1")
 
         assert result is False
-        st = hub._workers["w1"]
+        st = hub.registry._workers["w1"]
         assert st.hijack_session is None
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
@@ -217,14 +217,14 @@ class TestForceReleaseHijack:
         async with hub._lock:
             st = WorkerTermState()
             st.hijack_session = _make_session("rest-bob")
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
 
         before = time.time()
         result = await hub.connection_mgr.force_release_hijack("w1")
         after = time.time()
 
         assert result is True
-        assert hub._workers["w1"].hijack_session is None
+        assert hub.registry._workers["w1"].hijack_session is None
 
         # Exactly one resume control frame, owner captured from the session.
         mocks["send_worker"].assert_awaited_once()
@@ -250,12 +250,12 @@ class TestForceReleaseHijack:
             st = WorkerTermState()
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = time.monotonic() + 60
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
 
         result = await hub.connection_mgr.force_release_hijack("w1")
 
         assert result is True
-        st = hub._workers["w1"]
+        st = hub.registry._workers["w1"]
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
 
@@ -273,12 +273,12 @@ class TestForceReleaseHijack:
             st = WorkerTermState()
             st.hijack_owner = MagicMock()
             st.hijack_owner_expires_at = None
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
 
         result = await hub.connection_mgr.force_release_hijack("w1")
 
         assert result is True
-        assert hub._workers["w1"].hijack_owner is None
+        assert hub.registry._workers["w1"].hijack_owner is None
         mocks["send_worker"].assert_awaited_once()
         mocks["broadcast_state"].assert_awaited_once_with("w1")
 
@@ -291,12 +291,12 @@ class TestForceReleaseHijack:
             st.hijack_session = _make_session("rest-alice")
             st.hijack_owner = MagicMock()
             st.hijack_owner_expires_at = time.monotonic() + 60
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
 
         result = await hub.connection_mgr.force_release_hijack("w1")
 
         assert result is True
-        st = hub._workers["w1"]
+        st = hub.registry._workers["w1"]
         assert st.hijack_session is None
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
@@ -319,7 +319,7 @@ class TestForceReleaseHijack:
         async with hub._lock:
             st = WorkerTermState()
             st.hijack_session = _make_session("seq")
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
 
         assert await hub.connection_mgr.force_release_hijack("w1") is True
         assert order == ["send", "notify", "broadcast"]
@@ -331,7 +331,7 @@ class TestForceReleaseHijack:
         async with hub._lock:
             st = WorkerTermState()
             st.hijack_session = _make_session("facade")
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
         assert await hub.force_release_hijack("w1") is True
 
     async def test_notify_kwargs_are_exact(self) -> None:
@@ -341,7 +341,7 @@ class TestForceReleaseHijack:
         async with hub._lock:
             st = WorkerTermState()
             st.hijack_session = _make_session("kw")
-            hub._workers["w1"] = st
+            hub.registry._workers["w1"] = st
 
         await hub.connection_mgr.force_release_hijack("w1")
 

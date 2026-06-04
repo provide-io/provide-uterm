@@ -36,7 +36,7 @@ def _make_hub_app() -> tuple[TermHub, FastAPI]:
 def _add_worker(hub: TermHub, worker_id: str = WID) -> AsyncMock:
     mock_ws = AsyncMock()
     mock_ws.send_text = AsyncMock()
-    hub._workers[worker_id] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers[worker_id] = WorkerTermState(worker_ws=mock_ws)
     return mock_ws
 
 
@@ -193,7 +193,7 @@ class TestHijackErrors:
     async def test_begin_conflict_already_hijacked(self) -> None:
         hub, app = _make_hub_app()
         _add_worker(hub)
-        hub._workers[WID].hijack_session = HijackSession(
+        hub.registry._workers[WID].hijack_session = HijackSession(
             hijack_id="existing",
             owner="other",
             acquired_at=time.time(),

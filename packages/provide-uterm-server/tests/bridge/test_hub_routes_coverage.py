@@ -49,7 +49,7 @@ class TestWaitForSnapshot:
         async with hub._lock:
             from provide.uterm.server.bridge.models import WorkerTermState
 
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
 
@@ -57,7 +57,7 @@ class TestWaitForSnapshot:
         async def _set_snapshot():
             await asyncio.sleep(0.05)
             async with hub._lock:
-                st2 = hub._workers["w1"]
+                st2 = hub.registry._workers["w1"]
                 st2.last_snapshot = {"type": "snapshot", "screen": "test", "ts": time.time()}
 
         task = asyncio.create_task(_set_snapshot())
@@ -83,7 +83,7 @@ class TestTouchHijackOwner:
         async with hub._lock:
             from provide.uterm.server.bridge.models import WorkerTermState
 
-            hub._workers["w1"] = WorkerTermState()
+            hub.registry._workers["w1"] = WorkerTermState()
         result = await hub.touch_hijack_owner("w1")
         assert result is None
 
@@ -101,7 +101,7 @@ class TestRestSessionValidation:
         async with hub._lock:
             from provide.uterm.server.bridge.models import WorkerTermState
 
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
 
@@ -114,7 +114,7 @@ class TestRestSessionValidation:
         async with hub._lock:
             from provide.uterm.server.bridge.models import WorkerTermState
 
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get("/worker/w1/hijack/dead0000-0000-0000-0000-000000000000/events")
@@ -125,7 +125,7 @@ class TestRestSessionValidation:
         async with hub._lock:
             from provide.uterm.server.bridge.models import WorkerTermState
 
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.post(
@@ -139,7 +139,7 @@ class TestRestSessionValidation:
         async with hub._lock:
             from provide.uterm.server.bridge.models import WorkerTermState
 
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.post("/worker/w1/hijack/dead0000-0000-0000-0000-000000000000/step")
@@ -152,7 +152,7 @@ class TestRestSessionValidation:
         async with hub._lock:
             from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
             # Create a session that expires immediately
@@ -266,7 +266,7 @@ class TestBroadcastDeadSocketHijackOwner:
         worker_ws.send_text = AsyncMock(side_effect=lambda p: sent_to_worker.append(p))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[dead_browser] = "operator"
             st.hijack_owner = dead_browser
@@ -286,7 +286,7 @@ class TestBroadcastDeadSocketHijackOwner:
 
         # Browser should be removed from set
         async with hub._lock:
-            st2 = hub._workers["w1"]
+            st2 = hub.registry._workers["w1"]
             assert dead_browser not in st2.browsers
             assert st2.hijack_owner is None
 
@@ -312,7 +312,7 @@ class TestBroadcastHijackStateDeadSocketOwner:
         worker_ws.send_text = AsyncMock(side_effect=lambda p: sent_to_worker.append(p))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[dead_browser] = "operator"
             st.hijack_owner = dead_browser
@@ -345,7 +345,7 @@ class TestTryAcquireRestHijackNoWorker:
 
         hub, _ = _make_app()
         async with hub._lock:
-            hub._workers["w1"] = WorkerTermState()  # worker_ws defaults to None
+            hub.registry._workers["w1"] = WorkerTermState()  # worker_ws defaults to None
         ok, err = await hub.try_acquire_rest_hijack(
             "w1", owner="owner", lease_s=300, hijack_id="aabb", now=time.monotonic()
         )
@@ -365,7 +365,7 @@ class TestTouchHijackOwnerWithLease:
         hub, _ = _make_app()
         mock_ws = AsyncMock()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.hijack_owner = mock_ws
             st.hijack_owner_expires_at = time.monotonic() + 10
 
@@ -390,22 +390,22 @@ class TestAllowRestAcquireForLruEviction:
 
         # Fill the cache to the limit using distinct client IDs.
         for i in range(_REST_CLIENT_CACHE_MAX):
-            hub._rest_acquire_per_client[f"client-{i}"] = hub._rest_acquire_bucket
+            hub.limiter.rest_acquire_per_client[f"client-{i}"] = hub.limiter.rest_acquire_bucket
 
-        assert len(hub._rest_acquire_per_client) == _REST_CLIENT_CACHE_MAX
+        assert len(hub.limiter.rest_acquire_per_client) == _REST_CLIENT_CACHE_MAX
 
         # One more call triggers eviction.
         hub.allow_rest_acquire_for("new-client")
 
         # After eviction the cache should contain (MAX - EVICT_COUNT) + 1 entries,
         # NOT be fully cleared.
-        remaining = len(hub._rest_acquire_per_client)
+        remaining = len(hub.limiter.rest_acquire_per_client)
         assert remaining == _REST_CLIENT_CACHE_MAX - _REST_CLIENT_EVICT_COUNT + 1
         # The newest client must be present; the oldest should be gone.
-        assert "new-client" in hub._rest_acquire_per_client
-        assert "client-0" not in hub._rest_acquire_per_client
+        assert "new-client" in hub.limiter.rest_acquire_per_client
+        assert "client-0" not in hub.limiter.rest_acquire_per_client
         # A recently-added client near the end should survive.
-        assert f"client-{_REST_CLIENT_CACHE_MAX - 1}" in hub._rest_acquire_per_client
+        assert f"client-{_REST_CLIENT_CACHE_MAX - 1}" in hub.limiter.rest_acquire_per_client
 
 
 # disconnect_worker and TOCTOU re-check tests moved to

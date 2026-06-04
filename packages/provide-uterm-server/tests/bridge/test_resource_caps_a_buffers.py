@@ -88,7 +88,7 @@ async def test_buffer_cap_respects_max_buffer_chars_attr() -> None:
 
 async def _register(hub: TermHub, worker_id: str, browser_ws: MagicMock, role: str) -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
 
 

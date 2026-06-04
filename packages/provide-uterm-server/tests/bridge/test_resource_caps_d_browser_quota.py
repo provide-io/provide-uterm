@@ -56,7 +56,7 @@ def _make_hub(cap: int = 3) -> TermHub:
 async def _register_ws(hub: TermHub, ws: MagicMock, worker_id: str = "w1") -> dict[str, Any]:
     """Call register_browser, ensuring the worker state entry exists first."""
     async with hub._lock:
-        hub._workers.setdefault(worker_id, WorkerTermState())
+        hub.registry._workers.setdefault(worker_id, WorkerTermState())
     return await hub.register_browser(worker_id, ws, "viewer")
 
 
@@ -90,7 +90,7 @@ async def test_cap_plus_one_rejected_with_1008() -> None:
     assert hub._principal_browser_counts["alice"] == 2
     # Rejected ws must NOT be in st.browsers
     async with hub._lock:
-        st = hub._workers["w1"]
+        st = hub.registry._workers["w1"]
     assert ws3 not in st.browsers
 
 
@@ -167,13 +167,13 @@ async def test_worker_registration_not_capped() -> None:
     for i in range(5):
         wid = f"fleet-{i}"
         async with hub._lock:
-            hub._workers.setdefault(wid, WorkerTermState())
+            hub.registry._workers.setdefault(wid, WorkerTermState())
         ws = MagicMock()
         ws.send_text = AsyncMock()
         await hub.register_worker(wid, ws)
 
     # Worker count is fleet-level, not limited
-    assert len(hub._workers) == 5
+    assert len(hub.registry._workers) == 5
     # Principal counter must NOT have grown (workers exempt)
     assert len(hub._principal_browser_counts) == 0
 

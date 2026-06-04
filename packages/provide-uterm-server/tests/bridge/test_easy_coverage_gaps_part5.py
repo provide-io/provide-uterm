@@ -40,7 +40,7 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
     caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
@@ -104,7 +104,7 @@ async def test_resolve_approval_paused_browser_resumed_without_hold_buffer() -> 
     browser_ws = AsyncMock()
     await hub.register_browser("w1", browser_ws, "admin")
     hub._paused_browsers.add(browser_ws)  # paused, but no entry in _hold_buffers
-    hub._approval_store.add(
+    hub.approval_store.add(
         ApprovalRequest(
             id="r-noh",
             worker_id="w1",

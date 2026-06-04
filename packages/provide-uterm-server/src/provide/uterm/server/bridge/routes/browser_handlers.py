@@ -263,7 +263,7 @@ async def _handle_input(
                 created_at=time.time(),
                 expires_at=time.time() + decision.timeout_s,
             )
-            hub._approval_store.add(request)
+            hub.approval_store.add(request)
             hub._paused_browsers.add(ws)
             from provide.uterm.server.bridge.hub.core import _encode_browser_frame
 
@@ -313,7 +313,7 @@ async def _handle_input(
                 created_at=time.time(),
                 expires_at=time.time() + part_decision.timeout_s,
             )
-            hub._approval_store.add(request)
+            hub.approval_store.add(request)
             hub._paused_browsers.add(ws)
             from provide.uterm.server.bridge.hub.core import _encode_browser_frame
 

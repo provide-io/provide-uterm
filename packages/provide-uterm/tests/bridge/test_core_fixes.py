@@ -53,7 +53,7 @@ class TestBrowserCount:
         browser2 = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[browser1] = "operator"
             st.browsers[browser2] = "admin"
 
@@ -75,7 +75,7 @@ class TestBrowserCount:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w2", WorkerTermState())
+            st = hub.registry._workers.setdefault("w2", WorkerTermState())
             st.browsers[browser_ws] = "viewer"
 
         assert await hub.browser_count("w2") == 1
@@ -100,7 +100,7 @@ class TestGetLastSnapshot:
         snapshot = {"type": "snapshot", "screen": "hello", "ts": time.time()}
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.last_snapshot = snapshot
 
         result = await hub.get_last_snapshot("w1")
@@ -114,7 +114,7 @@ class TestGetLastSnapshot:
         hub = _make_hub()
 
         async with hub._lock:
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         result = await hub.get_last_snapshot("w1")
         assert result is None
@@ -141,7 +141,7 @@ class TestGetRecentEvents:
     async def _hub_with_events(self, n: int) -> TermHub:
         hub = _make_hub()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             for i in range(n):
                 st.events.append({"seq": i + 1, "ts": time.time(), "type": "snapshot", "data": {}})
         return hub
@@ -183,7 +183,7 @@ class TestGetRecentEvents:
         """The most recent N events (by seq) are returned, not the oldest."""
         hub = _make_hub()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             for i in range(5):
                 st.events.append({"seq": i + 1, "ts": time.time(), "type": "ev", "data": {}})
 
@@ -218,7 +218,7 @@ class TestDisconnectWorkerStateCleanup:
         worker_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers["b"] = "operator"  # keep state alive after disconnect
 
@@ -239,14 +239,14 @@ class TestDisconnectWorkerStateCleanup:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
         await hub.disconnect_worker("w1")
 
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None  # still has browser
             assert st.worker_ws is None, (
                 "worker_ws must be None after disconnect, not '' — mutmut_9 sets worker_ws = ''"
@@ -263,7 +263,7 @@ class TestDisconnectWorkerStateCleanup:
         hijack_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
@@ -272,7 +272,7 @@ class TestDisconnectWorkerStateCleanup:
         await hub.disconnect_worker("w1")
 
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None
             assert st.hijack_owner is None, (
                 "hijack_owner must be None after disconnect, not '' — mutmut_15 sets hijack_owner = ''"
@@ -289,7 +289,7 @@ class TestDisconnectWorkerStateCleanup:
         hijack_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
@@ -298,7 +298,7 @@ class TestDisconnectWorkerStateCleanup:
         await hub.disconnect_worker("w1")
 
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None
             assert st.hijack_owner_expires_at is None, (
                 "hijack_owner_expires_at must be None after disconnect, not '' — "

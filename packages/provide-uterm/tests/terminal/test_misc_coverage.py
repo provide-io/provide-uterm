@@ -213,7 +213,7 @@ class TestWaitForGuardNoNewSnapshot:
 
         # Register a worker with a snapshot that has an old timestamp
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
             # Set a snapshot with ts=1.0 (old, won't match future time)

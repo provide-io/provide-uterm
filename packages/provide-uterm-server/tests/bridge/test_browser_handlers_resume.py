@@ -53,7 +53,7 @@ async def _register(
     worker_ws: Any | None = None,
 ) -> WorkerTermState:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
         if worker_ws is not None:
             st.worker_ws = worker_ws
@@ -362,7 +362,7 @@ class TestHandleBrowserMessageDispatch:
         wws = _make_ws()
         await _register(hub, "w1", ws, "operator", wws)
         async with hub._lock:
-            hub._workers["w1"].input_mode = "open"
+            hub.registry._workers["w1"].input_mode = "open"
         result = await handle_browser_message(hub, ws, "w1", "operator", {"type": "input", "data": "x"}, True)
         assert result is True
 

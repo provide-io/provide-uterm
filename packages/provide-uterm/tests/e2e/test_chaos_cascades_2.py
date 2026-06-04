@@ -74,7 +74,7 @@ async def test_worker_crash_mid_snapshot_flood_with_active_hijack() -> None:
                 assert disconnected, f"Browser should get worker_disconnected: {browser_msgs}"
 
                 # Hijack must be cleared
-                st = hub._workers.get("flood-crash")
+                st = hub.registry._workers.get("flood-crash")
                 if st is not None:
                     assert st.hijack_owner is None, f"Hijack owner should be None, got {st.hijack_owner}"
 
@@ -109,7 +109,7 @@ async def test_lease_cleanup_during_reconnect_with_competing_hijack(live_hub: An
             await _drain_all(worker)  # drain pause
 
             # Shorten lease to expire fast
-            st = hub._workers["lease-race"]
+            st = hub.registry._workers["lease-race"]
             st.hijack_owner_expires_at = time.monotonic() + 0.3
 
         # B1 disconnected — lease still ticking
@@ -134,7 +134,7 @@ async def test_lease_cleanup_during_reconnect_with_competing_hijack(live_hub: An
             await _drain_all(b2, timeout=1.0)
 
             # Check final state: at most one owner, no zombie
-            st = hub._workers.get("lease-race")
+            st = hub.registry._workers.get("lease-race")
             if st is not None:
                 now = time.monotonic()
                 if st.hijack_owner is not None:

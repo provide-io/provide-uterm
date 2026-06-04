@@ -24,7 +24,7 @@ async def test_approval_flow_buffering_and_hold() -> None:
 
     hub = TermHub(policy_gate=HoldPolicyGate())
     # Mocking approval store as it's not yet in TermHub.__init__
-    hub._approval_store = MagicMock()
+    hub.approval_store = MagicMock()
 
     ws = AsyncMock()
     worker_ws = AsyncMock()
@@ -47,7 +47,7 @@ async def test_approval_flow_buffering_and_hold() -> None:
     worker_ws.send_text.assert_not_called()
 
     # ApprovalRequest should be created (we'll implement this)
-    hub._approval_store.add.assert_called()
+    hub.approval_store.add.assert_called()
 
     # Check broadcast
     found_pending = False

@@ -92,7 +92,7 @@ class TestDisconnectWorkerEarlyExit:
         rec["prune"].assert_not_called()
         assert rec["order"] == []
         # No worker state was created as a side effect.
-        assert "ghost" not in hub._workers
+        assert "ghost" not in hub.registry._workers
 
     async def test_returns_false_when_worker_ws_none(self) -> None:
         """st present but worker_ws is None → returns False, no callbacks, state untouched."""
@@ -113,7 +113,7 @@ class TestDisconnectWorkerEarlyExit:
             )
             st.hijack_owner = MagicMock()
             st.hijack_owner_expires_at = now + 60
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         result = await hub.disconnect_worker(worker_id)
 
@@ -123,7 +123,7 @@ class TestDisconnectWorkerEarlyExit:
         rec["broadcast_hijack_state"].assert_not_called()
         rec["prune"].assert_not_called()
         # Hijack state must remain intact (early return, no clearing).
-        st_after = hub._workers[worker_id]
+        st_after = hub.registry._workers[worker_id]
         assert st_after.hijack_session is not None
         assert st_after.hijack_owner is not None
         assert st_after.hijack_owner_expires_at == now + 60
@@ -150,13 +150,13 @@ class TestDisconnectWorkerClears:
         async with hub._lock:
             st = WorkerTermState()
             st.worker_ws = ws
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         result = await hub.disconnect_worker(worker_id)
 
         assert result is True
         # worker_ws cleared, hijack fields stay None.
-        st_after = hub._workers[worker_id]
+        st_after = hub.registry._workers[worker_id]
         assert st_after.worker_ws is None
         assert st_after.hijack_session is None
         assert st_after.hijack_owner is None
@@ -200,12 +200,12 @@ class TestDisconnectWorkerClears:
                 lease_expires_at=now + 60,
                 last_heartbeat=now,
             )
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         result = await hub.disconnect_worker(worker_id)
 
         assert result is True
-        st_after = hub._workers[worker_id]
+        st_after = hub.registry._workers[worker_id]
         assert st_after.worker_ws is None
         assert st_after.hijack_session is None
         assert st_after.hijack_owner is None
@@ -233,12 +233,12 @@ class TestDisconnectWorkerClears:
             st.worker_ws = ws
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = now + 60
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         result = await hub.disconnect_worker(worker_id)
 
         assert result is True
-        st_after = hub._workers[worker_id]
+        st_after = hub.registry._workers[worker_id]
         assert st_after.worker_ws is None
         assert st_after.hijack_owner is None
         assert st_after.hijack_owner_expires_at is None
@@ -264,7 +264,7 @@ class TestDisconnectWorkerCloseError:
         async with hub._lock:
             st = WorkerTermState()
             st.worker_ws = ws
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         with patch("provide.uterm.server.bridge.hub.connection.logger") as mock_logger:
             result = await hub.disconnect_worker(worker_id)
@@ -288,7 +288,7 @@ class TestDisconnectWorkerCloseError:
         async with hub._lock:
             st = WorkerTermState()
             st.worker_ws = ws
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         with patch("provide.uterm.server.bridge.hub.connection.logger") as mock_logger:
             result = await hub.disconnect_worker(worker_id)
@@ -313,7 +313,7 @@ class TestDisconnectWorkerEventBus:
         async with hub._lock:
             st = WorkerTermState()
             st.worker_ws = ws
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         bus = MagicMock()
         hub._event_bus = bus
@@ -339,7 +339,7 @@ class TestDisconnectWorkerEventBus:
         async with hub._lock:
             st = WorkerTermState()
             st.worker_ws = ws
-            hub._workers[worker_id] = st
+            hub.registry._workers[worker_id] = st
 
         assert hub._event_bus is None
 

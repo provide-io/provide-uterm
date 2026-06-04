@@ -163,14 +163,14 @@ def test_browser_loses_ownership_on_worker_disconnect() -> None:
             browser.send_json({"type": "hijack_request"})
             worker.receive_json()  # pause
             browser.receive_json()  # hijack_state
-            assert hub._workers["bot1"].hijack_owner is not None
+            assert hub.registry._workers["bot1"].hijack_owner is not None
 
         # Worker disconnected: browser must receive worker_disconnected and
         # lose ownership — hijack_owner is cleared in the finally block. The
         # ownership-cleared hijack_state races the disconnect frame, so assert
         # on membership of both frames rather than the first one's type.
         assert "worker_disconnected" in _recv_disconnect_frames(browser)
-        st = hub._workers.get("bot1")
+        st = hub.registry._workers.get("bot1")
         assert st is not None, "state must exist while browser is still connected"
         assert st.hijack_owner is None, "hijack_owner must be cleared on worker disconnect"
 
@@ -198,7 +198,7 @@ def test_browser_input_no_worker() -> None:
         # so _touch_if_owner returns None and input is silently ignored.
         # Verify hub state reflects cleared ownership rather than waiting for a
         # message that will never arrive.
-        st = hub._workers.get("bot1")
+        st = hub.registry._workers.get("bot1")
         assert st is not None
         assert st.hijack_owner is None
 
@@ -235,7 +235,9 @@ def test_browser_connect_receives_hello_and_hijack_state() -> None:
 
 def test_browser_connect_receives_existing_snapshot() -> None:
     app, hub = make_app()
-    hub._workers["bot1"] = WorkerTermState(last_snapshot={"type": "snapshot", "screen": "existing screen", "ts": 0.0})
+    hub.registry._workers["bot1"] = WorkerTermState(
+        last_snapshot={"type": "snapshot", "screen": "existing screen", "ts": 0.0}
+    )
     with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
         snapshot = browser.receive_json()
@@ -273,7 +275,7 @@ def test_browser_hijack_request_no_worker() -> None:
 
 def test_browser_hijack_request_already_held() -> None:
     app, hub = make_app("admin")
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=AsyncMock(),
         hijack_session=_active_session(str(uuid.uuid4()), "other"),
     )
@@ -411,7 +413,7 @@ def test_browser_hijack_release() -> None:
             assert state["type"] == "hijack_state"
             assert state["hijacked"] is False
 
-    st = hub._workers.get("bot1")
+    st = hub.registry._workers.get("bot1")
     if st:
         assert st.hijack_owner is None
 
@@ -438,11 +440,11 @@ def test_browser_registers_and_unregisters_in_browsers_set() -> None:
     app, hub = make_app()
     with TestClient(app) as client, connect_test_ws(client, "/ws/browser/bot1/term") as browser:
         _read_initial_browser_messages(browser)
-        st = hub._workers.get("bot1")
+        st = hub.registry._workers.get("bot1")
         assert st is not None
         assert len(st.browsers) == 1
 
-    st = hub._workers.get("bot1")
+    st = hub.registry._workers.get("bot1")
     if st:
         assert len(st.browsers) == 0
 

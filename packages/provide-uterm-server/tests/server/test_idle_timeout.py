@@ -30,7 +30,7 @@ async def test_touch_activity_updates_timestamp(hub: TermHub) -> None:
     """touch_activity should update last_activity_at for a registered worker."""
     st = WorkerTermState()
     st.last_activity_at = 1000.0
-    hub._workers["w1"] = st
+    hub.registry._workers["w1"] = st
 
     with patch("time.monotonic", return_value=2000.0):
         await hub.touch_activity("w1")
@@ -56,7 +56,7 @@ async def _run_sweep_once(hub: TermHub, timeout_s: int) -> None:
     async with hub._lock:
         candidates = [
             (wid, st.last_activity_at)
-            for wid, st in hub._workers.items()
+            for wid, st in hub.registry._workers.items()
             if not st.browsers and (now - st.last_activity_at) > timeout_s
         ]
     for worker_id, _last_at in candidates:
@@ -69,12 +69,12 @@ async def test_idle_session_disconnected_after_timeout(hub: TermHub) -> None:
     st = WorkerTermState()
     st.worker_ws = ws_mock
     st.last_activity_at = time.time() - 600  # 10 minutes ago
-    hub._workers["idle-1"] = st
+    hub.registry._workers["idle-1"] = st
 
     await _run_sweep_once(hub, timeout_s=300)
 
     # Worker should have been disconnected and pruned
-    assert "idle-1" not in hub._workers
+    assert "idle-1" not in hub.registry._workers
 
 
 async def test_active_session_not_disconnected(hub: TermHub) -> None:
@@ -83,11 +83,11 @@ async def test_active_session_not_disconnected(hub: TermHub) -> None:
     st = WorkerTermState()
     st.worker_ws = ws_mock
     st.last_activity_at = time.time()  # just now
-    hub._workers["active-1"] = st
+    hub.registry._workers["active-1"] = st
 
     await _run_sweep_once(hub, timeout_s=300)
 
-    assert "active-1" in hub._workers
+    assert "active-1" in hub.registry._workers
     assert st.worker_ws is ws_mock
 
 
@@ -97,11 +97,11 @@ async def test_timeout_disabled_when_zero(hub: TermHub) -> None:
     st = WorkerTermState()
     st.worker_ws = ws_mock
     st.last_activity_at = time.time() - 99999
-    hub._workers["old-1"] = st
+    hub.registry._workers["old-1"] = st
 
     await _run_sweep_once(hub, timeout_s=0)
 
-    assert "old-1" in hub._workers
+    assert "old-1" in hub.registry._workers
     assert st.worker_ws is ws_mock
 
 
@@ -113,11 +113,11 @@ async def test_session_with_browsers_not_disconnected(hub: TermHub) -> None:
     st.worker_ws = ws_mock
     st.last_activity_at = time.time() - 600
     st.browsers[browser_mock] = "viewer"
-    hub._workers["has-browser"] = st
+    hub.registry._workers["has-browser"] = st
 
     await _run_sweep_once(hub, timeout_s=300)
 
-    assert "has-browser" in hub._workers
+    assert "has-browser" in hub.registry._workers
     assert st.worker_ws is ws_mock
 
 
@@ -131,8 +131,8 @@ async def test_sweep_resilient_to_per_worker_errors(hub: TermHub) -> None:
     st2 = WorkerTermState()
     st2.worker_ws = ws2
     st2.last_activity_at = time.time() - 600
-    hub._workers["fail-1"] = st1
-    hub._workers["ok-1"] = st2
+    hub.registry._workers["fail-1"] = st1
+    hub.registry._workers["ok-1"] = st2
 
     original_disconnect = hub.disconnect_worker
     call_count = 0
@@ -149,7 +149,7 @@ async def test_sweep_resilient_to_per_worker_errors(hub: TermHub) -> None:
     async with hub._lock:
         candidates = [
             (wid, st.last_activity_at)
-            for wid, st in hub._workers.items()
+            for wid, st in hub.registry._workers.items()
             if not st.browsers and (now - st.last_activity_at) > 300
         ]
     for worker_id, _ in candidates:
@@ -158,7 +158,7 @@ async def test_sweep_resilient_to_per_worker_errors(hub: TermHub) -> None:
 
     assert call_count == 2
     # ok-1 should be cleaned up; fail-1 still there since disconnect raised
-    assert "ok-1" not in hub._workers
+    assert "ok-1" not in hub.registry._workers
 
 
 async def test_activity_updated_on_worker_data() -> None:

@@ -23,13 +23,13 @@ from provide.uterm.server.bridge.models import WorkerTermState
 # A JWT-shaped secret matched by default_rules() (the _JWT pattern). Using a
 # real default-ruleset shape proves we redact with the server default set, not
 # a test-injected gate.
-_JWT_SECRET = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dummsignaturevalue123"
-_AWS_KEY = "AKIAIOSFODNN7EXAMPLE"  # matches default _AWS_ACCESS_KEY_ID
+_JWT_SECRET = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dummsignaturevalue123"  # pragma: allowlist secret
+_AWS_KEY = "AKIAIOSFODNN7EXAMPLE"  # matches default _AWS_ACCESS_KEY_ID  # pragma: allowlist secret
 
 
 async def _register_worker(hub: TermHub, worker_id: str) -> None:
     async with hub._lock:
-        hub._workers[worker_id] = WorkerTermState()
+        hub.registry._workers[worker_id] = WorkerTermState()
 
 
 async def test_term_event_content_redacted_in_ring() -> None:

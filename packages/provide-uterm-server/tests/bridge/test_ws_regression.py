@@ -80,7 +80,7 @@ def test_browser_hello_reflects_hijacked_state_at_connect() -> None:
 
     # Pre-install an active REST hijack session so the hub considers this bot hijacked.
     session_id = str(uuid.uuid4())
-    hub._workers["bot42"] = WorkerTermState(
+    hub.registry._workers["bot42"] = WorkerTermState(
         hijack_session=_active_session(session_id, "rest_user"),
     )
 
@@ -112,7 +112,7 @@ def test_browser_receives_cached_snapshot_on_connect() -> None:
     app, hub = make_app()
 
     # Pre-populate a snapshot so the browser should receive it immediately on connect.
-    hub._workers["snap_bot"] = WorkerTermState(
+    hub.registry._workers["snap_bot"] = WorkerTermState(
         last_snapshot={
             "type": "snapshot",
             "screen": "cached screen",
@@ -180,7 +180,7 @@ def test_non_owner_browser_disconnect_does_not_send_resume() -> None:
         # and the test would fail with a 500 or an uncaught exception.
         worker.send_json({"type": "term", "data": "alive", "ts": 0.0})
         # Worker is still alive — no crash from the finally block
-        assert hub._workers["bot1"].worker_ws is not None
+        assert hub.registry._workers["bot1"].worker_ws is not None
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def test_hijack_request_send_fail_no_notify_no_owner() -> None:
             # Pause was never delivered so ownership was never written —
             # on_hijack_changed must not fire at all.
             assert not callbacks, "on_hijack_changed must not fire when pause send fails before ownership is written"
-            st = hub._workers.get("bot1")
+            st = hub.registry._workers.get("bot1")
             assert st is not None
             assert st.hijack_owner is None
 
@@ -339,8 +339,8 @@ def test_stale_worker_output_is_ignored_after_reconnect() -> None:
             msg = browser.receive_json()
             assert msg["type"] == "snapshot"
             assert msg["screen"] == "fresh"
-            assert hub._workers["bot1"].last_snapshot is not None
-            assert hub._workers["bot1"].last_snapshot["screen"] == "fresh"
+            assert hub.registry._workers["bot1"].last_snapshot is not None
+            assert hub.registry._workers["bot1"].last_snapshot["screen"] == "fresh"
 
             worker2.send_json({"type": "term", "data": "live", "ts": 2.0})
             msg = browser.receive_json()
@@ -410,7 +410,7 @@ def test_hijack_request_send_fail_no_notify_when_rest_session_active() -> None:
             # Install the REST session AFTER the worker connects so it is not
             # cleared by the reconnect stale-state cleanup.
             rest_id = str(uuid.uuid4())
-            hub._workers["bot1"].hijack_session = _active_session(rest_id, "rest_owner")
+            hub.registry._workers["bot1"].hijack_session = _active_session(rest_id, "rest_owner")
 
             orig_send = hub.send_worker
 

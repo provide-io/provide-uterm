@@ -2279,7 +2279,7 @@ class TestApprovalsRoutes:
             store = MagicMock(name="approval_store")
             store._requests = requests if requests is not None else {}
             hub = MagicMock(name="hub")
-            hub._approval_store = store
+            hub.approval_store = store
             hub.resolve_approval = AsyncMock()
         return _request(
             app_state={"uterm_hub": hub, "uterm_authz": authz},
@@ -2402,7 +2402,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=row)
         store.claim = MagicMock(return_value=True)
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         authz = self._admin_authz()
         req = _request(
@@ -2421,7 +2421,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=None)
         store.claim = MagicMock()
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
@@ -2440,7 +2440,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=self._approval(req_id="r-5"))
         store.claim = MagicMock(return_value=False)
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
@@ -2458,7 +2458,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock()
         store.claim = MagicMock()
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz(is_admin=False)},
@@ -2484,7 +2484,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=row)
         store.claim = MagicMock(return_value=True)
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
@@ -2507,7 +2507,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=row)
         store.claim = MagicMock(return_value=True)
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
@@ -2525,7 +2525,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=None)
         store.claim = MagicMock()
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
@@ -2544,7 +2544,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock(return_value=self._approval(req_id="r-8"))
         store.claim = MagicMock(return_value=False)
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         req = _request(
             app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
@@ -2562,7 +2562,7 @@ class TestApprovalsRoutes:
         store.get = MagicMock()
         store.claim = MagicMock()
         hub = MagicMock()
-        hub._approval_store = store
+        hub.approval_store = store
         hub.resolve_approval = AsyncMock()
         authz = self._admin_authz()
         req = _request(

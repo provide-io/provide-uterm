@@ -33,7 +33,7 @@ def _make_ws() -> MagicMock:
 
 async def _register(hub: TermHub, worker_id: str, browser_ws: Any, role: str) -> WorkerTermState:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
         return st
 

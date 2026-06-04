@@ -56,16 +56,16 @@ class TestRateLimitEvaluationOrder:
         hub = _make_hub(rest_acquire_rate_limit_per_sec=100)  # high global rate
         client = "victim"
         # Create and exhaust per-client bucket manually.
-        hub._rest_acquire_per_client[client] = TokenBucket(0.001)
-        hub._rest_acquire_per_client[client]._tokens = 0.0
+        hub.limiter.rest_acquire_per_client[client] = TokenBucket(0.001)
+        hub.limiter.rest_acquire_per_client[client]._tokens = 0.0
 
-        global_tokens_before = hub._rest_acquire_bucket._tokens
+        global_tokens_before = hub.limiter.rest_acquire_bucket._tokens
 
         # This call should be rejected at the per-client check; global bucket untouched.
         result = hub.allow_rest_acquire_for(client)
 
         assert result is False, "Per-client exhausted → should be rejected"
-        assert hub._rest_acquire_bucket._tokens == global_tokens_before, (
+        assert hub.limiter.rest_acquire_bucket._tokens == global_tokens_before, (
             "Global bucket must NOT be drained when the per-client check rejects first"
         )
 
@@ -76,15 +76,15 @@ class TestRateLimitEvaluationOrder:
         """
         hub = _make_hub(rest_send_rate_limit_per_sec=100)  # high global rate
         client = "flooder"
-        hub._rest_send_per_client[client] = TokenBucket(0.001)
-        hub._rest_send_per_client[client]._tokens = 0.0
+        hub.limiter.rest_send_per_client[client] = TokenBucket(0.001)
+        hub.limiter.rest_send_per_client[client]._tokens = 0.0
 
-        global_tokens_before = hub._rest_send_bucket._tokens
+        global_tokens_before = hub.limiter.rest_send_bucket._tokens
 
         result = hub.allow_rest_send_for(client)
 
         assert result is False, "Per-client exhausted → should be rejected"
-        assert hub._rest_send_bucket._tokens == global_tokens_before, (
+        assert hub.limiter.rest_send_bucket._tokens == global_tokens_before, (
             "Global bucket must NOT be drained when per-client rejects"
         )
 
@@ -97,12 +97,12 @@ class TestRateLimitEvaluationOrder:
         """
         hub = _make_hub(rest_acquire_rate_limit_per_sec=100)
         client = "legit"
-        global_tokens_before = hub._rest_acquire_bucket._tokens
+        global_tokens_before = hub.limiter.rest_acquire_bucket._tokens
 
         result = hub.allow_rest_acquire_for(client)
 
         assert result is True, "Should be allowed"
-        assert hub._rest_acquire_bucket._tokens < global_tokens_before, (
+        assert hub.limiter.rest_acquire_bucket._tokens < global_tokens_before, (
             "Global bucket token must be consumed when per-client passes"
         )
 
@@ -114,7 +114,7 @@ class TestRateLimitEvaluationOrder:
         """
         hub = _make_hub(rest_acquire_rate_limit_per_sec=100)
         # Drain global bucket.
-        hub._rest_acquire_bucket._tokens = 0.0
+        hub.limiter.rest_acquire_bucket._tokens = 0.0
 
         result = hub.allow_rest_acquire_for("any-client")
 
@@ -124,12 +124,12 @@ class TestRateLimitEvaluationOrder:
         """Send rate: per-client pass → global token consumed."""
         hub = _make_hub(rest_send_rate_limit_per_sec=100)
         client = "sender"
-        global_tokens_before = hub._rest_send_bucket._tokens
+        global_tokens_before = hub.limiter.rest_send_bucket._tokens
 
         result = hub.allow_rest_send_for(client)
 
         assert result is True
-        assert hub._rest_send_bucket._tokens < global_tokens_before, (
+        assert hub.limiter.rest_send_bucket._tokens < global_tokens_before, (
             "Global bucket token must be consumed when per-client passes"
         )
 
@@ -170,7 +170,7 @@ class TestResumeWithoutOwnerBackwardsScan:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             # Simulate: browser held hijack (owned_hijack=True), lease expired,
@@ -201,7 +201,7 @@ class TestResumeWithoutOwnerBackwardsScan:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.events = deque(
@@ -233,7 +233,7 @@ class TestResumeWithoutOwnerBackwardsScan:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             # Only snapshot events — no expiry ever appended.
@@ -261,7 +261,7 @@ class TestResumeWithoutOwnerBackwardsScan:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             # Expired → re-acquired → now not hijacked (second session also expired)
@@ -291,7 +291,7 @@ class TestResumeWithoutOwnerBackwardsScan:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.events = deque(maxlen=2000)
@@ -320,7 +320,7 @@ class TestWasOwnerClearsExpiresAt:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = MagicMock()
             st.browsers[browser_ws] = "admin"
             # Make browser_ws the dashboard hijack owner with an active lease.
@@ -330,7 +330,7 @@ class TestWasOwnerClearsExpiresAt:
         await hub.cleanup_browser_disconnect("w1", browser_ws, owned_hijack=True)
 
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None
             assert st.hijack_owner_expires_at is None, (
                 "was_owner path must set hijack_owner_expires_at = None, not '' or any other falsy value"
@@ -360,7 +360,7 @@ class TestElifGuardConditions:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = None  # no worker connected
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = None
@@ -387,7 +387,7 @@ class TestElifGuardConditions:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = MagicMock()  # worker IS connected
             st.browsers[browser_ws] = "operator"
             st.hijack_owner = None

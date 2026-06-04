@@ -48,8 +48,6 @@ from provide.uterm.server.bridge.hub.router import MessageRouter
 from provide.uterm.server.bridge.hub.store import StateStore
 
 if TYPE_CHECKING:
-    from collections import deque
-
     from fastapi import APIRouter
 
     from provide.uterm.bridge.contracts import InputMode
@@ -58,7 +56,6 @@ if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.ext import PolicyContext
     from provide.uterm.server.bridge.identity import IdentityProvider
     from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
-    from provide.uterm.server.bridge.ratelimit import TokenBucket
 
 logger = get_logger(__name__)
 
@@ -221,7 +218,7 @@ class TermHub:
         # Capture a pre-cleanup snapshot (lock-free; telemetry is fail-open)
         # so we know which hijack_type(s) to report when cleanup returns True.
         now = time.monotonic()
-        st = self._workers.get(worker_id)
+        st = self.registry._workers.get(worker_id)
         had_rest = st is not None and st.hijack_session is not None and st.hijack_session.lease_expires_at <= now
         had_dashboard = (
             st is not None
@@ -556,11 +553,6 @@ class TermHub:
         """Periodically audit active connections for behavioral anomalies."""
         await self.router.run_behavioral_audit_loop()
 
-    @property
-    def _keystroke_timestamps(self) -> dict[Any, deque[float]]:
-        """Back-compat view of the router's keystroke ring buffer map."""
-        return self.router.keystroke_timestamps
-
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
         """Clear heuristic state and call into the connection manager."""
         self.router.forget_browser(ws)
@@ -771,94 +763,9 @@ class TermHub:
             audit_task.add_done_callback(self._background_tasks.discard)
 
     @property
-    def _workers(self) -> dict[str, WorkerTermState]:
-        """Back-compat view of the worker map owned by :attr:`registry`.
-
-        Mixins and tests still index/iterate ``self._workers`` directly;
-        this property forwards to the registry's underlying dict so the
-        Phase 1 extraction is non-functional. New code should prefer
-        :attr:`registry` accessors.
-        """
-        return self.registry._workers
-
-    @_workers.setter
-    def _workers(self, value: dict[str, WorkerTermState]) -> None:
-        """Replace the worker map wholesale (back-compat for tests)."""
-        self.registry._workers = value
-
-    # -- RateLimiter back-compat shims -----------------------------------
-    # These forward the legacy ``_rest_*`` attributes to :attr:`limiter`.
-    # Tests still poke individual buckets directly (force ``_tokens = 0``
-    # to simulate exhaustion, swap in ``MagicMock``s, pre-populate the
-    # per-client dict to exercise eviction); the shims keep that surface
-    # alive while ownership moves into the service.
-
-    @property
-    def _rest_acquire_bucket(self) -> TokenBucket:
-        return self.limiter.rest_acquire_bucket
-
-    @_rest_acquire_bucket.setter
-    def _rest_acquire_bucket(self, bucket: TokenBucket) -> None:
-        self.limiter.rest_acquire_bucket = bucket
-
-    @property
-    def _rest_send_bucket(self) -> TokenBucket:
-        return self.limiter.rest_send_bucket
-
-    @_rest_send_bucket.setter
-    def _rest_send_bucket(self, bucket: TokenBucket) -> None:
-        self.limiter.rest_send_bucket = bucket
-
-    @property
-    def _rest_acquire_per_client(self) -> dict[str, TokenBucket]:
-        return self.limiter.rest_acquire_per_client
-
-    @_rest_acquire_per_client.setter
-    def _rest_acquire_per_client(self, value: dict[str, TokenBucket]) -> None:
-        self.limiter.rest_acquire_per_client = value
-
-    @property
-    def _rest_send_per_client(self) -> dict[str, TokenBucket]:
-        return self.limiter.rest_send_per_client
-
-    @_rest_send_per_client.setter
-    def _rest_send_per_client(self, value: dict[str, TokenBucket]) -> None:
-        self.limiter.rest_send_per_client = value
-
-    # -- HijackLeaseManager back-compat shim ----------------------------
-    # ``_dashboard_hijack_lease_s`` is still read as a plain attribute by
-    # :class:`HubMessagingMixin.try_reclaim_hijack` and by tests; forward
-    # to :attr:`lease` so the service owns the canonical value.
-
-    @property
-    def _dashboard_hijack_lease_s(self) -> int:
-        return self.lease.dashboard_hijack_lease_s
-
-    @_dashboard_hijack_lease_s.setter
-    def _dashboard_hijack_lease_s(self, value: int) -> None:
-        self.lease.dashboard_hijack_lease_s = value
-
-    @property
     def identity_provider(self) -> IdentityProvider | None:
         """Public accessor for the configured identity provider."""
         return self._identity_provider
-
-    @property
-    def _approval_store(self) -> InMemoryApprovalStore:
-        """Back-compat alias for :attr:`approval_store`.
-
-        Mixin code, route handlers, the FanOutController, and several
-        tests still reference ``self._approval_store`` directly; this
-        property forwards to the canonical attribute so the Phase 3
-        extraction is non-functional. New code should prefer
-        :attr:`approval_store`.
-        """
-        return self.approval_store
-
-    @_approval_store.setter
-    def _approval_store(self, store: InMemoryApprovalStore) -> None:
-        """Replace the approval store wholesale (back-compat for tests)."""
-        self.approval_store = store
 
     async def set_worker_hello_mode(self, worker_id: str, mode: str) -> bool:
         """Backward-compatible wrapper for worker hello mode handling."""

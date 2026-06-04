@@ -27,7 +27,7 @@ async def test_get_creates_state() -> None:
     hub = TermHub()
     st = await hub._get("bot1")
     assert isinstance(st, WorkerTermState)
-    assert "bot1" in hub._workers
+    assert "bot1" in hub.registry._workers
 
 
 async def test_get_returns_same_state() -> None:
@@ -51,7 +51,7 @@ async def test_is_hijacked_false_initially() -> None:
 async def test_cleanup_expired_rest_session() -> None:
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].hijack_session = HijackSession(
+    hub.registry._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
         acquired_at=time.monotonic() - 200,
@@ -61,13 +61,13 @@ async def test_cleanup_expired_rest_session() -> None:
     expired = await hub.cleanup_expired_hijack("bot1")
     assert expired
     # Bot is fully idle after session expiry → pruned from _bots.
-    assert "bot1" not in hub._workers
+    assert "bot1" not in hub.registry._workers
 
 
 async def test_cleanup_not_expired_rest_session() -> None:
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].hijack_session = HijackSession(
+    hub.registry._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
         acquired_at=time.monotonic(),
@@ -76,7 +76,7 @@ async def test_cleanup_not_expired_rest_session() -> None:
     )
     expired = await hub.cleanup_expired_hijack("bot1")
     assert not expired
-    assert hub._workers["bot1"].hijack_session is not None
+    assert hub.registry._workers["bot1"].hijack_session is not None
 
 
 # ---------------------------------------------------------------------------
@@ -88,12 +88,12 @@ async def test_cleanup_expired_dashboard_owner() -> None:
     hub = TermHub()
     await hub._get("bot1")
     mock_ws = AsyncMock()
-    hub._workers["bot1"].hijack_owner = mock_ws
-    hub._workers["bot1"].hijack_owner_expires_at = time.monotonic() - 1
+    hub.registry._workers["bot1"].hijack_owner = mock_ws
+    hub.registry._workers["bot1"].hijack_owner_expires_at = time.monotonic() - 1
     expired = await hub.cleanup_expired_hijack("bot1")
     assert expired
     # Bot is fully idle after owner expiry → pruned from _bots.
-    assert "bot1" not in hub._workers
+    assert "bot1" not in hub.registry._workers
 
 
 async def test_cleanup_missing_bot_returns_false() -> None:
@@ -111,8 +111,8 @@ async def test_cleanup_sends_resume_to_worker() -> None:
     hub = TermHub()
     await hub._get("bot1")
     mock_ws = AsyncMock()
-    hub._workers["bot1"].worker_ws = mock_ws
-    hub._workers["bot1"].hijack_session = HijackSession(
+    hub.registry._workers["bot1"].worker_ws = mock_ws
+    hub.registry._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
         acquired_at=time.monotonic() - 200,
@@ -255,7 +255,7 @@ async def test_wait_for_guard_invalid_regex() -> None:
 async def test_wait_for_guard_no_constraints_returns_immediately() -> None:
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {"screen": "hello"}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "hello"}
     ok, snapshot, reason = await hub.wait_for_guard(
         "bot1",
         expect_prompt_id=None,
@@ -270,7 +270,7 @@ async def test_wait_for_guard_no_constraints_returns_immediately() -> None:
 async def test_wait_for_guard_with_prompt_constraint() -> None:
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {
+    hub.registry._workers["bot1"].last_snapshot = {
         "screen": "hello",
         "prompt_detected": {"prompt_id": "main_menu"},
     }
@@ -304,11 +304,11 @@ async def test_broadcast_removes_dead_socket() -> None:
 
     dead_ws = AsyncMock()
     dead_ws.send_text = AsyncMock(side_effect=RuntimeError("disconnected"))
-    hub._workers["bot1"].browsers[dead_ws] = "operator"
+    hub.registry._workers["bot1"].browsers[dead_ws] = "operator"
 
     await hub.broadcast("bot1", {"type": "test"})
     # Dead socket should be removed
-    assert dead_ws not in hub._workers["bot1"].browsers
+    assert dead_ws not in hub.registry._workers["bot1"].browsers
 
 
 async def test_broadcast_hijack_state_rest_session_active() -> None:
@@ -316,8 +316,8 @@ async def test_broadcast_hijack_state_rest_session_active() -> None:
     hub = TermHub()
     await hub._get("bot1")
     mock_ws = AsyncMock()
-    hub._workers["bot1"].browsers[mock_ws] = "operator"
-    hub._workers["bot1"].hijack_session = HijackSession(
+    hub.registry._workers["bot1"].browsers[mock_ws] = "operator"
+    hub.registry._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
         acquired_at=time.monotonic(),
@@ -335,10 +335,10 @@ async def test_broadcast_hijack_state_removes_dead_socket() -> None:
     await hub._get("bot1")
     dead_ws = AsyncMock()
     dead_ws.send_text = AsyncMock(side_effect=RuntimeError("gone"))
-    hub._workers["bot1"].browsers[dead_ws] = "operator"
+    hub.registry._workers["bot1"].browsers[dead_ws] = "operator"
 
     await hub.broadcast_hijack_state("bot1")
-    assert dead_ws not in hub._workers["bot1"].browsers
+    assert dead_ws not in hub.registry._workers["bot1"].browsers
 
 
 async def test_touch_hijack_owner_returns_none_when_no_bot() -> None:
@@ -358,7 +358,7 @@ async def test_wait_for_snapshot_returns_fresh_snapshot() -> None:
     hub = TermHub()
     await hub._get("bot1")
     # A snapshot with ts=0 predates req_ts and must NOT be returned (stale).
-    hub._workers["bot1"].last_snapshot = {"screen": "stale", "cols": 80, "rows": 25, "ts": 0}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "stale", "cols": 80, "rows": 25, "ts": 0}
     result = await hub.wait_for_snapshot("bot1", timeout_ms=50)
     assert result is None, "stale cached snapshot (ts=0) must not be returned on timeout"
 
@@ -376,8 +376,8 @@ async def test_hijack_state_msg_owner_is_me() -> None:
     hub = TermHub()
     await hub._get("bot1")
     mock_ws = AsyncMock()
-    hub._workers["bot1"].hijack_owner = mock_ws
-    hub._workers["bot1"].hijack_owner_expires_at = time.monotonic() + 3600
+    hub.registry._workers["bot1"].hijack_owner = mock_ws
+    hub.registry._workers["bot1"].hijack_owner_expires_at = time.monotonic() + 3600
     msg = await hub.hijack_state_msg_for("bot1", mock_ws)
     assert msg["owner"] == "me"
 
@@ -387,10 +387,10 @@ async def test_cleanup_expired_both_expired_sends_resume() -> None:
     hub = TermHub()
     await hub._get("bot1")
     mock_ws = AsyncMock()
-    hub._workers["bot1"].worker_ws = mock_ws
-    hub._workers["bot1"].hijack_owner = AsyncMock()
-    hub._workers["bot1"].hijack_owner_expires_at = time.monotonic() - 1
-    hub._workers["bot1"].hijack_session = HijackSession(
+    hub.registry._workers["bot1"].worker_ws = mock_ws
+    hub.registry._workers["bot1"].hijack_owner = AsyncMock()
+    hub.registry._workers["bot1"].hijack_owner_expires_at = time.monotonic() - 1
+    hub.registry._workers["bot1"].hijack_session = HijackSession(
         hijack_id="abc",
         owner="test",
         acquired_at=time.monotonic() - 200,

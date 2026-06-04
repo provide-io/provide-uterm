@@ -48,9 +48,9 @@ class TestEventSeqMonotonicityAdditional:
         ws1 = _mock_ws()
         ws2 = _mock_ws()
         async with hub._lock:
-            st1 = hub._workers.setdefault("w1", WorkerTermState())
+            st1 = hub.registry._workers.setdefault("w1", WorkerTermState())
             st1.worker_ws = ws1
-            st2 = hub._workers.setdefault("w2", WorkerTermState())
+            st2 = hub.registry._workers.setdefault("w2", WorkerTermState())
             st2.worker_ws = ws2
 
         results: dict[str, list[int]] = {"w1": [], "w2": []}
@@ -99,7 +99,7 @@ class TestEventSeqMonotonicityAdditional:
 
         # Deque should only hold the last 5
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None, "Worker state should exist"
             assert len(st.events) <= 5, f"Deque should be bounded to 5, got {len(st.events)}"
 
@@ -121,7 +121,7 @@ class TestManyBrowserBroadcast:
 
         browsers = [_mock_ws() for _ in range(n)]
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             for b in browsers:
                 st.browsers[b] = "viewer"
 
@@ -145,7 +145,7 @@ class TestManyBrowserBroadcast:
         dead_browser.send_text = AsyncMock(side_effect=RuntimeError("dead"))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             for b in good_browsers:
                 st.browsers[b] = "viewer"
             st.browsers[dead_browser] = "viewer"
@@ -155,7 +155,7 @@ class TestManyBrowserBroadcast:
 
         # Dead browser should be removed from the state
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             if st2 is not None:
                 assert dead_browser not in st2.browsers, "Dead browser should be removed after failed broadcast"
 

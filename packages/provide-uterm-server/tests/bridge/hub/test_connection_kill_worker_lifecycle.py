@@ -47,7 +47,7 @@ def _ws() -> MagicMock:
 
 async def _put_state(hub: TermHub, worker_id: str, st: WorkerTermState) -> None:
     async with hub._lock:
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
 
 def _hijack(owner: str = "alice", *, lease_expires_at: float) -> HijackSession:
@@ -77,7 +77,7 @@ class TestRegisterWorker:
 
         assert result is False
         async with hub._lock:
-            st = hub._workers["w-new"]
+            st = hub.registry._workers["w-new"]
         assert st.worker_ws is ws
         assert st.hijack_session is None
         assert st.hijack_owner is None
@@ -94,7 +94,7 @@ class TestRegisterWorker:
         await hub.connection_mgr.register_worker("w-deque", _ws())
 
         async with hub._lock:
-            rebuilt = hub._workers["w-deque"].events
+            rebuilt = hub.registry._workers["w-deque"].events
         assert isinstance(rebuilt, deque)
         assert rebuilt.maxlen == 7
         # The prior contents are preserved through the rebuild.
@@ -112,7 +112,7 @@ class TestRegisterWorker:
 
         assert result is False
         async with hub._lock:
-            st = hub._workers["w-recon"]
+            st = hub.registry._workers["w-recon"]
         # Same state object reused (setdefault), ws swapped to the reconnecting one.
         assert st is existing
         assert st.worker_ws is new_ws
@@ -129,8 +129,8 @@ class TestRegisterWorker:
         assert ei.value.reason == "worker capacity exceeded"
         # The rejected worker_id never entered the map.
         async with hub._lock:
-            assert "w-overflow" not in hub._workers
-            assert len(hub._workers) == 1
+            assert "w-overflow" not in hub.registry._workers
+            assert len(hub.registry._workers) == 1
 
     async def test_cap_boundary_is_ge_not_gt(self) -> None:
         """At exactly max_workers a new id is rejected (>=), proving the boundary.
@@ -163,7 +163,7 @@ class TestRegisterWorker:
 
         assert result is True
         async with hub._lock:
-            st = hub._workers["w-exp"]
+            st = hub.registry._workers["w-exp"]
         assert st.hijack_session is None
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
@@ -186,7 +186,7 @@ class TestRegisterWorker:
 
         assert result is False
         async with hub._lock:
-            st = hub._workers["w-live"]
+            st = hub.registry._workers["w-live"]
         # Session is NOT cleared because the lease is still valid.
         assert st.hijack_session is live
         assert st.worker_ws is ws
@@ -208,7 +208,7 @@ class TestRegisterWorker:
 
         assert result is True
         async with hub._lock:
-            assert hub._workers["w-boundary"].hijack_session is None
+            assert hub.registry._workers["w-boundary"].hijack_session is None
 
     async def test_lease_one_tick_above_now_preserved(self, monkeypatch: Any) -> None:
         """lease_expires_at strictly above now is preserved (anchors the <= direction)."""
@@ -225,7 +225,7 @@ class TestRegisterWorker:
 
         assert result is False
         async with hub._lock:
-            assert hub._workers["w-above"].hijack_session is live
+            assert hub.registry._workers["w-above"].hijack_session is live
 
     async def test_dashboard_owner_without_session_returns_true_and_clears_owner(self) -> None:
         """No session but a live dashboard owner -> prev_was_hijacked True, owner cleared."""
@@ -240,7 +240,7 @@ class TestRegisterWorker:
 
         assert result is True
         async with hub._lock:
-            st = hub._workers["w-dash"]
+            st = hub.registry._workers["w-dash"]
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
         # Session was already None; it stays None.
@@ -266,7 +266,7 @@ class TestRegisterWorker:
 
         assert result is True
         async with hub._lock:
-            st = hub._workers["w-both"]
+            st = hub.registry._workers["w-both"]
         assert st.hijack_session is None
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
@@ -322,7 +322,7 @@ class TestDeregisterWorker:
         assert should_broadcast is True
         assert was_hijacked is True
         async with hub._lock:
-            st = hub._workers["w-dc"]
+            st = hub.registry._workers["w-dc"]
         assert st.worker_ws is None
         assert st.hijack_session is None
         assert st.hijack_owner is None
@@ -343,7 +343,7 @@ class TestDeregisterWorker:
         assert should_broadcast is True
         assert was_hijacked is False
         async with hub._lock:
-            assert hub._workers["w-nh"].worker_ws is None
+            assert hub.registry._workers["w-nh"].worker_ws is None
 
     async def test_was_hijacked_true_from_owner_only(self) -> None:
         """was_hijacked is True when only hijack_owner is set (session None)."""
@@ -402,7 +402,7 @@ class TestDeregisterWorker:
         assert was_hijacked is False
         # Nothing cleared: the replacement worker's state is intact.
         async with hub._lock:
-            st = hub._workers["w-stale"]
+            st = hub.registry._workers["w-stale"]
         assert st.worker_ws is current_ws
         assert st.hijack_session is sess
         assert st.hijack_owner is owner

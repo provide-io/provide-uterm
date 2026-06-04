@@ -31,7 +31,7 @@ async def test_broadcast_hijack_state_owner_gets_me_others_get_other() -> None:
     ws_other = AsyncMock()
 
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.browsers = {ws_owner: "admin", ws_other: "operator"}
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = time.monotonic() + 60
@@ -55,7 +55,7 @@ async def test_broadcast_hijack_state_no_hijack_owner_is_none() -> None:
     ws2 = AsyncMock()
 
     async with hub._lock:
-        st = hub._workers.setdefault("bot1", WorkerTermState())
+        st = hub.registry._workers.setdefault("bot1", WorkerTermState())
         st.browsers = {ws1: "operator", ws2: "operator"}
 
     await hub.broadcast_hijack_state("bot1")
@@ -153,7 +153,7 @@ async def test_wait_for_guard_timeout_ms_minimum() -> None:
     """wait_for_guard clamps timeout_ms to minimum 50ms."""
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {"screen": "test"}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "test"}
 
     # timeout_ms=1 should be clamped to 50ms
     start = time.monotonic()
@@ -175,7 +175,7 @@ async def test_wait_for_guard_poll_interval_minimum() -> None:
     """wait_for_guard clamps poll_interval_ms to minimum 20ms."""
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {"screen": "test", "ts": time.time()}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "test", "ts": time.time()}
 
     # poll_interval_ms=1 should be clamped to 20ms
     start = time.monotonic()
@@ -198,12 +198,12 @@ async def test_wait_for_guard_matches_during_poll() -> None:
     await hub._get("bot1")
 
     # Set initial snapshot without prompt_id
-    hub._workers["bot1"].last_snapshot = {"screen": "initial"}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "initial"}
 
     # Simulate snapshot being updated in background
     async def update_snapshot() -> None:
         await asyncio.sleep(0.03)
-        hub._workers["bot1"].last_snapshot = {
+        hub.registry._workers["bot1"].last_snapshot = {
             "screen": "updated",
             "prompt_detected": {"prompt_id": "target"},
             "ts": time.time(),
@@ -242,7 +242,7 @@ async def test_wait_for_guard_no_new_snapshot_rerequests() -> None:
 
     # Set snapshot with old timestamp
     old_ts = time.time() - 1
-    hub._workers["bot1"].last_snapshot = {
+    hub.registry._workers["bot1"].last_snapshot = {
         "screen": "old",
         "ts": old_ts,
     }
@@ -266,7 +266,7 @@ async def test_wait_for_snapshot_with_fresh_snapshot() -> None:
 
     # Set fresh snapshot with timestamp in future (will be checked against req_ts)
     fresh_ts = time.time() + 1  # Definitely in the future
-    hub._workers["bot1"].last_snapshot = {
+    hub.registry._workers["bot1"].last_snapshot = {
         "screen": "fresh content",
         "ts": fresh_ts,
     }
@@ -289,7 +289,7 @@ async def test_wait_for_snapshot_ignores_older_ts() -> None:
     req_ts = time.time()
 
     # Manually set to just before request time
-    hub._workers["bot1"].last_snapshot = {
+    hub.registry._workers["bot1"].last_snapshot = {
         "screen": "old",
         "ts": req_ts - 0.1,
     }
@@ -308,8 +308,8 @@ async def test_wait_for_snapshot_worker_disappears() -> None:
     # Simulate worker being removed
     async def remove_worker() -> None:
         await asyncio.sleep(0.02)
-        if "bot1" in hub._workers:
-            del hub._workers["bot1"]
+        if "bot1" in hub.registry._workers:
+            del hub.registry._workers["bot1"]
 
     task = asyncio.create_task(remove_worker())
     result = await hub.wait_for_snapshot("bot1", timeout_ms=200)
@@ -346,7 +346,7 @@ async def test_wait_for_snapshot_timestamp_gt_not_ge() -> None:
     req_ts = time.time()
 
     # Snapshot with ts exactly equal to req_ts should NOT be returned (must be >)
-    hub._workers["bot1"].last_snapshot = {"screen": "test", "ts": req_ts}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "test", "ts": req_ts}
 
     result = await hub.wait_for_snapshot("bot1", timeout_ms=50)
 
@@ -362,7 +362,7 @@ async def test_wait_for_snapshot_timestamp_exceeds_req() -> None:
     req_ts = time.time()
 
     # Snapshot with ts slightly in future (> req_ts)
-    hub._workers["bot1"].last_snapshot = {"screen": "fresh", "ts": req_ts + 0.01}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "fresh", "ts": req_ts + 0.01}
 
     start = time.monotonic()
     result = await hub.wait_for_snapshot("bot1", timeout_ms=500)
@@ -377,7 +377,7 @@ async def test_wait_for_guard_min_timeout_50ms() -> None:
     """wait_for_guard clamps timeout to min 50ms (not 49ms or 51ms)."""
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {"screen": "test"}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "test"}
 
     # Request very small timeout that should be clamped to 50ms
     start = time.monotonic()
@@ -398,7 +398,7 @@ async def test_wait_for_guard_min_interval_20ms() -> None:
     """wait_for_guard clamps poll_interval to min 20ms (not 19ms or 21ms)."""
     hub = TermHub()
     await hub._get("bot1")
-    hub._workers["bot1"].last_snapshot = {"screen": "test", "ts": time.time()}
+    hub.registry._workers["bot1"].last_snapshot = {"screen": "test", "ts": time.time()}
 
     # Request very small interval
     start = time.monotonic()

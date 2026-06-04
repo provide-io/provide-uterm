@@ -770,7 +770,7 @@ def create_server_app(
                 status = NodeStatus(
                     node_id=node_id,
                     active_sessions=await hub.browser_count_total(),
-                    worker_count=len(hub._workers),
+                    worker_count=len(hub.registry._workers),
                     timestamp=time.time(),
                 )
                 await discovery_provider.announce(status)

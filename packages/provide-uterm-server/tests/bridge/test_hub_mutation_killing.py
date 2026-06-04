@@ -70,7 +70,7 @@ class TestForceReleaseHijackControlMsg:
         worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(decode_control_payload(s)))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()
             st.hijack_owner_expires_at = time.monotonic() + 300
@@ -97,7 +97,7 @@ class TestForceReleaseHijackControlMsg:
         worker_ws = AsyncMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()
             st.hijack_owner_expires_at = time.monotonic() + 300
@@ -105,7 +105,7 @@ class TestForceReleaseHijackControlMsg:
         await hub.force_release_hijack("w1")
 
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             if st2 is not None:
                 assert st2.hijack_owner_expires_at is None, (
                     f"hijack_owner_expires_at must be None after force release, got {st2.hijack_owner_expires_at!r}"
@@ -123,7 +123,7 @@ class TestForceReleaseHijackControlMsg:
         browser_ws.send_text = AsyncMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()
             st.hijack_owner_expires_at = time.monotonic() + 300
@@ -179,7 +179,7 @@ class TestRequestAnalysis:
         worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(decode_control_payload(s)))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
 
         await hub.request_analysis("w1")
@@ -210,9 +210,9 @@ class TestAllowRestSendForPerClient:
         hub.allow_rest_send_for("client1")
         hub.allow_rest_send_for("client2")
 
-        assert "client1" in hub._rest_send_per_client, "client1 should have its own bucket entry"
-        assert "client2" in hub._rest_send_per_client, "client2 should have its own bucket entry"
-        assert hub._rest_send_per_client["client1"] is not hub._rest_send_per_client["client2"], (
+        assert "client1" in hub.limiter.rest_send_per_client, "client1 should have its own bucket entry"
+        assert "client2" in hub.limiter.rest_send_per_client, "client2 should have its own bucket entry"
+        assert hub.limiter.rest_send_per_client["client1"] is not hub.limiter.rest_send_per_client["client2"], (
             "client1 and client2 must use different bucket objects (separate per-client limits)"
         )
 
@@ -223,8 +223,8 @@ class TestAllowRestSendForPerClient:
         """
         hub = _make_hub()
         hub.allow_rest_send_for("myClient")
-        assert "myClient" in hub._rest_send_per_client, "'myClient' must be a key in _rest_send_per_client"
-        assert None not in hub._rest_send_per_client, "None must NOT be a key in _rest_send_per_client"
+        assert "myClient" in hub.limiter.rest_send_per_client, "'myClient' must be a key in _rest_send_per_client"
+        assert None not in hub.limiter.rest_send_per_client, "None must NOT be a key in _rest_send_per_client"
 
 
 # ---------------------------------------------------------------------------

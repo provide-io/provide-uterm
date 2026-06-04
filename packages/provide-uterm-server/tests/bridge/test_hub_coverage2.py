@@ -42,13 +42,13 @@ def _read_initial_browser(browser: Any) -> tuple[dict, dict]:
 
 async def _register_worker(hub: TermHub, worker_id: str, ws: Any) -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.worker_ws = ws
 
 
 async def _register_browser_ws(hub: TermHub, worker_id: str, browser_ws: Any, role: str = "admin") -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
 
 
@@ -410,7 +410,7 @@ class TestBroadcastHijackStateSt2None:
         dead_ws.send_text = AsyncMock(side_effect=Exception("dead"))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[dead_ws] = "admin"
 
         # Patch remove_dead_browsers to also delete the worker entry
@@ -420,7 +420,7 @@ class TestBroadcastHijackStateSt2None:
             result = await original_rdb(worker_id, dead)
             # Delete the worker state to simulate st2 is None at line 288
             async with hub._lock:
-                hub._workers.pop(worker_id, None)
+                hub.registry._workers.pop(worker_id, None)
             return result
 
         hub.remove_dead_browsers = _removing_rdb  # type: ignore[method-assign]
@@ -442,14 +442,14 @@ class TestSendWorkerClearsDeadWs:
         worker_ws.send_text = AsyncMock(side_effect=Exception("send failed"))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
 
         result = await hub.send_worker("w1", {"type": "test"})
         assert result is False
 
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             assert st2 is not None
             assert st2.worker_ws is None  # Cleared by the failure handler
 
@@ -461,7 +461,7 @@ class TestSendWorkerClearsDeadWs:
         old_ws.send_text = AsyncMock(side_effect=Exception("send failed"))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = old_ws
 
         # Patch the lock's acquire to swap the ws between failure and the re-lock
@@ -474,7 +474,7 @@ class TestSendWorkerClearsDeadWs:
             result = await original_acquire()
             if acquire_count == 2:
                 # Simulate new worker taking over between send failure and re-lock
-                st = hub._workers.get("w1")
+                st = hub.registry._workers.get("w1")
                 if st is not None:
                     st.worker_ws = new_ws  # replaced with new ws
             return result  # type: ignore[return-value]
@@ -485,6 +485,6 @@ class TestSendWorkerClearsDeadWs:
         assert result is False
 
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             assert st2 is not None
             assert st2.worker_ws is new_ws  # NOT cleared — the new ws was kept

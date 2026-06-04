@@ -69,13 +69,13 @@ def test_forget_browser_removes_state(hub: TermHub) -> None:
 
 
 def test_keystroke_timestamps_property_aliases_router(hub: TermHub) -> None:
-    """The legacy ``hub._keystroke_timestamps`` shim mirrors the router's map.
+    """The legacy ``hub.router.keystroke_timestamps`` shim mirrors the router's map.
 
     Mutations made through either entry point are visible on the other —
     the property returns the underlying dict, not a copy.
     """
     source = object()
-    hub._keystroke_timestamps[source] = deque([1.0, 2.0], maxlen=50)
+    hub.router.keystroke_timestamps[source] = deque([1.0, 2.0], maxlen=50)
     assert hub.router.keystroke_timestamps[source][-1] == 2.0
 
 

@@ -47,7 +47,7 @@ def _active_session(hijack_id: str, owner: str = "test") -> HijackSession:
 def test_acquire_hijack() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test", "lease_s": 60})
@@ -74,7 +74,7 @@ def test_acquire_conflict_already_hijacked() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id, "owner_a"),
     )
@@ -88,7 +88,7 @@ def test_acquire_conflict_already_hijacked() -> None:
 def test_acquire_default_owner() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/acquire")
@@ -104,7 +104,7 @@ def test_acquire_send_worker_fails() -> None:
 
     bad_ws = AsyncMock()
     bad_ws.send_text = AsyncMock(side_effect=RuntimeError("broken"))
-    hub._workers["bot1"] = WorkerTermState(worker_ws=bad_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=bad_ws)
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test", "lease_s": 60})
@@ -122,7 +122,7 @@ def test_heartbeat() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -141,7 +141,7 @@ def test_heartbeat_wrong_id() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -158,7 +158,7 @@ def test_heartbeat_request_none_defaults() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -174,7 +174,7 @@ def test_heartbeat_inner_session_none() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -192,7 +192,7 @@ def test_heartbeat_session_mismatch_inside_lock() -> None:
     mock_ws = AsyncMock()
     real_id = str(uuid.uuid4())
     other_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(other_id),  # different session active
     )
@@ -213,7 +213,7 @@ def test_release() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -224,12 +224,12 @@ def test_release() -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["ok"] is True
-    assert hub._workers["bot1"].hijack_session is None
+    assert hub.registry._workers["bot1"].hijack_session is None
 
 
 def test_release_invalid_session() -> None:
     app, hub = make_app()
-    hub._workers["bot1"] = WorkerTermState()
+    hub.registry._workers["bot1"] = WorkerTermState()
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/no-such-id/release")
@@ -243,7 +243,7 @@ def test_release_inner_session_none() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -260,7 +260,7 @@ def test_release_session_mismatch_inside_lock() -> None:
     mock_ws = AsyncMock()
     real_id = str(uuid.uuid4())
     other_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(other_id),
     )
@@ -280,7 +280,7 @@ def test_send_no_worker() -> None:
     app, hub = make_app()
     hijack_id = str(uuid.uuid4())
     # Valid session but worker_ws = None
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         hijack_session=_active_session(hijack_id),
     )
 
@@ -292,7 +292,7 @@ def test_send_no_worker() -> None:
 
 def test_send_invalid_session() -> None:
     app, hub = make_app()
-    hub._workers["bot1"] = WorkerTermState()
+    hub.registry._workers["bot1"] = WorkerTermState()
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/no-such-id/send", json={"keys": "hi"})
@@ -305,7 +305,7 @@ def test_send_empty_keys() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )

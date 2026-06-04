@@ -200,7 +200,7 @@ async def test_ephemeral_double_disconnect_race(live_hub: Any) -> None:
         await asyncio.sleep(0.3)
 
         # Check state: no browsers, no errors
-        st = hub._workers.get("eph-race")
+        st = hub.registry._workers.get("eph-race")
         if st is not None:
             assert len(st.browsers) == 0, f"Browser list should be empty: {len(st.browsers)}"
 
@@ -242,7 +242,7 @@ async def test_worker_id_reuse_after_cleanup_no_stale_state() -> None:
             await w2.recv()  # snapshot_req
 
             # Hijack should be clean
-            st = hub._workers.get("reuse-1")
+            st = hub.registry._workers.get("reuse-1")
             assert st is not None
             assert st.hijack_owner is None, f"Stale hijack owner: {st.hijack_owner}"
 

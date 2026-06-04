@@ -53,11 +53,11 @@ class TestWorkerHelloNegotiation:
 
         # Give the server's worker_hello handler time to commit.
         for _ in range(20):
-            st = hub._workers.get(worker_id)  # type: ignore[attr-defined]
+            st = hub.registry._workers.get(worker_id)  # type: ignore[attr-defined]
             if st is not None and st.protocol_version is not None:
                 return st
             _time.sleep(0.02)
-        return hub._workers.get(worker_id)  # type: ignore[attr-defined]
+        return hub.registry._workers.get(worker_id)  # type: ignore[attr-defined]
 
     def test_legacy_protocol_version_int_is_accepted(self) -> None:
         """Old workers sent ``protocol_version: 1``; that must still work."""

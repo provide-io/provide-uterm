@@ -115,8 +115,8 @@ def test_worker_disconnect_clears_rest_hijack_session() -> None:
     with TestClient(fapp) as client, connect_test_ws(client, "/ws/worker/bot1/term") as worker:
         _read_worker_snapshot_req(worker)
         session_id = str(uuid.uuid4())
-        hub._workers["bot1"].hijack_session = _active_session(session_id, "rest_owner")
-        assert hub._workers["bot1"].hijack_session is not None
+        hub.registry._workers["bot1"].hijack_session = _active_session(session_id, "rest_owner")
+        assert hub.registry._workers["bot1"].hijack_session is not None
         # worker disconnects → finally block clears hijack_session
 
     disabled_calls = [(b, e, o) for b, e, o in callbacks if not e]
@@ -143,7 +143,7 @@ def test_worker_disconnect_clears_ws_hijack_owner() -> None:
             msg = browser.receive_json()
             assert msg["type"] == "hijack_state", f"Expected hijack_state but got: {msg}"
 
-            st = hub._workers.get("bot1")
+            st = hub.registry._workers.get("bot1")
             assert st is not None and st.hijack_owner is not None, "hijack_owner should be set"
             # worker exits → finally block clears hijack_owner
 
@@ -151,7 +151,7 @@ def test_worker_disconnect_clears_ws_hijack_owner() -> None:
         # on membership of both frames rather than the first one's type.
         assert "worker_disconnected" in _recv_disconnect_frames(browser)
 
-        st = hub._workers.get("bot1")
+        st = hub.registry._workers.get("bot1")
         assert st is not None, "state should still exist while browser is connected"
         assert st.hijack_owner is None, "hijack_owner must be cleared on worker disconnect"
         assert st.hijack_owner_expires_at is None, "hijack_owner_expires_at must be cleared"
@@ -227,7 +227,7 @@ def test_browser_disconnect_resume_without_owner() -> None:
             # do NOT add a hijack_owner_expired event — that would suppress
             # the resume_without_owner path. owned_hijack stays True in
             # the WS handler since no explicit release was sent.
-            st = hub._workers["bot1"]
+            st = hub.registry._workers["bot1"]
             st.hijack_owner = None
             st.hijack_owner_expires_at = None
             # Ensure last event is not an expiry event
