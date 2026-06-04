@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from scripts.demos.browser import _dev_auth_cookies_or_empty
 from scripts.demos.ffmpeg import ffmpeg_to_mp4
+from scripts.demos.grid_compose import tile_grid_with_footer
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -335,17 +336,7 @@ def record_fleet_complete(
             grid_ctx.close()
             browser.close()
 
-        # Extract grid webm → mp4
-        grid_webms = list(grid_webm_dir.glob("*.webm"))
-        if grid_webms:
-            latest = max(grid_webms, key=lambda x: x.stat().st_mtime)
-            target = feature_dir / "grid.webm"
-            latest.rename(target)
-            results["grid"] = ffmpeg_to_mp4(target)
-        else:
-            results["grid"] = None
-
-        # Extract per-worker webms → mp4s
+        # Extract per-worker webms → mp4s (these render correctly)
         for sid in session_ids:
             wd = worker_webm_dirs[sid]
             wwebms = list(wd.glob("*.webm"))
@@ -356,6 +347,21 @@ def record_fleet_complete(
                 results[sid] = ffmpeg_to_mp4(target)
             else:
                 results[sid] = None
+
+        # Build the grid composite by tiling the per-worker videos (which
+        # render) and appending the broadcast-results panel cropped from the
+        # grid screenshot. The live iframe grid records blank: /app/session
+        # cannot be framed (X-Frame-Options: deny) and, once that is stripped,
+        # the in-iframe terminal widget still never mounts.
+        results["grid"] = tile_grid_with_footer(
+            [results.get(sid) for sid in session_ids],
+            shots_dir / after_shot,
+            feature_dir / "grid.mp4",
+            cols=cols,
+            cell_w=480,
+            cell_h=cell_h,
+            footer_h=panel_h,
+        )
 
     except Exception as exc:
         print(f"  [WARN] record_fleet_complete failed: {exc}", flush=True)
