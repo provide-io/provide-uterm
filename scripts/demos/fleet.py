@@ -12,6 +12,7 @@ import shutil
 import time
 from typing import TYPE_CHECKING, Any
 
+from scripts.demos.browser import _dev_auth_cookies_or_empty
 from scripts.demos.ffmpeg import ffmpeg_to_mp4
 
 if TYPE_CHECKING:
@@ -61,6 +62,10 @@ def record_simultaneous_perspectives(
             webm_dirs: dict[str, Path] = {}
             contexts: dict[str, Any] = {}
             pages: dict[str, Any] = {}
+            # Browser navigations / page-driven WS carry no bearer header — they
+            # authenticate via the uterm_token cookie (dev_token mode). Without
+            # this every /app/session/* load 401s and the video records an error.
+            auth_cookies = _dev_auth_cookies_or_empty(base_url)
             for name in names:
                 wd = feature_dir / f"_webm_{name}"
                 wd.mkdir(parents=True, exist_ok=True)
@@ -72,6 +77,8 @@ def record_simultaneous_perspectives(
                     record_video_size={"width": 1280, "height": 720},
                     **extra,
                 )
+                if auth_cookies:
+                    ctx.add_cookies(auth_cookies)  # type: ignore[arg-type]
                 contexts[name] = ctx
                 pages[name] = ctx.new_page()
 
@@ -207,12 +214,19 @@ def record_fleet_complete(
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
 
+            # Browser navigations / page-driven WS carry no bearer header — they
+            # authenticate via the uterm_token cookie (dev_token mode). Without
+            # this every /app/session/* load 401s and the video records an error.
+            auth_cookies = _dev_auth_cookies_or_empty(base_url)
+
             # Grid context
             grid_ctx = browser.new_context(
                 viewport={"width": grid_w, "height": grid_h},
                 record_video_dir=str(grid_webm_dir),
                 record_video_size={"width": grid_w, "height": grid_h},
             )
+            if auth_cookies:
+                grid_ctx.add_cookies(auth_cookies)  # type: ignore[arg-type]
             grid_page = grid_ctx.new_page()
 
             _IFRAME_CSS = (
@@ -285,6 +299,8 @@ def record_fleet_complete(
                     record_video_dir=str(worker_webm_dirs[sid]),
                     record_video_size={"width": worker_w, "height": worker_h},
                 )
+                if auth_cookies:
+                    wctx.add_cookies(auth_cookies)  # type: ignore[arg-type]
                 wp = wctx.new_page()
                 wp.goto(f"{base_url}/app/session/{sid}", wait_until="domcontentloaded")
                 worker_ctxs[sid] = wctx
