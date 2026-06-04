@@ -13,18 +13,16 @@ docstring at :mod:`provide.uterm.server.bridge.hub` for the full service map.
 from __future__ import annotations
 
 import asyncio
-import time
-from collections.abc import Awaitable, Callable, Coroutine
 from typing import TYPE_CHECKING, Any, Literal
 
-from provide.telemetry import get_logger
-
 try:
-    from fastapi import WebSocket
+    from fastapi import WebSocket  # noqa: TC002 — runtime import drives the friendly ImportError below
 except ImportError as _e:  # pragma: no cover
     raise ImportError("fastapi is required for TermHub: pip install 'provide-uterm[websocket]'") from _e
 
-from provide.uterm.control_channel import encode_control, encode_data
+import provide.uterm.server.bridge.hub.core_delegates_connection as _conn
+import provide.uterm.server.bridge.hub.core_delegates_lease as _lease_d
+import provide.uterm.server.bridge.hub.core_orchestration as _orch
 from provide.uterm.server.bridge.hub.approvals import InMemoryApprovalStore
 from provide.uterm.server.bridge.hub.connection import ConnectionManager
 from provide.uterm.server.bridge.hub.ext import (
@@ -35,7 +33,6 @@ from provide.uterm.server.bridge.hub.ext import (
     OutputPolicyGate,
     PolicyDecision,
     PolicyGate,
-    TelemetryEvent,
     TelemetrySink,
 )
 from provide.uterm.server.bridge.hub.lease import HijackLeaseManager
@@ -43,66 +40,41 @@ from provide.uterm.server.bridge.hub.limiter import RateLimiter
 from provide.uterm.server.bridge.hub.polling_service import PollingCoordinator
 from provide.uterm.server.bridge.hub.presence import PresenceManager
 from provide.uterm.server.bridge.hub.registry import WorkerRegistry
-from provide.uterm.server.bridge.hub.resume import ResumeSession, ResumeTokenStore
 from provide.uterm.server.bridge.hub.router import MessageRouter
 from provide.uterm.server.bridge.hub.store import StateStore
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from fastapi import APIRouter
 
     from provide.uterm.bridge.contracts import InputMode
     from provide.uterm.server.bridge.frames import HijackStateFrame
+    from provide.uterm.server.bridge.hub.core_helpers import (
+        BrowserRoleResolver,
+        HijackStateCallback,
+        MetricCallback,
+        ResumeCallback,
+        WorkerEmptyCallback,
+    )
     from provide.uterm.server.bridge.hub.event_bus import EventBus
     from provide.uterm.server.bridge.hub.ext import PolicyContext
+    from provide.uterm.server.bridge.hub.resume import ResumeTokenStore
     from provide.uterm.server.bridge.identity import IdentityProvider
     from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
 
-logger = get_logger(__name__)
-
-HijackStateCallback = Callable[[str, bool, str | None], Awaitable[None] | None]
-BrowserRoleResolver = Callable[[WebSocket, str], str | None | Awaitable[str | None]]
-MetricCallback = Callable[[str, int], None]
-WorkerEmptyCallback = Callable[[str], Coroutine[Any, Any, None]]
-ResumeCallback = Callable[[str, ResumeSession], Awaitable[bool]]
-
-
-def _encode_browser_frame(msg: dict[str, Any]) -> str:
-    if str(msg.get("type") or "") == "term":
-        return encode_data(str(msg.get("data") or ""))
-    return encode_control(msg)
-
-
-def _encode_worker_frame(msg: dict[str, Any]) -> str:
-    if str(msg.get("type") or "") == "input":
-        return encode_data(str(msg.get("data") or ""))
-    return encode_control(msg)
-
-
-def _mono_to_wall(mono_ts: float | None) -> float | None:
-    """Convert a monotonic timestamp to wall-clock for external consumers."""
-    if mono_ts is None:
-        return None
-    return time.time() + (mono_ts - time.monotonic())
-
-
-class BrowserRoleResolutionError(RuntimeError):
-    """Raised when a browser-role resolver fails and the WS should be rejected."""
+    OnBrowserMessage = Callable[["TermHub", WebSocket, str, str, dict[str, Any], bool], Awaitable[bool]]
 
 
 class TermHub:
     """In-memory registry for terminal WebSocket connections."""
 
-    # -- PollingCoordinator delegates (Phase 7b: ex-_PollingMixin) -----------
-    # The coordinator owns the actual implementation; ``hub.polling`` is
-    # the canonical handle. These class-level pass-throughs keep the
-    # legacy ``hub.<name>(...)`` call surface intact without an extra
-    # mixin in the MRO. ``snapshot_matches`` is exposed as a
-    # ``staticmethod`` so ``TermHub.snapshot_matches(...)`` keeps working.
-
+    # Thin no-mixin delegators to the owning service (heavier bodies in the
+    # ``core_delegates_*`` / ``core_orchestration`` / ``core_helpers`` siblings).
+    # Lease/router hooks dispatch via ``self._hub.<method>`` so monkey-patched hub names still intercept.
     snapshot_matches = staticmethod(PollingCoordinator.snapshot_matches)
 
     async def wait_for_snapshot(self, worker_id: str, timeout_ms: int = 1500) -> dict[str, Any] | None:
-        """Poll for a fresh snapshot from *worker_id*, waiting up to *timeout_ms* ms."""
         return await self.polling.wait_for_snapshot(worker_id, timeout_ms)
 
     async def wait_for_guard(
@@ -114,7 +86,6 @@ class TermHub:
         timeout_ms: int,
         poll_interval_ms: int,
     ) -> tuple[bool, dict[str, Any] | None, str | None]:
-        """Poll until the snapshot satisfies prompt-id/regex guards or *timeout_ms* elapses."""
         return await self.polling.wait_for_guard(
             worker_id,
             expect_prompt_id=expect_prompt_id,
@@ -123,121 +94,63 @@ class TermHub:
             poll_interval_ms=poll_interval_ms,
         )
 
-    # -- StateStore delegates (Phase 7b: ex-HubStateMixin) -----------------
-    # The store (``self.state``) owns the actual implementation. The
-    # methods below are thin pass-throughs that keep the legacy
-    # ``hub.<name>(...)`` call surface intact without an extra mixin in
-    # the MRO. Tests still monkey-patch ``shutdown`` and
-    # ``notify_hijack_changed`` on hub instances — that pattern keeps
-    # working because instance attributes shadow class methods regardless
-    # of where the method lives in the class hierarchy.
-
     @property
     def event_bus(self) -> EventBus | None:
-        """Public accessor for the EventBus instance (None if not configured)."""
         return self._event_bus
 
     @event_bus.setter
     def event_bus(self, value: EventBus | None) -> None:
-        """Backward-compatible setter used by tests and app wiring."""
         self._event_bus = value
 
     def _buffer_and_get_command(self, ws: WebSocket, data: str) -> str | None:
-        """Accumulate input for *ws* and return the command if a newline is received."""
         return self.state.buffer_and_get_command(ws, data)
 
     async def shutdown(self) -> None:
-        """Cancel all background tasks for graceful shutdown."""
         await self.state.shutdown()
 
     async def touch_activity(self, worker_id: str) -> None:
-        """Update the last-activity timestamp for *worker_id*."""
         await self.state.touch_activity(worker_id)
 
     def metric(self, name: str, value: int = 1) -> None:
-        """Emit a named metric via the configured on_metric callback."""
         self.state.metric(name, value)
 
-    # ``staticmethod`` wrappers around the canonical implementations on
-    # :class:`StateStore` so legacy ``hub.clamp_lease(...)`` /
-    # ``TermHub.is_dashboard_hijack_active(st)`` call sites keep working.
     clamp_lease = staticmethod(StateStore.clamp_lease)
     has_valid_rest_lease = staticmethod(StateStore.has_valid_rest_lease)
     is_dashboard_hijack_active = staticmethod(StateStore.is_dashboard_hijack_active)
 
     def is_hijacked(self, st: WorkerTermState) -> bool:
-        """Return True if *st* is under any active hijack (dashboard WS or REST)."""
         return self.state.is_hijacked(st)
 
     async def _get(self, worker_id: str) -> WorkerTermState:
-        """Return the existing :class:`WorkerTermState` for *worker_id* or create one."""
         return await self.state.get_or_create(worker_id)
 
     def notify_hijack_changed(self, worker_id: str, *, enabled: bool, owner: str | None = None) -> None:
-        """Fire the on_hijack_changed callback (sync or async) without blocking."""
         self.state.notify_hijack_changed(worker_id, enabled=enabled, owner=owner)
 
     async def _resolve_role_for_browser(self, ws: WebSocket, worker_id: str) -> str:
-        """Resolve a browser role via the configured callback; defaults to "viewer"."""
         return await self.state.resolve_role_for_browser(ws, worker_id)
 
     async def prepare_policy_context(self, ws: WebSocket, worker_id: str, action: str | None = None) -> PolicyContext:
-        """Create a :class:`PolicyContext` for the given browser WebSocket and worker."""
         return await self.state.prepare_policy_context(ws, worker_id, action)
 
     def _map_roles(self, principal: Any) -> frozenset[str]:
-        """Map an identity-provider principal to a frozen set of hub roles."""
         return self.state._map_roles(principal)
-
-    # -- HijackLeaseManager delegates (Phase 7b: ex-_OwnershipMixin) --------
-    # ``self.lease`` (HijackLeaseManager) owns the hijack state machine.
-    # The pure-forward methods below keep the legacy ``hub.<name>(...)``
-    # call surface intact without an extra mixin in the MRO. Tests
-    # monkey-patch ``_recheck_and_resume``, ``append_event``,
-    # ``broadcast_hijack_state`` and ``prune_if_idle`` on hub instances
-    # to kill mutations in :meth:`HijackLeaseManager.cleanup_expired`;
-    # those patches still intercept because the lease service dispatches
-    # those hooks through ``self._hub.<method>``, which lands on the
-    # hub-level pure delegators (and therefore on the patched names).
 
     @staticmethod
     def _compute_lease_expirations(st: Any, now: float) -> tuple[bool, bool]:
-        """Return ``(browser_expired, rest_expired)`` without mutating state."""
         return HijackLeaseManager.compute_lease_expirations(st, now)
 
     async def _expire_leases_under_lock(self, worker_id: str, now: float) -> tuple[bool, bool, bool] | None:
-        """Expire stale leases under lock — forwards to :attr:`lease`."""
         return await self.lease._expire_leases_under_lock(worker_id, now)
 
     async def _recheck_and_resume(self, worker_id: str, now: float) -> None:
-        """Re-check under lock and send resume — forwards to :attr:`lease`."""
         await self.lease._recheck_and_resume(worker_id, now)
 
     async def cleanup_expired_hijack(self, worker_id: str) -> bool:
-        """Expire stale REST/dashboard leases; emit resume if fully released."""
-        # Capture a pre-cleanup snapshot (lock-free; telemetry is fail-open)
-        # so we know which hijack_type(s) to report when cleanup returns True.
-        now = time.monotonic()
-        st = self.registry._workers.get(worker_id)
-        had_rest = st is not None and st.hijack_session is not None and st.hijack_session.lease_expires_at <= now
-        had_dashboard = (
-            st is not None
-            and st.hijack_owner is not None
-            and st.hijack_owner_expires_at is not None
-            and st.hijack_owner_expires_at <= now
-        )
-        cleaned = await self.lease.cleanup_expired(worker_id)
-        if cleaned:
-            if had_rest:
-                await self.emit_telemetry("hijack.expired", worker_id=worker_id, metadata={"hijack_type": "rest"})
-            if had_dashboard:
-                await self.emit_telemetry("hijack.expired", worker_id=worker_id, metadata={"hijack_type": "dashboard"})
-        return cleaned
+        return await _lease_d.cleanup_expired_hijack(self, worker_id)
 
     async def get_rest_session(self, worker_id: str, hijack_id: str) -> HijackSession | None:
-        """Return the active REST session for *hijack_id* or None."""
-        await self.cleanup_expired_hijack(worker_id)
-        return await self.lease._get_rest_session_no_cleanup(worker_id, hijack_id)
+        return await _lease_d.get_rest_session(self, worker_id, hijack_id)
 
     async def try_acquire_rest_hijack(
         self,
@@ -248,53 +161,28 @@ class TermHub:
         hijack_id: str,
         now: float,
     ) -> tuple[bool, str | None]:
-        """Atomically check availability and create a REST hijack session."""
-        ok, err = await self.lease.try_acquire_rest(
-            worker_id, owner=owner, lease_s=lease_s, hijack_id=hijack_id, now=now
+        return await _lease_d.try_acquire_rest_hijack(
+            self, worker_id, owner=owner, lease_s=lease_s, hijack_id=hijack_id, now=now
         )
-        if ok:
-            await self.emit_telemetry(
-                "hijack.acquired",
-                worker_id=worker_id,
-                principal=owner,
-                metadata={"hijack_type": "rest", "lease_s": lease_s},
-            )
-        return ok, err
 
     async def try_acquire_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
-        """Atomically check availability and set the dashboard WS hijack owner."""
-        ok, err = await self.lease.try_acquire_ws(worker_id, ws)
-        if ok:
-            await self.emit_telemetry(
-                "hijack.acquired",
-                worker_id=worker_id,
-                metadata={"hijack_type": "dashboard", "lease_s": self.lease.dashboard_hijack_lease_s},
-            )
-        return ok, err
+        return await _lease_d.try_acquire_ws_hijack(self, worker_id, ws)
 
     async def touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
-        """Extend the dashboard WS hijack lease."""
         return await self.lease.touch_owner(worker_id, lease_s)
 
     async def touch_if_owner(self, worker_id: str, ws: WebSocket) -> float | None:
-        """Atomically verify WS ownership and extend lease."""
         return await self.lease.touch_if_owner(worker_id, ws)
 
     async def try_release_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
-        """Atomically verify ownership and clear in a single lock block."""
-        ok, rest_active = await self.lease.try_release_ws(worker_id, ws)
-        if ok:
-            await self.emit_telemetry("hijack.released", worker_id=worker_id, metadata={"hijack_type": "dashboard"})
-        return ok, rest_active
+        return await _lease_d.try_release_ws_hijack(self, worker_id, ws)
 
     async def extend_hijack_lease(
         self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float
     ) -> float | None:
-        """Extend the REST hijack lease."""
         return await self.lease.extend_lease(worker_id, hijack_id, owner, lease_s, now)
 
     async def get_fresh_hijack_expiry(self, worker_id: str, hijack_id: str, fallback: float) -> float:
-        """Re-read the current lease expiry under lock."""
         return await self.lease.get_fresh_expiry(worker_id, hijack_id, fallback)
 
     async def get_hijack_events_data(
@@ -305,218 +193,131 @@ class TermHub:
         after_seq: int,
         limit: int,
     ) -> dict[str, Any]:
-        """Return the events payload for a REST hijack events endpoint."""
         return await self.lease.get_events_data(worker_id, hijack_id, hs, after_seq, limit)
 
     async def check_hijack_valid(self, worker_id: str, hijack_id: str) -> bool:
-        """Return True if the REST hijack session is still valid."""
         return await self.lease.check_valid(worker_id, hijack_id)
 
     async def release_rest_hijack(self, worker_id: str, hijack_id: str) -> tuple[bool, bool]:
-        """Atomically clear the REST hijack session."""
         return await self.lease.release_rest(worker_id, hijack_id)
 
     async def check_still_hijacked(self, worker_id: str) -> bool:
-        """Return True if any hijack (REST or dashboard WS) is currently active."""
         return await self.lease.still_hijacked(worker_id)
 
     async def is_input_open_mode(self, worker_id: str) -> bool:
-        """Return True if the worker is in open input mode."""
         return await self.lease.is_input_open_mode(worker_id)
 
     async def prepare_browser_input(self, worker_id: str, ws: WebSocket) -> bool:
-        """Check if ws may send input; extends dashboard lease if ws is owner."""
         return await self.lease.prepare_browser_input(worker_id, ws)
 
-    # -- ConnectionManager / PresenceManager delegates (Phase 7b:
-    #    ex-_ConnectionMixin) -------------------------------------------
-    # ``self.connection_mgr`` (ConnectionManager) owns the worker/browser
-    # register/deregister + REST rate-limit gate paths, and the
-    # ``force_release_hijack`` lifecycle. ``self.presence_mgr``
-    # (PresenceManager) owns the read-only browser presence queries and
-    # the worker-bound presence control frames. The methods below keep
-    # the legacy ``hub.<name>(...)`` call surface intact without an extra
-    # mixin in the MRO. Tests monkey-patch ``request_snapshot`` and
-    # ``force_release_hijack`` on hub instances; instance attributes
-    # shadow class methods so the patches keep working after the move.
-
     def allow_rest_acquire_for(self, client_id: str) -> bool:
-        """Per-client REST acquire rate limit (also checks the global bucket)."""
         return self.connection_mgr.allow_rest_acquire_for(client_id)
 
     def allow_rest_send_for(self, client_id: str) -> bool:
-        """Per-client REST send/step rate limit (also checks the global bucket)."""
         return self.connection_mgr.allow_rest_send_for(client_id)
 
     def worker_token(self) -> str | None:
-        """Return the configured worker bearer token (read-only)."""
         return self.connection_mgr.worker_token()
 
     async def register_worker(self, worker_id: str, ws: WebSocket) -> bool:
-        """Register *ws* as the active worker for *worker_id*."""
-        result = await self.connection_mgr.register_worker(worker_id, ws)
-        await self.emit_telemetry("session.registered", worker_id=worker_id, metadata={"session_type": "worker"})
-        return result
+        return await _conn.register_worker(self, worker_id, ws)
 
     async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
-        """Return True if *ws* is still the registered worker for *worker_id*."""
         return await self.connection_mgr.is_active_worker(worker_id, ws)
 
     async def set_worker_tunnel_flag(self, worker_id: str, value: bool) -> None:
-        """Mark whether ``worker_id``'s worker WS uses the tunnel wire format."""
         await self.connection_mgr.set_worker_tunnel_flag(worker_id, value)
 
     async def set_worker_hello(self, worker_id: str, mode: InputMode, protocol_version: int | None = None) -> bool:
-        """Process a ``worker_hello`` message: set input_mode and persist protocol version."""
         return await self.connection_mgr.set_worker_hello(worker_id, mode, protocol_version)
 
     async def update_last_snapshot(self, worker_id: str, snapshot: dict[str, Any]) -> None:
-        """Store *snapshot* as the most recent snapshot for *worker_id*."""
         await self.connection_mgr.update_last_snapshot(worker_id, snapshot)
 
     async def register_browser(
         self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
     ) -> dict[str, Any]:
-        """Register *ws* as a browser for *worker_id* and return initial state."""
-        result = await self.connection_mgr.register_browser(worker_id, ws, role, defer_broadcast=defer_broadcast)
-        await self.emit_telemetry(
-            "session.registered",
-            worker_id=worker_id,
-            role=role,
-            metadata={"session_type": "browser"},
-        )
-        return result
+        return await _conn.register_browser(self, worker_id, ws, role, defer_broadcast=defer_broadcast)
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
-        """Allow broadcasts to a browser after its startup frames have been sent."""
         await self.connection_mgr.activate_browser_broadcasts(worker_id, ws)
 
     async def register_browser_state_snapshot(self, worker_id: str, ws: WebSocket) -> dict[str, Any]:
-        """Return current browser state without re-registering (resume helper)."""
         return await self.presence_mgr.register_browser_state_snapshot(worker_id, ws)
 
     async def resolve_role_for_browser(self, ws: WebSocket, worker_id: str) -> str:
-        """Public wrapper around the hub's ``_resolve_role_for_browser`` callback."""
         return await self.presence_mgr.resolve_role_for_browser(ws, worker_id)
 
     def can_send_input(self, st: WorkerTermState, ws: WebSocket) -> bool:
-        """Check if *ws* can send input to the worker (open mode or hijack owner)."""
         return self.presence_mgr.can_send_input(st, ws)
 
     async def request_snapshot(self, worker_id: str) -> None:
-        """Send a ``snapshot_req`` control frame to the worker (no-op if no worker)."""
         await self.presence_mgr.request_snapshot(worker_id)
 
     async def request_analysis(self, worker_id: str) -> None:
-        """Send an ``analyze_req`` control frame to the worker (no-op if no worker)."""
         await self.presence_mgr.request_analysis(worker_id)
 
     async def force_release_hijack(self, worker_id: str) -> bool:
-        """Forcibly clear any active hijack for *worker_id* and send a resume frame."""
         return await self.connection_mgr.force_release_hijack(worker_id)
 
-    # -- MessageRouter delegates (Phase 7b: ex-HubMessagingMixin) -----------
-    # ``self.router`` (MessageRouter) owns the broadcast / send_worker hot
-    # path plus the behavioral-heuristics ring buffer. The methods below
-    # keep the legacy ``hub.<name>(...)`` call surface intact. Tests
-    # monkey-patch broadcast / broadcast_hijack_state / send_worker /
-    # set_input_mode / append_event / get_idle_candidates / etc.; instance
-    # attributes shadow class methods so those patches keep working.
-    #
-    # ``disconnect_worker`` and ``_run_behavioral_audit_loop`` were
-    # collapsed to pure delegators in the Phase 7b final pass. Their
-    # orchestration bodies now live on :class:`ConnectionManager` and
-    # :class:`MessageRouter` respectively; the inter-step hooks
-    # (``broadcast`` / ``broadcast_hijack_state`` / ``prune_if_idle`` /
-    # ``notify_hijack_changed`` / ``_audit_all_browsers``) dispatch via
-    # ``self._hub.<method>`` so existing tests that patch those names on
-    # the hub instance still intercept through the hub-level delegators.
-    # The exception logger for ``disconnect_worker.close()`` now lives in
-    # ``connection.py`` and for the audit loop in ``router.py``; tests
-    # that intercept the log via ``patch('...core.logger')`` were
-    # updated to target the new module-level loggers.
-
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Append a timestamped event to the worker's event ring buffer and return it."""
         return await self.router.append_event(worker_id, event_type, data)
 
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
-        """Send *msg* to all browser WebSockets registered for *worker_id*."""
         await self.router.broadcast(worker_id, msg)
 
     async def broadcast_hijack_state(self, worker_id: str) -> None:
-        """Send a hijack_state message to every browser for *worker_id*."""
         await self.router.broadcast_hijack_state(worker_id)
 
     async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
-        """Send *msg* to the worker WebSocket; returns False if no worker is connected."""
         return await self.router.send_worker(worker_id, msg, source=source)
 
     async def hijack_state_msg_for(self, worker_id: str, ws: WebSocket) -> HijackStateFrame:
-        """Build a hijack_state dict for *ws*, setting owner='me' if *ws* holds the lease."""
         return await self.router.hijack_state_msg_for(worker_id, ws)
 
     async def set_input_mode(self, worker_id: str, mode: InputMode) -> tuple[bool, str | None]:
-        """Set input_mode under lock. Rejects if active hijack when switching to "open"."""
         return await self.router.set_input_mode(worker_id, mode)
 
     async def disconnect_worker(self, worker_id: str) -> bool:
-        """Programmatically disconnect the worker WS. Returns True if a worker was connected."""
         return await self.connection_mgr.disconnect_worker(worker_id)
 
     async def prune_if_idle(self, worker_id: str) -> None:
-        """Remove worker state when no connections or leases remain."""
         await self.router.prune_if_idle(worker_id)
 
     async def get_idle_candidates(self, timeout_s: float) -> list[tuple[str, float]]:
-        """Return ``(worker_id, last_activity_at)`` for workers idle beyond *timeout_s*."""
         return await self.router.get_idle_candidates(timeout_s)
 
     async def set_browser_role(self, worker_id: str, ws: WebSocket, role: str) -> None:
-        """Update the role for *ws* in *worker_id*'s browser set."""
         await self.router.set_browser_role(worker_id, ws, role)
 
     async def try_reclaim_hijack(self, worker_id: str, ws: WebSocket) -> bool:
-        """Attempt to acquire hijack ownership for *ws* if the session is unhijacked."""
         return await self.router.try_reclaim_hijack(worker_id, ws)
 
     async def get_worker_browser_role(self, worker_id: str, ws: WebSocket) -> str | None:
-        """Return the role assigned to *ws* for *worker_id*, or ``None`` if not found."""
         return await self.router.get_worker_browser_role(worker_id, ws)
 
     async def get_last_snapshot(self, worker_id: str, recipient: Any = None) -> dict[str, Any] | None:
-        """Return the most recent snapshot for *worker_id*, or ``None`` if not registered.
-
-        When *recipient* is supplied and an output-redaction policy is active,
-        the snapshot is role-scoped redacted (M5). See
-        :meth:`MessageRouter.get_last_snapshot`.
-        """
+        # *recipient* set ⇒ role-scoped redaction (M5); see MessageRouter.get_last_snapshot.
         return await self.router.get_last_snapshot(worker_id, recipient)
 
     async def redact_snapshot_for_recipient(
         self, worker_id: str, snapshot: dict[str, Any], recipient: Any
     ) -> dict[str, Any]:
-        """Return a recipient-role-redacted copy of *snapshot* (M5). Delegates to the router."""
         return await self.router.redact_snapshot_for_recipient(worker_id, snapshot, recipient)
 
     async def browser_count(self, worker_id: str) -> int:
-        """Return the number of browser WebSockets currently connected for *worker_id*."""
         return await self.router.browser_count(worker_id)
 
     async def browser_count_total(self) -> int:
-        """Return the total number of browser WebSockets connected across all workers."""
         return await self.router.browser_count_total()
 
     async def get_recent_events(self, worker_id: str, limit: int) -> list[dict[str, Any]]:
-        """Return the most recent events for *worker_id* (up to *limit*, clamped to 1-500)."""
         return await self.router.get_recent_events(worker_id, limit)
 
     def _record_keystroke(self, source: Any) -> None:
-        """Record the timing of a keystroke from a browser."""
         self.router.record_keystroke(source)
 
     def _get_heuristics(self, source: Any) -> dict[str, float]:
-        """Return behavioral metrics for the given browser."""
         return self.router.get_heuristics(source)
 
     async def _send_hijack_state_to(
@@ -532,7 +333,6 @@ class TermHub:
         lease_expires_at: float | None,
         suppress_errors: bool = False,
     ) -> set[WebSocket]:
-        """Forward to :meth:`MessageRouter.send_hijack_state_to`."""
         return await self.router.send_hijack_state_to(
             browsers,
             worker_id=worker_id,
@@ -546,57 +346,26 @@ class TermHub:
         )
 
     async def _audit_all_browsers(self) -> None:
-        """Iterate all active browsers and evaluate behavioral heuristics."""
         await self.router.audit_all_browsers()
 
     async def _run_behavioral_audit_loop(self) -> None:
-        """Periodically audit active connections for behavioral anomalies."""
         await self.router.run_behavioral_audit_loop()
 
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
-        """Clear heuristic state and call into the connection manager."""
-        self.router.forget_browser(ws)
-        self._input_buffers.pop(ws, None)
-        self._hold_buffers.pop(ws, None)
-        self._paused_browsers.discard(ws)
-        result = await self.connection_mgr.cleanup_browser_disconnect(worker_id, ws, owned_hijack)
-        await self.emit_telemetry("session.disconnected", worker_id=worker_id, metadata={"session_type": "browser"})
-        return result
+        return await _conn.cleanup_browser_disconnect(self, worker_id, ws, owned_hijack)
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
-        """Clear input buffers for dead browsers and call into the lease manager."""
-        for ws in dead:
-            self._input_buffers.pop(ws, None)
-            self._hold_buffers.pop(ws, None)
-            self._startup_pending_browsers.discard(ws)
-            self._paused_browsers.discard(ws)
-        return await self.lease.remove_dead_browsers(worker_id, dead)
+        return await _conn.remove_dead_browsers(self, worker_id, dead)
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
-        """Deregister the worker WS and notify the EventBus on disconnect."""
-        should_broadcast, was_hijacked = await self.connection_mgr.deregister_worker(worker_id, ws)
-        if should_broadcast and self._event_bus is not None:
-            self._event_bus.close_worker(worker_id)
-        return should_broadcast, was_hijacked
+        return await _conn.deregister_worker(self, worker_id, ws)
 
     @property
     def resume_store(self) -> ResumeTokenStore | None:
-        """Public accessor for the resume token store."""
         return self._resume_store
 
     def create_router(self, *, extra_route_registrars: list[Any] | None = None) -> APIRouter:
-        """Create and return a FastAPI ``APIRouter`` with all terminal routes registered."""
-        from fastapi import APIRouter
-
-        from provide.uterm.server.bridge.routes.rest import register_rest_routes
-        from provide.uterm.server.bridge.routes.websockets import register_ws_routes
-
-        router = APIRouter()
-        register_rest_routes(self, router)
-        register_ws_routes(self, router)
-        for registrar in extra_route_registrars or []:
-            registrar(self, router)
-        return router
+        return _orch.create_router(self, extra_route_registrars=extra_route_registrars)
 
     def __init__(
         self,
@@ -609,12 +378,7 @@ class TermHub:
         max_ws_message_bytes: int = 1_048_576,
         max_input_chars: int = 10_000,
         browser_rate_limit_per_sec: float = 30,
-        # Non-input control frames (hijack_request, presence_update, resume,
-        # queued_input, control_request) are budgeted separately from input
-        # keystrokes. The cap is intentionally smaller — a legitimate UI
-        # emits at most a few control frames per second; higher rates are a
-        # client-side bug or an abuse attempt. The budget protects the hub
-        # from a hostile browser flooding hijack_requests or presence_updates.
+        # Non-input control frames get a smaller separate anti-flood budget.
         browser_control_rate_limit_per_sec: float = 10,
         rest_acquire_rate_limit_per_sec: float = 5,
         rest_send_rate_limit_per_sec: float = 20,
@@ -640,25 +404,15 @@ class TermHub:
         max_workers: int = 10000,
     ) -> None:
         self._lock = asyncio.Lock()
-        # WorkerRegistry owns the worker map; the legacy ``_workers``
-        # attribute is exposed as a property below so existing mixin
-        # code can continue to use mapping operations unchanged while
-        # the phased refactor migrates call sites to ``self.registry``.
+        # Service objects own the impl; ``_workers`` / ``_rest_*`` / … stay as property shims.
         self.registry = WorkerRegistry()
         self._on_hijack_changed = on_hijack_changed
         self._on_metric = on_metric
         self._resolve_browser_role = resolve_browser_role
         self.on_worker_empty: WorkerEmptyCallback | None = on_worker_empty
         self._worker_token = worker_token
-        # Finding #5d: policy for a malformed inbound worker control frame —
-        # ``"drop"`` isolates+drops the frame (session survives), ``"reject"``
-        # sends an error frame and closes the worker WS with 1003. Read by the
-        # per-frame guard in the worker recv loop (websockets_impl.py).
+        # Finding #5d: malformed-worker-frame policy — ``"drop"`` vs ``"reject"`` (WS close 1003); see websockets_impl.py.
         self.worker_frame_on_invalid: Literal["drop", "reject"] = worker_frame_on_invalid
-        # HijackLeaseManager owns the hijack state machine; legacy
-        # ``_dashboard_hijack_lease_s`` is exposed via a property shim
-        # below so existing mixin and test code that reads it as an
-        # attribute keeps working.
         self.lease = HijackLeaseManager(
             registry=self.registry,
             lock=self._lock,
@@ -671,11 +425,6 @@ class TermHub:
         self.max_event_data_chars = max(256, int(max_event_data_chars))
         self.browser_rate_limit_per_sec = float(browser_rate_limit_per_sec)
         self.browser_control_rate_limit_per_sec = max(0.1, float(browser_control_rate_limit_per_sec))
-        # RateLimiter owns the per-purpose REST token buckets; legacy
-        # ``_rest_*`` attributes are exposed as property shims below so
-        # existing mixin and test code that pokes the buckets directly
-        # continues to work while the phased refactor migrates call
-        # sites to ``self.limiter`` accessors.
         self.limiter = RateLimiter(
             rest_acquire_rate=float(rest_acquire_rate_limit_per_sec),
             rest_send_rate=float(rest_send_rate_limit_per_sec),
@@ -692,17 +441,9 @@ class TermHub:
         self._policy_gate = policy_gate or NoOpPolicyGate()
         self._input_buffers: dict[WebSocket, str] = {}
         self._hold_buffers: dict[WebSocket, str] = {}
-        # InMemoryApprovalStore owns pending/resolved approval requests.
-        # The legacy ``_approval_store`` attribute is exposed as a
-        # property+setter shim below so existing mixin code, route
-        # handlers, the FanOutController, and tests can continue to
-        # read/write the store unchanged while the phased refactor
-        # migrates call sites to ``self.approval_store``.
         self.approval_store = InMemoryApprovalStore()
         self._paused_browsers: set[WebSocket] = set()
-        self._on_browser_message: (
-            Callable[[TermHub, WebSocket, str, str, dict[str, Any], bool], Awaitable[bool]] | None
-        ) = None
+        self._on_browser_message: OnBrowserMessage | None = None
         self._identity_provider = identity_provider
         self._delegate_roles = delegate_roles
         self._output_policy_gate = output_policy_gate
@@ -710,50 +451,14 @@ class TermHub:
         self._behavioral_thresholds = behavioral_thresholds or BehavioralThresholds()
         self._behavioral_audit_interval_s = max(1.0, float(behavioral_audit_interval_s))
         self._telemetry_sink: TelemetrySink | None = telemetry_sink
-        # Per-principal browser connection quota (BROWSER-only; workers exempt).
-        # Only concrete, non-anonymous principals are counted; the count is
-        # decremented on browser disconnect so the dict never grows unboundedly.
+        # Per-principal browser quota (concrete principals) + global worker_id cap (bounds OOM; reconnects exempt).
         self.max_connections_per_principal = max(1, int(max_connections_per_principal))
-        # Generous GLOBAL cap on distinct worker_ids (workers share a static
-        # principal, so the per-principal browser quota does not bound them).
-        # Bounds OOM from unique-worker_id floods; reconnects of an already-
-        # registered worker_id are exempt. See register_worker in connection.py.
         self.max_workers = max(1, int(max_workers))
         self._principal_browser_counts: dict[str, int] = {}
-        # Reverse map from WebSocket → principal subject_id so the disconnect
-        # path can decrement the right counter without re-reading ws.state
-        # (which may be unreliable at that point).
-        self._ws_principal: dict[Any, str] = {}
-        # MessageRouter owns the broadcast / send_worker hot path plus
-        # the behavioral-heuristics ring buffer; ``HubMessagingMixin``
-        # is now a thin facade forwarding to this service. The router
-        # is constructed last because it holds a back-reference to the
-        # hub for cross-mixin calls (``is_hijacked``,
-        # ``prepare_policy_context`` etc.).
-        self.router = MessageRouter(self)
-        # StateStore owns the worker-state heartbeat (``touch_activity``),
-        # the per-browser line buffer, the hijack-state predicates, the
-        # metric / on_hijack_changed callback fan-out, and browser-role
-        # resolution + policy-context plumbing. ``HubStateMixin`` is now
-        # a thin facade forwarding to this service — see
-        # :mod:`provide.uterm.server.bridge.hub.store`.
+        self._ws_principal: dict[Any, str] = {}  # WebSocket → principal subject_id (disconnect decrement)
+        self.router = MessageRouter(self)  # built first: state/polling/connection reuse it
         self.state = StateStore(self)
-        # PollingCoordinator owns the snapshot polling helpers
-        # (``snapshot_matches``, ``wait_for_snapshot``, ``wait_for_guard``).
-        # ``_PollingMixin`` is now a thin facade forwarding to this
-        # service — see :mod:`provide.uterm.server.bridge.hub.polling_service`.
         self.polling = PollingCoordinator(self)
-        # ConnectionManager owns worker/browser register/deregister,
-        # rate-limit gate plumbing and the ``force_release_hijack``
-        # lifecycle path; PresenceManager owns the read-only browser
-        # presence queries (``can_send_input``, role resolution,
-        # browser-state snapshot) and worker-bound presence control
-        # frames (``request_snapshot`` / ``request_analysis``). Both are
-        # back-referenced via the hub for cross-cutting calls
-        # (``is_hijacked``, ``send_worker``, ``broadcast_hijack_state``,
-        # ``notify_hijack_changed``, ``_resolve_role_for_browser``).
-        # ``_ConnectionMixin`` is now a thin facade forwarding to these
-        # services — see :mod:`provide.uterm.server.bridge.hub.connections`.
         self.connection_mgr = ConnectionManager(self)
         self.presence_mgr = PresenceManager(self)
 
@@ -764,16 +469,10 @@ class TermHub:
 
     @property
     def identity_provider(self) -> IdentityProvider | None:
-        """Public accessor for the configured identity provider."""
         return self._identity_provider
 
     async def set_worker_hello_mode(self, worker_id: str, mode: str) -> bool:
-        """Backward-compatible wrapper for worker hello mode handling."""
-        # Narrow the str arg to InputMode at the wrapper boundary; reject
-        # unknown values so the cast on the next line is sound.
-        if mode not in ("hijack", "open"):
-            raise ValueError(f"invalid input mode: {mode!r}")
-        return await self.set_worker_hello(worker_id, mode)  # type: ignore[arg-type]
+        return await _orch.set_worker_hello_mode(self, worker_id, mode)
 
     async def emit_telemetry(
         self,
@@ -784,36 +483,11 @@ class TermHub:
         role: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Emit a lifecycle telemetry event to the configured sink.
-
-        Strictly additive and fail-open: if no sink is configured or the
-        sink raises, this method silently returns. It must never alter
-        control flow, block terminal I/O, or propagate exceptions.
-        """
-        if self._telemetry_sink is None:
-            return
-        evt = TelemetryEvent(
-            event_type=event_type,
-            worker_id=worker_id,
-            principal=principal,
-            role=role,
-            metadata=metadata or {},
-            timestamp=time.time(),
+        await _orch.emit_telemetry(
+            self, event_type, worker_id=worker_id, principal=principal, role=role, metadata=metadata
         )
-        try:
-            await self._telemetry_sink.emit(evt)
-        except Exception:
-            # Defensive: WebhookTelemetrySink is already fail-open, but any
-            # other sink implementation might raise; absorb it here so
-            # emit_telemetry is unconditionally safe to call from lifecycle hooks.
-            pass
 
-    # -- Approval flow (Phase 7b: ex-HubApprovalFlowMixin) ------------------
-    # The orchestration logic that surrounds the approval-store CRUD
-    # surface (worker resume, browser rejection notice, paused-browser
-    # playback, approval_resolved control-frame fanout) lives directly on
-    # TermHub now. The mixin held no patched methods; moving it on shrinks
-    # the MRO by one parent without affecting the public call surface.
+    # Approval flow -- orchestration body in ``core_orchestration.resolve_approval``.
 
     async def resolve_approval(
         self,
@@ -822,77 +496,4 @@ class TermHub:
         decision: PolicyDecision,
         command: str,
     ) -> None:
-        """Resolve a pending approval and resume the worker if approved."""
-        req = self.approval_store.get(request_id)
-        if req and getattr(req, "is_fanout", False):
-            if decision.action == "allow":
-                fo_ctrl = getattr(self, "fan_out_controller", None)
-                if fo_ctrl:
-                    await fo_ctrl.release_approved_command(request_id)
-            elif decision.action == "deny":
-                logger.info(
-                    "fanout_approval_rejected request_id=%s group_id=%s",
-                    request_id,
-                    getattr(req, "group_id", "unknown"),
-                )
-                fo_ctrl = getattr(self, "fan_out_controller", None)
-                if fo_ctrl:
-                    await asyncio.to_thread(fo_ctrl._on_approval_expired, request_id)
-            return
-
-        st = await self._get(worker_id)
-
-        if decision.action == "allow":
-            await self.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()})
-        elif decision.action == "deny":
-            msg = f"\\r\\x1b[31m[REJECTED] Command '{command.strip()}' blocked by Admin.\\x1b[0m"
-            if decision.reason:
-                msg += f" \\x1b[33mReason: {decision.reason}\\x1b[0m"
-            msg += "\\r"
-            for ws in list(st.browsers.keys()):
-                await ws.send_text(encode_data(msg))
-
-        for ws in list(st.browsers.keys()):
-            if ws in self._paused_browsers:
-                self._paused_browsers.discard(ws)
-                if decision.action == "allow" and ws in self._hold_buffers:
-                    buffered_data = self._hold_buffers.pop(ws)
-                    if self._on_browser_message:  # pragma: no branch — _on_browser_message is wired by app factory; no-handler case is a unit-test artifact
-
-                        async def playback(
-                            hub: TermHub,
-                            browser_ws: WebSocket,
-                            current_worker_id: str,
-                            role: str,
-                            msg: dict[str, str],
-                            owned_hijack: bool,
-                        ) -> None:
-                            if (
-                                hub._on_browser_message
-                            ):  # pragma: no branch — entered only when set; recheck inside closure is defensive
-                                await hub._on_browser_message(
-                                    hub, browser_ws, current_worker_id, role, msg, owned_hijack
-                                )
-
-                        task = asyncio.create_task(
-                            playback(
-                                self,
-                                ws,
-                                worker_id,
-                                st.browsers.get(ws, "viewer"),
-                                {"type": "input", "data": buffered_data},
-                                False,
-                            )
-                        )
-                        self._background_tasks.add(task)
-                        task.add_done_callback(self._background_tasks.discard)
-
-            await ws.send_text(
-                _encode_browser_frame(
-                    {
-                        "type": "approval_resolved",
-                        "outcome": "approved" if decision.action == "allow" else "rejected",
-                        "request_id": request_id,
-                    }
-                )
-            )
+        await _orch.resolve_approval(self, worker_id, request_id, decision, command)
