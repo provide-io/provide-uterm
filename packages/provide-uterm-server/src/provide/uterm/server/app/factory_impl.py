@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 import re
 import secrets
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
@@ -28,6 +26,30 @@ from provide.uterm.server.app.auth import (
 )
 from provide.uterm.server.app.connectors import _register_builtin_connectors
 from provide.uterm.server.app.control_plane import _build_control_plane, _build_durability_capabilities
+from provide.uterm.server.app.factory_components import (
+    build_governance_gates,
+    build_identity_provider,
+    build_recording_store,
+    initial_metrics,
+    log_durability_posture,
+    resume_audit_chain,
+)
+from provide.uterm.server.app.factory_sweeps import (
+    _detect_multi_replica_environment,
+    cancel_and_drain,
+    checkpoint_audit_head,
+    node_registry_heartbeat,
+    sweep_control_plane_reap,
+    sweep_expired_approvals,
+    sweep_expired_recordings,
+    sweep_expired_sessions,
+    sweep_expired_tunnel_tokens,
+    sweep_idle_sessions,
+)
+from provide.uterm.server.app.factory_tunnel_auth import (
+    resolve_tunnel_share_principal,
+    resolve_tunnel_ws_worker_principal,
+)
 from provide.uterm.server.app.hub_authz import build_require_hub_route_authz
 from provide.uterm.server.app.middleware import (
     install_cors_security_telemetry,
@@ -36,10 +58,8 @@ from provide.uterm.server.app.middleware import (
 from provide.uterm.server.app.posture import compute_security_posture
 from provide.uterm.server.app.routes_wiring import install_routers, mount_frontend_assets
 from provide.uterm.server.audit import audit_event, configure_audit_chain
-from provide.uterm.server.audit_chain import GENESIS_HASH, AuditChain, verify_audit_log
 from provide.uterm.server.auth import (
     LocalIdentityProvider,
-    WebhookIdentityProvider,
     extract_bearer_token,
     resolve_http_principal,
     resolve_ws_principal,
@@ -49,52 +69,24 @@ from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.policy import SessionPolicyResolver
 from provide.uterm.server.profiles import FileProfileStore
 from provide.uterm.server.registry import SessionRegistry
-from provide.uterm.server.tunnel_invites import sweep_expired_tunnel_invites
 from provide.uterm.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from provide.uterm.server.audit_chain import AuditChain
     from provide.uterm.server.bridge.hub.resume import _ControlPlaneResumeBackend
     from provide.uterm.server.bridge.identity import IdentityProvider
     from provide.uterm.server.models import ServerConfig
+
+# ``_detect_multi_replica_environment`` is re-exported (it now lives in
+# ``factory_sweeps``) to keep this module's public import surface unchanged.
+__all__ = ["_detect_multi_replica_environment", "create_server_app"]
 
 logger = get_logger(__name__)
 # Delay between FastAPI startup completing and the auto-start session loop
 # beginning.  Gives the event loop time to finish route/middleware init.
 _AUTO_START_DELAY_S = 0.15
-# Cadence for the approval-expiry sweep: time out expired PENDING approvals
-# (firing on_expired so hold buffers drain) and prune old terminal entries.
-# Matches the tunnel-token sweep cadence — both reap short-lived hold state.
-_APPROVAL_SWEEP_INTERVAL_S = 30
-
-# Environment variables that almost-always indicate a multi-replica
-# orchestrator. Their presence alone doesn't *prove* multi-replica
-# operation (a single-replica k8s deployment also sets KUBERNETES_*),
-# but it raises the question loudly enough that the startup banner
-# should escalate when control-plane durability is process-local.
-_MULTI_REPLICA_ENV_HINTS: tuple[tuple[str, str], ...] = (
-    ("KUBERNETES_SERVICE_HOST", "Kubernetes"),
-    ("K_SERVICE", "Cloud Run"),
-    ("WEBSITE_INSTANCE_ID", "Azure App Service"),
-    ("ECS_CONTAINER_METADATA_URI", "AWS ECS"),
-    ("ECS_CONTAINER_METADATA_URI_V4", "AWS ECS"),
-    ("FLY_APP_NAME", "Fly.io"),
-)
-
-
-def _detect_multi_replica_environment() -> set[str]:
-    """Return a set of orchestrator names detected from process env.
-
-    Returns an empty set in environments that look single-replica
-    (bare-metal, single docker container, single VM, dev workstation).
-    """
-    found: set[str] = set()
-    for env_var, label in _MULTI_REPLICA_ENV_HINTS:
-        if os.environ.get(env_var):
-            found.add(label)
-    return found
-
 
 _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)(?:/.*)?$"),
@@ -154,36 +146,7 @@ def create_server_app(
 
     durability_capabilities = _build_durability_capabilities(config).as_dict()
 
-    if config.control_plane.backend == "memory":
-        logger.warning(
-            "standalone_server_durability=process-local: the FastAPI reference server keeps live control-plane state "
-            "in memory only (tunnel tokens/share state, approvals, resume state, webhook registrations, and live "
-            "session arbitration state). It is not HA or persistent across restart/failover; run it as a single active "
-            "instance or use a durable backend for multi-node deployment."
-        )
-        # Escalate when common multi-replica orchestrators are detected.
-        # Process-local control-plane state diverges across replicas: a
-        # share token issued on pod A won't validate on pod B, an approval
-        # decision on pod A is invisible to pod B, etc. Operators routinely
-        # miss this until users hit it in prod, so emit a load-bearing
-        # ERROR when the environment looks multi-replica.
-        _replica_hints = _detect_multi_replica_environment()
-        if _replica_hints:
-            logger.error(
-                "standalone_server_durability=process-local in a multi-replica environment (%s). "
-                "Tunnel tokens, approvals, webhook registrations, and live runtime state are NOT replicated; "
-                "share/control URLs issued on one replica will NOT authenticate against another. "
-                "Pin to a single replica or move to a durable backend (control_plane.backend=sqlite/postgres).",
-                ", ".join(sorted(_replica_hints)),
-            )
-    else:
-        logger.info(
-            "standalone_server_durability=sqlite: the resume-token store is "
-            "persisted to %s. Session records, approvals, and hijack leases are in-memory and lost on restart; "
-            "tunnel tokens, webhook registrations, fan-out groups, and live runtime state also remain process-local; "
-            "see /api/durability/capabilities.",
-            config.control_plane.database_url,
-        )
+    log_durability_posture(config)
 
     from provide.uterm.server.authorization import (
         AuthorizationProvider,
@@ -202,37 +165,7 @@ def create_server_app(
     authz = AuthorizationService(authz_provider)
     policy = SessionPolicyResolver(config.auth, authz=authz)
     registry: SessionRegistry | None = None
-    metrics: dict[str, int] = {
-        "http_requests_total": 0,
-        "http_requests_4xx_total": 0,
-        "http_requests_5xx_total": 0,
-        "http_requests_error_total": 0,
-        "auth_failures_http_total": 0,
-        "auth_failures_ws_total": 0,
-        "ws_disconnect_total": 0,
-        "ws_disconnect_worker_total": 0,
-        "ws_disconnect_browser_total": 0,
-        "hijack_conflicts_total": 0,
-        "hijack_lease_expiries_total": 0,
-        "hijack_acquires_total": 0,
-        "hijack_releases_total": 0,
-        "hijack_steps_total": 0,
-        # Rate-limit drop counters (websocket browser + REST acquire/send/step)
-        "ws_browser_rate_limited_total": 0,
-        "ws_browser_control_rate_limited_total": 0,
-        # Inbound worker control frame that failed type validation (finding #5d)
-        "ws_worker_frame_invalid_total": 0,
-        "rest_acquire_rate_limited_total": 0,
-        "rest_send_rate_limited_total": 0,
-        "rest_step_rate_limited_total": 0,
-        # Webhook delivery failure counters
-        "webhook_delivery_blocked_total": 0,
-        "webhook_auto_unregistered_total": 0,
-        "webhook_delivery_failed_total": 0,
-        "webhook_delivery_giving_up_total": 0,
-        # Event-bus subscriber drop counter
-        "event_bus_subscriber_drop_total": 0,
-    }
+    metrics: dict[str, int] = initial_metrics()
     # Token state values are heterogeneous (str token values, float expiries,
     # int counters); the registry expects ``dict[str, object]`` per-session.
     tunnel_tokens: dict[str, dict[str, object]] = {}
@@ -240,141 +173,6 @@ def create_server_app(
 
     def _inc_metric(name: str, value: int = 1) -> None:
         metrics[name] = metrics.get(name, 0) + value
-
-    def _share_session_id_for(path: str) -> str | None:
-        for pattern in _SHARE_SESSION_PATTERNS:
-            match = pattern.match(path)
-            if match is not None:
-                return str(match.group("session_id"))
-        return None
-
-    def _resolve_tunnel_share_principal(connection: HTTPConnection) -> Principal | None:
-        path = str(connection.scope.get("path", ""))
-        session_id = _share_session_id_for(path)
-        if session_id is None:
-            return None
-        # Tunnel share/control auth is cookie-only after the one-time
-        # ``?invite=`` bootstrap. Do not accept raw bearer tokens in the query
-        # string; URLs are routinely logged by proxies and browser history.
-        provided = None
-        from http.cookies import SimpleCookie
-
-        app = connection.scope.get("app")
-        token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
-        token_state = token_map.get(session_id) if isinstance(token_map, dict) else None
-        if token_state is None:
-            return None
-
-        cookie_header = dict(connection.scope.get("headers", [])).get(b"cookie", b"").decode("utf-8", errors="ignore")
-        cookies = SimpleCookie(cookie_header)
-        cookie_key = f"uterm_tunnel_{session_id}"
-        if cookie_key in cookies:
-            provided = cookies[cookie_key].value
-        if not provided:
-            return None
-        # Check expiry.
-        expires_at = token_state.get("expires_at")
-        if isinstance(expires_at, (int, float)) and time.time() > float(expires_at):
-            logger.info("tunnel_token_expired session_id=%s", session_id)
-            return None
-        # Check IP binding.
-        if config.tunnel.ip_binding:
-            issued_ip = token_state.get("issued_ip")
-            client_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
-            if issued_ip and issued_ip != client_ip:
-                logger.info(
-                    "tunnel_token_ip_mismatch session_id=%s issued=%s actual=%s", session_id, issued_ip, client_ip
-                )
-                return None
-        # Match token type. The stored values are BLAKE2b digests, so we
-        # compare the hash of the caller-supplied token against the stored
-        # hash in constant time — see ``tunnel/token_hash.py``.
-        from provide.uterm.tunnel.token_hash import verify_token
-
-        source_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
-        if verify_token(str(provided), str(token_state.get("control_token_hash", ""))):
-            connection.state.uterm_share_token = str(provided)
-            connection.state.uterm_share_role = "operator"
-            logger.info("tunnel_token_validated session_id=%s token_type=control source_ip=%s", session_id, source_ip)
-            return Principal(
-                subject_id=f"share:{session_id}:operator",
-                roles=frozenset({"admin"}),
-                scopes=frozenset({"*"}),
-                # Confine the admin grant to this share's session: the operator
-                # drives its own session with full admin capabilities but is not
-                # a global administrator, so the grant cannot escalate to other
-                # sessions even if this principal is resolved off-path.
-                admin_session_scope=session_id,
-            )
-        if verify_token(str(provided), str(token_state.get("share_token_hash", ""))):
-            connection.state.uterm_share_token = str(provided)
-            connection.state.uterm_share_role = "viewer"
-            logger.info("tunnel_token_validated session_id=%s token_type=share source_ip=%s", session_id, source_ip)
-            return Principal(
-                subject_id=f"share:{session_id}:viewer",
-                roles=frozenset({"viewer"}),
-                scopes=frozenset({"session.read"}),
-            )
-        logger.info("tunnel_token_validation_failed session_id=%s source_ip=%s", session_id, source_ip)
-        return None
-
-    def _resolve_tunnel_ws_worker_principal(connection: HTTPConnection) -> Principal | None:
-        path = str(connection.scope.get("path", ""))
-        if not path.startswith("/tunnel/"):
-            return None
-        worker_id = path.removeprefix("/tunnel/")
-        if not worker_id:  # pragma: no cover — FastAPI's path matcher already excludes the empty-id case
-            return None
-
-        provided = extract_bearer_token(connection.headers)
-        if not provided:  # pragma: no cover — WS upgrade with no Authorization header already 401s upstream
-            return None
-
-        # Tunnel workers in JWT mode should still be able to authenticate with
-        # the raw global worker token.  This keeps CLI/runtime behaviour
-        # aligned with /ws/worker/ auth before JWT resolution is attempted.
-        if config.auth.worker_bearer_token is not None and secrets.compare_digest(
-            provided,
-            config.auth.worker_bearer_token,
-        ):
-            connection.state.uterm_worker_token = provided
-            return Principal(subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
-
-        app = connection.scope.get("app")
-        token_map = getattr(getattr(app, "state", object()), "uterm_tunnel_tokens", {})
-        token_state = token_map.get(worker_id) if isinstance(token_map, dict) else None
-        if not isinstance(token_state, dict):
-            return None
-
-        # Check expiry.
-        expires_at = token_state.get("expires_at")
-        if isinstance(expires_at, (int, float)) and time.time() > float(expires_at):
-            logger.info("tunnel_token_expired session_id=%s", worker_id)
-            return None
-
-        # Check IP binding.
-        if config.tunnel.ip_binding:
-            issued_ip = token_state.get("issued_ip")
-            client_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
-            if (
-                issued_ip and issued_ip != client_ip
-            ):  # pragma: no branch — matching-IP happy-path is covered by tunnel auth tests
-                logger.info(
-                    "tunnel_token_ip_mismatch session_id=%s issued=%s actual=%s", worker_id, issued_ip, client_ip
-                )
-                return None
-
-        # Match token type (stored as BLAKE2b digest).
-        from provide.uterm.tunnel.token_hash import verify_token
-
-        source_ip = str((connection.scope.get("client") or ("unknown", 0))[0])
-        if verify_token(str(provided), str(token_state.get("worker_token_hash", ""))):
-            connection.state.uterm_worker_token = str(provided)
-            logger.info("tunnel_worker_token_validated session_id=%s source_ip=%s", worker_id, source_ip)
-            return Principal(subject_id="worker", roles=frozenset({"admin"}), scopes=frozenset({"*"}))
-
-        logger.info("tunnel_worker_token_validation_failed session_id=%s source_ip=%s", worker_id, source_ip)
-        return None
 
     async def _require_authenticated(connection: HTTPConnection) -> None:
         async def _resolve_configured_principal(connection: HTTPConnection) -> Principal:
@@ -390,7 +188,7 @@ def create_server_app(
                 return Principal(subject_id="anonymous", roles=frozenset({"viewer"}), scopes=frozenset())
             return resolved
 
-        share_principal = _resolve_tunnel_share_principal(connection)
+        share_principal = resolve_tunnel_share_principal(connection, config=config, patterns=_SHARE_SESSION_PATTERNS)
         if share_principal is not None:
             connection.state.uterm_principal = share_principal
             return
@@ -399,7 +197,7 @@ def create_server_app(
         # falling through to JWT principal resolution.  Without this bypass,
         # per-session /tunnel/{id} tokens would be rejected as anonymous.
         if connection.scope.get("type") == "websocket":
-            worker_principal = _resolve_tunnel_ws_worker_principal(connection)
+            worker_principal = resolve_tunnel_ws_worker_principal(connection, config=config)
             if worker_principal is not None:
                 connection.state.uterm_principal = worker_principal
                 return
@@ -472,72 +270,14 @@ def create_server_app(
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="insufficient privileges")
         return await policy.role_for(principal, session)
 
-    from provide.uterm.server.bridge.hub.ext import (
-        BehavioralThresholds,
-        WebhookBehavioralAuditGate,
-        WebhookPolicyGate,
-        WebhookTelemetrySink,
-    )
-
-    policy_gate = None
-    if config.governance.policy_webhook_url:
-        policy_gate = WebhookPolicyGate(
-            url=config.governance.policy_webhook_url,
-            secret=config.governance.policy_webhook_secret,
-            timeout_s=config.governance.policy_webhook_timeout_s,
-        )
-
-    # Choose Identity Provider based on config
+    # Choose Identity Provider + governance gates based on config.
     api_key_store = ApiKeyStore()
-
-    if config.auth.identity_provider == "webhook" and config.auth.webhook_idp_url:
-        # 1d: curate the request headers/cookies forwarded to the external IdP —
-        # the always-needed auth credentials plus any operator extensions. Header
-        # keys are lower-cased (Starlette/httpx lower-case them); cookies match
-        # by exact name.
-        forward_headers = {
-            "authorization",
-            "x-api-key",
-            config.auth.principal_header.lower(),
-            config.auth.role_header.lower(),
-        } | {h.lower() for h in config.auth.webhook_idp_forward_headers}
-        forward_cookies = {
-            config.auth.token_cookie,
-            config.auth.principal_cookie,
-            config.auth.role_cookie,
-        } | set(config.auth.webhook_idp_forward_cookies)
-        idp: IdentityProvider = WebhookIdentityProvider(
-            url=config.auth.webhook_idp_url,
-            secret=config.auth.webhook_idp_secret,
-            timeout_s=config.auth.webhook_idp_timeout_s,
-            on_failure=getattr(config.auth, "webhook_idp_on_failure", "deny"),
-            require_signed_response=config.auth.webhook_idp_require_signed_response,
-            forward_headers=frozenset(forward_headers),
-            forward_cookies=frozenset(forward_cookies),
-            require_response_nonce=config.auth.webhook_idp_require_response_nonce,
-        )
-    else:
-        idp = LocalIdentityProvider(config.auth, api_key_store=api_key_store)
-
-    behavioral_audit_gate = None
-    if config.governance.behavioral_audit_url:
-        behavioral_audit_gate = WebhookBehavioralAuditGate(
-            url=config.governance.behavioral_audit_url,
-            secret=config.governance.behavioral_audit_secret,
-            fail_open=config.governance.behavioral_fail_open,
-        )
-    behavioral_thresholds = BehavioralThresholds(
-        max_cps=config.governance.behavioral_max_cps,
-        min_jitter=config.governance.behavioral_min_jitter,
-    )
-
-    telemetry_sink = None
-    if config.governance.telemetry_webhook_url:
-        telemetry_sink = WebhookTelemetrySink(
-            url=config.governance.telemetry_webhook_url,
-            secret=config.governance.telemetry_webhook_secret,
-            timeout_s=config.governance.telemetry_webhook_timeout_s,
-        )
+    idp: IdentityProvider = build_identity_provider(config, api_key_store)
+    _gates = build_governance_gates(config)
+    policy_gate = _gates.policy_gate
+    behavioral_audit_gate = _gates.behavioral_audit_gate
+    behavioral_thresholds = _gates.behavioral_thresholds
+    telemetry_sink = _gates.telemetry_sink
 
     control_plane = _build_control_plane(config)
     # The shared ``ControlPlane`` Protocol intentionally omits the resume-only
@@ -584,29 +324,8 @@ def create_server_app(
         raise RuntimeError(
             "annotation support not installed; pip install 'provide-uterm-server[annotation]'",
         ) from exc
-    from provide.uterm.recording import InMemoryRecordingStore, LocalFileRecordingStore, NullRecordingStore
-    from provide.uterm.server.discovery import (
-        DiscoveryProvider,
-        NodeStatus,
-        NoOpDiscoveryProvider,
-        WebhookDiscoveryProvider,
-    )
-    from provide.uterm.server.recording import WebhookRecordingStore
 
-    # Choose Recording Store
-    recording_store: LocalFileRecordingStore | InMemoryRecordingStore | NullRecordingStore | WebhookRecordingStore
-    if config.recording.store_type == "webhook" and config.recording.webhook_url:
-        recording_store = WebhookRecordingStore(
-            url=config.recording.webhook_url,
-            secret=config.recording.webhook_secret,
-            timeout_s=config.recording.webhook_timeout_s,
-        )
-    elif config.recording.store_type == "memory":
-        recording_store = InMemoryRecordingStore()
-    elif config.recording.store_type == "null":
-        recording_store = NullRecordingStore()
-    else:
-        recording_store = LocalFileRecordingStore(config.recording.directory)
+    recording_store = build_recording_store(config)
 
     detector = PatternDetector()
     registry = SessionRegistry(
@@ -623,163 +342,6 @@ def create_server_app(
     )
     profile_store = FileProfileStore(config.profiles.directory)
 
-    async def _sweep_idle_sessions() -> None:
-        """Periodically disconnect sessions with no activity beyond the configured timeout."""
-        timeout_s = config.session_idle_timeout_s
-        while True:
-            await asyncio.sleep(60)
-            if timeout_s <= 0:
-                continue
-            now = time.time()
-            candidates = await hub.get_idle_candidates(timeout_s)
-            for worker_id, last_at in candidates:
-                try:
-                    logger.info(
-                        "session_idle_timeout worker_id=%s idle_s=%d",
-                        worker_id,
-                        int(now - last_at),
-                    )
-                    await hub.disconnect_worker(worker_id)
-                except Exception:
-                    logger.exception("session_idle_timeout_error worker_id=%s", worker_id)
-
-    async def _sweep_expired_sessions() -> None:
-        """Remove stopped sessions older than session_retention_s."""
-        retention_s = config.session_retention_s
-        while True:
-            await asyncio.sleep(300)
-            if retention_s <= 0:
-                continue
-            now = time.time()
-            pairs = await registry.list_sessions_with_definitions()
-            for sess_status, _definition in pairs:
-                if sess_status.lifecycle_state != "stopped":
-                    continue
-                if sess_status.stopped_at is None:
-                    continue
-                if (now - sess_status.stopped_at) >= retention_s:
-                    try:
-                        await registry.delete_session(sess_status.session_id)
-                        logger.info(
-                            "session_retention_sweep session_id=%s age_s=%d",
-                            sess_status.session_id,
-                            int(now - sess_status.stopped_at),
-                        )
-                    except Exception:
-                        logger.exception("session_retention_sweep_error session_id=%s", sess_status.session_id)
-
-    async def _sweep_expired_recordings() -> None:
-        """Delete local recording files older than recording.retention_s."""
-        retention_s = config.recording.retention_s
-        if retention_s <= 0 or config.recording.store_type != "local":
-            while True:
-                await asyncio.sleep(300)
-            # unreachable; keeps cancellation/loop behavior identical
-        directory = config.recording.directory
-        while True:
-            await asyncio.sleep(300)
-            now = time.time()
-            for path in directory.glob("*.jsonl"):
-                try:
-                    age_s = now - path.stat().st_mtime
-                    if age_s >= retention_s:
-                        path.unlink(missing_ok=True)
-                        logger.info(
-                            "recording_retention_sweep path=%s age_s=%d",
-                            str(path),
-                            int(age_s),
-                        )
-                except Exception:
-                    logger.exception("recording_retention_sweep_error path=%s", str(path))
-
-    async def _sweep_expired_tunnel_tokens() -> None:
-        """Periodically remove expired tunnel tokens and pending invites."""
-        while True:
-            await asyncio.sleep(60)
-            now = time.time()
-            sweep_expired_tunnel_invites(tunnel_invites, now=now)
-            expired: list[str] = []
-            for sid, state in tunnel_tokens.items():
-                expires_at = state.get("expires_at")
-                if isinstance(expires_at, (int, float)) and now > float(expires_at):
-                    expired.append(sid)
-            for sid in expired:
-                tunnel_tokens.pop(sid, None)
-                logger.info("tunnel_token_expired session_id=%s swept=true", sid)
-
-    async def _sweep_expired_approvals() -> None:
-        """Periodically time out expired pending approvals and prune old ones."""
-        while True:
-            await asyncio.sleep(_APPROVAL_SWEEP_INTERVAL_S)
-            try:
-                await hub.approval_store.cleanup_expired()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("approval_sweep_error")
-
-    async def _sweep_control_plane_reap() -> None:
-        """Periodically physically-delete expired/soft-deleted control-plane rows."""
-        while True:
-            await asyncio.sleep(config.control_plane.reap_interval_s)
-            try:
-                deleted = await control_plane.reap(now=time.time(), retention_s=config.control_plane.reap_retention_s)
-                if deleted:
-                    logger.info("control_plane_reap deleted_rows=%d", deleted)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("control_plane_reap_error")
-
-    async def _checkpoint_audit_head(chain: AuditChain) -> None:
-        """Periodically checkpoint the audit-chain head into the control plane.
-
-        Cheap atomic reads of ``chain.seq``/``chain.last_hash`` (no awaits in the
-        synchronous append path) flushed to the durable control-plane head, which
-        is the cross-restart anti-rollback anchor. ``set_audit_head`` is monotonic
-        so a checkpoint can never move the head backwards.
-        """
-        while True:
-            await asyncio.sleep(config.control_plane.reap_interval_s)
-            try:
-                await control_plane.set_audit_head(chain.seq, chain.last_hash)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("audit_head_checkpoint_error")
-
-    async def _node_registry_heartbeat() -> None:
-        """Periodically announce Node status to the External Management Tier."""
-        discovery_provider: DiscoveryProvider
-        if config.governance.discovery_provider == "webhook" and config.governance.registry_webhook_url:
-            discovery_provider = WebhookDiscoveryProvider(
-                url=config.governance.registry_webhook_url,
-                secret=config.governance.registry_webhook_secret,
-            )
-        else:
-            discovery_provider = NoOpDiscoveryProvider()
-
-        if isinstance(discovery_provider, NoOpDiscoveryProvider):
-            return
-
-        interval = config.governance.registry_webhook_interval_s
-        node_id = getattr(config.server, "node_id", "default")
-
-        while True:
-            try:
-                status = NodeStatus(
-                    node_id=node_id,
-                    active_sessions=await hub.browser_count_total(),
-                    worker_count=len(hub.registry._workers),
-                    timestamp=time.time(),
-                )
-                await discovery_provider.announce(status)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.warning("node_registry_heartbeat_failed")
-            await asyncio.sleep(interval)
-
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         async def _delayed_boot() -> None:
@@ -790,44 +352,16 @@ def create_server_app(
 
         await control_plane.migrate()
 
-        # WORM audit chain (opt-in). Resume the chain from the on-disk head,
-        # verifying it against the persisted control-plane head, then start the
-        # periodic head checkpoint. The append path stays fully synchronous; only
-        # the checkpoint task touches the (async) control plane.
+        # WORM audit chain (opt-in): resume+verify the chain, then start the
+        # periodic head checkpoint.  ``audit_event`` is threaded so the resume
+        # helper observes any test-time patch of ``factory_impl.audit_event``.
         audit_chain: AuditChain | None = None
         audit_checkpoint_task: asyncio.Task[None] | None = None
         if config.audit.chain_enabled and config.audit.chain_file:
-            cp_head = await control_plane.get_audit_head()
-            # Startup integrity check: verify the on-disk log against the head.
-            result = verify_audit_log(config.audit.chain_file, expected_head=cp_head)
-            # Alarm predicate: a brand-new deployment (no persisted head AND no
-            # file yet) is the legitimate genesis case — verify reports ok=False
-            # only because the file is absent, so don't false-alarm. Alarm when
-            # the control-plane head exists (rollback/truncation possible) OR the
-            # file exists but is internally broken.
-            file_exists = Path(config.audit.chain_file).exists()
-            if not result.ok and (cp_head is not None or file_exists):
-                # LOUD alarm — tamper or end-truncation/rollback detected. Boot
-                # anyway (refusing to boot would let an attacker DoS by corrupting
-                # the log), but emit a CRITICAL log + an audit event so monitoring
-                # fires.
-                logger.critical(
-                    "audit_chain_integrity_alarm reason=%s first_bad_seq=%s",
-                    result.reason,
-                    result.first_bad_seq,
-                )
-                audit_event(
-                    "audit.chain_integrity_alarm",
-                    detail={"reason": result.reason, "first_bad_seq": result.first_bad_seq},
-                )
-            # Resume from the file's ACTUAL head so the forward chain stays valid.
-            resume_seq = result.head_seq or 0
-            resume_hash = result.head_hash or GENESIS_HASH
-            audit_chain = AuditChain(config.audit.chain_file, seq=resume_seq, last_hash=resume_hash)
-            configure_audit_chain(audit_chain)
-            # Re-checkpoint the resumed head (monotonic — a no-op if it's behind).
-            await control_plane.set_audit_head(resume_seq, resume_hash)
-            audit_checkpoint_task = asyncio.create_task(_checkpoint_audit_head(audit_chain))
+            audit_chain = await resume_audit_chain(config, control_plane, audit_event=audit_event)
+            audit_checkpoint_task = asyncio.create_task(
+                checkpoint_audit_head(audit_chain, config=config, control_plane=control_plane)
+            )
 
         boot_task = asyncio.create_task(_delayed_boot())
         boot_task.add_done_callback(
@@ -837,16 +371,18 @@ def create_server_app(
                 else None
             )
         )
-        sweep_task = asyncio.create_task(_sweep_expired_tunnel_tokens())
-        approval_sweep_task = asyncio.create_task(_sweep_expired_approvals())
-        idle_sweep_task = asyncio.create_task(_sweep_idle_sessions())
-        retention_sweep_task = asyncio.create_task(_sweep_expired_sessions())
-        recording_retention_sweep_task = asyncio.create_task(_sweep_expired_recordings())
-        heartbeat_task = asyncio.create_task(_node_registry_heartbeat())
+        sweep_task = asyncio.create_task(
+            sweep_expired_tunnel_tokens(tunnel_tokens=tunnel_tokens, tunnel_invites=tunnel_invites)
+        )
+        approval_sweep_task = asyncio.create_task(sweep_expired_approvals(hub=hub))
+        idle_sweep_task = asyncio.create_task(sweep_idle_sessions(config=config, hub=hub))
+        retention_sweep_task = asyncio.create_task(sweep_expired_sessions(config=config, registry=registry))
+        recording_retention_sweep_task = asyncio.create_task(sweep_expired_recordings(config=config))
+        heartbeat_task = asyncio.create_task(node_registry_heartbeat(config=config, hub=hub))
         # Both backends soft-delete (set deleted_at/revoked_at/resolved_at and
         # leave expired rows in place), so both need the reaper to physically
         # prune past the retention cutoff. Schedule it unconditionally.
-        reap_task = asyncio.create_task(_sweep_control_plane_reap())
+        reap_task = asyncio.create_task(sweep_control_plane_reap(config=config, control_plane=control_plane))
         pam_task: asyncio.Task[None] | None = None
         with contextlib.suppress(ImportError):
             from provide.uterm.server.pam_integration import run_pam_integration
@@ -880,30 +416,16 @@ def create_server_app(
                 # Reset the module global so a re-created app in the same process
                 # starts clean (no stale chain).
                 configure_audit_chain(None)
-            reap_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await reap_task
-            heartbeat_task.cancel()
-            recording_retention_sweep_task.cancel()
-            retention_sweep_task.cancel()
-            idle_sweep_task.cancel()
-            approval_sweep_task.cancel()
-            sweep_task.cancel()
-            boot_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await heartbeat_task
-            with contextlib.suppress(asyncio.CancelledError):
-                await recording_retention_sweep_task
-            with contextlib.suppress(asyncio.CancelledError):
-                await boot_task
-            with contextlib.suppress(asyncio.CancelledError):
-                await sweep_task
-            with contextlib.suppress(asyncio.CancelledError):
-                await approval_sweep_task
-            with contextlib.suppress(asyncio.CancelledError):
-                await idle_sweep_task
-            with contextlib.suppress(asyncio.CancelledError):
-                await retention_sweep_task
+            await cancel_and_drain(
+                reap_task,
+                heartbeat_task,
+                recording_retention_sweep_task,
+                retention_sweep_task,
+                idle_sweep_task,
+                approval_sweep_task,
+                sweep_task,
+                boot_task,
+            )
             await hub.shutdown()
             await webhook_manager.shutdown()
             await registry.shutdown()
