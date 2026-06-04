@@ -164,7 +164,9 @@ class TestSpawnProcessKills:
             cmd = ["python", "-m", "worker"]
         if env is None:
             env = {"FOO": "bar"}
-        import provide.uterm.manager.process_impl as process_impl
+        # _spawn_process was extracted into process_impl_spawn; its subprocess
+        # module global lives there now.
+        import provide.uterm.manager.process_impl_spawn as process_impl
 
         popen = MagicMock(return_value=make_mock_proc())
         with patch.object(process_impl.subprocess, "Popen", popen):
@@ -179,7 +181,9 @@ class TestSpawnProcessKills:
         """
         from pathlib import Path
 
-        import provide.uterm.manager.process_impl as process_impl
+        # _spawn_process was extracted into process_impl_spawn; its subprocess
+        # module global lives there now.
+        import provide.uterm.manager.process_impl_spawn as process_impl
 
         pm = AgentProcessManager(
             manager,
@@ -216,7 +220,9 @@ class TestSpawnProcessKills:
         """
         from pathlib import Path
 
-        import provide.uterm.manager.process_impl as process_impl
+        # _spawn_process was extracted into process_impl_spawn; its subprocess
+        # module global lives there now.
+        import provide.uterm.manager.process_impl_spawn as process_impl
 
         # Pre-create an oversized log so the rotation branch is entered.
         log_dir = Path(pm._log_dir)
@@ -254,7 +260,9 @@ class TestSpawnProcessKills:
         """
         from pathlib import Path
 
-        import provide.uterm.manager.process_impl as process_impl
+        # _spawn_process was extracted into process_impl_spawn; its subprocess
+        # module global lives there now.
+        import provide.uterm.manager.process_impl_spawn as process_impl
         from provide.uterm.manager.constants import WORKER_LOG_MAX_BYTES
 
         log_dir = Path(pm._log_dir)

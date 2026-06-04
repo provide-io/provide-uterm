@@ -344,7 +344,17 @@ paths_to_mutate = [
     #   1 int(None or 0)==0 getattr, 1 `% 360` sign-flip. The 14 mocked manager suites
     #   (test_process_mutation_killing{,_2..5}.py + test_process_*/_coverage_*) are wired in
     #   tests_dir below; test_process.py stays UNWIRED (real Popen).
+    #
+    # process_impl_spawn.py — the low-level spawn/stop group (spawn_agent /
+    #   _spawn_process / _spawn_platform_kwargs / _build_preexec_rlimit_fn /
+    #   _stop_process_tree) split out of process_impl.py to keep both files <500
+    #   LOC. Same mutation contract (killed==100) and same kill-suites; the class
+    #   methods in process_impl.py are thin wrappers forwarding here. The 4
+    #   _stop_process_tree documented equivalents are re-homed under the
+    #   process_impl_spawn.x__stop_process_tree__mutmut_* module-function names in
+    #   mutation_equivalents.toml.
     "src/provide/uterm/manager/process_impl.py",
+    "src/provide/uterm/manager/process_impl_spawn.py",
     # Refactor #16 service classes — state-machine + dispatch logic split
     # out of the former TermHub mixin pile. High mutation value; tests for
     # each service live under tests/bridge/hub/test_<name>.py.

@@ -67,8 +67,9 @@ def make_mock_proc(pid=42, returncode=0):
 class TestStopProcessTreeKills:
     """Kill-tests for AgentProcessManager._stop_process_tree.
 
-    The method resolves ``os``/``signal``/``logger``/``contextlib`` from the
-    ``process_impl`` module globals, so all patching targets ``process_impl``.
+    The method (extracted into ``process_impl_spawn``) resolves
+    ``os``/``signal``/``logger``/``contextlib`` from THAT module's globals, so all
+    patching targets ``process_impl_spawn``.
     """
 
     # --- guard: resolved_pid <= 0 ------------------------------------------
@@ -80,7 +81,7 @@ class TestStopProcessTreeKills:
 
     async def test_pid_one_is_signalled(self, pm):
         """mutmut_7: `<= 0` -> `<= 1` would early-return for pid==1."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         with (
             patch.object(pi.os, "name", "posix"),
@@ -92,7 +93,7 @@ class TestStopProcessTreeKills:
     # --- process is None branch: posix force-kill --------------------------
     async def test_none_branch_posix_sigkill_args(self, pm):
         """mutmut_22/24: SIGKILL arg dropped/None in process=None branch."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         with (
             patch.object(pi.os, "name", "posix"),
@@ -107,7 +108,7 @@ class TestStopProcessTreeKills:
         Raising RuntimeError: original propagates RuntimeError; the (OSError, None)
         mutant raises TypeError from isinstance instead.
         """
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         with (
             patch.object(pi.os, "name", "posix"),
@@ -118,7 +119,7 @@ class TestStopProcessTreeKills:
 
     async def test_none_branch_warning_logged(self, pm):
         """mutmut_25/26/28/29/30: logger.warning('agent_force_killed', agent_id=...)."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         log = MagicMock()
         with (
@@ -132,7 +133,7 @@ class TestStopProcessTreeKills:
     # --- process present: posix SIGTERM path -------------------------------
     async def test_proc_posix_sigterm_args(self, pm):
         """mutmut_43/44: SIGTERM call uses (resolved_pid, signal.SIGTERM)."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=888)
         with (
@@ -145,7 +146,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_posix_suppress_none_propagates_runtime(self, pm):
         """mutmut_40: site-D suppress (OSError, None); RuntimeError -> TypeError on mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=12)
         with (
@@ -162,7 +163,7 @@ class TestStopProcessTreeKills:
         Original suppresses OSError and reaches the wait; the (None, ...) mutant
         raises TypeError so the wait is never awaited.
         """
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=13)
         wait = AsyncMock()
@@ -176,7 +177,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_posix_suppress_drop_oserror_propagates(self, pm):
         """mutmut_41: site-D suppress (ProcessLookupError,) no longer catches plain OSError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=14)
         wait = AsyncMock()
@@ -190,7 +191,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_terminated_info_logged(self, pm):
         """mutmut_51/52/54/55/56: logger.info('agent_terminated', agent_id=...)."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=15)
         log = MagicMock()
@@ -206,7 +207,7 @@ class TestStopProcessTreeKills:
     # --- process present: Windows (nt) taskkill path -----------------------
     async def test_proc_nt_taskkill_args(self, pm):
         """mutmut_38: proc-nt _taskkill_process_tree(resolved_pid) -> (None)."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=987)
         with (
@@ -219,7 +220,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_nt_suppress_first_none_raises_on_oserror(self, pm):
         """mutmut_34: proc-nt suppress (None, RuntimeError); OSError -> TypeError on mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=21)
         wait = AsyncMock()
@@ -233,7 +234,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_nt_suppress_second_none_raises_on_runtime(self, pm):
         """mutmut_35: proc-nt suppress (OSError, None); RuntimeError -> TypeError on mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=22)
         wait = AsyncMock()
@@ -247,7 +248,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_nt_suppress_drop_oserror_propagates(self, pm):
         """mutmut_36: proc-nt suppress (RuntimeError,) no longer catches OSError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=23)
         wait = AsyncMock()
@@ -261,7 +262,7 @@ class TestStopProcessTreeKills:
 
     async def test_proc_nt_suppress_drop_runtime_propagates(self, pm):
         """mutmut_37: proc-nt suppress (OSError,) no longer catches RuntimeError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=24)
         wait = AsyncMock()

@@ -67,14 +67,15 @@ def make_mock_proc(pid=42, returncode=0):
 class TestStopProcessTreeKills2:
     """Kill-tests for AgentProcessManager._stop_process_tree.
 
-    The method resolves ``os``/``signal``/``logger``/``contextlib`` from the
-    ``process_impl`` module globals, so all patching targets ``process_impl``.
+    The method (extracted into ``process_impl_spawn``) resolves
+    ``os``/``signal``/``logger``/``contextlib`` from THAT module's globals, so all
+    patching targets ``process_impl_spawn``.
     """
 
     # --- guard: resolved_pid <= 0 ------------------------------------------
     async def test_none_nt_suppress_second_none_raises_on_runtime(self, pm):
         """mutmut_13: none-nt suppress (OSError, None); RuntimeError -> TypeError on mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         log = MagicMock()
         with (
@@ -87,7 +88,7 @@ class TestStopProcessTreeKills2:
 
     async def test_none_nt_suppress_drop_runtime_propagates(self, pm):
         """mutmut_15: none-nt suppress (OSError,) no longer catches RuntimeError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         log = MagicMock()
         with (
@@ -103,7 +104,7 @@ class TestStopProcessTreeKills2:
         """mutmut_64: final _signal_posix_process_group(resolved_pid, SIGKILL)."""
         from unittest.mock import call
 
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=701)
         with (
@@ -119,7 +120,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_nt_skips_posix_sigkill(self, pm):
         """mutmut_58/59: `if os.name != "nt"` guard; on nt the final SIGKILL must be skipped."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=702)
         with (
@@ -133,7 +134,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_posix_suppress_first_none(self, pm):
         """mutmut_60: final suppress (None, ProcessLookupError); SIGKILL OSError -> TypeError mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         def sig_side(pid, s):
             if s == pi.signal.SIGKILL:
@@ -151,7 +152,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_posix_suppress_second_none_propagates_runtime(self, pm):
         """mutmut_61: final suppress (OSError, None); SIGKILL RuntimeError -> TypeError mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         def sig_side(pid, s):
             if s == pi.signal.SIGKILL:
@@ -167,7 +168,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_posix_suppress_drop_oserror_propagates(self, pm):
         """mutmut_62: final suppress (ProcessLookupError,) no longer catches plain OSError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         def sig_side(pid, s):
             if s == pi.signal.SIGKILL:
@@ -187,7 +188,7 @@ class TestStopProcessTreeKills2:
         """mutmut_74/75/78: final _wait_for_process_exit(process, 1.0)."""
         from unittest.mock import call
 
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=703)
         wait = AsyncMock(side_effect=[TimeoutError, None])
@@ -199,9 +200,33 @@ class TestStopProcessTreeKills2:
             await pm._stop_process_tree(agent_id="a", process=proc, timeout_s=5.0)
         assert wait.await_args_list[-1] == call(proc, 1.0)
 
+    async def test_first_wait_receives_caller_timeout(self, pm):
+        """The caller's timeout_s must flow through the process_impl wrapper into the
+        FIRST _wait_for_process_exit (the moved process_impl_spawn function uses it).
+
+        Kills process_impl._stop_process_tree wrapper mutant that drops the
+        ``timeout_s=timeout_s`` forwarding kwarg: with it dropped the moved function
+        falls back to its default (_STOP_TIMEOUT_S == 5.0), so a distinct caller value
+        (7.5) would not reach the first wait. The success path (single wait) isolates
+        the FIRST call from the hardcoded 1.0 second wait.
+        """
+        from unittest.mock import call
+
+        import provide.uterm.manager.process_impl_spawn as pi
+
+        proc = make_mock_proc(pid=705)
+        wait = AsyncMock(return_value=None)  # first wait succeeds -> only one call
+        with (
+            patch.object(pi.os, "name", "posix"),
+            patch.object(pm, "_wait_for_process_exit", wait),
+            patch.object(pm, "_signal_posix_process_group"),
+        ):
+            await pm._stop_process_tree(agent_id="a", process=proc, timeout_s=7.5)
+        assert wait.await_args_list[0] == call(proc, 7.5)
+
     async def test_final_suppress_first_none(self, pm):
         """mutmut_68: final-wait suppress (None, OSError, RuntimeError); 2nd wait TimeoutError -> TypeError mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=704)
         log = MagicMock()
@@ -216,7 +241,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_suppress_middle_none(self, pm):
         """mutmut_69: final-wait suppress (TimeoutError, None, RuntimeError); 2nd wait RuntimeError -> TypeError mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=705)
         log = MagicMock()
@@ -231,7 +256,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_suppress_last_none(self, pm):
         """mutmut_70: final-wait suppress (TimeoutError, OSError, None); 2nd wait RuntimeError -> TypeError mutant."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=706)
         log = MagicMock()
@@ -246,7 +271,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_suppress_drop_oserror_propagates(self, pm):
         """mutmut_72: final-wait suppress (TimeoutError, RuntimeError) no longer catches plain OSError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=707)
         log = MagicMock()
@@ -261,7 +286,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_suppress_drop_runtime_propagates(self, pm):
         """mutmut_73: final-wait suppress (TimeoutError, OSError,) no longer catches RuntimeError."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=708)
         log = MagicMock()
@@ -276,7 +301,7 @@ class TestStopProcessTreeKills2:
 
     async def test_final_force_killed_warning_logged(self, pm):
         """mutmut_79/80/82/83/84: final logger.warning('agent_force_killed', agent_id=...)."""
-        import provide.uterm.manager.process_impl as pi
+        import provide.uterm.manager.process_impl_spawn as pi
 
         proc = make_mock_proc(pid=709)
         log = MagicMock()
