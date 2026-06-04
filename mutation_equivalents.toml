@@ -627,3 +627,9 @@ reason = "wait_for_guard deadline clamp max(50, timeout_ms) -> max(51, timeout_m
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.polling_service.xǁPollingCoordinatorǁwait_for_guard__mutmut_32"
 reason = "wait_for_guard initial last_snapshot None -> ''; the slow path always enters the loop (deadline >= 50ms) and reassigns last_snapshot on the first poll before any read, so the '' initial value is a dead store — unobservable."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.store.xǁStateStoreǁprepare_policy_context__mutmut_6"
+reason = "prepare_policy_context initial principal None -> ''; both branches of the immediately-following if/else reassign principal (resolve_principal or the ws.state getattr), so the '' initial value is a dead store overwritten before any read — unobservable."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.store.xǁStateStoreǁmetric__mutmut_1"
+reason = "Trampoline-masked default-arg mutation metric(value=1->2); mutmut's dispatcher keeps the original signature and forwards the bound default (1) explicitly to the variant, so the mutated default is never exercised — unkillable trampoline artifact (the documented auth.py class). The real default IS regression-tested (test_metric_default_value_is_one asserts a no-value call emits 1)."
