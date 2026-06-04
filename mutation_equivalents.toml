@@ -536,20 +536,24 @@ reason = "getattr(config, 'auth_worker_token_env_var', <default>): ManagerConfig
 mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_scope_worker_tokens__mutmut_13"
 reason = "getattr(config, 'auth_worker_token_env_var', <default>): ManagerConfig always defines auth_worker_token_env_var (Pydantic field, config.py:44), so the getattr default is never reached; mutating or dropping it is dead code."
 
+# _stop_process_tree was extracted into the sibling process_impl_spawn.py as a
+# module-level function (see the process_impl.py split), so its mutmut mutants are
+# now named with module-function mangling (x__stop_process_tree__mutmut_N) under
+# the process_impl_spawn module path; the trailing numbers + reasons are unchanged.
 [[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_20"
+mutant = "provide.uterm.manager.process_impl_spawn.x__stop_process_tree__mutmut_20"
 reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): ProcessLookupError is a subclass of OSError, so suppressing OSError already catches it — identical."
 
 [[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_42"
+mutant = "provide.uterm.manager.process_impl_spawn.x__stop_process_tree__mutmut_42"
 reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): ProcessLookupError is a subclass of OSError, so suppressing OSError already catches it — identical."
 
 [[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_63"
+mutant = "provide.uterm.manager.process_impl_spawn.x__stop_process_tree__mutmut_63"
 reason = "contextlib.suppress(OSError, ProcessLookupError) -> (OSError,): ProcessLookupError is a subclass of OSError, so suppressing OSError already catches it — identical."
 
 [[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_stop_process_tree__mutmut_71"
+mutant = "provide.uterm.manager.process_impl_spawn.x__stop_process_tree__mutmut_71"
 reason = "contextlib.suppress(TimeoutError, OSError, RuntimeError) -> (OSError, RuntimeError): TimeoutError is a subclass of OSError (Python 3.10+), so it is still suppressed by OSError — behaviorally identical."
 
 [[equivalent]]

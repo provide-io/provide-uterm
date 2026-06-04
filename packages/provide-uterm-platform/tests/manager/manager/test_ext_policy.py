@@ -73,8 +73,13 @@ async def test_lifecycle_telemetry(manager):
     """Standardized DAS events are emitted on spawn and kill."""
     pm = manager.agent_process_manager
 
+    # spawn_agent now logs via process_impl_spawn.logger (it was extracted there),
+    # while kill_agent still logs via process_impl.logger. Patch BOTH module loggers
+    # with the same mock so both spawn + kill events land on it.
+    mock_logger = MagicMock()
     with (
-        patch("provide.uterm.manager.process_impl.logger") as mock_logger,
+        patch("provide.uterm.manager.process_impl.logger", mock_logger),
+        patch("provide.uterm.manager.process_impl_spawn.logger", mock_logger),
         patch.object(pm, "_load_worker_type", return_value=("shell", {})),
         patch.object(pm, "_get_registry_entry") as mock_reg,
         patch.object(pm, "_spawn_process", return_value=MagicMock(pid=1234)),

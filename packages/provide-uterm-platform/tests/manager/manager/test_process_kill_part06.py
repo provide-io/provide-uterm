@@ -115,7 +115,9 @@ class TestSpawnAgentKills:
     @pytest.mark.asyncio
     async def test_spawning_agent_info_log_args(self, pm, manager, tmp_path):
         """m7/8/9/11/12/13/14: logger.info first positional + agent_id/config_path kwargs."""
-        import provide.uterm.manager.process_impl as mod
+        # spawn_agent was extracted into process_impl_spawn; its module-level
+        # ``logger`` lives there now, so patch.object targets that module.
+        import provide.uterm.manager.process_impl_spawn as mod
 
         cfg = self._cfg(tmp_path)
         manager.broadcast_status = AsyncMock()
@@ -175,7 +177,9 @@ class TestSpawnAgentKills:
     @pytest.mark.asyncio
     async def test_policy_reject_warning_log_and_error(self, pm, manager, tmp_path):
         """m24/25/27/28/29: logger.warning('agent_spawn_rejected_by_policy', agent_id=...)."""
-        import provide.uterm.manager.process_impl as mod
+        # spawn_agent was extracted into process_impl_spawn; its module-level
+        # ``logger`` lives there now, so patch.object targets that module.
+        import provide.uterm.manager.process_impl_spawn as mod
 
         cfg = self._cfg(tmp_path)
 
@@ -349,7 +353,9 @@ class TestSpawnAgentKills:
     @pytest.mark.asyncio
     async def test_spawn_failure_exception_log_and_raise(self, pm, manager, tmp_path):
         """m100/101/102/104/105/106/107/108: logger.exception args + RuntimeError wrap."""
-        import provide.uterm.manager.process_impl as mod
+        # spawn_agent was extracted into process_impl_spawn; its module-level
+        # ``logger`` lives there now, so patch.object targets that module.
+        import provide.uterm.manager.process_impl_spawn as mod
 
         cfg = self._cfg(tmp_path)
         manager.broadcast_status = AsyncMock()

@@ -94,7 +94,9 @@ class TestBuildPreexecRlimitFn:
     # --- mut 2,3: os.name == "nt" guard ----------------------------------
     def test_nt_returns_none_even_with_limits_configured(self, pm):
         """mut_2/3: under os.name=='nt' the original returns None regardless of config."""
-        with patch("provide.uterm.manager.process_impl.os") as fake_os:
+        # _build_preexec_rlimit_fn was extracted into process_impl_spawn, so its
+        # ``os`` reference resolves from that module's namespace — patch there.
+        with patch("provide.uterm.manager.process_impl_spawn.os") as fake_os:
             fake_os.name = "nt"
             fn = self._build_with(pm, nofile_soft=100, as_mb=64, cpu_s=10)
         assert fn is None

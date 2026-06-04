@@ -386,7 +386,9 @@ class TestSpawnPlatformKwargs:
         mutmut_7/9/10 (bad getattr name TypeError) since those raise instead
         of returning the dict.
         """
-        from provide.uterm.manager import process_impl
+        # _spawn_platform_kwargs was extracted into process_impl_spawn; its
+        # os/subprocess module globals live there now.
+        from provide.uterm.manager import process_impl_spawn as process_impl
 
         with (
             patch.object(process_impl.os, "name", "nt"),
@@ -403,7 +405,9 @@ class TestSpawnPlatformKwargs:
         (getattr('CREATE_NEW_PROCESS_GROUP', 0)), mutmut_10
         (getattr(subprocess, 0)) — each raises TypeError on this path.
         """
-        from provide.uterm.manager import process_impl
+        # _spawn_platform_kwargs was extracted into process_impl_spawn; its
+        # os/subprocess module globals live there now.
+        from provide.uterm.manager import process_impl_spawn as process_impl
 
         with (
             patch.object(process_impl.os, "name", "nt"),
@@ -422,7 +426,9 @@ class TestSpawnPlatformKwargs:
         (no default -> AttributeError), mutmut_14 (default 1 -> truthy ->
         {'creationflags': 1}). Original returns {}.
         """
-        from provide.uterm.manager import process_impl
+        # _spawn_platform_kwargs was extracted into process_impl_spawn; its
+        # os/subprocess module globals live there now.
+        from provide.uterm.manager import process_impl_spawn as process_impl
 
         sub = process_impl.subprocess
         had = hasattr(sub, "CREATE_NEW_PROCESS_GROUP")
