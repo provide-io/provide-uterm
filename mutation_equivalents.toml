@@ -601,3 +601,20 @@ reason = "raise RuntimeError message string-mangled (XX..XX) on the unreachable 
 [[equivalent]]
 mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁallocate_agent_id__mutmut_18"
 reason = "raise RuntimeError message upper-cased on the unreachable exhaustion path; see __mutmut_16 — the raise never executes in any reachable/testable state, so the message is unobservable."
+
+# PresenceManager.can_send_input — the open-mode default of
+# st.browsers.get(ws, "viewer") is unobservable: the role is used only in
+# `role in ("operator", "admin")`, and "viewer" / None / "" / "VIEWER" /
+# "XXviewerXX" are all non-members, so every default yields the identical False.
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.presence.xǁPresenceManagerǁcan_send_input__mutmut_7"
+reason = "st.browsers.get(ws, 'viewer') default -> None; unobservable — role is only tested for membership in ('operator','admin') and None is a non-member, identical False as 'viewer'."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.presence.xǁPresenceManagerǁcan_send_input__mutmut_9"
+reason = "st.browsers.get(ws, 'viewer') default removed (-> None); unobservable — role only checked for membership in ('operator','admin'), identical False."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.presence.xǁPresenceManagerǁcan_send_input__mutmut_10"
+reason = "st.browsers.get(ws, 'viewer') default -> 'XXviewerXX'; unobservable — a non-('operator','admin') string yields the identical False."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.presence.xǁPresenceManagerǁcan_send_input__mutmut_11"
+reason = "st.browsers.get(ws, 'viewer') default -> 'VIEWER'; unobservable — a non-('operator','admin') string yields the identical False."
