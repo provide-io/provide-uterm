@@ -36,7 +36,7 @@ from provide.uterm.session_logger import SessionLogger
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from provide.uterm.annotation import PatternDetector
+    from provide.uterm.annotation import PatternDetector, StreamingDetector
     from provide.uterm.recording import RecordingStore
     from provide.uterm.server.bridge.hub import TermHub
 
@@ -82,6 +82,15 @@ class HostedSessionRuntime:
         self._recording_path: Path | None = None
         self._logger: SessionLogger | None = None
         self._detector = detector
+        # Per-session streaming wrapper for the *send* path only: keystroke
+        # input can fragment a pattern across chunks, while the *read* path
+        # already receives the fully reassembled screen. Held per session so
+        # carried text never bleeds between sessions (the detector is shared).
+        self._send_stream: StreamingDetector | None = None
+        if detector is not None:
+            from provide.uterm.annotation import StreamingDetector
+
+            self._send_stream = StreamingDetector(detector)
         self._event_seq: int = 0
         self._at_password_prompt: bool = False
 
@@ -264,8 +273,8 @@ class HostedSessionRuntime:
             else:
                 await self._logger.log_send(data)
             self._event_seq += 1
-            if self._detector is not None:
-                for annotation in self._detector.detect("send", data, seq=self._event_seq):
+            if self._send_stream is not None:
+                for annotation in self._send_stream.detect("send", data, seq=self._event_seq):
                     await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _log_event(self, event: str, payload: dict[str, Any]) -> None:

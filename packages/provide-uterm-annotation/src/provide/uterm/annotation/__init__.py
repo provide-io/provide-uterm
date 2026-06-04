@@ -10,6 +10,7 @@ from __future__ import annotations
 from provide.uterm.annotation._detector import PatternDetector
 from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule
 from provide.uterm.annotation._rules import BUILTIN_RULES
+from provide.uterm.annotation._streaming import StreamingDetector
 
 __all__ = [
     "Annotation",
@@ -17,4 +18,5 @@ __all__ = [
     "BUILTIN_RULES",
     "DetectionRule",
     "PatternDetector",
+    "StreamingDetector",
 ]
