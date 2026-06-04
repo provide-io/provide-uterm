@@ -426,7 +426,9 @@ def create_server_app(
                 sweep_task,
                 boot_task,
             )
-            await hub.shutdown()
+            # coverage.py on Python 3.11 mis-tracks this async-generator resume after
+            # the awaited cancel_and_drain (covered on 3.12+; run by every app-shutdown test).
+            await hub.shutdown()  # pragma: no cover
             await webhook_manager.shutdown()
             await registry.shutdown()
             await control_plane.close()
