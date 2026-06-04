@@ -40,7 +40,7 @@ class TestEventDequeMaxlen:
             await hub.append_event("w1", "test_event", {"i": i})
 
         async with hub._lock:
-            st = hub._workers.get("w1")
+            st = hub.registry._workers.get("w1")
             assert st is not None, "worker state should exist"
             assert isinstance(st.events, deque), "events should be a deque"
             assert st.events.maxlen == 10, f"maxlen should be 10, got {st.events.maxlen}"

@@ -22,14 +22,14 @@ def test_allow_rest_send_for_evicts_on_overflow() -> None:
     # Fill dict just to the cap by bypassing the public method (avoids rate limit logic).
     from provide.uterm.server.bridge.ratelimit import TokenBucket
 
-    hub._rest_send_per_client = {f"c{i}": TokenBucket(1) for i in range(cap)}
+    hub.limiter.rest_send_per_client = {f"c{i}": TokenBucket(1) for i in range(cap)}
 
     # One more call should trigger eviction path
     result = hub.allow_rest_send_for("new-client")
     assert isinstance(result, bool)
     # Dict shrunk by eviction then grew by 1 → total = cap - (cap//2) + 1
     expected = cap - cap // 2 + 1
-    assert len(hub._rest_send_per_client) == expected
+    assert len(hub.limiter.rest_send_per_client) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ async def test_set_worker_hello_mode_blocked_when_hijack_active() -> None:
         from provide.uterm.server.bridge.models import WorkerTermState
 
         st = WorkerTermState()
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     # Activate a hijack lease
     import time
@@ -60,7 +60,7 @@ async def test_set_worker_hello_mode_blocked_when_hijack_active() -> None:
 
     now = time.monotonic()
     async with hub._lock:
-        hub._workers[worker_id].hijack_session = HijackSession(
+        hub.registry._workers[worker_id].hijack_session = HijackSession(
             hijack_id="test-hid",
             owner="alice",
             acquired_at=now,
@@ -71,7 +71,7 @@ async def test_set_worker_hello_mode_blocked_when_hijack_active() -> None:
     # Attempting to switch to open while hijack is active should be blocked
     result = await hub.set_worker_hello_mode(worker_id, "open")
     assert result is False
-    assert hub._workers[worker_id].input_mode == "hijack"
+    assert hub.registry._workers[worker_id].input_mode == "hijack"
 
 
 async def test_set_worker_hello_mode_returns_false_unknown_worker() -> None:
@@ -88,11 +88,11 @@ async def test_set_worker_hello_mode_succeeds_when_no_hijack() -> None:
     async with hub._lock:
         from provide.uterm.server.bridge.models import WorkerTermState
 
-        hub._workers[worker_id] = WorkerTermState()
+        hub.registry._workers[worker_id] = WorkerTermState()
 
     result = await hub.set_worker_hello_mode(worker_id, "open")
     assert result is True
-    assert hub._workers[worker_id].input_mode == "open"
+    assert hub.registry._workers[worker_id].input_mode == "open"
 
 
 # ---------------------------------------------------------------------------
@@ -118,11 +118,11 @@ async def test_force_release_hijack_clears_rest_session() -> None:
             lease_expires_at=now + 60,
             last_heartbeat=now,
         )
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.force_release_hijack(worker_id)
     assert result is True
-    assert hub._workers[worker_id].hijack_session is None
+    assert hub.registry._workers[worker_id].hijack_session is None
 
 
 # ---------------------------------------------------------------------------
@@ -136,12 +136,12 @@ def test_allow_rest_acquire_for_evicts_on_overflow() -> None:
     cap = _conn_module._REST_CLIENT_CACHE_MAX
     from provide.uterm.server.bridge.ratelimit import TokenBucket
 
-    hub._rest_acquire_per_client = {f"c{i}": TokenBucket(1) for i in range(cap)}
+    hub.limiter.rest_acquire_per_client = {f"c{i}": TokenBucket(1) for i in range(cap)}
 
     result = hub.allow_rest_acquire_for("new-client")
     assert isinstance(result, bool)
     expected = cap - cap // 2 + 1
-    assert len(hub._rest_acquire_per_client) == expected
+    assert len(hub.limiter.rest_acquire_per_client) == expected
 
 
 def test_allow_rest_acquire_for_checks_both_buckets() -> None:
@@ -149,8 +149,8 @@ def test_allow_rest_acquire_for_checks_both_buckets() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    hub._rest_acquire_bucket = MagicMock()
-    hub._rest_acquire_bucket.allow.return_value = False
+    hub.limiter.rest_acquire_bucket = MagicMock()
+    hub.limiter.rest_acquire_bucket.allow.return_value = False
     result = hub.allow_rest_acquire_for("client1")
     assert result is False
 
@@ -160,8 +160,8 @@ def test_allow_rest_send_for_checks_both_buckets() -> None:
     hub = TermHub()
     from unittest.mock import MagicMock
 
-    hub._rest_send_bucket = MagicMock()
-    hub._rest_send_bucket.allow.return_value = False
+    hub.limiter.rest_send_bucket = MagicMock()
+    hub.limiter.rest_send_bucket.allow.return_value = False
     result = hub.allow_rest_send_for("client1")
     assert result is False
 
@@ -193,14 +193,14 @@ async def test_register_worker_clears_all_hijack_fields() -> None:
         )
         st.hijack_owner = MagicMock()
         st.hijack_owner_expires_at = now - 1
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     # Register should clear expired hijack
     ws = MagicMock()
     result = await hub.register_worker(worker_id, ws)
     assert result is True
     async with hub._lock:
-        st = hub._workers[worker_id]
+        st = hub.registry._workers[worker_id]
         assert st.hijack_session is None
         assert st.hijack_owner is None
         assert st.hijack_owner_expires_at is None
@@ -236,7 +236,7 @@ async def test_is_active_worker_returns_false_on_ws_mismatch() -> None:
 
         st = WorkerTermState()
         st.worker_ws = ws1
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.is_active_worker(worker_id, ws2)
     assert result is False
@@ -254,7 +254,7 @@ async def test_is_active_worker_returns_true_on_ws_match() -> None:
 
         st = WorkerTermState()
         st.worker_ws = ws
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.is_active_worker(worker_id, ws)
     assert result is True
@@ -372,7 +372,7 @@ async def test_cleanup_browser_disconnect_was_owner_with_rest_active() -> None:
         )
         st.hijack_owner = ws_owner
         st.hijack_owner_expires_at = now + 60
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.cleanup_browser_disconnect(worker_id, ws_owner, False)
     assert result["was_owner"] is True
@@ -392,7 +392,7 @@ async def test_cleanup_browser_disconnect_not_owner_triggers_on_worker_empty() -
     async with hub._lock:
         st = WorkerTermState()
         st.browsers[ws] = "viewer"
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     # Set callback
     callback_invoked = []
@@ -426,7 +426,7 @@ async def test_cleanup_browser_disconnect_resume_without_owner() -> None:
         st.hijack_owner = ws
         st.hijack_owner_expires_at = 0  # Expired
         st.events = [{"type": "other_event"}]
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.cleanup_browser_disconnect(worker_id, ws, owned_hijack=True)
     assert result["resume_without_owner"] is True
@@ -449,7 +449,7 @@ async def test_cleanup_browser_disconnect_no_resume_on_expired_event() -> None:
         st.hijack_owner = ws
         st.hijack_owner_expires_at = 0
         st.events = [{"type": "hijack_owner_expired"}]
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.cleanup_browser_disconnect(worker_id, ws, owned_hijack=True)
     assert result["resume_without_owner"] is False
@@ -472,7 +472,7 @@ async def test_cleanup_browser_disconnect_no_resume_on_lease_expired_event() -> 
         st.hijack_owner = ws
         st.hijack_owner_expires_at = 0
         st.events = [{"type": "hijack_lease_expired"}]
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
     result = await hub.cleanup_browser_disconnect(worker_id, ws, owned_hijack=True)
     assert result["resume_without_owner"] is False

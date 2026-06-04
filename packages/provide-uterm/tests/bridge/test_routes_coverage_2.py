@@ -216,7 +216,7 @@ class TestWsBrowserNoInitialSnapshot:
 
         async def _setup() -> None:
             async with hub._lock:
-                st = hub._workers.setdefault("w1", WorkerTermState())
+                st = hub.registry._workers.setdefault("w1", WorkerTermState())
                 st.worker_ws = AsyncMock()
                 st.worker_ws.send_text = AsyncMock()
                 st.last_snapshot = None  # No snapshot
@@ -367,7 +367,7 @@ class TestBrowserHandlerHijackRelease:
 
         now = time.monotonic()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
@@ -410,7 +410,7 @@ class TestBrowserHandlerHijackRelease:
 
         now = time.monotonic()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws

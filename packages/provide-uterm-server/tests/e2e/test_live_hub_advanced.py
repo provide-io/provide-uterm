@@ -52,7 +52,7 @@ class TestBrowserRoles:
     async def test_viewer_cannot_send_input_in_open_mode(self) -> None:
         """Viewer sends input in open mode, gets error; worker doesn't receive it."""
         async with _hub_with_roles({"*": "viewer"}) as (hub, base_url):
-            hub._dashboard_hijack_lease_s = 0.5
+            hub.lease.dashboard_hijack_lease_s = 0.5
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/browser/v1/term")) as browser,
                 connect_async_ws(_ws_url(base_url, "/ws/worker/v1/term")) as worker,

@@ -48,7 +48,7 @@ def _active_session(hijack_id: str, owner: str = "test") -> HijackSession:
 def test_snapshot_no_worker() -> None:
     app, hub = make_app()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         hijack_session=_active_session(hijack_id),
     )
 
@@ -80,7 +80,7 @@ def test_events() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -109,7 +109,7 @@ def test_events_empty_bot_state() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -126,8 +126,8 @@ def test_events_no_bot_state() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    # Register valid session but with no bot state in hub._workers
-    hub._workers["bot1"] = WorkerTermState(
+    # Register valid session but with no bot state in hub.registry._workers
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -135,16 +135,16 @@ def test_events_no_bot_state() -> None:
     # Use a different bot_id that has no state
     # But we need a valid session... let's use a workaround:
     # Get the session via bot1, then remove the bot state
-    hub._workers["bot2"] = WorkerTermState(
+    hub.registry._workers["bot2"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
     # Remove bot2's state to trigger the None branch
-    del hub._workers["bot2"]
+    del hub.registry._workers["bot2"]
     # Re-add an empty state without using a separate event loop (asyncio.Lock is
     # loop-bound; running hub coroutines on a different loop is incorrect).
-    hub._workers["bot2"] = WorkerTermState()
-    hub._workers["bot2"].hijack_session = _active_session(hijack_id)
+    hub.registry._workers["bot2"] = WorkerTermState()
+    hub.registry._workers["bot2"].hijack_session = _active_session(hijack_id)
 
     with TestClient(app) as client:
         r = client.get(f"/worker/bot2/hijack/{hijack_id}/events")
@@ -162,7 +162,7 @@ def test_step() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -177,7 +177,7 @@ def test_step() -> None:
 def test_step_no_worker() -> None:
     app, hub = make_app()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         hijack_session=_active_session(hijack_id),
     )
 
@@ -192,7 +192,7 @@ def test_step_invalid_hijack_session() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -214,7 +214,7 @@ def test_send_with_worker_and_no_guard() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -236,7 +236,7 @@ def test_send_guard_not_satisfied() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -255,7 +255,7 @@ def test_send_guard_invalid_regex() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -296,7 +296,7 @@ def test_events_has_more_true_when_exactly_limit_rows() -> None:
         st.events.append({"seq": i + 1, "ts": time.time(), "type": "snapshot", "data": {}})
     st.event_seq = 5
     st.min_event_seq = 1
-    hub._workers["bot1"] = st
+    hub.registry._workers["bot1"] = st
 
     with TestClient(app) as client:
         r = client.get(f"/worker/bot1/hijack/{hijack_id}/events?limit=5&after_seq=0")
@@ -328,7 +328,7 @@ def test_events_has_more_false_when_fewer_than_limit() -> None:
         st.events.append({"seq": i + 1, "ts": time.time(), "type": "snapshot", "data": {}})
     st.event_seq = 3
     st.min_event_seq = 1
-    hub._workers["bot1"] = st
+    hub.registry._workers["bot1"] = st
 
     with TestClient(app) as client:
         r = client.get(f"/worker/bot1/hijack/{hijack_id}/events?limit=10&after_seq=0")

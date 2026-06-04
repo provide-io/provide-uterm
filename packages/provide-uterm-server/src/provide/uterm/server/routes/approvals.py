@@ -35,7 +35,7 @@ def create_approvals_router() -> APIRouter:
                 "created_at": req.created_at,
                 "expires_at": req.expires_at,
             }
-            for req in hub._approval_store._requests.values()
+            for req in hub.approval_store._requests.values()
             if req.status == ApprovalStatus.PENDING
         ]
 
@@ -52,11 +52,11 @@ def create_approvals_router() -> APIRouter:
     async def approve_command(request_id: str, request: Request) -> dict[str, str]:
         await _require_admin(request)
         hub = request.app.state.uterm_hub
-        approval_req = hub._approval_store.get(request_id)
+        approval_req = hub.approval_store.get(request_id)
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
 
-        if not hub._approval_store.claim(request_id, ApprovalStatus.APPROVED):
+        if not hub.approval_store.claim(request_id, ApprovalStatus.APPROVED):
             raise HTTPException(status_code=400, detail="Approval request is not pending")
         await hub.resolve_approval(
             approval_req.worker_id, request_id, PolicyDecision(action="allow"), approval_req.command
@@ -67,11 +67,11 @@ def create_approvals_router() -> APIRouter:
     async def reject_command(request_id: str, request: Request, reason: str | None = None) -> dict[str, str]:
         await _require_admin(request)
         hub = request.app.state.uterm_hub
-        approval_req = hub._approval_store.get(request_id)
+        approval_req = hub.approval_store.get(request_id)
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
 
-        if not hub._approval_store.claim(request_id, ApprovalStatus.REJECTED):
+        if not hub.approval_store.claim(request_id, ApprovalStatus.REJECTED):
             raise HTTPException(status_code=400, detail="Approval request is not pending")
         await hub.resolve_approval(
             approval_req.worker_id, request_id, PolicyDecision(action="deny", reason=reason), approval_req.command

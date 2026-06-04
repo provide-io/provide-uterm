@@ -54,7 +54,7 @@ class TestSetInputModeBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[browser_ws] = "operator"
 
         before = time.time()
@@ -83,7 +83,7 @@ class TestSetInputModeBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[browser_ws] = "operator"
 
         await hub.set_input_mode("w1", "open")

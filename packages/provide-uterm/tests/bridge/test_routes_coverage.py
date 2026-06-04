@@ -89,7 +89,7 @@ class TestRestSendEmptyKeys:
         # Register a valid REST session
         async def _setup() -> None:
             async with hub._lock:
-                st = hub._workers.setdefault("w1", WorkerTermState())
+                st = hub.registry._workers.setdefault("w1", WorkerTermState())
                 st.worker_ws = AsyncMock()
                 st.worker_ws.send_text = AsyncMock()
                 st.hijack_session = HijackSession(
@@ -150,7 +150,7 @@ class TestRestHijackRelease:
 
         async def _setup() -> None:
             async with hub._lock:
-                st = hub._workers.setdefault("w1", WorkerTermState())
+                st = hub.registry._workers.setdefault("w1", WorkerTermState())
                 st.worker_ws = AsyncMock()
                 st.worker_ws.send_text = AsyncMock()
                 st.hijack_session = HijackSession(
@@ -180,7 +180,7 @@ class TestRestHijackRelease:
 
         async def _setup() -> None:
             async with hub._lock:
-                st = hub._workers.setdefault("w1", WorkerTermState())
+                st = hub.registry._workers.setdefault("w1", WorkerTermState())
                 st.worker_ws = AsyncMock()
                 st.worker_ws.send_text = AsyncMock()
                 st.hijack_session = HijackSession(

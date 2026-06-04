@@ -41,7 +41,7 @@ async def _register(
     hub: TermHub, worker_id: str, browser_ws: MagicMock, role: str, worker_ws: MagicMock | None = None
 ) -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
         if worker_ws is not None:
             st.worker_ws = worker_ws
@@ -77,9 +77,9 @@ async def test_input_playback_on_approval_resolve() -> None:
 
     # Set input mode to hijack (default)
     async with hub._lock:
-        hub._workers["w1"].input_mode = "hijack"
-        hub._workers["w1"].hijack_owner = ws
-        hub._workers["w1"].hijack_owner_expires_at = time.monotonic() + 60
+        hub.registry._workers["w1"].input_mode = "hijack"
+        hub.registry._workers["w1"].hijack_owner = ws
+        hub.registry._workers["w1"].hijack_owner_expires_at = time.monotonic() + 60
 
     # Simulate browser being paused and having buffered data
     hub._paused_browsers.add(ws)

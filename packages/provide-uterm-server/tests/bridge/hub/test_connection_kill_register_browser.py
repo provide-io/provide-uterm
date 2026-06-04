@@ -68,7 +68,7 @@ def _ws_no_principal() -> MagicMock:
 
 async def _seed_worker(hub: TermHub, worker_id: str, st: WorkerTermState) -> None:
     async with hub._lock:
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
 
 class _FakeResumeStore:
@@ -247,17 +247,17 @@ class TestRegisterBrowserReturnDict:
         ws = _ws_no_principal()
 
         await hub.register_browser("w1", ws, "operator")
-        assert hub._workers["w1"].browsers[ws] == "operator"
+        assert hub.registry._workers["w1"].browsers[ws] == "operator"
 
     async def test_creates_worker_state_when_absent(self) -> None:
         """register_browser setdefaults a WorkerTermState for an unknown worker."""
         hub = TermHub()
         ws = _ws_no_principal()
-        assert "wnew" not in hub._workers
+        assert "wnew" not in hub.registry._workers
 
         result = await hub.register_browser("wnew", ws, "viewer")
-        assert "wnew" in hub._workers
-        assert hub._workers["wnew"].browsers[ws] == "viewer"
+        assert "wnew" in hub.registry._workers
+        assert hub.registry._workers["wnew"].browsers[ws] == "viewer"
         # Fresh state defaults: offline, hijack mode, no snapshot.
         assert result == {
             "is_hijacked": False,
@@ -334,7 +334,7 @@ class TestRegisterBrowserQuota:
         assert hub._principal_browser_counts["alice"] == 1
         assert ws not in hub._ws_principal
         # Rejected ws never landed in the browsers map.
-        assert ws not in hub._workers["w1"].browsers
+        assert ws not in hub.registry._workers["w1"].browsers
 
     async def test_over_limit_also_raises(self) -> None:
         """current > limit also triggers 1008 (>= comparison, not ==)."""
@@ -494,7 +494,7 @@ class TestRegisterBrowserRollback:
         assert ws not in hub._ws_principal
         assert ws not in hub._ws_to_resume_token
         # The browser was never recorded in state.
-        assert ws not in hub._workers["w1"].browsers
+        assert ws not in hub.registry._workers["w1"].browsers
 
     async def test_rollback_preserves_other_connections_of_same_principal(self) -> None:
         """Rollback decrements (not zeroes) when the principal has other live conns."""

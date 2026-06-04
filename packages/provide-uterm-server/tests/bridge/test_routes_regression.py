@@ -50,7 +50,7 @@ def test_acquire_pause_message_contains_hijack_id() -> None:
     """Regression fix 3: pause control message sent to worker must include hijack_id for correlation."""
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test", "lease_s": 60})
@@ -75,7 +75,7 @@ def test_acquire_already_hijacked_does_not_send_resume() -> None:
 
     # Pre-inject an active session so _try_acquire_rest_hijack returns (False, already_hijacked)
     existing_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(existing_id, "owner_a"),
     )
@@ -106,7 +106,7 @@ def test_events_empty_bot_state_via_direct_dict_assignment() -> None:
     hijack_id = str(uuid.uuid4())
 
     # Correct pattern: direct dict assignment — no extra event loop
-    hub._workers["botA"] = WorkerTermState(
+    hub.registry._workers["botA"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
@@ -136,7 +136,7 @@ def test_acquire_sends_compensating_resume_on_error_after_pause() -> None:
 
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     async def _raise(*args: object, **kwargs: object) -> None:
         raise RuntimeError("simulated error after pause")
@@ -167,7 +167,7 @@ def test_acquire_sends_compensating_resume_on_cancellation_after_pause() -> None
 
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     async def _cancel(*args: object, **kwargs: object) -> None:
         raise _asyncio.CancelledError
@@ -197,7 +197,7 @@ def test_acquire_compensating_resume_swallows_send_worker_failure(caplog) -> Non
 
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     async def _append_event_raises(*args: object, **kwargs: object) -> None:
         raise RuntimeError("simulated commit-time failure")
@@ -225,7 +225,7 @@ def test_acquire_no_compensating_resume_on_success() -> None:
     """Round-7 fix 1: a successful acquire must NOT send an extra compensating resume."""
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     with TestClient(app) as client:
         r = client.post("/worker/bot1/hijack/acquire", json={"owner": "test"})
@@ -244,7 +244,7 @@ def test_acquire_no_resume_on_race_loss() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     existing_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(existing_id, "owner_a"),
     )
@@ -272,17 +272,17 @@ def test_snapshot_returns_fresh_lease_after_concurrent_heartbeat() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
 
-    original_expires = hub._workers["bot1"].hijack_session.lease_expires_at  # type: ignore[union-attr]
+    original_expires = hub.registry._workers["bot1"].hijack_session.lease_expires_at  # type: ignore[union-attr]
     extended_expires = original_expires + 3600
 
     async def _extend_and_return(bot_id: str, timeout_ms: int = 1500) -> dict:
         # Simulate a concurrent heartbeat mutating the lease while we wait
-        st = hub._workers.get(bot_id)
+        st = hub.registry._workers.get(bot_id)
         if st and st.hijack_session:
             st.hijack_session.lease_expires_at = extended_expires
         return {"screen": "hello", "cols": 80, "rows": 25}
@@ -307,16 +307,16 @@ def test_snapshot_falls_back_to_original_lease_if_session_gone() -> None:
     app, hub = make_app()
     mock_ws = AsyncMock()
     hijack_id = str(uuid.uuid4())
-    hub._workers["bot1"] = WorkerTermState(
+    hub.registry._workers["bot1"] = WorkerTermState(
         worker_ws=mock_ws,
         hijack_session=_active_session(hijack_id),
     )
 
-    original_expires = hub._workers["bot1"].hijack_session.lease_expires_at  # type: ignore[union-attr]
+    original_expires = hub.registry._workers["bot1"].hijack_session.lease_expires_at  # type: ignore[union-attr]
 
     async def _release_and_return(bot_id: str, timeout_ms: int = 1500) -> dict:
         # Simulate the session being released while waiting for a snapshot
-        st = hub._workers.get(bot_id)
+        st = hub.registry._workers.get(bot_id)
         if st:
             st.hijack_session = None
         return {"screen": "bye"}
@@ -345,7 +345,7 @@ async def test_acquire_succeeds_when_worker_connects_after_cleanup() -> None:
     authoritative liveness gate.
 
     We verify by having _send_worker succeed (returns True) even though no
-    worker WS is pre-registered in hub._workers.
+    worker WS is pre-registered in hub.registry._workers.
     """
     from unittest.mock import patch
 
@@ -391,7 +391,7 @@ def test_acquire_no_worker_race_sends_exactly_one_resume() -> None:
 
     app, hub = make_app()
     mock_ws = AsyncMock()
-    hub._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers["bot1"] = WorkerTermState(worker_ws=mock_ws)
 
     async def _no_worker(worker_id: str, **kw: object) -> tuple[bool, str | None]:
         return False, "no_worker"

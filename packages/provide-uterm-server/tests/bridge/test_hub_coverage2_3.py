@@ -56,7 +56,7 @@ class TestRestSendKeysTooLong:
 
         async def _setup() -> None:
             async with hub._lock:
-                st = hub._workers.setdefault("w1", WorkerTermState())
+                st = hub.registry._workers.setdefault("w1", WorkerTermState())
                 st.worker_ws = _make_ws()
                 st.worker_ws.send_text = AsyncMock()
                 st.hijack_session = HijackSession(
@@ -322,7 +322,7 @@ class TestResumeWithoutOwnerRecheckTrue:
                     # so that owned_hijack stays True but was_owner=False at disconnect
                     async def _expire_hijack() -> None:
                         async with hub._lock:
-                            st = hub._workers.get("w1")
+                            st = hub.registry._workers.get("w1")
                             if st is not None:
                                 st.hijack_owner = None
                                 st.hijack_owner_expires_at = None

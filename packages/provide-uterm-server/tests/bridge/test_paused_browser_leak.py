@@ -32,7 +32,7 @@ async def test_cleanup_browser_disconnect_clears_paused_browser() -> None:
     hub = _make_hub()
     ws = _make_ws()
     async with hub._lock:
-        st = hub._workers.setdefault("w1", WorkerTermState())
+        st = hub.registry._workers.setdefault("w1", WorkerTermState())
         st.browsers[ws] = "viewer"
     hub._paused_browsers.add(ws)
     hub._hold_buffers[ws] = "queued"
@@ -48,7 +48,7 @@ async def test_remove_dead_browsers_clears_paused_browser() -> None:
     hub = _make_hub()
     ws = _make_ws()
     async with hub._lock:
-        st = hub._workers.setdefault("w1", WorkerTermState())
+        st = hub.registry._workers.setdefault("w1", WorkerTermState())
         st.browsers[ws] = "viewer"
     hub._paused_browsers.add(ws)
     hub._hold_buffers[ws] = "queued"

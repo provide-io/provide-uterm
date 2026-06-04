@@ -36,7 +36,7 @@ def _make_ws() -> MagicMock:
 
 async def _register_worker(hub: TermHub, worker_id: str, worker_ws: Any | None = None) -> WorkerTermState:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         if worker_ws is not None:
             st.worker_ws = worker_ws
         return st
@@ -114,7 +114,7 @@ class TestTryAcquireRestHijack:
         acquired, err = await hub.try_acquire_rest_hijack("w1", owner="test", lease_s=60, hijack_id="hj-1", now=now)
         assert acquired is True
         async with hub._lock:
-            hs = hub._workers["w1"].hijack_session
+            hs = hub.registry._workers["w1"].hijack_session
             assert hs is not None
             assert hs.acquired_at == now
             assert hs.acquired_at is not None
@@ -128,7 +128,7 @@ class TestTryAcquireRestHijack:
         acquired, err = await hub.try_acquire_rest_hijack("w1", owner="test", lease_s=60, hijack_id="hj-1", now=now)
         assert acquired is True
         async with hub._lock:
-            hs = hub._workers["w1"].hijack_session
+            hs = hub.registry._workers["w1"].hijack_session
             assert hs is not None
             assert hs.last_heartbeat == now
             assert hs.last_heartbeat is not None
@@ -193,8 +193,8 @@ class TestRemoveDeadBrowsers:
 
         await hub.remove_dead_browsers("w1", {dead_ws})
         async with hub._lock:
-            assert dead_ws not in hub._workers["w1"].browsers
-            assert alive_ws in hub._workers["w1"].browsers
+            assert dead_ws not in hub.registry._workers["w1"].browsers
+            assert alive_ws in hub.registry._workers["w1"].browsers
 
     async def test_owner_cleared_only_when_and_condition_both_true(self) -> None:
         """mutmut_9: is_dashboard_hijack_active AND hijack_owner is ws (not OR)."""
@@ -212,7 +212,7 @@ class TestRemoveDeadBrowsers:
         await hub.remove_dead_browsers("w1", {non_owner_dead})
         async with hub._lock:
             # Owner should still be set
-            assert hub._workers["w1"].hijack_owner is owner_ws
+            assert hub.registry._workers["w1"].hijack_owner is owner_ws
 
     async def test_owner_expires_at_set_to_none_not_empty(self) -> None:
         """mutmut_13: hijack_owner_expires_at must be set to None, not ''."""
@@ -227,7 +227,7 @@ class TestRemoveDeadBrowsers:
 
         await hub.remove_dead_browsers("w1", {owner_ws})
         async with hub._lock:
-            assert hub._workers["w1"].hijack_owner_expires_at is None
+            assert hub.registry._workers["w1"].hijack_owner_expires_at is None
 
     async def test_resume_sent_with_correct_keys(self) -> None:
         """mutmut_28-44: resume message must have correct keys/values."""
@@ -302,7 +302,7 @@ class TestExtendHijackLease:
         new_expiry = await hub.extend_hijack_lease("w1", hs.hijack_id, hs.owner, 30, now)
         assert new_expiry is not None
         async with hub._lock:
-            updated_hs = hub._workers["w1"].hijack_session
+            updated_hs = hub.registry._workers["w1"].hijack_session
             assert updated_hs is not None
             assert updated_hs.last_heartbeat == now
             assert updated_hs.last_heartbeat is not None

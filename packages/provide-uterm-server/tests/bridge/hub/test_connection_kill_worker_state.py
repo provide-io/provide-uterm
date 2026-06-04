@@ -21,7 +21,7 @@ Targets three methods on
 
 Every test constructs a FRESH :class:`TermHub` (as in
 ``test_connections_coverage.py``), seeds worker state via
-``async with hub._lock: hub._workers[wid] = WorkerTermState()`` and drives the
+``async with hub._lock: hub.registry._workers[wid] = WorkerTermState()`` and drives the
 methods through the hub facade. Observability is verified by patching the
 ``logger`` in the connection module and asserting the exact event string +
 positional args.
@@ -41,7 +41,7 @@ _LOGGER_PATH = "provide.uterm.server.bridge.hub.connection.logger"
 async def _seed_worker(hub: TermHub, worker_id: str, st: WorkerTermState) -> None:
     """Install *st* as the worker state for *worker_id* under the hub lock."""
     async with hub._lock:
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
 
 def _active_rest_session() -> HijackSession:
@@ -69,7 +69,7 @@ class TestSetWorkerHello:
             result = await hub.set_worker_hello("ghost", "open")
         assert result is False
         # Nothing was created for the ghost worker.
-        assert hub._workers.get("ghost") is None
+        assert hub.registry._workers.get("ghost") is None
         # No protocol_version => neither protocol log fired.
         logger.info.assert_not_called()
         logger.warning.assert_not_called()
@@ -107,7 +107,7 @@ class TestSetWorkerHello:
 
         assert result is False
         # Mode was NOT changed to "open".
-        assert hub._workers[worker_id].input_mode == "hijack"
+        assert hub.registry._workers[worker_id].input_mode == "hijack"
         logger.warning.assert_called_once_with(
             "worker_hello_mode_blocked worker_id=%s — cannot switch to open while hijack active",
             worker_id,
@@ -127,9 +127,9 @@ class TestSetWorkerHello:
             result = await hub.set_worker_hello(worker_id, "open")
 
         assert result is True
-        assert hub._workers[worker_id].input_mode == "open"
+        assert hub.registry._workers[worker_id].input_mode == "open"
         # No version supplied -> protocol_version stays None, no protocol logs.
-        assert hub._workers[worker_id].protocol_version is None
+        assert hub.registry._workers[worker_id].protocol_version is None
         logger.info.assert_not_called()
         logger.warning.assert_not_called()
 
@@ -146,7 +146,7 @@ class TestSetWorkerHello:
             result = await hub.set_worker_hello(worker_id, "hijack")
 
         assert result is True
-        assert hub._workers[worker_id].input_mode == "hijack"
+        assert hub.registry._workers[worker_id].input_mode == "hijack"
         # The block-warning is only for the open path; it must NOT fire here.
         logger.warning.assert_not_called()
 
@@ -163,8 +163,8 @@ class TestSetWorkerHello:
             result = await hub.set_worker_hello(worker_id, "open", protocol_version=2)
 
         assert result is True
-        assert hub._workers[worker_id].input_mode == "open"
-        assert hub._workers[worker_id].protocol_version == 2
+        assert hub.registry._workers[worker_id].input_mode == "open"
+        assert hub.registry._workers[worker_id].protocol_version == 2
         logger.info.assert_called_once_with("worker_hello_protocol worker_id=%s version=%d", worker_id, 2)
         # version 2 >= 1 -> no legacy warning.
         logger.warning.assert_not_called()
@@ -181,8 +181,8 @@ class TestSetWorkerHello:
             result = await hub.set_worker_hello(worker_id, "open", protocol_version=0)
 
         assert result is True
-        assert hub._workers[worker_id].input_mode == "open"
-        assert hub._workers[worker_id].protocol_version == 0
+        assert hub.registry._workers[worker_id].input_mode == "open"
+        assert hub.registry._workers[worker_id].protocol_version == 0
         logger.info.assert_called_once_with("worker_hello_protocol worker_id=%s version=%d", worker_id, 0)
         logger.warning.assert_called_once_with("worker_hello_legacy_protocol worker_id=%s version=%d", worker_id, 0)
 
@@ -199,9 +199,9 @@ class TestSetWorkerHello:
             result = await hub.set_worker_hello(worker_id, "open")
 
         assert result is True
-        assert hub._workers[worker_id].input_mode == "open"
+        assert hub.registry._workers[worker_id].input_mode == "open"
         # Unchanged: the `if protocol_version is not None` guard kept the old value.
-        assert hub._workers[worker_id].protocol_version == 7
+        assert hub.registry._workers[worker_id].protocol_version == 7
         logger.info.assert_not_called()
         logger.warning.assert_not_called()
 
@@ -223,7 +223,7 @@ class TestSetWorkerTunnelFlag:
         result = await hub.set_worker_tunnel_flag(worker_id, True)
 
         assert result is None
-        assert hub._workers[worker_id].is_tunnel_worker is True
+        assert hub.registry._workers[worker_id].is_tunnel_worker is True
 
     async def test_sets_flag_false(self) -> None:
         """Known worker -> is_tunnel_worker set to False exactly (distinct from the True arc)."""
@@ -236,14 +236,14 @@ class TestSetWorkerTunnelFlag:
         result = await hub.set_worker_tunnel_flag(worker_id, False)
 
         assert result is None
-        assert hub._workers[worker_id].is_tunnel_worker is False
+        assert hub.registry._workers[worker_id].is_tunnel_worker is False
 
     async def test_noop_for_unknown_worker(self) -> None:
         """Unknown worker_id -> noop, no WorkerTermState created."""
         hub = TermHub()
         result = await hub.set_worker_tunnel_flag("ghost", True)
         assert result is None
-        assert hub._workers.get("ghost") is None
+        assert hub.registry._workers.get("ghost") is None
 
     async def test_does_not_touch_other_workers(self) -> None:
         """Setting the flag on one worker leaves a sibling worker's flag unchanged."""
@@ -257,8 +257,8 @@ class TestSetWorkerTunnelFlag:
 
         await hub.set_worker_tunnel_flag("w-target", True)
 
-        assert hub._workers["w-target"].is_tunnel_worker is True
-        assert hub._workers["w-other"].is_tunnel_worker is False
+        assert hub.registry._workers["w-target"].is_tunnel_worker is True
+        assert hub.registry._workers["w-other"].is_tunnel_worker is False
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +279,7 @@ class TestUpdateLastSnapshot:
         result = await hub.update_last_snapshot(worker_id, snapshot)
 
         assert result is None
-        assert hub._workers[worker_id].last_snapshot is snapshot
+        assert hub.registry._workers[worker_id].last_snapshot is snapshot
 
     async def test_overwrites_previous_snapshot(self) -> None:
         """A second update replaces the stored snapshot (not merged/appended)."""
@@ -292,14 +292,14 @@ class TestUpdateLastSnapshot:
         new_snapshot = {"new": True}
         await hub.update_last_snapshot(worker_id, new_snapshot)
 
-        assert hub._workers[worker_id].last_snapshot is new_snapshot
+        assert hub.registry._workers[worker_id].last_snapshot is new_snapshot
 
     async def test_noop_for_unknown_worker(self) -> None:
         """Unknown worker_id -> noop, no WorkerTermState created."""
         hub = TermHub()
         result = await hub.update_last_snapshot("ghost", {"a": 1})
         assert result is None
-        assert hub._workers.get("ghost") is None
+        assert hub.registry._workers.get("ghost") is None
 
     async def test_does_not_touch_other_workers(self) -> None:
         """Updating one worker's snapshot leaves a sibling worker's snapshot unchanged."""
@@ -313,8 +313,8 @@ class TestUpdateLastSnapshot:
 
         await hub.update_last_snapshot("w-target", {"fresh": 1})
 
-        assert hub._workers["w-target"].last_snapshot == {"fresh": 1}
-        assert hub._workers["w-other"].last_snapshot is sentinel
+        assert hub.registry._workers["w-target"].last_snapshot == {"fresh": 1}
+        assert hub.registry._workers["w-other"].last_snapshot is sentinel
 
 
 __all__ = [

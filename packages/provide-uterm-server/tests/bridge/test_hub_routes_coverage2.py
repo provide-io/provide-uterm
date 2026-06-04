@@ -40,7 +40,7 @@ class TestDisconnectWorkerCloseError:
         mock_ws.send_text = AsyncMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = mock_ws
 
         ok = await hub.disconnect_worker("w1")
@@ -74,7 +74,7 @@ class TestDisconnectWorkerWasHijacked:
 
         now = time.time()
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = mock_ws
             st.hijack_session = HijackSession(
                 hijack_id="test-hid",
@@ -109,7 +109,7 @@ class TestRestSendToctouRecheck:
         now = time.time()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
             st.hijack_session = HijackSession(
@@ -122,7 +122,7 @@ class TestRestSendToctouRecheck:
 
         async def _guard_that_expires(*args, **kwargs):
             async with hub._lock:
-                st2 = hub._workers.get("w1")
+                st2 = hub.registry._workers.get("w1")
                 if st2 is not None:
                     st2.hijack_session = None  # simulate expiry
             return True, {"screen": ""}, None
@@ -152,7 +152,7 @@ class TestRestStepToctouRecheck:
         now = time.time()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
             st.hijack_session = HijackSession(
@@ -169,7 +169,7 @@ class TestRestStepToctouRecheck:
             result = await _original(worker_id, hijack_id)
             if result is not None:
                 async with hub._lock:
-                    st2 = hub._workers.get(worker_id)
+                    st2 = hub.registry._workers.get(worker_id)
                     if st2 is not None:
                         st2.hijack_session = None
             return result

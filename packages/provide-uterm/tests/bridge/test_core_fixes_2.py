@@ -66,7 +66,7 @@ class TestDisconnectWorkerWasHijackedLogic:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
             # Explicitly no hijack
@@ -93,7 +93,7 @@ class TestDisconnectWorkerWasHijackedLogic:
         hijack_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
@@ -127,7 +127,7 @@ class TestDisconnectWorkerBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
@@ -149,7 +149,7 @@ class TestDisconnectWorkerBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
@@ -171,7 +171,7 @@ class TestDisconnectWorkerBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
@@ -211,7 +211,7 @@ class TestDisconnectWorkerCallArgs:
         hijack_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
@@ -245,7 +245,7 @@ class TestDisconnectWorkerCallArgs:
         hijack_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.hijack_owner = hijack_ws
@@ -274,7 +274,7 @@ class TestDisconnectWorkerCallArgs:
         worker_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             # No browsers — prune will remove the state
 
@@ -316,7 +316,7 @@ class TestDisconnectWorkerCloseException:
         worker_ws.close = AsyncMock(side_effect=RuntimeError("close failed"))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "operator"
 
@@ -354,7 +354,7 @@ class TestSetInputModeActiveHijackError:
         worker_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = hijack_ws
             st.hijack_owner_expires_at = time.monotonic() + 3600
@@ -379,7 +379,7 @@ class TestSetInputModeActiveHijackError:
         hub = _make_hub()
 
         async with hub._lock:
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         ok, err = await hub.set_input_mode("w1", "open")
         assert ok is True
@@ -405,7 +405,7 @@ class TestSetInputModeBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[browser_ws] = "operator"
 
         before = time.time()  # wall-clock — comparing against broadcast ts
@@ -434,7 +434,7 @@ class TestSetInputModeBroadcastPayload:
         browser_ws = _make_async_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[browser_ws] = "operator"
 
         await hub.set_input_mode("w1", "open")

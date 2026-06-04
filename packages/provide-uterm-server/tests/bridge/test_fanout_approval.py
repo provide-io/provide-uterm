@@ -177,11 +177,11 @@ async def test_fanout_approval_expiration_cleanup(controller, hub, gate):
     assert req_id in controller._pending_approvals
 
     # Force expiration in Hub
-    req = hub._approval_store.get(req_id)
+    req = hub.approval_store.get(req_id)
     req.expires_at = time.time() - 10
 
     # Trigger cleanup
-    await hub._approval_store.cleanup_expired()
+    await hub.approval_store.cleanup_expired()
 
     # Verify controller state is pruned
     assert req_id not in controller._pending_approvals
@@ -327,4 +327,4 @@ async def test_fanout_approval_rbac_admin_only(controller, hub, gate):
 
     resp = await approve_route.endpoint(req_id, mock_request)
     assert resp["status"] == "approved"
-    assert hub._approval_store.get(req_id).status.value == "approved"
+    assert hub.approval_store.get(req_id).status.value == "approved"

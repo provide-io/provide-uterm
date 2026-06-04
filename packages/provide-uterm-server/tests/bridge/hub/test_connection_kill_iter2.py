@@ -56,7 +56,7 @@ def _ws() -> MagicMock:
 
 async def _put(hub: TermHub, worker_id: str, st: WorkerTermState) -> None:
     async with hub._lock:
-        hub._workers[worker_id] = st
+        hub.registry._workers[worker_id] = st
 
 
 # ===========================================================================

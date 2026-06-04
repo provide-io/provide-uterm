@@ -39,7 +39,7 @@ def _make_ws(subject_id: str) -> MagicMock:
 
 async def _register(hub: TermHub, ws: MagicMock, worker_id: str = "w1") -> None:
     async with hub._lock:
-        hub._workers.setdefault(worker_id, WorkerTermState())
+        hub.registry._workers.setdefault(worker_id, WorkerTermState())
     await hub.register_browser(worker_id, ws, "viewer")
 
 
@@ -84,5 +84,5 @@ async def test_successful_register_mints_exactly_one_token() -> None:
 
 async def _register_returning(hub: TermHub, ws: MagicMock, worker_id: str = "w1") -> dict:
     async with hub._lock:
-        hub._workers.setdefault(worker_id, WorkerTermState())
+        hub.registry._workers.setdefault(worker_id, WorkerTermState())
     return await hub.register_browser(worker_id, ws, "viewer")

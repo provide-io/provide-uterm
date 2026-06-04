@@ -29,13 +29,13 @@ def _make_ws() -> MagicMock:
 
 async def _register_worker(hub: TermHub, worker_id: str, ws: Any) -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.worker_ws = ws
 
 
 async def _register_browser(hub: TermHub, worker_id: str, browser_ws: Any, role: str = "admin") -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
 
 
@@ -158,7 +158,7 @@ class TestBroadcastHijackStateSt2None:
         worker_ws = _make_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "viewer"
 
@@ -166,7 +166,7 @@ class TestBroadcastHijackStateSt2None:
         # If we also clear the worker_ws (to allow prune), the worker state
         # should be pruned and st2 should be None.
         async with hub._lock:
-            st2 = hub._workers["w1"]
+            st2 = hub.registry._workers["w1"]
             st2.worker_ws = None  # so prune_if_idle removes it
 
         # broadcast_hijack_state will find st (browser dead), remove it,
@@ -188,7 +188,7 @@ class TestSendWorkerFailure:
         worker_ws.send_text = AsyncMock(side_effect=RuntimeError("connection dropped"))
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
 
         result = await hub.send_worker("w1", {"type": "test"})
@@ -196,7 +196,7 @@ class TestSendWorkerFailure:
 
         # worker_ws should be cleared
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             assert st2 is None or st2.worker_ws is None
 
 
@@ -224,7 +224,7 @@ class TestGetRecentEventsWithEvents:
         hub = _make_hub()
 
         async with hub._lock:
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         # Append some events
         await hub.append_event("w1", "snapshot", {"screen": "hello"})
@@ -262,7 +262,7 @@ class TestCleanupBrowserDisconnectResumeWithoutOwner:
         worker_ws = _make_ws()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             # No dashboard hijack active (hijack_owner is None → was_owner=False)
@@ -291,7 +291,7 @@ class TestForceReleaseHijackDashboard:
         worker_ws.send_text = AsyncMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = owner_ws
             st.hijack_owner_expires_at = time.monotonic() + 300
@@ -300,5 +300,5 @@ class TestForceReleaseHijackDashboard:
         assert result is True
 
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             assert st2 is None or st2.hijack_owner is None

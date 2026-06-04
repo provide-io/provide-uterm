@@ -52,7 +52,7 @@ def _make_worker_ws() -> MagicMock:
 
 async def _register(hub: TermHub, worker_id: str, browser_ws: Any, role: str, worker_ws: Any | None = None) -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.browsers[browser_ws] = role
         if worker_ws is not None:
             st.worker_ws = worker_ws
@@ -363,7 +363,7 @@ class TestBrowserHandlersResumeReclaimFail:
 
         # Register worker and browser; set input_mode = "open" so reclaim check fails
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.browsers[ws] = "admin"
             st.worker_ws = worker_ws
             st.input_mode = "open"  # reclaim condition: st.input_mode != "open" → False

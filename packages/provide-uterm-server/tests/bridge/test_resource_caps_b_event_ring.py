@@ -28,7 +28,7 @@ def _make_hub(max_event_data_chars: int = _CAP) -> TermHub:
 
 async def _register_worker(hub: TermHub, worker_id: str) -> None:
     async with hub._lock:
-        hub._workers[worker_id] = WorkerTermState()
+        hub.registry._workers[worker_id] = WorkerTermState()
 
 
 async def test_term_event_data_truncated_in_ring() -> None:
@@ -45,7 +45,7 @@ async def test_term_event_data_truncated_in_ring() -> None:
 
     # Also verify it landed in the ring correctly
     async with hub._lock:
-        st = hub._workers["w1"]
+        st = hub.registry._workers["w1"]
         ring_evt = st.events[-1]
     assert len(ring_evt["data"]["data"]) == _CAP
 
@@ -107,7 +107,7 @@ async def test_live_broadcast_receives_full_data_while_ring_is_truncated() -> No
 
     async with hub._lock:
         st = WorkerTermState()
-        hub._workers["w1"] = st
+        hub.registry._workers["w1"] = st
         st.browsers[browser_ws] = "viewer"
 
     long_data = "Z" * (_CAP * 3)  # well above cap

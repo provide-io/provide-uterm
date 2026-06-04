@@ -35,7 +35,7 @@ def _make_ws() -> MagicMock:
 
 async def _register_worker(hub: TermHub, worker_id: str, worker_ws: Any | None = None) -> WorkerTermState:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         if worker_ws is not None:
             st.worker_ws = worker_ws
         return st
@@ -256,7 +256,7 @@ class TestPrepareBrowserInput:
         await hub.prepare_browser_input("w1", non_owner)
         async with hub._lock:
             # Expiry should not have changed (or changed by tiny delta)
-            new_expiry = hub._workers["w1"].hijack_owner_expires_at
+            new_expiry = hub.registry._workers["w1"].hijack_owner_expires_at
             assert new_expiry is not None
 
     async def test_owner_ws_lease_extended_not_negated(self) -> None:
@@ -275,7 +275,7 @@ class TestPrepareBrowserInput:
         # Prepare for owner — lease should be extended
         await hub.prepare_browser_input("w1", owner_ws)
         async with hub._lock:
-            new_expiry = hub._workers["w1"].hijack_owner_expires_at
+            new_expiry = hub.registry._workers["w1"].hijack_owner_expires_at
         # Expiry should be around time.monotonic() + _dashboard_hijack_lease_s
         assert new_expiry is not None
         assert new_expiry > before + 10  # extended
@@ -294,7 +294,7 @@ class TestPrepareBrowserInput:
 
         await hub.prepare_browser_input("w1", owner_ws)
         async with hub._lock:
-            assert hub._workers["w1"].hijack_owner_expires_at is not None
+            assert hub.registry._workers["w1"].hijack_owner_expires_at is not None
 
     async def test_owner_expires_at_not_subtracted(self) -> None:
         """mutmut_15: hijack_owner_expires_at must be time.monotonic() + lease, not - lease."""
@@ -310,7 +310,7 @@ class TestPrepareBrowserInput:
 
         await hub.prepare_browser_input("w1", owner_ws)
         async with hub._lock:
-            new_expiry = hub._workers["w1"].hijack_owner_expires_at
+            new_expiry = hub.registry._workers["w1"].hijack_owner_expires_at
         # Must be in the future (not in the past due to subtraction)
         assert new_expiry is not None
         assert new_expiry > time.monotonic()

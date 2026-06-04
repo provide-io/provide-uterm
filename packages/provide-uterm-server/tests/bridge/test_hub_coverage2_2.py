@@ -32,7 +32,7 @@ class TestCleanupExpiredHijackShouldResumeFalse:
         now = time.monotonic()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = _make_ws()
             # Dashboard hijack expired
             fake_browser_ws = _make_ws()
@@ -51,7 +51,7 @@ class TestCleanupExpiredHijackShouldResumeFalse:
         assert result is True  # dashboard expired
 
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             assert st2 is not None
             assert st2.hijack_owner is None  # dashboard owner cleared
             assert st2.hijack_session is not None  # REST still active
@@ -71,7 +71,7 @@ class TestCleanupExpiredHijackShouldResumeFalseAfterRecheck:
 
         # Set up an expired dashboard hijack (so cleanup will fire)
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.hijack_owner = _make_ws()  # any ws
             st.hijack_owner_expires_at = now - 1  # expired
@@ -85,7 +85,7 @@ class TestCleanupExpiredHijackShouldResumeFalseAfterRecheck:
             result = await original_acquire()
             # On the 2nd lock acquisition (the recheck), install a new hijack
             if acquire_count == 2:
-                st = hub._workers.get("w1")
+                st = hub.registry._workers.get("w1")
                 if st is not None and st.hijack_session is None:
                     st.hijack_session = HijackSession(
                         hijack_id="new-hijack",
@@ -117,7 +117,7 @@ class TestCleanupExpiredHijackRecheckTrue:
 
         # Expired REST session — should_resume will be True after first lock
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = _make_ws()
             st.hijack_session = HijackSession(
                 hijack_id="old-hijack",
@@ -145,7 +145,7 @@ class TestCleanupExpiredHijackRecheckTrue:
             acquire_count += 1
             result = await original_acquire()
             if acquire_count == 2:
-                st = hub._workers.get("w1")
+                st = hub.registry._workers.get("w1")
                 if st is not None:
                     # Make hub think something is hijacked
                     fake_ws = _make_ws()
@@ -192,7 +192,7 @@ class TestRemoveDeadBrowsersClearsOwner:
         worker_ws.send_text = AsyncMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
@@ -202,7 +202,7 @@ class TestRemoveDeadBrowsersClearsOwner:
         assert result is True  # notify_hijack_off was True
 
         async with hub._lock:
-            st2 = hub._workers.get("w1")
+            st2 = hub.registry._workers.get("w1")
             assert st2 is not None
             assert st2.hijack_owner is None
 
@@ -223,7 +223,7 @@ class TestRemoveDeadBrowsersRecheckFindsHijack:
         worker_ws.send_text = AsyncMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[owner_ws] = "admin"
             st.hijack_owner = owner_ws
@@ -238,7 +238,7 @@ class TestRemoveDeadBrowsersRecheckFindsHijack:
             acquire_count += 1
             result = await original_acquire()
             if acquire_count == 2:
-                st = hub._workers.get("w1")
+                st = hub.registry._workers.get("w1")
                 if st is not None and st.hijack_session is None:
                     st.hijack_session = HijackSession(
                         hijack_id="injected",
@@ -286,7 +286,7 @@ class TestReleaseRestHijackNotFound:
         now = time.monotonic()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.hijack_session = HijackSession(
                 hijack_id="correct-id",
                 owner="op",
@@ -304,7 +304,7 @@ class TestReleaseRestHijackNotFound:
         hub = TermHub()
 
         async with hub._lock:
-            hub._workers.setdefault("w1", WorkerTermState())
+            hub.registry._workers.setdefault("w1", WorkerTermState())
 
         was_released, should_resume = await hub.release_rest_hijack("w1", "any-id")
         assert was_released is False
@@ -318,7 +318,7 @@ class TestReleaseRestHijackNotFound:
 
 async def _setup_hijack_session(hub: TermHub, worker_id: str, hid: str, now: float) -> None:
     async with hub._lock:
-        st = hub._workers.setdefault(worker_id, WorkerTermState())
+        st = hub.registry._workers.setdefault(worker_id, WorkerTermState())
         st.worker_ws = _make_ws()
         st.worker_ws.send_text = AsyncMock()
         st.hijack_session = HijackSession(

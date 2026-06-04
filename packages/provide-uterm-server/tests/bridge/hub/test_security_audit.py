@@ -20,7 +20,7 @@ async def test_hub_drops_input_immediately_after_lease_expiry():
     hijack_id = "h1"
 
     # Mock a worker state
-    hub._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
+    hub.registry._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
 
     # 1. Acquire REST lease
     now = time.monotonic()
@@ -34,7 +34,7 @@ async def test_hub_drops_input_immediately_after_lease_expiry():
     await hub.cleanup_expired_hijack(worker_id)
 
     async with hub._lock:
-        st = hub._workers.get(worker_id)
+        st = hub.registry._workers.get(worker_id)
         assert st.hijack_session is None
 
 
@@ -45,7 +45,7 @@ async def test_hub_rejects_heartbeat_from_wrong_principal():
     hijack_id = "h2"
 
     # Mock a worker state
-    hub._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
+    hub.registry._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
 
     # 1. Admin acquires lease
     now = time.monotonic()
@@ -63,7 +63,7 @@ async def test_hub_atomic_hijack_acquisition():
     worker_id = "w3"
 
     # Mock a worker state
-    hub._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
+    hub.registry._workers[worker_id] = WorkerTermState(input_mode="hijack", worker_ws=AsyncMock())
 
     async def attempt_hijack(user_id):
         success, err = await hub.try_acquire_rest_hijack(

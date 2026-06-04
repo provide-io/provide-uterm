@@ -664,7 +664,7 @@ class MessageRouter:
                 and not hub.is_hijacked(st)
             ):
                 st.hijack_owner = ws
-                st.hijack_owner_expires_at = time.monotonic() + hub._dashboard_hijack_lease_s
+                st.hijack_owner_expires_at = time.monotonic() + hub.lease.dashboard_hijack_lease_s
                 return True
         return False
 

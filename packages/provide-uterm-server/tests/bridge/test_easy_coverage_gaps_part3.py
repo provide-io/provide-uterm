@@ -40,7 +40,7 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
     caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
@@ -64,14 +64,14 @@ async def test_worker_hello_without_protocol_version_applies_mode() -> None:
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # protocol_version omitted -> None -> skip the version-record branch (222->224).
     applied = await hub.set_worker_hello("w1", "open")
     assert applied is True
-    assert hub._workers["w1"].input_mode == "open"
+    assert hub.registry._workers["w1"].input_mode == "open"
     # Negative direction: the version is NOT recorded (kills the `is None` mutant
     # together with the positive test below).
-    assert hub._workers["w1"].protocol_version is None
+    assert hub.registry._workers["w1"].protocol_version is None
 
 
 async def test_worker_hello_records_provided_protocol_version() -> None:
@@ -81,11 +81,11 @@ async def test_worker_hello_records_provided_protocol_version() -> None:
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Positive direction (222->223): a provided version IS recorded.
     applied = await hub.set_worker_hello("w1", "open", protocol_version=2)
     assert applied is True
-    assert hub._workers["w1"].protocol_version == 2
+    assert hub.registry._workers["w1"].protocol_version == 2
 
 
 # ---------------------------------------------------------------------------
@@ -111,11 +111,11 @@ async def test_set_worker_tunnel_flag_sets_flag_for_known_worker() -> None:
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Positive direction (193->194): a registered worker has its flag set (kills
     # the `is None` mutant together with the unknown-worker no-op test above).
     await hub.connection_mgr.set_worker_tunnel_flag("w1", value=True)
-    assert hub._workers["w1"].is_tunnel_worker is True
+    assert hub.registry._workers["w1"].is_tunnel_worker is True
 
 
 # ---------------------------------------------------------------------------

@@ -172,7 +172,7 @@ class TestHeartbeatRaceWithLeaseCleanup:
                 await _drain_all(worker)
 
                 # Shorten the lease to expire fast
-                hub._workers["hb-race1"].hijack_owner_expires_at = time.monotonic() + 0.5
+                hub.registry._workers["hb-race1"].hijack_owner_expires_at = time.monotonic() + 0.5
 
                 # Wait so we are near/past expiry
                 await asyncio.sleep(0.4)
@@ -198,7 +198,7 @@ class TestHeartbeatRaceWithLeaseCleanup:
                 await asyncio.sleep(0.2)
 
                 # Check final state: either alive or fully released, never zombie
-                st = hub._workers["hb-race1"]
+                st = hub.registry._workers["hb-race1"]
                 now = time.monotonic()
 
                 hijack_alive = (

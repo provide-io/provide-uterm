@@ -40,7 +40,7 @@ async def test_worker_hello_logs_warning_for_legacy_protocol(caplog: pytest.LogC
     from provide.uterm.server.bridge.models import WorkerTermState
 
     hub = TermHub()
-    hub._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=AsyncMock())
     # Phase 6 of refactor #16: log lives on the new ConnectionManager module.
     caplog.set_level(logging.WARNING, logger="provide.uterm.server.bridge.hub.connection")
     await hub.set_worker_hello("w1", "open", protocol_version=0)
@@ -130,7 +130,7 @@ async def test_resolve_approval_deny_sends_rejection_with_reason() -> None:
 
     # Seed a non-fanout approval request so the deny path falls into the
     # in-place rejection branch (not the fanout-controller branch).
-    hub._approval_store.add(
+    hub.approval_store.add(
         ApprovalRequest(
             id="req-x",
             worker_id="w1",
@@ -287,7 +287,7 @@ async def test_resolve_approval_fanout_allow_without_fan_out_controller() -> Non
 
     hub = TermHub()  # no fan_out_controller attribute set
     await hub.register_worker("w1", AsyncMock())
-    hub._approval_store.add(
+    hub.approval_store.add(
         ApprovalRequest(
             id="r-fo",
             worker_id="w1",
@@ -314,7 +314,7 @@ async def test_resolve_approval_fanout_deny_without_fan_out_controller() -> None
 
     hub = TermHub()
     await hub.register_worker("w1", AsyncMock())
-    hub._approval_store.add(
+    hub.approval_store.add(
         ApprovalRequest(
             id="r-fd",
             worker_id="w1",
@@ -340,7 +340,7 @@ async def test_resolve_approval_fanout_hold_decision_is_noop() -> None:
 
     hub = TermHub()
     await hub.register_worker("w1", AsyncMock())
-    hub._approval_store.add(
+    hub.approval_store.add(
         ApprovalRequest(
             id="r-fh",
             worker_id="w1",
@@ -370,7 +370,7 @@ async def test_resolve_approval_non_fanout_hold_decision_is_noop_on_worker() -> 
     await hub.register_worker("w1", worker_ws)
     browser_ws = AsyncMock()
     await hub.register_browser("w1", browser_ws, "admin")
-    hub._approval_store.add(
+    hub.approval_store.add(
         ApprovalRequest(
             id="r-h",
             worker_id="w1",

@@ -27,7 +27,7 @@ from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
 
 async def test_100_rapid_connect_disconnect_no_leaked_state(live_hub: Any) -> None:
-    """Worker connects/disconnects 100 times; no leaked state in hub._workers."""
+    """Worker connects/disconnects 100 times; no leaked state in hub.registry._workers."""
     hub, base_url = live_hub
     wid = "rapid-100"
     ws_base = base_url.replace("http://", "ws://")
@@ -40,13 +40,13 @@ async def test_100_rapid_connect_disconnect_no_leaked_state(live_hub: Any) -> No
     await asyncio.sleep(0.3)
 
     # Final state: entry pruned or clean
-    st = hub._workers.get(wid)
+    st = hub.registry._workers.get(wid)
     if st is not None:
         assert st.worker_ws is None, f"Worker WS should be None, got {st.worker_ws}"
         assert st.hijack_owner is None, f"Hijack owner leaked: {st.hijack_owner}"
         assert len(st.browsers) == 0, f"Browser list leaked: {len(st.browsers)}"
 
-    assert len(hub._workers) <= 1, f"Should have at most 1 entry, got {len(hub._workers)}"
+    assert len(hub.registry._workers) <= 1, f"Should have at most 1 entry, got {len(hub.registry._workers)}"
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ async def test_hijack_acquire_release_50_cycles_no_corruption(live_hub: Any) -> 
 
             # Final state: fully released
             await asyncio.sleep(0.3)
-            st = hub._workers.get("cycle50")
+            st = hub.registry._workers.get("cycle50")
             assert st is not None
             assert st.hijack_owner is None, f"Final hijack_owner should be None: {st.hijack_owner}"
 

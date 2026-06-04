@@ -99,8 +99,8 @@ class TermHubStateMachine(RuleBasedStateMachine):
         wid, ws = browser
         # Mirror real WS disconnect: release hijack if owner, then discard
         self._run(self.hub.try_release_ws_hijack(wid, ws))
-        if wid in self.hub._workers:
-            st = self.hub._workers[wid]
+        if wid in self.hub.registry._workers:
+            st = self.hub.registry._workers[wid]
             st.browsers.pop(ws, None)
             if wid in self._browsers and ws in self._browsers[wid]:
                 self._browsers[wid].remove(ws)
@@ -137,7 +137,7 @@ class TermHubStateMachine(RuleBasedStateMachine):
     # -- Invariants checked after every step ---------------------------------
 
     def teardown(self) -> None:
-        for wid, st in self.hub._workers.items():
+        for wid, st in self.hub.registry._workers.items():
             # 1. input_mode always valid
             assert st.input_mode in ("hijack", "open"), f"Bad input_mode: {st.input_mode!r}"
 
@@ -173,13 +173,13 @@ class TermHubStateMachine(RuleBasedStateMachine):
                     assert seqs[i] > seqs[i - 1], f"Non-monotonic event seqs: {seqs}"
 
         # 7. No idle workers in _workers (should have been pruned)
-        for wid, st in list(self.hub._workers.items()):
+        for wid, st in list(self.hub.registry._workers.items()):
             has_connections = st.worker_ws is not None or bool(st.browsers)
             has_leases = st.hijack_owner is not None or st.hijack_session is not None
             if not has_connections and not has_leases:
                 # Prune should have removed this — call it now and verify
                 self._run(self.hub.prune_if_idle(wid))
-                assert wid not in self.hub._workers, f"Idle worker {wid} not pruned"
+                assert wid not in self.hub.registry._workers, f"Idle worker {wid} not pruned"
 
 
 TestHubStateMachine = TermHubStateMachine.TestCase
@@ -334,7 +334,7 @@ class TestConcurrentStress:
         await asyncio.gather(*[_race(ws) for ws in browsers])
 
         # After all releases: either no owner or exactly one
-        final_st = hub._workers.get("w1")
+        final_st = hub.registry._workers.get("w1")
         if final_st is not None and final_st.hijack_owner is not None:
             assert final_st.hijack_owner in set(browsers)
 
@@ -355,7 +355,7 @@ class TestConcurrentStress:
 
         await asyncio.gather(*[_switch(m) for m in modes])
 
-        final_st = hub._workers.get("w1")
+        final_st = hub.registry._workers.get("w1")
         if final_st is not None:
             assert final_st.input_mode in ("hijack", "open")
 
@@ -384,7 +384,7 @@ class TestConcurrentStress:
         tasks = [_acquire_release(ws) for ws in browsers] + [_disconnect()]
         await asyncio.gather(*tasks)
 
-        final_st = hub._workers.get("w1")
+        final_st = hub.registry._workers.get("w1")
         if final_st is not None:
             # After disconnect: worker_ws should be None
             assert final_st.worker_ws is None

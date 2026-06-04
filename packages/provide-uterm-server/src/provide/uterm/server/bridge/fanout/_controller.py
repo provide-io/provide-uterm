@@ -43,7 +43,7 @@ class FanOutController:
         self._pending_approvals: dict[str, dict[str, Any]] = {}
 
         # Subscribe to approval expiration to prune pending state
-        hub_approvals = getattr(self._hub, "_approval_store", None)
+        hub_approvals = getattr(self._hub, "approval_store", None)
         if hub_approvals:
             hub_approvals.on_expired = self._on_approval_expired
 
@@ -190,8 +190,8 @@ class FanOutController:
                 is_fanout=True,
             )
             # Use getattr to avoid hard circular dependency if hub isn't fully typed here
-            hub_approvals = getattr(self._hub, "_approval_store", None)
-            if hub_approvals:  # pragma: no branch — production hub always wires _approval_store; defensive guard
+            hub_approvals = getattr(self._hub, "approval_store", None)
+            if hub_approvals:  # pragma: no branch — production hub always wires approval_store; defensive guard
                 hub_approvals.add(approval)
 
             # 1.3 Audit the hold event

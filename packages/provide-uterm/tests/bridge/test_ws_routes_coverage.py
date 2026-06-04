@@ -63,7 +63,7 @@ class TestStaleHijackOnWorkerReconnect:
 
             async def _setup_stale():
                 async with hub._lock:
-                    st = hub._workers.setdefault("w1", WorkerTermState())
+                    st = hub.registry._workers.setdefault("w1", WorkerTermState())
                     st.hijack_session = HijackSession(
                         hijack_id="stale-hid",
                         owner="stale",

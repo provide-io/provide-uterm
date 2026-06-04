@@ -39,7 +39,7 @@ async def test_hub_browser_count_total() -> None:
         def __init__(self, count: int):
             self.browsers = dict.fromkeys(range(count), "viewer")
 
-    hub._workers = {
+    hub.registry._workers = {
         "w1": MockState(2),
         "w2": MockState(3),
     }

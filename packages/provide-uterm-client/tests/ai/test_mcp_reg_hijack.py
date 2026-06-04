@@ -37,7 +37,7 @@ def _make_hub_app() -> tuple[TermHub, FastAPI]:
 def _add_worker(hub: TermHub, worker_id: str) -> AsyncMock:
     mock_ws = AsyncMock()
     mock_ws.send_text = AsyncMock()
-    hub._workers[worker_id] = WorkerTermState(worker_ws=mock_ws)
+    hub.registry._workers[worker_id] = WorkerTermState(worker_ws=mock_ws)
     return mock_ws
 
 
@@ -47,7 +47,7 @@ def _add_worker_with_snapshot(
     screen: str,
 ) -> AsyncMock:
     ws = _add_worker(hub, worker_id)
-    hub._workers[worker_id].last_snapshot = {
+    hub.registry._workers[worker_id].last_snapshot = {
         "screen": screen,
         "cursor": {"x": 0, "y": 0},
         "cols": 80,

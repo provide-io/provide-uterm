@@ -28,7 +28,7 @@ async def test_broadcast_prunes_browser_whose_send_stalls(monkeypatch: object) -
     # _get() creates the WorkerTermState; direct dict assignment registers the browser.
     await hub._get("w1")
     ws = _HangingWS()
-    hub._workers["w1"].browsers[ws] = "viewer"  # type: ignore[arg-type]
+    hub.registry._workers["w1"].browsers[ws] = "viewer"  # type: ignore[arg-type]
 
     await hub.broadcast("w1", {"type": "term", "data": "x"})
 
@@ -72,7 +72,7 @@ async def test_broadcast_dispatches_all_sends_concurrently() -> None:
     release = asyncio.Event()
     for _ in range(n):
         ws = _GatedWS(in_flight=in_flight, expected=n, arrived=arrived, release=release)
-        hub._workers["w1"].browsers[ws] = "viewer"  # type: ignore[arg-type]
+        hub.registry._workers["w1"].browsers[ws] = "viewer"  # type: ignore[arg-type]
 
     task = asyncio.create_task(hub.broadcast("w1", {"type": "term", "data": "x"}))
     try:
@@ -103,8 +103,8 @@ async def test_broadcast_slow_browser_does_not_serialize_a_fast_one() -> None:
         async def send_text(self, _payload: str) -> None:
             fast_done.set()
 
-    hub._workers["w1"].browsers[_SlowWS()] = "viewer"  # type: ignore[arg-type]
-    hub._workers["w1"].browsers[_FastWS()] = "viewer"  # type: ignore[arg-type]
+    hub.registry._workers["w1"].browsers[_SlowWS()] = "viewer"  # type: ignore[arg-type]
+    hub.registry._workers["w1"].browsers[_FastWS()] = "viewer"  # type: ignore[arg-type]
 
     task = asyncio.create_task(hub.broadcast("w1", {"type": "term", "data": "x"}))
     try:
@@ -131,8 +131,8 @@ async def test_broadcast_prunes_raising_browser_among_concurrent_sends() -> None
 
     bad = _RaisingWS()
     good = _OkWS()
-    hub._workers["w1"].browsers[good] = "viewer"  # type: ignore[arg-type]
-    hub._workers["w1"].browsers[bad] = "viewer"  # type: ignore[arg-type]
+    hub.registry._workers["w1"].browsers[good] = "viewer"  # type: ignore[arg-type]
+    hub.registry._workers["w1"].browsers[bad] = "viewer"  # type: ignore[arg-type]
 
     await hub.broadcast("w1", {"type": "term", "data": "x"})
 

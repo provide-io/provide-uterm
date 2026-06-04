@@ -58,7 +58,7 @@ class TestHijackReleasedStopsScan:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = worker_ws
             st.browsers[browser_ws] = "admin"
             st.events = deque(
@@ -110,7 +110,7 @@ class TestOnWorkerEmptyCallback:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = MagicMock()
             st.browsers[browser_ws] = "operator"
 
@@ -132,7 +132,7 @@ class TestOnWorkerEmptyCallback:
         browser2 = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w1", WorkerTermState())
+            st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = MagicMock()
             st.browsers[browser1] = "operator"
             st.browsers[browser2] = "admin"
@@ -159,7 +159,7 @@ class TestOnWorkerEmptyCallback:
         browser_ws = MagicMock()
 
         async with hub._lock:
-            st = hub._workers.setdefault("w2", WorkerTermState())
+            st = hub.registry._workers.setdefault("w2", WorkerTermState())
             st.worker_ws = MagicMock()
             st.browsers[browser_ws] = "operator"
 

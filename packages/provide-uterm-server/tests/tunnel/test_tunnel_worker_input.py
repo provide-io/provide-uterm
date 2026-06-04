@@ -46,7 +46,7 @@ async def test_tunnel_worker_receives_raw_bytes_for_input() -> None:
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
     ws = _MockWs()
     # Inject the worker state directly to bypass the full register flow.
-    hub._workers["tun-1"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
+    hub.registry._workers["tun-1"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
 
     ok = await hub.send_worker("tun-1", {"type": "input", "data": "ls -la\r"})
 
@@ -65,7 +65,7 @@ async def test_regular_worker_still_receives_text_input() -> None:
     """
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
     ws = _MockWs()
-    hub._workers["std-1"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=False)  # type: ignore[attr-defined]
+    hub.registry._workers["std-1"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=False)  # type: ignore[attr-defined]
 
     ok = await hub.send_worker("std-1", {"type": "input", "data": "echo hi\r"})
 
@@ -84,7 +84,7 @@ async def test_tunnel_worker_drops_non_input_messages() -> None:
     """
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
     ws = _MockWs()
-    hub._workers["tun-2"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
+    hub.registry._workers["tun-2"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
 
     ok = await hub.send_worker("tun-2", {"type": "snapshot_req", "req_id": "x"})
 
@@ -98,7 +98,7 @@ async def test_tunnel_worker_input_with_non_string_data_dropped() -> None:
     """Defensive: malformed input with non-string data shouldn't crash."""
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
     ws = _MockWs()
-    hub._workers["tun-3"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
+    hub.registry._workers["tun-3"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
 
     ok = await hub.send_worker("tun-3", {"type": "input", "data": 12345})
 
@@ -110,13 +110,13 @@ async def test_tunnel_worker_input_with_non_string_data_dropped() -> None:
 async def test_set_worker_tunnel_flag_writes_through() -> None:
     """``set_worker_tunnel_flag`` mutates the state under the lock."""
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
-    hub._workers["w1"] = WorkerTermState(worker_ws=_MockWs(), is_tunnel_worker=False)  # type: ignore[attr-defined]
+    hub.registry._workers["w1"] = WorkerTermState(worker_ws=_MockWs(), is_tunnel_worker=False)  # type: ignore[attr-defined]
 
     await hub.set_worker_tunnel_flag("w1", True)
-    assert hub._workers["w1"].is_tunnel_worker is True  # type: ignore[attr-defined]
+    assert hub.registry._workers["w1"].is_tunnel_worker is True  # type: ignore[attr-defined]
 
     await hub.set_worker_tunnel_flag("w1", False)
-    assert hub._workers["w1"].is_tunnel_worker is False  # type: ignore[attr-defined]
+    assert hub.registry._workers["w1"].is_tunnel_worker is False  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -140,9 +140,9 @@ async def test_tunnel_worker_send_handles_exception() -> None:
     hub = TermHub(resolve_browser_role=lambda _ws, _wid: "operator")
     ws: Any = MagicMock()
     ws.send_bytes = AsyncMock(side_effect=ConnectionError("ws broke"))
-    hub._workers["tun-err"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
+    hub.registry._workers["tun-err"] = WorkerTermState(worker_ws=ws, is_tunnel_worker=True)  # type: ignore[attr-defined]
 
     ok = await hub.send_worker("tun-err", {"type": "input", "data": "ping\r"})
 
     assert ok is False
-    assert hub._workers["tun-err"].worker_ws is None  # type: ignore[attr-defined]
+    assert hub.registry._workers["tun-err"].worker_ws is None  # type: ignore[attr-defined]
