@@ -618,3 +618,12 @@ reason = "st.browsers.get(ws, 'viewer') default -> 'XXviewerXX'; unobservable �
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.presence.xǁPresenceManagerǁcan_send_input__mutmut_11"
 reason = "st.browsers.get(ws, 'viewer') default -> 'VIEWER'; unobservable — a non-('operator','admin') string yields the identical False."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.polling_service.xǁPollingCoordinatorǁwait_for_snapshot__mutmut_1"
+reason = "wait_for_snapshot default timeout_ms 1500 -> 1501; a 1ms shift in the poll deadline is below the 80ms poll-sleep granularity, so it never changes an iteration count or return value — unobservable."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.polling_service.xǁPollingCoordinatorǁwait_for_guard__mutmut_22"
+reason = "wait_for_guard deadline clamp max(50, timeout_ms) -> max(51, timeout_ms); only differs when timeout_ms <= 50 (1ms longer deadline), and with the >=20ms poll interval a 1ms shift never crosses an interval boundary — unobservable."
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.polling_service.xǁPollingCoordinatorǁwait_for_guard__mutmut_32"
+reason = "wait_for_guard initial last_snapshot None -> ''; the slow path always enters the loop (deadline >= 50ms) and reassigns last_snapshot on the first poll before any read, so the '' initial value is a dead store — unobservable."
