@@ -366,6 +366,13 @@ paths_to_mutate = [
     # suites). Enforced at killed==100 now that the mutmut child-reaping crash is
     # fixed (test_process.py removed from tests_dir).
     "src/provide/uterm/server/bridge/hub/connection.py",
+    # connection_hijack.py — module-level bodies of ConnectionManager's
+    # hijack-clearing lifecycle (disconnect_worker / _event_bus_close /
+    # force_release_hijack), split out to keep connection.py < 500 LOC. Driven
+    # by the same test_connection_kill_hijack_clearing.py / _ratelimit_force.py
+    # suites (which call the ConnectionManager wrappers by name). Enforced at
+    # killed==100.
+    "src/provide/uterm/server/bridge/hub/connection_hijack.py",
     "src/provide/uterm/server/bridge/hub/presence.py",
     "src/provide/uterm/server/bridge/hub/store.py",
     "src/provide/uterm/server/bridge/hub/polling_service.py",

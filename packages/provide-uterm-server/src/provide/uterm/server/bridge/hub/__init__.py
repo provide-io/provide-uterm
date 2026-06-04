@@ -28,7 +28,9 @@ instance:
   buffer.
 * ``hub.connection_mgr`` — :class:`ConnectionManager`
   (``connection.py``). Worker/browser register/deregister, REST
-  rate-limit gates, force_release_hijack lifecycle.
+  rate-limit gates, force_release_hijack lifecycle. The hijack-clearing
+  method bodies (``disconnect_worker`` / ``_event_bus_close`` /
+  ``force_release_hijack``) live in ``connection_hijack.py``.
 * ``hub.presence_mgr`` — :class:`PresenceManager` (``presence.py``).
   Read-only browser presence queries (``can_send_input``, role
   resolution) and worker-bound presence control frames

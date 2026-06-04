@@ -19,7 +19,9 @@ hub lock, and pins every observable: the exact bool return, every
 ``notify_hijack_changed`` kwargs, and which hub callbacks
 (``broadcast`` / ``broadcast_hijack_state`` / ``prune_if_idle`` /
 ``_event_bus_close``) fired and in what order. ``logger.debug`` on a close
-error is asserted via a patched module-level logger.
+error is asserted via a patched module-level logger (the hijack-clearing
+bodies now live in ``connection_hijack``, so the patch targets
+``connection_hijack.logger``).
 """
 
 from __future__ import annotations
@@ -266,7 +268,7 @@ class TestDisconnectWorkerCloseError:
             st.worker_ws = ws
             hub.registry._workers[worker_id] = st
 
-        with patch("provide.uterm.server.bridge.hub.connection.logger") as mock_logger:
+        with patch("provide.uterm.server.bridge.hub.connection_hijack.logger") as mock_logger:
             result = await hub.disconnect_worker(worker_id)
 
         assert result is True
@@ -290,7 +292,7 @@ class TestDisconnectWorkerCloseError:
             st.worker_ws = ws
             hub.registry._workers[worker_id] = st
 
-        with patch("provide.uterm.server.bridge.hub.connection.logger") as mock_logger:
+        with patch("provide.uterm.server.bridge.hub.connection_hijack.logger") as mock_logger:
             result = await hub.disconnect_worker(worker_id)
 
         assert result is True

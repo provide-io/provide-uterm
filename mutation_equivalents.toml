@@ -40,21 +40,28 @@ Python's codec registry lookup is case-insensitive (encodings.normalize_encoding
 so "utf-8" and "UTF-8" select the identical codec and produce byte-identical output. \
 No test can distinguish them — behaviorally equivalent."""
 
-# --- connection.py (ConnectionManager) ------------------------------------
+# --- connection.py / connection_hijack.py (ConnectionManager) -------------
+# The hijack-clearing-lifecycle bodies (disconnect_worker / _event_bus_close /
+# force_release_hijack) were split into connection_hijack.py as module-level
+# functions, so their mutant ids changed from the method-mangled
+# ``connection.xǁConnectionManagerǁ<method>__mutmut_N`` to the function-mangled
+# ``connection_hijack.x_<method>__mutmut_N`` (the trailing _mutmut_N numbers are
+# unchanged). The equivalence reasons are identical to before the split.
+#
 # typing.cast(type_str, value) is a RUNTIME NO-OP: it returns `value` unchanged
 # and ignores the type argument entirely (cast exists only for static checkers).
 # Mutating the cast type-string therefore has zero runtime effect — unkillable.
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_30"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_30"
 reason = "cast(None, make_worker_disconnected_frame(...)) — typing.cast is a runtime no-op; the type arg is ignored, value returned unchanged."
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_34"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_34"
 reason = 'cast("XXdict[str, Any]XX", ...) — typing.cast runtime no-op; the (mangled) type string is ignored at runtime.'
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_35"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_35"
 reason = 'cast("dict[str, any]", ...) — typing.cast runtime no-op; type-string case has no runtime effect.'
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_36"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_36"
 reason = 'cast("DICT[STR, ANY]", ...) — typing.cast runtime no-op; type-string case has no runtime effect.'
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁregister_browser__mutmut_85"
@@ -83,15 +90,15 @@ reason = "browser_count initial -1 -> +1: only consumed by `== 0`; 1==0 and -1==
 mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁcleanup_browser_disconnect__mutmut_12"
 reason = "browser_count initial -1 -> -2: only consumed by `== 0`; both `!= 0` -> same branch. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_2"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_2"
 reason = 'ws initial `None` -> "": ws is reassigned to st.worker_ws before any read (the st-None/worker_ws-None early return happens first), so the initial is dead. Equivalent.'
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁforce_release_hijack__mutmut_5"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_force_release_hijack__mutmut_5"
 reason = "had_hijack initial False -> None: only consumed by `if not had_hijack`; not False and not None are both True -> same return. Equivalent."
 
 # Argument value equals its default / unreachable default.
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁdisconnect_worker__mutmut_42"
+mutant = "provide.uterm.server.bridge.hub.connection_hijack.x_disconnect_worker__mutmut_42"
 reason = "notify_hijack_changed(worker_id, enabled=False, owner=None) -> drop owner=None. owner's signature default IS None, so omitting it passes the identical value. Equivalent."
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.connection.xǁConnectionManagerǁcleanup_browser_disconnect__mutmut_48"

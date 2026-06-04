@@ -14,38 +14,36 @@ the composing :class:`TermHub`. The companion
 :class:`provide.uterm.server.bridge.hub.presence.PresenceManager` owns the
 read-only presence query surface (role resolution, ``can_send_input``,
 ``register_browser_state_snapshot``, ``request_snapshot`` /
-``request_analysis``); methods that need both lifecycle mutations *and*
-a presence-shaped notification (only ``force_release_hijack`` today)
-stay here and chain through the hub facade for the broadcast side.
+``request_analysis``); methods needing both lifecycle mutations *and* a
+presence-shaped notification stay here and chain through the hub facade.
 
 Scope:
 
-* REST rate-limit gate plumbing (delegating to ``hub.limiter``) plus the
-  observability log on rejection.
+* REST rate-limit gate plumbing (``hub.limiter``) + rejection log.
 * Worker WS lifecycle: ``register_worker`` / ``is_active_worker`` /
   ``set_worker_tunnel_flag`` / ``set_worker_hello`` /
   ``update_last_snapshot`` / ``deregister_worker``.
 * Browser WS lifecycle: ``register_browser`` /
-  ``activate_browser_broadcasts`` / ``cleanup_browser_disconnect`` plus
-  the two private helpers ``_scan_events_for_resume`` and
-  ``_update_lock_state`` that participate in the disconnect handler.
-* ``force_release_hijack`` — clears any active hijack and emits the
-  follow-up ``resume`` control frame plus a hijack-state broadcast via
-  the hub facade.
+  ``activate_browser_broadcasts`` / ``cleanup_browser_disconnect`` plus the
+  private helpers ``_scan_events_for_resume`` / ``_update_lock_state``.
+* Hijack-clearing lifecycle: ``disconnect_worker`` (+ its
+  ``_event_bus_close`` helper) and ``force_release_hijack`` — clears any
+  active hijack and emits the follow-up ``resume`` control frame plus a
+  hijack-state broadcast via the hub facade. The *bodies* live in
+  :mod:`provide.uterm.server.bridge.hub.connection_hijack` (module-level
+  functions taking the manager as their first arg); the methods here are
+  thin wrappers, moving the line bulk + mutants there while keeping the
+  public method surface on :class:`ConnectionManager`.
 
-This module is mutation-enforced at killed==100 (483 killed + 18 documented
-equivalents in ``mutation_equivalents.toml``): the ``tests/bridge/hub/
-test_connection_kill_*.py`` suites pin every return value, state mutation,
-quota-counter update, and observability call, so a surviving non-equivalent
-mutant means a behaviour went unasserted. Keep that bar when editing.
+This module is mutation-enforced at killed==100 (the hijack-clearing
+bodies' mutants now live in ``connection_hijack.py``, also enforced): the
+``tests/bridge/hub/test_connection_kill_*.py`` suites pin every return
+value, state mutation, quota-counter update, and observability call (the
+documented equivalents are in ``mutation_equivalents.toml``).
 
-Hot-path note: ``register_browser`` / ``cleanup_browser_disconnect`` are
-called per-session (browser attach / detach) — not in the per-frame hot
-path. The mixin shim cost is therefore irrelevant at this layer. Lock
-semantics are intentionally preserved verbatim from the mixin
-implementation: the manager uses the *hub's* ``asyncio.Lock`` (accessed
-via the back reference) so concurrent connection churn keeps
-serialising against the same object that the rest of the hub uses.
+Lock semantics are preserved verbatim: the manager uses the *hub's*
+``asyncio.Lock`` (via the back reference) so concurrent connection churn
+keeps serialising against the same object the rest of the hub uses.
 """
 
 from __future__ import annotations
@@ -56,6 +54,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger, get_tracer
+from provide.uterm.server.bridge.hub import connection_hijack
 from provide.uterm.server.bridge.hub.ext import (
     EVENT_RATE_LIMIT_TRIGGERED,
     EVENT_SESSION_DISCONNECTED,
@@ -485,84 +484,16 @@ class ConnectionManager:
     # -- Hijack-clearing lifecycle --------------------------------------
 
     async def disconnect_worker(self, worker_id: str) -> bool:
-        """Programmatically disconnect the worker WS. Returns ``True`` if a worker was connected.
-
-        Inter-step hooks (``broadcast``, ``notify_hijack_changed``,
-        ``broadcast_hijack_state``, ``prune_if_idle``) are dispatched via
-        ``self._hub.<method>`` so existing mutation-killing tests which
-        patch the hub-level names continue to intercept them after the
-        orchestration moved into the service. The hub-level methods are
-        pure one-line delegators back to their owning services, so the
-        cycle terminates on the second hop.
-        """
-        from provide.uterm.server.bridge.frames import make_worker_disconnected_frame
-
-        hub = self._hub
-        ws: WebSocket | None = None
-        async with hub._lock:
-            st = hub.registry.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False
-            ws = st.worker_ws
-            st.worker_ws = None
-            was_hijacked = st.hijack_session is not None or st.hijack_owner is not None
-            st.hijack_session = None
-            st.hijack_owner = None
-            st.hijack_owner_expires_at = None
-        try:
-            await ws.close()
-        except Exception as exc:
-            logger.debug("disconnect_worker close error worker_id=%s: %s", worker_id, exc)
-        await hub.broadcast(worker_id, cast("dict[str, Any]", make_worker_disconnected_frame(worker_id)))
-        if was_hijacked:
-            hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
-            await hub.broadcast_hijack_state(worker_id)
-        if hub._event_bus is not None:
-            self._event_bus_close(worker_id)
-        await hub.prune_if_idle(worker_id)
-        return True
+        """Programmatically disconnect the worker WS (body in :mod:`connection_hijack`)."""
+        return await connection_hijack.disconnect_worker(self, worker_id)
 
     def _event_bus_close(self, worker_id: str) -> None:
-        """Indirect close so the EventBus reference is read on the hub each call.
-
-        Tests substitute ``hub._event_bus`` after construction; reading
-        through the back-reference keeps that pattern working without
-        plumbing a setter through this service.
-        """
-        bus = self._hub._event_bus
-        if bus is not None:  # pragma: no branch
-            bus.close_worker(worker_id)
+        """Indirect EventBus close, read on the hub each call (body in :mod:`connection_hijack`)."""
+        connection_hijack._event_bus_close(self, worker_id)
 
     async def force_release_hijack(self, worker_id: str) -> bool:
-        """Forcibly clear any active hijack for *worker_id* and send a resume control frame.
-
-        Returns ``True`` if a hijack was active and was cleared, ``False`` otherwise.
-        Typically called before switching input mode to ``"open"`` or on session teardown.
-        """
-        hub = self._hub
-        owner = "server-forced"
-        had_hijack = False
-        async with hub._lock:
-            st = hub.registry.get(worker_id)
-            if st is None:
-                return False
-            if st.hijack_session is not None:
-                owner = st.hijack_session.owner
-                st.hijack_session = None
-                had_hijack = True
-            if hub.is_dashboard_hijack_active(st):  # pragma: no branch
-                st.hijack_owner = None
-                st.hijack_owner_expires_at = None
-                had_hijack = True
-        if not had_hijack:
-            return False
-        await hub.send_worker(
-            worker_id,
-            {"type": "control", "action": "resume", "owner": owner, "lease_s": 0, "ts": time.time()},
-        )
-        hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
-        await hub.broadcast_hijack_state(worker_id)
-        return True
+        """Forcibly clear any active hijack and send a resume frame (body in :mod:`connection_hijack`)."""
+        return await connection_hijack.force_release_hijack(self, worker_id)
 
 
 __all__ = ["ConnectionManager"]

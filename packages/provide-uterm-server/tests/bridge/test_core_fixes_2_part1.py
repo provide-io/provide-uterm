@@ -321,9 +321,9 @@ class TestDisconnectWorkerCloseException:
             st.browsers[browser_ws] = "operator"
 
         mock_logger = MagicMock()
-        # Log emits from ConnectionManager.disconnect_worker after the
-        # Phase 7b collapse moved the body off the hub.
-        with patch("provide.uterm.server.bridge.hub.connection.logger", mock_logger):
+        # Log emits from disconnect_worker's body, which now lives in
+        # connection_hijack.py (split out of connection.py to keep it < 500 LOC).
+        with patch("provide.uterm.server.bridge.hub.connection_hijack.logger", mock_logger):
             await hub.disconnect_worker("w1")
 
         debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
