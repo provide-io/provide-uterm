@@ -83,13 +83,13 @@ async def prove_command_approval():
 
     # 5. Resolve via Admin REST API (Simulated)
     print("\n[STEP 4] Admin approves the request...")
-    approval_req = hub._approval_store.get("proof-req-999")
+    approval_req = hub.approval_store.get("proof-req-999")
     if not approval_req or approval_req.status != ApprovalStatus.PENDING:
         print("FAIL: Approval request not found in store.")
         return
 
     await hub.resolve_approval(worker_id, "proof-req-999", PolicyDecision(action="allow"), approval_req.command)
-    hub._approval_store.resolve("proof-req-999", ApprovalStatus.APPROVED)
+    hub.approval_store.resolve("proof-req-999", ApprovalStatus.APPROVED)
 
     # 6. Verify command reached worker
     if worker_ws.send_text.called:
