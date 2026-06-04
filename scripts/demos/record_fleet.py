@@ -112,9 +112,10 @@ async def run_terminal_demo() -> None:
                 "/api/sessions",
                 json={
                     "session_id": sid,
-                    "connector_type": "pty",
+                    # "shell" emulates server-side + serves a snapshot so the
+                    # browser xterm renders; raw "pty"/bash stays blank.
+                    "connector_type": "shell",
                     "auto_start": True,
-                    "connector_config": {"command": "/bin/bash"},
                 },
             )
             r.raise_for_status()
@@ -172,9 +173,10 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
                     "/api/sessions",
                     json={
                         "session_id": sid,
-                        "connector_type": "pty",
+                        # "shell" emulates server-side + serves a snapshot so the
+                        # browser xterm renders; raw "pty"/bash stays blank.
+                        "connector_type": "shell",
                         "auto_start": True,
-                        "connector_config": {"command": "/bin/bash"},
                     },
                 )
             time.sleep(2.0)
