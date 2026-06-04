@@ -527,6 +527,14 @@ tests_dir = [
     # covered by test_connections_coverage.py, leaving most presence mutants
     # with no bound tests.
     "packages/provide-uterm-server/tests/bridge/test_presence_protocol.py",
+    # WorkerRegistry (hub/registry.py) — the *hub* registry (distinct from the
+    # server SessionRegistry that test_registry_mutation_killing.py covers). Its
+    # dedicated suite was never wired in, so the file sat at ~61% under tests_dir.
+    "packages/provide-uterm-server/tests/bridge/hub/test_registry.py",
+    # HijackCoordinator (bridge/coordinator.py) — dedicated unit + stress suites
+    # were never wired in (file sat at ~31% under tests_dir).
+    "packages/provide-uterm/tests/bridge/test_coordinator_units.py",
+    "packages/provide-uterm/tests/bridge/test_coordinator_stress.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).

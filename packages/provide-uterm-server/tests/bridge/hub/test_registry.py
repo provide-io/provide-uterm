@@ -73,5 +73,7 @@ def test_registry_require_raises_on_missing() -> None:
     st = _state()
     r.put("w1", st)
     assert r.require("w1") is st
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError) as excinfo:
         r.require("missing")
+    # The KeyError names the missing worker (pins KeyError(worker_id) vs KeyError(None)).
+    assert excinfo.value.args == ("missing",)
