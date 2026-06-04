@@ -29,18 +29,51 @@ serialising against the same object that the rest of the hub uses.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-import statistics
 import time
-from collections import deque
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+from provide.uterm.server.bridge.hub.router_behavioral import (
+    audit_all_browsers as _audit_all_browsers_impl,
+)
+from provide.uterm.server.bridge.hub.router_behavioral import (
+    forget_browser as _forget_browser_impl,
+)
+from provide.uterm.server.bridge.hub.router_behavioral import (
+    get_heuristics as _get_heuristics_impl,
+)
+from provide.uterm.server.bridge.hub.router_behavioral import (
+    record_keystroke as _record_keystroke_impl,
+)
+from provide.uterm.server.bridge.hub.router_behavioral import (
+    run_behavioral_audit_loop as _run_behavioral_audit_loop_impl,
+)
+from provide.uterm.server.bridge.hub.router_broadcast import (
+    broadcast as _broadcast_impl,
+)
+from provide.uterm.server.bridge.hub.router_broadcast import (
+    broadcast_hijack_state as _broadcast_hijack_state_impl,
+)
+from provide.uterm.server.bridge.hub.router_broadcast import (
+    send_hijack_state_to as _send_hijack_state_to_impl,
+)
+from provide.uterm.server.bridge.hub.router_broadcast import (
+    send_worker as _send_worker_impl,
+)
+
+# Re-exported so the ``router_impl`` namespace (and tests importing these from
+# it) is unchanged after the redaction helpers moved to ``router_redaction``.
+from provide.uterm.server.bridge.hub.router_redaction import (
+    _REDACT_MAX_DEPTH,  # noqa: F401  (re-export for namespace stability)
+    _redact_frame_fields,
+    _redact_value,
+)
 
 if TYPE_CHECKING:
+    from collections import deque
+
     from fastapi import WebSocket
 
     from provide.uterm.bridge.contracts import InputMode
@@ -53,69 +86,6 @@ logger = get_logger(__name__)
 # stalled is treated as dead and pruned rather than head-of-line-blocking the
 # worker-output fanout indefinitely.
 _BROADCAST_SEND_TIMEOUT_S = 5.0
-
-
-# Defensive recursion bound for _redact_value. Wire frames are JSON-decoded
-# (acyclic) and shallow in practice; this cap only guards against a
-# pathologically deep structure causing a RecursionError. A value below the cap
-# is returned as-is rather than redacted — secrets that deep don't occur in real
-# snapshot/analysis payloads, and failing closed on depth (returning raw) is the
-# conservative choice vs. raising on a hot broadcast path.
-_REDACT_MAX_DEPTH = 32
-
-
-def _redact_value(value: Any, redactor: StreamRedactor, _depth: int = 0) -> Any:
-    """Recursively redact string values inside nested dict/list structures.
-
-    Strings are redacted; dicts and lists are walked (values/elements only,
-    not dict keys); all other scalars (int/float/bool/None) are returned
-    unchanged. Recursion is capped at ``_REDACT_MAX_DEPTH`` — values deeper than
-    that are returned verbatim. Input is never mutated; new containers are built.
-    """
-    if isinstance(value, str):
-        return redactor.redact(value)
-    if _depth >= _REDACT_MAX_DEPTH:
-        return value
-    if isinstance(value, dict):
-        return {k: _redact_value(v, redactor, _depth + 1) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_redact_value(v, redactor, _depth + 1) for v in value]
-    return value
-
-
-def _redact_frame_fields(msg: dict[str, Any], redactor: StreamRedactor) -> dict[str, Any]:
-    """Return a copy of *msg* with its terminal-content string fields redacted.
-
-    Applies role-scoped redaction to the content-bearing fields of term,
-    snapshot, and analysis frames; other frame types are returned unchanged.
-    """
-    mtype = msg.get("type")
-    if mtype == "term":
-        return {**msg, "data": redactor.redact(str(msg.get("data", "")))}
-    if mtype == "snapshot":
-        out = dict(msg)
-        out["screen"] = redactor.redact(str(msg.get("screen", "")))
-        raw_tail = msg.get("raw_tail")
-        if isinstance(raw_tail, str):
-            out["raw_tail"] = redactor.redact(raw_tail)
-        # prompt_detected is a dict that can carry the matched prompt text
-        # (which may include secrets); redact its nested string values. None /
-        # absent stays as-is (_redact_value returns scalars unchanged).
-        if "prompt_detected" in out:
-            out["prompt_detected"] = _redact_value(out["prompt_detected"], redactor)
-        return out
-    if mtype == "analysis":
-        out = dict(msg)
-        out["formatted"] = redactor.redact(str(msg.get("formatted", "")))
-        raw = msg.get("raw")
-        if isinstance(raw, str):
-            out["raw"] = redactor.redact(raw)
-        elif isinstance(raw, (dict, list)):
-            # A structured raw was previously shipped verbatim; redact nested
-            # string values so secrets inside dict/list raw don't egress.
-            out["raw"] = _redact_value(raw, redactor)
-        return out
-    return msg
 
 
 class MessageRouter:
@@ -231,110 +201,12 @@ class MessageRouter:
         return evt
 
     # -- Broadcast / send hot path --------------------------------------
-
-    async def _payloads_by_role(
-        self,
-        worker_id: str,
-        msg: dict[str, Any],
-        browsers_with_roles: list[tuple[WebSocket, str]],
-        encoded_default: str,
-    ) -> dict[str | None, str]:
-        """Pre-resolve the encoded payload for every DISTINCT role, once each.
-
-        Redaction rules are role-scoped, so the policy context + redacted payload
-        only need to be built once per distinct viewer role per frame — not once
-        per browser. This caps the per-frame ``prepare_policy_context`` calls
-        (each re-acquires ``hub._lock``) and ``get_redaction_rules`` calls at the
-        number of distinct roles, instead of letting N viewers trigger N policy
-        builds + N lock acquisitions.
-
-        Resolved SEQUENTIALLY and up front (rather than lazily inside the per-
-        browser loop) precisely so the concurrent send fan-out in
-        :meth:`broadcast` reads an immutable mapping rather than racing on a
-        shared lazy cache and triggering duplicate policy builds.
-        """
-        from provide.uterm.server.bridge.hub.core import _encode_browser_frame
-
-        hub = self._hub
-        by_role: dict[str | None, str] = {}
-        for ws, role in browsers_with_roles:
-            if role in by_role:
-                continue
-            context = await hub.prepare_policy_context(ws, worker_id, action="output")
-            rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]
-            if (
-                rules
-            ):  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
-                by_role[role] = _encode_browser_frame(_redact_frame_fields(msg, StreamRedactor(rules)))
-            else:
-                by_role[role] = encoded_default
-        return by_role
+    # Thin wrappers over :mod:`router_broadcast` (fan-out / redaction / worker
+    # send); method surface and ``hub._lock`` semantics are unchanged.
 
     async def broadcast(self, worker_id: str, msg: dict[str, Any]) -> None:
-        """Send *msg* to all browser WebSockets registered for *worker_id*.
-
-        Sends are fanned out CONCURRENTLY (``asyncio.gather``) so a slow browser
-        only consumes its own ``_BROADCAST_SEND_TIMEOUT_S`` budget instead of
-        head-of-line-blocking every later browser by up to that timeout. Role-
-        scoped redaction payloads are pre-computed up front (see
-        :meth:`_payloads_by_role`) so the concurrent tasks read an immutable
-        mapping rather than racing on a lazy cache.
-        """
-        from provide.uterm.server.bridge.hub.core import _encode_browser_frame
-
-        hub = self._hub
-        async with hub._lock:
-            st = hub.registry.get(worker_id)
-            if st is None:
-                return
-            browsers_with_roles = [
-                (ws, role) for ws, role in st.browsers.items() if ws not in hub._startup_pending_browsers
-            ]
-
-        # Pre-encode for all browsers (except when redaction is needed).
-        encoded_default = _encode_browser_frame(msg)
-
-        gate_active = bool(hub._output_policy_gate) and msg.get("type") in {"term", "snapshot", "analysis"}
-        # When the gate is active, _payloads_by_role resolves an entry for every
-        # role present in browsers_with_roles, so the per-send lookup below is a
-        # total mapping (no default needed). When inactive, every browser gets
-        # the single shared default payload.
-        payload_by_role = (
-            await self._payloads_by_role(worker_id, msg, browsers_with_roles, encoded_default) if gate_active else {}
-        )
-
-        async def _send(ws: WebSocket, role: str) -> None:
-            payload = payload_by_role[role] if gate_active else encoded_default
-            await asyncio.wait_for(ws.send_text(payload), timeout=_BROADCAST_SEND_TIMEOUT_S)
-
-        # 0/1 browser: a single send has no head-of-line problem, so await it
-        # directly. This skips gather()'s extra event-loop turn and keeps the
-        # post-broadcast ordering identical to the legacy sequential path. With
-        # 2+ browsers we fan out concurrently so one slow viewer never delays
-        # the others by up to _BROADCAST_SEND_TIMEOUT_S.
-        if len(browsers_with_roles) <= 1:
-            results: list[BaseException | None] = []
-            for ws, role in browsers_with_roles:
-                try:
-                    await _send(ws, role)
-                    results.append(None)
-                except Exception as exc:
-                    # Mirror gather(return_exceptions=True): capture, don't raise.
-                    results.append(exc)
-        else:
-            results = list(
-                await asyncio.gather(*(_send(ws, role) for ws, role in browsers_with_roles), return_exceptions=True)
-            )
-
-        dead: set[WebSocket] = set()
-        for (ws, _role), result in zip(browsers_with_roles, results, strict=True):
-            if isinstance(result, Exception):
-                logger.debug("broadcast_send_failed worker_id=%s: %s", worker_id, result)
-                dead.add(ws)
-        if dead:
-            changed = await hub.remove_dead_browsers(worker_id, dead)
-            if changed:
-                await self.broadcast_hijack_state(worker_id)
+        """Send *msg* to all browser WebSockets registered for *worker_id*."""
+        await _broadcast_impl(self, worker_id, msg)
 
     async def send_hijack_state_to(
         self,
@@ -350,55 +222,8 @@ class MessageRouter:
         suppress_errors: bool = False,
     ) -> set[WebSocket]:
         """Send a hijack_state message to each browser; return the set of dead sockets."""
-        from provide.uterm.server.bridge.hub.core import _encode_browser_frame, _mono_to_wall
-
-        dead: set[WebSocket] = set()
-        for ws in browsers:
-            if is_dashboard and hijack_owner is ws:
-                owner: str | None = "me"
-            elif is_dashboard or is_rest:
-                owner = "other"
-            else:
-                owner = None
-            payload = _encode_browser_frame(
-                cast(
-                    "dict[str, Any]",
-                    make_hijack_state_frame(
-                        hijacked=is_hijacked,
-                        owner=owner,
-                        lease_expires_at=_mono_to_wall(lease_expires_at),
-                        input_mode=input_mode,
-                    ),
-                )
-            )
-            try:
-                await ws.send_text(payload)
-            except Exception as exc:
-                if not suppress_errors:
-                    logger.debug("broadcast_hijack_state_send_failed worker_id=%s: %s", worker_id, exc)
-                dead.add(ws)
-        return dead
-
-    async def broadcast_hijack_state(self, worker_id: str) -> None:
-        """Send a hijack_state message to every browser for *worker_id*, cleaning up dead sockets."""
-        hub = self._hub
-        async with hub._lock:
-            st = hub.registry.get(worker_id)
-            if st is None:
-                return
-            browsers = [ws for ws in st.browsers if ws not in hub._startup_pending_browsers]
-            hijack_owner = st.hijack_owner
-            is_hijacked = hub.is_hijacked(st)
-            is_dashboard = hub.is_dashboard_hijack_active(st)
-            is_rest = hub.has_valid_rest_lease(st)
-            input_mode = st.input_mode
-            lease_expires_at = (
-                st.hijack_session.lease_expires_at
-                if is_rest and st.hijack_session is not None
-                else st.hijack_owner_expires_at
-            )
-
-        dead = await self.send_hijack_state_to(
+        return await _send_hijack_state_to_impl(
+            self,
             browsers,
             worker_id=worker_id,
             is_hijacked=is_hijacked,
@@ -407,35 +232,12 @@ class MessageRouter:
             hijack_owner=hijack_owner,
             input_mode=input_mode,
             lease_expires_at=lease_expires_at,
+            suppress_errors=suppress_errors,
         )
-        if dead:
-            await hub.remove_dead_browsers(worker_id, dead)
-            async with hub._lock:
-                st2 = hub.registry.get(worker_id)
-                if st2 is None:
-                    return
-                survivors = [ws for ws in st2.browsers if ws not in hub._startup_pending_browsers]
-                is_h2 = hub.is_hijacked(st2)
-                is_dashboard2 = hub.is_dashboard_hijack_active(st2)
-                is_rest2 = hub.has_valid_rest_lease(st2)
-                hijack_owner2 = st2.hijack_owner
-                input_mode2 = st2.input_mode
-                lease2 = (
-                    st2.hijack_session.lease_expires_at
-                    if is_rest2 and st2.hijack_session is not None
-                    else st2.hijack_owner_expires_at
-                )
-            await self.send_hijack_state_to(
-                survivors,
-                worker_id=worker_id,
-                is_hijacked=is_h2,
-                is_dashboard=is_dashboard2,
-                is_rest=is_rest2,
-                hijack_owner=hijack_owner2,
-                input_mode=input_mode2,
-                lease_expires_at=lease2,
-                suppress_errors=True,
-            )
+
+    async def broadcast_hijack_state(self, worker_id: str) -> None:
+        """Send a hijack_state message to every browser for *worker_id*, cleaning up dead sockets."""
+        await _broadcast_hijack_state_impl(self, worker_id)
 
     async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
         """Send *msg* to the worker WebSocket; returns False if no worker is connected.
@@ -446,119 +248,31 @@ class MessageRouter:
         dropped because the worker's bridge loop has no JSON-envelope
         handling.
         """
-        from provide.uterm.server.bridge.hub.core import _encode_worker_frame
-
-        hub = self._hub
-        if source and msg.get("type") == "input":
-            self.record_keystroke(source)
-
-        async with hub._lock:
-            st = hub.registry.get(worker_id)
-            if st is None or st.worker_ws is None:
-                return False
-            ws = st.worker_ws
-            is_tunnel = st.is_tunnel_worker
-        try:
-            if is_tunnel:
-                # Tunnel wire format: hub → worker is raw bytes for input,
-                # nothing for control. Matches the existing ``uterm share``
-                # bridge loop which writes every received byte to PTY.
-                if msg.get("type") != "input":
-                    return True
-                data = msg.get("data")
-                if not isinstance(data, str):
-                    return True
-                await ws.send_bytes(data.encode("utf-8"))
-                return True
-            await ws.send_text(_encode_worker_frame(msg))
-            return True
-        except BaseException as exc:
-            logger.debug("send_worker_failed worker_id=%s: %s", worker_id, exc)
-            async with hub._lock:
-                st2 = hub.registry.get(worker_id)
-                if st2 is not None and st2.worker_ws is ws:  # pragma: no branch
-                    st2.worker_ws = None
-            if isinstance(exc, Exception):
-                return False
-            raise
+        return await _send_worker_impl(self, worker_id, msg, source=source)
 
     # -- Behavioral heuristics ------------------------------------------
+    # Thin wrappers over :mod:`router_behavioral` (keystroke timing / audit);
+    # method surface is unchanged.
 
     def record_keystroke(self, source: Any) -> None:
         """Record the timing of a keystroke from a browser."""
-        if source not in self._keystroke_timestamps:
-            self._keystroke_timestamps[source] = deque(maxlen=50)
-        self._keystroke_timestamps[source].append(time.monotonic())
+        _record_keystroke_impl(self, source)
 
     def get_heuristics(self, source: Any) -> dict[str, float]:
         """Return behavioral metrics for the given browser."""
-        timestamps = self._keystroke_timestamps.get(source)
-        if not timestamps or len(timestamps) < 2:
-            return {"cps": 0.0, "jitter": 0.0}
-
-        duration = timestamps[-1] - timestamps[0]
-        cps = (len(timestamps) - 1) / duration if duration > 0 else 0.0
-        intervals = [timestamps[i] - timestamps[i - 1] for i in range(1, len(timestamps))]
-        jitter = statistics.variance(intervals) if len(intervals) > 1 else 0.0
-        return {"cps": cps, "jitter": jitter}
+        return _get_heuristics_impl(self, source)
 
     def forget_browser(self, ws: Any) -> None:
         """Drop heuristic state for a disconnected browser."""
-        self._keystroke_timestamps.pop(ws, None)
+        _forget_browser_impl(self, ws)
 
     async def run_behavioral_audit_loop(self) -> None:
-        """Periodically audit active connections for behavioral anomalies.
-
-        ``self._hub._audit_all_browsers`` is invoked rather than the local
-        method so existing tests that patch ``hub._audit_all_browsers``
-        (e.g. to raise an exception and exercise the exception logger)
-        keep intercepting. The hub-level shim forwards to
-        :meth:`audit_all_browsers` here, so the cycle terminates on the
-        second hop.
-        """
-        import asyncio
-
-        hub = self._hub
-        while True:
-            await asyncio.sleep(hub._behavioral_audit_interval_s)
-            try:
-                await hub._audit_all_browsers()
-            except Exception:
-                logger.exception("behavioral_audit_loop_error")
+        """Periodically audit active connections for behavioral anomalies."""
+        await _run_behavioral_audit_loop_impl(self)
 
     async def audit_all_browsers(self) -> None:
         """Iterate all active browsers and evaluate behavioral heuristics."""
-        from fastapi import status
-
-        from provide.uterm.server.bridge.hub.ext import ConnectionHeuristics
-
-        hub = self._hub
-        async with hub._lock:
-            all_browsers = [(worker_id, ws) for worker_id, st in hub.registry.items() for ws in st.browsers]
-
-        for worker_id, ws in all_browsers:
-            heuristics_data = self.get_heuristics(ws)
-            heuristics = ConnectionHeuristics(
-                cps=heuristics_data["cps"],
-                jitter=heuristics_data["jitter"],
-                timestamp=time.time(),
-            )
-            context = await hub.prepare_policy_context(ws, worker_id, action="behavioral_audit")
-            # _behavioral_audit_gate is Any | None; the guard above already
-            # exited the loop when it's None (see run_behavioral_audit_loop),
-            # but the narrow doesn't survive across awaits.
-            assert hub._behavioral_audit_gate is not None
-            decision = await hub._behavioral_audit_gate.audit_connection(
-                heuristics, context, hub._behavioral_thresholds
-            )
-            if decision.action == "deny":
-                logger.warning(
-                    "behavioral_audit_denied worker_id=%s reason=%s",
-                    worker_id,
-                    decision.reason or "anomaly detected",
-                )
-                with contextlib.suppress(Exception):
-                    await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason=decision.reason or "Behavioral anomaly")
+        await _audit_all_browsers_impl(self)
 
     # -- Worker / browser lifecycle helpers -----------------------------
 
