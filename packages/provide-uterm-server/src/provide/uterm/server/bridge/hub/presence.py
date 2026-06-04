@@ -41,17 +41,38 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from provide.telemetry import get_logger
 
 if TYPE_CHECKING:
+    import asyncio
+
     from fastapi import WebSocket
 
-    from provide.uterm.server.bridge.hub.core import TermHub
+    from provide.uterm.server.bridge.hub.registry import WorkerRegistry
     from provide.uterm.server.bridge.models import WorkerTermState
 
 logger = get_logger(__name__)
+
+
+class _PresenceHubCallbacks(Protocol):
+    """Subset of :class:`TermHub` the presence manager reaches back into.
+
+    Declared as a structural protocol (mirroring ``_LeaseHubCallbacks`` in
+    ``lease.py``) so :class:`PresenceManager` can be constructed — and unit
+    tested — with a lightweight fake hub instead of dragging in the full
+    ``TermHub`` surface. ``TermHub`` satisfies this protocol structurally;
+    nothing changes at runtime.
+    """
+
+    _lock: asyncio.Lock
+    registry: WorkerRegistry
+
+    def is_hijacked(self, st: WorkerTermState) -> bool: ...
+    def is_dashboard_hijack_active(self, st: WorkerTermState) -> bool: ...
+    async def _resolve_role_for_browser(self, ws: WebSocket, worker_id: str) -> str: ...
+    async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = ...) -> bool: ...
 
 
 class PresenceManager:
@@ -71,7 +92,7 @@ class PresenceManager:
 
     __slots__ = ("_hub",)
 
-    def __init__(self, hub: TermHub) -> None:
+    def __init__(self, hub: _PresenceHubCallbacks) -> None:
         self._hub = hub
 
     # -- Browser presence queries ---------------------------------------
