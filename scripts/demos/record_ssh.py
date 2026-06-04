@@ -10,7 +10,7 @@ import asyncio
 import sys
 import threading
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import asyncssh
 import httpx
@@ -49,10 +49,20 @@ SITE_FORMAT = "mp4"
 
 
 async def _handle_shell(process: asyncssh.SSHServerProcess) -> None:  # type: ignore[type-arg]
-    process.stdout.write("Welcome to Demo SSH Server\r\n$ ")
+    # Write a realistic login banner + sample command output, then stay alive
+    # for the whole recording. The original 10s exit closed the SSH channel
+    # mid-recording, so the connector kept failing and reconnecting and the
+    # browser captured a flapping "Waking…" session instead of live output.
+    # The demo closes the SSH server when it is done, ending this coroutine.
+    process.stdout.write(
+        "Welcome to Demo SSH Server (Ubuntu 24.04.1 LTS)\r\n"
+        "Last login: Tue Jun  4 14:31:55 2026 from 127.0.0.1\r\n"
+        "demo@remote:~$ uptime\r\n"
+        " 14:32:01 up 42 days,  3:14,  2 users,  load average: 0.18, 0.22, 0.19\r\n"
+        "demo@remote:~$ "
+    )
     await process.stdout.drain()
-    # Keep the session alive for the demo before exiting
-    await asyncio.sleep(10.0)
+    await asyncio.sleep(180.0)
     process.exit(0)
 
 
@@ -155,49 +165,42 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Record terminal demo with asciinema
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
 
-    # Start SSH server + provide-uterm server in a background thread
-    loop_holder: list[asyncio.AbstractEventLoop] = []
-    ssh_srv_holder: list[Any] = []
-    base_url_holder: list[str] = []
-    srv_holder: list[Any] = []
+    # The inline asyncssh server must keep a *running* event loop for the whole
+    # recording. Run that loop in a dedicated thread with run_forever — the old
+    # code used run_until_complete, which returned right after setup and stopped
+    # the loop, leaving the SSH server unable to service its connection so the
+    # connector flapped ("Waking…") for the entire recording.
+    loop = asyncio.new_event_loop()
 
-    def _run_setup() -> None:
-        loop = asyncio.new_event_loop()
+    def _run_loop() -> None:
         asyncio.set_event_loop(loop)
-        loop_holder.append(loop)
+        loop.run_forever()
 
-        async def _setup() -> None:
-            ssh_srv, ssh_port = await _start_ssh_server()
-            ssh_srv_holder.append(ssh_srv)
-            base_url, srv = start_server()
-            base_url_holder.append(base_url)
-            srv_holder.append(srv)
-            with httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
-                http.post(
-                    "/api/sessions",
-                    json={
-                        "session_id": "ssh-demo",
-                        "display_name": "Demo SSH",
-                        "connector_type": "ssh",
-                        "auto_start": True,
-                        "connector_config": {
-                            "host": "127.0.0.1",
-                            "port": ssh_port,
-                            "username": "demo",
-                            "insecure_no_host_check": True,
-                            "client_keys": [],
-                        },
-                    },
-                )
-            wait_connected(base_url, "ssh-demo")
+    loop_thread = threading.Thread(target=_run_loop, daemon=True)
+    loop_thread.start()
 
-        loop.run_until_complete(_setup())
-
-    t = threading.Thread(target=_run_setup)
-    t.start()
-    t.join()
-
-    base_url = base_url_holder[0]
+    # Create the asyncssh server ON the loop, then do the (sync) provide-uterm
+    # setup on this thread so it never blocks the SSH server's loop.
+    ssh_srv, ssh_port = asyncio.run_coroutine_threadsafe(_start_ssh_server(), loop).result(timeout=15)
+    base_url, srv = start_server()
+    with httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+        http.post(
+            "/api/sessions",
+            json={
+                "session_id": "ssh-demo",
+                "display_name": "Demo SSH",
+                "connector_type": "ssh",
+                "auto_start": True,
+                "connector_config": {
+                    "host": "127.0.0.1",
+                    "port": ssh_port,
+                    "username": "demo",
+                    "insecure_no_host_check": True,
+                    "client_keys": [],
+                },
+            },
+        )
+    wait_connected(base_url, "ssh-demo")
     time.sleep(0.5)
 
     # Send a command so the SSH terminal shows output before the browser connects
@@ -211,8 +214,10 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     ]
     mp4_path = browser_record(base_url, steps, feat_dir)
 
-    stop_server(srv_holder[0])
-    ssh_srv_holder[0].close()
+    stop_server(srv)
+    loop.call_soon_threadsafe(ssh_srv.close)
+    loop.call_soon_threadsafe(loop.stop)
+    loop_thread.join(timeout=5)
 
     highlight = trim_clip(mp4_path, HIGHLIGHT_START_S, HIGHLIGHT_DURATION_S)
     return {"cast": cast_path, "mp4": mp4_path, "highlight": highlight}
