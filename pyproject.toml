@@ -542,6 +542,13 @@ tests_dir = [
     # gates the wall-clock suite cannot reach.
     "packages/provide-uterm-server/tests/bridge/test_hub_polling_coverage.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_polling_kill.py",
+    # StateStore (hub/store.py) — line-buffer + lifecycle + role/policy helpers.
+    # No dedicated suite was wired (file sat at ~14% under tests_dir, 196 mutants
+    # with no bound test). test_store_kill.py covers buffer/shutdown/lifecycle/
+    # metric/predicates; test_store_policy_kill.py covers the branch-heavy
+    # resolve_role_for_browser / prepare_policy_context / _map_roles surface.
+    "packages/provide-uterm-server/tests/bridge/hub/test_store_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_store_policy_kill.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).
