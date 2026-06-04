@@ -2,13 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Isolation tests for :class:`PresenceManager`.
+"""Isolation + mutation-killing tests for :class:`PresenceManager`.
 
 These exercise the manager against a hand-written fake that implements only
-``_PresenceHubCallbacks`` — the whole point of the structural protocol is that
-the manager can be driven without constructing a full ``TermHub``. If the
-manager grows a dependency on a hub member outside the protocol, these tests
-fail to construct, surfacing the coupling immediately.
+``_PresenceHubCallbacks`` — the point of the structural protocol is that the
+manager can be driven without constructing a full ``TermHub``. If the manager
+grows a dependency on a hub member outside the protocol, these tests fail to
+construct, surfacing the coupling immediately. The assertions also pin every
+behavioural branch so they bind PresenceManager's mutmut mutants.
 """
 
 from __future__ import annotations
@@ -49,12 +50,17 @@ class _FakeHub:
         self.sent: list[tuple[str, dict[str, Any]]] = []
 
     def is_hijacked(self, st: Any) -> bool:
+        # A real hub reads st; pin the arg so None-substitution mutants are killed.
+        assert st is not None
         return self._hijacked
 
     def is_dashboard_hijack_active(self, st: Any) -> bool:
+        assert st is not None
         return self._dash_active
 
     async def _resolve_role_for_browser(self, ws: Any, worker_id: str) -> str:
+        assert ws is not None
+        assert worker_id
         return self._role
 
     async def send_worker(self, worker_id: str, msg: dict[str, Any], *, source: Any = None) -> bool:
@@ -73,6 +79,9 @@ def _state(
     )
 
 
+# -- register_browser_state_snapshot -----------------------------------------
+
+
 async def test_snapshot_missing_worker_returns_offline_defaults() -> None:
     mgr = PresenceManager(_FakeHub())
     out = await mgr.register_browser_state_snapshot("nope", ws=object())
@@ -84,12 +93,11 @@ async def test_snapshot_missing_worker_returns_offline_defaults() -> None:
     }
 
 
-async def test_snapshot_reflects_hub_predicates() -> None:
+async def test_snapshot_present_worker_hijacked_by_me() -> None:
     ws = object()
-    st = _state(input_mode="open", owner=ws)
+    st = _state(input_mode="open", owner=ws, online=True)
     mgr = PresenceManager(_FakeHub(states={"w": st}, hijacked=True, dash_active=True))
-    out = await mgr.register_browser_state_snapshot("w", ws=ws)
-    assert out == {
+    assert await mgr.register_browser_state_snapshot("w", ws=ws) == {
         "is_hijacked": True,
         "hijacked_by_me": True,
         "worker_online": True,
@@ -97,29 +105,65 @@ async def test_snapshot_reflects_hub_predicates() -> None:
     }
 
 
-def test_can_send_input_open_mode_role_gate() -> None:
+async def test_snapshot_hijacked_by_me_false_when_owner_differs() -> None:
+    # dash-active but a *different* owner → hijacked_by_me must be False (pins the `and`/`is`).
+    st = _state(input_mode="hijack", owner=object(), online=True)
+    mgr = PresenceManager(_FakeHub(states={"w": st}, hijacked=True, dash_active=True))
+    out = await mgr.register_browser_state_snapshot("w", ws=object())
+    assert out["hijacked_by_me"] is False
+    assert out["is_hijacked"] is True
+    assert out["input_mode"] == "hijack"
+
+
+async def test_snapshot_worker_online_reflects_worker_ws() -> None:
+    st = _state(owner=None, online=False)  # worker_ws is None
+    mgr = PresenceManager(_FakeHub(states={"w": st}, hijacked=False, dash_active=False))
+    out = await mgr.register_browser_state_snapshot("w", ws=object())
+    assert out["worker_online"] is False
+    assert out["is_hijacked"] is False
+    assert out["hijacked_by_me"] is False
+
+
+# -- can_send_input ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("role", "expected"),
+    [("operator", True), ("admin", True), ("viewer", False)],
+)
+def test_can_send_input_open_mode_role_gate(role: str, expected: bool) -> None:
     mgr = PresenceManager(_FakeHub())
     ws = object()
-    op = _state(input_mode="open", browsers={ws: "operator"})
-    viewer = _state(input_mode="open", browsers={ws: "viewer"})
-    unknown = _state(input_mode="open", browsers={})
-    assert mgr.can_send_input(op, ws) is True
-    assert mgr.can_send_input(viewer, ws) is False
-    assert mgr.can_send_input(unknown, ws) is False  # defaults to viewer
+    st = _state(input_mode="open", browsers={ws: role})
+    assert mgr.can_send_input(st, ws) is expected
+
+
+def test_can_send_input_open_mode_unknown_defaults_to_viewer() -> None:
+    mgr = PresenceManager(_FakeHub())
+    ws = object()
+    st = _state(input_mode="open", browsers={})
+    assert mgr.can_send_input(st, ws) is False
 
 
 def test_can_send_input_hijack_owner_only() -> None:
-    mgr = PresenceManager(_FakeHub(dash_active=True))
     ws = object()
-    owned = _state(input_mode="hijack", owner=ws)
-    other = _state(input_mode="hijack", owner=object())
-    assert mgr.can_send_input(owned, ws) is True
-    assert mgr.can_send_input(other, ws) is False
+    mgr_active = PresenceManager(_FakeHub(dash_active=True))
+    assert mgr_active.can_send_input(_state(input_mode="hijack", owner=ws), ws) is True
+    assert mgr_active.can_send_input(_state(input_mode="hijack", owner=object()), ws) is False
+    # Not dashboard-hijack-active → even the owner cannot send (pins the `and`).
+    mgr_inactive = PresenceManager(_FakeHub(dash_active=False))
+    assert mgr_inactive.can_send_input(_state(input_mode="hijack", owner=ws), ws) is False
+
+
+# -- resolve_role_for_browser ------------------------------------------------
 
 
 async def test_resolve_role_delegates_to_callback() -> None:
     mgr = PresenceManager(_FakeHub(role="admin"))
     assert await mgr.resolve_role_for_browser(object(), "w") == "admin"
+
+
+# -- worker-bound presence control frames ------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -134,4 +178,6 @@ async def test_presence_control_frames_go_to_worker(call: str, expected_type: st
     worker_id, msg = hub.sent[0]
     assert worker_id == "w"
     assert msg["type"] == expected_type
-    assert "req_id" in msg and "ts" in msg
+    # req_id is a real uuid (kills str(None)="None", which is truthy); ts is a clock value.
+    assert "-" in msg["req_id"]
+    assert msg["ts"] > 0

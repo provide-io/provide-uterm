@@ -522,6 +522,11 @@ tests_dir = [
     "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_hijack_clearing.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_ratelimit_force.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_connection_kill_iter2.py",
+    # PresenceManager (hub/presence.py) — dedicated isolation suite driving all
+    # six methods against a protocol-only fake. Previously only incidentally
+    # covered by test_connections_coverage.py, leaving most presence mutants
+    # with no bound tests.
+    "packages/provide-uterm-server/tests/bridge/test_presence_protocol.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).
