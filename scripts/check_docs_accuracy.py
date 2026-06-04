@@ -193,11 +193,16 @@ def _structural_claim_violations(root: Path) -> list[str]:
             violations.append(f"{pyproject}: addopts enables --cov but is missing --cov-fail-under=100")
 
     # --- 2. MCP tool count ---
-    # Count @mcp.tool decorators in server_impl.py and compare to README's claim.
-    server_impl = root / "packages/provide-uterm-client/src/provide/uterm/ai/server_impl.py"
+    # Count @mcp.tool decorators across the ai/ tool modules and compare to the
+    # README's claim. The tool handlers were split out of server_impl.py into
+    # cohesive server_tools_*.py registration modules, so the count is summed
+    # across the ai/ package rather than read from a single file.
+    ai_dir = root / "packages/provide-uterm-client/src/provide/uterm/ai"
     readme = root / "README.md"
-    if server_impl.exists() and readme.exists():
-        actual_tool_count = server_impl.read_text(encoding="utf-8").count("@mcp.tool")
+    if ai_dir.exists() and readme.exists():
+        actual_tool_count = sum(
+            path.read_text(encoding="utf-8").count("@mcp.tool") for path in sorted(ai_dir.glob("*.py"))
+        )
         readme_text = readme.read_text(encoding="utf-8")
         # Match numbers adjacent to "MCP" or "tools for AI agents" (e.g. "21 tools", "21 session")
         mcp_count_match = re.search(
@@ -214,7 +219,8 @@ def _structural_claim_violations(root: Path) -> list[str]:
                     if doc_count_str in line and ("MCP" in line or "tools" in line.lower()):
                         violations.append(
                             f"{readme}:{line_no}: MCP tool count says {doc_count},"
-                            f" found {actual_tool_count} @mcp.tool decorators in server_impl.py"
+                            f" found {actual_tool_count} @mcp.tool decorators in"
+                            " packages/provide-uterm-client/src/provide/uterm/ai/"
                         )
                         break
 
