@@ -633,3 +633,49 @@ reason = "prepare_policy_context initial principal None -> ''; both branches of 
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.store.xǁStateStoreǁmetric__mutmut_1"
 reason = "Trampoline-masked default-arg mutation metric(value=1->2); mutmut's dispatcher keeps the original signature and forwards the bound default (1) explicitly to the variant, so the mutated default is never exercised — unkillable trampoline artifact (the documented auth.py class). The real default IS regression-tested (test_metric_default_value_is_one asserts a no-value call emits 1)."
+# --- tunnel/intercept.py: "forward" is both a canonical action AND the fallback
+#     default, so mutating any "forward" literal just routes through the fallback
+#     to the identical "forward"; default-arg value mutations are trampoline-masked.
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_1"
+reason = "Trampoline-masked default-arg InterceptGate(timeout_s=30.0->31.0); the dispatcher forwards the bound 30.0 to the variant, so the mutated default is never reached. Real default tested (test_default_timeout_s)."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_2"
+reason = "Trampoline-masked default-arg InterceptGate(timeout_action='forward'->'XXforwardXX'); dispatcher forwards the bound 'forward'. Real default tested (test_default_timeout_action)."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_3"
+reason = "Trampoline-masked default-arg InterceptGate(timeout_action='forward'->'FORWARD'); dispatcher forwards the bound 'forward'. Real default tested."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_16"
+reason = "timeout_action validation tuple ('forward','drop')->('XXforwardXX','drop'); 'forward' is redundant with the else default 'forward', so an input of 'forward' yields 'forward' via the else — identical, unobservable."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_17"
+reason = "timeout_action validation tuple 'forward'->'FORWARD'; redundant with the else default 'forward' (input 'forward' falls through to the same 'forward') — unobservable."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁcancel_all__mutmut_1"
+reason = "Trampoline-masked default-arg cancel_all(action='forward'->'XXforwardXX'); dispatcher forwards the bound 'forward'. Real default tested (test_cancel_all_default_forward)."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁcancel_all__mutmut_2"
+reason = "Trampoline-masked default-arg cancel_all(action='forward'->'FORWARD'); dispatcher forwards the bound 'forward'. Real default tested."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_4"
+reason = "msg.get('action', 'forward'->None) default; only used when 'action' is absent, and str(None)='None' is then normalized back to 'forward' by the validation — identical to the original default, unobservable."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_6"
+reason = "msg.get('action', 'forward'-> no default); absent key yields str(None)='None', normalized to 'forward' by the validation — identical to the original default."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_9"
+reason = "msg.get('action', 'forward'->'XXforwardXX') default; an absent-key default of 'XXforwardXX' is normalized to 'forward' by the validation — identical, unobservable."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_10"
+reason = "msg.get('action', 'forward'->'FORWARD') default; an absent-key default of 'FORWARD' is normalized to 'forward' by the (lowercase) validation — identical, unobservable."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_12"
+reason = "action validation tuple ('forward','drop','modify')->('XXforwardXX',...); 'forward' is redundant with the reset-to-'forward' default, so action 'forward' yields 'forward' either way — unobservable."
+[[equivalent]]
+mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_13"
+reason = "action validation tuple 'forward'->'FORWARD'; redundant with the reset-to-'forward' default (action 'forward' is reset to the same 'forward') — unobservable."
+# --- deckmux/_service.py
+[[equivalent]]
+mutant = "provide.uterm.deckmux._service.xǁDeckMuxPresenceǁhandle_message__mutmut_40"
+reason = "except-ValueError fallback user = None -> ''; user is only consumed by the immediately-following `if user:` truthiness guard, and both None and '' are falsy → the broadcast is skipped identically — unobservable."
