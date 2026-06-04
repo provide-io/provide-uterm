@@ -58,7 +58,7 @@ async def main() -> None:
     # Trigger deallocation by deregistering
     for i in range(num_workers):
         worker_id = f"worker-{i:04d}"
-        st = hub._workers.get(worker_id)
+        st = hub.registry._workers.get(worker_id)
         if st is not None:
             worker_ws = st.worker_ws
             await hub.deregister_worker(worker_id, worker_ws)

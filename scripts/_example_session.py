@@ -239,7 +239,7 @@ def _set_input_mode(session: DemoSessionState, mode: str, *, source: str) -> lis
 def _status_summary(session: DemoSessionState) -> str:
     observer_count = 0
     with contextlib.suppress(Exception):
-        st = _hub._workers.get(session.worker_id)
+        st = _hub.registry._workers.get(session.worker_id)
         if st is not None:
             observer_count = len(st.browsers)
     return f"mode={session.input_mode} paused={session.paused} turns={session.turn_counter} observers={observer_count}"
