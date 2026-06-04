@@ -32,7 +32,6 @@ from provide.uterm.bridge.contracts import (
     MAX_PROTOCOL_VERSION,
     MIN_PROTOCOL_VERSION,
     PREFERRED_PROTOCOL_VERSION,
-    negotiate_protocol_version,
 )
 from provide.uterm.control_channel import (
     ControlChannelDecoder,
@@ -41,19 +40,23 @@ from provide.uterm.control_channel import (
     encode_control,
 )
 from provide.uterm.server.bridge.frames import (
-    coerce_worker_status_frame,
-    make_analysis_frame,
-    make_error_frame,
     make_hello_frame,
-    make_snapshot_frame,
     make_term_frame,
     make_worker_connected_frame,
     make_worker_disconnected_frame,
 )
-from provide.uterm.server.bridge.models import VALID_ROLES, _safe_float, _safe_int
+from provide.uterm.server.bridge.models import VALID_ROLES
 from provide.uterm.server.bridge.ratelimit import TokenBucket
-from provide.uterm.server.bridge.rest_helpers import extract_prompt_id
 from provide.uterm.server.bridge.routes.browser_handlers import handle_browser_message
+from provide.uterm.server.bridge.routes.websockets_browser import (
+    dispatch_browser_event,
+    resume_worker_on_disconnect,
+)
+from provide.uterm.server.bridge.routes.websockets_worker import (
+    _build_worker_frame,
+    _dispatch_worker_frame,
+    _handle_worker_hello,
+)
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import BrowserRoleResolutionError, TermHub
@@ -80,141 +83,6 @@ async def _periodic_hijack_cleanup(hub: TermHub, worker_id: str, interval_s: flo
     while True:
         await asyncio.sleep(interval_s)
         await hub.cleanup_expired_hijack(worker_id)
-
-
-async def _handle_worker_hello(hub: TermHub, websocket: WebSocket, worker_id: str, msg: dict[str, Any]) -> bool:
-    """Handle a ``worker_hello`` frame: negotiate protocol + apply input mode.
-
-    Returns ``True`` if the caller should ``break`` the recv loop (protocol
-    mismatch → 1002 close), ``False`` to ``continue``. Carries no validated
-    frame builder, so it lives OUTSIDE the per-frame builder guard.
-    """
-    _hello_mode = msg.get("input_mode")
-    # Protocol range negotiation. Workers may send either the legacy
-    # ``protocol_version`` field (single int) or the new ``protocol`` object
-    # ``{min, max, preferred}``. Absent fields default to ``{min=1, max=1}`` —
-    # preserves behaviour for old clients that never advertised.
-    _proto_block = msg.get("protocol")
-    if isinstance(_proto_block, dict):
-        _client_min = _safe_int(_proto_block.get("min"), MIN_PROTOCOL_VERSION, min_val=1)
-        _client_max = _safe_int(_proto_block.get("max"), MAX_PROTOCOL_VERSION, min_val=1)
-    elif "protocol_version" in msg:
-        _legacy_v = _safe_int(msg.get("protocol_version"), 0)
-        _client_min = _legacy_v if _legacy_v >= 1 else 1
-        _client_max = _client_min
-    else:
-        _client_min = 1
-        _client_max = 1
-    _selected = negotiate_protocol_version(_client_min, _client_max)
-    if _selected is None:
-        # No overlap → close 1002. Send a structured error frame first so the
-        # worker can surface a meaningful disconnect reason.
-        logger.warning(
-            "worker_hello_protocol_mismatch worker_id=%s client=[%d,%d] server=[%d,%d]",
-            worker_id,
-            _client_min,
-            _client_max,
-            MIN_PROTOCOL_VERSION,
-            MAX_PROTOCOL_VERSION,
-        )
-        with suppress(Exception):
-            await websocket.send_text(
-                encode_control(
-                    {
-                        "type": "error",
-                        "reason": "protocol_mismatch",
-                        "client_min": _client_min,
-                        "client_max": _client_max,
-                        "server_min": MIN_PROTOCOL_VERSION,
-                        "server_max": MAX_PROTOCOL_VERSION,
-                    }
-                )
-            )
-            await websocket.close(code=1002, reason="protocol_mismatch")
-        return True
-    if _hello_mode in ("hijack", "open"):
-        mode_applied = await hub.set_worker_hello(worker_id, _hello_mode, _selected)
-        if mode_applied:  # pragma: no branch — set_worker_hello returns False only on a missing worker registration, already filtered upstream
-            await hub.broadcast_hijack_state(worker_id)
-        logger.info(
-            "worker_hello worker_id=%s input_mode=%s protocol_selected=%d applied=%s",
-            worker_id,
-            _hello_mode,
-            _selected,
-            mode_applied,
-        )
-    elif _hello_mode is not None:
-        logger.warning(
-            "worker_hello_invalid_mode worker_id=%s input_mode=%r — expected 'hijack' or 'open', ignoring",
-            worker_id,
-            _hello_mode,
-        )
-    return False
-
-
-def _build_worker_frame(mtype: str, msg: dict[str, Any]) -> dict[str, Any]:
-    """Build the validated wire frame for a worker control frame.
-
-    Runs INSIDE the narrow per-frame guard: a malformed worker frame makes the
-    builder raise (ValidationError/ValueError/KeyError/TypeError), which the
-    caller isolates. No state is mutated here, so a build failure cannot leave
-    partial state. The matching downstream I/O lives in
-    ``_dispatch_worker_frame`` and runs OUTSIDE the guard.
-    """
-    if mtype == "snapshot":
-        return cast(
-            "dict[str, Any]",
-            make_snapshot_frame(
-                screen=str(msg.get("screen", "")),
-                cursor=cast("dict[str, int]", msg.get("cursor", {"x": 0, "y": 0})),
-                cols=_safe_int(msg.get("cols"), 80, min_val=1),
-                rows=_safe_int(msg.get("rows"), 25, min_val=1),
-                screen_hash=str(msg.get("screen_hash", "")),
-                cursor_at_end=bool(msg.get("cursor_at_end", True)),
-                has_trailing_space=bool(msg.get("has_trailing_space", False)),
-                prompt_detected=cast("dict[str, Any] | None", msg.get("prompt_detected")),
-                raw_tail=cast("str | None", msg.get("raw_tail")),
-                ts=_safe_float(msg.get("ts"), time.time()),
-            ),
-        )
-    if mtype == "analysis":
-        return cast(
-            "dict[str, Any]",
-            make_analysis_frame(
-                formatted=str(msg.get("formatted", "")),
-                raw=msg.get("raw"),
-                ts=_safe_float(msg.get("ts"), time.time()),
-            ),
-        )
-    # mtype == "status" — the only remaining builder branch (filtered upstream).
-    return cast("dict[str, Any]", coerce_worker_status_frame(msg))
-
-
-async def _dispatch_worker_frame(hub: TermHub, worker_id: str, mtype: str, frame: dict[str, Any]) -> None:
-    """Run the downstream I/O for a successfully-built worker frame.
-
-    Runs OUTSIDE the per-frame builder guard: a failure here (update / broadcast
-    / append_event / redaction) is a genuine server-side fault and must
-    propagate to the outer handler, NOT be mis-isolated as an "invalid worker
-    frame" (which would mis-count it and silently swallow a real bug).
-    """
-    if mtype == "snapshot":
-        await hub.update_last_snapshot(worker_id, frame)
-        await hub.broadcast(worker_id, frame)
-        await hub.append_event(
-            worker_id,
-            "snapshot",
-            {
-                "prompt_id": extract_prompt_id(frame),
-                "screen_hash": frame.get("screen_hash"),
-                "screen": frame.get("screen", ""),
-            },
-        )
-    elif mtype == "analysis":
-        await hub.broadcast(worker_id, frame)
-    else:  # mtype == "status"
-        await hub.broadcast(worker_id, frame)
-        await hub.append_event(worker_id, "worker_status", {"status": frame})
 
 
 def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
@@ -526,76 +394,21 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                         logger.debug("ws_browser_closed_protocol_error worker_id=%s", worker_id)
                     break
                 for event in events:
-                    msg_b = {"type": "input", "data": event.data} if isinstance(event, DataChunk) else event.control
-                    mtype = msg_b.get("type")
-                    if mtype == "input" and not _browser_bucket.allow():
-                        hub.metric("ws_browser_rate_limited_total")
-                        logger.warning("ws_browser_rate_limited worker_id=%s", worker_id)
-                        with suppress(Exception):
-                            await websocket.send_text(encode_control(make_error_frame("rate_limited")))
-                            logger.debug("ws_browser_rate_limited_sent worker_id=%s", worker_id)
-                        continue
-                    if mtype is not None and mtype != "input" and not _browser_control_bucket.allow():
-                        hub.metric("ws_browser_control_rate_limited_total")
-                        logger.warning("ws_browser_control_rate_limited worker_id=%s mtype=%s", worker_id, mtype)
-                        with suppress(Exception):
-                            await websocket.send_text(encode_control(make_error_frame("rate_limited")))
-                        continue
-
-                    # Resume handled here (not in browser_handlers) because it can
-                    # update the local `role` / `can_hijack` variables.
-                    if mtype == "resume" and hub.resume_store is not None:
-                        from provide.uterm.server.bridge.routes.browser_handlers import _handle_resume
-
-                        owned_hijack = await _handle_resume(hub, websocket, worker_id, role, msg_b, owned_hijack)
-                        # _handle_resume may have updated the role in st.browsers;
-                        # read it back so subsequent messages use the correct role.
-                        role = await hub.get_worker_browser_role(worker_id, websocket) or role
-                        can_hijack = role == "admin"
-                        continue
-
-                    if mtype in ("presence_update", "queued_input", "control_request"):
-                        _dm_handle: Any = getattr(hub, "deckmux_handle_message", None)
-                        if _dm_handle is not None:
-                            _dm_msg_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
-                            await _dm_handle(worker_id, websocket, msg_b, principal=_dm_msg_principal)
-                        continue
-
-                    if mtype == "fanout_send":
-                        _fo_ctrl: Any = getattr(hub, "fan_out_controller", None)
-                        if _fo_ctrl is not None:
-                            from dataclasses import asdict
-
-                            _fo_group_id = msg_b.get("group_id", "")
-                            _fo_data = msg_b.get("data", "")
-                            _fo_principal = getattr(getattr(websocket, "state", None), "uterm_principal", None)
-                            _fo_subj = _fo_principal.subject_id if _fo_principal else "anonymous"
-                            # Verify caller has access to the group
-                            _fo_group = await _fo_ctrl.get_group(_fo_group_id, principal=_fo_subj)
-                            if _fo_group is None:
-                                continue  # caller doesn't own/have access
-                            _fo_result = await _fo_ctrl.send(
-                                _fo_group_id,
-                                _fo_data,
-                                principal=_fo_subj,
-                            )
-                            await websocket.send_text(
-                                encode_control(
-                                    {
-                                        "type": "fanout_result",
-                                        "group_id": _fo_result.group_id,
-                                        "send_id": _fo_result.send_id,
-                                        "results": [asdict(r) for r in _fo_result.results],
-                                        "divergent_sessions": _fo_result.divergent_sessions,
-                                        "failed_sessions": _fo_result.failed_sessions,
-                                    }
-                                )
-                            )
-                        continue
-
-                    if mtype in ("input", "hijack_request", "hijack_release"):
-                        await hub.touch_activity(worker_id)
-                    owned_hijack = await handle_browser_message(hub, websocket, worker_id, role, msg_b, owned_hijack)
+                    # Per-frame rate-limit + resume/presence/fanout/generic
+                    # dispatch lives in ``dispatch_browser_event``. A ``resume``
+                    # frame can update the local ``role`` / ``can_hijack``, so
+                    # those (and ``owned_hijack``) are read back from the return.
+                    role, can_hijack, owned_hijack = await dispatch_browser_event(
+                        hub,
+                        websocket,
+                        worker_id,
+                        role,
+                        can_hijack,
+                        owned_hijack,
+                        event,
+                        _browser_bucket,
+                        _browser_control_bucket,
+                    )
 
         except WebSocketDisconnect:
             pass
@@ -631,29 +444,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 if _do_resume and await hub.check_still_hijacked(worker_id):
                     _do_resume = False
                 if _do_resume:
-                    _resume_task = asyncio.create_task(
-                        hub.send_worker(
-                            worker_id,
-                            {
-                                "type": "control",
-                                "action": "resume",
-                                "owner": "dashboard",
-                                "lease_s": 0,
-                                "ts": time.time(),
-                            },
-                        )
-                    )
-                    hub._background_tasks.add(_resume_task)
-                    _resume_task.add_done_callback(hub._background_tasks.discard)
-                    _resume_task.add_done_callback(
-                        lambda t: (
-                            logger.warning(
-                                "ws_disconnect_resume_failed worker_id=%s error=%s", worker_id, t.exception()
-                            )
-                            if not t.cancelled() and t.exception() is not None
-                            else None
-                        )
-                    )
+                    resume_worker_on_disconnect(hub, worker_id)
                 await hub.broadcast_hijack_state(worker_id)
                 if _do_resume:
                     hub.notify_hijack_changed(worker_id, enabled=False, owner=None)
@@ -662,27 +453,5 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                 if await hub.check_still_hijacked(worker_id):
                     resume_without_owner = False
                 if resume_without_owner:
-                    _resume_task = asyncio.create_task(
-                        hub.send_worker(
-                            worker_id,
-                            {
-                                "type": "control",
-                                "action": "resume",
-                                "owner": "dashboard",
-                                "lease_s": 0,
-                                "ts": time.time(),
-                            },
-                        )
-                    )
-                    hub._background_tasks.add(_resume_task)
-                    _resume_task.add_done_callback(hub._background_tasks.discard)
-                    _resume_task.add_done_callback(
-                        lambda t: (
-                            logger.warning(
-                                "ws_disconnect_resume_failed worker_id=%s error=%s", worker_id, t.exception()
-                            )
-                            if not t.cancelled() and t.exception() is not None
-                            else None
-                        )
-                    )
+                    resume_worker_on_disconnect(hub, worker_id)
             await hub.prune_if_idle(worker_id)
