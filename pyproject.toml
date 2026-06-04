@@ -232,6 +232,7 @@ paths_to_mutate = [
     "src/provide/uterm/control_channel_patterns.py",
     "src/provide/uterm/auth.py",
     "src/provide/uterm/detection/detector.py",
+    "src/provide/uterm/detection/detector_compile.py",
     "src/provide/uterm/detection/engine.py",
     "src/provide/uterm/io.py",
     "src/provide/uterm/recording.py",
