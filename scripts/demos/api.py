@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 
+from scripts.demos.browser import _dev_auth_headers_or_empty
 from scripts.demos.output import clean_terminal_output
 
 
@@ -16,9 +17,10 @@ def wait_connected(base_url: str, session_id: str, timeout: float = 15.0) -> boo
     import httpx
 
     deadline = time.monotonic() + timeout
+    auth = _dev_auth_headers_or_empty()
     while time.monotonic() < deadline:
         try:
-            r = httpx.get(f"{base_url}/api/sessions/{session_id}", timeout=5.0)
+            r = httpx.get(f"{base_url}/api/sessions/{session_id}", timeout=5.0, headers=auth)
             if r.status_code == 200 and r.json().get("connected"):
                 return True
         except Exception:
@@ -41,7 +43,7 @@ def send_to_session(
     import httpx as _httpx
 
     try:
-        with _httpx.Client(base_url=base_url, timeout=30.0) as http:
+        with _httpx.Client(base_url=base_url, timeout=30.0, headers=_dev_auth_headers_or_empty()) as http:
             http.patch(f"/api/sessions/{session_id}", json={"input_mode": "hijack"})
             r = http.post(
                 f"/worker/{session_id}/hijack/acquire",
@@ -72,7 +74,7 @@ def fanout_send(
     import httpx as _httpx
 
     try:
-        with _httpx.Client(base_url=base_url, timeout=30.0) as http:
+        with _httpx.Client(base_url=base_url, timeout=30.0, headers=_dev_auth_headers_or_empty()) as http:
             r = http.post(
                 f"/api/fanout/groups/{group_id}/send",
                 json={"data": text, "quiesce_ms": 1500, "max_response_ms": 5000},
@@ -99,7 +101,7 @@ def fanout_send_results(
     import httpx as _httpx
 
     try:
-        with _httpx.Client(base_url=base_url, timeout=30.0) as http:
+        with _httpx.Client(base_url=base_url, timeout=30.0, headers=_dev_auth_headers_or_empty()) as http:
             r = http.post(
                 f"/api/fanout/groups/{group_id}/send",
                 json={"data": text, "quiesce_ms": 1500, "max_response_ms": 5000},
