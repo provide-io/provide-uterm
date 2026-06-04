@@ -13,7 +13,6 @@
     "packages/provide-uterm-cloudflare/tests/test_webhooks.py": 585,
     "packages/provide-uterm-cloudflare/tests/test_webhooks_part2.py": 541,
     "packages/provide-uterm-cloudflare/tests/test_ws_routes.py": 605,
-    "packages/provide-uterm/src/provide/uterm/detection/detector.py": 532,
     "packages/provide-uterm/tests/conftest.py": 515,
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py": 792,
     "packages/provide-uterm/tests/deckmux/test_hub_mixin_part2.py": 778,

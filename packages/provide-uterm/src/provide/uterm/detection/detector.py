@@ -16,6 +16,11 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from provide.uterm.detection.detector_compile import (
+    DetectorPatternCompileError,
+    compile_patterns,
+    swap_patterns,
+)
 from provide.uterm.detection.models import PromptDetectionDiagnostics, PromptMatch
 
 if TYPE_CHECKING:
@@ -23,19 +28,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Re-exported so ``from provide.uterm.detection.detector import
+# DetectorPatternCompileError`` keeps working after the compile/reload
+# machinery moved to ``detector_compile``.
+__all__ = ["DetectorPatternCompileError", "PromptDetector"]
+
 _DEFAULT_PROMPT_REGION_TAIL_LINES = 12
-
-
-class DetectorPatternCompileError(ValueError):
-    """Raised in ``strict=True`` mode when a pattern fails to compile.
-
-    The non-strict default merely logs failures and continues with the
-    surviving patterns — useful for "soft" environments where a broken
-    rule shouldn't take the whole detector offline. Production deploys
-    that load curated rules should pass ``strict=True`` so a typo in a
-    rules file is caught at startup instead of silently degrading
-    detection.
-    """
 
 
 class PromptDetector:
@@ -94,73 +92,10 @@ class PromptDetector:
     def _compile_patterns(self) -> list[tuple[re.Pattern[str], dict[str, Any]]]:
         """Compile regex patterns for efficient matching.
 
-        Returns:
-            List of (compiled_regex, pattern_dict) tuples
+        Thin wrapper over :func:`detector_compile.compile_patterns` (the
+        body lives there to keep this module under its LOC budget).
         """
-        compiled = []
-        failed_patterns: list[dict[str, Any]] = []
-
-        logger.info("pattern_compile_start count=%d", len(self._patterns))
-
-        for pattern in self._patterns:
-            try:
-                regex = re.compile(pattern["regex"], re.MULTILINE)
-                compiled.append((regex, pattern))
-                logger.debug("pattern_compile_ok pattern_id=%s", pattern.get("id", "unknown"))
-            except re.error as e:
-                # Pattern compilation failed - emit diagnostic.
-                # Reaching ``re.error`` means ``pattern["regex"]`` was successfully
-                # read above (only ``re.compile`` failed), so the ``regex`` key is
-                # always present here — no ``.get`` default is reachable.
-                regex_value = pattern["regex"]
-                failed_patterns.append(
-                    {
-                        "id": pattern.get("id", "unknown"),
-                        "regex": regex_value,
-                        "error": str(e),
-                    }
-                )
-                logger.exception(
-                    "pattern_compile_failed pattern_id=%s regex=%s error=%s",
-                    pattern.get("id", "unknown"),
-                    regex_value,
-                    str(e),
-                )
-                continue
-            except KeyError as e:
-                # Pattern missing required 'regex' key
-                logger.exception(
-                    "pattern_compile_invalid_structure pattern_id=%s missing_key=%s",
-                    pattern.get("id", "unknown"),
-                    str(e),
-                )
-                failed_patterns.append(
-                    {
-                        "id": pattern.get("id", "unknown"),
-                        "error": f"Missing key: {e}",
-                    }
-                )
-                continue
-
-        logger.info("pattern_compile_complete succeeded=%d failed=%d", len(compiled), len(failed_patterns))
-
-        if failed_patterns:
-            # Every entry appended above carries both ``id`` and ``error`` keys
-            # (set on both the ``re.error`` and ``KeyError`` branches), so direct
-            # indexing is correct and leaves no dead ``.get`` default to mutate.
-            logger.error(
-                "pattern_compile_failures count=%d failed=%s",
-                len(failed_patterns),
-                [{"id": p["id"], "error": p["error"]} for p in failed_patterns],
-            )
-            self._compile_failures = failed_patterns
-            if self._strict:
-                summary = ", ".join(f"{p['id']}: {p['error']}" for p in failed_patterns)
-                raise DetectorPatternCompileError(
-                    f"{len(failed_patterns)} pattern(s) failed to compile in strict mode: {summary}"
-                )
-
-        return compiled
+        return compile_patterns(self)
 
     @staticmethod
     def prompt_region(
@@ -513,20 +448,7 @@ class PromptDetector:
     def _swap_patterns(self, candidate: list[dict[str, Any]]) -> None:
         """Atomically replace ``self._patterns`` with ``candidate``.
 
-        Compiles the candidate set into locals first. In ``strict=True``
-        mode a bad pattern makes ``_compile_patterns`` raise; we restore the
-        previous ``_patterns`` before re-raising so the detector is never
-        left holding a poisoned list that re-raises on every future call.
+        Thin wrapper over :func:`detector_compile.swap_patterns` (the body
+        lives there to keep this module under its LOC budget).
         """
-        saved = self._patterns
-        self._patterns = candidate
-        try:
-            compiled_all = self._compile_patterns()
-        except Exception:
-            self._patterns = saved  # roll back before re-raising
-            raise
-        self._compiled_all = compiled_all
-        self._compiled_no_cursor_end_req = [
-            (regex, pat) for (regex, pat) in self._compiled_all if not bool(pat.get("expect_cursor_at_end", True))
-        ]
-        self._compiled = self._compiled_all
+        swap_patterns(self, candidate)
