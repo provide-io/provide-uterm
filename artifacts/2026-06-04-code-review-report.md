@@ -1,31 +1,11 @@
 # provide-uterm Code Review & Architecture Analysis - Part 1: Core Bridge System (TermHub)
 
-> **Resolution status (2026-06-03).** Every claim below was fact-checked against
-> the code; findings are factually accurate but severity was generally
-> overstated. Actionable findings have been resolved (commits
-> `cf9c47fa..eba6394e`, CI-green); see `CHANGELOG.md` `[Unreleased]`.
->
-> | Finding | Status |
-> |---------|--------|
-> | P1 §3 — I/O under the global lock (`try_acquire_rest`) | **Fixed** — two-phase reserve (`cf9c47fa`) |
-> | P1 §4 — sequential broadcast fan-out | **Fixed** — concurrent `gather` (`707300d4`) |
-> | P1 §4 — shard the global lock | **N/A** — defused by removing I/O from the lock; the lock now wraps only µs in-memory ops |
-> | P2 §2 — SSH `asyncssh` private-attr access | **Acknowledged** — already guarded (`contextlib.suppress` + fallback); not actioned |
-> | P3 §3 — ≤60 s credential-revocation window (CF) | **Acknowledged** — documented intentional trade-off |
-> | P5 §3 — MCP regex ReDoS | **Fixed** — catastrophic-construct guard + `session_watch` clamp (`fd480ade`) |
-> | P5 §3 — SSRF / DNS-rebinding in `session_create` | **Already mitigated** — DNS-resolving egress guard at the `SessionRegistry` chokepoint (`server/egress.py`); the MCP text-check is a cheap first pass, not the control |
-> | P6 §3 — `capture.c` multi-thread framing race | **Fixed** — single-syscall frame (`8bde10de`) |
-> | P6 §3 — `pam_listener` socket permission race | **Fixed** — umask-before-bind (`b9bf8fa7`) |
-> | P8 §2 — annotation stream fragmentation | **Deferred** — cross-call buffering breaks the one-event-per-`seq` model; needs design buy-in |
-> | P8 §3 — annotation fallback leaks raw match | **Fixed** — label-only fallback (`a4296f46`) |
-> | P1 §2 — back-compat `@property` shims | **Acknowledged** — intentional refactor-#16 migration scaffolding |
-
 This section of the code review focuses on the Core Bridge System, analyzing the `TermHub` composition (Hub Services) and the `WorkerLink` bridge mechanism. We evaluate the codebase against four critical lenses: Architecture, Maintainability, Security & Concurrency, and Performance & Scaling.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
 
 **Findings:**
-- **Service Composition:** `TermHub` (`core_impl.py`) acts as an effective facade for nine dedicated service classes: `WorkerRegistry`, `RateLimiter`, `InMemoryApprovalStore`, `HijackLeaseManager`, `MessageRouter`, `ConnectionManager`, `PresenceManager`, `StateStore`, and `PollingCoordinator`. This clarifies domain boundaries.
+- **Service Composition:** `TermHub` (`core_impl.py`, alongside newly extracted modules like `core_delegates_connection.py`, `core_delegates_lease.py`, `core_helpers.py`, and `core_orchestration.py`) acts as an effective facade for nine dedicated service classes: `WorkerRegistry`, `RateLimiter`, `InMemoryApprovalStore`, `HijackLeaseManager`, `MessageRouter`, `ConnectionManager`, `PresenceManager`, `StateStore`, and `PollingCoordinator`. This clarifies domain boundaries.
 - **WorkerLink Bridge:** The worker-side `TermBridge` (`worker_link.py`) is well-structured. It handles reconnections using exponential backoff, drops or rejects invalid payloads appropriately, and safely interfaces with the PTY/session in a non-blocking manner.
 - **Data Flow:** Frame routing cleanly distinguishes between `term` (raw bytes from PTY to browsers) and `control` frames. The introduction of `is_tunnel_worker` flags allows raw byte multiplexing without JSON envelope overhead, which is excellent for raw PTY performance.
 
@@ -36,7 +16,9 @@ While the transition to composed classes is a massive leap forward for maintaina
 **Findings:**
 - **Circular Dependencies / Back-references:** Several composed services rely on "reaching back" into the `TermHub` facade. For example, `MessageRouter` is constructed as `self.router = MessageRouter(self)` and accesses `hub._lock`, `hub.registry`, and `hub.prepare_policy_context`. This creates bidirectional coupling, where the managers are inextricably bound to the specific `TermHub` implementation rather than generic interfaces.
 - **Protocol Usage:** `HijackLeaseManager` mitigates this slightly by defining `_LeaseHubCallbacks(Protocol)` for its hub reference. This is a very robust Pythonic pattern that should be replicated across other managers (`MessageRouter`, `ConnectionManager`, etc.) to fully decouple them and make them unit-testable in isolation.
-- **Back-compatibility Shims:** `TermHub` still contains numerous back-compatibility shims (`@property` accessors for `_workers`, `_rest_acquire_bucket`, etc.). While necessary for the phased refactor, these should be tracked as technical debt and progressively stripped out to finalize the Phase 7 decoupling.
+- **Back-compatibility Shims:** `TermHub` previously contained numerous back-compatibility shims (`@property` accessors for `_workers`, `_rest_acquire_bucket`, etc.).
+  **Resolved Risk:** Retaining these shims delayed the finalization of the Phase 7 decoupling and maintained residual coupling.
+  **Resolution:** All back-compat property shims were removed from `TermHub` (commit `fe69a008`), finalizing the decoupling.
 
 ### 3. Security & Concurrency Robustness
 
@@ -52,8 +34,8 @@ The codebase uses a single, coarse-grained asynchronous lock (`TermHub._lock`) t
       await st.worker_ws.send_text(...)
       ...
   ```
-  **Risk:** If the worker's WebSocket write buffer is full (TCP backpressure) or the connection is slow, `send_text` will yield and block. Because the single global `TermHub._lock` is held, *all* other workers, browsers, and API requests across the entire server will stall waiting for the lock. This is a severe Denial of Service (DoS) vulnerability and performance hazard.
-  **Recommendation:** The network I/O must be moved outside the lock. You can achieve atomicity by marking the state as "pending_hijack" or similar under the lock, releasing the lock, performing the I/O, and then re-acquiring the lock to finalize the `HijackSession`.
+  **Resolved Risk:** If the worker's WebSocket write buffer is full (TCP backpressure) or the connection is slow, `send_text` will yield and block. Because the single global `TermHub._lock` is held, *all* other workers, browsers, and API requests across the entire server will stall waiting for the lock. This is a severe Denial of Service (DoS) vulnerability and performance hazard.
+  **Resolution:** The network I/O was moved outside the lock via a two-phase reserve mechanism (commit `cf9c47fa`), ensuring atomicity without blocking the global hub lock.
 
 - **Redaction & Policies:** The `MessageRouter` cleanly enforces output redaction via `_output_policy_gate` before broadcasting. The application of redaction to both the broadcast path and the persistent ring buffer (`_redact_event_payload`) ensures secrets do not leak via the `events/watch` API.
 
@@ -62,16 +44,17 @@ The codebase uses a single, coarse-grained asynchronous lock (`TermHub._lock`) t
 The system is designed to support up to 10,000 workers (`max_workers = 10000`). Under this load, several scaling bottlenecks emerge.
 
 **Findings:**
-- **Global Lock Contention:** As mentioned, `TermHub` relies on a single `asyncio.Lock()` for all workers. At 10,000 workers, concurrent connections, broadcasts, and state updates will cause intense contention on this single lock.
-  **Recommendation:** Shard the lock. The lock should be granular, ideally one `asyncio.Lock` per `WorkerTermState` (or per `worker_id`). The global lock should only protect the `WorkerRegistry`'s internal dictionary mutations (adding/removing a worker), while per-worker locks protect the individual worker's leases, browsers, and state.
-- **Sequential Broadcasts:** In `router_impl.py`, `MessageRouter.broadcast` iterates over `browsers_with_roles` and awaits each `send_text` sequentially:
+- **Global Lock Contention:** As mentioned, `TermHub` relies on a single `asyncio.Lock()` for all workers.
+  **Resolved Risk:** At 10,000 workers, concurrent connections, broadcasts, and state updates could cause intense contention on this single lock.
+  **Resolution:** The need to shard the lock was defused because the I/O was removed from the lock (`cf9c47fa`). The lock now only wraps microsecond-level in-memory operations, making contention negligible.
+- **Sequential Broadcasts:** In `router_broadcast.py` (split from `router_impl.py`), `MessageRouter.broadcast` iterates over `browsers_with_roles` and awaits each `send_text` sequentially:
   ```python
   for ws, role in browsers_with_roles:
       ...
       await asyncio.wait_for(ws.send_text(final_payload), timeout=_BROADCAST_SEND_TIMEOUT_S)
   ```
-  **Risk:** If there are 50 browsers watching a session, and the first browser is slow (taking 4 seconds to timeout), the 50th browser receives the frame 4 seconds late.
-  **Recommendation:** Fan-out the broadcasts concurrently using `asyncio.gather(*tasks, return_exceptions=True)` or `asyncio.TaskGroup`.
+  **Resolved Risk:** If there are 50 browsers watching a session, and the first browser is slow (taking 4 seconds to timeout), the 50th browser receives the frame 4 seconds late.
+  **Resolution:** The sequential iteration was replaced with concurrent fan-out using `asyncio.gather` (commit `707300d4`), preventing slow clients from blocking broadcasts to other browsers.
 - **Memory Footprint:** The `WorkerTermState` properly limits memory growth by restricting the event ring buffer to `event_deque_maxlen` (default 2000) and aggressively capping the payload size of `term` events (`max_event_data_chars`, default 8192). This is a safe and robust strategy for long-running sessions.
 
 ## Part 2: Server Transports & Protocol Gateways
@@ -125,7 +108,7 @@ This section of the code review focuses on the Cloudflare Workers architecture a
 ### 1. Architecture & General Health (Data Flow, Composition)
 
 **Findings:**
-- **Durable Object State Modeling:** The `SessionRuntime` Durable Object acts as a stateful coordinator for terminal sessions. The architecture leverages mixins (`_AuthMixin`, `_FetchMixin`, `_LifecycleMixin`, `_SessionRuntimeIoMixin`, `_WsHelperMixin`) to compose the `SessionRuntime` (`runtime.py`), effectively avoiding a monolith. `SessionRuntime` persists session metadata and terminal buffers into an embedded SQLite database (`SqliteStateStore`), which allows it to recover gracefully after Cloudflare hibernates the DO.
+- **Durable Object State Modeling:** The `SessionRuntime` Durable Object acts as a stateful coordinator for terminal sessions. The architecture leverages mixins (`_AuthMixin`, `_FetchMixin`, `_LifecycleMixin`, `_SessionRuntimeIoMixin`, `_WsHelperMixin`) to compose the `SessionRuntime` (recently split into `runtime.py` and `runtime_helpers.py`), effectively avoiding a monolith. `SessionRuntime` persists session metadata and terminal buffers into an embedded SQLite database (`SqliteStateStore`), which allows it to recover gracefully after Cloudflare hibernates the DO.
 - **WebSocket Hibernation Efficiency:** The application is explicitly designed for Cloudflare's WebSocket hibernation. In `lifecycle.py`, methods like `webSocketOpen` and `webSocketClose` handle connection events independently of the `fetch()` handler. The use of SQLite to persist the resume token (`_open_resume_token`) ensures browsers can securely reclaim connections when the DO wakes from hibernation without requiring re-authentication.
 
 ### 2. Maintainability & Structural Design
@@ -194,7 +177,7 @@ This section of the code review focuses on the AI and MCP tooling integration lo
 ### 1. Architecture & General Health (Data Flow, Composition)
 
 **Findings:**
-- **FastMCP Tool Surface:** The `server_impl.py` module exposes 21 explicit FastMCP tools covering session management, hijack lifecycle, and worker control. This establishes clear and comprehensive boundaries for AI agents to interact with terminal sessions.
+- **FastMCP Tool Surface:** The `server_impl.py` module (along with its split modules `server_tools_hijack.py`, `server_tools_session.py`, and `server_validators.py`) exposes 21 explicit FastMCP tools covering session management, hijack lifecycle, and worker control. This establishes clear and comprehensive boundaries for AI agents to interact with terminal sessions.
 - **Context Scoping:** The `AuthorizationContext` safely encapsulates the `McpPrincipal` (resolved either via request-scoped state or transport headers). This enables legacy callers using `X-Uterm-Principal` headers to function correctly while providing a secure fallback behavior for local `stdio` agents.
 
 ### 2. Maintainability & Structural Design
@@ -207,11 +190,11 @@ This section of the code review focuses on the AI and MCP tooling integration lo
 
 **Findings:**
 - **Regex Denial of Service (ReDoS):** The `_compile_user_pattern` function relies on a length cap (`MAX_USER_PATTERN_LEN = 512`) to prevent amplification, but compiles the pattern using the standard Python `re` module.
-  **Risk:** A 512-character limit is large enough for a malicious or hallucinating LLM to construct short, pathological patterns that cause catastrophic backtracking in the `re` engine, leading to a CPU exhaustion Denial of Service (DoS).
-  **Recommendation:** Migrate from the standard `re` module to a linear-time engine like `google-re2` for evaluating untrusted/LLM-supplied regex patterns.
+  **Resolved Risk:** A 512-character limit is large enough for a malicious or hallucinating LLM to construct short, pathological patterns that cause catastrophic backtracking in the `re` engine, leading to a CPU exhaustion Denial of Service (DoS).
+  **Resolution:** A catastrophic-construct guard was introduced along with a `session_watch` clamp (commit `fd480ade`) to protect against ReDoS without needing a full `google-re2` migration.
 - **Server-Side Request Forgery (SSRF) and DNS Rebinding:** In `session_create`, `_validate_session_create_config` evaluates hostnames against `ALLOW_PRIVATE_HOSTS` and a hardcoded denylist (e.g., `metadata.google.internal`). The comments explicitly state: "We never perform a DNS lookup here".
-  **Risk:** An attacker can bypass the hostname check by pointing a custom domain to `127.0.0.1` or `169.254.169.254` (DNS rebinding) since the MCP tool evaluates the name purely as text without resolving it.
-  **Recommendation:** Ensure strict egress filtering and DNS resolution checking are applied at the network or gateway layer on the server before dialing out, to fully close the SSRF pivot vector.
+  **Resolved Risk:** An attacker could bypass the hostname check by pointing a custom domain to `127.0.0.1` or `169.254.169.254` (DNS rebinding) since the MCP tool evaluates the name purely as text without resolving it.
+  **Resolution:** This is already mitigated by a DNS-resolving egress guard at the `SessionRegistry` chokepoint (`server/egress.py`). The MCP text-check is just a cheap first pass, not the primary control.
 
 ### 4. Performance & Scaling
 
@@ -238,11 +221,11 @@ This section of the code review focuses on the Platform code located in `package
 
 **Findings:**
 - **Capture Socket Race Condition:** In `pam_listener.py`, `PamNotifyListener` uses `asyncio.start_unix_server` to bind the socket before calling `os.chmod(self._path, 0o600)`.
-  **Risk:** This creates a race condition. The socket is created with the system's default umask before `os.chmod` restricts it. In this narrow window, an unauthorized local user could connect to the notification socket.
-  **Recommendation:** Use `os.umask(0o177)` before binding the socket and restore the previous umask afterward to ensure atomic, safe permission boundaries upon creation.
+  **Resolved Risk:** This creates a race condition. The socket is created with the system's default umask before `os.chmod` restricts it. In this narrow window, an unauthorized local user could connect to the notification socket.
+  **Resolution:** The code was fixed to use a umask-before-bind strategy (commit `b9bf8fa7`), ensuring atomic and safe permission boundaries upon socket creation.
 - **Concurrent Send Interleaving:** In `capture.c`, `send_frame` issues two separate `write()` / `send()` syscalls: one for the 5-byte header (`[1B channel][4B length]`) and one for the payload. The `g_capture_fd` is shared globally without locks.
-  **Risk:** If multiple threads in the captured process call `write()` concurrently, the OS might interleave the 5-byte header of one thread with the payload of another thread across the stream socket, completely corrupting the framing protocol.
-  **Recommendation:** Wrap the dual `write()` calls in `send_frame` with a `pthread_mutex_t` to serialize frames, or better, use `writev()` / `sendmsg()` scatter-gather I/O to send the header and payload atomically in a single syscall.
+  **Resolved Risk:** If multiple threads in the captured process call `write()` concurrently, the OS might interleave the 5-byte header of one thread with the payload of another thread across the stream socket, completely corrupting the framing protocol.
+  **Resolution:** Fixed by combining the header and payload into a single syscall frame dispatch (commit `8bde10de`), preventing OS-level interleaving across threads.
 
 ### 4. Performance & Scaling
 
@@ -292,7 +275,7 @@ This section of the code review focuses on the Annotation code located in `packa
 
 **Findings:**
 - **Lightweight Model Architecture:** The data models (`_models.py`) are explicitly defined using Python's `@dataclass(slots=True)`. This ensures a small memory footprint and avoids dictionary creation overhead, which is excellent for a high-volume event processing pipeline.
-- **Hot-Path Optimization:** The `PatternDetector` (`_detector.py`) class operates efficiently by immediately returning when `text` is empty and preventing unnecessary object allocations when no rules match.
+- **Hot-Path Optimization:** The `PatternDetector` (`detector.py` and `detector_compile.py`) class operates efficiently by immediately returning when `text` is empty and preventing unnecessary object allocations when no rules match.
 
 ### 2. Maintainability & Structural Design
 
@@ -306,9 +289,9 @@ This section of the code review focuses on the Annotation code located in `packa
 
 **Findings:**
 - **Secure Telemetry Defaults:** `Annotation` schemas correctly default to a `principal="system"` identifying the source securely.
-- **Data Privacy & Secret Leakage:** In `_detector.py`, `description_template.format` is wrapped in a `try...except` block. If a rule's template formatting fails (due to a `KeyError` or `IndexError`), the system falls back to `description = f"{rule.label}: {match_text}"`.
-  **Risk:** Because `match_text` contains the direct regular expression match, if the pattern matched an actual secret (such as a GitHub token or password), this fallback will inadvertently embed the plaintext secret directly into the telemetry/annotation `description`.
-  **Recommendation:** Do not default to including `match_text` in the fallback description. Explicitly redact `match_text` or enforce strict schema validation on `description_template` at initialization time to prevent formatting errors from causing a privacy breach.
+- **Data Privacy & Secret Leakage:** In `detector.py`, `description_template.format` is wrapped in a `try...except` block.
+  **Resolved Risk:** Because `match_text` contains the direct regular expression match, if the pattern matched an actual secret, this fallback would inadvertently embed the plaintext secret directly into the telemetry/annotation `description`.
+  **Resolution:** Fixed by implementing a label-only fallback (commit `a4296f46`), removing the raw `match_text` from the fallback template to prevent secret leakage.
 
 ### 4. Performance & Scaling
 
