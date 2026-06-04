@@ -74,13 +74,13 @@ from provide.uterm.server.bridge.models import (
     HijackAcquireRequest,
     HijackHeartbeatRequest,
     HijackSendRequest,
-    InputModeRequest,
 )
 from provide.uterm.server.bridge.rest_helpers import (
     build_hijack_events_response,
     build_hijack_snapshot_response,
     extract_prompt_id,
 )
+from provide.uterm.server.bridge.routes.rest_workerctl import register_workerctl_routes
 
 
 def _mono_to_wall(mono_ts: float) -> float:
@@ -473,31 +473,7 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
         await hub.prune_if_idle(worker_id)
         return {"ok": True, "worker_id": worker_id, "hijack_id": hijack_id}
 
-    @router.post("/worker/{worker_id}/input_mode")
-    async def set_input_mode(
-        worker_id: str = Path(pattern=r"^[\w\-]+$"),
-        request: InputModeRequest = Body(...),  # noqa: B008
-    ) -> Any:
-        # input_mode is validated by Pydantic to be "hijack" or "open" via the
-        # regex pattern on InputModeRequest, so the cast is sound.
-        ok, err = await hub.set_input_mode(worker_id, request.input_mode)  # type: ignore[arg-type]
-        if not ok:
-            status = 404 if err == "not_found" else 409
-            error_msg = (
-                "No worker registered." if err == "not_found" else "Cannot switch to open while hijack is active."
-            )
-            logger.warning("rest_input_mode_error worker_id=%s mode=%s err=%s", worker_id, request.input_mode, err)
-            return JSONResponse({"error": error_msg}, status_code=status)
-        logger.info("rest_input_mode_ok worker_id=%s mode=%s", worker_id, request.input_mode)
-        return {"ok": True, "input_mode": request.input_mode, "worker_id": worker_id}
-
-    @router.post("/worker/{worker_id}/disconnect_worker")
-    async def disconnect_worker(
-        worker_id: str = Path(pattern=r"^[\w\-]+$"),
-    ) -> Any:
-        ok = await hub.disconnect_worker(worker_id)
-        if not ok:
-            logger.warning("rest_disconnect_no_worker worker_id=%s", worker_id)
-            return JSONResponse({"error": "No worker connected."}, status_code=404)
-        logger.info("rest_disconnect_ok worker_id=%s", worker_id)
-        return {"ok": True, "worker_id": worker_id}
+    # Worker-control routes (input_mode, disconnect_worker) live in the sibling
+    # ``rest_workerctl`` module; register them on the same router so the public
+    # surface (a single ``register_rest_routes`` call) is unchanged.
+    register_workerctl_routes(hub, router)
