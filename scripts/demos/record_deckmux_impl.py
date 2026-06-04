@@ -272,9 +272,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             {
                 "session_id": "provide-shell",
                 "display_name": "Incident Response",
-                # "shell" emulates server-side + serves a snapshot so each
-                # persona's browser xterm renders; raw "pty"/bash stays blank.
-                "connector_type": "shell",
+                "connector_type": "shell",  # emulates + snapshots so the browser renders (raw pty = blank)
                 "input_mode": "open",
                 "auto_start": True,
             }
@@ -615,9 +613,7 @@ async def run_terminal_demo() -> None:
             {
                 "session_id": "provide-shell",
                 "display_name": "Provide Shell",
-                # "shell" emulates server-side + serves a snapshot so each
-                # persona's browser xterm renders; raw "pty"/bash stays blank.
-                "connector_type": "shell",
+                "connector_type": "shell",  # emulates + snapshots so the browser renders (raw pty = blank)
                 "input_mode": "open",
                 "auto_start": True,
             }
