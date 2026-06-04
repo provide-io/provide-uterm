@@ -27,6 +27,25 @@ if TYPE_CHECKING:
 _FLEET_COLS = 3  # columns in fleet grid (3x1 for 3 sessions, 3x3 for 9)
 
 
+def _header_mode_cookies(context_extra: dict[str, Any], base_url: str) -> list[dict[str, str]]:
+    """Mirror header-mode ``X-Uterm-Principal``/``Role`` into cookies.
+
+    Playwright does not forward a context's ``extra_http_headers`` on the
+    page-initiated WebSocket handshake, so the in-page hijack WS would
+    authenticate as an anonymous viewer and silently drop input in open mode
+    (only operators/admins may send). Cookies *are* carried on the WS
+    handshake, so replay the same identity there. No-op when the context sets
+    no ``X-Uterm-*`` headers (e.g. the dev_token recorders).
+    """
+    headers = context_extra.get("extra_http_headers") or {}
+    cookies: list[dict[str, str]] = []
+    for header_name, cookie_name in (("X-Uterm-Principal", "uterm_principal"), ("X-Uterm-Role", "uterm_role")):
+        value = headers.get(header_name)
+        if value:
+            cookies.append({"name": cookie_name, "value": value, "url": base_url})
+    return cookies
+
+
 def record_simultaneous_perspectives(
     perspectives: dict[str, list[BrowserStep]],
     base_url: str,
@@ -80,6 +99,9 @@ def record_simultaneous_perspectives(
                 )
                 if auth_cookies:
                     ctx.add_cookies(auth_cookies)  # type: ignore[arg-type]
+                persona_cookies = _header_mode_cookies(extra, base_url)
+                if persona_cookies:
+                    ctx.add_cookies(persona_cookies)  # type: ignore[arg-type]
                 contexts[name] = ctx
                 pages[name] = ctx.new_page()
 
