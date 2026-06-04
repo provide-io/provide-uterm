@@ -460,6 +460,10 @@ tests_dir = [
     "packages/provide-uterm-server/tests/tunnel/test_token_hash.py",
     "packages/provide-uterm-server/tests/tunnel/test_token_hash_hypothesis.py",
     "packages/provide-uterm-server/tests/tunnel/test_intercept_gate.py",
+    # intercept.py kill-suite: test_intercept_gate.py exercises the decision flow
+    # but never asserts the two logger.warning contents nor the cancel_all
+    # not-done guard / await_decision timeout wiring; this binds those mutants.
+    "packages/provide-uterm-server/tests/tunnel/test_intercept_kill.py",
     # SessionRegistry (server/registry.py) dedicated mutmut suite — PRESERVED but
     # commented out in lockstep with registry.py's deferral from paths_to_mutate
     # above (2026-06-01). Wiring these takes registry.py from ~14% (no bound
