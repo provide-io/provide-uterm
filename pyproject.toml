@@ -535,6 +535,13 @@ tests_dir = [
     # were never wired in (file sat at ~31% under tests_dir).
     "packages/provide-uterm/tests/bridge/test_coordinator_units.py",
     "packages/provide-uterm/tests/bridge/test_coordinator_stress.py",
+    # PollingCoordinator (hub/polling_service.py) — snapshot-polling kill suites
+    # (never wired in; file sat at ~21% under tests_dir). The coverage suite is a
+    # real-hub integration pass; test_polling_kill.py is a deterministic
+    # fake-clock suite that pins the deadline/interval arithmetic + re-request
+    # gates the wall-clock suite cannot reach.
+    "packages/provide-uterm-server/tests/bridge/test_hub_polling_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_polling_kill.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).
