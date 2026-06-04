@@ -7,8 +7,8 @@
 Owns the lifecycle of :class:`WorkerTermState` instances keyed by
 ``worker_id``. This class is intentionally a thin wrapper around a
 ``dict`` — its purpose is to give the worker map a *name* that other
-hub services can hold a reference to, instead of poking at
-``TermHub._workers`` directly.
+hub services and callers reference as ``hub.registry._workers`` (the
+former ``TermHub._workers`` back-compat shim has since been removed).
 
 Lock semantics are unchanged from the pre-refactor design: lock-free
 reads remain safe because CPython dict reads are atomic, and mutations
@@ -29,12 +29,12 @@ if TYPE_CHECKING:
 class WorkerRegistry:
     """In-memory registry of attached workers, keyed by ``worker_id``.
 
-    The underlying ``dict`` is exposed as :attr:`_workers` so existing
-    hub mixin code can continue to use mapping operations
+    The underlying ``dict`` is exposed as :attr:`_workers` (reached as
+    ``hub.registry._workers``) so callers can use mapping operations
     (``setdefault``, ``items``, ``values``, indexed access, ``del``)
-    directly during the phased refactor. New code should prefer the
-    explicit methods (:meth:`get`, :meth:`put`, :meth:`pop`,
-    :meth:`contains`, :meth:`all`, :meth:`items`).
+    directly. New code should prefer the explicit methods
+    (:meth:`get`, :meth:`put`, :meth:`pop`, :meth:`contains`,
+    :meth:`all`, :meth:`items`).
     """
 
     __slots__ = ("_workers",)
