@@ -323,6 +323,30 @@ class TestAddressAllowed:
     def test_public_ips_allowed(self, ip: str) -> None:
         assert _address_allowed(ip) is True
 
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "::ffff:169.254.169.254",  # IPv4-mapped
+            "2002:a9fe:a9fe::",  # 6to4 of 169.254.169.254
+            "64:ff9b::169.254.169.254",  # NAT64 well-known prefix
+            "::169.254.169.254",  # deprecated IPv4-compatible
+        ],
+    )
+    def test_embedded_ipv4_metadata_forms_denied(self, ip: str) -> None:
+        # Every IPv6 form that carries the v4 metadata IP must decode to it
+        # before the membership check — parity with the egress connector guard.
+        assert _address_allowed(ip) is False
+
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "::ffff:10.0.0.1",  # IPv4-mapped private
+            "64:ff9b::192.168.1.1",  # NAT64 of a private v4
+        ],
+    )
+    def test_embedded_ipv4_private_forms_denied(self, ip: str) -> None:
+        assert _address_allowed(ip) is False
+
 
 # ===========================================================================
 # _literal_or_resolved_addresses
