@@ -90,3 +90,54 @@ class TestAsyncInlineWebSocketClient:
 
         with pytest.raises(TypeError, match="expected text WebSocket payload"):
             await client.recv_frame()
+
+
+class TestFifoOrdering:
+    """Assert that both clients deliver frames in strict FIFO order.
+
+    These tests were added together with the deque refactor.  They document
+    the invariant that a batch of frames arriving in a single WebSocket
+    message are returned in the same order they were encoded, regardless of
+    the underlying pending-buffer implementation.
+    """
+
+    def test_sync_client_fifo_order(self) -> None:
+        """SyncInlineWebSocketClient returns frames in encoding order."""
+        frames = [encode_control({"type": "ping", "seq": i}) + encode_data(f"data{i}") for i in range(3)]
+        # Flatten into one big message so multiple frames are buffered at once
+        combined = "".join(frames)
+
+        ws = MagicMock()
+        ws.receive_text.side_effect = [combined]
+        client = SyncInlineWebSocketClient(ws, role="browser")
+
+        received = [client.recv_frame() for _ in range(6)]
+        expected = [
+            {"type": "ping", "seq": 0},
+            {"type": "term", "data": "data0"},
+            {"type": "ping", "seq": 1},
+            {"type": "term", "data": "data1"},
+            {"type": "ping", "seq": 2},
+            {"type": "term", "data": "data2"},
+        ]
+        assert received == expected
+
+    async def test_async_client_fifo_order(self) -> None:
+        """AsyncInlineWebSocketClient returns frames in encoding order."""
+        frames = [encode_control({"type": "ping", "seq": i}) + encode_data(f"data{i}") for i in range(3)]
+        combined = "".join(frames)
+
+        ws = AsyncMock()
+        ws.recv.side_effect = [combined]
+        client = AsyncInlineWebSocketClient(ws, role="browser")
+
+        received = [await client.recv_frame() for _ in range(6)]
+        expected = [
+            {"type": "ping", "seq": 0},
+            {"type": "term", "data": "data0"},
+            {"type": "ping", "seq": 1},
+            {"type": "term", "data": "data1"},
+            {"type": "ping", "seq": 2},
+            {"type": "term", "data": "data2"},
+        ]
+        assert received == expected

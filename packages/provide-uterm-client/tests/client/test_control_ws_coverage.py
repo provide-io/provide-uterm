@@ -171,10 +171,12 @@ class TestSyncReceiveJson:
 
     def test_recv_frame_returns_pending_without_ws_call(self) -> None:
         """Covers line 78: pending queue is used before calling ws."""
+        from collections import deque
+
         ws = MagicMock()
         client = SyncInlineWebSocketClient(ws, role="browser")
-        # Pre-load pending
-        client._pending = [{"type": "cached"}]
+        # Pre-load pending using deque (the underlying type after the O(1) refactor)
+        client._pending = deque([{"type": "cached"}])
         result = client.recv_frame()
         assert result == {"type": "cached"}
         ws.receive_text.assert_not_called()
@@ -374,3 +376,36 @@ class TestConnectAsyncWs:
             async with connect_async_ws("ws://host/ws/worker/abc") as client:
                 assert isinstance(client, AsyncInlineWebSocketClient)
                 assert client._decoder._role == "worker"
+
+
+class TestPendingBufferIsDeque:
+    """Assert that both clients use collections.deque for their pending buffer.
+
+    deque.popleft() is O(1); list.pop(0) is O(N).  The tests below fail
+    before the implementation switch and serve as the TDD red step.
+    """
+
+    def test_sync_client_pending_is_deque(self) -> None:
+        from collections import deque
+
+        ws = MagicMock()
+        client = SyncInlineWebSocketClient(ws, role="browser")
+        assert isinstance(client._pending, deque), "SyncInlineWebSocketClient._pending must be a deque"
+
+    def test_async_client_pending_is_deque(self) -> None:
+        from collections import deque
+
+        ws = AsyncMock()
+        client = AsyncInlineWebSocketClient(ws, role="browser")
+        assert isinstance(client._pending, deque), "AsyncInlineWebSocketClient._pending must be a deque"
+
+    def test_sync_pending_preload_via_deque(self) -> None:
+        """Pre-loading _pending as a deque works with recv_frame (covers the existing pending path)."""
+        from collections import deque
+
+        ws = MagicMock()
+        client = SyncInlineWebSocketClient(ws, role="browser")
+        client._pending = deque([{"type": "cached"}])
+        result = client.recv_frame()
+        assert result == {"type": "cached"}
+        ws.receive_text.assert_not_called()

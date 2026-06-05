@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from collections.abc import Mapping
 from contextlib import asynccontextmanager
 from typing import Any, Literal
@@ -65,7 +66,7 @@ class SyncInlineWebSocketClient:
     def __init__(self, websocket: Any, *, role: WsRole) -> None:
         self._ws = websocket
         self._decoder = LogicalFrameDecoder(role=role)
-        self._pending: list[dict[str, Any]] = []
+        self._pending: deque[dict[str, Any]] = deque()
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._ws, name)
@@ -81,7 +82,7 @@ class SyncInlineWebSocketClient:
     def recv_frame(self) -> dict[str, Any]:
         while True:
             if self._pending:
-                return self._pending.pop(0)
+                return self._pending.popleft()
             self._pending.extend(self._decoder.feed(self._ws.receive_text()))
 
     def receive_json(self, mode: str = "text") -> dict[str, Any]:
@@ -94,7 +95,7 @@ class AsyncInlineWebSocketClient:
     def __init__(self, websocket: Any, *, role: WsRole) -> None:
         self._ws = websocket
         self._decoder = LogicalFrameDecoder(role=role)
-        self._pending: list[dict[str, Any]] = []
+        self._pending: deque[dict[str, Any]] = deque()
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._ws, name)
@@ -128,7 +129,7 @@ class AsyncInlineWebSocketClient:
     async def recv_frame(self) -> dict[str, Any]:
         while True:
             if self._pending:
-                return self._pending.pop(0)
+                return self._pending.popleft()
             raw = await self._ws.recv()
             if not isinstance(raw, str):
                 raise TypeError(f"expected text WebSocket payload, got {type(raw).__name__}")
