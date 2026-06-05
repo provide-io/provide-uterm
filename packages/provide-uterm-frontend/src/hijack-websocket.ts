@@ -44,7 +44,9 @@ export function withAuthToken(_state: HijackState, path: string): string {
 export function saveResumeToken(state: HijackState, token: string): void {
   try {
     sessionStorage.setItem(`uterm_resume_${state.workerId}`, token);
-  } catch (_) {}
+  } catch (err) {
+    console.debug("ProvideHijack: failed to persist resume token to sessionStorage (best-effort)", err);
+  }
 }
 
 export function loadResumeToken(state: HijackState): string | null {
@@ -114,7 +116,9 @@ export function startReconnectAnim(state: HijackState): void {
     i++;
     try {
       state.term.write(`\x1b7\x1b[B\x1b[G\x1b[2;36m${ch}\x1b[0m\x1b8`);
-    } catch (_) {}
+    } catch (err) {
+      console.debug("ProvideHijack: term.write failed during reconnect animation (best-effort)", err);
+    }
   }, RECONNECT_ANIM_INTERVAL_MS);
 }
 
@@ -125,7 +129,9 @@ export function stopReconnectAnim(state: HijackState): void {
   if (state.term) {
     try {
       state.term.write("\x1b7\x1b[B\x1b[G \x1b8");
-    } catch (_) {}
+    } catch (err) {
+      console.debug("ProvideHijack: term.write failed clearing reconnect animation (best-effort)", err);
+    }
   }
 }
 
@@ -133,7 +139,9 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
   if (state.ws) {
     try {
       state.ws.close();
-    } catch (_) {}
+    } catch (err) {
+      console.debug("ProvideHijack: ws.close() failed replacing stale socket (best-effort cleanup)", err);
+    }
     state.ws = null;
   }
   // Do NOT reset _hijacked/_hijackedByMe here: the server confirms actual state
@@ -189,7 +197,9 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
       handlers.setStatus("bad", "Protocol error");
       try {
         ws.close();
-      } catch (_) {}
+      } catch (err) {
+        console.debug("ProvideHijack: ws.close() failed after protocol error (best-effort cleanup)", err);
+      }
       return;
     }
   };
@@ -220,7 +230,9 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
   ws.onerror = () => {
     try {
       ws.close();
-    } catch (_) {}
+    } catch (err) {
+      console.debug("ProvideHijack: ws.close() failed in onerror handler (best-effort cleanup)", err);
+    }
   };
 }
 
