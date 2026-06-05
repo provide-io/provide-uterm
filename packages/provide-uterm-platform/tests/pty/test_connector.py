@@ -33,6 +33,16 @@ def test_connector_rejects_unknown_keys() -> None:
         PTYConnector("s1", "name", config={"command": "/bin/echo", "unknown_key": True})
 
 
+def test_connector_rejects_invalid_input_mode() -> None:
+    with pytest.raises(ValueError, match="invalid input_mode"):
+        PTYConnector("s1", "name", config={"command": "/bin/echo", "input_mode": "bogus"})
+
+
+def test_connector_accepts_valid_input_mode() -> None:
+    conn = PTYConnector("s1", "name", config={"command": "/bin/echo", "input_mode": "hijack"})
+    assert conn._input_mode == "hijack"
+
+
 def test_connector_rejects_relative_command() -> None:
     with pytest.raises(ValueError, match="absolute path"):
         make_connector("bash")
