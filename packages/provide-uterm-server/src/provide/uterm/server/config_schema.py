@@ -272,6 +272,12 @@ class SecurityConfig(ServerBaseModel):
     # Cloud-metadata IPs (169.254.169.254, 100.100.100.200, fd00:ec2::254) are
     # ALWAYS blocked regardless of this flag.
     block_private_connector_targets: bool = False
+    # When True, /metrics and /metrics/prometheus require an authenticated
+    # (non-anonymous) principal. Default False keeps them open for the usual
+    # Prometheus scraping convention (protect at the network/proxy layer);
+    # enable it to require auth when the endpoints are reachable from untrusted
+    # networks.
+    metrics_require_auth: bool = False
 
 
 class TunnelConfig(ServerBaseModel):

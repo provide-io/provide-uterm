@@ -501,6 +501,20 @@ def test_config_block_private_connector_targets_can_be_enabled() -> None:
     assert cfg.block_private_connector_targets is True
 
 
+def test_config_metrics_require_auth_default_false() -> None:
+    """SecurityConfig.metrics_require_auth defaults to False (open for scraping)."""
+    from provide.uterm.server.config_schema import SecurityConfig
+
+    assert SecurityConfig().metrics_require_auth is False
+
+
+def test_config_metrics_require_auth_can_be_enabled() -> None:
+    """SecurityConfig.metrics_require_auth can be set to True."""
+    from provide.uterm.server.config_schema import SecurityConfig
+
+    assert SecurityConfig(metrics_require_auth=True).metrics_require_auth is True
+
+
 # ---------------------------------------------------------------------------
 # V-H1: SSRF chokepoint in SessionRegistry.create_session / update_session.
 #
