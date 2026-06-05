@@ -463,6 +463,31 @@ async def test_route_webhooks_register_with_pattern_and_secret() -> None:
     assert webhooks[0]["secret"] == "mysecret"
 
 
+@pytest.mark.asyncio
+async def test_route_webhooks_register_encrypts_secret_when_key_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With WEBHOOK_SECRET_KEY set, the registered secret is stored encrypted
+    (envelope), not as plaintext."""
+    from provide.uterm.cloudflare.do import _webhook_crypto as wc
+
+    async def fake_enc(_key: str, plaintext: bytes) -> tuple[bytes, bytes]:
+        return (b"iviviviviviv", b"CT:" + plaintext)
+
+    monkeypatch.setattr(wc, "_aesgcm_encrypt", fake_enc)
+    store = _make_store()
+    runtime = _Runtime(store, worker_id="w1")
+    runtime.env = SimpleNamespace(WEBHOOK_SECRET_KEY="dGVzdGtleQ==")  # pragma: allowlist secret — base64("testkey")
+    req = _req(
+        "http://example.com/api/sessions/w1/webhooks",
+        method="POST",
+        body={"url": "https://example.com/hook", "secret": "mysecret"},
+    )
+    resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
+    assert resp.status == 200
+    stored = store.load_webhooks("w1")[0]["secret"]
+    assert stored.startswith("enc:v1:")
+    assert "mysecret" not in stored
+
+
 # ---------------------------------------------------------------------------
 # Dispatch integration
 # ---------------------------------------------------------------------------
