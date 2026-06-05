@@ -346,6 +346,62 @@ async def test_route_webhooks_register_bad_event_types() -> None:
 
 
 @pytest.mark.asyncio
+async def test_route_webhooks_register_pattern_too_long() -> None:
+    store = _make_store()
+    runtime = _Runtime(store, worker_id="w1")
+    req = _req(
+        "http://example.com/api/sessions/w1/webhooks",
+        method="POST",
+        body={"url": "https://x.com/hook", "pattern": "a" * 257},
+    )
+    resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
+    assert resp.status == 422
+    assert store.load_webhooks("w1") == []
+
+
+@pytest.mark.asyncio
+async def test_route_webhooks_register_pattern_not_string() -> None:
+    store = _make_store()
+    runtime = _Runtime(store, worker_id="w1")
+    req = _req(
+        "http://example.com/api/sessions/w1/webhooks",
+        method="POST",
+        body={"url": "https://x.com/hook", "pattern": 123},
+    )
+    resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
+    assert resp.status == 422
+
+
+@pytest.mark.asyncio
+async def test_route_webhooks_register_pattern_invalid_regex() -> None:
+    store = _make_store()
+    runtime = _Runtime(store, worker_id="w1")
+    req = _req(
+        "http://example.com/api/sessions/w1/webhooks",
+        method="POST",
+        body={"url": "https://x.com/hook", "pattern": "("},  # unbalanced group
+    )
+    resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
+    assert resp.status == 422
+
+
+@pytest.mark.asyncio
+async def test_route_webhooks_register_valid_pattern_persists() -> None:
+    store = _make_store()
+    runtime = _Runtime(store, worker_id="w1")
+    req = _req(
+        "http://example.com/api/sessions/w1/webhooks",
+        method="POST",
+        body={"url": "https://x.com/hook", "pattern": "ERROR|WARN"},
+    )
+    resp = await route_webhooks(runtime, req, "/api/sessions/w1/webhooks", str(req.url), "POST", "w1")
+    assert resp.status == 200
+    webhooks = store.load_webhooks("w1")
+    assert len(webhooks) == 1
+    assert webhooks[0]["pattern"] == "ERROR|WARN"
+
+
+@pytest.mark.asyncio
 async def test_route_webhooks_list() -> None:
     store = _make_store()
     store.save_webhook("wh1", "w1", "https://example.com/a")
