@@ -29,6 +29,11 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
+try:
+    from provide.uterm.cloudflare.do._webhook_crypto import decrypt_secret, encrypt_secret
+except ImportError:  # pragma: no cover - CF flat bundle path
+    from _webhook_crypto import decrypt_secret, encrypt_secret  # type: ignore[import-not-found,no-redef]
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -114,7 +119,9 @@ async def fire_webhooks(
             "event": event,
             "timestamp": time.time(),
         }
-        await _deliver_webhook(wh["url"], payload, wh.get("secret"), _fetch=_fetch)
+        stored_secret = wh.get("secret")
+        secret = await decrypt_secret(getattr(runtime, "env", None), stored_secret) if stored_secret else None
+        await _deliver_webhook(wh["url"], payload, secret, _fetch=_fetch)
 
 
 async def route_webhooks(
@@ -158,13 +165,15 @@ async def route_webhooks(
             except re.error:
                 return json_response({"error": "pattern is not a valid regex"}, status=422)
         wh_id = uuid.uuid4().hex
+        secret_raw = payload.get("secret")
+        secret_stored = await encrypt_secret(getattr(runtime, "env", None), secret_raw) if secret_raw else None
         runtime.store.save_webhook(
             wh_id,
             session_id,
             hook_url,
             event_types=event_types,
             pattern=pattern,
-            secret=payload.get("secret"),
+            secret=secret_stored,
         )
         return json_response(
             {
