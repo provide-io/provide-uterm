@@ -22,27 +22,12 @@ import tomllib
 from pathlib import Path
 
 # Perimeter files that cannot be mutated under mutmut on a low-core CI runner and
-# are therefore omitted from the SCHEDULED matrix (they still run locally in a
-# full-perimeter pass, and via --changed-only on a many-core host when touched).
-#
-#   pty/connector.py — its PTY tests (test_connector*/test_capture_connector*)
-#   spawn subprocesses that leak into mutmut's fork-loop os.wait() and mass-report
-#   "not checked" (reproduced deterministically across sharded runs; passes only
-#   on many-core local hosts). manager/process_impl survives the same hazard
-#   because the manager-dir conftest mocks subprocess during mutation AND its one
-#   real-spawn test was dropped from tests_dir.
-#   FOLLOW-UP (NOT a simple conftest mock — that was tried and reverted): connector
-#   is killed by MANY load-bearing real-fork integration tests across ~7 files
-#   (e.g. test_start_and_stop_echo forks /bin/echo and asserts its PTY output), so
-#   a blanket os.fork mock breaks the baseline (0.00) and skipping those tests
-#   risks survivors. The real fix is to convert that real-fork coverage to mocked
-#   equivalents (so no test forks during mutation), or to run this shard on a
-#   larger runner. Until then connector is mutation-covered by local full runs.
-_CI_EXCLUDE: frozenset[str] = frozenset(
-    {
-        "src/provide/uterm/pty/connector.py",
-    }
-)
+# are therefore omitted from the SCHEDULED matrix. Currently empty: pty/connector.py
+# used to crash here (its real-fork integration tests leak children into mutmut's
+# fork-loop os.wait()), but the pty conftest now SKIPS those real-fork tests during a
+# mutation run and test_connector_mutation_mocked.py reproduces their mutant-killing
+# coverage fork-free, so connector is gated normally again.
+_CI_EXCLUDE: frozenset[str] = frozenset()
 
 
 def main() -> int:
