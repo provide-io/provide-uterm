@@ -250,3 +250,24 @@ class TestSanitize:
         result = _sanitize("a" * 600)
         assert result == ("a" * 500) + "..."
         assert len(result) == 503
+
+    def test_composite_keys_are_redacted(self) -> None:
+        """Composite keys containing a sensitive token substring must be redacted."""
+        from provide.uterm.client.hijack import _sanitize
+
+        result = _sanitize({"api_key": "should-be-hidden", "access_token": "also-hidden"})
+        assert result == {"api_key": "***", "access_token": "***"}
+
+    def test_nested_composite_keys_are_redacted(self) -> None:
+        """Nested dicts with composite sensitive keys must also be redacted."""
+        from provide.uterm.client.hijack import _sanitize
+
+        result = _sanitize({"credentials": {"api_key": "hidden", "access_token": "hidden"}})
+        assert result["credentials"] == {"api_key": "***", "access_token": "***"}
+
+    def test_non_sensitive_key_is_not_redacted(self) -> None:
+        """Non-sensitive keys must pass through unchanged."""
+        from provide.uterm.client.hijack import _sanitize
+
+        result = _sanitize({"status": "ok", "count": 3})
+        assert result == {"status": "ok", "count": 3}
