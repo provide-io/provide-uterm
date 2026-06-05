@@ -87,6 +87,8 @@ class PTYConnector:
             validate_username(config["username"])
         if config.get("env"):
             validate_env(config["env"])
+        if config.get("input_mode") is not None and str(config["input_mode"]) not in _VALID_MODES:
+            raise ValueError(f"invalid input_mode {config['input_mode']!r}: must be one of {sorted(_VALID_MODES)}")
 
         self._session_id = session_id
         self._display_name = display_name
