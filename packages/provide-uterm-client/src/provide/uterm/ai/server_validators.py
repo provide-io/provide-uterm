@@ -18,6 +18,7 @@ callers/tests importing from ``provide.uterm.ai.server_impl`` keep working.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from typing import Any
 
@@ -43,6 +44,26 @@ _BLOCKED_HOST_NAMES: frozenset[str] = frozenset(
 )
 
 
+def _numeric_ipv4(candidate: str) -> ipaddress.IPv4Address | None:
+    """Resolve the non-canonical numeric IPv4 forms that :mod:`ipaddress` rejects
+    but the C resolver (``inet_aton``, used by sockets / httpx / curl) accepts:
+    decimal (``2130706433``), octal (``0177.0.0.1``), hex (``0x7f.1``), and the
+    shortened ``127.1`` forms. A blocklist that only understands the canonical
+    dotted-quad is trivially bypassed by these (``http://2130706433`` reaches
+    127.0.0.1), so normalise and re-check. Returns ``None`` for anything
+    ``inet_aton`` rejects — i.e. a real hostname, which the server's
+    DNS-resolving egress guard then handles. ``inet_aton`` is purely numeric and
+    never performs DNS.
+    """
+    import socket
+
+    try:
+        packed = socket.inet_aton(candidate)
+    except OSError:
+        return None
+    return ipaddress.IPv4Address(packed)
+
+
 def _is_internal_host(host: str) -> bool:
     """Return ``True`` when *host* targets an internal / metadata endpoint.
 
@@ -52,8 +73,6 @@ def _is_internal_host(host: str) -> bool:
     names. We never perform a DNS lookup here: rebinding and egress control are
     the server's responsibility.
     """
-    import ipaddress
-
     # Strip a trailing root dot ("localhost." == "localhost") before matching,
     # otherwise the FQDN form slips past the exact-match denylist.
     candidate = host.strip().strip("[]").rstrip(".").lower()
@@ -66,7 +85,15 @@ def _is_internal_host(host: str) -> bool:
     try:
         ip = ipaddress.ip_address(candidate)
     except ValueError:
-        return False
+        # Not a canonical IP string. It may still be a non-canonical numeric
+        # IPv4 form (decimal / octal / hex / shortened) that resolvers accept —
+        # normalise and re-check so the blocklist can't be bypassed by them. A
+        # genuine hostname yields None here and is left to the server's egress
+        # guard (which resolves DNS); we deliberately never resolve DNS here.
+        numeric = _numeric_ipv4(candidate)
+        if numeric is None:
+            return False
+        ip = numeric
     if ip.is_loopback or ip.is_link_local:
         return True
     return not ALLOW_PRIVATE_HOSTS and (ip.is_private or ip.is_reserved or ip.is_unspecified)
