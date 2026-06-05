@@ -412,6 +412,11 @@ tests_dir = [
     "packages/provide-uterm-platform/tests/pty/test_connector_io.py",
     "packages/provide-uterm-platform/tests/pty/test_connector_stop.py",
     "packages/provide-uterm-platform/tests/pty/test_connector_child.py",
+    # Fork-free parent-side mutation coverage for connector.py — replaces the
+    # mutant-killing the real-fork integration tests provide (those are skipped
+    # during a mutation run by the pty conftest, to keep real children out of
+    # mutmut's fork-loop os.wait() reaper). See test_connector_mutation_mocked.py.
+    "packages/provide-uterm-platform/tests/pty/test_connector_mutation_mocked.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_codec.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_coverage.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_mutmut.py",
