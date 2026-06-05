@@ -60,6 +60,30 @@ class TestTelnetWsGateway:
             server.close()
             await server.wait_closed()
 
+    async def test_start_default_host_is_loopback(self) -> None:
+        # Default bind is loopback now, so start() with no host must NOT raise.
+        gw = TelnetWsGateway("ws://test")
+        server = await gw.start(port=0)
+        try:
+            assert isinstance(server, asyncio.AbstractServer)
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    async def test_start_nonloopback_without_optin_raises(self) -> None:
+        gw = TelnetWsGateway("ws://test")
+        with pytest.raises(RuntimeError, match="non-loopback"):
+            await gw.start("0.0.0.0", 0)  # nosec B104 — asserting the guard fires
+
+    async def test_start_nonloopback_with_optin_binds(self) -> None:
+        gw = TelnetWsGateway("ws://test", allow_unauthenticated=True)
+        server = await gw.start("0.0.0.0", 0)  # nosec B104 — explicit opt-in under test
+        try:
+            assert isinstance(server, asyncio.AbstractServer)
+        finally:
+            server.close()
+            await server.wait_closed()
+
     async def test_handle_reconnects_on_ws_drop(self) -> None:
         gw = TelnetWsGateway("ws://test")
 
