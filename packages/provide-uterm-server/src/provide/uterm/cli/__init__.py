@@ -186,6 +186,7 @@ def _cmd_listen(args: argparse.Namespace) -> None:
             authorized_keys=args.authorized_keys,
             require_resolver=args.require_resolver,
             allow_unauthenticated_ssh=args.allow_unauthenticated_ssh,
+            allow_unauthenticated_telnet=args.allow_unauthenticated_telnet,
         )
     )
 
@@ -204,11 +205,17 @@ async def _run_listen(
     authorized_keys: str | None = None,
     require_resolver: bool = False,
     allow_unauthenticated_ssh: bool = False,
+    allow_unauthenticated_telnet: bool = False,
 ) -> None:
     servers = []
 
     if telnet_port:
-        gw = TelnetWsGateway(ws_url, color_mode=color_mode, iac_negotiate=iac_negotiate)
+        gw = TelnetWsGateway(
+            ws_url,
+            color_mode=color_mode,
+            iac_negotiate=iac_negotiate,
+            allow_unauthenticated=allow_unauthenticated_telnet,
+        )
         srv = await gw.start(bind, telnet_port)
         servers.append(srv)
         print(f"uterm listen  telnet://{bind}:{telnet_port}  →  {ws_url}")
@@ -385,6 +392,15 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Explicitly allow an SSH listener without required public-key auth on a non-loopback bind address. "
+            "Only use this behind another access-control layer."
+        ),
+    )
+    listen_p.add_argument(
+        "--allow-unauthenticated-telnet",
+        action="store_true",
+        default=False,
+        help=(
+            "Explicitly allow the plaintext telnet listener on a non-loopback bind address. "
             "Only use this behind another access-control layer."
         ),
     )

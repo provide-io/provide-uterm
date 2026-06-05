@@ -94,11 +94,16 @@ class TelnetWsGateway:
         ws_ssl: ssl.SSLContext | bool | None = None,
         client_cert: Path | str | None = None,
         client_key: Path | str | None = None,
+        allow_unauthenticated: bool = False,
     ) -> None:
         _require_websockets()
         self._ws_url = ws_url
         self._color_mode = color_mode
         self._token_file = token_file
+        # Telnet is plaintext + unauthenticated by nature; binding it to a
+        # non-loopback address requires this explicit opt-in (mirrors the SSH
+        # gateway), so it is not silently exposed to the network.
+        self._allow_unauthenticated = allow_unauthenticated
         self._iac_negotiate = iac_negotiate
         self._iac_negotiate_timeout = iac_negotiate_timeout
         self._ws_ssl: ssl.SSLContext | bool | None
@@ -114,19 +119,29 @@ class TelnetWsGateway:
 
     async def start(
         self,
-        host: str = TerminalDefaults.BIND_ALL,  # nosec B104
+        host: str = TerminalDefaults.TELNET_HOST,
         port: int = TerminalDefaults.GATEWAY_TELNET_PORT,
     ) -> asyncio.AbstractServer:
         """Start the TCP listener and return the server object.
 
         Args:
-            host: Bind address. Defaults to ``"0.0.0.0"``.
+            host: Bind address. Defaults to ``"127.0.0.1"`` (loopback). Binding
+                a non-loopback address (e.g. ``"0.0.0.0"``) requires
+                ``allow_unauthenticated=True`` — telnet is plaintext and
+                unauthenticated, so it must not be exposed to the network silently.
             port: TCP port. Defaults to ``2112``.
 
         Returns:
             An :class:`asyncio.AbstractServer` — call
             ``await server.serve_forever()`` to block until shutdown.
         """
+        from provide.uterm.gateway._ssh_gateway import _is_loopback_bind_host
+
+        if not self._allow_unauthenticated and not _is_loopback_bind_host(host):
+            raise RuntimeError(
+                "refusing to start an unauthenticated telnet gateway on a non-loopback bind address; "
+                "set allow_unauthenticated=True only when this listener is protected by another access-control layer"
+            )
         return await asyncio.start_server(self._handle, host, port)
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
