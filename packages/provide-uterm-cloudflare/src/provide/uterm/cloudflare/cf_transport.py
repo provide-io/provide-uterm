@@ -128,7 +128,14 @@ class CFWebSocketStreamWriter:
         """Flush pending buffer as a WebSocket text message."""
         if self._batching or not self._pending or self._closed:
             return
-        text = bytes(self._pending).decode("utf-8", errors="replace")
+        # Decode with latin-1 (maps bytes 0x00-0xFF → U+0000-U+00FF losslessly)
+        # so raw terminal bytes — including non-UTF-8 CP437 line-drawing chars
+        # and 8-bit binary — round-trip exactly. The matching reader decodes
+        # incoming text with latin-1 for the same CP437-preservation reason; a
+        # utf-8/errors="replace" writer would corrupt high bytes to U+FFFD
+        # before transmission, so the reader could never recover them. latin-1
+        # cannot fail, so no errors= handler is needed.
+        text = bytes(self._pending).decode("latin-1")
         self._pending.clear()
         try:
             self._ws.send(text)

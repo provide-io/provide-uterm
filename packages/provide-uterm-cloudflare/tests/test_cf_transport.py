@@ -242,3 +242,34 @@ class TestCFWebSocketStreamWriter:
         await writer.drain()
         # second send never called because writer is closed
         assert ws.send.call_count == 1
+
+    async def test_drain_round_trips_non_utf8_bytes(self) -> None:
+        """Raw terminal bytes (incl. non-UTF-8) survive write→drain losslessly.
+
+        The matching reader decodes with latin-1 for CP437 preservation, so the
+        writer must encode with latin-1 too. A utf-8/errors="replace" writer
+        would map every high byte to U+FFFD before transmission, permanently
+        corrupting CP437 line-drawing chars and 8-bit binary.
+        """
+        ws = MagicMock()
+        writer = CFWebSocketStreamWriter(ws)
+        # Every possible byte value, including non-UTF-8 sequences.
+        original = bytes(range(256))
+        writer.write(original)
+        await writer.drain()
+        ws.send.assert_called_once()
+        sent_text = ws.send.call_args.args[0]
+        # Perfect round-trip — no U+FFFD replacement characters.
+        assert "�" not in sent_text
+        assert sent_text.encode("latin-1") == original
+
+    async def test_drain_round_trips_cp437_box_drawing(self) -> None:
+        """CP437 box-drawing bytes round-trip exactly through drain."""
+        ws = MagicMock()
+        writer = CFWebSocketStreamWriter(ws)
+        original = b"\xc4\xb3\xda"  # ─ │ ┌ in CP437
+        writer.write(original)
+        await writer.drain()
+        sent_text = ws.send.call_args.args[0]
+        assert "�" not in sent_text
+        assert sent_text.encode("latin-1") == original
