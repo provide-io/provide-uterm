@@ -25,7 +25,10 @@ function loadRecents(): RecentConnection[] {
   try {
     const raw = localStorage.getItem("uterm-recent-connections");
     if (!raw) return [];
-    return JSON.parse(raw) as RecentConnection[];
+    const parsed = JSON.parse(raw);
+    // Guard against valid-JSON-but-not-an-array (e.g. a stray object/number):
+    // the cast would otherwise lie and the later .filter/.map would throw.
+    return Array.isArray(parsed) ? (parsed as RecentConnection[]) : [];
   } catch {
     return [];
   }
