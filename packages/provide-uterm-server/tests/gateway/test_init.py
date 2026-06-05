@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import provide.uterm.gateway as gateway
@@ -72,6 +73,28 @@ class TestTokenHelpers:
         p = tmp_path / "token.json"
         _write_token(p, "t")
         assert _stat.S_IMODE(p.stat().st_mode) == 0o600
+
+    def test_write_token_creates_0700_parent_dir(self, tmp_path: Path) -> None:
+        """The parent dir holding the bearer token must be owner-only too."""
+        import stat as _stat
+
+        p = tmp_path / "newdir" / "token.json"
+        _write_token(p, "t")
+        assert _stat.S_IMODE(p.parent.stat().st_mode) == 0o700
+
+    def test_write_token_perms_hold_under_permissive_umask(self, tmp_path: Path) -> None:
+        """Even with a wide-open process umask the file/dir are created tight
+        (atomic create, not create-then-chmod with a world-readable window)."""
+        import stat as _stat
+
+        old = os.umask(0o000)
+        try:
+            p = tmp_path / "wide" / "token.json"
+            _write_token(p, "t")
+            assert _stat.S_IMODE(p.stat().st_mode) == 0o600
+            assert _stat.S_IMODE(p.parent.stat().st_mode) == 0o700
+        finally:
+            os.umask(old)
 
     def test_read_legacy_bare_token_normalises(self, tmp_path: Path) -> None:
         """Older token files were a bare token string — keep them working."""
