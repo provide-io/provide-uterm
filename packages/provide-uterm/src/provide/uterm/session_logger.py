@@ -277,7 +277,22 @@ class SessionLogger:
     async def _periodic_flush(self) -> None:
         while True:
             await asyncio.sleep(self._flush_interval)
-            await self._flush_buffer()
+            try:
+                await self._flush_buffer()
+            except Exception as exc:
+                # A transient store failure must not kill the periodic flusher.
+                # _flush_buffer_unlocked keeps the batch buffered on failure, so
+                # the next tick retries it; letting the exception escape would
+                # cancel this task and strand the retained batch (no flushes) for
+                # the rest of the session. CancelledError is a BaseException, so
+                # stop() still tears the task down cleanly. Logged at warning (not
+                # exception) because this is an expected, retried condition — a
+                # full traceback every interval would be noisy under an outage.
+                logger.warning(
+                    "session_logger_periodic_flush_failed",
+                    session_id=self._session_id,
+                    error=str(exc),
+                )
 
     def _redact_text(self, value: str) -> str:
         if self._redactor is None:
