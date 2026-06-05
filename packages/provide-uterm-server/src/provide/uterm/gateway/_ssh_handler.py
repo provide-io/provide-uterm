@@ -160,6 +160,19 @@ def _make_no_auth_server_class(
             # key followed by kbdint would bypass the resolver gate.
             return not require_resolver
 
+        def get_kbdint_challenge(self, username: str, lang: str, submethods: str) -> tuple[str, str, str, list[Any]]:
+            # Issue an empty challenge (no prompts): asyncssh then calls
+            # validate_kbdint_response with an empty response list, which we
+            # accept. Without these two overrides, advertising kbdint via
+            # kbdint_auth_supported() left the method failing silently — the base
+            # SSHServer returns no challenge, so the client's kbdint attempt was
+            # rejected. kbdint is only offered when not require_resolver, so
+            # accepting here matches the no-gate posture of the other handlers.
+            return ("", "", "", [])
+
+        def validate_kbdint_response(self, username: str, responses: Any) -> bool:
+            return True
+
     return _NoAuthServer
 
 
