@@ -450,7 +450,19 @@ def _literal_or_resolved_addresses(host: str, resolver: Resolver) -> Sequence[st
 
 
 def _address_allowed(address: str, *, allow_loopback_destinations: bool = False) -> bool:
+    # Decode any embedded-IPv4 IPv6 form (mapped / 6to4 / NAT64 / compat) to its
+    # IPv4 before the membership / range checks, mirroring the egress connector
+    # guard (egress._check_resolved_ip). Current CPython's is_private/is_reserved
+    # happen to cover most of these, but that classification has shifted across
+    # 3.11-3.13; decoding explicitly keeps the guard version-independent and the
+    # two SSRF guards symmetric (e.g. 64:ff9b::169.254.169.254 -> the v4 metadata IP).
+    from provide.uterm.server.egress import _decode_embedded_ipv4
+
     ip = ipaddress.ip_address(address)
+    if isinstance(ip, ipaddress.IPv6Address):
+        embedded = _decode_embedded_ipv4(ip)
+        if embedded is not None:
+            ip = embedded
     if ip in _METADATA_IPS:
         return False
     if ip.is_loopback:
