@@ -201,6 +201,59 @@ async def test_webhook_authz_provider_capabilities() -> None:
     assert await provider.capabilities_for(principal) == frozenset()
 
 
+# ---------------------------------------------------------------------------
+# Perf fix: WebhookAuthorizationProvider reuses ONE httpx.AsyncClient across
+# calls (keep-alive / connection pooling) instead of opening one per request.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_authz_provider_reuses_single_client() -> None:
+    """All three webhook paths must share the one client built in __init__,
+    so HTTP keep-alive / connection pooling is preserved across calls."""
+    url = "https://fleet.example.com/authz"
+    provider = WebhookAuthorizationProvider(url=url)
+
+    principal = MagicMock()
+    principal.subject_id = "alice"
+    principal.roles = ["admin"]
+    principal.scopes = ["*"]
+    principal.claims = {"iss": "test"}
+
+    session = MagicMock()
+    session.session_id = "sess1"
+
+    # The client is created exactly once, eagerly, in __init__.
+    client = provider._client
+    assert client is not None
+
+    respx.post(url).mock(return_value=Response(200, json={"allow": True, "capabilities": ["session.read"]}))
+
+    # Drive every method that performs a POST and assert each used the *same*
+    # client object — i.e. no per-call ``async with httpx.AsyncClient(...)``.
+    await provider._check(principal, "session.read")
+    assert provider._client is client
+    await provider.capabilities_for(principal)
+    assert provider._client is client
+    await provider.resolve_browser_role(principal, session)
+    assert provider._client is client
+
+    await provider.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_webhook_authz_provider_aclose_closes_client() -> None:
+    """aclose() must close the shared client so the connection pool is released."""
+    url = "https://fleet.example.com/authz"
+    provider = WebhookAuthorizationProvider(url=url)
+
+    assert provider._client.is_closed is False
+    await provider.aclose()
+    assert provider._client.is_closed is True
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_node_registry_heartbeat_logic() -> None:
