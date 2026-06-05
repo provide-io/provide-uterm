@@ -143,6 +143,11 @@ export class ProvideHijack {
   dispose(): void {
     this.disconnect();
     stopReconnectAnim(this._state);
+    // Clear the approval countdown interval + widget; otherwise disposing while
+    // an approval_pending UI is up leaks a setInterval that keeps firing against
+    // the torn-down widget until the approval would have expired.
+    this._hideApprovalUI();
+    this._pendingApproval = null;
     if (this._activityFlashTimer) {
       clearTimeout(this._activityFlashTimer);
       this._activityFlashTimer = null;
