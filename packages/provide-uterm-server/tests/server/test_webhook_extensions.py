@@ -256,6 +256,30 @@ async def test_webhook_authz_provider_aclose_closes_client() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_authz_service_aclose_forwards_to_provider() -> None:
+    """AuthorizationService.aclose() must forward to a provider that defines it,
+    so the FastAPI lifespan releases the webhook connection pool on shutdown."""
+    provider = WebhookAuthorizationProvider(url="https://fleet.example.com/authz")
+    authz = AuthorizationService(provider)
+
+    assert provider._client.is_closed is False
+    await authz.aclose()
+    assert provider._client.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_authz_service_aclose_noop_without_provider_aclose() -> None:
+    """AuthorizationService.aclose() is a safe no-op for a provider (e.g. the
+    local RBAC default) that holds no closable resources."""
+    from provide.uterm.server.authorization import LocalAuthorizationProvider
+
+    authz = AuthorizationService(LocalAuthorizationProvider())
+    # Must not raise even though LocalAuthorizationProvider has no aclose().
+    await authz.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_node_registry_heartbeat_logic() -> None:
     from provide.uterm.server.app import create_server_app
     from provide.uterm.server.config import default_server_config

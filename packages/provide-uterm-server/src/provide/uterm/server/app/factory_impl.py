@@ -430,6 +430,9 @@ def create_server_app(
             # the awaited cancel_and_drain (covered on 3.12+; run by every app-shutdown test).
             await hub.shutdown()  # pragma: no cover
             await webhook_manager.shutdown()
+            # Release the webhook authorization provider's pooled HTTP client
+            # (no-op for the local RBAC default, which holds no resources).
+            await authz.aclose()
             await registry.shutdown()
             await control_plane.close()
 

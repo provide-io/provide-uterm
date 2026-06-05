@@ -395,3 +395,15 @@ class AuthorizationService:
         if hasattr(provider, "resolve_browser_role"):
             return await provider.resolve_browser_role(principal, session)
         return await LocalAuthorizationProvider().resolve_browser_role(principal, session)
+
+    async def aclose(self) -> None:
+        """Release any provider-held resources (e.g. a pooled webhook client).
+
+        Forwards to the provider's ``aclose`` when it defines one so the app
+        lifespan can close the webhook connection pool on shutdown; a no-op for
+        providers (like the local RBAC default) that hold no such resources.
+        """
+        provider: Any = self._provider
+        method = getattr(provider, "aclose", None)
+        if callable(method):
+            await method()
