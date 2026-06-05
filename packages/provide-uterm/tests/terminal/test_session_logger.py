@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
@@ -257,3 +258,37 @@ class TestSessionLogger:
         mock_store.append_events.assert_called_once()
         delivered = mock_store.append_events.call_args[0][1]
         assert len(delivered) == 2
+
+
+@pytest.mark.asyncio
+async def test_periodic_flush_survives_transient_store_failure(mock_store) -> None:
+    """A transient store error in the background flush loop must not crash it:
+    the batch stays buffered (clear-after-success) and the next tick retries it.
+    Without the guard the asyncio task dies and flushing stops for the rest of
+    the session, stranding the retained batch."""
+    state = {"calls": 0, "fail": True}
+
+    def _flaky(_session_id, _events):
+        state["calls"] += 1
+        if state["fail"]:
+            raise RuntimeError("transient store error")
+
+    mock_store.append_events = AsyncMock(side_effect=_flaky)
+
+    slogger = SessionLogger(mock_store, flush_interval_s=0.02)
+    await slogger.start(session_id="flaky")
+    await slogger.log_send("payload")
+    await asyncio.sleep(0.08)  # several periodic ticks fire — all fail
+
+    # The periodic flusher survived the repeated failures (task not crashed) ...
+    assert slogger._flush_task is not None
+    assert not slogger._flush_task.done()
+    assert state["calls"] >= 1  # at least one flush attempt actually ran
+    # ... and the batch is still buffered (C12: not cleared on failure).
+    assert len(slogger._buffer) == 1
+    # When the store recovers, the next flush delivers the retained batch
+    # instead of having lost it to a dead flusher.
+    state["fail"] = False
+    await slogger.flush()
+    assert slogger._buffer == []
+    await slogger.stop()
