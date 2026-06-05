@@ -158,8 +158,10 @@ async def send_hijack_state_to(
     suppress_errors: bool = False,
 ) -> set[WebSocket]:
     """Send a hijack_state message to each browser; return the set of dead sockets."""
+    from provide.uterm.server.bridge.hub import router_impl
     from provide.uterm.server.bridge.hub.core import _encode_browser_frame, _mono_to_wall
 
+    timeout_s = router_impl._BROADCAST_SEND_TIMEOUT_S
     dead: set[WebSocket] = set()
     for ws in browsers:
         if is_dashboard and hijack_owner is ws:
@@ -180,7 +182,9 @@ async def send_hijack_state_to(
             )
         )
         try:
-            await ws.send_text(payload)
+            # Per-send timeout so one stalled browser can't head-of-line-block
+            # the hijack-state notification to the rest (parity with broadcast()).
+            await asyncio.wait_for(ws.send_text(payload), timeout=timeout_s)
         except Exception as exc:
             if not suppress_errors:
                 logger.debug("broadcast_hijack_state_send_failed worker_id=%s: %s", worker_id, exc)
