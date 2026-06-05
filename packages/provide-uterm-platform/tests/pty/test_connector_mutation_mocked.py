@@ -194,13 +194,33 @@ async def test_poll_messages_truncates_buffer() -> None:
 async def test_handle_input_writes_to_master() -> None:
     r, w = os.pipe()
     try:
+        os.set_blocking(r, False)  # so a no-write mutant returns fast, not a blocking hang
         conn = _conn()
         _connected(conn, w)
         await conn.handle_input("hi")
-        assert os.read(r, 16) == b"hi"
+        try:
+            got = os.read(r, 16)
+        except BlockingIOError:
+            got = b""  # a guard mutant skipped the write → no data
+        assert got == b"hi"
     finally:
         os.close(r)
         os.close(w)
+
+
+async def test_poll_messages_disconnected_with_data_returns_empty() -> None:
+    """Disconnected must short-circuit even when the fd has data (pins ``or`` vs ``and``)."""
+    r, w = os.pipe()
+    try:
+        conn = _conn()
+        conn._connected = False  # is_connected() False ...
+        conn._master_fd = r  # ... but fd is set, with data waiting
+        conn._paused = False
+        os.write(w, b"data")
+        assert await conn.poll_messages() == []  # `not connected or paused` → []
+    finally:
+        os.close(w)
+        os.close(r)
 
 
 async def test_handle_input_noop_when_not_connected() -> None:
