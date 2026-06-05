@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from httpx import ASGITransport
@@ -16,6 +17,7 @@ from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
 
 from provide.uterm.ai.server import create_mcp_app
+from provide.uterm.ai.server_validators import _reject_bad_ids
 
 WID = "mcp-worker"
 
@@ -491,3 +493,67 @@ class TestMcpPathInjection:
         data = await _call(mcp, "session_annotate", {"session_id": "s1", "label": "x"})
         assert isinstance(data["success"], bool)
         assert data.get("error") != "invalid_id"
+
+
+_BAD_ID = "../../api/keys"
+
+# Every id-accepting tool must emit the structured invalid_id contract rather
+# than let _safe_id raise a ToolError downstream. (id_field, tool, extra_args)
+_ID_TOOLS = [
+    ("session_id", "session_status", {}),
+    ("session_id", "session_read", {}),
+    ("session_id", "session_connect", {}),
+    ("session_id", "session_disconnect", {}),
+    ("session_id", "session_watch", {}),
+    ("session_id", "session_subscribe", {}),
+    ("session_id", "session_set_mode", {"mode": "open"}),
+    ("worker_id", "hijack_begin", {}),
+    ("worker_id", "hijack_heartbeat", {"hijack_id": "h1"}),
+    ("worker_id", "hijack_read", {"hijack_id": "h1"}),
+    ("worker_id", "hijack_send", {"hijack_id": "h1", "keys": "ls"}),
+    ("worker_id", "hijack_step", {"hijack_id": "h1"}),
+    ("worker_id", "hijack_release", {"hijack_id": "h1"}),
+    ("worker_id", "worker_input_mode", {"mode": "open"}),
+    ("worker_id", "worker_disconnect", {}),
+]
+
+
+class TestMcpAllToolsRejectBadId:
+    """Path-injection guard coverage across the full id-accepting tool surface."""
+
+    @pytest.mark.parametrize(("id_field", "tool", "extra"), _ID_TOOLS, ids=[t[1] for t in _ID_TOOLS])
+    async def test_tool_rejects_injected_id(self, id_field: str, tool: str, extra: dict[str, Any]) -> None:
+        mcp = _mcp_for_server(_make_server_app())
+        data = await _call(mcp, tool, {id_field: _BAD_ID, **extra})
+        assert data["success"] is False
+        assert data["error"] == "invalid_id"
+        assert id_field in data["detail"]
+
+    async def test_two_id_tool_rejects_bad_hijack_id(self) -> None:
+        # Good worker_id, bad hijack_id → the second id is what gets reported.
+        mcp = _mcp_for_server(_make_server_app())
+        data = await _call(mcp, "hijack_read", {"worker_id": "w1", "hijack_id": _BAD_ID})
+        assert data["success"] is False
+        assert data["error"] == "invalid_id"
+        assert "hijack_id" in data["detail"]
+
+
+class TestRejectBadIdsHelper:
+    """Unit coverage for the multi-id validator."""
+
+    def test_all_valid_returns_none(self) -> None:
+        assert _reject_bad_ids(("w1", "worker_id"), ("h1", "hijack_id")) is None
+
+    def test_no_pairs_returns_none(self) -> None:
+        assert _reject_bad_ids() is None
+
+    def test_first_bad_reported(self) -> None:
+        out = _reject_bad_ids((_BAD_ID, "worker_id"), ("h1", "hijack_id"))
+        assert out is not None
+        assert out["error"] == "invalid_id"
+        assert "worker_id" in out["detail"]
+
+    def test_second_bad_reported(self) -> None:
+        out = _reject_bad_ids(("w1", "worker_id"), (_BAD_ID, "hijack_id"))
+        assert out is not None
+        assert "hijack_id" in out["detail"]

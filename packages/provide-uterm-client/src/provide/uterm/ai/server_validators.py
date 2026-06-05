@@ -137,6 +137,21 @@ def _reject_bad_id(value: str, kind: str = "id") -> dict[str, Any] | None:
     return None
 
 
+def _reject_bad_ids(*pairs: tuple[str, str]) -> dict[str, Any] | None:
+    """Validate several ``(value, kind)`` path-segment ids in order.
+
+    Returns the first :func:`_reject_bad_id` rejection, or ``None`` when every
+    id is valid. Lets a multi-id tool (e.g. ``hijack_*`` with both ``worker_id``
+    and ``hijack_id``) emit the structured ``invalid_id`` contract for whichever
+    id is bad instead of letting ``_safe_id`` raise a ToolError downstream.
+    """
+    for value, kind in pairs:
+        rejection = _reject_bad_id(value, kind)
+        if rejection is not None:
+            return rejection
+    return None
+
+
 def _trim_tail(screen: str, tail_lines: int | None) -> str:
     """Trim *screen* to the last *tail_lines* lines (no-op when tail_lines is unset)."""
     if tail_lines is not None and tail_lines > 0:
