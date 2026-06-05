@@ -679,3 +679,47 @@ reason = "action validation tuple 'forward'->'FORWARD'; redundant with the reset
 [[equivalent]]
 mutant = "provide.uterm.deckmux._service.xǁDeckMuxPresenceǁhandle_message__mutmut_40"
 reason = "except-ValueError fallback user = None -> ''; user is only consumed by the immediately-following `if user:` truthiness guard, and both None and '' are falsy → the broadcast is skipped identically — unobservable."
+# --- detection/engine.py (full-perimeter survivors) ---
+[[equivalent]]
+mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ__init____mutmut_1"
+reason = "Trampoline-masked default-arg DetectionEngine(buffer_size=50->51); mutmut's dispatcher forwards the bound 50 to the variant, so the mutated default is never reached. Real default tested (the existing __init__ default-value test)."
+[[equivalent]]
+mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ__init____mutmut_2"
+reason = "Trampoline-masked default-arg DetectionEngine(idle_threshold_s=2.0->3.0); dispatcher forwards the bound 2.0. Real default tested."
+[[equivalent]]
+mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ_sync_process_screen__mutmut_19"
+reason = "snapshot.get('screen', ''->None) default; the default is dead — extract_kv is only reached after a prompt matched, which required snapshot['screen'] to be present, so .get('screen', X) always returns the screen and never the default. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ_sync_process_screen__mutmut_21"
+reason = "snapshot.get('screen', ''-> no default); same dead-default class — when extract_kv runs the screen key is always present (it was used to match the prompt), so the absent-default branch is unreachable."
+[[equivalent]]
+mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ_sync_process_screen__mutmut_24"
+reason = "snapshot.get('screen', ''->'XXXX') default; dead default — the screen key is always present when extract_kv runs (used for the preceding prompt match), so the default value is never returned."
+# --- auth.py (full-perimeter survivors) ---
+[[equivalent]]
+mutant = "provide.uterm.auth.x__coerce_to_binary_pubkey__mutmut_14"
+reason = "stripped.split(None, 2)-> split(None); only parts[1] (the 2nd whitespace token = base64 payload) and the len(parts)>=2 guard are used, and both are identical regardless of maxsplit. The dropped maxsplit only affects parts[2+], which is never read. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__coerce_to_binary_pubkey__mutmut_16"
+reason = "stripped.split(None, 2->3); only parts[1] and the len>=2 guard are used; a larger maxsplit changes only parts[2+], which is never read. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_14"
+reason = "options_str = ''->None in the keytype-first branch; options_str is consumed only by `opts = _parse_options(options_str) if options_str else {}`, and '' and None are both falsy -> opts={} identically. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_19"
+reason = "line[first_token_end:].lstrip()-> rstrip(); rest is consumed only by rest.split(None, 2), which already ignores leading whitespace, and the only field that could retain whitespace (parts[2], the comment) is .strip()'d downstream — so parts[0]/parts[1]/the final subject are identical. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_44"
+reason = "blob_text.encode('ascii'->'ASCII'); codec name lookup is case-insensitive and normalizes 'ASCII'->'ascii', identical bytes for the ASCII keytype+payload text. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__find_first_token_end__mutmut_1"
+reason = "in_quotes = False->None; in_quotes is only read via `not in_quotes` and toggled via `not in_quotes` — `not False` and `not None` are both True, so False and None drive identical control flow. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__split_options__mutmut_3"
+reason = "in_quotes = False->None; identical to _find_first_token_end — in_quotes is only used through `not in_quotes`, where False and None are indistinguishable. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x_fingerprint_from_openssh_blob__mutmut_11"
+reason = "base64.b64encode(digest).decode('ascii'->'ASCII'); case-insensitive codec, identical decode of the ASCII base64 digest. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x_fingerprint_from_openssh_blob__mutmut_12"
+reason = "...decode('ascii').rstrip('='->'XX=XX'); the digest is always a 32-byte SHA-256, whose base64 is 44 chars ending in one '='. The char before the padding (index 42) encodes only 4 significant bits + 2 zero pad bits, so its base64 index is always a multiple of 4 and can never be 'X' (index 23). rstrip('X=') therefore strips exactly the same single '=' as rstrip('='). Verified by search: no input produces an 'X'-before-padding fingerprint. Unobservable."
