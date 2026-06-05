@@ -25,7 +25,12 @@ from fastmcp import Context  # noqa: TC002
 
 from provide.uterm.ai.auth import authorized
 from provide.uterm.ai.constants import MAX_KEYSTROKE_BYTES
-from provide.uterm.ai.server_validators import _clean_snapshot, _reject_bad_pattern
+from provide.uterm.ai.server_validators import (
+    _clean_snapshot,
+    _reject_bad_id,
+    _reject_bad_ids,
+    _reject_bad_pattern,
+)
 from provide.uterm.client.mcp_tools import _ok
 from provide.uterm.client.sanitizer import prepare_keystrokes
 
@@ -54,6 +59,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Acquire a lease-based hijack session for a running worker."""
+        rejection = _reject_bad_id(worker_id, "worker_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.acquire(worker_id, owner=owner, lease_s=lease_s)
         return _ok(ok, data)
 
@@ -66,6 +74,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Extend a hijack lease."""
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
         ok, data = await client.heartbeat(worker_id, hijack_id, lease_s=lease_s)
         return _ok(ok, data)
 
@@ -103,6 +114,9 @@ def register_hijack_tools(
             When set, trim the screen text to the last N lines.
             Useful for reducing context when only recent output matters.
         """
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
         if mode == "events":
             ok, data = await client.events(
                 worker_id,
@@ -134,6 +148,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Send input to a hijacked worker, optionally guarded by prompt/regex."""
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
         # Cap the attacker-supplied expect_regex length before forwarding it to
         # the server (which also compiles it). The server must additionally
         # bound matching time — see the A4 cross-lane request.
@@ -159,6 +176,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Single-step a hijacked worker loop."""
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
         ok, data = await client.step(worker_id, hijack_id)
         return _ok(ok, data)
 
@@ -170,6 +190,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Release hijack session and resume worker automation."""
+        rejection = _reject_bad_ids((worker_id, "worker_id"), (hijack_id, "hijack_id"))
+        if rejection is not None:
+            return rejection
         ok, data = await client.release(worker_id, hijack_id)
         return _ok(ok, data)
 
@@ -190,6 +213,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set session input mode (hijack/open)."""
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.set_session_mode(session_id, mode)
         return _ok(ok, data)
 
@@ -201,6 +227,9 @@ def register_hijack_tools(
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Set worker input mode directly (hijack/open)."""
+        rejection = _reject_bad_id(worker_id, "worker_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.set_input_mode(worker_id, mode)
         return _ok(ok, data)
 
@@ -208,5 +237,8 @@ def register_hijack_tools(
     @authorized("worker_disconnect", auth_ctx)
     async def worker_disconnect(worker_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Disconnect a worker WebSocket."""
+        rejection = _reject_bad_id(worker_id, "worker_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.disconnect_worker(worker_id)
         return _ok(ok, data)

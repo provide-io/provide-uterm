@@ -60,6 +60,9 @@ def register_session_tools(
     @authorized("session_status", auth_ctx)
     async def session_status(session_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Get a single session's details."""
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.get_session(session_id)
         return _ok(ok, data)
 
@@ -82,6 +85,9 @@ def register_session_tools(
         tail_lines:
             When set, trim the screen text to the last N lines.
         """
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.session_snapshot(session_id)
         result = _ok(ok, data)
         if ok and result.get("snapshot"):
@@ -92,6 +98,9 @@ def register_session_tools(
     @authorized("session_connect", auth_ctx)
     async def session_connect(session_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Start/connect a session."""
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.connect_session(session_id)
         return _ok(ok, data)
 
@@ -99,6 +108,9 @@ def register_session_tools(
     @authorized("session_disconnect", auth_ctx)
     async def session_disconnect(session_id: str, ctx: Context | None = None) -> dict[str, Any]:
         """Stop/disconnect a session."""
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         ok, data = await client.disconnect_session(session_id)
         return _ok(ok, data)
 
@@ -178,6 +190,9 @@ def register_session_tools(
             Maximum events to collect before returning early (clamped to
             1-50).
         """
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         rejection = _reject_bad_pattern(pattern)
         if rejection is not None:
             return rejection
@@ -231,6 +246,9 @@ def register_session_tools(
         """
         # Bound the attacker-supplied pattern up front (length cap → ReDoS
         # mitigation) before any compile/match work happens.
+        rejection = _reject_bad_id(session_id, "session_id")
+        if rejection is not None:
+            return rejection
         rejection = _reject_bad_pattern(pattern)
         if rejection is not None:
             return rejection
