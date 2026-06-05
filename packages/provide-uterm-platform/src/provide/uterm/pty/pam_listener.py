@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import socket
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -103,23 +104,55 @@ class PamNotifyListener:
             raise RuntimeError("PamNotifyListener already started")
         self._handler = handler
         # Restrict the notify socket to the owner so other local users cannot
-        # forge login events that drive root-side session creation. Set the
-        # umask *before* the bind so the socket is created 0o600 atomically:
-        # a post-bind chmod would leave a window where the socket exists with
-        # default-umask perms (e.g. srwxr-xr-x) that any local user could
-        # connect to. Restore the previous umask in finally so it always
-        # happens. Mirrors CaptureSocket.start() in pty/capture.py.
-        # NOTE: os.umask is process-global and not async-safe — keep the
-        # set→bind→restore window as tight as possible (only the bind call).
-        prev_umask = os.umask(_NOTIFY_BIND_UMASK)
+        # forge login events that drive root-side session creation. Bind the
+        # socket SYNCHRONOUSLY under a restrictive umask so it is created 0o600
+        # atomically: a post-bind chmod would leave a window where the socket
+        # exists with default-umask perms (e.g. srwxr-xr-x) that any local user
+        # could connect to.
+        #
+        # os.umask is process-global and not async-safe, so the umask must NOT
+        # be held across an ``await``: otherwise any other coroutine creating a
+        # file during that await would inherit the restrictive 0o177 umask.
+        # We therefore bind the raw socket ourselves (no await between umask
+        # set and restore) and hand the pre-bound socket to asyncio, which only
+        # performs the (umask-irrelevant) listen()/accept() loop.
+        #
+        # asyncio.start_unix_server(path=...) used to clear a stale socket file
+        # before binding; replicate that — but only when the leftover path is
+        # actually a socket, so we never clobber an unrelated file.
+        self._unlink_stale_socket()
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
-        finally:
-            os.umask(prev_umask)
+            prev_umask = os.umask(_NOTIFY_BIND_UMASK)
+            try:
+                sock.bind(self._path)
+            finally:
+                os.umask(prev_umask)
+            self._server = await asyncio.start_unix_server(self._handle_connection, sock=sock)
+        except BaseException:
+            sock.close()
+            raise
         # Belt-and-suspenders: enforce 0o600 even if the platform ignored the
         # umask for AF_UNIX sockets. With the umask in place this is a no-op.
         os.chmod(self._path, _NOTIFY_SOCKET_MODE)  # noqa: PTH101 — chmod the just-bound socket fd path
         logger.info("pam_notify_listener started socket=%s", self._path)
+
+    def _unlink_stale_socket(self) -> None:
+        """Remove a leftover socket file at our path before binding.
+
+        Only unlinks when the existing path is a socket, so an unrelated file
+        is never clobbered. Mirrors the stale-socket cleanup that
+        ``asyncio.start_unix_server(path=...)`` performed before we switched to
+        binding a pre-made socket ourselves.
+        """
+        p = Path(self._path)
+        try:
+            is_socket = p.is_socket()
+        except OSError:
+            return
+        if is_socket:
+            with contextlib.suppress(FileNotFoundError):
+                p.unlink()
 
     async def stop(self) -> None:
         """Stop the server and remove the socket file."""
