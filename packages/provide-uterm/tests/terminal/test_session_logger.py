@@ -211,3 +211,49 @@ class TestSessionLogger:
                     assert evt["data"]["keys"] == "***"
                     assert evt["data"]["byte_count"] == 9
         assert found
+
+    @pytest.mark.asyncio
+    async def test_flush_retains_batch_when_store_raises(self, mock_store) -> None:
+        """A failing append_events must NOT drop the buffered batch.
+
+        The buffer is only cleared after a successful append, so a transient
+        store failure leaves the events buffered for the next flush attempt.
+        """
+        # First append fails; subsequent appends succeed.
+        mock_store.append_events = AsyncMock(side_effect=[RuntimeError("store down"), None])
+
+        logger = SessionLogger(mock_store, flush_interval_s=1000.0)
+        # Drive _periodic_flush out of the picture: never start its task, so
+        # only our explicit flush() calls touch the buffer.
+        logger._session_id = "retry"
+        await logger.log_send("important")
+
+        # First flush hits the failing store and must propagate the error.
+        with pytest.raises(RuntimeError, match="store down"):
+            await logger.flush()
+
+        # The batch is still buffered — not lost.
+        assert len(logger._buffer) == 1
+        assert logger._buffer[0]["event"] == "send"
+
+        # A subsequent successful flush delivers the events exactly once.
+        await logger.flush()
+        assert logger._buffer == []
+        assert mock_store.append_events.call_count == 2
+        delivered = mock_store.append_events.call_args_list[1][0][1]
+        assert [e["event"] for e in delivered] == ["send"]
+
+    @pytest.mark.asyncio
+    async def test_flush_clears_buffer_on_success(self, mock_store) -> None:
+        """The happy path empties the buffer after a successful append."""
+        logger = SessionLogger(mock_store, flush_interval_s=1000.0)
+        logger._session_id = "ok"
+        await logger.log_send("a")
+        await logger.log_send("b")
+        assert len(logger._buffer) == 2
+
+        await logger.flush()
+        assert logger._buffer == []
+        mock_store.append_events.assert_called_once()
+        delivered = mock_store.append_events.call_args[0][1]
+        assert len(delivered) == 2

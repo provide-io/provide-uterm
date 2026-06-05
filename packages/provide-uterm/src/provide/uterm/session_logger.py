@@ -260,8 +260,15 @@ class SessionLogger:
         if not self._buffer or not self._session_id:
             return
         batch = list(self._buffer)
-        self._buffer.clear()
+        # Clear only AFTER append_events succeeds: if the store raises, the
+        # batch stays buffered for the next flush attempt instead of being
+        # lost. Every caller holds self._lock across this await (the only
+        # direct caller, _write_event, runs inside the lock; the other entry
+        # point, _flush_buffer, acquires it), so no concurrent append can
+        # mutate self._buffer during append_events — clearing the whole list
+        # here is safe and cannot drop a newly-appended record.
         await self._store.append_events(self._session_id, batch)
+        self._buffer.clear()
 
     async def _flush_buffer(self) -> None:
         async with self._lock:
