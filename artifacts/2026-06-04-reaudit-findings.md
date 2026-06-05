@@ -100,6 +100,48 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
 
 ---
 
+## External code-review findings (Gemini Antigravity CLI, 2026-06-05)
+
+A second agent independently reviewed the codebase and produced 12 code-level findings plus 5
+architectural reports. Each was evaluated for accuracy; the accurate, non-superseded ones were fixed on
+this branch with the same discipline (TDD, per-package 100% line+branch coverage, perimeter files
+re-checked with mutmut). Remediation ran as five parallel worktree subagents (one per package lane) and
+was integrated here. Numbering follows the external agent's 4-domain × 3 layout.
+
+**Fixed (11):**
+
+| Ext # | File | Fix |
+|-------|------|-----|
+| C1 (frontend) | `terminal_impl.ts` | replace the xterm `term.write` monkey-patch with a private `writeData()` |
+| C2 (frontend) | `hijack_impl.ts` | 7 empty `catch(_){}` blocks now log (console.warn/debug) instead of silently swallowing |
+| C3 (app) | `App.tsx` | `page_kind` switch default throws via an `<UnknownPageKind>` child so `<ErrorBoundary>` actually catches it |
+| C4 (client) | `hijack.py` | `_sanitize` uses a substring match so composite keys (`api_key`, `access_token`) are redacted |
+| C5 (client) | `control_ws.py` | frame queue `list`+`pop(0)` → `deque`+`popleft` (O(1)) in both sync/async clients |
+| C7 (cloudflare) | `cf_transport.py` | `drain()` decodes `latin-1` (lossless byte round-trip); was `utf-8`/`replace`, corrupting CP437/binary output the latin-1 reader could never recover |
+| C8 (server) | `authorization.py` | one pooled `httpx.AsyncClient` reused across all webhook calls; `aclose()` wired into the FastAPI lifespan shutdown |
+| C9 (server) | `auth.py` | `resolve_principal` offloads the blocking JWKS fetch via `asyncio.to_thread`; the stale "runs inside asyncio.to_thread" comment corrected (perimeter; thread-offload kill-test added) |
+| C10 (platform) | `connector.py` | persistent incremental UTF-8 decoder so multibyte chars split across `os.read` boundaries no longer become U+FFFD; the codec/decode/truncation lines keep `# pragma: no mutate` (the `> 32768` `>`→`>=` mutant is genuinely *equivalent* — `[-32768:]` makes both identical at the boundary — so the L7 mutation-hygiene cleanup stays deferred and the perimeter surface is unchanged) (perimeter) |
+| C12 (core) | `session_logger.py` | `_flush_buffer_unlocked` clears the buffer only **after** `append_events` succeeds, so a store failure no longer loses the batch (lock held across the await → safe) |
+| NEW-1 (platform) | `pam_listener.py` | bind the notify socket synchronously under the umask, then hand the pre-bound socket to `start_unix_server(sock=...)`, so the process-global umask no longer spans an `await` |
+
+**Not applied (2), with rationale:**
+
+- **C6** (annotation `_rules.py` — tighten `cred.github_token` `{8}`→`{36,255}`): **declined.** Same
+  family as the audit's "tighten AWS/GitHub regexes" minor, which the maintainer decided to **leave
+  loose** — a redaction detector should over- rather than under-match, so narrowing the quantifier would
+  risk missing real tokens. Consistent with that standing decision.
+- **C11** (`transport_session.py` `wait_for_screen_change` "race"): **refuted.** There is no `await`
+  between the `self._change_seq > since` check (line 179) and `self._update_event.clear()` (line 184),
+  so asyncio's cooperative scheduling makes the claimed interleave impossible — the reader loop only
+  runs when this coroutine awaits — and the `while` loop re-checks `_change_seq` after the wait anyway.
+
+The 5 architectural reports were accurate high-level overviews; their remaining suggestions (Web
+Components/Shadow DOM, a client-side router, Playwright E2E, KV→D1 migration, an authz LRU/circuit-
+breaker, exponential-backoff reconnect, `/api/tunnels` rate-limiting) are forward-looking roadmap items
+rather than defects and are not tracked as fixes here.
+
+---
+
 ## Resolved-claim verification (35/35 confirmed, 0 regressions)
 
 Every "Resolution" + commit in the prior report was re-checked against current source. All confirmed
