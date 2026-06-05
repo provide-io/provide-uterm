@@ -16,12 +16,6 @@ import tomllib
 from pathlib import Path
 from typing import Final
 
-BAD_STAT_KEYS: Final[tuple[str, ...]] = (
-    "segfault",
-    "suspicious",
-    "no_tests",
-    "check_was_interrupted_by_user",
-)
 BAD_MUTANT_STATES: Final[tuple[str, ...]] = (
     "not checked",
     "survived",
@@ -249,17 +243,6 @@ def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ..
     return sorted(set(changed))
 
 
-def _read_stats(path: Path) -> dict[str, int]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return {k: int(v) for k, v in payload.items()}
-
-
-def _is_clean(stats: dict[str, int]) -> bool:
-    if int(stats.get("total", 0)) <= 0:
-        return False
-    return all(int(stats.get(key, 0)) == 0 for key in BAD_STAT_KEYS)
-
-
 def _mutation_score(stats: dict[str, int]) -> float:
     total = int(stats.get("total", 0))
     if total <= 0:
@@ -351,8 +334,14 @@ def _collect_stats(
     """
     per_mutant = _results_per_mutant(python_version, env)
     effective, excused, stale = _apply_equivalent_allowlist(per_mutant, equivalents)
+    # Only warn about stale entries whose module was actually mutated this run.
+    # On a --changed-only / --paths run the allowlist legitimately carries
+    # entries for out-of-scope files (other perimeter modules); those are not
+    # stale, just unexercised — warning on them spammed every scoped CI run.
+    in_scope = {name.rsplit(".x", 1)[0] for name, _ in per_mutant}
     for name in stale:
-        print(f"WARNING: stale equivalent-allowlist entry (no surviving mutant matched): {name}")
+        if name.rsplit(".x", 1)[0] in in_scope:
+            print(f"WARNING: stale equivalent-allowlist entry (no surviving mutant matched): {name}")
     if excused:
         print(f"excused {len(excused)} documented-equivalent mutant(s) via {DEFAULT_EQUIVALENTS_FILE}")
     state_counts = _state_counts_from(effective)
