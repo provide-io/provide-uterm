@@ -36,6 +36,10 @@ broke the local baseline).
 | L3 | ✅ fixed | `ProvideHijack.dispose()` clears the approval countdown interval |
 | L4 | ✅ fixed | `PTYConnector.handle_input` swallows `os.write` `OSError`, marks disconnected |
 | minor (app) | ✅ fixed | `loadRecents` guards localStorage against non-array JSON (`Array.isArray`) |
+| minor (mcp) | ✅ fixed | `_is_internal_host` closes the `localhost.` / `*.localhost` denylist bypass |
+| minor (cf) | ✅ fixed | `_ensure_credentials` backs off the credential reload on a KV error |
+| minor (hub) | ✅ fixed | `send_hijack_state_to` per-send timeout (no head-of-line block) |
+| minor (tooling) | ✅ fixed | `run_mutation_gate`: drop dead `_is_clean`/`_read_stats`; scope stale-allowlist warnings |
 
 **Mutation-gate notes (perimeter files):** `webhooks.py` was driven through the mutmut gate (which
 surfaced the M3 reversal). `_gateway.py` (L1) has its kill-suite under `tests/gateway/`, which the
@@ -68,9 +72,16 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
   SQLite, unauthenticated `/metrics`, and tightening the AWS/GitHub credential regexes all change
   product behaviour or security posture and should be decided explicitly (note: a redaction detector
   prefers over- to under-matching, so tightening the regexes risks dropping real-secret coverage).
-- **Remaining minor polish** (dup `describe` blocks, `Array.isArray` guard, listener cleanup,
-  `_is_internal_host` trailing-dot, dead `run_mutation_gate` helpers, vite hardcoded port, etc.):
-  clear low-risk cleanups, tracked as a follow-up batch.
+- **Remaining minor polish** (still open): `session_subscribe` double-compiles the user regex (perf
+  nitpick); `capture.c` macOS `send_frame` SIGPIPE suppression (C, no Python test); `connector.py`/
+  `capture_connector.py` `input_mode` validation (perimeter — connector mutmut stalls locally);
+  frontend test hygiene (dedup `describe` blocks, module-scope mock cleanup); `_resolveApproval` POST
+  credentials; `connect_from_profile` route-level egress guard. The `kbdint` finding is deferred as
+  asyncssh-API-sensitive (the gateway *intends* to accept kbdint fall-through, so the honest fix is to
+  implement `get_kbdint_challenge`/`validate_kbdint_response`, not just return `False`). The
+  HijackHost listener-cleanup finding is a non-leak (React discards the container + its listeners on
+  unmount) and the vite hardcoded dev-proxy port is a conventional dev-only literal — both noted, not
+  changed.
 
 ---
 
