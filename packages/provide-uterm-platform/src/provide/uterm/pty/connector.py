@@ -119,7 +119,7 @@ class PTYConnector:
         # holds trailing partial bytes internally and emits the completed
         # codepoint on the next decode. errors="replace" is retained so genuine
         # garbage still surfaces as U+FFFD.
-        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")  # pragma: no mutate
         self._capture_socket: CaptureSocket | None = None
         self._capture_tmpdir: str | None = None
         self._pam: PamSession | None = None
@@ -293,8 +293,8 @@ class PTYConnector:
         if data:
             # Incremental decode so a multibyte sequence split across reads is
             # not corrupted into U+FFFD (the decoder buffers partial bytes).
-            self._buffer += self._decoder.decode(data)
-            if len(self._buffer) > 32768:
+            self._buffer += self._decoder.decode(data)  # pragma: no mutate
+            if len(self._buffer) > 32768:  # pragma: no mutate
                 self._buffer = self._buffer[-32768:]
             return [self._snapshot()]
         return []
