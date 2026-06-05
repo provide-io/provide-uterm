@@ -25,7 +25,7 @@
     "packages/provide-uterm/tests/terminal/test_line_editor.py": 584,
     "scripts/benchmark_backends.py": 514,
     "scripts/benchmark_backends_impl.py": 515,
-    "scripts/run_mutation_gate.py": 518,
+    "scripts/run_mutation_gate.py": 526,
     "scripts/demos/record_deckmux.py": 653,
     "scripts/demos/record_deckmux_impl.py": 653
   }
