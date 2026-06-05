@@ -1,4 +1,4 @@
-.PHONY: quality lint typecheck test frontend-test frontend-build
+.PHONY: quality quality-gate lint typecheck test frontend-test frontend-build
 
 PY_PACKAGES := \
 	packages/provide-uterm/src \
@@ -26,6 +26,13 @@ TY_PACKAGES := \
 # objects; mypy gates it, while ty is gated on packages it can analyze reliably.
 
 quality: lint typecheck frontend-test test
+
+# The exact static checks CI's `quality` job runs (max-LOC, SPDX headers,
+# codegen-frames drift, event literals, ruff, mypy/ty, bandit, xenon, vulture,
+# pip-audit, licenses, performance smoke, CF vendor tree, package artifacts).
+# Run before pushing so CI-only failures surface locally, not on the runner.
+quality-gate:
+	bash ci/quality_checks.sh
 
 lint:
 	uv run ruff check .

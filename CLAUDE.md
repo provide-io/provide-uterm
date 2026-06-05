@@ -31,7 +31,15 @@ uv run pytest packages/provide-uterm/tests/bridge/test_hub.py::test_name -vv
 # Run tests for a single package
 uv run pytest packages/provide-uterm-client/tests/ai/ -v
 
-# Full quality gate (ruff, mypy, pytest, xenon, vulture)
+# Static quality gate — the exact checks CI's `quality` job runs (max-LOC,
+# SPDX headers, codegen-frames drift, event literals, ruff, mypy/ty, bandit,
+# xenon, vulture, pip-audit, licenses, performance smoke, CF vendor tree,
+# package artifacts). Run before pushing so CI-only failures surface locally.
+# CI and this command share one source of truth: ci/quality_checks.sh.
+make quality-gate            # == bash ci/quality_checks.sh
+
+# Pytest worker-capping wrapper (caps -n workers at half the CPU count). This
+# runs ONLY pytest — the lint/type/static checks above live in quality-gate.
 uv run python scripts/run_pytest_gate.py -q
 
 # Mutation testing (validates test quality, min score 100%)
