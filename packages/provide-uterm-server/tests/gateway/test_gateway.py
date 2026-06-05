@@ -275,3 +275,16 @@ class TestMakeNoAuthServerClass:
         assert server.validate_password("anyuser", "anything") is True
         assert server.public_key_auth_supported() is True
         assert server.password_auth_supported() is True
+
+    def test_kbdint_offered_and_accepts(self) -> None:
+        """Without a resolver, kbdint is offered AND actually completes: the
+        empty challenge + accepting response replace the previously-advertised-
+        but-silently-failing method."""
+        server = _make_no_auth_server_class()()
+        assert server.kbdint_auth_supported() is True
+        assert server.get_kbdint_challenge("u", "", "") == ("", "", "", [])
+        assert server.validate_kbdint_response("u", []) is True
+
+    def test_kbdint_disabled_when_resolver_required(self) -> None:
+        server = _make_no_auth_server_class(require_resolver=True)()
+        assert server.kbdint_auth_supported() is False
