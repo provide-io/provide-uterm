@@ -332,6 +332,20 @@ def test_parse_event_non_numeric_pid_defaults_to_zero() -> None:
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
+@pytest.fixture
+def short_sock_dir():
+    """A SHORT temp dir for binding AF_UNIX sockets.
+
+    macOS limits ``sun_path`` to ~104 bytes and the worktree path can be long
+    enough that pytest's ``tmp_path`` (rooted under the worktree) overflows it
+    with ``OSError: AF_UNIX path too long``. Bind sockets under a short
+    ``/tmp``-rooted dir instead (mirrors the established
+    ``tempfile.TemporaryDirectory()`` pattern used elsewhere in this file).
+    """
+    with tempfile.TemporaryDirectory(dir="/tmp") as td:
+        yield Path(td)
+
+
 async def _collect(events: list[PamEvent], ev: PamEvent) -> None:
     events.append(ev)
 
@@ -344,10 +358,10 @@ async def _send_line(path: str, data: dict) -> None:
     await writer.wait_closed()
 
 
-async def test_notify_socket_is_owner_only(tmp_path) -> None:
+async def test_notify_socket_is_owner_only(short_sock_dir) -> None:
     import stat
 
-    sock = tmp_path / "notify.sock"
+    sock = short_sock_dir / "notify.sock"
     listener = PamNotifyListener(str(sock))
     await listener.start(AsyncMock())
     try:
@@ -357,34 +371,35 @@ async def test_notify_socket_is_owner_only(tmp_path) -> None:
         await listener.stop()
 
 
-async def test_notify_socket_umask_constrains_bind_and_is_restored(tmp_path, monkeypatch) -> None:
+async def test_notify_socket_umask_constrains_bind_and_is_restored(short_sock_dir, monkeypatch) -> None:
     """The socket is created 0o600 atomically (umask before bind), not via a
     post-bind chmod that leaves a permission window.
 
     Regression for the bind-then-chmod race: any local user could connect in
     the gap between bind (default umask perms, e.g. srwxr-xr-x) and the chmod —
     and forge login events that drive root-side session creation. start() must
-    set a restrictive umask (0o177) *before* the bind and restore the caller's
-    umask afterward, so the socket never exists world-accessible.
+    set a restrictive umask (0o177) *before* the synchronous bind and restore
+    the caller's umask afterward, so the socket never exists world-accessible.
     """
-    import asyncio as _asyncio
     import os
+    import socket as _socket
     import stat
 
     observed_umask: list[int] = []
-    real_bind = _asyncio.start_unix_server
+    real_bind = _socket.socket.bind
 
-    async def _spy_bind(*args, **kwargs):
-        # Capture the umask in effect at the moment of bind by reading and
-        # immediately restoring it (os.umask has no read-only variant).
+    def _spy_bind(self, *args, **kwargs):
+        # Capture the umask in effect at the moment of the real socket bind by
+        # reading and immediately restoring it (os.umask has no read-only
+        # variant). This is now where the 0o600 atomicity is enforced.
         cur = os.umask(0o022)
         os.umask(cur)
         observed_umask.append(cur)
-        return await real_bind(*args, **kwargs)
+        return real_bind(self, *args, **kwargs)
 
-    monkeypatch.setattr(_asyncio, "start_unix_server", _spy_bind)
+    monkeypatch.setattr(_socket.socket, "bind", _spy_bind)
 
-    sock = tmp_path / "notify.sock"
+    sock = short_sock_dir / "notify.sock"
     prev = os.umask(0o000)  # most permissive — surfaces any window
     try:
         listener = PamNotifyListener(str(sock))
@@ -403,12 +418,161 @@ async def test_notify_socket_umask_constrains_bind_and_is_restored(tmp_path, mon
         os.umask(prev)
 
 
+async def test_start_does_not_hold_restrictive_umask_across_await(short_sock_dir, monkeypatch) -> None:
+    """The umask window must not span any ``await`` in ``start()``.
+
+    Regression for the async-umask leak: the old code held the process-global
+    0o177 umask across ``await asyncio.start_unix_server(...)``, so any OTHER
+    coroutine creating a file during that await inherited the restrictive
+    umask. The fix binds the socket synchronously (no await between umask set
+    and restore), so by the time ``start_unix_server`` is awaited the caller's
+    umask has already been restored.
+    """
+    import asyncio as _asyncio
+    import os
+
+    observed_umask_at_await: list[int] = []
+    real_start = _asyncio.start_unix_server
+
+    async def _spy_start(*args, **kwargs):
+        # Capture the umask in effect when start_unix_server is awaited — the
+        # exact point a concurrent coroutine could leak through.
+        cur = os.umask(0o022)
+        os.umask(cur)
+        observed_umask_at_await.append(cur)
+        return await real_start(*args, **kwargs)
+
+    monkeypatch.setattr(_asyncio, "start_unix_server", _spy_start)
+
+    sock = short_sock_dir / "notify.sock"
+    prev = os.umask(0o000)
+    try:
+        listener = PamNotifyListener(str(sock))
+        await listener.start(AsyncMock())
+        try:
+            # The await must see the caller's umask (0o000), NOT the restrictive
+            # 0o177 bind umask. If it saw 0o177 the window spans the await.
+            assert observed_umask_at_await == [0o000]
+        finally:
+            await listener.stop()
+    finally:
+        os.umask(prev)
+
+
+async def test_start_removes_stale_socket_before_bind(short_sock_dir) -> None:
+    """A leftover socket file at the path is removed so the bind succeeds.
+
+    Reproduces a prior crash: with sock-based binding the bind fails with
+    EADDRINUSE if a stale socket file is present (the old path-based
+    start_unix_server cleared it). start() must replicate that cleanup.
+    """
+    import socket as _socket
+    import stat
+
+    sock_path = short_sock_dir / "notify.sock"
+    # Create a genuine, dead socket file at the path (bind then close).
+    stale = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    stale.bind(str(sock_path))
+    stale.close()
+    assert sock_path.exists()
+
+    listener = PamNotifyListener(str(sock_path))
+    await listener.start(AsyncMock())  # must not raise EADDRINUSE
+    try:
+        # Fresh socket bound at the path with the enforced owner-only mode.
+        assert stat.S_IMODE(sock_path.stat().st_mode) == 0o600
+    finally:
+        await listener.stop()
+    assert not sock_path.exists()
+
+
+async def test_start_does_not_clobber_non_socket_file(short_sock_dir) -> None:
+    """A non-socket file at the path is NOT unlinked (and the bind then fails).
+
+    Guards the ``is_socket()`` check: only stale *sockets* are removed, never
+    an unrelated regular file that happens to share the path.
+    """
+    reg_path = short_sock_dir / "notify.sock"
+    reg_path.write_text("not a socket")
+
+    listener = PamNotifyListener(str(reg_path))
+    with pytest.raises(OSError):
+        await listener.start(AsyncMock())
+    # The regular file must survive untouched.
+    assert reg_path.read_text() == "not a socket"
+
+
+async def test_start_unlink_stale_socket_is_socket_oserror_swallowed(short_sock_dir, monkeypatch) -> None:
+    """_unlink_stale_socket returns quietly if is_socket() raises OSError.
+
+    On a path we cannot stat, we must neither crash nor attempt to unlink — we
+    fall through to the bind (which then governs success/failure).
+    """
+    from pathlib import Path as _Path
+
+    sock_path = short_sock_dir / "notify.sock"
+
+    real_is_socket = _Path.is_socket
+
+    def _raising_is_socket(self):
+        if str(self) == str(sock_path):
+            raise OSError("stat denied")
+        return real_is_socket(self)
+
+    monkeypatch.setattr(_Path, "is_socket", _raising_is_socket)
+
+    listener = PamNotifyListener(str(sock_path))
+    # No file exists yet, so the bind still succeeds despite the stat raising.
+    await listener.start(AsyncMock())
+    try:
+        assert sock_path.exists()
+    finally:
+        await listener.stop()
+
+
+async def test_start_closes_socket_on_bind_failure(short_sock_dir, monkeypatch) -> None:
+    """If start_unix_server raises, the pre-bound socket is closed (no fd leak).
+
+    Exercises the ``except BaseException: sock.close(); raise`` cleanup branch.
+    """
+    import asyncio as _asyncio
+    import socket as _socket
+
+    from provide.uterm.pty import pam_listener as _pl
+
+    created: list[_socket.socket] = []
+    real_factory = _socket.socket
+
+    def _tracking_factory(*args, **kwargs):
+        sock = real_factory(*args, **kwargs)
+        created.append(sock)
+        return sock
+
+    # Patch the name the module under test actually uses (module-level `socket`).
+    monkeypatch.setattr(_pl.socket, "socket", _tracking_factory)
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("start_unix_server failed")
+
+    monkeypatch.setattr(_asyncio, "start_unix_server", _boom)
+
+    sock_path = short_sock_dir / "notify.sock"
+    listener = PamNotifyListener(str(sock_path))
+    with pytest.raises(RuntimeError, match="start_unix_server failed"):
+        await listener.start(AsyncMock())
+    # The socket we created must have been closed during cleanup: a closed
+    # socket reports fileno() == -1.
+    assert len(created) == 1
+    assert created[0].fileno() == -1, "pre-bound socket must be closed on start failure"
+    assert listener._server is None
+
+
 # ── peer-uid auth (Fix 2) ─────────────────────────────────────────────────────
 
 
-async def test_peer_uid_allowed_when_in_allowlist(tmp_path) -> None:
+async def test_peer_uid_allowed_when_in_allowlist(short_sock_dir) -> None:
     """require_peer_uids=[0] + peer euid 0 → connection allowed, handler called."""
-    path = str(tmp_path / "notify.sock")
+    path = str(short_sock_dir / "notify.sock")
     events: list[PamEvent] = []
     listener = PamNotifyListener(path, require_peer_uids=[0])
     # Monkeypatch _peer_euid to return 0 (root)
@@ -427,9 +591,9 @@ async def test_peer_uid_allowed_when_in_allowlist(tmp_path) -> None:
     assert len(events) == 1
 
 
-async def test_peer_uid_rejected_when_not_in_allowlist(tmp_path) -> None:
+async def test_peer_uid_rejected_when_not_in_allowlist(short_sock_dir) -> None:
     """require_peer_uids=[0] + peer euid 1000 → connection rejected, handler NOT called."""
-    path = str(tmp_path / "notify.sock")
+    path = str(short_sock_dir / "notify.sock")
     events: list[PamEvent] = []
     listener = PamNotifyListener(path, require_peer_uids=[0])
     # Monkeypatch _peer_euid to return 1000 (unprivileged user)
@@ -449,9 +613,9 @@ async def test_peer_uid_rejected_when_not_in_allowlist(tmp_path) -> None:
     assert len(events) == 0
 
 
-async def test_peer_uid_no_enforcement_when_allowlist_none(tmp_path) -> None:
+async def test_peer_uid_no_enforcement_when_allowlist_none(short_sock_dir) -> None:
     """require_peer_uids=None (default) → no enforcement, even euid 1000 allowed."""
-    path = str(tmp_path / "notify.sock")
+    path = str(short_sock_dir / "notify.sock")
     events: list[PamEvent] = []
     listener = PamNotifyListener(path, require_peer_uids=None)
     listener._peer_euid = lambda w: 1000  # type: ignore[method-assign]
@@ -469,9 +633,9 @@ async def test_peer_uid_no_enforcement_when_allowlist_none(tmp_path) -> None:
     assert len(events) == 1
 
 
-async def test_peer_uid_none_platform_allowed_with_warning(tmp_path) -> None:
+async def test_peer_uid_none_platform_allowed_with_warning(short_sock_dir) -> None:
     """_peer_euid returning None (unsupported platform) → allowed (warn, not reject)."""
-    path = str(tmp_path / "notify.sock")
+    path = str(short_sock_dir / "notify.sock")
     events: list[PamEvent] = []
     listener = PamNotifyListener(path, require_peer_uids=[0])
     # Simulate macOS: SO_PEERCRED unavailable
@@ -605,11 +769,11 @@ def test_peer_euid_returns_none_on_struct_error(tmp_path) -> None:
     assert result is None
 
 
-async def test_handle_connection_peer_euid_logged_when_no_enforcement(tmp_path, caplog) -> None:
+async def test_handle_connection_peer_euid_logged_when_no_enforcement(short_sock_dir, caplog) -> None:
     """Without allowlist, peer euid is still logged at debug level."""
     import logging
 
-    path = str(tmp_path / "notify.sock")
+    path = str(short_sock_dir / "notify.sock")
     events: list[PamEvent] = []
     listener = PamNotifyListener(path, require_peer_uids=None)
     listener._peer_euid = lambda w: 500  # type: ignore[method-assign]
