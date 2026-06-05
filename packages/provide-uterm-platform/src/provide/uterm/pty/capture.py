@@ -87,6 +87,13 @@ class CaptureSocket:
     async def read_frame(self) -> CaptureFrame:
         return await self._queue.get()
 
+    def read_nowait(self) -> CaptureFrame | None:
+        """Return the next buffered frame without blocking, or None when empty."""
+        try:
+            return self._queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
+
     def _enqueue(self, frame: CaptureFrame) -> None:
         """Buffer *frame*, applying drop-oldest backpressure when the queue is
         full so a fast producer cannot grow it without bound (PLAT-cap)."""
