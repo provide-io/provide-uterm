@@ -288,7 +288,13 @@ class PTYConnector:
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         if self.is_connected() and self._master_fd is not None and not self._paused:
-            os.write(self._master_fd, data.encode("utf-8"))  # pragma: no mutate
+            try:
+                os.write(self._master_fd, data.encode("utf-8"))  # pragma: no mutate
+            except OSError:
+                # The PTY master flips to EIO/EPIPE the instant the child exits.
+                # Mirror _read_master: mark disconnected instead of letting the
+                # write raise out into the bridge run-loop as an unclean error.
+                self._connected = False
         return [self._snapshot()]
 
     async def handle_control(self, action: str) -> list[dict[str, Any]]:
