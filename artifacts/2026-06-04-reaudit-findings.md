@@ -71,10 +71,15 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
   Removing the 4 pragmas exposes killable codec mutants (`"XXutf-8XX"`→LookupError) that need
   boundary tests plus equivalent-codec entries in `mutation_equivalents.toml`; best done as a focused
   pass against the connector mutation gate.
-- **Minor ⚠ judgment calls:** TelnetWsGateway `0.0.0.0` default bind, plaintext webhook secret in
-  SQLite, unauthenticated `/metrics`, and tightening the AWS/GitHub credential regexes all change
-  product behaviour or security posture and should be decided explicitly (note: a redaction detector
-  prefers over- to under-matching, so tightening the regexes risks dropping real-secret coverage).
+- **Minor ⚠ judgment calls — RESOLVED** (decided with the maintainer):
+  - **Telnet `0.0.0.0` bind** → ✅ fixed: default to loopback + `allow_unauthenticated` opt-in
+    (mirrors SSH) + a `--allow-unauthenticated-telnet` CLI flag.
+  - **Plaintext webhook secret** → ✅ fixed: AES-256-GCM at rest keyed by the `WEBHOOK_SECRET_KEY`
+    Worker binding (`do/_webhook_crypto.py`), backward-compatible with plaintext / no-key deployments.
+  - **Unauthenticated `/metrics`** → ✅ fixed: `SecurityConfig.metrics_require_auth` (default open for
+    Prometheus); when enabled both endpoints require a non-anonymous principal (401 otherwise).
+  - **Tighten AWS/GitHub regexes** → **left loose** (maintainer decision): a credential detector
+    prefers over- to under-matching, so the patterns stay as-is.
 - **Remaining minor polish** (still open, genuinely low-value): `session_subscribe` double-compiles the
   user regex (perf nitpick — compiling a ≤512-char regex twice is negligible); `connector.py` /
   `capture_connector.py` `input_mode` validation/semantics (both perimeter; `capture_connector` always
