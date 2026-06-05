@@ -153,6 +153,13 @@ static void uterm_capture_init(void) {
     g_capture_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (g_capture_fd < 0) return;
 
+    /* Suppress SIGPIPE on write() to a closed capture socket — otherwise a
+     * disconnected capture consumer would kill the *captured* process. macOS
+     * has no MSG_NOSIGNAL for send(), so set the socket option (the Linux
+     * backend uses send(..., MSG_NOSIGNAL) on send_frame instead). */
+    int nosigpipe = 1;
+    setsockopt(g_capture_fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
+
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
