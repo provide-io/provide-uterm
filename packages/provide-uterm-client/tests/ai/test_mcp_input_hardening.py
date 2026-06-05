@@ -155,6 +155,11 @@ class TestSessionCreateHostValidation:
             "metadata.google.internal.",  # trailing-dot FQDN form
             "anything.localhost",  # RFC 6761: *.localhost resolves to loopback
             "127.0.0.1.",  # trailing-dot literal IP
+            "2130706433",  # decimal int form of 127.0.0.1
+            "0177.0.0.1",  # octal form of 127.0.0.1
+            "0x7f.0.0.1",  # hex form of 127.0.0.1
+            "127.1",  # shortened a.d form of 127.0.0.1
+            "2852039166",  # decimal int form of 169.254.169.254 (cloud metadata)
         ],
     )
     def test_validate_rejects_internal_hosts(self, host: str) -> None:
@@ -191,6 +196,24 @@ class TestSessionCreateHostValidation:
                 url=None,
                 port=23,
                 host="93.184.216.34",
+            )
+            is None
+        )
+
+    def test_validate_allows_public_numeric_ip(self) -> None:
+        """A non-canonical numeric form of a PUBLIC IP must not be over-blocked
+        (the hardening only catches numeric forms that resolve to internal IPs)."""
+        import ipaddress
+
+        from provide.uterm.ai.server_impl import _validate_session_create_config
+
+        decimal_public = str(int(ipaddress.IPv4Address("93.184.216.34")))
+        assert (
+            _validate_session_create_config(
+                connector_type="telnet",
+                url=None,
+                port=23,
+                host=decimal_public,
             )
             is None
         )
