@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import threading
 import time  # noqa: F401  # re-exported so legacy ``auth.time`` monkeypatches reach the webhook replay clock
@@ -56,7 +57,9 @@ logger = get_logger(__name__)
 # PyJWKClient fetches and caches the JWKS document internally; sharing one
 # instance per URL avoids a redundant HTTP round-trip on every token validation.
 # Capped at 16 entries — in practice this is always 1 (one issuer per deployment).
-# Protected by a threading.Lock because _resolve_jwt_key runs inside asyncio.to_thread.
+# Protected by a threading.Lock because _resolve_jwt_key may run in a worker
+# thread (via resolve_principal's asyncio.to_thread) concurrently with the
+# event-loop thread.
 _JWKS_CLIENT_CACHE: dict[str, Any] = {}
 _JWKS_CLIENT_CACHE_MAX = 16
 _JWKS_CLIENT_CACHE_LOCK = threading.Lock()
@@ -140,7 +143,10 @@ class LocalIdentityProvider(IdentityProvider):
         self.api_key_store = api_key_store
 
     async def resolve_principal(self, connection: Request | WebSocket) -> Principal:
-        return self.resolve_principal_sync(connection)
+        # resolve_principal_sync can block on a synchronous JWKS network fetch
+        # (PyJWKClient.get_signing_key_from_jwt on a cache miss), so offload it
+        # to a worker thread rather than running it on the event loop.
+        return await asyncio.to_thread(self.resolve_principal_sync, connection)
 
     def resolve_principal_sync(self, connection: Request | WebSocket) -> Principal:
         headers = getattr(connection, "headers", {})

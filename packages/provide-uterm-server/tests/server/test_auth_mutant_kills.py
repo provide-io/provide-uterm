@@ -389,3 +389,65 @@ class TestResolveJwtKeyMutations:
         call_kwargs = mock_cls.call_args.kwargs
         assert call_kwargs.get("timeout") == 10
         _JWKS_CLIENT_CACHE.clear()
+
+
+# ---------------------------------------------------------------------------
+# resolve_principal — async wrapper must offload the (potentially blocking,
+# JWKS-fetching) sync resolver to a worker thread via asyncio.to_thread so the
+# event loop is never blocked on a network round-trip.
+# ---------------------------------------------------------------------------
+
+
+class TestResolvePrincipalOffloadsToThread:
+    async def test_resolve_principal_runs_sync_off_the_event_loop(self) -> None:
+        """Kills the mutant that drops asyncio.to_thread and calls
+        resolve_principal_sync directly on the loop thread.
+
+        We record the thread id observed inside the sync resolver; because the
+        wrapper offloads via asyncio.to_thread, that id MUST differ from the
+        event-loop thread id.
+        """
+        import asyncio
+        import threading
+
+        from provide.uterm.server.auth import LocalIdentityProvider
+        from provide.uterm.server.bridge.identity import Principal
+
+        loop_thread_id = threading.get_ident()
+        # Sanity: confirm we really are on the running event loop's thread.
+        assert asyncio.get_running_loop() is not None
+
+        recorded: dict[str, int] = {}
+        sentinel = Principal(subject_id="threaded", roles=frozenset({"viewer"}))
+
+        idp = LocalIdentityProvider(_jwt_auth_config())
+
+        def _record_thread(_connection: object) -> Principal:
+            recorded["thread_id"] = threading.get_ident()
+            return sentinel
+
+        with patch.object(LocalIdentityProvider, "resolve_principal_sync", side_effect=_record_thread):
+            result = await idp.resolve_principal(MagicMock())
+
+        # The result is exactly what the sync resolver returned.
+        assert result is sentinel
+        # And the sync resolver ran on a *different* (worker) thread.
+        assert recorded["thread_id"] != loop_thread_id
+
+    async def test_resolve_principal_matches_sync_result(self) -> None:
+        """The async wrapper must return the same Principal the sync entrypoint
+        produces for a given connection (no semantic drift from the offload)."""
+        from provide.uterm.server.auth import LocalIdentityProvider
+
+        idp = LocalIdentityProvider(_jwt_auth_config())
+        # An anonymous connection (no token) resolves deterministically.
+        connection = MagicMock()
+        connection.headers = {}
+        connection.cookies = {}
+
+        sync_principal = idp.resolve_principal_sync(connection)
+        async_principal = await idp.resolve_principal(connection)
+
+        assert async_principal.subject_id == sync_principal.subject_id
+        assert async_principal.roles == sync_principal.roles
+        assert async_principal.scopes == sync_principal.scopes
