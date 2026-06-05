@@ -151,6 +151,10 @@ class TestSessionCreateHostValidation:
             "172.16.0.1",
             "[::1]",
             "0.0.0.0",
+            "localhost.",  # trailing-dot FQDN form must not bypass the denylist
+            "metadata.google.internal.",  # trailing-dot FQDN form
+            "anything.localhost",  # RFC 6761: *.localhost resolves to loopback
+            "127.0.0.1.",  # trailing-dot literal IP
         ],
     )
     def test_validate_rejects_internal_hosts(self, host: str) -> None:
