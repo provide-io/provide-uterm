@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 from fastapi import APIRouter, Body, HTTPException, Path, Request
 from pydantic import ValidationError
 
-from provide.uterm.server.egress import EgressBlockedError
 from provide.uterm.server.models import model_dump
 from provide.uterm.server.profiles import ConnectionProfile
 from provide.uterm.server.registry import SessionValidationError
@@ -191,12 +190,6 @@ def create_profiles_router() -> APIRouter:
             session_payload["recording_enabled"] = True
         try:
             session = await registry.create_session(session_payload)
-        except EgressBlockedError as exc:
-            # The registry chokepoint blocks a metadata/internal connector
-            # target with EgressBlockedError (a ValueError subclass). Map it to
-            # 422 like the other connect routes instead of letting it fall into
-            # the generic ValueError→409 branch below.
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except SessionValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except ValueError as exc:
