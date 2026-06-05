@@ -1,8 +1,7 @@
 # provide-uterm Code Review & Architecture Analysis - Part 1: Core Bridge System (TermHub)
 
-> **See also:** [`2026-06-04-reaudit-findings.md`](2026-06-04-reaudit-findings.md) — a full-codebase
-> re-audit that re-verified every "Resolved" claim below (35/35 hold) and surfaced new findings
-> (2 critical, 4 medium, 7 low, 27 minor).
+> **Updated:** 2026-06-05
+> This report incorporates the resolutions and findings from the 2026-06-04 full-codebase re-audit.
 
 This section of the code review focuses on the Core Bridge System, analyzing the `TermHub` composition (Hub Services) and the `WorkerLink` bridge mechanism. We evaluate the codebase against four critical lenses: Architecture, Maintainability, Security & Concurrency, and Performance & Scaling.
 
@@ -42,6 +41,14 @@ The codebase uses a single, coarse-grained asynchronous lock (`TermHub._lock`) t
   **Resolution:** The network I/O was moved outside the lock via a two-phase reserve mechanism (commit `cf9c47fa`), ensuring atomicity without blocking the global hub lock.
 
 - **Redaction & Policies:** The `MessageRouter` cleanly enforces output redaction via `_output_policy_gate` before broadcasting. The application of redaction to both the broadcast path and the persistent ring buffer (`_redact_event_payload`) ensures secrets do not leak via the `events/watch` API.
+
+**Medium & Minor Findings:**
+- **Broadcast Aborts (M1):** In `core_orchestration.py`, `resolve_approval` iterated browsers with bare `await ws.send_text(...)`.
+  **Resolved Risk:** A browser disconnecting mid-loop would raise an exception and abort the broadcast, leaving remaining browsers paused and the endpoint returning 500.
+  **Resolution:** Wrapped each send in `try/except Exception`, collected dead sockets, and pruned them using `hub.remove_dead_browsers`.
+- **`send_hijack_state_to` Blocking:** Similar to above.
+  **Resolved Risk:** Potential head-of-line blocking during hijack state transmission.
+  **Resolution:** Implemented per-send timeouts to prevent slow clients from blocking the hub.
 
 ### 4. Performance & Scaling
 
@@ -91,8 +98,13 @@ The gateways handle untrusted legacy protocols, demanding strict security and sa
 
 **Findings:**
 - **Authentication Handshake:** The SSH gateway (`_ssh_gateway.py`) properly validates public keys using the pluggable `SSHKeyResolver`. Unauthenticated connections are strictly prevented from binding to non-loopback addresses unless explicitly configured with `allow_unauthenticated=True`.
-- **Token Persistence Security:** Token files stored on disk via `token_file` are safely written with 0600 file permissions and 0700 parent directory permissions in `_gateway.py` (`_write_token`). In `_ssh_handler.py`, tokens are isolated into per-user files derived from the SHA256 fingerprint of the client's public key, preventing multiple users from fighting over the same resume token.
+- **Token Persistence Security (L1):** Token files stored on disk via `token_file` are safely written.
+  **Resolved Risk:** Tokens were previously written and then `chmod`ed, creating a brief write-then-chmod TOCTOU window.
+  **Resolution:** Files and directories are now created atomically at `0600`/`0700` using `os.open` and umask-guarded `mkdir`. In `_ssh_handler.py`, tokens are isolated into per-user files derived from the SHA256 fingerprint of the client's public key.
 - **Concurrency & Resource Leaks:** The gateway handles bidirectional forwarding by spawning two concurrent `asyncio.Task`s (`t1`, `t2`) and waiting for them with `asyncio.FIRST_COMPLETED`. It correctly guarantees the cancellation of the pending task, preventing orphaned tasks and memory leaks upon connection closure.
+- **Telnet Binding & kbdint:**
+  **Resolved Risk:** Telnet was binding to `0.0.0.0` by default without auth guards, and SSH kbdint would silently fail.
+  **Resolution:** Telnet now defaults to loopback and requires an `--allow-unauthenticated-telnet` flag to expose. SSH `get_kbdint_challenge` / `validate_kbdint_response` were fully implemented so kbdint fall-through actually completes.
 
 ### 4. Performance & Scaling
 
@@ -125,11 +137,16 @@ This section of the code review focuses on the Cloudflare Workers architecture a
 
 ### 3. Security & Concurrency Robustness
 
-**Findings:**
-- **KV Eventual Consistency & Credentials:** `registry.py` handles the fleet-wide session registry via Cloudflare KV (`SESSION_REGISTRY`). Because KV is eventually consistent, there is a risk of staleness. However, in `runtime.py`, `_ensure_credentials` correctly manages this by fetching credential hashes with a short TTL (`_CREDENTIAL_TTL_S = 60.0`). It intelligently handles a "transiently missing" KV entry (a `None` result) by keeping the last known hashes, explicitly avoiding a false revocation.
-  **Risk:** A true token revocation could be delayed up to 60 seconds (the `_CREDENTIAL_TTL_S` cache window), allowing an evicted client up to 60 seconds of continued access.
-  **Recommendation:** If strict token revocation is required instantly, the auth gateway or DO should have an out-of-band invalidation mechanism (e.g., a pub/sub event) rather than purely polling KV.
+**Critical & High Findings:**
+- **KV Eventual Consistency & Credentials (C1):** `registry.py` handles the fleet-wide session registry via Cloudflare KV (`SESSION_REGISTRY`). 
+  **Resolved Risk:** Previously, `update_kv_session` would overwrite the KV entry without preserving `worker_token_hash`, `share_token_hash`, `control_token_hash`, and `issued_ip`, destroying tunnel authentication hashes every 60 seconds.
+  **Resolution:** `update_kv_session` now uses read-modify-write logic to preserve tunnel credential and lifecycle fields across status heartbeats.
+  **Resolved Risk:** Transitory KV read errors could lead to immediate credential eviction.
+  **Resolution:** `_ensure_credentials` backs off the credential reload on a KV error, retaining the cached hashes instead of throwing them away.
 - **Lease Expiration Persistence:** In `persistence.py`, `persist_lease` converts the monotonic `lease_expires_at` timestamp to a wall-clock timestamp before saving to SQLite. This prevents a critical security bug where a hibernated DO wakes up with a reset monotonic clock, potentially extending a hijack lease indefinitely.
+- **Webhook Security (L2):** 
+  **Resolved Risk:** Webhook `pattern` was accepted without length guards, risking ReDoS attacks, and the webhook secret was stored in plaintext SQLite.
+  **Resolution:** The `pattern` is now length-capped and compile-validated at registration. The webhook secret is now AES-256-GCM encrypted at rest keyed by a `WEBHOOK_SECRET_KEY` worker binding.
 
 ### 4. Performance & Scaling
 
@@ -141,7 +158,7 @@ This section of the code review focuses on the Cloudflare Workers architecture a
 
 ## Part 4: Frontend Application & xterm.js Integration
 
-This section of the code review focuses on the Frontend Application located in `packages/provide-uterm-frontend/`. We evaluate the separation between raw `xterm.js` rendering and orchestration logic, state synchronization for the 'DeckMux' (collaborative presence/cursors), and rendering performance for high-throughput streams. We analyze the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling.
+This section of the code review focuses on the Frontend Application located in `packages/provide-uterm-frontend/`. We evaluate the separation between raw `xterm.js` rendering and orchestration logic, state synchronization for the 'DeckMux' (collaborative presence/cursors), and rendering performance for high-throughput streams.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
 
@@ -161,7 +178,12 @@ This section of the code review focuses on the Frontend Application located in `
 **Findings:**
 - **DeckMux State Synchronization:** The frontend maintains a dedicated `HijackState` container separate from the DOM. Server-confirmed roles are preferred over constructor inputs (`this._state.serverRole ?? this._config.role`), which safely anchors UX decisions (like admin approval modals versus statusbars) in server authority rather than client claims.
 - **Robust Resumption:** `sessionStorage` is utilized to persist a `resumeToken`. Upon WebSocket disconnection, `hijack-websocket.ts` explicitly avoids clearing the `resumeToken`, guaranteeing successful session resumption on exponential backoff reconnects (`delaySec` scaling up to 30s) without dropping terminal context.
-- **Approval Expiry:** When handling `approval_pending` frames, the UI calculates remaining seconds (`computeRemainingSeconds`) and removes the approval UI automatically when the timer reaches zero, avoiding dangling interactive elements for expired control requests.
+- **Approval Expiry (L3):** 
+  **Resolved Risk:** When `ProvideHijack.dispose()` was called, it failed to clear the countdown interval, causing background errors or visual state bugs.
+  **Resolution:** `dispose()` now calls `_hideApprovalUI()` to clear the approval countdown interval.
+- **Approval Endpoints:**
+  **Resolved Risk:** `_resolveApproval` POST lacked `credentials:"include"`.
+  **Resolution:** Updated to send credentials so approve/reject works smoothly in cross-origin embeds.
 
 ### 4. Performance & Scaling
 
@@ -193,12 +215,15 @@ This section of the code review focuses on the AI and MCP tooling integration lo
 ### 3. Security & Concurrency Robustness
 
 **Findings:**
-- **Regex Denial of Service (ReDoS):** The `_compile_user_pattern` function relies on a length cap (`MAX_USER_PATTERN_LEN = 512`) to prevent amplification, but compiles the pattern using the standard Python `re` module.
-  **Resolved Risk:** A 512-character limit is large enough for a malicious or hallucinating LLM to construct short, pathological patterns that cause catastrophic backtracking in the `re` engine, leading to a CPU exhaustion Denial of Service (DoS).
-  **Resolution:** A catastrophic-construct guard was introduced along with a `session_watch` clamp (commit `fd480ade`) to protect against ReDoS without needing a full `google-re2` migration.
-- **Server-Side Request Forgery (SSRF) and DNS Rebinding:** In `session_create`, `_validate_session_create_config` evaluates hostnames against `ALLOW_PRIVATE_HOSTS` and a hardcoded denylist (e.g., `metadata.google.internal`). The comments explicitly state: "We never perform a DNS lookup here".
-  **Resolved Risk:** An attacker could bypass the hostname check by pointing a custom domain to `127.0.0.1` or `169.254.169.254` (DNS rebinding) since the MCP tool evaluates the name purely as text without resolving it.
-  **Resolution:** This is already mitigated by a DNS-resolving egress guard at the `SessionRegistry` chokepoint (`server/egress.py`). The MCP text-check is just a cheap first pass, not the primary control.
+- **MCP ID Rejection (M2):** 
+  **Resolved Risk:** 13 out of 15 MCP tools skipped `_reject_bad_id` validation. While `_safe_id` blocked malicious traversal, it resulted in FastMCP throwing an in-band `ToolError` instead of the documented `{"success": false, "error": "invalid_id"}` structure, breaking the API contract.
+  **Resolution:** Added `rejection = _reject_bad_id(<id>, "<field>"); if rejection: return rejection` to all 15 id-accepting MCP tools.
+- **Regex Denial of Service (ReDoS):** 
+  **Resolved Risk:** A 512-character limit is large enough for a malicious or hallucinating LLM to construct pathological patterns.
+  **Resolution:** A catastrophic-construct guard was introduced along with a `session_watch` clamp (commit `fd480ade`). Furthermore, `session_subscribe`'s regex double-compilation was fixed to compile once.
+- **Server-Side Request Forgery (SSRF) and DNS Rebinding:** 
+  **Resolved Risk:** An attacker could bypass hostname checks via DNS rebinding.
+  **Resolution:** Mitigated by a DNS-resolving egress guard at the `SessionRegistry`. Additionally, `_is_internal_host` was patched to close a denylist bypass involving trailing-dot FQDNs and `*.localhost` domains. A reported NAT64 SSRF bypass (M3) was heavily tested but refuted as not reproducible (stdlib safely blocks it).
 
 ### 4. Performance & Scaling
 
@@ -207,7 +232,7 @@ This section of the code review focuses on the AI and MCP tooling integration lo
 
 ## Part 6: Platform Targets & Agent Swarm Management
 
-This section of the code review focuses on the Platform code located in `packages/provide-uterm-platform/`, specifically analyzing local PTY captures, PAM authentication boundaries, LD_PRELOAD interceptors, and `uterm-manager` swarm orchestration. We evaluate the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling.
+This section of the code review focuses on the Platform code located in `packages/provide-uterm-platform/`, specifically analyzing local PTY captures, PAM authentication boundaries, LD_PRELOAD interceptors, and `uterm-manager` swarm orchestration.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
 
@@ -218,50 +243,60 @@ This section of the code review focuses on the Platform code located in `package
 ### 2. Maintainability & Structural Design
 
 **Findings:**
-- **Memory Safety in C:** The PAM module (`pam_uterm.c`) safely avoids buffer truncation risks by using dynamic allocation via `_build_json` (two-pass `vsnprintf` to calculate length, then allocate). It also safely uses `pam_get_user` over `pam_get_item(PAM_USER)` to sidestep known deadlocks in `libpam` implementations like Debian Linux-PAM.
+- **Linux Build Compliance (C2):**
+  **Resolved Risk:** `capture.c` defined `capture_disable()` inside an macOS-only `#ifdef __APPLE__` block but called it in cross-platform sections, causing compilation failures on Linux under `-Werror`.
+  **Resolution:** `capture_disable()` was moved to the shared section.
 - **Process Supervision:** `CaptureConnector` (`capture_connector.py`) implements a daemonless bridge to the intercepted shell. Instead of forking processes, it listens on a Unix socket for `libuterm_capture.so` to connect, greatly simplifying lifecycle management and keeping the platform agnostic to the spawned process tree.
 
 ### 3. Security & Concurrency Robustness
 
 **Findings:**
-- **Capture Socket Race Condition:** In `pam_listener.py`, `PamNotifyListener` uses `asyncio.start_unix_server` to bind the socket before calling `os.chmod(self._path, 0o600)`.
-  **Resolved Risk:** This creates a race condition. The socket is created with the system's default umask before `os.chmod` restricts it. In this narrow window, an unauthorized local user could connect to the notification socket.
-  **Resolution:** The code was fixed to use a umask-before-bind strategy (commit `b9bf8fa7`), ensuring atomic and safe permission boundaries upon socket creation.
-- **Concurrent Send Interleaving:** In `capture.c`, `send_frame` issues two separate `write()` / `send()` syscalls: one for the 5-byte header (`[1B channel][4B length]`) and one for the payload. The `g_capture_fd` is shared globally without locks.
-  **Resolved Risk:** If multiple threads in the captured process call `write()` concurrently, the OS might interleave the 5-byte header of one thread with the payload of another thread across the stream socket, completely corrupting the framing protocol.
-  **Resolution:** Fixed by combining the header and payload into a single syscall frame dispatch (commit `8bde10de`), preventing OS-level interleaving across threads.
+- **Capture Socket Race Condition:** 
+  **Resolved Risk:** `PamNotifyListener` created sockets before restricting permissions.
+  **Resolution:** Fixed using a umask-before-bind strategy.
+- **Concurrent Send Interleaving:** 
+  **Resolved Risk:** The `g_capture_fd` shared globally without locks could interleave headers and payloads from concurrent threads.
+  **Resolution:** Fixed by combining the header and payload into a single syscall frame dispatch (`8bde10de`).
+- **Connector Handlers & SIGPIPE (L4, Minor):**
+  **Resolved Risk:** `PTYConnector.handle_input` swallowed `os.write` `OSError` without handling connection state. macOS `send_frame` lacked SIGPIPE suppression.
+  **Resolution:** Handled the `OSError` to correctly mark connections as disconnected. The macOS capture socket now sets `SO_NOSIGPIPE` so a closed consumer doesn't terminate the captured process.
 
 ### 4. Performance & Scaling
 
 **Findings:**
-- **Capture Buffer Memory Churn:** `CaptureConnector` (`capture_connector.py`) accumulates frames using string concatenation (`self._buffer += text`) and bounded slicing (`self._buffer = self._buffer[-65536:]`) on every incoming `poll_messages` chunk.
-  **Risk:** In high-throughput terminal applications (e.g., `cat` on a large file or `htop`), executing these operations creates immense garbage collection pressure, as it copies strings continuously on every frame up to 64KB. This creates O(N^2) copying behavior under load.
-  **Recommendation:** Replace the pure string buffer with a `collections.deque(maxlen=65536)` of string fragments (joining only upon snapshot request) or a pre-allocated circular bytearray to eliminate per-frame allocations.
+- **Capture Buffer Memory Churn:** `CaptureConnector` accumulates frames using string concatenation and bounded slicing.
+  **Risk:** This creates O(N^2) copying behavior under load.
+  **Recommendation:** Replace the pure string buffer with a `collections.deque(maxlen=65536)` of string fragments or a pre-allocated circular bytearray.
+- **Blocking I/O in Async Context (L5):**
+  **Accepted Risk:** `_forward_stdin` in `CaptureConnector` uses blocking AF_UNIX connect/sendall within an asyncio context.
+  **Resolution:** Accepted antipattern. AF_UNIX connect/sendall on keystroke-sized data is sub-microsecond; a per-keystroke thread-pool offload would add unnecessary scheduling overhead.
 - **Swarm Process Bottlenecks:** `AgentManager` maintains its swarm using localized `subprocess.Popen` handles. While effective for single-node scaling, this architecture is strictly bounded by the host OS process and file descriptor limits.
   **Recommendation:** For horizontal scaling beyond a single node, introduce a distributed job scheduler abstraction (e.g., Celery, Kubernetes Jobs) instead of purely local subprocesses.
 
 ## Part 7: Desktop/Native App Wrappers
 
-This section of the code review focuses on the App Wrapper code located in `packages/provide-uterm-app/`. We evaluate the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling, assessing its current implementation as a web application and evaluating its readiness for a native shell.
+This section of the code review focuses on the App Wrapper code located in `packages/provide-uterm-app/`. We evaluate the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
 
 **Findings:**
 - **App Wrapper Architecture:** The analysis of `packages/provide-uterm-app/` reveals that it is not a native desktop wrapper (e.g., Electron or Tauri) but rather a standard React web application bootstrapped via Vite (`vite.config.ts`). The frontend gets built into a static web artifact (`provide-uterm-server/src/provide/uterm/server/frontend`) and is served dynamically.
-- **IPC Boundaries:** Because there is no desktop wrapper framework in use, there are no native Inter-Process Communication (IPC) boundaries to secure. All communication is strictly handled via standard HTTP requests (`fetch` in `client.ts`) and WebSockets proxied via `vite.config.ts` to `localhost:27780`.
+- **IPC Boundaries:** Because there is no desktop wrapper framework in use, there are no native Inter-Process Communication (IPC) boundaries to secure. All communication is strictly handled via standard HTTP requests (`fetch` in `client.ts`) and WebSockets.
 
 ### 2. Maintainability & Structural Design
 
 **Findings:**
-- **Component Routing:** `App.tsx` utilizes a safe, data-driven bootstrap mechanism (`readBootstrap()` in `bootstrap.ts`). By relying on an injected `#app-bootstrap` script payload containing `page_kind`, it bypasses complex client-side routing libraries, streamlining maintainability for single-page feature views like `dashboard`, `session`, and `connect`.
-- **Type Safety:** The `bootstrap.ts` runtime parser enforces that `page_kind` is verified against the `VALID_PAGE_KINDS` set, ensuring type-safe structural bootstrapping prior to rendering components.
+- **Component Routing:** `App.tsx` utilizes a safe, data-driven bootstrap mechanism (`readBootstrap()` in `bootstrap.ts`). By relying on an injected `#app-bootstrap` script payload containing `page_kind`, it bypasses complex client-side routing libraries.
+- **DOM & State Hygiene:**
+  **Resolved Risk:** `loadRecents` blindly parsed `localStorage` without validating JSON arrays, and DOM listeners in `HijackHost.tsx` were never removed on component unmount.
+  **Resolution:** Added `Array.isArray` parsing guards and proper listener unmount handlers.
 
 ### 3. Security & Concurrency Robustness
 
 **Findings:**
 - **Local Filesystem Access:** 
-  **Risk:** Given that this is a browser-based web frontend, the application inherently lacks direct access to the local user's filesystem (outside of standard browser sandboxing). Any filesystem interactions must occur via the server-side API proxy.
-  **Recommendation:** If native desktop capabilities (such as direct file logging, native OS notifications, or deep filesystem integration) are required in the future, migrating `provide-uterm-app` to Tauri or Electron with strictly locked-down IPC channels and bounded `fs` scope capabilities will be necessary.
+  **Risk:** Given that this is a browser-based web frontend, the application inherently lacks direct access to the local user's filesystem. Any filesystem interactions must occur via the server-side API proxy.
+  **Recommendation:** If native desktop capabilities are required, migrating to Tauri or Electron with strictly locked-down IPC channels will be necessary.
 - **Context Isolation:** As a web application, the app relies on standard browser context isolation. No node integration risks exist because there is no node integration in the browser context.
 
 ### 4. Performance & Scaling
@@ -269,11 +304,11 @@ This section of the code review focuses on the App Wrapper code located in `pack
 **Findings:**
 - **Desktop-Specific Performance:** 
   **Risk:** Without a native desktop shell, the application relies entirely on browser-based optimizations. High-throughput terminal streaming (especially collaborative multiplexing) will be constrained by the browser's single-threaded V8 DOM limits and WebGL backend.
-  **Recommendation:** For a dedicated, high-performance desktop experience, investigate using a WebView2/Tauri shell wrapped around this frontend to reduce memory overhead compared to a full Chromium-based browser tab. Alternatively, continue leveraging `xterm.js` WebGL renderers inside the standard browser.
+  **Recommendation:** For a dedicated, high-performance desktop experience, investigate using a WebView2/Tauri shell wrapped around this frontend to reduce memory overhead compared to a full Chromium-based browser tab.
 
 ## Part 8: Annotation Layer
 
-This section of the code review focuses on the Annotation code located in `packages/provide-uterm-annotation/`, analyzing its type-safety, telemetry schemas, event structures, and data privacy guarantees. We evaluate the codebase against four critical lenses: Architecture & Health, Maintainability & Structure, Security & Concurrency, and Performance & Scaling.
+This section of the code review focuses on the Annotation code located in `packages/provide-uterm-annotation/`, analyzing its type-safety, telemetry schemas, event structures, and data privacy guarantees.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
 
@@ -284,10 +319,10 @@ This section of the code review focuses on the Annotation code located in `packa
 ### 2. Maintainability & Structural Design
 
 **Findings:**
-- **Clean Rule Separation:** The built-in regular expressions and detection rules (e.g., `cred.aws_access_key`, `dest.rm_rf`) are cleanly separated into `_rules.py` with explicitly typed `frozenset` objects and compiled `re.Pattern` structures.
-- **Stream Chunk Fragmentation:** Terminal output is often fragmented into small chunks of arbitrary size depending on network conditions or process writes. `PatternDetector.detect()` receives this text sequentially without buffering lines or maintaining state across calls.
-  **Risk:** Multi-character regex rules (like AWS keys or full URLs) will silently fail to match if a sequence happens to be split across two separate `detect()` payload chunks.
-  **Recommendation:** Implement a line buffer or a sliding window mechanism that accumulates terminal text across events until a newline or size boundary is reached before applying regex rules.
+- **Clean Rule Separation:** The built-in regular expressions and detection rules (e.g., `cred.aws_access_key`, `dest.rm_rf`) are cleanly separated into `_rules.py` with explicitly typed `frozenset` objects and compiled `re.Pattern` structures. They intentionally prefer over-matching to under-matching for security completeness.
+- **Stream Chunk Fragmentation (L6):** 
+  **Deferred Risk:** Multi-character regex rules will silently fail to match if a sequence happens to be split across two separate `detect()` payload chunks. Furthermore, truncating the `carry` state drops the fresh text tail, potentially missing secondary secrets.
+  **Recommendation:** Implement a cross-call dedupe of recently-emitted matches before changing the carry behavior.
 
 ### 3. Security & Concurrency Robustness
 
