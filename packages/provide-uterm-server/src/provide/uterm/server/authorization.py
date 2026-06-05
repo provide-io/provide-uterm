@@ -192,6 +192,14 @@ class WebhookAuthorizationProvider:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        # Reuse one client across calls so HTTP keep-alive / connection pooling
+        # survives between authorization checks. Constructing it here opens no
+        # sockets — httpx.AsyncClient connects lazily on the first request.
+        self._client = httpx.AsyncClient(timeout=timeout_s)
+
+    async def aclose(self) -> None:
+        """Release the shared client's connection pool (lifecycle cleanup)."""
+        await self._client.aclose()
 
     def _signed_headers(self, body: bytes) -> dict[str, str]:
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -215,11 +223,10 @@ class WebhookAuthorizationProvider:
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             await assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
-                if resp.status_code == 200:
-                    return bool(resp.json().get("allow", False))
-                return False
+            resp = await self._client.post(self.url, content=body, headers=self._signed_headers(body))
+            if resp.status_code == 200:
+                return bool(resp.json().get("allow", False))
+            return False
         except Exception:
             return False
 
@@ -230,10 +237,9 @@ class WebhookAuthorizationProvider:
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             await assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
-                if resp.status_code == 200:
-                    return frozenset(resp.json().get("capabilities", []))
+            resp = await self._client.post(self.url, content=body, headers=self._signed_headers(body))
+            if resp.status_code == 200:
+                return frozenset(resp.json().get("capabilities", []))
         except Exception:
             pass
         return frozenset()
@@ -288,19 +294,18 @@ class WebhookAuthorizationProvider:
         body = json.dumps(payload, separators=(",", ":")).encode()
         try:
             await assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=self._signed_headers(body))
-                if resp.status_code == 200:
-                    # Filter the webhook-returned role to the canonical allow-list
-                    # at the boundary (case-folded), mirroring the IDP role path —
-                    # a compromised/misconfigured policy engine must not be able to
-                    # mint a privileged or bogus role string. ``_filter_known_roles``
-                    # yields a non-empty frozenset (falling back to viewer), so
-                    # ``next(iter(...))`` is always safe.
-                    from provide.uterm.server.auth import _filter_known_roles
+            resp = await self._client.post(self.url, content=body, headers=self._signed_headers(body))
+            if resp.status_code == 200:
+                # Filter the webhook-returned role to the canonical allow-list
+                # at the boundary (case-folded), mirroring the IDP role path —
+                # a compromised/misconfigured policy engine must not be able to
+                # mint a privileged or bogus role string. ``_filter_known_roles``
+                # yields a non-empty frozenset (falling back to viewer), so
+                # ``next(iter(...))`` is always safe.
+                from provide.uterm.server.auth import _filter_known_roles
 
-                    raw_role = resp.json().get("role", "viewer")
-                    return next(iter(_filter_known_roles([raw_role])))
+                raw_role = resp.json().get("role", "viewer")
+                return next(iter(_filter_known_roles([raw_role])))
         except Exception:
             pass
         return "viewer"

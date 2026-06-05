@@ -173,8 +173,6 @@ class TestWebhookAuthzIsAdmin:
         )
         from provide.uterm.server.bridge.identity import Principal
 
-        provider = WebhookAuthorizationProvider("https://example.com/authz")
-        service = AuthorizationService(provider)
         # A principal whose JWT role says ``admin`` — local fallback would
         # accept this without ever asking the policy engine.  The webhook
         # must be the source of truth instead.
@@ -186,11 +184,15 @@ class TestWebhookAuthzIsAdmin:
             def json(self):
                 return {"allow": False}
 
+        # The provider now builds ONE httpx.AsyncClient in __init__ and reuses
+        # it via ``self._client.post(...)`` — patch the constructor so that
+        # shared client is the mock, then drive it through the service.
         with patch("httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
-            instance.__aenter__.return_value = instance
             instance.post = AsyncMock(return_value=_Resp())
             mock_client_cls.return_value = instance
+            provider = WebhookAuthorizationProvider("https://example.com/authz")
+            service = AuthorizationService(provider)
             import json as _json
 
             allowed = await service.is_admin(principal)
@@ -217,7 +219,6 @@ class TestWebhookAuthzResolveBrowserRoleFiltered:
         from provide.uterm.server.bridge.identity import Principal
         from provide.uterm.server.models import SessionDefinition
 
-        provider = WebhookAuthorizationProvider("https://example.com/authz")
         principal = Principal(subject_id="bob", roles=frozenset({"viewer"}))
         session = SessionDefinition(session_id="s1", display_name="s1", connector_type="shell")
 
@@ -227,11 +228,14 @@ class TestWebhookAuthzResolveBrowserRoleFiltered:
             def json(self):
                 return {"role": returned_role}
 
+        # The provider reuses one httpx.AsyncClient created in __init__; build
+        # it under the patch so ``self._client`` is the mock whose ``.post``
+        # returns the stubbed response.
         with patch("httpx.AsyncClient") as mock_client_cls:
             instance = AsyncMock()
-            instance.__aenter__.return_value = instance
             instance.post = AsyncMock(return_value=_Resp())
             mock_client_cls.return_value = instance
+            provider = WebhookAuthorizationProvider("https://example.com/authz")
             return await provider.resolve_browser_role(principal, session)
 
     async def test_bogus_role_falls_back_to_viewer(self) -> None:
