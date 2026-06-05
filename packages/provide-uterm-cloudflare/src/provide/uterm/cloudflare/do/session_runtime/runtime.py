@@ -179,3 +179,7 @@ class SessionRuntime(
             self._credentials_loaded_at = now
         except Exception:
             logger.debug("_ensure_credentials kv read failed for %s", self.worker_id)
+            # Back off for the TTL on a KV error instead of re-hitting KV on
+            # every auth check while it is down; the last-known hashes stay in
+            # effect (same posture as a transient miss).
+            self._credentials_loaded_at = now

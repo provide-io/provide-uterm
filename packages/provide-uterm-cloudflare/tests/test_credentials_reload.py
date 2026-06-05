@@ -278,7 +278,7 @@ async def test_kv_read_raises_is_swallowed() -> None:
 
     await rt._ensure_credentials()  # must not raise
 
-    # _credentials_loaded_at should NOT be updated (exception path skips it)
-    # This matches the design: on KV failure we don't stamp a new load time,
-    # so the next call will retry.
-    # (No assertion on _credentials_loaded_at because the spec just requires no crash.)
+    # On a KV error we stamp the load time so the DO backs off for the TTL
+    # instead of re-hitting a down KV on every auth check; the last-known
+    # hashes stay in effect (same posture as a transient miss).
+    assert rt._credentials_loaded_at is not None
