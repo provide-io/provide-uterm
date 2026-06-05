@@ -26,7 +26,7 @@ from fastmcp import Context  # noqa: TC002
 from provide.uterm.ai.auth import authorized
 from provide.uterm.ai.server_validators import (
     _clean_snapshot,
-    _compile_user_pattern,
+    _compiled_pattern_or_rejection,
     _reject_bad_id,
     _reject_bad_pattern,
     _validate_session_create_config,
@@ -249,7 +249,7 @@ def register_session_tools(
         rejection = _reject_bad_id(session_id, "session_id")
         if rejection is not None:
             return rejection
-        rejection = _reject_bad_pattern(pattern)
+        compiled_pattern, rejection = _compiled_pattern_or_rejection(pattern)
         if rejection is not None:
             return rejection
         clamped_duration_s = min(max(duration_s, 1.0), 120.0)
@@ -262,13 +262,12 @@ def register_session_tools(
             max_events=clamped_max_events,
         )
         # Enrich with matched_pattern so callers know whether the pattern fired.
-        # Re-check each event's screen text against the compiled regex rather
-        # than trusting that "events arrived" implies "pattern matched" — the
-        # registry fallback path (no EventBus) does not pre-filter events.
-        # The pattern is already validated above, so the compile cannot fail.
+        # Re-check each event's screen text against the regex compiled above
+        # (reused, not recompiled) rather than trusting that "events arrived"
+        # implies "pattern matched" — the registry fallback path (no EventBus)
+        # does not pre-filter events.
         matched = False
-        if pattern and ok:
-            compiled = _compile_user_pattern(pattern)
+        if compiled_pattern is not None and ok:
             for event in data.get("events", []):
                 if not isinstance(event, dict):
                     continue
@@ -276,7 +275,7 @@ def register_session_tools(
                 screen = payload.get("screen", "") if isinstance(payload, dict) else ""
                 if not isinstance(screen, str):
                     screen = str(screen)
-                if compiled.search(screen):
+                if compiled_pattern.search(screen):
                     matched = True
                     break
         result = _ok(ok, data)

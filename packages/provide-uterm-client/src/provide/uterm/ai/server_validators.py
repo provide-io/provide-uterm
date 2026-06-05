@@ -122,6 +122,24 @@ def _reject_bad_pattern(pattern: str | None) -> dict[str, Any] | None:
     return None
 
 
+def _compiled_pattern_or_rejection(
+    pattern: str | None,
+) -> tuple[re.Pattern[str] | None, dict[str, Any] | None]:
+    """Compile a user pattern once and return ``(compiled, rejection)``.
+
+    ``(compiled, None)`` on success, ``(None, rejection)`` for a bad pattern,
+    ``(None, None)`` when no pattern is requested. Lets a tool validate the
+    pattern and reuse the compiled object without compiling it twice
+    (validate-then-recompile).
+    """
+    if pattern is None:
+        return None, None
+    try:
+        return _compile_user_pattern(pattern), None
+    except ValueError as exc:
+        return None, {"success": False, "error": "invalid_pattern", "detail": str(exc)}
+
+
 def _reject_bad_id(value: str, kind: str = "id") -> dict[str, Any] | None:
     """Validate a caller/LLM-supplied path-segment id, returning a rejection
     dict or ``None``.
