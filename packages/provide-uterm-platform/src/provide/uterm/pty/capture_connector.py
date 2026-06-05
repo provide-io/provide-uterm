@@ -25,7 +25,6 @@ Config keys accepted in connector_config:
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import socket
 import time
@@ -117,9 +116,8 @@ class CaptureConnector:
         changed = False
         # Drain all immediately available frames without blocking
         while True:
-            try:
-                frame = self._capture._queue.get_nowait()
-            except asyncio.QueueEmpty:
+            frame = self._capture.read_nowait()
+            if frame is None:
                 break
             if frame.channel == CHANNEL_STDOUT:
                 raw = frame.data.decode("utf-8", errors="replace")
