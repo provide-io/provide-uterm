@@ -1,5 +1,9 @@
 # provide-uterm Code Review & Architecture Analysis - Part 1: Core Bridge System (TermHub)
 
+> **See also:** [`2026-06-04-reaudit-findings.md`](2026-06-04-reaudit-findings.md) — a full-codebase
+> re-audit that re-verified every "Resolved" claim below (35/35 hold) and surfaced new findings
+> (2 critical, 4 medium, 7 low, 27 minor).
+
 This section of the code review focuses on the Core Bridge System, analyzing the `TermHub` composition (Hub Services) and the `WorkerLink` bridge mechanism. We evaluate the codebase against four critical lenses: Architecture, Maintainability, Security & Concurrency, and Performance & Scaling.
 
 ### 1. Architecture & General Health (Data Flow, Composition)
