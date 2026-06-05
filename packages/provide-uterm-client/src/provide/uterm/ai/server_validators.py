@@ -54,8 +54,14 @@ def _is_internal_host(host: str) -> bool:
     """
     import ipaddress
 
-    candidate = host.strip().strip("[]").lower()
+    # Strip a trailing root dot ("localhost." == "localhost") before matching,
+    # otherwise the FQDN form slips past the exact-match denylist.
+    candidate = host.strip().strip("[]").rstrip(".").lower()
     if candidate in _BLOCKED_HOST_NAMES:
+        return True
+    # RFC 6761: ``localhost`` and any ``*.localhost`` name is reserved and must
+    # resolve to loopback, so treat the whole subtree as internal.
+    if candidate.endswith(".localhost"):
         return True
     try:
         ip = ipaddress.ip_address(candidate)
