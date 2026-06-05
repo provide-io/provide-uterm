@@ -14,6 +14,23 @@ import pytest
 
 from provide.uterm.pty.pam_listener import PamEvent, PamNotifyListener, _parse_event
 
+
+@pytest.fixture
+def tmp_path():
+    """Short-path override of pytest's built-in ``tmp_path``.
+
+    These tests bind ``AF_UNIX`` sockets, whose ``sun_path`` is capped at ~104
+    bytes. macOS's long ``$TMPDIR`` combined with pytest's long per-test
+    directory names (e.g. ``pytest-of-<user>/pytest-N/<test_name>0/``) pushes
+    ``<tmp_path>/notify.sock`` over that limit, so ``listener.start()`` fails
+    with ``OSError: AF_UNIX path too long``. ``tempfile.TemporaryDirectory()``
+    keeps the base short (``$TMPDIR/tmpXXXXXXXX``) so the bind succeeds — the
+    same pattern the other socket tests in this file already use.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        yield Path(td)
+
+
 # ── _parse_event ─────────────────────────────────────────────────────────────
 
 
