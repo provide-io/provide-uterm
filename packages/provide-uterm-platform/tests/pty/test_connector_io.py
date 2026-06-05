@@ -290,6 +290,19 @@ async def test_handle_input_writes_to_pty() -> None:
     assert written == [b"ping\n"]
 
 
+async def test_handle_input_oserror_marks_disconnected() -> None:
+    """A write to a dead PTY master (child exited → EIO/EPIPE) must be swallowed
+    and flip _connected to False, mirroring _read_master, not raise out."""
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    assert conn.is_connected() is True
+    with patch("provide.uterm.pty.connector.os.write", side_effect=OSError("EIO")):
+        msgs = await conn.handle_input("ping\n")  # must not raise
+    assert conn._connected is False
+    assert isinstance(msgs, list)  # a snapshot is still returned
+    await conn.stop()
+
+
 async def test_handle_input_no_write_when_not_connected() -> None:
     """handle_input() does not write when not connected."""
     conn = make_connector("/bin/cat")
