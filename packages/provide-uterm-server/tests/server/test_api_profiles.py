@@ -200,3 +200,14 @@ def test_connect_from_profile_forwards_password(app_client: TestClient) -> None:
     # Password must not appear in the profile itself
     fetched = app_client.get(f"/api/profiles/{profile['profile_id']}").json()
     assert "password" not in fetched
+
+
+def test_connect_from_profile_egress_blocked_returns_422(app_client: TestClient) -> None:
+    """A profile whose connector targets a cloud-metadata IP is rejected at the
+    route with a 422. The route-level egress guard runs before create_session;
+    without it the registry's EgressBlockedError (a ValueError) surfaces through
+    the route's ``except ValueError`` as a misleading 409 instead."""
+    profile = _create_profile(app_client, connector_type="ssh", host="169.254.169.254", username="u")
+    r = app_client.post(f"/api/profiles/{profile['profile_id']}/connect", json={})
+    assert r.status_code == 422
+    assert "metadata" in r.json()["detail"].lower()
