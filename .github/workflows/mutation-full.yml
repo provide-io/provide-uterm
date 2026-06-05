@@ -1,0 +1,57 @@
+name: "🧬 Mutation Gate (full perimeter)"
+
+# Why this exists, separate from ci.yml's `mutation-gate` job:
+# ci.yml runs mutmut with --changed-only (PR/push diff), which by design only
+# re-mutates the perimeter files a change touches. Perimeter files that are NOT
+# touched for a long time can therefore accumulate latent survivors that --changed-only
+# never re-checks (this is exactly how detection/engine.py + auth.py drifted to 39
+# un-killed mutants, found only by a manual full run on 2026-06-05). This workflow
+# mutates the ENTIRE [tool.mutmut].paths_to_mutate perimeter on a schedule so that
+# drift is caught automatically.
+#
+# Script policy: keep run: blocks <= 3 lines; the single gate command below is one
+# line, so it stays inline (no ci/ wrapper needed).
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Sundays 06:00 UTC. The full perimeter (~6k mutants) is far heavier
+    # than the per-PR changed-only gate; weekly keeps CI cost bounded while still
+    # catching slow-moving drift. Change to "0 6 * * *" for nightly if desired.
+    - cron: "0 6 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-gate-full:
+    runs-on: ubuntu-latest
+    # The full perimeter is much slower than changed-only; give it generous head
+    # room under GitHub's 360-minute hard cap.
+    timeout-minutes: 350
+    steps:
+      # Full history so mutmut/git operations have the complete tree.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+      # uv drives the gate (uv run) and the workspace install.
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+      # Pin the gate's interpreter to match scripts/run_mutation_gate.py default.
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      # Frontend assets: mutmut's stats run executes the full tests_dir, which
+      # includes full-app integration tests that abort without built assets
+      # (mirrors ci.yml's mutation-gate job).
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version-file: ".nvmrc"
+      - run: npm ci
+      - run: npm run build:frontend
+      # Install the workspace + dev tooling (mutmut, pytest, ...).
+      - run: uv sync --frozen --group dev
+      # Full perimeter: no --changed-only, so every paths_to_mutate file is mutated.
+      # --retries 0 = a single parallel pass — a survivor is reported (exit 1)
+      # without the slow single-worker retry that could blow the job timeout.
+      - name: Run full-perimeter mutation gate
+        run: uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 0 --min-mutation-score 100
