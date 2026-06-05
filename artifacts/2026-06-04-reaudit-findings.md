@@ -40,6 +40,9 @@ broke the local baseline).
 | minor (cf) | ✅ fixed | `_ensure_credentials` backs off the credential reload on a KV error |
 | minor (hub) | ✅ fixed | `send_hijack_state_to` per-send timeout (no head-of-line block) |
 | minor (tooling) | ✅ fixed | `run_mutation_gate`: drop dead `_is_clean`/`_read_stats`; scope stale-allowlist warnings |
+| minor (capture) | ✅ fixed | macOS capture socket sets `SO_NOSIGPIPE` (a closed consumer no longer SIGPIPE-kills the captured process) |
+| minor (frontend) | ✅ fixed | `_resolveApproval` sends `credentials:"include"` (approve/reject works in cross-origin embeds) |
+| minor (routes) | ✅ fixed | egress-blocked profile connect returns 422 (not a misleading 409) — registry stays the chokepoint |
 
 **Mutation-gate notes (perimeter files):** `webhooks.py` was driven through the mutmut gate (which
 surfaced the M3 reversal). `_gateway.py` (L1) has its kill-suite under `tests/gateway/`, which the
@@ -72,11 +75,13 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
   SQLite, unauthenticated `/metrics`, and tightening the AWS/GitHub credential regexes all change
   product behaviour or security posture and should be decided explicitly (note: a redaction detector
   prefers over- to under-matching, so tightening the regexes risks dropping real-secret coverage).
-- **Remaining minor polish** (still open): `session_subscribe` double-compiles the user regex (perf
-  nitpick); `capture.c` macOS `send_frame` SIGPIPE suppression (C, no Python test); `connector.py`/
-  `capture_connector.py` `input_mode` validation (perimeter — connector mutmut stalls locally);
-  frontend test hygiene (dedup `describe` blocks, module-scope mock cleanup); `_resolveApproval` POST
-  credentials; `connect_from_profile` route-level egress guard. The `kbdint` finding is deferred as
+- **Remaining minor polish** (still open, genuinely low-value): `session_subscribe` double-compiles the
+  user regex (perf nitpick — compiling a ≤512-char regex twice is negligible); `connector.py` /
+  `capture_connector.py` `input_mode` validation/semantics (both perimeter; `capture_connector` always
+  reports `"open"` — whether capture is meant to be passive-only is a semantics question, and the local
+  connector mutmut run stalls); `payloads_by_role` per-role lock re-entry (perf, accept); frontend test
+  hygiene (dedup `describe` blocks, module-scope mock cleanup); `poll_messages` private `_queue` access
+  (architecture nitpick). The `kbdint` finding is deferred as
   asyncssh-API-sensitive (the gateway *intends* to accept kbdint fall-through, so the honest fix is to
   implement `get_kbdint_challenge`/`validate_kbdint_response`, not just return `False`). The
   HijackHost listener-cleanup finding is a non-leak (React discards the container + its listeners on
