@@ -4,6 +4,7 @@
 #
 from __future__ import annotations
 
+import codecs
 import fcntl
 import hashlib
 import os
@@ -111,6 +112,14 @@ class PTYConnector:
         self._connected = False
         self._paused = False
         self._buffer = ""
+        # Persistent incremental UTF-8 decoder: os.read(..., 4096) can split a
+        # multibyte sequence at the read boundary. A per-call
+        # bytes.decode(errors="replace") would turn each fragment into U+FFFD and
+        # permanently corrupt the character; the incremental decoder instead
+        # holds trailing partial bytes internally and emits the completed
+        # codepoint on the next decode. errors="replace" is retained so genuine
+        # garbage still surfaces as U+FFFD.
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._capture_socket: CaptureSocket | None = None
         self._capture_tmpdir: str | None = None
         self._pam: PamSession | None = None
@@ -282,8 +291,10 @@ class PTYConnector:
             return []
         data = self._read_master()
         if data:
-            self._buffer += data.decode("utf-8", errors="replace")  # pragma: no mutate
-            if len(self._buffer) > 32768:  # pragma: no mutate
+            # Incremental decode so a multibyte sequence split across reads is
+            # not corrupted into U+FFFD (the decoder buffers partial bytes).
+            self._buffer += self._decoder.decode(data)
+            if len(self._buffer) > 32768:
                 self._buffer = self._buffer[-32768:]
             return [self._snapshot()]
         return []
@@ -324,6 +335,10 @@ class PTYConnector:
         return [self._hello(), self._snapshot()]
 
     async def clear(self) -> list[dict[str, Any]]:
+        # Reset the rendered buffer only. The incremental decoder is left
+        # untouched on purpose: a multibyte sequence that straddles a clear()
+        # should still complete on the next poll rather than be corrupted into
+        # U+FFFD by dropping its already-consumed leading bytes.
         self._buffer = ""
         return [self._snapshot()]
 

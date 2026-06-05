@@ -353,6 +353,101 @@ async def test_poll_messages_invalid_utf8_replaced() -> None:
     assert "\ufffd" in conn._buffer
 
 
+async def test_poll_messages_multibyte_split_across_reads_decodes_correctly() -> None:
+    """A multibyte UTF-8 char split exactly at a read boundary decodes intact.
+
+    Regression for the boundary bug: the old per-call
+    ``data.decode("utf-8", errors="replace")`` turned each fragment of a split
+    multibyte sequence into U+FFFD, permanently corrupting the character even
+    though the next read carried the rest. The persistent incremental decoder
+    buffers the trailing partial bytes internally and emits the completed
+    character on the next decode.
+    """
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    # '\u20ac' is U+20AC == b"\xe2\x82\xac" (3 bytes). Split after the first byte.
+    chunks = [b"a\xe2", b"\x82\xacb"]
+    conn._read_master = lambda: chunks.pop(0) if chunks else b""  # type: ignore[method-assign]
+
+    # First poll: leading "a" plus the dangling first byte of '\u20ac'. The decoder
+    # holds the partial sequence, so only "a" is emitted \u2014 and crucially no
+    # U+FFFD is produced for the (valid, merely incomplete) prefix byte.
+    await conn.poll_messages()
+    assert conn._buffer == "a"
+    assert "\ufffd" not in conn._buffer
+
+    # Second poll completes the multibyte char and appends the trailing "b".
+    await conn.poll_messages()
+    await conn.stop()
+    assert conn._buffer == b"a\xe2\x82\xacb".decode("utf-8")
+    assert conn._buffer == "a\u20acb"
+    assert "\ufffd" not in conn._buffer
+
+
+async def test_poll_messages_four_byte_split_across_reads_decodes_correctly() -> None:
+    """A 4-byte emoji split across reads decodes to one codepoint, no U+FFFD."""
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    # U+1F600 GRINNING FACE == b"\xf0\x9f\x98\x80" (4 bytes). Split mid-sequence.
+    emoji_bytes = b"\xf0\x9f\x98\x80"
+    chunks = [emoji_bytes[:2], emoji_bytes[2:]]
+    conn._read_master = lambda: chunks.pop(0) if chunks else b""  # type: ignore[method-assign]
+
+    await conn.poll_messages()
+    assert conn._buffer == ""  # whole sequence is still pending in the decoder
+    assert "\ufffd" not in conn._buffer
+
+    await conn.poll_messages()
+    await conn.stop()
+    assert conn._buffer == emoji_bytes.decode("utf-8")
+    assert conn._buffer == "\U0001f600"
+    assert "\ufffd" not in conn._buffer
+
+
+async def test_poll_messages_genuinely_invalid_bytes_still_replaced() -> None:
+    """errors='replace' is preserved for genuine garbage (not a split prefix).
+
+    A complete-but-invalid byte (0xff is never a valid UTF-8 lead byte and the
+    follow byte is also invalid) must still surface as U+FFFD \u2014 the incremental
+    decoder must not silently swallow real garbage.
+    """
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    chunks = [b"\xff", b"\xfe"]
+    conn._read_master = lambda: chunks.pop(0) if chunks else b""  # type: ignore[method-assign]
+
+    await conn.poll_messages()
+    await conn.poll_messages()
+    await conn.stop()
+    # Two standalone invalid bytes \u2192 two replacement characters, no valid text.
+    assert conn._buffer == "\ufffd\ufffd"
+
+
+async def test_clear_keeps_incremental_decoder_state() -> None:
+    """clear() resets the buffer but leaves a mid-stream partial sequence pending.
+
+    Documents the intentional choice: a multibyte char that straddles a clear()
+    must still complete on the next poll rather than being corrupted into U+FFFD.
+    """
+    conn = make_connector("/bin/cat")
+    await conn.start()
+    # Feed the first two bytes of '\u20ac' (3-byte sequence), leaving one byte pending.
+    chunks = [b"\xe2\x82", b"\xac"]
+    conn._read_master = lambda: chunks.pop(0) if chunks else b""  # type: ignore[method-assign]
+    await conn.poll_messages()
+    assert conn._buffer == ""  # nothing emitted yet; partial held in decoder
+
+    # clear() wipes the (empty) buffer but must not drop the decoder's partial.
+    await conn.clear()
+    assert conn._buffer == ""
+
+    await conn.poll_messages()
+    await conn.stop()
+    assert conn._buffer == b"\xe2\x82\xac".decode("utf-8")
+    assert conn._buffer == "\u20ac"
+    assert "\ufffd" not in conn._buffer
+
+
 async def test_handle_control_step_sets_paused_false() -> None:
     """handle_control('step') sets _paused to exactly False."""
     conn = make_connector("/bin/cat")
