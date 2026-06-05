@@ -16,6 +16,12 @@ interface AppProps {
   bootstrap: AppBootstrap;
 }
 
+/** Rendered when `page_kind` has no matching case; throws so the nearest
+ *  ErrorBoundary can display its fallback rather than silently showing nothing. */
+function UnknownPageKind({ kind }: { kind: string }): never {
+  throw new Error(`Unknown page_kind: ${kind}`);
+}
+
 export function App({ bootstrap }: AppProps) {
   return (
     <ErrorBoundary>
@@ -33,6 +39,8 @@ export function App({ bootstrap }: AppProps) {
             return <ReplayPage bootstrap={bootstrap} />;
           case "inspect":
             return <InspectPage bootstrap={bootstrap} />;
+          default:
+            return <UnknownPageKind kind={bootstrap.page_kind} />;
         }
       })()}
     </ErrorBoundary>
