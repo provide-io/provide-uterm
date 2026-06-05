@@ -1417,3 +1417,159 @@ describe("onResize callback", () => {
     expect(onResize).not.toHaveBeenCalled();
   });
 });
+
+// Fix 2 regression: swallowed exceptions in hijack_impl.ts must log a
+// console.warn or console.debug with context identifying the site.
+describe("ProvideHijack catch-block observability (Fix 2)", () => {
+  it("disconnect() logs console.debug when ws.close() throws", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const { widget } = makeWidget();
+    const ws = getWs();
+    ws.open();
+    // Make ws.close() throw
+    ws.close = () => { throw new Error("close failed"); };
+    widget.disconnect();
+    expect(debugSpy).toHaveBeenCalledWith(
+      expect.stringContaining("ws.close"),
+      expect.any(Error),
+    );
+    debugSpy.mockRestore();
+  });
+
+  it("term message logs console.warn when term.write() throws", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    makeWidget();
+    getWs().open();
+    // Override Terminal so write throws
+    class ThrowingTerminal extends MockTerminal {
+      override write(_s: string): void { throw new Error("write failed"); }
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).Terminal = ThrowingTerminal;
+    // Disconnect and reconnect to get a throwing terminal
+    const { widget: w2 } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "term", data: "hi" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("term write"),
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+    w2.dispose();
+  });
+
+  it("snapshot message logs console.warn when term.write() throws", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    class ThrowingTerminal2 extends MockTerminal {
+      override write(_s: string): void { throw new Error("write failed on snapshot"); }
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).Terminal = ThrowingTerminal2;
+    const { widget: w3 } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "some screen" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("snapshot write"),
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+    w3.dispose();
+  });
+
+  it("input field focus-after-send logs console.debug when focus() throws", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    class ThrowOnFocus extends MockTerminal {
+      override focus(): void { throw new Error("focus failed"); }
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).Terminal = ThrowOnFocus;
+    const { widget: w4, container } = makeWidget();
+    getWs().open();
+    // Create a terminal first
+    sendMessage({ type: "term", data: "hello" });
+    // Hijack so input is enabled
+    sendMessage({ type: "hello", hijacked: true, hijacked_by_me: true, input_mode: "open" });
+    const inputField = container.querySelector<HTMLInputElement>("[id$='-inputfield']");
+    const inputSend = container.querySelector<HTMLButtonElement>("[id$='-inputsend']");
+    if (inputField && inputSend) {
+      inputField.value = "test";
+      inputSend.click();
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringContaining("focus"),
+        expect.any(Error),
+      );
+    }
+    debugSpy.mockRestore();
+    w4.dispose();
+  });
+
+  it("FitAddon init logs console.debug when fit() throws in requestAnimationFrame", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => { cb(); return 0; });
+    class ThrowingFitAddon extends MockFitAddon {
+      override fit(): void { throw new Error("fit rAF failed"); }
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).FitAddon = { FitAddon: ThrowingFitAddon };
+    const { widget: w5 } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" }); // triggers _ensureTerm → fitAddon.fit via rAF
+    expect(debugSpy).toHaveBeenCalledWith(
+      expect.stringContaining("fit"),
+      expect.any(Error),
+    );
+    debugSpy.mockRestore();
+    w5.dispose();
+  });
+
+  it("WebLinksAddon loadAddon failure logs console.warn", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).WebLinksAddon = {
+      WebLinksAddon: class { constructor() { throw new Error("weblinks failed"); } },
+    };
+    // Stub ResizeObserver so _initTerm can proceed to the WebLinksAddon load step.
+    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => { cb(); return 0; });
+    const { widget: w6 } = makeWidget();
+    // WebLinksAddon is loaded during _initTerm, triggered by the first snapshot.
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("WebLinksAddon"),
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+    // biome-ignore lint/suspicious/noExplicitAny: cleanup
+    delete (window as any).WebLinksAddon;
+    w6.dispose();
+  });
+
+  it("ResizeObserver fit() failure logs console.debug", () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+    let roCallback: (() => void) | null = null;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(cb: () => void) { roCallback = cb; }
+      observe() {}
+      disconnect() {}
+    });
+    // Suppress rAF — we want to test only the ResizeObserver path
+    vi.stubGlobal("requestAnimationFrame", (_cb: () => void) => 0);
+    class ThrowingFitAddonRO extends MockFitAddon {
+      override fit(): void { throw new Error("fit ResizeObserver failed"); }
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
+    (window as any).FitAddon = { FitAddon: ThrowingFitAddonRO };
+    const { widget: w7 } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "snapshot", screen: "" }); // triggers _initTerm
+    // Invoke the captured ResizeObserver callback to exercise the catch block
+    roCallback?.();
+    expect(debugSpy).toHaveBeenCalledWith(
+      expect.stringContaining("ResizeObserver"),
+      expect.any(Error),
+    );
+    debugSpy.mockRestore();
+    w7.dispose();
+  });
+});
