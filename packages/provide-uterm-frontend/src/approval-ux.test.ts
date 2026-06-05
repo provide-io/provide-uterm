@@ -84,11 +84,26 @@ describe("Command Approval UX", () => {
   it("hides UI on approval_resolved", async () => {
     const hijack = new ProvideHijack(container, { workerId: "w1", role: "admin" });
     const ws = (global as any).wsInstances[0];
-    
+
     ws.receive(encodeControlFrame({ type: "approval_pending", request_id: "req-1", command: "rm", expires_at: Date.now() / 1000 + 60 }));
     expect(container.querySelector(".hijack-approval-modal")).toBeTruthy();
 
     ws.receive(encodeControlFrame({ type: "approval_resolved", outcome: "approved", request_id: "req-1" }));
     expect(container.querySelector(".hijack-approval-modal")).toBeFalsy();
+  });
+
+  it("clears the approval countdown interval on dispose", async () => {
+    const hijack = new ProvideHijack(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
+    const ws = (global as any).wsInstances[0];
+
+    ws.receive(encodeControlFrame({ type: "approval_pending", request_id: "req-1", command: "rm", expires_at: Date.now() / 1000 + 60 }));
+    // The countdown setInterval is now live.
+    expect((hijack as any)._approvalTimer).not.toBeNull();
+
+    hijack.dispose();
+
+    // dispose() must clear it, not leak a setInterval against the torn-down widget.
+    expect((hijack as any)._approvalTimer).toBeNull();
+    expect((hijack as any)._pendingApproval).toBeNull();
   });
 });
