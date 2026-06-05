@@ -569,7 +569,10 @@ export class ProvideHijack {
 
     try {
       const url = `${location.origin}/api/approvals/${this._pendingApproval.id}/${action}`;
-      const resp = await fetch(url, { method: "POST" });
+      // credentials:"include" mirrors restHijack so approve/reject carries the
+      // session cookie in cross-origin embeds (tunnel/share) too, not just the
+      // default same-origin case.
+      const resp = await fetch(url, { method: "POST", credentials: "include" });
       if (!resp.ok) {
         throw new Error(`Failed to ${action}: ${resp.statusText}`);
       }
