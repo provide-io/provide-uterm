@@ -80,18 +80,23 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
     Prometheus); when enabled both endpoints require a non-anonymous principal (401 otherwise).
   - **Tighten AWS/GitHub regexes** → **left loose** (maintainer decision): a credential detector
     prefers over- to under-matching, so the patterns stay as-is.
-- **Remaining minor polish** (still open, genuinely low-value): `session_subscribe` double-compiles the
-  user regex (perf nitpick — compiling a ≤512-char regex twice is negligible); `connector.py` /
-  `capture_connector.py` `input_mode` validation/semantics (both perimeter; `capture_connector` always
-  reports `"open"` — whether capture is meant to be passive-only is a semantics question, and the local
-  connector mutmut run stalls); `payloads_by_role` per-role lock re-entry (perf, accept); frontend test
-  hygiene (dedup `describe` blocks, module-scope mock cleanup); `poll_messages` private `_queue` access
-  (architecture nitpick). The `kbdint` finding is deferred as
-  asyncssh-API-sensitive (the gateway *intends* to accept kbdint fall-through, so the honest fix is to
-  implement `get_kbdint_challenge`/`validate_kbdint_response`, not just return `False`). The
-  HijackHost listener-cleanup finding is a non-leak (React discards the container + its listeners on
-  unmount) and the vite hardcoded dev-proxy port is a conventional dev-only literal — both noted, not
-  changed.
+- **Minor tail — now resolved:**
+  - ✅ `session_subscribe` regex double-compile → `_compiled_pattern_or_rejection` compiles once.
+  - ✅ `PTYConnector.__init__` now validates `input_mode` against `_VALID_MODES` (consistent with `set_mode`).
+  - ✅ `CaptureSocket.read_nowait()` added; `poll_messages` no longer reaches into the private `_queue`.
+  - ✅ `kbdint` → implemented `get_kbdint_challenge`/`validate_kbdint_response` so kbdint fall-through
+    actually completes (asyncssh 2.23 empty-challenge + accept), realizing the documented intent.
+    Unit-tested at the callback level; the end-to-end SSH kbdint handshake wants an e2e/real-SSH check.
+- **Minor tail — intentionally left as-is (documented):**
+  - `CaptureConnector` accepts-but-ignores `input_mode`: **by design** — the session framework passes
+    `input_mode` to every connector generically and capture is always-open observation (not a bug).
+  - `payloads_by_role` per-role lock re-entry: a hot-path perf nuance with concurrency implications;
+    accepted rather than risk the broadcast lock semantics.
+  - Frontend test hygiene (duplicate `describe` *names* over distinct tests; module-scope mocks):
+    cosmetic, and deleting/restructuring risks dropping coverage or depends on vitest isolation —
+    left as-is.
+  - HijackHost listener-cleanup is a non-leak (React discards the container + its listeners on unmount);
+    the vite hardcoded dev-proxy port is a conventional dev-only literal.
 
 ---
 
