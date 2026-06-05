@@ -2695,6 +2695,51 @@ class TestApiRouter:
         empty = await prom(_request(app_state={"uterm_metrics": {}}))
         assert empty.body.decode() == ""
 
+    async def test_metrics_open_when_require_auth_false(self) -> None:
+        cfg = SimpleNamespace(security=SimpleNamespace(metrics_require_auth=False), auth=SimpleNamespace())
+        metrics = _endpoint(self._router(), "/api/metrics")
+        out = await metrics(_request(app_state={"uterm_metrics": {"a": 1}, "uterm_config": cfg}))
+        assert out == {"metrics": {"a": 1}}
+
+    async def test_metrics_require_auth_rejects_anonymous(self) -> None:
+        cfg = SimpleNamespace(security=SimpleNamespace(metrics_require_auth=True), auth=SimpleNamespace())
+        req = _request(app_state={"uterm_metrics": {"a": 1}, "uterm_config": cfg})
+        metrics = _endpoint(self._router(), "/api/metrics")
+        with (
+            patch(
+                "provide.uterm.server.auth.resolve_http_principal",
+                return_value=SimpleNamespace(subject_id="anonymous"),
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await metrics(req)
+        assert exc.value.status_code == 401
+
+    async def test_metrics_require_auth_allows_authenticated(self) -> None:
+        cfg = SimpleNamespace(security=SimpleNamespace(metrics_require_auth=True), auth=SimpleNamespace())
+        req = _request(app_state={"uterm_metrics": {"a": 1}, "uterm_config": cfg})
+        metrics = _endpoint(self._router(), "/api/metrics")
+        with patch(
+            "provide.uterm.server.auth.resolve_http_principal",
+            return_value=SimpleNamespace(subject_id="alice"),
+        ):
+            out = await metrics(req)
+        assert out == {"metrics": {"a": 1}}
+
+    async def test_metrics_prometheus_require_auth_rejects_anonymous(self) -> None:
+        cfg = SimpleNamespace(security=SimpleNamespace(metrics_require_auth=True), auth=SimpleNamespace())
+        req = _request(app_state={"uterm_metrics": {"a": 1}, "uterm_config": cfg})
+        prom = _endpoint(self._router(), "/api/metrics/prometheus")
+        with (
+            patch(
+                "provide.uterm.server.auth.resolve_http_principal",
+                return_value=SimpleNamespace(subject_id="anonymous"),
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await prom(req)
+        assert exc.value.status_code == 401
+
 
 class TestSessionsRouter:
     def test_returns_router_with_routes(self) -> None:
