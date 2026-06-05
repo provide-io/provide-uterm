@@ -119,6 +119,12 @@ async def resolve_approval(
 
     st = await hub._get(worker_id)
 
+    # Browsers can disconnect at any await point here. A bare send that raises
+    # would abort the whole resolution, leaving other browsers without their
+    # approval_resolved frame and stranding them in _paused_browsers. Collect
+    # dead sockets and prune them once at the end, mirroring broadcast().
+    dead: set[WebSocket] = set()
+
     if decision.action == "allow":
         await hub.send_worker(worker_id, {"type": "input", "data": command, "ts": time.time()})
     elif decision.action == "deny":
@@ -127,7 +133,11 @@ async def resolve_approval(
             msg += f" \\x1b[33mReason: {decision.reason}\\x1b[0m"
         msg += "\\r"
         for ws in list(st.browsers.keys()):
-            await ws.send_text(encode_data(msg))
+            try:
+                await ws.send_text(encode_data(msg))
+            except Exception as exc:
+                logger.debug("approval_deny_send_failed worker_id=%s: %s", worker_id, exc)
+                dead.add(ws)
 
     for ws in list(st.browsers.keys()):
         if ws in hub._paused_browsers:
@@ -162,15 +172,22 @@ async def resolve_approval(
                     hub._background_tasks.add(task)
                     task.add_done_callback(hub._background_tasks.discard)
 
-        await ws.send_text(
-            _encode_browser_frame(
-                {
-                    "type": "approval_resolved",
-                    "outcome": "approved" if decision.action == "allow" else "rejected",
-                    "request_id": request_id,
-                }
+        try:
+            await ws.send_text(
+                _encode_browser_frame(
+                    {
+                        "type": "approval_resolved",
+                        "outcome": "approved" if decision.action == "allow" else "rejected",
+                        "request_id": request_id,
+                    }
+                )
             )
-        )
+        except Exception as exc:
+            logger.debug("approval_resolved_send_failed worker_id=%s: %s", worker_id, exc)
+            dead.add(ws)
+
+    if dead:
+        await hub.remove_dead_browsers(worker_id, dead)
 
 
 __all__ = [
