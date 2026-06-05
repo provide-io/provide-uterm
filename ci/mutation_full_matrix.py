@@ -29,9 +29,15 @@ from pathlib import Path
 #   spawn subprocesses that leak into mutmut's fork-loop os.wait() and mass-report
 #   "not checked" (reproduced deterministically across sharded runs; passes only
 #   on many-core local hosts). manager/process_impl survives the same hazard
-#   because the manager-dir conftest mocks subprocess during mutation — pty has no
-#   such mock yet. FOLLOW-UP: add a pty-test subprocess mock keyed on
-#   MUTANT_UNDER_TEST (mirroring the manager conftest), then drop this exclusion.
+#   because the manager-dir conftest mocks subprocess during mutation AND its one
+#   real-spawn test was dropped from tests_dir.
+#   FOLLOW-UP (NOT a simple conftest mock — that was tried and reverted): connector
+#   is killed by MANY load-bearing real-fork integration tests across ~7 files
+#   (e.g. test_start_and_stop_echo forks /bin/echo and asserts its PTY output), so
+#   a blanket os.fork mock breaks the baseline (0.00) and skipping those tests
+#   risks survivors. The real fix is to convert that real-fork coverage to mocked
+#   equivalents (so no test forks during mutation), or to run this shard on a
+#   larger runner. Until then connector is mutation-covered by local full runs.
 _CI_EXCLUDE: frozenset[str] = frozenset(
     {
         "src/provide/uterm/pty/connector.py",
