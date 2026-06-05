@@ -2709,11 +2709,17 @@ class TestApiRouter:
             patch(
                 "provide.uterm.server.auth.resolve_http_principal",
                 return_value=SimpleNamespace(subject_id="anonymous"),
-            ),
+            ) as resolve,
             pytest.raises(HTTPException) as exc,
         ):
             await metrics(req)
         assert exc.value.status_code == 401
+        # Pin the exact detail string — kills the detail=None / dropped /
+        # "XX..XX" / case-folded mutants in the HTTPException.
+        assert exc.value.detail == "authentication required for /metrics"
+        # Pin the resolver call args — kills the request->None, cfg.auth->None,
+        # and dropped-argument mutants in the resolve_http_principal(...) call.
+        resolve.assert_called_once_with(req, cfg.auth)
 
     async def test_metrics_require_auth_allows_authenticated(self) -> None:
         cfg = SimpleNamespace(security=SimpleNamespace(metrics_require_auth=True), auth=SimpleNamespace())
@@ -2722,9 +2728,10 @@ class TestApiRouter:
         with patch(
             "provide.uterm.server.auth.resolve_http_principal",
             return_value=SimpleNamespace(subject_id="alice"),
-        ):
+        ) as resolve:
             out = await metrics(req)
         assert out == {"metrics": {"a": 1}}
+        resolve.assert_called_once_with(req, cfg.auth)
 
     async def test_metrics_prometheus_require_auth_rejects_anonymous(self) -> None:
         cfg = SimpleNamespace(security=SimpleNamespace(metrics_require_auth=True), auth=SimpleNamespace())
@@ -2734,11 +2741,13 @@ class TestApiRouter:
             patch(
                 "provide.uterm.server.auth.resolve_http_principal",
                 return_value=SimpleNamespace(subject_id="anonymous"),
-            ),
+            ) as resolve,
             pytest.raises(HTTPException) as exc,
         ):
             await prom(req)
         assert exc.value.status_code == 401
+        assert exc.value.detail == "authentication required for /metrics"
+        resolve.assert_called_once_with(req, cfg.auth)
 
 
 class TestSessionsRouter:
