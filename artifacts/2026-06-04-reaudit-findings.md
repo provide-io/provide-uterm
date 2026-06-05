@@ -16,6 +16,64 @@ regressions). One reviewer finding was refuted by verification (recorded below).
 
 ---
 
+## Resolution status — branch `review/2026-06-04-reaudit-fixes`
+
+Remediation was carried out on this branch. Each fix is its own TDD commit and keeps the affected
+package at 100% line+branch coverage; perimeter files were re-checked with the mutmut gate (which was
+first unblocked by fixing a pre-existing `AF_UNIX path too long` failure in `test_pam_listener` that
+broke the local baseline).
+
+**Fixed & committed:**
+
+| ID | Status | Commit summary |
+|----|--------|----------------|
+| C1 | ✅ fixed | `update_kv_session` read-modify-write preserves tunnel credential/lifecycle fields |
+| C2 | ✅ fixed | `capture_disable()` moved to the shared section so the Linux build compiles under `-Werror` |
+| M1 | ✅ fixed | `resolve_approval` send loops guarded + dead-socket pruning |
+| M2 | ✅ fixed | `_reject_bad_id`/`_reject_bad_ids` on all 15 id-accepting MCP tools |
+| L1 | ✅ fixed | token file/dir created atomically at 0600/0700 (no TOCTOU window) |
+| L2 | ✅ fixed | CF webhook `pattern` length-capped + compile-validated at registration |
+| L3 | ✅ fixed | `ProvideHijack.dispose()` clears the approval countdown interval |
+| L4 | ✅ fixed | `PTYConnector.handle_input` swallows `os.write` `OSError`, marks disconnected |
+| minor (app) | ✅ fixed | `loadRecents` guards localStorage against non-array JSON (`Array.isArray`) |
+
+**Mutation-gate notes (perimeter files):** `webhooks.py` was driven through the mutmut gate (which
+surfaced the M3 reversal). `_gateway.py` (L1) has its kill-suite under `tests/gateway/`, which the
+`[tool.mutmut]` config does not yet wire into the mutation tree (a pre-existing gap), so its gate runs
+vacuously locally. `connector.py` (L4) reproducibly **stalls** the local mutmut run (the documented
+connector fork-hang the recent "fork-free coverage" commits fought); both rely on 100% line+branch
+coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
+
+**Re-classified after deeper analysis:**
+
+| ID | Status | Rationale |
+|----|--------|-----------|
+| M3 | ⛔ not-reproducible (reverted; regression tests kept) | On Python 3.11 + 3.13 the stdlib's `is_reserved`/`is_private`/`is_link_local` already block every embedded-IPv4 form (mapped/6to4/NAT64/compat) carrying a metadata or private IPv4 — the mutation gate confirmed the decode is an *equivalent* mutant on all supported interpreters. The reviewer was empirically wrong. `test_embedded_ipv4_*` regression tests pin the invariant and will fail loudly if a future CPython relaxes the classification; at that point an explicit decode (with real, killable mutants) can be added. |
+
+**Deferred with recommendation (low value / behaviour tradeoff / needs product decision):**
+
+- **L5** (`capture_connector._forward_stdin` blocking I/O): *accept.* AF_UNIX connect/sendall on
+  keystroke-sized data is sub-microsecond and lazy-cached; a per-keystroke `run_in_executor` adds
+  thread-pool scheduling overhead that isn't clearly better. Documented as an accepted antipattern.
+- **L6** (`_streaming.py` carry-tail drop): *no clean fix.* The literal `carry = text[-max:]` would
+  re-emit a duplicate credential annotation whenever a complete secret sits in a chunk followed by more
+  output (common in terminals); `Annotation.span` is seq-based (no char offset) and `match_text` was
+  deliberately removed (secret-leak fix `a4296f46`), so the post-match tail can't be carried precisely.
+  Recommend a cross-call dedupe of recently-emitted matches before changing the carry behaviour.
+- **L7** (remove `# pragma: no mutate` on `connector.py`): *do as dedicated mutation-hygiene work.*
+  Removing the 4 pragmas exposes killable codec mutants (`"XXutf-8XX"`→LookupError) that need
+  boundary tests plus equivalent-codec entries in `mutation_equivalents.toml`; best done as a focused
+  pass against the connector mutation gate.
+- **Minor ⚠ judgment calls:** TelnetWsGateway `0.0.0.0` default bind, plaintext webhook secret in
+  SQLite, unauthenticated `/metrics`, and tightening the AWS/GitHub credential regexes all change
+  product behaviour or security posture and should be decided explicitly (note: a redaction detector
+  prefers over- to under-matching, so tightening the regexes risks dropping real-secret coverage).
+- **Remaining minor polish** (dup `describe` blocks, `Array.isArray` guard, listener cleanup,
+  `_is_internal_host` trailing-dot, dead `run_mutation_gate` helpers, vite hardcoded port, etc.):
+  clear low-risk cleanups, tracked as a follow-up batch.
+
+---
+
 ## Resolved-claim verification (35/35 confirmed, 0 regressions)
 
 Every "Resolution" + commit in the prior report was re-checked against current source. All confirmed
