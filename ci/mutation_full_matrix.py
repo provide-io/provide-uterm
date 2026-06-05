@@ -21,10 +21,27 @@ import json
 import tomllib
 from pathlib import Path
 
+# Perimeter files that cannot be mutated under mutmut on a low-core CI runner and
+# are therefore omitted from the SCHEDULED matrix (they still run locally in a
+# full-perimeter pass, and via --changed-only on a many-core host when touched).
+#
+#   pty/connector.py — its PTY tests (test_connector*/test_capture_connector*)
+#   spawn subprocesses that leak into mutmut's fork-loop os.wait() and mass-report
+#   "not checked" (reproduced deterministically across sharded runs; passes only
+#   on many-core local hosts). manager/process_impl survives the same hazard
+#   because the manager-dir conftest mocks subprocess during mutation — pty has no
+#   such mock yet. FOLLOW-UP: add a pty-test subprocess mock keyed on
+#   MUTANT_UNDER_TEST (mirroring the manager conftest), then drop this exclusion.
+_CI_EXCLUDE: frozenset[str] = frozenset(
+    {
+        "src/provide/uterm/pty/connector.py",
+    }
+)
+
 
 def main() -> int:
     data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    paths = data["tool"]["mutmut"]["paths_to_mutate"]
+    paths = [p for p in data["tool"]["mutmut"]["paths_to_mutate"] if p not in _CI_EXCLUDE]
     print(json.dumps(paths, separators=(",", ":")))
     return 0
 

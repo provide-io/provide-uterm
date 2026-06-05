@@ -12,7 +12,11 @@ name: "🧬 Mutation Gate (full perimeter)"
 # "not checked" (observed dying at ~1540/6227). Instead it FANS OUT one matrix job per
 # perimeter file (each <=~700 mutants — the stable batch size the --changed-only gate
 # already runs cleanly). The file list comes from ci/mutation_full_matrix.py (reads
-# pyproject), so there is no duplicated perimeter list to drift.
+# pyproject), so there is no duplicated perimeter list to drift. That generator also
+# omits the few files mutmut cannot run on a low-core runner (pty/connector.py — its
+# PTY tests leak subprocesses into mutmut's os.wait(); see the script for the
+# follow-up). Files with no mutable surface (Pydantic models, shims, constant tables)
+# pass via the gate's --paths "no mutable surface" path.
 #
 # Script policy: run: blocks stay <= 3 lines (each is a single command), so no extra
 # ci/ wrapper is needed beyond the matrix generator.
