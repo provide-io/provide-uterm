@@ -65,6 +65,14 @@ async def update_kv_session(
         "last_error": None,
         "hijacked": hijacked,
     }
+    # Read-modify-write: merge the status fields OVER the existing entry instead
+    # of blind-overwriting it. The tunnel API stores credential hashes, the
+    # ``revoked`` flag, expiry, and one-time invites in this same ``session:{id}``
+    # key, and the DO's ``_ensure_credentials`` re-reads it on a 60s TTL — so a
+    # blind ``put`` here nulled tunnel/share/control auth ~60s after every worker
+    # (re)connect. Merging preserves those fields (create/revoke/rotate remain
+    # authoritative); a revoked entry keeps its null hashes + ``revoked`` flag.
+    status = {**await _read_entry(kv, key), **status}
     try:
         # Note: do NOT pass expirationTtl as a keyword argument — CF Python Workers
         # (Pyodide) cannot map Python kwargs to the JS options object for KV.put().
@@ -72,6 +80,28 @@ async def update_kv_session(
         await kv.put(key, json.dumps(status, ensure_ascii=True))
     except Exception as exc:
         logger.debug("kv put %s failed: %s", key, exc)
+
+
+async def _read_entry(kv: Any, key: str) -> dict[str, Any]:
+    """Return the existing KV entry as a dict, or ``{}`` if absent/unreadable.
+
+    Used by :func:`update_kv_session` to merge status over the prior entry
+    without losing tunnel credential/lifecycle fields. Any failure (KV error,
+    missing key, corrupt or non-object JSON) degrades to ``{}`` so the status
+    write still proceeds.
+    """
+    try:
+        raw = await kv.get(key)
+    except Exception as exc:
+        logger.debug("kv get %s failed during merge: %s", key, exc)
+        return {}
+    if raw is None:
+        return {}
+    try:
+        data = json.loads(str(raw))
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 async def get_kv_session(env: Any, worker_id: str) -> dict[str, Any] | None:
