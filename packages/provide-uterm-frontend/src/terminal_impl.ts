@@ -117,6 +117,7 @@ export class ProvideTerminal {
   private resizeObserver: ResizeObserver | null = null;
   private reconnectTimer: number | null = null;
   private readonly wsDecoder = new ControlChannelDecoder();
+  private _firstDataWritten = false;
 
   constructor(container: HTMLElement, config: TerminalConfig = {}) {
     this.container = container;
@@ -271,6 +272,16 @@ export class ProvideTerminal {
     this.ws.send(data);
   }
 
+  /** Write data to the xterm instance, hiding the loading screen on first call. */
+  private writeData(data: string): void {
+    if (!this._firstDataWritten) {
+      const loading = this.root?.querySelector(`#loadingScreen-${this.uid}`) as HTMLElement | null;
+      if (loading) loading.style.display = "none";
+      this._firstDataWritten = true;
+    }
+    this.term?.write(data);
+  }
+
   private scheduleReconnect(): void {
     if (this.reconnectTimer !== null) return;
     this.reconnectTimer = window.setTimeout(() => {
@@ -309,11 +320,11 @@ export class ProvideTerminal {
         // Stream is corrupt; reset decoder and fall back to writing the raw
         // payload so users don't get stuck on a blank screen.
         this.wsDecoder.reset();
-        this.term.write(payload);
+        this.writeData(payload);
         return;
       }
       for (const frame of frames) {
-        if (frame.type === "data") this.term.write(frame.data);
+        if (frame.type === "data") this.writeData(frame.data);
       }
     };
     ws.onclose = () => {
@@ -514,17 +525,11 @@ export class ProvideTerminal {
     this.term.focus();
     this.term.onData((data) => this.handleTerminalInput(data));
 
+    // Reset the first-data gate so the loading screen is shown again if the
+    // terminal is re-created (e.g. on reconnect).
+    this._firstDataWritten = false;
     const loading = this.q<HTMLElement>("loadingScreen");
     loading.style.removeProperty("display");
-    let firstData = false;
-    const originalWrite = this.term.write.bind(this.term);
-    this.term.write = (data: string): void => {
-      if (!firstData) {
-        loading.style.display = "none";
-        firstData = true;
-      }
-      originalWrite(data);
-    };
 
     this.updateStatus(this.connected);
   }

@@ -1268,3 +1268,34 @@ describe("ProvideTerminal control-channel framing", () => {
     expect(xterm.written.join("")).toContain("\x10X");
   });
 });
+
+// Fix 1 regression: ProvideTerminal must NOT monkey-patch term.write.
+// Instead, writeData() is a private method on ProvideTerminal that hides the
+// loading screen on first call without mutating the third-party xterm instance.
+describe("ProvideTerminal writeData() — no monkey-patch on term.write", () => {
+  it("term.write is NOT reassigned (no own-property override on xterm instance)", async () => {
+    await makeTerminal({ wsUrl: "/ws/terminal" });
+    const xterm = getXterm();
+    // After construction the xterm instance must not have an own 'write' property;
+    // the method must still live on the prototype (i.e. it has not been patched).
+    expect(Object.prototype.hasOwnProperty.call(xterm, "write")).toBe(false);
+  });
+
+  it("loading screen hidden after first write via writeData", async () => {
+    const { container } = await makeTerminal({ wsUrl: "/ws/terminal" });
+    getWs().open();
+    getWs().triggerMessage("first chunk");
+    const loading = container.querySelector<HTMLElement>(`[id^="loadingScreen-"]`)!;
+    expect(loading.style.display).toBe("none");
+  });
+
+  it("subsequent writes do not re-show loading screen", async () => {
+    const { container } = await makeTerminal({ wsUrl: "/ws/terminal" });
+    getWs().open();
+    getWs().triggerMessage("first chunk");
+    getWs().triggerMessage("second chunk");
+    getWs().triggerMessage("third chunk");
+    const loading = container.querySelector<HTMLElement>(`[id^="loadingScreen-"]`)!;
+    expect(loading.style.display).toBe("none");
+  });
+});
