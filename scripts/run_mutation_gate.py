@@ -360,6 +360,14 @@ def _collect_stats(
     }
     print(f"mutation_score={score:.2f}")
     print(json.dumps(state_counts, indent=2, sort_keys=True))
+    # Surface WHICH mutants survived so a failure is actionable straight from the
+    # log (essential for connector.py, which only runs under Linux CI — it
+    # fork-hangs on macOS, so the survivors can't be enumerated locally).
+    bad = sorted(name for name, state in effective if state in BAD_MUTANT_STATES)
+    if bad:
+        print(f"surviving mutants ({len(bad)}):")
+        for name in bad:
+            print(f"  {name}")
     return effective, last_stats
 
 
