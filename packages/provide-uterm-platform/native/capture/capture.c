@@ -54,6 +54,17 @@ typedef ssize_t (*fn_write)(int, const void *, size_t);
 typedef ssize_t (*fn_read)(int, void *, size_t);
 typedef int     (*fn_connect)(int, const struct sockaddr *, socklen_t);
 
+/* Shared by both backends: closes the capture socket so subsequent frames are
+ * dropped.  Defined here (not inside the __APPLE__ block) because the Linux
+ * send_frame() calls it too — with -Werror an implicit declaration would fail
+ * the Linux build. */
+static void capture_disable(void) {
+    if (g_capture_fd >= 0) {
+        close(g_capture_fd);
+        g_capture_fd = -1;
+    }
+}
+
 #ifdef __APPLE__
 
 /* ── macOS DYLD_INTERPOSE implementation ──────────────────────────────────────
@@ -88,13 +99,6 @@ static const interpose_t _itp_connect = { (const void *)&uterm_connect, (const v
 static fn_write   g_real_write;
 static fn_read    g_real_read;
 static fn_connect g_real_connect;
-
-static void capture_disable(void) {
-    if (g_capture_fd >= 0) {
-        close(g_capture_fd);
-        g_capture_fd = -1;
-    }
-}
 
 static void send_frame(uint8_t channel, const void *data, size_t len) {
     if (g_capture_fd < 0 || !g_real_write) return;
