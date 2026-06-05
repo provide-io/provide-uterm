@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
@@ -79,16 +80,32 @@ def _read_token(path: Path) -> dict[str, Any] | None:
 
 
 def _write_token(path: Path, token: str, player_id: int | None = None) -> None:
-    """Persist a token record to disk with 0600 file / 0700 parent perms."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with contextlib.suppress(OSError):
-        path.parent.chmod(0o700)
+    """Persist a token record to disk with 0600 file / 0700 parent perms.
+
+    The parent dir and the file are created at their restrictive modes
+    atomically — a umask-guarded ``mkdir`` and an ``os.open(..., 0o600)`` — not
+    created at the process umask and chmod-ed afterwards. The old
+    create-then-chmod sequence left a brief window in which the bearer token
+    was world-readable on a shared host (TOCTOU).
+    """
     payload: dict[str, object] = {"token": token}
     if player_id is not None:
         payload["player_id"] = player_id
-    path.write_text(json.dumps(payload))
-    with contextlib.suppress(OSError):
-        path.chmod(0o600)
+    data = json.dumps(payload).encode()
+    old_umask = os.umask(0o077)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Tighten the dir if it pre-existed at a looser mode (umask only bounds
+        # newly created paths).
+        with contextlib.suppress(OSError):
+            path.parent.chmod(0o700)
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, data)
+        finally:
+            os.close(fd)
+    finally:
+        os.umask(old_umask)
 
 
 def _delete_token(path: Path) -> None:
