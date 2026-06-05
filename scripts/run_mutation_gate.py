@@ -380,6 +380,7 @@ def run_mutation_gate(
     retries: int,
     min_mutation_score: float,
     paths_to_mutate: list[str] | None = None,
+    allow_empty: bool = False,
 ) -> dict[str, int]:
     attempts = retries + 1
     last_stats: dict[str, int] = {}
@@ -422,6 +423,15 @@ def run_mutation_gate(
             raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
 
         _effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
+
+        # An explicitly-narrowed target (--paths / --changed-only) with zero mutants
+        # is a file with no mutable surface (a Pydantic model, a re-export shim,
+        # decorated-only dispatch, constant patterns) — legitimately clean, not a
+        # config break. The total>0 guard only matters for the full pyproject
+        # perimeter (where total==0 would mean paths_to_mutate is misconfigured).
+        if allow_empty and last_stats["total"] == 0 and last_stats["bad_total"] == 0:
+            print("mutation gate ok: explicitly-targeted file(s) have no mutable surface (0 mutants)")
+            return last_stats
 
         score = _mutation_score(last_stats)
         if last_stats["total"] > 0 and score >= min_mutation_score and last_stats["bad_total"] == 0:
@@ -505,6 +515,9 @@ def main() -> int:
             args.retries,
             args.min_mutation_score,
             paths_to_mutate=paths_to_mutate,
+            # An explicitly-narrowed target set (--paths / --changed-only) may
+            # legitimately contain only no-mutable-surface files → 0 mutants is OK.
+            allow_empty=paths_to_mutate is not None,
         )
     except RuntimeError as exc:
         print(str(exc))
