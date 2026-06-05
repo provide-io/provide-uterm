@@ -134,7 +134,9 @@ export class ProvideHijack {
     if (this._state.ws) {
       try {
         this._state.ws.close();
-      } catch (_) {}
+      } catch (err) {
+        console.debug("ProvideHijack: ws.close() failed during disconnect (best-effort cleanup)", err);
+      }
       this._state.ws = null;
     }
   }
@@ -263,7 +265,9 @@ export class ProvideHijack {
           if (this._state.term && this._state.term.cols > 0 && this._state.term.rows > 0) {
             this._config.onResize?.(this._state.term.cols, this._state.term.rows);
           }
-        } catch (_) {}
+        } catch (err) {
+          console.debug("ProvideHijack: fit() failed in requestAnimationFrame (best-effort resize)", err);
+        }
       });
       this._ro = new ResizeObserver(() => {
         try {
@@ -271,7 +275,9 @@ export class ProvideHijack {
           if (this._state.term && this._state.term.cols > 0 && this._state.term.rows > 0) {
             this._config.onResize?.(this._state.term.cols, this._state.term.rows);
           }
-        } catch (_) {}
+        } catch (err) {
+          console.debug("ProvideHijack: fit() failed in ResizeObserver callback (best-effort resize)", err);
+        }
       });
       this._ro.observe(termDiv);
     }
@@ -281,7 +287,9 @@ export class ProvideHijack {
     if (webLinksAddonGlobal) {
       try {
         term.loadAddon(new webLinksAddonGlobal.WebLinksAddon());
-      } catch (_) {}
+      } catch (err) {
+        console.warn("ProvideHijack: WebLinksAddon failed to load (optional addon, skipping)", err);
+      }
     }
 
     // Forward keyboard input to WS when hijacked or in open mode.
@@ -347,7 +355,9 @@ export class ProvideHijack {
         if (msg.data) {
           try {
             this._ensureTerm().write(msg.data);
-          } catch (_) {}
+          } catch (err) {
+            console.warn("ProvideHijack: term write failed for 'term' frame", err);
+          }
         }
         break;
 
@@ -363,7 +373,9 @@ export class ProvideHijack {
           // Avoids t.reset() which destroys scrollback and breaks scroll indicators.
           t.write("[!p[2J[H");
           t.write((msg.screen ?? "").replace(/\n/g, "\r\n"));
-        } catch (_) {}
+        } catch (err) {
+          console.warn("ProvideHijack: snapshot write failed", err);
+        }
         break;
       }
 
@@ -747,7 +759,9 @@ export class ProvideHijack {
         inputField.value = "";
         try {
           this._ensureTerm().focus();
-        } catch (_) {}
+        } catch (err) {
+          console.debug("ProvideHijack: focus() failed after input send (best-effort UX)", err);
+        }
       };
       inputField.addEventListener("keydown", (e: KeyboardEvent) => {
         if (e.key === "Enter") {
