@@ -37,6 +37,13 @@ if TYPE_CHECKING:
 # Injected at module level in tests to avoid CF-only js.fetch dependency.
 _outbound_fetch: Any = None
 
+# Cap the admin-supplied webhook screen-match pattern. fire_webhooks runs
+# re.search(pattern, screen) on every snapshot; an unbounded or pathological
+# pattern could burn the Durable Object's 50ms CPU budget. Bounding the length
+# (and rejecting un-compilable patterns) at registration limits that, and the
+# CF runtime's hard CPU ceiling backstops the rest.
+_MAX_WEBHOOK_PATTERN_LEN = 256
+
 
 async def _deliver_webhook(
     url: str,
@@ -142,13 +149,21 @@ async def route_webhooks(
         event_types = payload.get("event_types")
         if event_types is not None and not isinstance(event_types, list):
             return json_response({"error": "event_types must be a list"}, status=422)
+        pattern = payload.get("pattern")
+        if pattern is not None:
+            if not isinstance(pattern, str) or len(pattern) > _MAX_WEBHOOK_PATTERN_LEN:
+                return json_response({"error": "pattern must be a string <= 256 chars"}, status=422)
+            try:
+                re.compile(pattern)
+            except re.error:
+                return json_response({"error": "pattern is not a valid regex"}, status=422)
         wh_id = uuid.uuid4().hex
         runtime.store.save_webhook(
             wh_id,
             session_id,
             hook_url,
             event_types=event_types,
-            pattern=payload.get("pattern"),
+            pattern=pattern,
             secret=payload.get("secret"),
         )
         return json_response(
