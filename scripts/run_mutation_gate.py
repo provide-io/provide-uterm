@@ -468,6 +468,17 @@ def main() -> int:
         action="store_true",
         help="With --changed-only, consider only staged changes.",
     )
+    parser.add_argument(
+        "--paths",
+        default=None,
+        help=(
+            "Comma-separated explicit subset of [tool.mutmut].paths_to_mutate to mutate "
+            "(format matches paths_to_mutate, e.g. 'src/provide/uterm/auth.py'). Used to "
+            "chunk a full-perimeter run into small, stable batches — a single mutmut run "
+            "over the whole perimeter trips the fork-loop child-reaping crash at scale. "
+            "Mutually exclusive with --changed-only."
+        ),
+    )
     args = parser.parse_args()
     half_cpus = _half_cpu_count()
     requested_children = args.max_children if args.max_children is not None else half_cpus
@@ -478,6 +489,12 @@ def main() -> int:
         paths_to_mutate = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
         if not paths_to_mutate:
             print("mutation gate skipped: no changed Python files under mutation roots")
+            return 0
+        print(f"mutation gate targets ({len(paths_to_mutate)}): {paths_to_mutate}")
+    elif args.paths:
+        paths_to_mutate = [p.strip() for p in args.paths.split(",") if p.strip()]
+        if not paths_to_mutate:
+            print("mutation gate skipped: --paths resolved to an empty set")
             return 0
         print(f"mutation gate targets ({len(paths_to_mutate)}): {paths_to_mutate}")
 
