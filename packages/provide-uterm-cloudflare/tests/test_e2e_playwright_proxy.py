@@ -32,7 +32,7 @@ from typing import Any
 
 import pytest
 import websockets as _websockets
-from cf_e2e_auth import ws_auth_headers
+from cf_e2e_auth import E2E_JWT, ws_auth_headers
 from playwright.sync_api import Page
 
 # JS injected into each page via a single evaluate() call.
@@ -191,6 +191,20 @@ def test_two_playwright_browsers_proxy(page: Page, browser: Any, wrangler_server
     # Browser B: separate context (isolated cookies/storage = genuinely separate client).
     ctx2 = browser.new_context()
     page2 = ctx2.new_page()
+
+    # Authenticate the browser WS upgrades. A JS WebSocket can't set an
+    # Authorization header, so the jwt-only worker accepts the principal JWT via
+    # the CF_Authorization cookie (the only WS auth path). E2E_JWT is the
+    # harness/CF-Access token the worker's decode_jwt accepts.
+    if E2E_JWT:
+        cookie = {"name": "CF_Authorization", "value": E2E_JWT, "url": wrangler_server}
+        page.context.add_cookies([cookie])
+        ctx2.add_cookies([cookie])
+        # Same-origin the pages with the worker so the (SameSite=Lax) cookie
+        # rides the browser WS upgrade. The navigation happens BEFORE the WS-open
+        # evaluate(), so it doesn't reset the later wait_for_function context.
+        page.goto(f"{wrangler_server}/api/health")
+        page2.goto(f"{wrangler_server}/api/health")
 
     try:
         # Step 1: Connect both browsers first so they are live when snapshot fires.
