@@ -298,6 +298,23 @@ async def test_poll_messages_empty_when_connected_but_read_yields_nothing() -> N
         os.close(w)
 
 
+async def test_poll_messages_empty_when_paused_even_with_data_available() -> None:
+    """Paused short-circuits even when data is waiting on the fd → []. Pins the
+    ``or self._paused`` term: a mutant that drops the paused check would fall
+    through, read the data and snapshot it instead of returning []."""
+    r, w = os.pipe()
+    try:
+        conn = _conn()
+        _connected(conn, r)
+        conn._paused = True
+        os.write(w, b"data")  # data IS available on the fd ...
+        assert await conn.poll_messages() == []  # ... but paused → []
+        assert conn._buffer == ""  # nothing was read/buffered
+    finally:
+        os.close(w)
+        os.close(r)
+
+
 def test_read_master_none_fd_returns_empty() -> None:
     conn = _conn()
     assert conn._read_master() == b""
