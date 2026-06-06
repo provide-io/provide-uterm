@@ -32,6 +32,37 @@ _SSE_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/events/stream$
 _WEBHOOK_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/webhooks(?:/([a-zA-Z0-9_-]{1,64}))?$")
 _RECORDING_ROUTE_RE = re.compile(r"^/api/sessions/([a-zA-Z0-9_-]{1,64})/recording(?:/(entries|download))?$")
 
+# Methods that mutate state and therefore must be protected from cross-site
+# request forgery (CSRF). GET/HEAD are safe by convention.
+_STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _is_cross_site(request: object, url: str) -> bool:
+    """Best-effort detection of a cross-site *browser* request (CSRF risk).
+
+    State-changing routes accept the ``CF_Authorization`` cookie as a credential,
+    and that cookie's ``SameSite`` attribute is set by Cloudflare Access — outside
+    this app's control (see ``docs/cloudflare-security.md``). Rather than trust it,
+    reject cross-site browser requests here using ``Sec-Fetch-Site`` (sent by every
+    modern browser) with an ``Origin``-vs-host fallback for older agents.
+
+    Non-browser clients (CLI, worker, server-to-server) send neither header and are
+    treated as same-site — CSRF needs an *ambient* browser cookie, which those
+    callers do not carry; they must present an explicit ``Authorization`` bearer.
+    """
+    headers = getattr(request, "headers", None)
+    if headers is None:
+        return False
+    sec_fetch_site = str(headers.get("Sec-Fetch-Site") or "").lower()
+    if sec_fetch_site:
+        return sec_fetch_site == "cross-site"
+    origin = str(headers.get("Origin") or "")
+    if not origin:
+        return False
+    if origin.lower() == "null":
+        return True
+    return urlparse(origin).netloc != urlparse(url).netloc
+
 
 async def _check_session_visibility(runtime: RuntimeProtocol, request: object) -> object | None:
     """Return a 403 Response if the caller cannot access the session, or None.
@@ -63,6 +94,13 @@ async def route_http(runtime: RuntimeProtocol, request: object) -> object:
     url = str(getattr(request, "url", ""))
     path = urlparse(url).path
     method = str(getattr(request, "method", "GET")).upper()
+
+    # CSRF guard: reject cross-site browser requests to state-changing routes.
+    # Defends the cookie-authenticated POSTs (hijack acquire/send, input_mode,
+    # disconnect_worker, …) regardless of the Cloudflare-managed CF_Authorization
+    # SameSite attribute. Read-only GETs are unaffected.
+    if method in _STATE_CHANGING_METHODS and _is_cross_site(request, url):
+        return json_response({"error": "cross_site_blocked"}, status=403)
 
     if path == "/api/health":
         return json_response({"ok": True, "service": "provide-uterm-cloudflare"})

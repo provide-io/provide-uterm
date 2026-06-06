@@ -473,3 +473,93 @@ async def test_unknown_path_returns_404() -> None:
     resp = await route_http(runtime, _Req("https://x/worker/w/unknown-endpoint"))
     assert resp.status == 404
     assert _body(resp)["error"] == "not_found"
+
+
+# ---------------------------------------------------------------------------
+# CSRF cross-site guard — _is_cross_site + route_http state-changing gate
+# ---------------------------------------------------------------------------
+
+
+def _req_h(url: str, *, method: str = "POST", headers: dict | None = None, body: dict | None = None) -> SimpleNamespace:
+    """A request stub carrying headers (for the CSRF guard) and a JSON body."""
+    return SimpleNamespace(url=url, method=method, headers=headers or {}, _body=json.dumps(body or {}))
+
+
+async def test_cross_site_post_blocked_via_sec_fetch_site() -> None:
+    """Sec-Fetch-Site: cross-site on a state-changing POST → 403 cross_site_blocked."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h("https://x/worker/w/hijack/acquire", headers={"Sec-Fetch-Site": "cross-site"}, body={"owner": "a"}),
+    )
+    assert resp.status == 403
+    assert _body(resp)["error"] == "cross_site_blocked"
+
+
+async def test_same_origin_post_allowed_via_sec_fetch_site() -> None:
+    """Sec-Fetch-Site: same-origin proceeds (not CSRF-blocked)."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h(
+            "https://x/worker/w/hijack/acquire",
+            headers={"Sec-Fetch-Site": "same-origin"},
+            body={"owner": "a", "lease_s": 60},
+        ),
+    )
+    assert "hijack_id" in _body(resp)
+
+
+async def test_cross_site_post_blocked_via_origin_fallback() -> None:
+    """No Sec-Fetch-Site, Origin host != request host → 403."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h("https://x/worker/w/hijack/acquire", headers={"Origin": "https://evil.example"}, body={"owner": "a"}),
+    )
+    assert resp.status == 403
+    assert _body(resp)["error"] == "cross_site_blocked"
+
+
+async def test_origin_null_blocked() -> None:
+    """An opaque Origin (null) on a state-changing POST → 403."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h("https://x/worker/w/hijack/acquire", headers={"Origin": "null"}, body={"owner": "a"}),
+    )
+    assert resp.status == 403
+
+
+async def test_same_origin_via_origin_header_allowed() -> None:
+    """Origin host == request host proceeds."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h(
+            "https://x/worker/w/hijack/acquire",
+            headers={"Origin": "https://x"},
+            body={"owner": "a", "lease_s": 60},
+        ),
+    )
+    assert "hijack_id" in _body(resp)
+
+
+async def test_post_with_headers_but_no_csrf_signals_allowed() -> None:
+    """Headers present but no Sec-Fetch-Site/Origin (non-browser client) → proceeds."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h("https://x/worker/w/hijack/acquire", headers={}, body={"owner": "a", "lease_s": 60}),
+    )
+    assert "hijack_id" in _body(resp)
+
+
+async def test_get_cross_site_not_blocked() -> None:
+    """A GET is never CSRF-blocked, even with Sec-Fetch-Site: cross-site."""
+    runtime = _Runtime()
+    resp = await route_http(
+        runtime,
+        _req_h("https://x/api/health", method="GET", headers={"Sec-Fetch-Site": "cross-site"}),
+    )
+    assert _body(resp)["ok"] is True
