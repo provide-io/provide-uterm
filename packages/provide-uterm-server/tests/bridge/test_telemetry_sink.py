@@ -151,7 +151,9 @@ async def test_webhook_telemetry_sink_fail_open_on_egress_exception() -> None:
     sink = WebhookTelemetrySink(url="https://telemetry.example/ingest")
     evt = TelemetryEvent(event_type="x", worker_id="w", timestamp=0.0)
     with patch(
-        "provide.uterm.server.bridge.hub.ext.assert_webhook_target_allowed",
+        # ext imports the egress guard lazily (to break an import cycle), so the
+        # mock must target the source module, not ext's namespace.
+        "provide.uterm.server.egress.assert_webhook_target_allowed",
         AsyncMock(side_effect=RuntimeError("egress denied")),
     ):
         # Must not raise
