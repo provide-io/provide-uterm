@@ -18,6 +18,10 @@ import type { HijackHandlers, HijackState } from "./hijack-state.js";
 const RECONNECT_DELAYS = [1, 2, 5, 10, 30] as const;
 const WAKING_TIMEOUT_MS = 10_000;
 const RECONNECT_ANIM_INTERVAL_MS = 80;
+// Throttle for outbound consumption ACKs: at most one ack per window, carrying
+// the cumulative bytes received so the DO can size its Tier-A backpressure
+// window (see docs/ard-cloudflare-backpressure.md).
+const ACK_THROTTLE_MS = 100;
 
 export function resolveWsUrl(state: HijackState): string {
   const { config } = state;
@@ -94,6 +98,22 @@ export function clearHeartbeat(state: HijackState): void {
   }
 }
 
+/** Schedule a single throttled consumption ACK (Tier-A backpressure). */
+export function scheduleAck(state: HijackState): void {
+  if (state.ackTimer) return;
+  state.ackTimer = setTimeout(() => {
+    state.ackTimer = null;
+    wsSend(state, { type: "ack", bytes: state.ackBytes });
+  }, ACK_THROTTLE_MS);
+}
+
+export function clearAckTimer(state: HijackState): void {
+  if (state.ackTimer) {
+    clearTimeout(state.ackTimer);
+    state.ackTimer = null;
+  }
+}
+
 export function startHeartbeat(state: HijackState): void {
   clearHeartbeat(state);
   state.heartbeatTimer = setInterval(() => {
@@ -159,6 +179,9 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
   }
   state.ws = ws;
   state.wsDecoder.reset();
+  // New connection → the DO's per-socket sent counter restarts at 0.
+  state.ackBytes = 0;
+  clearAckTimer(state);
 
   ws.onopen = () => {
     if (ws !== state.ws) return; // stale handler — a newer socket replaced this one
@@ -185,7 +208,12 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
 
   ws.onmessage = (e: MessageEvent) => {
     try {
-      const frames = state.wsDecoder.feed(typeof e.data === "string" ? (e.data as string) : String(e.data));
+      const raw = typeof e.data === "string" ? (e.data as string) : String(e.data);
+      // Count raw received bytes (pre-decode, matching the DO's per-frame
+      // msg_len) and ACK on a throttle to drive Tier-A backpressure.
+      state.ackBytes += raw.length;
+      scheduleAck(state);
+      const frames = state.wsDecoder.feed(raw);
       for (const frame of frames) {
         const msg: Record<string, unknown> =
           frame.type === "data" ? { type: "term", data: frame.data } : frame.control;
@@ -207,6 +235,7 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
   ws.onclose = () => {
     if (ws !== state.ws) return; // stale handler from a replaced socket
     clearHeartbeat(state);
+    clearAckTimer(state);
     if (state.wakingTimer) {
       clearTimeout(state.wakingTimer);
       state.wakingTimer = null;

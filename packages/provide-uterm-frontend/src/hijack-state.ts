@@ -24,6 +24,11 @@ export class HijackState {
   reconnectAnimTimer: ReturnType<typeof setInterval> | null = null;
   reconnectAttempt = 0;
 
+  // Tier-A backpressure: cumulative bytes received on this connection, ACKed to
+  // the DO on a throttle so it can pause the producer when this browser lags.
+  ackBytes = 0;
+  ackTimer: ReturnType<typeof setTimeout> | null = null;
+
   wakingTimer: ReturnType<typeof setTimeout> | null = null;
   wakingTimedOut = false;
 
