@@ -13,11 +13,23 @@ import httpx
 from pydantic import BaseModel, Field
 
 from provide.telemetry import event, get_logger
-from provide.uterm.server.egress import assert_webhook_target_allowed
 from provide.uterm.server.tracing import inject_trace_context
 from provide.uterm.server.webhook_signing import build_webhook_signature
 
 _sink_logger = get_logger(__name__)
+
+
+async def _assert_webhook_target_allowed(url: str) -> None:
+    """Lazy wrapper around the egress SSRF guard.
+
+    Imported lazily to break the ``egress -> webhooks -> bridge.hub -> egress``
+    import cycle: ``egress`` must be importable cold (e.g. via
+    ``pam_integration``) without this module holding a module-level back-
+    reference while ``egress`` is still initialising.
+    """
+    from provide.uterm.server.egress import assert_webhook_target_allowed
+
+    await assert_webhook_target_allowed(url)
 
 
 @dataclass(frozen=True)
@@ -79,7 +91,7 @@ class WebhookPolicyGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
-            await assert_webhook_target_allowed(self.url)
+            await _assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
@@ -134,7 +146,7 @@ class WebhookFanOutPolicyGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
-            await assert_webhook_target_allowed(self.url)
+            await _assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
@@ -229,7 +241,7 @@ class WebhookBehavioralAuditGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
-            await assert_webhook_target_allowed(self.url)
+            await _assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
@@ -288,7 +300,7 @@ class WebhookTelemetrySink:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
-            await assert_webhook_target_allowed(self.url)
+            await _assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 await client.post(self.url, content=body, headers=headers)
         except Exception as exc:
@@ -336,7 +348,7 @@ class WebhookOutputPolicyGate:
         body = _encode_webhook_payload(payload)
         headers = _build_webhook_headers(self.secret, body)
         try:
-            await assert_webhook_target_allowed(self.url)
+            await _assert_webhook_target_allowed(self.url)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(self.url, content=body, headers=headers)
                 if resp.status_code == 200:
