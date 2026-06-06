@@ -64,7 +64,7 @@ COPY packages/provide-uterm-app/ packages/provide-uterm-app/
 RUN npm run build:frontend
 
 # ---- builder stage: resolve + install into a uv-managed venv ----------------
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 ARG FRONTEND_DIR
 
@@ -120,7 +120,7 @@ COPY --from=frontend-build /src/${FRONTEND_DIR}/ ${FRONTEND_DIR}/
 RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
 
 # ---- runtime stage ----------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
