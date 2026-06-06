@@ -4,6 +4,8 @@
 //
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ControlChannelDecoder } from "./hijack-codec.js";
+
 // ── Mock classes ──────────────────────────────────────────────────────────────
 
 class MockWebSocket {
@@ -1297,5 +1299,50 @@ describe("ProvideTerminal writeData() — no monkey-patch on term.write", () => 
     getWs().triggerMessage("third chunk");
     const loading = container.querySelector<HTMLElement>(`[id^="loadingScreen-"]`)!;
     expect(loading.style.display).toBe("none");
+  });
+});
+
+// ── Tier-A backpressure consumption ACKs ──────────────────────────────────────
+
+describe("ProvideTerminal Tier-A backpressure ACKs", () => {
+  it("ACKs cumulative received bytes after the throttle window", async () => {
+    await makeTerminal({ wsUrl: "/ws/terminal" });
+    const ws = getWs();
+    ws.open();
+    ws.triggerMessage("hello"); // 5 raw bytes received
+    // Throttled: nothing sent until the window elapses.
+    expect(ws.sent.filter((s) => s.includes('"ack"')).length).toBe(0);
+    vi.advanceTimersByTime(100);
+    const dec = new ControlChannelDecoder();
+    const ctrl = dec.feed(ws.sent.at(-1) as string).find((f) => f.type === "control") as
+      | { control: unknown }
+      | undefined;
+    expect(ctrl?.control).toEqual({ type: "ack", bytes: 5 });
+  });
+
+  it("coalesces frames within one window into a single cumulative ACK", async () => {
+    await makeTerminal({ wsUrl: "/ws/terminal" });
+    const ws = getWs();
+    ws.open();
+    ws.triggerMessage("abc"); // 3
+    ws.triggerMessage("de"); // 2
+    vi.advanceTimersByTime(100);
+    const acks = ws.sent.filter((s) => s.includes('"ack"'));
+    expect(acks.length).toBe(1);
+    const dec = new ControlChannelDecoder();
+    const ctrl = dec.feed(acks[0]).find((f) => f.type === "control") as { control: unknown } | undefined;
+    expect(ctrl?.control).toEqual({ type: "ack", bytes: 5 });
+  });
+});
+
+describe("ProvideTerminal ACK teardown", () => {
+  it("clears a pending ACK timer on dispose (no ACK after teardown)", async () => {
+    const { terminal } = await makeTerminal({ wsUrl: "/ws/terminal" });
+    const ws = getWs();
+    ws.open();
+    ws.triggerMessage("data"); // schedules an ACK timer
+    terminal.dispose();
+    vi.advanceTimersByTime(100);
+    expect(ws.sent.filter((s) => s.includes('"ack"')).length).toBe(0);
   });
 });
