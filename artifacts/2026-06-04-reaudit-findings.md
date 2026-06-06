@@ -113,11 +113,15 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
     `input_mode` to every connector generically and capture is always-open observation (not a bug).
   - `payloads_by_role` per-role lock re-entry: a hot-path perf nuance with concurrency implications;
     accepted rather than risk the broadcast lock semantics.
-  - Frontend test hygiene (duplicate `describe` *names* over distinct tests; module-scope mocks):
-    cosmetic, and deleting/restructuring risks dropping coverage or depends on vitest isolation —
-    left as-is.
-  - HijackHost listener-cleanup is a non-leak (React discards the container + its listeners on unmount);
-    the vite hardcoded dev-proxy port is a conventional dev-only literal.
+  - ~~Frontend test hygiene (duplicate `describe` *names*; module-scope mocks)~~ → **✅ resolved**
+    (`660a1788`): the 7 continuation-half `describe` names are suffixed ` (continued)`, and
+    `approval-ux.test.ts` stubs `WebSocket`/`Terminal`/`FitAddon` per-test via `vi.stubGlobal` +
+    `vi.unstubAllGlobals` (no module-scope leakage). vitest stays green (321 frontend tests).
+  - ~~HijackHost listener-cleanup~~ → **✅ resolved** (`c1cc8b06`): the 3 container listeners are now
+    `removeEventListener`'d on unmount (was a non-leak — React discards the node — but now explicit).
+    The vite dev-proxy port was **already compliant**: `vite.config.ts` reads it from a named
+    `DEV_API_HOST` constant with a `UTERM_DEV_API_HOST` env override at the top of the config (not a
+    buried inline literal).
 
 ---
 
