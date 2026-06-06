@@ -37,11 +37,22 @@ class PatternDetector:
         most one annotation is returned per *category* — the first rule whose
         pattern matches wins and later rules in that category are skipped.
         """
+        return self.scan(event_type, text, seq)[0]
+
+    def scan(self, event_type: str, text: str, seq: int) -> tuple[list[Annotation], int]:
+        """Like :meth:`detect`, but also return the end offset of the furthest
+        match in *text* (0 when nothing matches).
+
+        :class:`StreamingDetector` uses the offset to carry only the window tail
+        *after* the matched region — bridging a second secret that straddles the
+        boundary without re-reporting a match that already completed.
+        """
         if not text:
-            return []
+            return [], 0
 
         results: list[Annotation] = []
         seen_categories: set[str] = set()
+        max_end = 0
 
         for rule in self._rules:
             if rule.category in seen_categories:
@@ -53,6 +64,7 @@ class PatternDetector:
                 continue
 
             seen_categories.add(rule.category)
+            max_end = max(max_end, m.end())
             match_text = m.group(0)[:_DESCRIPTION_TRUNCATE]
             try:
                 description = rule.description_template.format(match=match_text, event_type=event_type)
@@ -71,4 +83,4 @@ class PatternDetector:
                 )
             )
 
-        return results
+        return results, max_end
