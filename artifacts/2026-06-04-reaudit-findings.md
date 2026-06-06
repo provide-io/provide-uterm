@@ -12,7 +12,13 @@ hand re-confirmation of the two criticals, the NAT64 SSRF medium, and the regex/
 
 **Result:** the codebase is mature and well-hardened. **35/35** prior resolved claims still hold (0
 regressions). One reviewer finding was refuted by verification (recorded below). Net new confirmed:
-**2 critical, 4 medium, 7 low, 27 minor.**
+**2 critical, 3 medium, 7 low, 27 minor.**
+
+**Resolution status (2026-06-06): every actionable finding is closed.** Both criticals (C1, C2) and all
+seven lows (L1–L7) are fixed; of the 3 mediums, M1 + M2 are fixed and M3 (NAT64 SSRF) was re-classified
+**not-reproducible** and reverted (regression tests kept). The 27 minors are each either fixed or
+recorded as a conscious accept/by-design decision. The one refuted reviewer finding stays refuted.
+Nothing actionable remains open. Per-finding evidence is in the tables below.
 
 ---
 
