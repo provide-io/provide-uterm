@@ -23,11 +23,12 @@ package at 100% line+branch coverage; perimeter files were re-checked with the m
 first unblocked by fixing a pre-existing `AF_UNIX path too long` failure in `test_pam_listener` that
 broke the local baseline).
 
-> **Update 2026-06-06:** follow-up commits closed four items this section originally listed as
+> **Update 2026-06-06:** follow-up commits closed five items this section originally listed as
 > deferred/conditional — **L6** (`6706001f`), the **kbdint** end-to-end check (`7a97987a`),
-> **webhook-secret encryption** e2e verification in real workerd (`6ae732c1`), and now **L7**
-> (the `connector.py` mutation-pragma cleanup). The tables below reflect that; the prior framing is
-> preserved inline where it adds provenance.
+> **webhook-secret encryption** e2e verification in real workerd (`6ae732c1`), **L7** (the
+> `connector.py` mutation-pragma cleanup), and **L5** (the `_forward_stdin` blocking-socket → asyncio
+> Unix stream conversion). The tables below reflect that; the prior framing is preserved inline where
+> it adds provenance.
 
 **Fixed & committed:**
 
@@ -41,6 +42,7 @@ broke the local baseline).
 | L2 | ✅ fixed | CF webhook `pattern` length-capped + compile-validated at registration |
 | L3 | ✅ fixed | `ProvideHijack.dispose()` clears the approval countdown interval |
 | L4 | ✅ fixed | `PTYConnector.handle_input` swallows `os.write` `OSError`, marks disconnected |
+| L5 | ✅ fixed | `CaptureConnector._forward_stdin` converted from a blocking `socket.sendall` to an `asyncio` Unix stream (`open_unix_connection` + `write`/`drain`); non-blocking + thread-free, lazy-connect/reconnect-retry preserved |
 | L6 | ✅ fixed (`6706001f`) | `StreamingDetector` carries the *post-match* window tail (`PatternDetector.scan()` now returns `match_end`) so a second straddling secret survives the boundary — without re-reporting an already-completed match (the duplicate-annotation hazard that first deferred it) |
 | L7 | ✅ fixed | removed the 4 `# pragma: no mutate` on `connector.py`'s codec/decode/truncation lines; the exposed killable mutants are killed by `test_connector_mutation_mocked_part2.py` (invalid-UTF-8→U+FFFD; buffer cap at exactly 32769), and the 3 genuinely-equivalent residuals (`utf-8`→`UTF-8` ×2 codec case-flips, `>`→`>=` clamp no-op) are documented in `mutation_equivalents.toml` with exact mutant IDs |
 | minor (app) | ✅ fixed | `loadRecents` guards localStorage against non-array JSON (`Array.isArray`) |
@@ -67,9 +69,11 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
 
 **Deferred with recommendation (low value / behaviour tradeoff / needs product decision):**
 
-- **L5** (`capture_connector._forward_stdin` blocking I/O): *accept.* AF_UNIX connect/sendall on
-  keystroke-sized data is sub-microsecond and lazy-cached; a per-keystroke `run_in_executor` adds
-  thread-pool scheduling overhead that isn't clearly better. Documented as an accepted antipattern.
+- ~~**L5** (`capture_connector._forward_stdin` blocking I/O): *accept.*~~ → **✅ resolved**, moved to
+  the Fixed table. Rather than the `run_in_executor` offload (which adds per-keystroke thread-pool
+  scheduling), `_forward_stdin` now uses an `asyncio` Unix stream (`open_unix_connection` + `write`/
+  `drain`), so a slow or dead peer can never stall the event loop — thread-free and idiomatic. The
+  lazy-connect + reconnect-retry-once semantics are preserved.
 - ~~**L6** (`_streaming.py` carry-tail drop)~~ → **✅ resolved (`6706001f`)**, moved to the Fixed table.
   The original "no clean fix" assessment (a literal `carry = text[-max:]` would re-emit a duplicate
   annotation) was superseded: `scan()` now returns the furthest `match_end`, so the carry is the bounded
@@ -238,7 +242,7 @@ metadata/private checks.
 | L2 | `cloudflare/do/_webhooks.py:96-102,149-151` | Webhook `pattern` accepted with no length/ReDoS guard. → length-cap + `compile_expect_regex` at registration. Bounded by CF's 50ms CPU cap; admin-only. |
 | L3 | `frontend/hijack_impl.ts:142-160` | `dispose()` doesn't clear `_approvalTimer` (self-clears at expiry). → call `_hideApprovalUI()`. |
 | L4 | `platform/pty/connector.py:289-292` | `handle_input` `os.write` not OSError-guarded (asymmetry with `_read_master`; caught by retry loop). → try/except, set `_connected=False`. |
-| L5 | `platform/pty/capture_connector.py:151-169` | `_forward_stdin` blocking socket in async ctx (AF_UNIX latency negligible). → executor offload / asyncio stream. |
+| L5 | `platform/pty/capture_connector.py:151-169` | `_forward_stdin` blocking socket in async ctx (AF_UNIX latency negligible). → executor offload / asyncio stream. **✅ fixed** — converted to an `asyncio` Unix stream (thread-free, non-blocking). See Resolution status. |
 | L6 | `annotation/_streaming.py:53` | On a match, carry reset to `""` drops the fresh-`text` tail → a second cross-boundary secret can be missed. **✅ fixed (`6706001f`)** — *not* via the naive `text[-max:]` (which would duplicate completed matches) but by carrying the *post-match* window suffix using a new `scan()`→`match_end` return. See Resolution status. |
 | L7 | `platform/pty/connector.py` (codec/decode/truncation lines) | 4 `# pragma: no mutate` masked killable mutants (`"XXutf-8XX"`→LookupError; `>32768` off-by-one). **✅ fixed** — pragmas removed; killable mutants killed by `test_connector_mutation_mocked_part2.py`; 3 genuine equivalents documented in `mutation_equivalents.toml`. See Resolution status. (Policy text is in `docs/mutmut-survivors-triage.md`.) |
 

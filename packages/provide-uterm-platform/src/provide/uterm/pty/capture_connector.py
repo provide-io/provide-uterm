@@ -25,8 +25,8 @@ Config keys accepted in connector_config:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
-import socket
 import time
 from typing import Any
 
@@ -88,7 +88,7 @@ class CaptureConnector:
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
         self._stdin_count = 0
-        self._stdin_sock: socket.socket | None = None
+        self._stdin_writer: asyncio.StreamWriter | None = None
 
     async def start(self) -> None:
         self._capture = CaptureSocket(self._socket_path)
@@ -96,12 +96,7 @@ class CaptureConnector:
         self._connected = True
 
     async def stop(self) -> None:
-        if self._stdin_sock is not None:
-            try:
-                self._stdin_sock.close()
-            except OSError:
-                pass
-            self._stdin_sock = None
+        await self._close_stdin_writer()
         if self._capture is not None:
             await self._capture.stop()
             self._capture = None
@@ -143,28 +138,39 @@ class CaptureConnector:
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         if self._stdin_socket_path:
-            self._forward_stdin(data.encode("utf-8", errors="replace"))
+            await self._forward_stdin(data.encode("utf-8", errors="replace"))
         return []
 
-    def _forward_stdin(self, data: bytes) -> None:
-        """Write to stdin socket; lazy-connect, reconnect and retry once on error."""
+    async def _forward_stdin(self, data: bytes) -> None:
+        """Forward keystrokes to the stdin socket over an asyncio Unix stream.
+
+        Lazy-connects, then writes + drains; on error reconnects and retries once.
+        An asyncio stream (rather than a blocking ``socket.sendall``) keeps a slow
+        or dead peer from stalling the event loop on a keystroke.
+        """
         for _attempt in range(2):
-            if self._stdin_sock is None:
+            if self._stdin_writer is None:
                 try:
-                    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    s.connect(self._stdin_socket_path)  # type: ignore[arg-type]
-                    self._stdin_sock = s
+                    _reader, self._stdin_writer = await asyncio.open_unix_connection(self._stdin_socket_path)
                 except OSError:
                     return
             try:
-                self._stdin_sock.sendall(data)
+                self._stdin_writer.write(data)
+                await self._stdin_writer.drain()
                 return
             except OSError:
-                try:
-                    self._stdin_sock.close()
-                except OSError:
-                    pass
-                self._stdin_sock = None
+                await self._close_stdin_writer()
+
+    async def _close_stdin_writer(self) -> None:
+        """Close the stdin stream writer, swallowing teardown errors."""
+        if self._stdin_writer is None:
+            return
+        self._stdin_writer.close()
+        try:
+            await self._stdin_writer.wait_closed()
+        except OSError:
+            pass
+        self._stdin_writer = None
 
     async def handle_control(self, action: str) -> list[dict[str, Any]]:
         return []
