@@ -134,7 +134,7 @@ class PTYConnector:
         # holds trailing partial bytes internally and emits the completed
         # codepoint on the next decode. errors="replace" is retained so genuine
         # garbage still surfaces as U+FFFD.
-        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")  # pragma: no mutate
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._capture_socket: CaptureSocket | None = None
         self._capture_tmpdir: str | None = None
         self._pam: PamSession | None = None
@@ -340,8 +340,8 @@ class PTYConnector:
         if data:
             # Incremental decode so a multibyte sequence split across reads is
             # not corrupted into U+FFFD (the decoder buffers partial bytes).
-            self._buffer += self._decoder.decode(data)  # pragma: no mutate
-            if len(self._buffer) > 32768:  # pragma: no mutate
+            self._buffer += self._decoder.decode(data)
+            if len(self._buffer) > 32768:
                 self._buffer = self._buffer[-32768:]
             return [self._snapshot()]
         return []
@@ -349,7 +349,7 @@ class PTYConnector:
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         if self.is_connected() and self._master_fd is not None and not self._paused:
             try:
-                os.write(self._master_fd, data.encode("utf-8"))  # pragma: no mutate
+                os.write(self._master_fd, data.encode("utf-8"))
             except OSError:
                 # The PTY master flips to EIO/EPIPE the instant the child exits.
                 # Mirror _read_master: mark disconnected instead of letting the

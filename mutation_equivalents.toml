@@ -723,3 +723,18 @@ reason = "base64.b64encode(digest).decode('ascii'->'ASCII'); case-insensitive co
 [[equivalent]]
 mutant = "provide.uterm.auth.x_fingerprint_from_openssh_blob__mutmut_12"
 reason = "...decode('ascii').rstrip('='->'XX=XX'); the digest is always a 32-byte SHA-256, whose base64 is 44 chars ending in one '='. The char before the padding (index 42) encodes only 4 significant bits + 2 zero pad bits, so its base64 index is always a multiple of 4 and can never be 'X' (index 23). rstrip('X=') therefore strips exactly the same single '=' as rstrip('='). Verified by search: no input produces an 'X'-before-padding fingerprint. Unobservable."
+
+# --- pty/connector.py — codec-name case flips + buffer-cap boundary (L7 hygiene) ---
+# The 4 `# pragma: no mutate` markers on the codec/decode/truncation lines were
+# removed (re-audit L7); their killable mutants are now killed by
+# test_connector_mutation_mocked{,_part2}.py. These three residual mutants are
+# genuinely equivalent and documented here.
+[[equivalent]]
+mutant = "provide.uterm.pty.connector.xǁPTYConnectorǁ__init____mutmut_121"
+reason = "codecs.getincrementaldecoder('utf-8'->'UTF-8'); the codec registry lookup is case-insensitive (encodings.normalize_encoding folds 'UTF-8'->'utf-8'), so both select the identical incremental decoder and produce byte-identical output for every input. Verified: decoding b'\\xff' yields U+FFFD under both. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.pty.connector.xǁPTYConnectorǁpoll_messages__mutmut_8"
+reason = "`if len(self._buffer) > 32768:` -> `>= 32768`, guarding `self._buffer = self._buffer[-32768:]`. The predicate differs only at len == 32768: the original skips truncation (buffer is already 32768 chars), the mutant truncates via [-32768:], which on a 32768-char string returns the identical string. For every other length the predicate value is unchanged. The buffer is byte-identical in all cases. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.pty.connector.xǁPTYConnectorǁhandle_input__mutmut_11"
+reason = "data.encode('utf-8'->'UTF-8'); case-insensitive codec lookup normalizes 'UTF-8'->'utf-8', identical bytes written to the PTY master for every input. Verified: 'hi'.encode('UTF-8') == b'hi'. Unobservable."

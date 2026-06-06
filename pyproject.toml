@@ -417,6 +417,7 @@ tests_dir = [
     # during a mutation run by the pty conftest, to keep real children out of
     # mutmut's fork-loop os.wait() reaper). See test_connector_mutation_mocked.py.
     "packages/provide-uterm-platform/tests/pty/test_connector_mutation_mocked.py",
+    "packages/provide-uterm-platform/tests/pty/test_connector_mutation_mocked_part2.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_codec.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_coverage.py",
     "packages/provide-uterm/tests/terminal/test_control_channel_mutmut.py",
