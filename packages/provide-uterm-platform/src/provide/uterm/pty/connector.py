@@ -4,6 +4,7 @@
 #
 from __future__ import annotations
 
+import asyncio
 import codecs
 import fcntl
 import hashlib
@@ -45,6 +46,15 @@ _VALID_CONFIG_KEYS = frozenset(
 )
 
 _VALID_MODES = frozenset({"open", "hijack"})
+
+# Grace window granted in stop() to a child that outlived SIGHUP + PTY EOF before
+# escalating to SIGKILL: poll up to ``_STOP_GRACE_POLLS`` times, sleeping
+# ``_STOP_GRACE_POLL_S`` between non-blocking reaps (≈1s total). Lets the child run
+# its hangup path — flush shell history, remove editor swap files — instead of
+# being force-killed the instant it hasn't exited yet. Mirrors the manager tier's
+# graceful SIGTERM→wait→SIGKILL escalation (manager/process_impl _stop_process_tree).
+_STOP_GRACE_POLLS = 20
+_STOP_GRACE_POLL_S = 0.05
 
 
 def _register() -> None:
@@ -256,7 +266,14 @@ class PTYConnector:
             except ChildProcessError:
                 pid_reaped = self._child_pid  # already gone  # pragma: no mutate
             if pid_reaped == 0:
-                # Child still running — escalate to SIGKILL then block-wait
+                # Child outlived SIGHUP + PTY EOF. Grant a grace window for it to
+                # run its hangup path (flush shell history, clean editor swap
+                # files) before force-killing. The fast WNOHANG above keeps an
+                # already-exited child (the common user-initiated exit) at zero
+                # added latency; only a still-live child pays the grace.
+                pid_reaped = await self._reap_within_grace(self._child_pid)
+            if pid_reaped == 0:
+                # Still alive after the grace window — escalate to SIGKILL then block-wait
                 try:
                     os.kill(self._child_pid, signal.SIGKILL)
                 except (ProcessLookupError, PermissionError):
@@ -287,6 +304,26 @@ class PTYConnector:
             self._pam = None
 
         self._connected = False
+
+    async def _reap_within_grace(self, pid: int) -> int:
+        """Poll-reap *pid* over the grace window; return the reaped pid or ``0``.
+
+        Sleeps ``_STOP_GRACE_POLL_S`` between non-blocking ``waitpid`` checks, up
+        to ``_STOP_GRACE_POLLS`` times, so a child that voluntarily exits after
+        SIGHUP/EOF is reaped without SIGKILL and the caller escalates the instant
+        the budget is exhausted. Returns the child's pid if it exits (or was
+        already reaped) and ``0`` if it is still alive after the window — matching
+        ``waitpid(WNOHANG)``'s convention so the caller's ``== 0`` check is uniform.
+        """
+        for _ in range(_STOP_GRACE_POLLS):
+            await asyncio.sleep(_STOP_GRACE_POLL_S)
+            try:
+                reaped, _ = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                return pid  # reaped elsewhere
+            if reaped != 0:
+                return reaped
+        return 0
 
     def is_connected(self) -> bool:
         return self._connected and self._master_fd is not None
