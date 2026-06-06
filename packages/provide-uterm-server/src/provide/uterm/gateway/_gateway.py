@@ -374,8 +374,13 @@ async def _pipe_ws(
     iac_negotiate: bool = False,
     iac_negotiate_timeout: float = 0.4,
     ws_ssl: _ssl.SSLContext | bool | None = None,
-) -> None:
+) -> int | None:
     """Open a WebSocket to *ws_url* and bidirectionally pipe with reader/writer.
+
+    Returns the WebSocket close code once the pipe ends (``None`` if it is not
+    available). The caller uses it to distinguish a deliberate server-side close
+    (``1000`` normal closure) from a transient drop / DO hibernation
+    (``1006``/``None``) so it does not reconnect after a user-initiated quit.
 
     When ``iac_negotiate`` is True and ``telnet`` is True, the gateway
     performs a brief RFC 1091 TTYPE + RFC 1572 NEW-ENVIRON negotiation
@@ -449,6 +454,10 @@ async def _pipe_ws(
         for task in pending:  # pragma: no branch — may be empty if both finish
             task.cancel()
         await asyncio.gather(*[*_done, *pending], return_exceptions=True)
+
+    # The context manager has closed the WS; surface its close code so the
+    # caller can avoid reconnecting after a deliberate (1000) server close.
+    return getattr(ws, "close_code", None)
 
 
 # ---------------------------------------------------------------------------
