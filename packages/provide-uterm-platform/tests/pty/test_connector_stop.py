@@ -86,6 +86,12 @@ async def test_stop_escalates_to_sigkill_when_child_survives_sighup() -> None:
     # The grace window polls the full budget before escalating (no early kill).
     assert mock_sleep.call_count == 20
     mock_sleep.assert_any_call(0.05)
+    # Every WNOHANG poll — fast-path AND grace — must target the real child pid.
+    # Pins the pid argument so os.waitpid(pid -> None) and
+    # _reap_within_grace(self._child_pid -> None) mutants (which a pid-ignoring
+    # mock would otherwise let survive) are killed.
+    wnohang_pids = {pid for pid, flags in waitpid_calls if flags == os.WNOHANG}
+    assert wnohang_pids == {12345}
 
 
 async def test_stop_grace_reaps_child_that_exits_during_window() -> None:
