@@ -169,8 +169,9 @@ class TelnetWsGateway:
             for attempt in range(max_reconnects + 1):
                 if reader.at_eof():
                     break
+                close_code: int | None = None
                 try:
-                    await _pipe_ws(
+                    close_code = await _pipe_ws(
                         reader,
                         writer,
                         self._ws_url,
@@ -187,6 +188,14 @@ class TelnetWsGateway:
 
                 # TCP client closed — we're done
                 if reader.at_eof():
+                    break
+
+                # Deliberate server-side close (WS normal closure 1000): the
+                # session ended on purpose (e.g. the user quit), so end the
+                # telnet connection instead of reconnecting. Transient drops /
+                # DO hibernation use 1006/None and still reconnect below.
+                if close_code == 1000:
+                    logger.debug("ws_closed_normally: not reconnecting (deliberate close)")
                     break
 
                 # WS closed while TCP is still alive (hibernation or transient drop)

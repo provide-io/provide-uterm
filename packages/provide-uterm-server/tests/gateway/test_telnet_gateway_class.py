@@ -119,6 +119,66 @@ class TestTelnetWsGateway:
         assert call_count >= 1  # at least one call; reconnect behavior is tested
         writer.close.assert_called_once()
 
+    async def test_handle_does_not_reconnect_on_normal_close(self) -> None:
+        """A deliberate server-side close (WS code 1000) ends the session — the
+        gateway must NOT reconnect. Transient drops / hibernation use 1006/None
+        and still reconnect; only a normal closure means the user quit on purpose.
+        """
+        gw = TelnetWsGateway("ws://test")
+
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        call_count = 0
+
+        async def mock_pipe_ws(*args: Any, **kwargs: Any) -> int:
+            nonlocal call_count
+            call_count += 1
+            return 1000  # normal closure — the server closed deliberately
+
+        # TCP client stays connected throughout; only the 1000 close must stop the loop.
+        reader.at_eof = MagicMock(return_value=False)
+
+        with (
+            patch("provide.uterm.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe_ws),
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await gw._handle(reader, writer)
+
+        assert call_count == 1  # no reconnect after a deliberate close
+        mock_sleep.assert_not_called()  # no reconnect backoff
+        writer.close.assert_called_once()
+
+    async def test_handle_reconnects_on_abnormal_close(self) -> None:
+        """A non-1000 close (transient drop / hibernation) still reconnects."""
+        gw = TelnetWsGateway("ws://test")
+
+        reader = AsyncMock(spec=asyncio.StreamReader)
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        call_count = 0
+
+        async def mock_pipe_ws(*args: Any, **kwargs: Any) -> int:
+            nonlocal call_count
+            call_count += 1
+            return 1006  # abnormal closure — should reconnect
+
+        # enter loop; after pipe TCP still alive; re-enter; after 2nd pipe TCP closed
+        reader.at_eof = MagicMock(side_effect=[False, False, False, True])
+
+        with (
+            patch("provide.uterm.gateway._telnet_gateway._pipe_ws", side_effect=mock_pipe_ws),
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await gw._handle(reader, writer)
+
+        assert call_count == 2  # reconnected once
+        mock_sleep.assert_called()
+
     async def test_handle_stops_when_reader_eof_initially(self) -> None:
         gw = TelnetWsGateway("ws://test")
 
