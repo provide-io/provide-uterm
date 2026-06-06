@@ -143,6 +143,13 @@ async def test_request_json_oversized_body_returns_empty() -> None:
     rt = _make_runtime()
 
     class _BigReq:
+        def __init__(self) -> None:
+            self.headers = type(
+                "MockHeaders",
+                (),
+                {"get": lambda self, k, d=None: "application/json" if k.lower() == "content-type" else d},
+            )()
+
         async def text(self) -> str:
             return "x" * (_MAX_REQUEST_BODY + 1)
 
