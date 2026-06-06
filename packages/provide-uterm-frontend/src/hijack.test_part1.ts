@@ -426,8 +426,8 @@ describe("message dispatch", () => {
     sendMessage({ type: "hijack_state", hijacked: true, owner: "other" });
     const sentBefore = getWs().sent.length;
     vi.advanceTimersByTime(5100);
-    // No heartbeat sent (cleared)
-    expect(getWs().sent.length).toBe(sentBefore);
+    // No heartbeat sent (cleared) — ignore Tier-A ACK frames.
+    expect(getWs().sent.slice(sentBefore).filter((f) => !f.includes('"ack"'))).toHaveLength(0);
   });
 
   it("hijack_state with input_mode updates status", () => {
@@ -522,8 +522,8 @@ describe("heartbeat", () => {
     const sentBefore = getWs().sent.length;
     vi.advanceTimersByTime(5100);
     // No heartbeat WS frame sent — rest mode skips WS and calls fetch
-    // (fetch returns null because _restHijackId is null, but no WS frames sent)
-    expect(getWs().sent.length).toBe(sentBefore);
+    // (fetch returns null because _restHijackId is null). Ignore Tier-A ACK frames.
+    expect(getWs().sent.slice(sentBefore).filter((f) => !f.includes('"ack"'))).toHaveLength(0);
   });
 });
 
@@ -997,8 +997,8 @@ describe("heartbeat", () => {
     const sentBefore = getWs().sent.length;
     vi.advanceTimersByTime(5100);
     // No heartbeat WS frame sent — rest mode skips WS and calls fetch
-    // (fetch returns null because _restHijackId is null, but no WS frames sent)
-    expect(getWs().sent.length).toBe(sentBefore);
+    // (fetch returns null because _restHijackId is null). Ignore Tier-A ACK frames.
+    expect(getWs().sent.slice(sentBefore).filter((f) => !f.includes('"ack"'))).toHaveLength(0);
   });
 });
 
@@ -1571,5 +1571,32 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     );
     debugSpy.mockRestore();
     w7.dispose();
+  });
+});
+
+// ── Tier-A backpressure consumption ACKs ──────────────────────────────────────
+
+describe("ProvideHijack Tier-A backpressure ACKs", () => {
+  it("ACKs cumulative received bytes after the throttle window", () => {
+    makeWidget();
+    getWs().open();
+    getWs().receive("hello"); // 5 raw bytes received
+    // Throttled: no ack until the window elapses.
+    expect(getWs().sent.some((s) => s.includes('"ack"'))).toBe(false);
+    vi.advanceTimersByTime(100);
+    const ack = getWs().sent.find((s) => s.includes('"ack"'));
+    expect(ack).toBeTruthy();
+    expect(ack).toContain('"bytes":5');
+  });
+
+  it("coalesces frames within one window into a single cumulative ACK", () => {
+    makeWidget();
+    getWs().open();
+    getWs().receive("abc"); // 3
+    getWs().receive("de"); // 2
+    vi.advanceTimersByTime(100);
+    const acks = getWs().sent.filter((s) => s.includes('"ack"'));
+    expect(acks).toHaveLength(1);
+    expect(acks[0]).toContain('"bytes":5');
   });
 });
