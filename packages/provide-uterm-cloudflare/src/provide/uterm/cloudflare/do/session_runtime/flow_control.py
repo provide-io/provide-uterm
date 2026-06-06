@@ -83,12 +83,14 @@ class FlowController:
         return best
 
     def decide(self, now: float) -> str | None:
-        """Return ``PAUSE``, ``RESUME``, or ``None`` for the current inflight + state."""
-        inflight = self.max_inflight(now)
-        if not self._paused and inflight > self.high_water:
+        """Producer pause/resume decision (Tier B): pause only when *every* active
+        browser is congested, resume once at least one can keep up again. Per-browser
+        hysteresis lives in the sticky congestion state, so this stays stable."""
+        congested = self.all_active_congested(now)
+        if not self._paused and congested:
             self._paused = True
             return PAUSE
-        if self._paused and inflight < self.low_water:
+        if self._paused and not congested:
             self._paused = False
             return RESUME
         return None
