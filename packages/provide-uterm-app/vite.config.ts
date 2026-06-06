@@ -2,6 +2,13 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+// Dev-server proxy target for the local FastAPI backend. Kept out of the inline
+// proxy config (no hardcoded ports) and overridable via env; defaults to the
+// FastAPI dev port (27780).
+const DEV_API_HOST = process.env.UTERM_DEV_API_HOST ?? "localhost:27780";
+const DEV_HTTP_TARGET = `http://${DEV_API_HOST}`;
+const DEV_WS_TARGET = `ws://${DEV_API_HOST}`;
+
 export default defineConfig({
   plugins: [react()],
   base: "",
@@ -20,8 +27,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:27780",
-      "/ws": { target: "ws://localhost:27780", ws: true },
+      "/api": DEV_HTTP_TARGET,
+      "/ws": { target: DEV_WS_TARGET, ws: true },
     },
   },
 });
