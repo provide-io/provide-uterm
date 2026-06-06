@@ -125,8 +125,9 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
       },
     });
 
-    // Forward xterm scroll events → presence_update (normalized to 0-1 fractions)
-    container.addEventListener("uterm:scroll", (e) => {
+    // Forward xterm scroll events → presence_update (normalized to 0-1 fractions).
+    // Named (not inline) so the cleanup can removeEventListener it — see return below.
+    const onScroll = (e: Event) => {
       const { viewportY, rows, totalLines } = (
         e as CustomEvent<{ viewportY: number; rows: number; totalLines?: number }>
       ).detail;
@@ -138,15 +139,15 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
         scroll_line: normTop,
         scroll_range: [normTop, normBottom],
       });
-    });
+    };
+    container.addEventListener("uterm:scroll", onScroll);
 
-    // Forward DeckMux outbound events → WS
-    container.addEventListener("deckmux:request_control", () => {
+    // Forward DeckMux outbound events → WS (request_control and hand_off both ask for control)
+    const onRequestControl = () => {
       widget.sendControlMessage({ type: "control_request" });
-    });
-    container.addEventListener("deckmux:hand_off", () => {
-      widget.sendControlMessage({ type: "control_request" });
-    });
+    };
+    container.addEventListener("deckmux:request_control", onRequestControl);
+    container.addEventListener("deckmux:hand_off", onRequestControl);
 
     // Keepalive: send dims every 15 s so server-side idle pruning can evict dead connections
     const keepaliveInterval = setInterval(() => {
@@ -156,6 +157,9 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
     }, 15_000);
 
     return () => {
+      container.removeEventListener("uterm:scroll", onScroll);
+      container.removeEventListener("deckmux:request_control", onRequestControl);
+      container.removeEventListener("deckmux:hand_off", onRequestControl);
       clearInterval(keepaliveInterval);
       widget.dispose();
     };
