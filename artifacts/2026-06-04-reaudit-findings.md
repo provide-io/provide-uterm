@@ -23,6 +23,11 @@ package at 100% line+branch coverage; perimeter files were re-checked with the m
 first unblocked by fixing a pre-existing `AF_UNIX path too long` failure in `test_pam_listener` that
 broke the local baseline).
 
+> **Update 2026-06-06:** follow-up commits closed three items this section originally listed as
+> deferred/conditional — **L6** (`6706001f`), the **kbdint** end-to-end check (`7a97987a`), and
+> **webhook-secret encryption** e2e verification in real workerd (`6ae732c1`). The tables below now
+> reflect that; the prior framing is preserved inline where it adds provenance.
+
 **Fixed & committed:**
 
 | ID | Status | Commit summary |
@@ -35,6 +40,7 @@ broke the local baseline).
 | L2 | ✅ fixed | CF webhook `pattern` length-capped + compile-validated at registration |
 | L3 | ✅ fixed | `ProvideHijack.dispose()` clears the approval countdown interval |
 | L4 | ✅ fixed | `PTYConnector.handle_input` swallows `os.write` `OSError`, marks disconnected |
+| L6 | ✅ fixed (`6706001f`) | `StreamingDetector` carries the *post-match* window tail (`PatternDetector.scan()` now returns `match_end`) so a second straddling secret survives the boundary — without re-reporting an already-completed match (the duplicate-annotation hazard that first deferred it) |
 | minor (app) | ✅ fixed | `loadRecents` guards localStorage against non-array JSON (`Array.isArray`) |
 | minor (mcp) | ✅ fixed | `_is_internal_host` closes the `localhost.` / `*.localhost` denylist bypass |
 | minor (cf) | ✅ fixed | `_ensure_credentials` backs off the credential reload on a KV error |
@@ -62,11 +68,10 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
 - **L5** (`capture_connector._forward_stdin` blocking I/O): *accept.* AF_UNIX connect/sendall on
   keystroke-sized data is sub-microsecond and lazy-cached; a per-keystroke `run_in_executor` adds
   thread-pool scheduling overhead that isn't clearly better. Documented as an accepted antipattern.
-- **L6** (`_streaming.py` carry-tail drop): *no clean fix.* The literal `carry = text[-max:]` would
-  re-emit a duplicate credential annotation whenever a complete secret sits in a chunk followed by more
-  output (common in terminals); `Annotation.span` is seq-based (no char offset) and `match_text` was
-  deliberately removed (secret-leak fix `a4296f46`), so the post-match tail can't be carried precisely.
-  Recommend a cross-call dedupe of recently-emitted matches before changing the carry behaviour.
+- ~~**L6** (`_streaming.py` carry-tail drop)~~ → **✅ resolved (`6706001f`)**, moved to the Fixed table.
+  The original "no clean fix" assessment (a literal `carry = text[-max:]` would re-emit a duplicate
+  annotation) was superseded: `scan()` now returns the furthest `match_end`, so the carry is the bounded
+  *post-match* window suffix — bridging a second straddling secret with no duplicate.
 - **L7** (remove `# pragma: no mutate` on `connector.py`): *do as dedicated mutation-hygiene work.*
   Removing the 4 pragmas exposes killable codec mutants (`"XXutf-8XX"`→LookupError) that need
   boundary tests plus equivalent-codec entries in `mutation_equivalents.toml`; best done as a focused
@@ -75,7 +80,8 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
   - **Telnet `0.0.0.0` bind** → ✅ fixed: default to loopback + `allow_unauthenticated` opt-in
     (mirrors SSH) + a `--allow-unauthenticated-telnet` CLI flag.
   - **Plaintext webhook secret** → ✅ fixed: AES-256-GCM at rest keyed by the `WEBHOOK_SECRET_KEY`
-    Worker binding (`do/_webhook_crypto.py`), backward-compatible with plaintext / no-key deployments.
+    Worker binding (`do/_webhook_crypto.py`), backward-compatible with plaintext / no-key deployments;
+    the encrypt/decrypt round-trip is exercised in the real workerd runtime (`6ae732c1`).
   - **Unauthenticated `/metrics`** → ✅ fixed: `SecurityConfig.metrics_require_auth` (default open for
     Prometheus); when enabled both endpoints require a non-anonymous principal (401 otherwise).
   - **Tighten AWS/GitHub regexes** → **left loose** (maintainer decision): a credential detector
@@ -86,7 +92,7 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
   - ✅ `CaptureSocket.read_nowait()` added; `poll_messages` no longer reaches into the private `_queue`.
   - ✅ `kbdint` → implemented `get_kbdint_challenge`/`validate_kbdint_response` so kbdint fall-through
     actually completes (asyncssh 2.23 empty-challenge + accept), realizing the documented intent.
-    Unit-tested at the callback level; the end-to-end SSH kbdint handshake wants an e2e/real-SSH check.
+    Unit-tested at the callback level **and** covered end-to-end against a real asyncssh client (`7a97987a`).
 - **Minor tail — intentionally left as-is (documented):**
   - `CaptureConnector` accepts-but-ignores `input_mode`: **by design** — the session framework passes
     `input_mode` to every connector generically and capture is always-open observation (not a bug).
@@ -228,7 +234,7 @@ metadata/private checks.
 | L3 | `frontend/hijack_impl.ts:142-160` | `dispose()` doesn't clear `_approvalTimer` (self-clears at expiry). → call `_hideApprovalUI()`. |
 | L4 | `platform/pty/connector.py:289-292` | `handle_input` `os.write` not OSError-guarded (asymmetry with `_read_master`; caught by retry loop). → try/except, set `_connected=False`. |
 | L5 | `platform/pty/capture_connector.py:151-169` | `_forward_stdin` blocking socket in async ctx (AF_UNIX latency negligible). → executor offload / asyncio stream. |
-| L6 | `annotation/_streaming.py:53` | On a match, carry reset to `""` drops the fresh-`text` tail → a second cross-boundary secret can be missed. → `self._carry = text[-self._max_carry:]` always. |
+| L6 | `annotation/_streaming.py:53` | On a match, carry reset to `""` drops the fresh-`text` tail → a second cross-boundary secret can be missed. **✅ fixed (`6706001f`)** — *not* via the naive `text[-max:]` (which would duplicate completed matches) but by carrying the *post-match* window suffix using a new `scan()`→`match_end` return. See Resolution status. |
 | L7 | `platform/pty/connector.py:283-284,291,326` | 4 `# pragma: no mutate` mask killable mutants (`"XXutf-8XX"`→LookupError; `>32768` off-by-one). → remove pragmas, add boundary tests, document equivalents in `mutation_equivalents.toml`. (Policy text is in `docs/mutmut-survivors-triage.md`, not `MUTATION_PATTERNS.md`.) |
 
 ---
