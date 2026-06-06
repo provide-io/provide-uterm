@@ -229,6 +229,75 @@ async def test_handle_input_noop_when_not_connected() -> None:
     assert out[0]["type"] == "snapshot"  # still returns a snapshot, no write
 
 
+async def test_handle_input_no_write_when_connected_but_paused() -> None:
+    """Paused (connected, fd set) → the guard is False → no write. Pins
+    ``not self._paused`` so a ``self._paused`` mutant (which would write while
+    paused) is killed."""
+    r, w = os.pipe()
+    try:
+        os.set_blocking(r, False)
+        conn = _conn()
+        _connected(conn, w)
+        conn._paused = True
+        await conn.handle_input("nope")
+        try:
+            got = os.read(r, 16)
+        except BlockingIOError:
+            got = b""
+        assert got == b""
+    finally:
+        os.close(r)
+        os.close(w)
+
+
+async def test_handle_input_no_write_when_disconnected_with_fd() -> None:
+    """Disconnected but with an fd set → the guard is False → no write. Pins the
+    ``is_connected() and ...`` conjunction so an ``and``->``or`` mutant (which
+    would write while disconnected) is killed."""
+    r, w = os.pipe()
+    try:
+        os.set_blocking(r, False)
+        conn = _conn()
+        conn._master_fd = w  # fd present ...
+        conn._connected = False  # ... but not connected
+        await conn.handle_input("nope")
+        try:
+            got = os.read(r, 16)
+        except BlockingIOError:
+            got = b""
+        assert got == b""
+    finally:
+        os.close(r)
+        os.close(w)
+
+
+async def test_handle_input_oserror_marks_disconnected() -> None:
+    """A failed os.write (closed fd → OSError) flips _connected to False. Pins
+    the ``self._connected = False`` assignment against a ``= True`` mutant."""
+    r, w = os.pipe()
+    os.close(w)  # writing to a closed fd raises OSError (EBADF)
+    conn = _conn()
+    _connected(conn, w)
+    assert conn._connected is True
+    await conn.handle_input("boom")
+    assert conn._connected is False
+    os.close(r)
+
+
+async def test_poll_messages_empty_when_connected_but_read_yields_nothing() -> None:
+    """Connected + not paused but the read returns no data → []. Exercises the
+    ``if data:`` False branch and the guard's connected / not-paused path."""
+    r, w = os.pipe()
+    try:
+        os.set_blocking(r, False)
+        conn = _conn()
+        _connected(conn, r)  # connected, reading the empty pipe
+        assert await conn.poll_messages() == []
+    finally:
+        os.close(r)
+        os.close(w)
+
+
 def test_read_master_none_fd_returns_empty() -> None:
     conn = _conn()
     assert conn._read_master() == b""
