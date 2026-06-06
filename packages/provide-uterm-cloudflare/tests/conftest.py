@@ -27,6 +27,13 @@ import pytest
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _CF_VENDOR_MISSING = not (_PACKAGE_ROOT / "python_modules").exists()
 
+# The root pytest runs with `--import-mode=importlib`, which (unlike the default
+# prepend mode) does NOT add the tests dir to sys.path. Insert it so sibling
+# test-helper modules (e.g. cf_e2e_auth, cf_jwt_harness) are importable by name.
+_TESTS_DIR = str(Path(__file__).resolve().parent)
+if _TESTS_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_DIR)
+
 # Ensure the main provide-uterm src is on sys.path so `provide.uterm` is
 # importable in E2E tests that use HostedSessionRuntime.  The `provide` namespace
 # package can resolve to provide-engine only if its src isn't first on sys.path.
