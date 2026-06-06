@@ -32,9 +32,8 @@ from typing import Any
 
 import pytest
 import websockets as _websockets
+from cf_e2e_auth import ws_auth_headers
 from playwright.sync_api import Page
-
-_DEV_BEARER = "e2e-dev-token"
 
 # JS injected into each page via a single evaluate() call.
 # Using evaluate() (not set_content + evaluate) avoids the Playwright
@@ -153,7 +152,7 @@ def _send_snapshot_via_worker_ws(worker_ws_url: str, snapshot_screen: str, keep_
     async def _run() -> None:
         async with _websockets.connect(
             worker_ws_url,
-            additional_headers={"Authorization": f"Bearer {_DEV_BEARER}"},
+            additional_headers={**ws_auth_headers(worker_ws_url)},
         ) as ws:
             await ws.send(json.dumps({"type": "snapshot", "screen": snapshot_screen, "ts": time.time()}))
             await asyncio.sleep(keep_alive_s)

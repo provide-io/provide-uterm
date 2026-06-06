@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 import urllib.error
 import urllib.request
@@ -26,32 +25,17 @@ import uuid
 
 import pytest
 import websockets
+from cf_e2e_auth import http_auth_headers, ws_auth_headers
 
 from provide.uterm.control_channel import encode_control
 
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-uterm-e2e-test/1.0"
 
-# CF Access service token for real_cf tests (bypasses Cloudflare Access login).
-# Set via env vars or fall back to empty (local pywrangler dev uses AUTH_MODE=dev).
-_CF_CLIENT_ID = os.environ.get("CF_ACCESS_CLIENT_ID", "")
-_CF_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
-_WORKER_BEARER_TOKEN = os.environ.get("CF_WORKER_BEARER_TOKEN", "")
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _cf_access_headers() -> dict[str, str]:
-    """Return CF Access service token headers if configured."""
-    if _CF_CLIENT_ID and _CF_CLIENT_SECRET:
-        return {
-            "CF-Access-Client-Id": _CF_CLIENT_ID,
-            "CF-Access-Client-Secret": _CF_CLIENT_SECRET,
-        }
-    return {}
 
 
 def _base_ws(base_http: str) -> str:
@@ -63,19 +47,14 @@ def _new_worker_id() -> str:
 
 
 def _ws_connect(uri: str):
-    """Connect with CF Access headers and worker bearer token when available."""
-    extra = _cf_access_headers()
-    # Worker WS connections need the bearer token for the DO auth check.
-    if _WORKER_BEARER_TOKEN and "/ws/worker/" in uri:
-        extra["Authorization"] = f"Bearer {_WORKER_BEARER_TOKEN}"
-    if extra:
-        return websockets.connect(uri, additional_headers=extra)
-    return websockets.connect(uri)
+    """Connect with the auth headers the worker expects for this WS upgrade."""
+    extra = ws_auth_headers(uri)
+    return websockets.connect(uri, additional_headers=extra) if extra else websockets.connect(uri)
 
 
 def _http_get(base: str, path: str) -> tuple[int, object]:
     url = f"{base}{path}"
-    headers = {"User-Agent": _HTTP_UA, **_cf_access_headers()}
+    headers = {"User-Agent": _HTTP_UA, **http_auth_headers(url)}
     req = urllib.request.Request(url, headers=headers)  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
@@ -90,7 +69,7 @@ def _http_get(base: str, path: str) -> tuple[int, object]:
 def _http_post(base: str, path: str, body: dict) -> tuple[int, dict]:
     url = f"{base}{path}"
     data = json.dumps(body).encode()
-    headers = {"Content-Type": "application/json", "User-Agent": _HTTP_UA, **_cf_access_headers()}
+    headers = {"Content-Type": "application/json", "User-Agent": _HTTP_UA, **http_auth_headers(url)}
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
