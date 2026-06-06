@@ -110,6 +110,7 @@ def test_connector_init_default_state() -> None:
     assert conn._child_pid is None
     assert conn._connected is False
     assert conn._paused is False
+    assert conn._flow_paused is False
     assert conn._input_mode == "open"
     assert conn._buffer == ""
     assert conn._capture_socket is None
@@ -355,3 +356,59 @@ async def test_user_switch_requires_root() -> None:
     await conn.stop()
     screens = [m["screen"] for m in msgs if m.get("type") == "snapshot"]
     assert any("nobody" in s for s in screens)
+
+
+# ── Tier-A flow control (flow_pause / flow_resume) ─────────────────────────────
+
+
+async def test_handle_control_flow_pause_sets_flag_and_emits_nothing() -> None:
+    """flow_pause sets _flow_paused and returns no frames (no traffic mid-congestion)."""
+    conn = make_connector("/bin/echo")
+    out = await conn.handle_control("flow_pause")
+    assert conn._flow_paused is True
+    assert out == []
+
+
+async def test_handle_control_flow_resume_clears_flag_and_emits_nothing() -> None:
+    """flow_resume clears _flow_paused and returns no frames."""
+    conn = make_connector("/bin/echo")
+    conn._flow_paused = True
+    out = await conn.handle_control("flow_resume")
+    assert conn._flow_paused is False
+    assert out == []
+
+
+async def test_flow_pause_stops_polling_even_with_data() -> None:
+    """While flow-paused, poll_messages returns [] without draining the master, so the
+    kernel PTY buffer fills and the child blocks on write() (XOFF)."""
+    r, w = os.pipe()
+    try:
+        os.set_blocking(r, False)
+        conn = make_connector("/bin/echo")
+        conn._master_fd = r
+        conn._connected = True
+        os.write(w, b"flooded output")
+        await conn.handle_control("flow_pause")
+        assert await conn.poll_messages() == []
+        assert conn._buffer == ""  # nothing was read while flow-paused
+    finally:
+        os.close(w)
+        os.close(r)
+
+
+async def test_flow_resume_allows_polling_again() -> None:
+    """After flow_resume, poll_messages drains the master again."""
+    r, w = os.pipe()
+    try:
+        os.set_blocking(r, False)
+        conn = make_connector("/bin/echo")
+        conn._master_fd = r
+        conn._connected = True
+        await conn.handle_control("flow_pause")
+        await conn.handle_control("flow_resume")
+        os.write(w, b"resumed")
+        out = await conn.poll_messages()
+        assert out and "resumed" in out[0]["screen"]
+    finally:
+        os.close(w)
+        os.close(r)
