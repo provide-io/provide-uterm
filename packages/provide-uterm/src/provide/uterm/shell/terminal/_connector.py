@@ -72,6 +72,10 @@ class UshellConnector(_SessionConnector):
         self._dispatcher = CommandDispatcher(ctx, self._sandbox)
         self._pending_frames: list[dict[str, Any]] = []
         self._animation_task: asyncio.Task[None] | None = None
+        # Tier-A backpressure: when flow-paused, poll_messages withholds output so
+        # the DO stops forwarding to congested browsers (the CF SessionRuntime sends
+        # flow_pause/flow_resume via handle_control). Distinct from hijack pause.
+        self._flow_paused = False
 
     # ------------------------------------------------------------------
     # SessionConnector lifecycle
@@ -101,6 +105,8 @@ class UshellConnector(_SessionConnector):
         recv_task can win the poll/recv race and deliver browser input.
         """
         if not self._connected:
+            return []
+        if self._flow_paused:
             return []
         if not self._welcomed:
             self._welcomed = True
@@ -150,11 +156,19 @@ class UshellConnector(_SessionConnector):
         self._pending_frames.append(term(PROMPT))
 
     async def handle_control(self, action: str) -> list[dict[str, Any]]:
-        """Handle hijack control actions.
+        """Handle control actions.
 
-        Ushell ignores ``pause``/``resume``/``step`` — the REPL is always
-        interactive and doesn't distinguish paused state.
+        Hijack ``pause``/``resume``/``step`` are ignored — the REPL is always
+        interactive. Tier-A backpressure ``flow_pause``/``flow_resume`` gate
+        ``poll_messages`` output, and ``snapshot_request`` returns a fresh
+        snapshot to resync a recovered viewer.
         """
+        if action == "flow_pause":
+            self._flow_paused = True
+        elif action == "flow_resume":
+            self._flow_paused = False
+        elif action == "snapshot_request":
+            return [await self.get_snapshot()]
         return []
 
     # ------------------------------------------------------------------
