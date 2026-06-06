@@ -116,6 +116,50 @@ class TestSshWsGatewayStart:
             await ssh_srv.wait_closed()
             ws_srv.close()
 
+    async def test_keyboard_interactive_auth_completes_handshake(self) -> None:
+        """A client forced to keyboard-interactive auth completes the handshake.
+
+        Exercises the kbdint path end to end against a real asyncssh client:
+        kbdint_auth_supported() advertises it, get_kbdint_challenge() issues an
+        empty challenge (no prompts), and validate_kbdint_response() accepts the
+        empty response. Before the gateway overrode those, advertising kbdint
+        left the client's attempt failing silently. Restricting the client to
+        ``keyboard-interactive`` (no pubkey/password) proves that path alone auths.
+        """
+        from provide.uterm.gateway import SshWsGateway
+
+        ws_srv, ws_port = await _start_ws_echo_server(banner="KBDINT-OK\r\n")
+        gw = SshWsGateway(f"ws://127.0.0.1:{ws_port}")
+        ssh_srv = await gw.start("127.0.0.1", 0)
+        ssh_port: int = ssh_srv.sockets[0].getsockname()[1]
+        try:
+            async with (
+                asyncssh.connect(
+                    "127.0.0.1",
+                    port=ssh_port,
+                    known_hosts=None,
+                    username="guest",
+                    preferred_auth="keyboard-interactive",  # force kbdint only
+                    client_keys=[],  # no pubkey fallback
+                    # asyncssh's default client uses `password` as its kbdint
+                    # response source; the gateway issues an empty (no-prompt)
+                    # challenge so the value is unused — it just enables the
+                    # client to attempt keyboard-interactive at all.
+                    password="x",
+                    config=[],
+                ) as conn,
+                conn.create_process() as proc,
+            ):
+                # Reaching here means kbdint auth succeeded (empty challenge accepted).
+                proc.stdin.write_eof()
+                data = await asyncio.wait_for(proc.stdout.read(4096), timeout=5.0)
+            text = data if isinstance(data, str) else data.decode("latin-1")
+            assert "KBDINT-OK" in text
+        finally:
+            ssh_srv.close()
+            await ssh_srv.wait_closed()
+            ws_srv.close()
+
     async def test_process_handler_resumes_after_token_received(self) -> None:
         """After server sends session_token, next WS reconnect sends a resume frame."""
         from provide.uterm.control_channel import encode_control
