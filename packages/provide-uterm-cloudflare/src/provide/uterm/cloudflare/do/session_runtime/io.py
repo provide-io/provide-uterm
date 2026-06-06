@@ -140,6 +140,13 @@ class _SessionRuntimeIoMixin:
     # ------------------------------------------------------------------
 
     async def request_json(self, request: Any) -> dict[str, Any]:
+        # Require application/json so a CSRF "simple request" (text/plain or a form
+        # encoding — both skip the CORS preflight) cannot deliver a parseable body.
+        content_type = str(request.headers.get("Content-Type") or "").lower()  # type: ignore[attr-defined]
+        if "application/json" not in content_type:
+            logger.warning("request_json: rejected non-JSON content-type %r", content_type)
+            return {}
+
         body = await request.text()  # type: ignore[attr-defined]
         if not body:
             return {}

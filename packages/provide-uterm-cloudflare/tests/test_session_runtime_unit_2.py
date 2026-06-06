@@ -420,6 +420,13 @@ async def test_request_json_non_dict() -> None:
     assert await rt.request_json(_make_mock_request(body="[1, 2]")) == {}
 
 
+async def test_request_json_invalid_content_type() -> None:
+    """request_json rejects requests without application/json Content-Type."""
+    rt = _make_runtime()
+    req = _make_mock_request(headers={"Content-Type": "text/plain"}, body='{"key": "value"}')
+    assert await rt.request_json(req) == {}
+
+
 class _MockRequest:
     """Minimal HTTP request stub."""
 
@@ -432,7 +439,7 @@ class _MockRequest:
     ) -> None:
         self.url = url
         self.method = method
-        self._headers = headers or {}
+        self._headers = {"Content-Type": "application/json", **(headers or {})}
         self._body = body
         self.headers = SimpleNamespace(get=lambda k, d=None: self._headers.get(k, d))
 
