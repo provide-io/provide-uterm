@@ -3,13 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 import asyncio
-import contextlib
-import socket
 import struct
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -33,6 +31,16 @@ async def _send_frames(path: str, frames: list[bytes]) -> None:
 def _make_connector(td: str, **kwargs: object) -> CaptureConnector:
     path = str(Path(td) / "cap.sock")
     return CaptureConnector("test-cap-1", "Test Capture", {"socket_path": path, **kwargs})
+
+
+def _mock_writer(*, drain_error: bool = False, wait_closed_error: bool = False) -> MagicMock:
+    """A stand-in asyncio.StreamWriter: sync write/close, awaitable drain/wait_closed."""
+    writer = MagicMock()
+    writer.write = MagicMock()
+    writer.drain = AsyncMock(side_effect=OSError("drain") if drain_error else None)
+    writer.close = MagicMock()
+    writer.wait_closed = AsyncMock(side_effect=OSError("wait_closed") if wait_closed_error else None)
+    return writer
 
 
 def test_unknown_config_key_rejected() -> None:
@@ -265,27 +273,27 @@ def test_capture_register_success() -> None:
     assert registered.get("pty_capture") is CaptureConnector
 
 
-async def test_stop_closes_stdin_sock() -> None:
-    """stop() closes _stdin_sock when it is set."""
+async def test_stop_closes_stdin_writer() -> None:
+    """stop() closes the stdin stream writer and clears it."""
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        mock_sock = MagicMock()
-        conn._stdin_sock = mock_sock
+        writer = _mock_writer()
+        conn._stdin_writer = writer
         await conn.stop()
-        mock_sock.close.assert_called_once()
-        assert conn._stdin_sock is None
+        writer.close.assert_called_once()
+        writer.wait_closed.assert_awaited_once()
+        assert conn._stdin_writer is None
 
 
-async def test_stop_stdin_sock_close_oserror_ignored() -> None:
-    """stop() ignores OSError when closing _stdin_sock."""
+async def test_stop_stdin_writer_wait_closed_oserror_ignored() -> None:
+    """stop() ignores an OSError from the stdin writer's wait_closed()."""
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
         await conn.start()
-        mock_sock = MagicMock()
-        mock_sock.close.side_effect = OSError("boom")
-        conn._stdin_sock = mock_sock
+        conn._stdin_writer = _mock_writer(wait_closed_error=True)
         await conn.stop()  # must not raise
+        assert conn._stdin_writer is None
 
 
 async def test_connect_frame_followed_by_more_frames_loops() -> None:
@@ -326,119 +334,86 @@ async def test_connect_log_truncated_at_100() -> None:
 
 
 async def test_handle_input_forwards_to_stdin_socket() -> None:
-    """handle_input() forwards data to stdin socket when configured."""
+    """handle_input() forwards typed bytes to the stdin socket over an asyncio stream."""
     with tempfile.TemporaryDirectory() as td:
         stdin_sock_path = str(Path(td) / "stdin.sock")
         received: list[bytes] = []
+        got = asyncio.Event()
 
-        # Create a simple Unix socket server to receive stdin data
-        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        srv.bind(stdin_sock_path)
-        srv.listen(1)
-        srv.settimeout(2.0)
+        async def _on_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            received.append(await reader.read(64))
+            writer.close()
+            got.set()
 
-        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
-        await conn.start()
-        await conn.handle_input("hello\n")
-
-        # Accept connection and read data
-        with contextlib.suppress(Exception):
-            client, _ = srv.accept()
-            data = client.recv(1024)
-            received.append(data)
-            client.close()
-        srv.close()
-
-        await conn.stop()
-        assert received and b"hello\n" in received[0]
+        server = await asyncio.start_unix_server(_on_conn, path=stdin_sock_path)
+        try:
+            conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
+            await conn.start()
+            assert await conn.handle_input("hello\n") == []
+            await asyncio.wait_for(got.wait(), 2.0)
+            await conn.stop()
+        finally:
+            server.close()
+            await server.wait_closed()
+        assert received and received[0] == b"hello\n"
 
 
-async def test_forward_stdin_reconnects_on_send_error() -> None:
-    """_forward_stdin() clears broken socket when sendall raises OSError."""
+async def test_forward_stdin_connect_failure_returns() -> None:
+    """No listener at the stdin path → open_unix_connection raises → forward returns cleanly."""
     with tempfile.TemporaryDirectory() as td:
-        stdin_sock_path = str(Path(td) / "stdin.sock")
-
-        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
+        conn = _make_connector(td, stdin_socket_path=str(Path(td) / "absent.sock"))
         await conn.start()
-
-        # Pre-set a broken sock that will fail on sendall
-        broken_sock = MagicMock()
-        broken_sock.sendall.side_effect = OSError("broken pipe")
-        broken_sock.close = MagicMock()
-        conn._stdin_sock = broken_sock
-
-        # _forward_stdin should clear the broken sock; since no real server is listening
-        # the reconnect attempt will also fail (OSError on connect) — that's OK
-        conn._forward_stdin(b"test")
-
-        assert conn._stdin_sock is None  # cleared after failure
+        await conn.handle_input("x")  # connect fails (no server) → OSError → return
+        assert conn._stdin_writer is None
         await conn.stop()
 
 
-async def test_forward_stdin_close_oserror_on_broken_sock() -> None:
-    """_forward_stdin() handles OSError from close() on a broken socket."""
+async def test_forward_stdin_reuses_existing_writer() -> None:
+    """A live writer is reused: no new connection is opened for the next keystroke."""
     with tempfile.TemporaryDirectory() as td:
-        stdin_sock_path = str(Path(td) / "stdin.sock")
+        conn = _make_connector(td, stdin_socket_path=str(Path(td) / "s.sock"))
+        writer = _mock_writer()
+        conn._stdin_writer = writer
+        with patch(
+            "provide.uterm.pty.capture_connector.asyncio.open_unix_connection",
+            new=AsyncMock(),
+        ) as open_conn:
+            await conn._forward_stdin(b"abc")
+        open_conn.assert_not_called()  # existing writer reused
+        writer.write.assert_called_once_with(b"abc")
+        writer.drain.assert_awaited_once()
+        assert conn._stdin_writer is writer
 
-        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
-        await conn.start()
 
-        # Pre-set a sock that fails on both sendall AND close
-        broken_sock = MagicMock()
-        broken_sock.sendall.side_effect = OSError("broken pipe")
-        broken_sock.close.side_effect = OSError("close failed")
-        conn._stdin_sock = broken_sock
-
-        # Must not raise — OSError from close() is swallowed
-        conn._forward_stdin(b"test")
-
-        assert conn._stdin_sock is None
-        await conn.stop()
+async def test_forward_stdin_reconnects_on_drain_error() -> None:
+    """A drain failure tears down the writer and retries once on a fresh connection."""
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td, stdin_socket_path=str(Path(td) / "s.sock"))
+        broken, fresh = _mock_writer(drain_error=True), _mock_writer()
+        with patch(
+            "provide.uterm.pty.capture_connector.asyncio.open_unix_connection",
+            new=AsyncMock(side_effect=[(MagicMock(), broken), (MagicMock(), fresh)]),
+        ):
+            await conn._forward_stdin(b"data")
+        broken.write.assert_called_once_with(b"data")
+        broken.close.assert_called_once()  # broken writer torn down
+        fresh.write.assert_called_once_with(b"data")  # retried on the new writer
+        assert conn._stdin_writer is fresh
 
 
 async def test_forward_stdin_both_attempts_fail_exhausts_loop() -> None:
-    """_forward_stdin() exits loop when reconnect succeeds but sendall fails twice."""
+    """Both attempts' drains fail → the retry loop exhausts and leaves no writer."""
     with tempfile.TemporaryDirectory() as td:
-        stdin_sock_path = str(Path(td) / "stdin.sock")
-
-        # Create a server that accepts connections but immediately drops them
-        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        srv.bind(stdin_sock_path)
-        srv.listen(5)
-        srv.setblocking(False)
-
-        conn = _make_connector(td, stdin_socket_path=stdin_sock_path)
-        await conn.start()
-
-        # Attempt 0: broken sock → sendall fails → close → sock = None
-        # Attempt 1: None → real connect succeeds → sendall fails → sock = None → done
-        call_count = [0]
-
-        def _patched_socket(*args: object, **kwargs: object) -> MagicMock:
-            call_count[0] += 1
-            s = MagicMock()
-            s.connect = MagicMock()  # succeed
-            s.sendall.side_effect = OSError("send failed attempt 2")
-            s.close = MagicMock()
-            return s
-
-        broken_sock = MagicMock()
-        broken_sock.sendall.side_effect = OSError("send failed attempt 1")
-        broken_sock.close = MagicMock()
-        conn._stdin_sock = broken_sock
-
+        conn = _make_connector(td, stdin_socket_path=str(Path(td) / "s.sock"))
+        w1, w2 = _mock_writer(drain_error=True), _mock_writer(drain_error=True)
         with patch(
-            "provide.uterm.pty.capture_connector.socket.socket",
-            side_effect=_patched_socket,
+            "provide.uterm.pty.capture_connector.asyncio.open_unix_connection",
+            new=AsyncMock(side_effect=[(MagicMock(), w1), (MagicMock(), w2)]),
         ):
-            conn._forward_stdin(b"test")
-
-        # The loop should have exhausted both attempts
-        assert conn._stdin_sock is None
-        assert call_count[0] == 1  # one new socket was created for attempt 1
-
-        srv.close()
-        await conn.stop()
+            await conn._forward_stdin(b"x")
+        w1.close.assert_called_once()
+        w2.close.assert_called_once()
+        assert conn._stdin_writer is None
 
 
 async def test_poll_messages_unknown_channel_loops() -> None:
