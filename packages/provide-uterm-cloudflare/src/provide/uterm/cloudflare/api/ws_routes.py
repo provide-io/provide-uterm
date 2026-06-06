@@ -162,6 +162,11 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
             # Relay intercept/inspect commands from browser back to the worker
             if runtime.worker_ws is not None:
                 await runtime.send_ws(runtime.worker_ws, cast("dict[str, object]", frame))
+        elif frame_type == "ack":
+            # Browser reports cumulative bytes consumed → drives Tier-A backpressure.
+            # _normalize_frame already coerced "bytes" to a non-negative int.
+            acked = cast("dict[str, Any]", frame).get("bytes", 0)
+            await runtime.note_browser_ack(runtime.ws_key(ws), acked)
         # heartbeat / ping: keep-alive frames, no response required.
 
 
