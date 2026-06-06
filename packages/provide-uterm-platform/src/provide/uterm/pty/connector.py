@@ -121,6 +121,11 @@ class PTYConnector:
         self._child_pid: int | None = None
         self._connected = False
         self._paused = False
+        # Tier-A output backpressure: when the hub/DO signals ``flow_pause`` we stop
+        # reading the PTY master so the kernel buffer fills and the child blocks on
+        # write() (XOFF). Distinct from hijack ``_paused`` so the two never interfere.
+        # See docs/ard-cloudflare-backpressure.md.
+        self._flow_paused = False
         self._buffer = ""
         # Persistent incremental UTF-8 decoder: os.read(..., 4096) can split a
         # multibyte sequence at the read boundary. A per-call
@@ -329,7 +334,7 @@ class PTYConnector:
         return self._connected and self._master_fd is not None
 
     async def poll_messages(self) -> list[dict[str, Any]]:
-        if not self.is_connected() or self._paused:
+        if not self.is_connected() or self._paused or self._flow_paused:
             return []
         data = self._read_master()
         if data:
@@ -357,6 +362,14 @@ class PTYConnector:
             self._paused = True
         elif action in ("resume", "step"):
             self._paused = False
+        elif action == "flow_pause":
+            # Backpressure XOFF: stop reading output. Emit nothing — a snapshot
+            # here would add traffic during the very congestion we're relieving.
+            self._flow_paused = True
+            return []
+        elif action == "flow_resume":
+            self._flow_paused = False
+            return []
         return [self._snapshot()]
 
     async def get_snapshot(self) -> dict[str, Any]:
