@@ -239,13 +239,17 @@ class _SessionRuntimeIoMixin:
             all_ws = []
         if not all_ws:
             all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]
+        frame_type = str(payload.get("type") or "")
         for ws in all_ws:
             if self._socket_role(ws) != "browser":  # type: ignore[attr-defined]
                 continue
             ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
+            # Tier B: drop high-volume term frames to a congested viewer so one slow
+            # viewer can't stall the producer for everyone. It is resynced with a
+            # fresh snapshot once it drains below low-water (see _apply_flow_control).
+            if frame_type == "term" and self._flow.is_congested(ws_id):
+                continue
             try:
-                # Backpressure logic
-                frame_type = str(payload.get("type") or "")
                 encoded = (
                     encode_data(str(payload.get("data", "")))
                     if frame_type in {"input", "term"}
@@ -283,10 +287,21 @@ class _SessionRuntimeIoMixin:
         await self._apply_flow_control()
 
     async def _apply_flow_control(self) -> None:
-        """Emit a producer pause/resume hint when congestion state transitions."""
+        """Emit a producer pause/resume hint and resync any recovered viewers."""
         action = self._flow.decide(time.monotonic())
         if action is not None:
             await self._signal_worker_flow(action)
+        # Tier B: a viewer that just drained below low-water had term frames
+        # dropped while congested, so its screen is stale. Pull a fresh snapshot
+        # from the worker (broadcast to all — an idempotent repaint) to resync it.
+        if self._flow.take_recovered():
+            await self._request_worker_snapshot()
+
+    async def _request_worker_snapshot(self) -> None:
+        """Ask the producer worker for a fresh full-screen snapshot (Tier B resync)."""
+        if self.worker_ws is None:
+            return
+        await self.send_ws(self.worker_ws, {"type": "control", "action": "snapshot_request", "ts": time.time()})
 
     async def _signal_worker_flow(self, action: str) -> None:
         """Send a Tier-A flow-control hint to an external producer worker.
