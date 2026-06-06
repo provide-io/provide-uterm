@@ -168,6 +168,10 @@ async def test_poll_messages_empty_when_not_connected_or_paused() -> None:
     assert await conn.poll_messages() == []  # not connected
     r, w = os.pipe()
     try:
+        # Non-blocking so an ``or``->``and`` guard mutant (which falls through to
+        # read while paused) returns fast instead of blocking on the empty pipe
+        # and timing out the mutant.
+        os.set_blocking(r, False)
         _connected(conn, r)
         conn._paused = True
         assert await conn.poll_messages() == []  # paused
