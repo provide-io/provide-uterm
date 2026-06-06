@@ -134,6 +134,13 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         or run_real_cf
         or any("e2e" in str(m) for m in getattr(config.option, "markexpr", "").split())
     )
+    # The worker is jwt-only (the AUTH_MODE=dev auth bypass was removed). Local
+    # pywrangler-dev e2e tests that hit authenticated routes therefore need a
+    # real JWT; without one every such request 401s. REAL_CF runs authenticate
+    # at the edge with CF Access service tokens instead, so this gate only
+    # applies to the local (non-REAL_CF) path. Set CF_E2E_JWT to opt in once the
+    # request helpers are wired to send it.
+    local_e2e_unauthed = run_e2e and not run_real_cf and not os.environ.get("CF_E2E_JWT")
     for item in items:
         if item.get_closest_marker("slow") and not run_slow:
             item.add_marker(pytest.mark.skip(reason="slow tests skipped; set SLOW=1 or REAL_CF=1"))
@@ -141,6 +148,12 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.skip(reason="requires real CF deployment; set REAL_CF=1"))
         elif item.get_closest_marker("e2e") and not run_e2e:
             item.add_marker(pytest.mark.skip(reason="E2E tests skipped; use -m e2e or set E2E=1"))
+        elif item.get_closest_marker("e2e") and local_e2e_unauthed:
+            item.add_marker(
+                pytest.mark.skip(
+                    reason="CF e2e tests need a JWT (the AUTH_MODE 'dev' bypass was removed); set CF_E2E_JWT"
+                )
+            )
 
 
 def pytest_terminal_summary(
@@ -183,7 +196,20 @@ class _PywranglerManager:
         self._dev_vars_original: str | None = (
             self._dev_vars_path.read_text(encoding="utf-8") if self._dev_vars_path.exists() else None
         )
-        self._dev_vars_path.write_text("AUTH_MODE=dev\n", encoding="utf-8")
+        # The worker is jwt-only: config.from_env rejects the removed dev/none
+        # modes, so writing AUTH_MODE=dev made the worker 500 on every request
+        # (it booted, but /api/health never returned 200, so the fixture skipped
+        # the whole suite with a misleading "did not start"). Write a bootable
+        # jwt config instead — a real AUTH_MODE plus a worker bearer token that
+        # clears config's entropy floor; JWT_* come from wrangler.toml [vars].
+        # Routes that require a principal still 401 without a JWT, so e2e tests
+        # are gated on CF_E2E_JWT in pytest_collection_modifyitems.
+        import secrets
+
+        self._dev_vars_path.write_text(
+            f"AUTH_MODE=jwt\nWORKER_BEARER_TOKEN={secrets.token_urlsafe(48)}\n",
+            encoding="utf-8",
+        )
 
     def start(self) -> bool:
         self._stop_proc()
