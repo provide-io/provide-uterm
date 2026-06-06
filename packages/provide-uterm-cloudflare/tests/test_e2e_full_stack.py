@@ -23,27 +23,16 @@ from pathlib import Path
 
 import pytest
 import websockets
+from cf_e2e_auth import http_auth_headers, ws_auth_headers
 
 from provide.uterm.control_channel import encode_control
 
 _WS_TIMEOUT_S = 15.0
 _HTTP_UA = "provide-uterm-e2e-test/1.0"
-# In AUTH_MODE=dev, any non-empty bearer token is accepted for worker auth.
+# Fallback worker bearer for the runtime CONFIG (worker_bearer_token=...), not a
+# request header. Kept for parity when CF_WORKER_BEARER_TOKEN is unset locally.
 _DEV_BEARER = "e2e-dev-token"
-
-# CF Access service token for real_cf tests.
-_CF_CLIENT_ID = os.environ.get("CF_ACCESS_CLIENT_ID", "")
-_CF_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
 _WORKER_BEARER_TOKEN = os.environ.get("CF_WORKER_BEARER_TOKEN", "")
-
-
-def _cf_access_headers(url: str = "") -> dict[str, str]:
-    """Return CF Access headers only for real CF (https), not local pywrangler (http)."""
-    if url.startswith("http://"):
-        return {}
-    if _CF_CLIENT_ID and _CF_CLIENT_SECRET:
-        return {"CF-Access-Client-Id": _CF_CLIENT_ID, "CF-Access-Client-Secret": _CF_CLIENT_SECRET}
-    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -56,16 +45,14 @@ def _base_ws(base_http: str) -> str:
 
 
 def _ws_connect(uri: str):
-    """Connect with CF Access headers when targeting real CF (wss://)."""
-    extra = _cf_access_headers(uri)
-    if "/ws/worker/" in uri and uri.startswith("wss://"):
-        extra["Authorization"] = f"Bearer {_WORKER_BEARER_TOKEN or _DEV_BEARER}"
+    """Connect with the WS upgrade auth headers (worker bearer or principal JWT + CF Access)."""
+    extra = ws_auth_headers(uri)
     return websockets.connect(uri, additional_headers=extra) if extra else websockets.connect(uri)
 
 
 def _http_get(base: str, path: str) -> tuple[int, object]:
     url = f"{base}{path}"
-    req = urllib.request.Request(url, headers={"User-Agent": _HTTP_UA, **_cf_access_headers(url)})  # noqa: S310
+    req = urllib.request.Request(url, headers={"User-Agent": _HTTP_UA, **http_auth_headers(url)})  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
             return resp.status, json.loads(resp.read())
@@ -83,7 +70,7 @@ def _http_post(base: str, path: str, body: dict) -> tuple[int, dict]:
         url,
         data=data,
         method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": _HTTP_UA, **_cf_access_headers(url)},
+        headers={"Content-Type": "application/json", "User-Agent": _HTTP_UA, **http_auth_headers(url)},
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
@@ -120,8 +107,8 @@ _real_ws_connect = websockets.connect
 
 
 def _patched_ws_connect(uri, **kwargs):
-    """Wrap websockets.connect to inject CF Access headers into outbound connections."""
-    extra = _cf_access_headers(str(uri))
+    """Wrap websockets.connect to inject the WS upgrade auth headers into outbound connections."""
+    extra = ws_auth_headers(str(uri))
     if extra:
         existing = dict(kwargs.get("additional_headers", {}) or {})
         existing.update(extra)

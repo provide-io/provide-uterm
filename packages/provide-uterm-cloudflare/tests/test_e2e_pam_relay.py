@@ -23,10 +23,9 @@ import urllib.request
 import uuid
 
 import pytest
+from cf_e2e_auth import E2E_JWT, http_auth_headers
 
 _HTTP_UA = "provide-uterm-e2e-pam-relay/1.0"
-# In AUTH_MODE=dev (local pywrangler), any Bearer token is accepted.
-_DEV_TOKEN = "dev-token"
 
 
 def _http_post(base: str, path: str, body: dict) -> tuple[int, dict]:
@@ -35,7 +34,7 @@ def _http_post(base: str, path: str, body: dict) -> tuple[int, dict]:
     headers = {
         "Content-Type": "application/json",
         "User-Agent": _HTTP_UA,
-        "Authorization": f"Bearer {_DEV_TOKEN}",
+        **http_auth_headers(url),
     }
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)  # noqa: S310
     try:
@@ -149,7 +148,7 @@ async def test_forward_to_relay_delivers_open_event(wrangler_server: str) -> Non
             "mode": "notify",
         },
         wrangler_server,
-        _DEV_TOKEN,
+        E2E_JWT,
     )
     # No assertion needed beyond no exception — _forward_to_relay is fire-and-forget
 
@@ -160,7 +159,7 @@ async def test_create_relay_tunnel_returns_token_and_endpoint(wrangler_server: s
     from provide.uterm.server.pam_integration import _create_relay_tunnel
 
     sid = f"pam-relay-e2e-{uuid.uuid4().hex[:8]}"
-    result = await _create_relay_tunnel(wrangler_server, _DEV_TOKEN, sid, "E2E Relay Tunnel")
+    result = await _create_relay_tunnel(wrangler_server, E2E_JWT, sid, "E2E Relay Tunnel")
 
     assert result is not None, "_create_relay_tunnel returned None — request failed"
     worker_token, ws_endpoint = result
@@ -179,7 +178,7 @@ async def test_relay_open_close_full_cycle(wrangler_server: str) -> None:
     await _forward_to_relay(
         {"event": "open", "username": username, "tty": tty, "pid": 1234, "mode": "notify"},
         wrangler_server,
-        _DEV_TOKEN,
+        E2E_JWT,
     )
     # Independently verify the session was created
     slug = tty.split("/")[-1]

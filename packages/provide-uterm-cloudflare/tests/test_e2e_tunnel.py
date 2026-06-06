@@ -23,6 +23,7 @@ import urllib.error
 import urllib.request
 
 import pytest
+from cf_e2e_auth import http_auth_headers
 
 from provide.uterm.tunnel.protocol import CHANNEL_DATA, CHANNEL_HTTP, encode_control, encode_frame
 
@@ -36,7 +37,7 @@ def _base_ws(base_http: str) -> str:
 def _http_post(base: str, path: str, body: dict) -> tuple[int, dict]:
     url = f"{base}{path}"
     data = json.dumps(body).encode()
-    headers = {"Content-Type": "application/json", "User-Agent": _HTTP_UA}
+    headers = {"Content-Type": "application/json", "User-Agent": _HTTP_UA, **http_auth_headers(url)}
     req = urllib.request.Request(url, data=data, method="POST", headers=headers)  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
@@ -51,7 +52,7 @@ def _http_post(base: str, path: str, body: dict) -> tuple[int, dict]:
 def _http_get(base: str, path: str, *, follow_redirects: bool = True) -> tuple[int, str, dict[str, str]]:
     """GET with optional redirect following. Returns (status, body, headers)."""
     url = f"{base}{path}"
-    headers_dict = {"User-Agent": _HTTP_UA}
+    headers_dict = {"User-Agent": _HTTP_UA, **http_auth_headers(url)}
     req = urllib.request.Request(url, headers=headers_dict)  # noqa: S310
     try:
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
@@ -70,7 +71,7 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 def _http_delete(base: str, path: str) -> tuple[int, dict]:
     url = f"{base}{path}"
-    headers = {"User-Agent": _HTTP_UA}
+    headers = {"User-Agent": _HTTP_UA, **http_auth_headers(url)}
     req = urllib.request.Request(url, method="DELETE", headers=headers)  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310

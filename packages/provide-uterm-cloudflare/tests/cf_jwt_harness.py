@@ -61,11 +61,16 @@ def build_keypair() -> tuple[bytes, dict]:
     return priv_pem, {"keys": [jwk]}
 
 
-def mint(priv_pem: bytes, *, subject: str = "cf-e2e-test-user") -> str:
-    """Mint a short-lived RS256 JWT the worker's decode_jwt accepts."""
+def mint(priv_pem: bytes, *, subject: str = "cf-e2e-test-user", roles: tuple[str, ...] = ("admin",)) -> str:
+    """Mint a short-lived RS256 JWT the worker's decode_jwt accepts.
+
+    The principal is granted ``admin`` by default via the ``roles`` claim — the
+    CF e2e suite drives admin operations (hijack leases, restarts) that the
+    removed ``AUTH_MODE=dev`` mode used to auto-admit.
+    """
     now = int(time.time())
     return pyjwt.encode(
-        {"iss": ISSUER, "aud": AUDIENCE, "sub": subject, "iat": now, "exp": now + TOKEN_TTL_S},
+        {"iss": ISSUER, "aud": AUDIENCE, "sub": subject, "iat": now, "exp": now + TOKEN_TTL_S, "roles": list(roles)},
         priv_pem,
         algorithm="RS256",
         headers={"kid": KID},
