@@ -299,20 +299,20 @@ async def test_poll_messages_empty_when_connected_but_read_yields_nothing() -> N
 
 
 async def test_poll_messages_empty_when_paused_even_with_data_available() -> None:
-    """Paused short-circuits even when data is waiting on the fd → []. Pins the
-    ``or self._paused`` term: a mutant that drops the paused check would fall
-    through, read the data and snapshot it instead of returning []."""
-    r, w = os.pipe()
-    try:
-        conn = _conn()
-        _connected(conn, r)
-        conn._paused = True
-        os.write(w, b"data")  # data IS available on the fd ...
-        assert await conn.poll_messages() == []  # ... but paused → []
-        assert conn._buffer == ""  # nothing was read/buffered
-    finally:
-        os.close(w)
-        os.close(r)
+    """Paused short-circuits *before* reading → []. Pins the ``... or self._paused``
+    term: the ``or``->``and`` mutant (which, when connected, drops the paused
+    short-circuit and falls through to read) is killed. Uses a mocked
+    _read_master so the kill is deterministic rather than depending on a real
+    pipe-read race (the existing disconnected-with-data pipe test did not fire
+    under mutmut for exactly that reason)."""
+    conn = _conn()
+    conn._connected = True
+    conn._master_fd = 7  # any non-None fd; must never actually be read
+    conn._paused = True
+    with patch.object(conn, "_read_master", return_value=b"data") as read:
+        assert await conn.poll_messages() == []  # paused → [] without reading
+        read.assert_not_called()  # the or->and mutant would read here instead
+    assert conn._buffer == ""
 
 
 def test_read_master_none_fd_returns_empty() -> None:
