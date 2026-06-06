@@ -52,3 +52,22 @@ async def test_app_lifespan_heartbeat_init() -> None:
         # Lifespan started
         pass
     # Lifespan ended
+
+
+async def test_app_lifespan_closes_governance_gate_clients() -> None:
+    """A configured governance gate gets its pooled HTTP client closed on shutdown.
+
+    Only the policy gate is configured: that exercises the close loop's
+    gate-present branch (policy) and gate-absent branch (behavioral/telemetry are
+    None) without spawning the behavioral-audit background task, which clashes
+    with the async test loop under TestClient.
+    """
+    config = default_server_config()
+    config.governance.policy_webhook_url = "https://fleet.example.com/policy"
+
+    from fastapi.testclient import TestClient
+
+    app = create_server_app(config, api_only=True)
+    # Entering + exiting the lifespan must run the gate's aclose() without error.
+    with TestClient(app):
+        pass
