@@ -196,6 +196,21 @@ class TestRemoveDeadBrowsers:
             assert dead_ws not in hub.registry._workers["w1"].browsers
             assert alive_ws in hub.registry._workers["w1"].browsers
 
+    async def test_dead_browser_router_heuristic_state_is_forgotten(self) -> None:
+        """remove_dead_browsers must forget the router's per-browser heuristic state.
+
+        Otherwise a browser pruned via the dead-socket path (not the graceful
+        cleanup_browser_disconnect) leaks its keystroke_timestamps entry forever.
+        """
+        hub = _make_hub()
+        dead_ws = _make_ws()
+        wws = _make_ws()
+        await _register_worker(hub, "w1", wws)
+        hub.router.keystroke_timestamps[dead_ws] = [1.0, 2.0]
+
+        await hub.remove_dead_browsers("w1", {dead_ws})
+        assert dead_ws not in hub.router.keystroke_timestamps
+
     async def test_owner_cleared_only_when_and_condition_both_true(self) -> None:
         """mutmut_9: is_dashboard_hijack_active AND hijack_owner is ws (not OR)."""
         hub = _make_hub()

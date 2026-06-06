@@ -56,8 +56,12 @@ async def cleanup_browser_disconnect(hub: TermHub, worker_id: str, ws: WebSocket
 
 
 async def remove_dead_browsers(hub: TermHub, worker_id: str, dead: set[WebSocket]) -> bool:
-    """Clear input buffers for dead browsers and call into the lease manager."""
+    """Clear per-browser state for dead browsers and call into the lease manager."""
     for ws in dead:
+        # Forget the router-side heuristic state too, mirroring the graceful
+        # cleanup_browser_disconnect path — otherwise a browser pruned via the
+        # dead-socket path leaks its keystroke_timestamps entry forever.
+        hub.router.forget_browser(ws)
         hub._input_buffers.pop(ws, None)
         hub._hold_buffers.pop(ws, None)
         hub._startup_pending_browsers.discard(ws)
