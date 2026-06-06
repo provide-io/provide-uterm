@@ -75,6 +75,13 @@ class WebhookPolicyGate:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        # Reuse one client across calls so HTTP keep-alive / connection pooling
+        # avoids a fresh TLS handshake per keystroke (intercept_input is hot).
+        self._client = httpx.AsyncClient(timeout=timeout_s)
+
+    async def aclose(self) -> None:
+        """Release the pooled client's connection pool (lifecycle cleanup)."""
+        await self._client.aclose()
 
     async def intercept_input(self, data: str, context: PolicyContext) -> PolicyDecision:
         # Redact secrets out of the keystroke stream before it leaves the
@@ -92,15 +99,14 @@ class WebhookPolicyGate:
         headers = _build_webhook_headers(self.secret, body)
         try:
             await _assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=headers)
-                if resp.status_code == 200:
-                    body = resp.json()
-                    if "action" in body:
-                        return PolicyDecision(**body)
-                    allow = bool(body.get("allow", False))
-                    return PolicyDecision(action="allow" if allow else "deny")
-                return PolicyDecision(action="deny")
+            resp = await self._client.post(self.url, content=body, headers=headers)
+            if resp.status_code == 200:
+                body = resp.json()
+                if "action" in body:
+                    return PolicyDecision(**body)
+                allow = bool(body.get("allow", False))
+                return PolicyDecision(action="allow" if allow else "deny")
+            return PolicyDecision(action="deny")
         except Exception:
             return PolicyDecision(action="deny")
 
@@ -126,6 +132,11 @@ class WebhookFanOutPolicyGate:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        self._client = httpx.AsyncClient(timeout=timeout_s)
+
+    async def aclose(self) -> None:
+        """Release the pooled client's connection pool (lifecycle cleanup)."""
+        await self._client.aclose()
 
     async def intercept_fanout(
         self,
@@ -147,11 +158,10 @@ class WebhookFanOutPolicyGate:
         headers = _build_webhook_headers(self.secret, body)
         try:
             await _assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=headers)
-                if resp.status_code == 200:
-                    return PolicyDecision(**resp.json())
-                return PolicyDecision(action="deny")
+            resp = await self._client.post(self.url, content=body, headers=headers)
+            if resp.status_code == 200:
+                return PolicyDecision(**resp.json())
+            return PolicyDecision(action="deny")
         except Exception:
             return PolicyDecision(action="deny")
 
@@ -224,6 +234,11 @@ class WebhookBehavioralAuditGate:
         self.secret = secret
         self.timeout = timeout_s
         self.fail_open = fail_open
+        self._client = httpx.AsyncClient(timeout=timeout_s)
+
+    async def aclose(self) -> None:
+        """Release the pooled client's connection pool (lifecycle cleanup)."""
+        await self._client.aclose()
 
     async def audit_connection(
         self,
@@ -242,11 +257,10 @@ class WebhookBehavioralAuditGate:
         headers = _build_webhook_headers(self.secret, body)
         try:
             await _assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=headers)
-                if resp.status_code == 200:
-                    return PolicyDecision(**resp.json())
-                return PolicyDecision(action="allow" if self.fail_open else "deny")
+            resp = await self._client.post(self.url, content=body, headers=headers)
+            if resp.status_code == 200:
+                return PolicyDecision(**resp.json())
+            return PolicyDecision(action="allow" if self.fail_open else "deny")
         except Exception:
             return PolicyDecision(action="allow" if self.fail_open else "deny")
 
@@ -294,6 +308,11 @@ class WebhookTelemetrySink:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        self._client = httpx.AsyncClient(timeout=timeout_s)
+
+    async def aclose(self) -> None:
+        """Release the pooled client's connection pool (lifecycle cleanup)."""
+        await self._client.aclose()
 
     async def emit(self, event: TelemetryEvent) -> None:
         payload = event.model_dump()
@@ -301,8 +320,7 @@ class WebhookTelemetrySink:
         headers = _build_webhook_headers(self.secret, body)
         try:
             await _assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                await client.post(self.url, content=body, headers=headers)
+            await self._client.post(self.url, content=body, headers=headers)
         except Exception as exc:
             # Fail-open: telemetry must never raise into the hub or block I/O.
             _sink_logger.debug("telemetry_sink_error url=%s: %s", self.url, exc)
@@ -332,6 +350,11 @@ class WebhookOutputPolicyGate:
         self.url = url
         self.secret = secret
         self.timeout = timeout_s
+        self._client = httpx.AsyncClient(timeout=timeout_s)
+
+    async def aclose(self) -> None:
+        """Release the pooled client's connection pool (lifecycle cleanup)."""
+        await self._client.aclose()
 
     async def get_redaction_rules(self, context: PolicyContext) -> list[RedactionRule]:
         # Imported lazily: redaction_defaults imports RedactionRule from this
@@ -349,15 +372,14 @@ class WebhookOutputPolicyGate:
         headers = _build_webhook_headers(self.secret, body)
         try:
             await _assert_webhook_target_allowed(self.url)
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(self.url, content=body, headers=headers)
-                if resp.status_code == 200:
-                    rules_data = resp.json().get("rules", [])
-                    return [RedactionRule(**r) for r in rules_data]
-                # Fail CLOSED: a non-200 webhook response must not silently
-                # disable redaction. Fall back to the built-in default ruleset
-                # so secrets keep getting redacted from terminal output.
-                return default_rules()
+            resp = await self._client.post(self.url, content=body, headers=headers)
+            if resp.status_code == 200:
+                rules_data = resp.json().get("rules", [])
+                return [RedactionRule(**r) for r in rules_data]
+            # Fail CLOSED: a non-200 webhook response must not silently
+            # disable redaction. Fall back to the built-in default ruleset
+            # so secrets keep getting redacted from terminal output.
+            return default_rules()
         except Exception:
             # Fail CLOSED on any transport/egress error — same rationale.
             return default_rules()

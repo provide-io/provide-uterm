@@ -433,6 +433,10 @@ def create_server_app(
             # Release the webhook authorization provider's pooled HTTP client
             # (no-op for the local RBAC default, which holds no resources).
             await authz.aclose()
+            # Release the pooled HTTP clients held by the governance webhook gates.
+            for _gate in (policy_gate, behavioral_audit_gate, telemetry_sink):
+                if _gate is not None:
+                    await _gate.aclose()
             await registry.shutdown()
             await control_plane.close()
 

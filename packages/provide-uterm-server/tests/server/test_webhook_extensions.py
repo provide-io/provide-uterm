@@ -14,7 +14,14 @@ from httpx import Response
 from starlette.testclient import TestClient
 
 from provide.uterm.server.authorization import AuthorizationService, WebhookAuthorizationProvider
-from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookPolicyGate
+from provide.uterm.server.bridge.hub.ext import (
+    PolicyContext,
+    WebhookBehavioralAuditGate,
+    WebhookFanOutPolicyGate,
+    WebhookOutputPolicyGate,
+    WebhookPolicyGate,
+    WebhookTelemetrySink,
+)
 from provide.uterm.server.webhook_signing import verify_webhook_signature
 
 
@@ -445,3 +452,21 @@ async def test_webhook_fanout_gate_redacts_command() -> None:
     payload = json.loads(route.calls.last.request.content)
     assert "hunter2supersecret" not in payload["command"]
     assert "[PASSWORD_REDACTED]" in payload["command"]
+
+
+@pytest.mark.parametrize(
+    "gate_cls",
+    [
+        WebhookPolicyGate,
+        WebhookFanOutPolicyGate,
+        WebhookBehavioralAuditGate,
+        WebhookTelemetrySink,
+        WebhookOutputPolicyGate,
+    ],
+)
+async def test_webhook_gate_aclose_releases_pooled_client(gate_cls) -> None:
+    """Each gate holds one reusable client (HTTP keep-alive) and closes it on aclose()."""
+    gate = gate_cls(url="https://gate.example.com/hook")
+    assert not gate._client.is_closed
+    await gate.aclose()
+    assert gate._client.is_closed
