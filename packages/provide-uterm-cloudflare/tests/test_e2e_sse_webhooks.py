@@ -51,6 +51,10 @@ _HTTP_UA = "provide-uterm-e2e-test/1.0"
 _CF_CLIENT_ID = os.environ.get("CF_ACCESS_CLIENT_ID", "")
 _CF_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
 _WORKER_BEARER_TOKEN = os.environ.get("CF_WORKER_BEARER_TOKEN", "")
+# A JWT the worker's decode_jwt accepts (real CF Access token, or one minted
+# against a test JWKS the worker is pointed at) — sent as the bearer credential
+# for authenticated DO routes. See the CF_E2E_JWT gate in conftest.py.
+_E2E_JWT = os.environ.get("CF_E2E_JWT", "")
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +63,21 @@ _WORKER_BEARER_TOKEN = os.environ.get("CF_WORKER_BEARER_TOKEN", "")
 
 
 def _cf_access_headers(url: str = "") -> dict[str, str]:
-    """Return CF Access service token headers when targeting real CF (https)."""
-    if url.startswith("http://"):
-        return {}
-    if _CF_CLIENT_ID and _CF_CLIENT_SECRET:
-        return {"CF-Access-Client-Id": _CF_CLIENT_ID, "CF-Access-Client-Secret": _CF_CLIENT_SECRET}
-    return {}
+    """Auth headers for the worker: a JWT bearer (any scheme) and, for real CF
+    over https, the CF Access service-token pair.
+
+    ``CF_E2E_JWT`` carries a JWT the worker's ``decode_jwt`` accepts (a real CF
+    Access token, or one minted against a test JWKS the worker is pointed at).
+    It is the credential for the authenticated DO routes (webhooks, sessions)
+    now that the ``AUTH_MODE=dev`` bypass is gone; without it those routes 401.
+    """
+    headers: dict[str, str] = {}
+    if _E2E_JWT:
+        headers["Authorization"] = f"Bearer {_E2E_JWT}"
+    if not url.startswith("http://") and _CF_CLIENT_ID and _CF_CLIENT_SECRET:
+        headers["CF-Access-Client-Id"] = _CF_CLIENT_ID
+        headers["CF-Access-Client-Secret"] = _CF_CLIENT_SECRET
+    return headers
 
 
 def _base_ws(base_http: str) -> str:
