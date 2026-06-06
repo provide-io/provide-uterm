@@ -182,7 +182,12 @@ class PTYConnector:
         termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
 
         pid = os.fork()  # nosec B110  # deliberate fork for PTY supervision
-        if pid == 0:  # pragma: no cover - fork-child path (coverage runs in parent only)
+        # pragma: no mutate on the discriminator — mutating ``pid == 0`` to
+        # ``pid != 0`` runs the child path (exec/_exit) in the *parent* process,
+        # which hangs the mutant under test (reported as a timeout, not an
+        # assertable failure). The real-fork integration tests verify the actual
+        # child-execs / parent-supervises split.
+        if pid == 0:  # pragma: no cover - fork-child path (coverage runs in parent only)  # pragma: no mutate
             # ── child ──────────────────────────────────────────────────────
             self._child_exec(master_fd, slave_fd, resolved, env)
         else:
