@@ -73,11 +73,18 @@ from provide.uterm.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+    from typing import Protocol
 
     from provide.uterm.server.audit_chain import AuditChain
     from provide.uterm.server.bridge.hub.resume import _ControlPlaneResumeBackend
     from provide.uterm.server.bridge.identity import IdentityProvider
     from provide.uterm.server.models import ServerConfig
+
+    class _GateClient(Protocol):
+        """Structural type for a governance webhook gate that pools an HTTP client."""
+
+        async def aclose(self) -> None: ...
+
 
 # ``_detect_multi_replica_environment`` is re-exported (it now lives in
 # ``factory_sweeps``) to keep this module's public import surface unchanged.
@@ -97,6 +104,22 @@ _SHARE_SESSION_PATTERNS = (
     re.compile(r"^/ws/browser/(?P<session_id>[\w\-]+)/term$"),
     re.compile(r"^/worker/(?P<session_id>[\w\-]+)/hijack(?:/.*)?$"),
 )
+
+
+async def _aclose_webhook_gates(*gates: _GateClient | None) -> None:
+    """Release the pooled HTTP client held by each configured webhook gate.
+
+    Extracted from the app lifespan deliberately: coverage.py on Python 3.11
+    mis-tracks branch arcs in the async-generator *resume* after an awaited call
+    (the same bug the ``hub.shutdown()`` pragma below works around), so a
+    ``for``/``if``/``await`` loop placed in that continuation reads as uncovered
+    on 3.11 even when every app-shutdown test drives it. Living in an ordinary
+    helper, the loop is tracked correctly on every interpreter and its two
+    branches (gate present / gate absent) are directly unit-testable.
+    """
+    for gate in gates:
+        if gate is not None:
+            await gate.aclose()
 
 
 def create_server_app(
@@ -434,9 +457,9 @@ def create_server_app(
             # (no-op for the local RBAC default, which holds no resources).
             await authz.aclose()
             # Release the pooled HTTP clients held by the governance webhook gates.
-            for _gate in (policy_gate, behavioral_audit_gate, telemetry_sink):
-                if _gate is not None:
-                    await _gate.aclose()
+            # Delegated to a module-level helper so the branchy close loop is
+            # tracked correctly on Python 3.11 (see ``_aclose_webhook_gates``).
+            await _aclose_webhook_gates(policy_gate, behavioral_audit_gate, telemetry_sink)
             await registry.shutdown()
             await control_plane.close()
 

@@ -71,3 +71,24 @@ async def test_app_lifespan_closes_governance_gate_clients() -> None:
     # Entering + exiting the lifespan must run the gate's aclose() without error.
     with TestClient(app):
         pass
+
+
+async def test_aclose_webhook_gates_closes_present_and_skips_none() -> None:
+    """The gate-close helper awaits aclose() on present gates and skips None slots.
+
+    Exercises both branches of the loop directly (gate present / gate absent)
+    without going through TestClient's lifespan — so coverage of the close logic
+    is deterministic on every interpreter, independent of the Python 3.11
+    async-generator-resume tracking quirk that motivated extracting the helper.
+    """
+    from provide.uterm.server.app.factory_impl import _aclose_webhook_gates
+
+    closed: list[str] = []
+
+    class _FakeGate:
+        async def aclose(self) -> None:
+            closed.append("closed")
+
+    # First arg present (True branch → aclose awaited); second is None (False branch → skipped).
+    await _aclose_webhook_gates(_FakeGate(), None)
+    assert closed == ["closed"]
