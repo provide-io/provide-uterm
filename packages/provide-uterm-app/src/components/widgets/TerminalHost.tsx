@@ -31,7 +31,13 @@ export function TerminalHost({ config }: TerminalHostProps) {
     const widget = new TermWidget(containerRef.current, config ?? {});
     mountedRef.current = true;
     setMounted(true);
-    return () => { widget.dispose(); };
+    return () => {
+      widget.dispose();
+      // Reset so a re-run (config change / StrictMode double-mount) re-creates
+      // the widget instead of the init guard skipping it — which would dispose
+      // the terminal and leave it blank.
+      mountedRef.current = false;
+    };
   }, [config, setMounted]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
