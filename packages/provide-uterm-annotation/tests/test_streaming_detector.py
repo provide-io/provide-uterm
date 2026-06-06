@@ -41,8 +41,25 @@ def test_no_reemit_on_the_following_chunk() -> None:
     sd.detect("send", _KEY[:8], seq=1)
     first = sd.detect("send", _KEY[8:], seq=2)
     assert len(first) == 1
-    # The carry is dropped after a hit, so the same key isn't reported again.
+    # Only the post-match tail is carried (here empty, as the key ends the
+    # window), so the same key isn't re-reported on the next chunk.
     assert sd.detect("send", "nothing here", seq=3) == []
+
+
+def test_second_split_pattern_after_a_hit_still_bridges() -> None:
+    """A hit must not drop the post-match tail.
+
+    Dropping the whole carry on any hit (the old behaviour) loses a *second*
+    secret that begins right after a completed match and straddles the boundary.
+    Here chunk 1 completes an escalation hit (``sudo``) and begins an AWS key;
+    chunk 2 finishes the key, which must still be detected.
+    """
+    sd = StreamingDetector(PatternDetector())
+    first = sd.detect("send", "sudo AKIA0123", seq=1)  # pragma: allowlist secret
+    assert any(a.label == "privilege_escalation" for a in first)
+    assert not any(a.label == "credential_exposure" for a in first)  # key not yet complete
+    second = sd.detect("send", "456789AB ok", seq=2)  # pragma: allowlist secret
+    assert any(a.label == "credential_exposure" for a in second), second
 
 
 def test_empty_text_returns_empty_and_keeps_carry() -> None:

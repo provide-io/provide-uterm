@@ -41,16 +41,18 @@ class StreamingDetector:
     def detect(self, event_type: str, text: str, seq: int) -> list[Annotation]:
         """Scan *text* (joined with the carried tail) and return any matches.
 
-        A match owned by the chunk in which it *completes* — the returned
-        annotation's span carries the *seq* passed for that chunk. On a hit the
-        carried tail is dropped so the same match is not re-reported on the next
-        chunk; otherwise a bounded tail is kept to bridge the next boundary.
+        A match is owned by the chunk in which it *completes* — the returned
+        annotation's span carries the *seq* passed for that chunk. The carried
+        tail is the bounded window suffix *after* the furthest match: it bridges
+        a secret straddling the next boundary (including a second one that begins
+        right after a completed match) without re-reporting a match that already
+        finished.
         """
         if not text:
             return []
         window = self._carry + text if self._carry else text
-        annotations = self._detector.detect(event_type, window, seq)
-        self._carry = "" if annotations else window[-self._max_carry :]
+        annotations, match_end = self._detector.scan(event_type, window, seq)
+        self._carry = window[match_end:][-self._max_carry :]
         return annotations
 
     def reset(self) -> None:
