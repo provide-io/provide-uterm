@@ -309,6 +309,43 @@ async def test_do_webhook_register_returns_webhook_id(wrangler_server: str) -> N
 
 
 @pytest.mark.e2e
+async def test_do_webhook_register_with_secret_does_not_echo_secret(wrangler_server: str) -> None:
+    """Registering a webhook WITH a secret runs encrypt_secret in the real workerd runtime.
+
+    ``encrypt_secret``/``decrypt_secret`` (do/_webhook_crypto.py) call
+    ``crypto.subtle`` (AES-256-GCM) and are ``# pragma: no cover - CF runtime
+    only`` because Web Crypto only exists inside workerd/Pyodide — a unit test
+    cannot exercise them. This e2e test drives the register path with a
+    ``secret`` so the encrypt branch actually runs in the Worker, and asserts:
+
+    1. registration still succeeds (200 + webhook_id), proving encryption did
+       not raise; and
+    2. the response never echoes the plaintext ``secret`` back — it is
+       encrypted at rest and must not leak in the registration reply.
+
+    When ``WEBHOOK_SECRET_KEY`` is unset the crypto module returns plaintext
+    (documented fallback); the no-echo assertion holds either way, so this test
+    is meaningful both with and without the key configured. See the runbook in
+    ``.provide/HANDOFF.md`` for the full encrypt→decrypt→HMAC round-trip
+    validation against a deployed Worker.
+    """
+    worker_id = _new_worker_id()
+    hook_url = "https://example.com/hook"
+
+    status, body = _http_post(
+        wrangler_server,
+        f"/api/sessions/{worker_id}/webhooks",
+        {"url": hook_url, "secret": "live-test-secret"},  # pragma: allowlist secret
+    )
+    assert status == 200, f"expected 200, got {status}: {body}"
+    assert "webhook_id" in body, f"no webhook_id in {body}"
+    assert body["url"] == hook_url
+    # The plaintext secret must never round-trip back to the caller.
+    assert "secret" not in body, f"secret leaked in registration response: {body}"
+    assert "live-test-secret" not in str(body), f"secret value leaked in response: {body}"  # pragma: allowlist secret
+
+
+@pytest.mark.e2e
 async def test_do_webhook_list_after_register(wrangler_server: str) -> None:
     """POST then GET lists the registered webhook."""
     worker_id = _new_worker_id()
