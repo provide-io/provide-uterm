@@ -117,6 +117,19 @@ def _patched_ws_connect(uri, **kwargs):
 
 
 @pytest.fixture(autouse=True)
+def _register_shell_connector() -> None:
+    """Register the ``shell`` connector the HostedSessionRuntime needs.
+
+    ``create_server_app()`` registers the builtin connectors via
+    ``_register_builtin_connectors()``; these tests drive ``HostedSessionRuntime``
+    directly, so without this the runtime fails to start with
+    ``unsupported connector_type: 'shell'``. The import self-registers and is
+    idempotent.
+    """
+    import provide.uterm.server.connectors.shell  # noqa: F401  # self-registers on import
+
+
+@pytest.fixture(autouse=True)
 def _inject_cf_headers_into_runtime(request: pytest.FixtureRequest):
     """Patch websockets.connect for real_cf tests so HostedSessionRuntime sends CF Access headers."""
     if not request.node.get_closest_marker("real_cf"):
