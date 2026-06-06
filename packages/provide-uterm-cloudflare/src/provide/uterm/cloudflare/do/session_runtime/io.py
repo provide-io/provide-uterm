@@ -298,21 +298,33 @@ class _SessionRuntimeIoMixin:
             await self._request_worker_snapshot()
 
     async def _request_worker_snapshot(self) -> None:
-        """Ask the producer worker for a fresh full-screen snapshot (Tier B resync)."""
+        """Ask the producer for a fresh full-screen snapshot (Tier B resync).
+
+        For an in-DO ushell producer, handle_control returns the snapshot frames
+        directly, which we broadcast (idempotent repaint). An external worker
+        replies asynchronously over its WS → broadcast_worker_frame.
+        """
+        if self._ushell is not None:
+            for frame in await self._ushell.handle_control("snapshot_request"):
+                await self.broadcast_to_browsers(frame)
+            return
         if self.worker_ws is None:
             return
         await self.send_ws(self.worker_ws, {"type": "control", "action": "snapshot_request", "ts": time.time()})
 
     async def _signal_worker_flow(self, action: str) -> None:
-        """Send a Tier-A flow-control hint to an external producer worker.
+        """Send a Tier-A flow-control hint to the producer.
 
         Uses ``flow_pause``/``flow_resume`` — distinct from hijack pause/resume so
-        the two never interfere. ushell (in-DO producer) honoring is a later slice,
-        so this is a no-op when there is no external ``worker_ws``.
+        the two never interfere. Routed to the in-DO ushell connector when present,
+        otherwise to the external worker WS.
         """
+        control = "flow_pause" if action == _FLOW_PAUSE else "flow_resume"
+        if self._ushell is not None:
+            await self._ushell.handle_control(control)
+            return
         if self.worker_ws is None:
             return
-        control = "flow_pause" if action == _FLOW_PAUSE else "flow_resume"
         await self.send_ws(self.worker_ws, {"type": "control", "action": control, "ts": time.time()})
 
     async def note_browser_ack(self, ws_id: str, acked_bytes: int) -> None:

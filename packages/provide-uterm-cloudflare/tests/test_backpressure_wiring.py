@@ -32,6 +32,7 @@ class _Host(_SessionRuntimeIoMixin):
         self.max_buffer_bytes = 1_000_000
         self.browser_sockets: dict[str, object] = {}
         self.browser_hijack_owner: dict[str, str] = {}
+        self._ushell = None
         self.ctx = SimpleNamespace(getWebSockets=list)  # [] → fall back to browser_sockets
 
     def ws_key(self, ws: object) -> str:
@@ -104,3 +105,39 @@ async def test_recovery_via_ack_requests_worker_snapshot() -> None:
     host._flow.on_sent("a", 250)  # congested
     await host.note_browser_ack("a", 230)  # inflight 20 < low → recovered
     assert any(f.get("action") == "snapshot_request" for f in host.sent)
+
+
+class _Ushell:
+    """Stub in-DO ushell producer recording the control actions it receives."""
+
+    def __init__(self) -> None:
+        self.controls: list[str] = []
+
+    async def handle_control(self, action: str) -> list[dict[str, object]]:
+        self.controls.append(action)
+        if action == "snapshot_request":
+            return [{"type": "snapshot", "screen": "S"}]
+        return []
+
+
+async def test_signal_worker_flow_routes_to_ushell() -> None:
+    """An in-DO ushell producer is flow-paused via handle_control, not a worker WS."""
+    host = _Host(worker_ws=None)
+    ush = _Ushell()
+    host._ushell = ush
+    await host._signal_worker_flow(PAUSE)
+    assert ush.controls == ["flow_pause"]
+    assert host.sent == []  # no external worker WS involved
+
+
+async def test_request_worker_snapshot_routes_to_ushell_and_broadcasts() -> None:
+    """ushell resync: snapshot_request returns frames inline → broadcast to browsers."""
+    host = _Host(worker_ws=None)
+    ush = _Ushell()
+    host._ushell = ush
+    viewer = object()
+    host.browser_sockets = {host.ws_key(viewer): viewer}
+    await host._request_worker_snapshot()
+    assert ush.controls == ["snapshot_request"]
+    delivered = host.delivered.get(host.ws_key(viewer), [])
+    assert any(f.get("type") == "snapshot" for f in delivered)
