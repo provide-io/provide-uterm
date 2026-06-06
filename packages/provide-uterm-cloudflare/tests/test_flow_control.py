@@ -102,3 +102,63 @@ def test_decide_no_signal_when_idle_and_unpaused() -> None:
     fc.on_ack("a", 0, now=0.0)
     assert fc.decide(now=0.0) is None
     assert fc.paused is False
+
+
+# ── Tier B: per-viewer congestion + recovery ──────────────────────────────────
+
+
+def test_is_congested_sets_above_high_and_clears_below_low() -> None:
+    fc = _fc(high=1000, low=400)
+    fc.on_ack("a", 0, now=0.0)  # active
+    fc.on_sent("a", 1500)  # inflight 1500 > high → congested
+    assert fc.is_congested("a") is True
+    fc.on_ack("a", 900, now=1.0)  # inflight 600 — above low → stays congested (hysteresis)
+    assert fc.is_congested("a") is True
+    fc.on_ack("a", 1200, now=2.0)  # inflight 300 < low → clears
+    assert fc.is_congested("a") is False
+
+
+def test_not_congested_when_below_high() -> None:
+    fc = _fc(high=1000, low=400)
+    fc.on_ack("a", 0, now=0.0)
+    fc.on_sent("a", 500)
+    assert fc.is_congested("a") is False
+
+
+def test_recovery_recorded_once_and_cleared_by_take() -> None:
+    fc = _fc(high=1000, low=400)
+    fc.on_ack("a", 0, now=0.0)
+    fc.on_sent("a", 1500)  # congested
+    assert fc.take_recovered() == set()  # not recovered yet
+    fc.on_ack("a", 1200, now=1.0)  # inflight 300 < low → recovered
+    assert fc.take_recovered() == {"a"}
+    assert fc.take_recovered() == set()  # cleared after take
+
+
+def test_all_active_congested_true_only_when_every_active_browser_congested() -> None:
+    fc = _fc(high=1000, low=400, grace=5.0)
+    assert fc.all_active_congested(now=0.0) is False  # no active browsers
+    fc.on_ack("a", 0, now=0.0)
+    fc.on_sent("a", 1500)  # a congested
+    fc.on_ack("b", 0, now=0.0)
+    fc.on_sent("b", 500)  # b keeps up
+    assert fc.all_active_congested(now=0.0) is False
+    fc.on_sent("b", 1000)  # b now 1500 > high → congested
+    assert fc.all_active_congested(now=0.0) is True
+
+
+def test_all_active_congested_ignores_silent_browser() -> None:
+    fc = _fc(high=1000, low=400, grace=5.0)
+    fc.on_ack("a", 0, now=0.0)
+    fc.on_sent("a", 1500)  # congested, last ack at t=0
+    assert fc.all_active_congested(now=10.0) is False  # a is silent (>grace) → no active
+
+
+def test_forget_clears_congestion_and_recovery() -> None:
+    fc = _fc(high=1000, low=400)
+    fc.on_ack("a", 0, now=0.0)
+    fc.on_sent("a", 1500)  # congested
+    fc.on_ack("a", 1200, now=1.0)  # recovered
+    fc.forget("a")
+    assert fc.is_congested("a") is False
+    assert fc.take_recovered() == set()
