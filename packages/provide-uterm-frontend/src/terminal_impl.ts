@@ -10,7 +10,7 @@
  * lifecycle, and the public class registered on window.
  */
 
-import { ControlChannelDecoder } from "./hijack-codec.js";
+import { ControlChannelDecoder, encodeWsFrame } from "./hijack-codec.js";
 import {
   buildSettingsPanelHtml,
   DEFAULTS,
@@ -26,6 +26,11 @@ import {
   THEME_DEFAULTS,
   type ThemeName,
 } from "./terminal-themes.js";
+
+// Throttle for outbound consumption ACKs: at most one ack per window, carrying
+// the cumulative bytes received so the DO can size its Tier-A backpressure
+// window (see docs/ard-cloudflare-backpressure.md).
+const ACK_THROTTLE_MS = 100;
 
 interface XtermLine {
   translateToString(trimRight?: boolean): string;
@@ -118,6 +123,10 @@ export class ProvideTerminal {
   private reconnectTimer: number | null = null;
   private readonly wsDecoder = new ControlChannelDecoder();
   private _firstDataWritten = false;
+  // Tier-A backpressure: cumulative bytes received on this connection, ACKed to
+  // the DO on a throttle so it can pause the producer when the browser lags.
+  private _ackBytes = 0;
+  private _ackTimer: number | null = null;
 
   constructor(container: HTMLElement, config: TerminalConfig = {}) {
     this.container = container;
@@ -144,6 +153,7 @@ export class ProvideTerminal {
     }
     this.ws?.close();
     this.ws = null;
+    this.clearAckTimer();
   }
 
   getBufferText(maxLines = 200): string {
@@ -272,6 +282,28 @@ export class ProvideTerminal {
     this.ws.send(data);
   }
 
+  /** Schedule a single throttled consumption ACK (Tier-A backpressure). */
+  private scheduleAck(): void {
+    if (this._ackTimer !== null) return;
+    this._ackTimer = window.setTimeout(() => {
+      this._ackTimer = null;
+      this.sendAck();
+    }, ACK_THROTTLE_MS);
+  }
+
+  private sendAck(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(encodeWsFrame({ type: "ack", bytes: this._ackBytes }));
+    }
+  }
+
+  private clearAckTimer(): void {
+    if (this._ackTimer !== null) {
+      window.clearTimeout(this._ackTimer);
+      this._ackTimer = null;
+    }
+  }
+
   /** Write data to the xterm instance, hiding the loading screen on first call. */
   private writeData(data: string): void {
     if (!this._firstDataWritten) {
@@ -302,6 +334,9 @@ export class ProvideTerminal {
     const ws = new WebSocket(this.resolveWsUrl());
     this.ws = ws;
     this.wsDecoder.reset();
+    // New connection → the DO's per-socket sent counter restarts at 0.
+    this._ackBytes = 0;
+    this.clearAckTimer();
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.connected = true;
@@ -310,6 +345,10 @@ export class ProvideTerminal {
     ws.onmessage = (event) => {
       const payload = typeof event.data === "string" ? event.data : "";
       if (!payload || this.term === null) return;
+      // Count raw received bytes (pre-decode, matching the DO's per-frame
+      // msg_len) and ACK on a throttle to drive Tier-A backpressure.
+      this._ackBytes += payload.length;
+      this.scheduleAck();
       // Decode the inline control-channel framing so the user never sees raw
       // JSON control frames mixed into terminal output. Control chunks are
       // discarded here — ProvideTerminal has no hijack UI to surface them.
