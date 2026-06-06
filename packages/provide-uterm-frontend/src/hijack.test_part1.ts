@@ -970,7 +970,7 @@ describe("message handling continuation", () => {
 
 // ── Heartbeat ─────────────────────────────────────────────────────────────────
 
-describe("heartbeat", () => {
+describe("heartbeat (continued)", () => {
   it("sends heartbeat to WS when hijackedByMe", () => {
     makeWidget();
     getWs().open();
@@ -1004,7 +1004,7 @@ describe("heartbeat", () => {
 
 // ── Button clicks ─────────────────────────────────────────────────────────────
 
-describe("button clicks", () => {
+describe("button clicks (continued)", () => {
   it("hijack button sends hijack_request via WS", () => {
     const { container } = makeWidget();
     getWs().open();
@@ -1137,7 +1137,7 @@ describe("button clicks", () => {
 
 // ── Text input ────────────────────────────────────────────────────────────────
 
-describe("text input field", () => {
+describe("text input field (continued)", () => {
   it("sends input on Enter key when hijackedByMe", () => {
     const { container } = makeWidget();
     getWs().open();
@@ -1194,7 +1194,7 @@ describe("text input field", () => {
 
 // ── Reconnect / nudge ─────────────────────────────────────────────────────────
 
-describe("reconnect logic", () => {
+describe("reconnect logic (continued)", () => {
   it("backoff delay increases with each attempt", () => {
     makeWidget();
     // First close → 1s delay
@@ -1220,7 +1220,7 @@ describe("reconnect logic", () => {
 
 // ── mobileKeys=false ──────────────────────────────────────────────────────────
 
-describe("mobileKeys=false option", () => {
+describe("mobileKeys=false option (continued)", () => {
   it("does not build mobile keys", () => {
     const { container } = makeWidget({ mobileKeys: false });
     expect(container.querySelectorAll(".mkey")).toHaveLength(0);
@@ -1229,7 +1229,7 @@ describe("mobileKeys=false option", () => {
 
 // ── Local echo and activity indicator ─────────────────────────────────────────
 
-describe("local echo and activity indicator", () => {
+describe("local echo and activity indicator (continued)", () => {
   it("widget has local echo tracking state variables", () => {
     const { widget } = makeWidget();
     // biome-ignore lint/suspicious/noExplicitAny: test mock
@@ -1295,7 +1295,7 @@ describe("local echo and activity indicator", () => {
 
 // ── onResize callback ──────────────────────────────────────────────────────────
 
-describe("onResize callback", () => {
+describe("onResize callback (continued)", () => {
   let capturedRoCallback: (() => void) | null = null;
 
   beforeEach(() => {
