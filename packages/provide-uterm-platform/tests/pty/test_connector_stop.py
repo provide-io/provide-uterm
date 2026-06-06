@@ -49,7 +49,13 @@ async def test_stop_handles_dead_child_pid() -> None:
 
 
 async def test_stop_escalates_to_sigkill_when_child_survives_sighup() -> None:
-    """stop() escalates to SIGKILL and blocks until child is reaped."""
+    """stop() grants a grace window, then escalates to SIGKILL and block-reaps.
+
+    A child that never exits (every WNOHANG returns 0) must be polled the full
+    grace budget before SIGKILL — proving the escalation is not instant. The
+    hardcoded ``call_count``/``assert_any_call`` values pin the grace constants
+    so a mutated poll count or interval is killed by the mutation gate.
+    """
     conn = make_connector("/bin/echo", ["done"])
     conn._connected = True
     conn._child_pid = 12345
@@ -66,13 +72,91 @@ async def test_stop_escalates_to_sigkill_when_child_survives_sighup() -> None:
     def _fake_kill(pid: int, sig: int) -> None:
         kill_calls.append((pid, sig))
 
-    with patch("os.waitpid", side_effect=_fake_waitpid), patch("os.kill", side_effect=_fake_kill):
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("os.waitpid", side_effect=_fake_waitpid),
+        patch("os.kill", side_effect=_fake_kill),
+    ):
         await conn.stop()
 
     assert conn._child_pid is None
     assert (12345, _signal.SIGHUP) in kill_calls
     assert (12345, _signal.SIGKILL) in kill_calls
     assert any(flags == 0 for _, flags in waitpid_calls), "blocking waitpid must be called"
+    # The grace window polls the full budget before escalating (no early kill).
+    assert mock_sleep.call_count == 20
+    mock_sleep.assert_any_call(0.05)
+
+
+async def test_stop_grace_reaps_child_that_exits_during_window() -> None:
+    """A child that exits during the grace window is reaped WITHOUT SIGKILL.
+
+    This is the fix's core guarantee: a still-live child gets time to run its
+    hangup path (flush shell history, clean editor swap files) and exit on its
+    own terms instead of being force-killed the instant the fast-path WNOHANG
+    sees it still running.
+    """
+    conn = make_connector("/bin/echo", ["done"])
+    conn._connected = True
+    conn._child_pid = 12345
+    wnohang_count = [0]
+
+    def _fake_waitpid(pid: int, flags: int) -> tuple[int, int]:
+        if flags == os.WNOHANG:
+            wnohang_count[0] += 1
+            # 1st WNOHANG = the fast-path check (still running); the child exits
+            # by the first grace poll (2nd WNOHANG).
+            if wnohang_count[0] >= 2:
+                return (pid, 0)
+            return (0, 0)
+        return (pid, 0)
+
+    kill_calls: list[tuple[int, int]] = []
+
+    def _fake_kill(pid: int, sig: int) -> None:
+        kill_calls.append((pid, sig))
+
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock),
+        patch("os.waitpid", side_effect=_fake_waitpid),
+        patch("os.kill", side_effect=_fake_kill),
+    ):
+        await conn.stop()
+
+    assert conn._child_pid is None
+    assert (12345, _signal.SIGHUP) in kill_calls
+    assert (12345, _signal.SIGKILL) not in kill_calls, "a child that exits gracefully must not be SIGKILLed"
+
+
+async def test_stop_grace_childprocesserror_during_window_no_sigkill() -> None:
+    """A child reaped (ChildProcessError) during the grace window skips SIGKILL."""
+    conn = make_connector("/bin/echo", ["done"])
+    conn._connected = True
+    conn._child_pid = 12345
+    wnohang_count = [0]
+
+    def _fake_waitpid(pid: int, flags: int) -> tuple[int, int]:
+        if flags == os.WNOHANG:
+            wnohang_count[0] += 1
+            if wnohang_count[0] >= 2:
+                raise ChildProcessError("reaped during grace")
+            return (0, 0)
+        return (pid, 0)
+
+    kill_calls: list[tuple[int, int]] = []
+
+    def _fake_kill(pid: int, sig: int) -> None:
+        kill_calls.append((pid, sig))
+
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock),
+        patch("os.waitpid", side_effect=_fake_waitpid),
+        patch("os.kill", side_effect=_fake_kill),
+    ):
+        await conn.stop()
+
+    assert conn._child_pid is None
+    assert (12345, _signal.SIGKILL) not in kill_calls
 
 
 async def test_stop_sigkill_processlookuperror_and_waitpid_childprocesserror() -> None:
