@@ -18,10 +18,28 @@ Or install from the monorepo with `uv`:
 uv pip install -e packages/provide-uterm-cloudflare
 ```
 
-Deploy with `pywrangler` (wraps `wrangler` for Python Workers):
+### Deploy
+
+The worker entrypoint is `src/worker_entry.py` (referenced by `main` in
+`wrangler.toml`). It lives at the package `src/` root on purpose: wrangler bundles
+the directory of the `main` file, so anchoring it there preserves the full
+`provide/uterm/cloudflare/` tree in the bundle and the worker's qualified imports
+resolve as-is.
+
+The Pyodide runtime also needs a flat vendor tree of the pure-Python deps the
+worker imports (`structlog`, `provide.telemetry`, and the `provide.uterm.*`
+modules). `pywrangler sync` produces a layout the worker can't import, so build it
+with the helper script, then deploy with `wrangler` directly (not `pywrangler
+deploy`, which would re-sync and overwrite the tree):
 
 ```bash
-uv run pywrangler deploy
+bash .ci/vendor_cf_worker.sh                          # build python_modules/
+cd packages/provide-uterm-cloudflare
+CLOUDFLARE_API_TOKEN=… npx wrangler deploy            # publish
+
+# Required secrets (AUTH_MODE is jwt-only; the worker 500s without these):
+npx wrangler secret put WORKER_BEARER_TOKEN           # >=32 high-entropy chars
+npx wrangler secret put WEBHOOK_SECRET_KEY            # base64 AES-256 key
 ```
 
 ## Key features
