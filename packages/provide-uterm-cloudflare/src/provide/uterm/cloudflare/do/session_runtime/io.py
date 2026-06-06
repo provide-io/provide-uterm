@@ -38,6 +38,11 @@ except Exception:  # pragma: no cover
     from state.registry import KV_REFRESH_S, update_kv_session  # type: ignore[import-not-found,no-redef]
     from state.store import LeaseRecord  # type: ignore[import-not-found,no-redef]
 
+from .flow_control import PAUSE as _FLOW_PAUSE
+
+if TYPE_CHECKING:
+    from .flow_control import FlowController
+
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -74,6 +79,7 @@ class _SessionRuntimeIoMixin:
         worker_id: str
         max_buffer_bytes: int
         _queue_bytes: int
+        _flow: FlowController
         store: Any
         ctx: Any
         meta: Any
@@ -262,6 +268,8 @@ class _SessionRuntimeIoMixin:
                 self._queue_bytes += msg_len
                 try:
                     await self.send_ws(ws, payload)
+                    # Record bytes sent for ACK-driven backpressure (Tier A).
+                    self._flow.on_sent(ws_id, msg_len)
                 finally:
                     # Always release the reservation, even if send_ws raises —
                     # otherwise a transient send failure leaks _queue_bytes
@@ -271,6 +279,31 @@ class _SessionRuntimeIoMixin:
             except Exception:
                 self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
                 self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
+                self._flow.forget(ws_id)
+        await self._apply_flow_control()
+
+    async def _apply_flow_control(self) -> None:
+        """Emit a producer pause/resume hint when congestion state transitions."""
+        action = self._flow.decide(time.monotonic())
+        if action is not None:
+            await self._signal_worker_flow(action)
+
+    async def _signal_worker_flow(self, action: str) -> None:
+        """Send a Tier-A flow-control hint to an external producer worker.
+
+        Uses ``flow_pause``/``flow_resume`` — distinct from hijack pause/resume so
+        the two never interfere. ushell (in-DO producer) honoring is a later slice,
+        so this is a no-op when there is no external ``worker_ws``.
+        """
+        if self.worker_ws is None:
+            return
+        control = "flow_pause" if action == _FLOW_PAUSE else "flow_resume"
+        await self.send_ws(self.worker_ws, {"type": "control", "action": control, "ts": time.time()})
+
+    async def note_browser_ack(self, ws_id: str, acked_bytes: int) -> None:
+        """Record a browser's cumulative-bytes ACK and re-evaluate backpressure."""
+        self._flow.on_ack(ws_id, acked_bytes, time.monotonic())
+        await self._apply_flow_control()
 
     async def broadcast_worker_frame(self, payload: dict[str, Any]) -> None:
         event = self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)  # type: ignore[attr-defined]

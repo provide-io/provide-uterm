@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from provide.uterm.cloudflare.do.session_runtime.flow_control import FlowController
 from provide.uterm.cloudflare.do.session_runtime.ws_helpers import _WsHelperMixin
 
 from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
@@ -25,6 +26,7 @@ def _make_host(*, jwt_mode: str = "dev") -> _WsHelperMixin:
             self.browser_hijack_owner: dict = {}
             self.browser_resume_tokens: dict = {}
             self.config = SimpleNamespace(jwt=SimpleNamespace(mode=jwt_mode))
+            self._flow = FlowController(high_water=1, low_water=0, ack_grace_s=1.0)
 
     return _Host()  # type: ignore[return-value]
 

@@ -148,6 +148,7 @@ class _WsHelperMixin:
         self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
         self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
         self.browser_resume_tokens.pop(ws_id, None)  # type: ignore[attr-defined]
+        self._flow.forget(ws_id)  # type: ignore[attr-defined]
 
     async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None:
         frame_type = str(payload.get("type") or "")

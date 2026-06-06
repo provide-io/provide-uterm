@@ -134,6 +134,14 @@ class LimitsConfig:
     max_input_chars: int = 10_000
     max_events_per_worker: int = 2_000
     max_buffer_bytes: int = 1_048_576
+    # Tier-A backpressure (see docs/ard-cloudflare-backpressure.md). When a
+    # browser's un-ACKed inflight bytes exceed the high-water mark the producer is
+    # paused (XOFF); it resumes once inflight falls below the low-water mark. A
+    # browser silent for longer than the grace window is excluded from the
+    # decision so a stuck client cannot pause the producer forever.
+    backpressure_high_water_bytes: int = 4_194_304
+    backpressure_low_water_bytes: int = 1_048_576
+    backpressure_ack_grace_s: float = 10.0
 
 
 @dataclass(slots=True)
@@ -208,6 +216,9 @@ class CloudflareConfig:
             max_input_chars=max(100, int(_get("MAX_INPUT_CHARS", "10000"))),
             max_events_per_worker=max(100, int(_get("MAX_EVENTS_PER_WORKER", "2000"))),
             max_buffer_bytes=max(1024, int(_get("MAX_BUFFER_BYTES", "1048576"))),
+            backpressure_high_water_bytes=max(1024, int(_get("BACKPRESSURE_HIGH_WATER_BYTES", "4194304"))),
+            backpressure_low_water_bytes=max(0, int(_get("BACKPRESSURE_LOW_WATER_BYTES", "1048576"))),
+            backpressure_ack_grace_s=max(0.0, float(_get("BACKPRESSURE_ACK_GRACE_S", "10"))),
         )
         upstream = UpstreamConfig(
             base_ws_url=_get("UPSTREAM_BASE_WS_URL", ""),

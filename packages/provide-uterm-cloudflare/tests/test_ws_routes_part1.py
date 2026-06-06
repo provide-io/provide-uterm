@@ -40,6 +40,7 @@ class _Runtime:
         self._browser_role = browser_role
         self._sent: list[dict] = []
         self._pushed: list[str] = []
+        self._acks: list[tuple[str, int]] = []
         self._broadcast: list[dict] = []
         self._snapshots_saved: list[dict] = []
         self._input_modes_saved: list[str] = []
@@ -58,6 +59,9 @@ class _Runtime:
     async def push_worker_input(self, data: str) -> bool:
         self._pushed.append(data)
         return True
+
+    async def note_browser_ack(self, ws_id: str, acked_bytes: int) -> None:
+        self._acks.append((ws_id, acked_bytes))
 
     async def broadcast_worker_frame(self, frame: object) -> None:
         self._broadcast.append(frame)
@@ -426,3 +430,24 @@ async def test_presence_update_relayed_to_other_browsers() -> None:
     runtime._socket_roles[runtime.ws_key(other)] = "browser"
     await handle_socket_message(runtime, sender, _raw("presence_update"), is_worker=False)
     assert len(runtime._sent) == 1
+
+
+# ---------------------------------------------------------------------------
+# ack frame → note_browser_ack (Tier-A backpressure ingestion)
+# ---------------------------------------------------------------------------
+
+
+async def test_ack_frame_with_int_bytes_forwarded() -> None:
+    """A browser 'ack' frame forwards its cumulative byte count to note_browser_ack."""
+    runtime = _Runtime()
+    ws = _Ws()
+    await handle_socket_message(runtime, ws, _raw("ack", bytes=512), is_worker=False)
+    assert runtime._acks == [(runtime.ws_key(ws), 512)]
+
+
+async def test_ack_frame_with_non_int_bytes_defaults_zero() -> None:
+    """A non-integer 'bytes' value is coerced to 0 (never raises)."""
+    runtime = _Runtime()
+    ws = _Ws()
+    await handle_socket_message(runtime, ws, _raw("ack", bytes="oops"), is_worker=False)
+    assert runtime._acks == [(runtime.ws_key(ws), 0)]

@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover
 
 from .auth import _AuthMixin
 from .fetch import _FetchMixin
+from .flow_control import FlowController
 from .io import _SessionRuntimeIoMixin
 from .lifecycle import _LifecycleMixin
 from .ws_helpers import _WsHelperMixin
@@ -73,6 +74,12 @@ class SessionRuntime(
         self.browser_resume_tokens: dict[str, str] = {}
         self._queue_bytes = 0
         self.max_buffer_bytes = self.config.limits.max_buffer_bytes
+        # Tier-A backpressure controller (ACK-driven; workerd has no bufferedAmount).
+        self._flow = FlowController(
+            high_water=self.config.limits.backpressure_high_water_bytes,
+            low_water=self.config.limits.backpressure_low_water_bytes,
+            ack_grace_s=self.config.limits.backpressure_ack_grace_s,
+        )
         self.last_snapshot: dict[str, Any] | None = None  # type: ignore[assignment]
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
