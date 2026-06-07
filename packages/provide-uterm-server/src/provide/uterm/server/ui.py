@@ -21,17 +21,39 @@ logger = get_logger(__name__)
 _vite_manifest: dict[str, object] | None = None
 _vite_manifest_loaded = False
 
+_vanilla_manifest: dict[str, object] | None = None
+_vanilla_manifest_loaded = False
 
-def _hijack_js_version() -> str:
-    """Return a short cache-busting token based on hijack.js mtime."""
+
+def _read_vanilla_manifest() -> dict[str, object] | None:
+    global _vanilla_manifest, _vanilla_manifest_loaded
+    if _vanilla_manifest_loaded:
+        return _vanilla_manifest
+    _vanilla_manifest_loaded = True
     try:
-        resource = importlib.resources.files("provide.uterm.server") / "frontend" / "hijack.js"
-        if resource.is_file():
-            with importlib.resources.as_file(resource) as path:
-                return format(int(path.stat().st_mtime_ns), "x")[-8:]
+        manifest_path = (
+            importlib.resources.files("provide.uterm.server") / "frontend" / ".vite" / "vanilla-manifest.json"
+        )
+        if not manifest_path.is_file():
+            # Fallback to root dir if vite doesn't use .vite
+            manifest_path = importlib.resources.files("provide.uterm.server") / "frontend" / "vanilla-manifest.json"
+        if manifest_path.is_file():
+            raw = manifest_path.read_text(encoding="utf-8")
+            _vanilla_manifest = json.loads(raw)
+            logger.info("vanilla_manifest loaded entries=%d", len(_vanilla_manifest or {}))
     except Exception:
         pass
-    return "0"
+    return _vanilla_manifest
+
+
+def _resolve_vanilla_asset(entry_name: str) -> str:
+    manifest = _read_vanilla_manifest()
+    if manifest and entry_name in manifest:
+        entry = manifest[entry_name]
+        if isinstance(entry, dict) and "file" in entry:
+            return str(entry["file"])
+    # fallback
+    return entry_name.split("/")[-1].replace(".ts", ".js")
 
 
 def _read_vite_manifest() -> dict[str, object] | None:
@@ -218,7 +240,7 @@ def session_page_html(
         # hijack.js must appear before the Vite React bundle so window.ProvideHijack
         # is set before React's useEffect runs (both are deferred modules; document
         # order determines execution order).
-        pre_vite_modules=(f"hijack.js?v={_hijack_js_version()}",),
+        pre_vite_modules=(f"{_resolve_vanilla_asset('src/hijack.ts')}",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
