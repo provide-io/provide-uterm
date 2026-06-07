@@ -47,6 +47,8 @@ sequenceDiagram
 | **`provide-uterm-client`** | Programmatic access and AI tools. | `httpx`, `fastmcp`. | The **Interface Layer**. Provides the Python SDK and MCP tools for AI agents. |
 | **`provide-uterm-platform`** | Host-side interaction (PTY/Agent). | Local PTYs, PAM auth. | The **Agent Tier**. Manages local process lifecycle and bridges real PTYs to the virtual control plane. |
 | **`provide-uterm-frontend`** | Browser-based terminal UI. | TypeScript, `xterm.js`, Vanilla CSS. | The **User Interface**. Implements the `DeckMux` UI and terminal rendering. |
+| **`provide-uterm-annotation`** | Streaming secret detection + redaction. | Python, regex pattern sets. | The **Redaction Tier**. Detects and redacts credentials/secrets in terminal streams (boundary-aware streaming), enforced at 100% coverage with its own CI job. |
+| **`provide-uterm-app`** | Application shell. | TypeScript, React, Vite. | The **App Shell**. Composes the frontend widgets (terminal, hijack, inspect, presence) into the routed single-page application. |
 
 ---
 
