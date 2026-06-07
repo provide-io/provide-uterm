@@ -31,6 +31,7 @@ from provide.uterm.control_channel import encode_control
 
 if TYPE_CHECKING:
     from provide.uterm.cloudflare.api.http_routes import route_http
+    from provide.uterm.cloudflare.api.http_routes._dispatch import _is_cross_site
     from provide.uterm.cloudflare.auth.jwt import extract_bearer_or_cookie
     from provide.uterm.cloudflare.cf_types import Response
     from provide.uterm.cloudflare.contracts import RuntimeProtocol
@@ -39,12 +40,14 @@ if TYPE_CHECKING:
 else:
     try:
         from provide.uterm.cloudflare.api.http_routes import route_http
+        from provide.uterm.cloudflare.api.http_routes._dispatch import _is_cross_site
         from provide.uterm.cloudflare.auth.jwt import extract_bearer_or_cookie
         from provide.uterm.cloudflare.cf_types import Response
         from provide.uterm.cloudflare.do.ushell import init_ushell
         from provide.uterm.cloudflare.state.registry import update_kv_session
     except Exception:  # pragma: no cover
         from api.http_routes import route_http  # type: ignore[import-not-found,no-redef]
+        from api.http_routes._dispatch import _is_cross_site  # type: ignore[import-not-found,no-redef]
         from auth.jwt import extract_bearer_or_cookie  # type: ignore[import-not-found,no-redef]
         from cf_types import Response  # type: ignore[import-not-found]
         from do.ushell import init_ushell  # type: ignore[import-not-found,no-redef]
@@ -172,6 +175,17 @@ class _FetchMixin:
             if socket_role in ("worker", "raw"):
                 browser_role = "admin"
             else:
+                # CSWSH defense-in-depth: the browser socket authenticates via the
+                # ambient CF_Authorization cookie, and a WS upgrade is a GET that
+                # bypasses the HTTP CSRF guard. Reject a cross-site WebSocket
+                # handshake (mirrors api/http_routes/_dispatch.py::_is_cross_site).
+                # Worker/raw sockets (bearer-auth, no Origin) take the branch above.
+                if _is_cross_site(request, str(request.url)):
+                    return Response(
+                        json.dumps({"error": "cross_site_blocked"}),
+                        status=403,
+                        headers={"content-type": "application/json"},
+                    )
                 browser_role = await self.browser_role_for_request(request)  # type: ignore[attr-defined]
                 # Enforce session visibility before upgrading browser WebSockets.
                 # Only browser sockets carry a JWT and require visibility checks.
