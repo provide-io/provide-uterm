@@ -72,32 +72,32 @@ def terminal_decoder_server() -> Generator[str, None, None]:
         except Exception:
             return
 
-    page_html = """<!DOCTYPE html>
+    @app.get("/term-test", response_class=HTMLResponse)
+    async def _term_test_page() -> str:
+        from provide.uterm.server.ui import _resolve_vanilla_asset
+
+        script_path = _resolve_vanilla_asset("src/terminal.ts")
+        page_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>ProvideTerminal decoder test</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.css">
-  <link rel="stylesheet" href="/ui/terminal.css">
-  <style>html,body,#app{margin:0;padding:0;width:100%;height:100vh;background:#0b0f14;}</style>
+  <style>html,body,#app{{margin:0;padding:0;width:100%;height:100vh;background:#0b0f14;}}</style>
 </head>
 <body>
   <div id="app"></div>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/lib/addon-fit.js"></script>
   <script type="module">
-    import { ProvideTerminal } from '/ui/terminal.js';
-    window._term = new ProvideTerminal(document.getElementById('app'), {
+    import '/ui/{script_path}';
+    window._term = new window.ProvideTerminal(document.getElementById('app'), {{
       wsUrl: '/ws/term-test',
       title: 'decoder-test',
-    });
+    }});
   </script>
 </body>
 </html>"""
-
-    @app.get("/term-test", response_class=HTMLResponse)
-    async def _term_test_page() -> str:
-        return page_html
 
     # Expose sentinels via a JSON endpoint so tests stay deterministic
     # without hard-coding them in two places.

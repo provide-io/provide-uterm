@@ -69,8 +69,14 @@ def xterm_hijack_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/xterm-test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
+        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+
+        script_path = _resolve_vanilla_asset("src/hijack.ts")
+        css_paths = _resolve_vanilla_css("src/hijack.ts")
+        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
         return f"""<!DOCTYPE html>
 <html><head><meta charset='UTF-8'>
+{css_links}
 <link rel="stylesheet" href="{_XTERM_CDN}/css/xterm.css">
 <style>*{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{width:100%;height:100dvh;background:#0b0f14}}
@@ -81,8 +87,8 @@ html,body{{width:100%;height:100dvh;background:#0b0f14}}
 <body>
 <div id='app'></div>
 <script type='module'>
-import {{ ProvideHijack }} from '/ui/hijack.js';
-window._widget = new ProvideHijack(document.getElementById('app'),
+import '/ui/{script_path}';
+window._widget = new window.ProvideHijack(document.getElementById('app'),
   {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});
 </script>
 </body></html>"""
