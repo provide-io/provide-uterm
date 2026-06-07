@@ -153,6 +153,54 @@ async def test_browser_ws_upgrade_allowed_for_private_session_with_admin_role() 
 
 
 @pytest.mark.asyncio
+async def test_browser_ws_upgrade_blocked_cross_site() -> None:
+    """A cross-site browser WS handshake is rejected (CSWSH defense) even with valid
+    auth — the cookie-authed browser socket must not be hijackable from another origin."""
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
+    runtime.meta["visibility"] = "public"
+
+    req = _Req(
+        "https://example.invalid/ws/browser/test-worker",
+        headers={
+            "Upgrade": "websocket",
+            "Authorization": f"Bearer {_admin_jwt()}",
+            "Sec-Fetch-Site": "cross-site",
+        },
+    )
+
+    sys.modules["js"] = _fake_js_module()
+    try:
+        resp = await runtime.fetch(req)
+        assert resp.status == 403
+        assert json.loads(resp.body)["error"] == "cross_site_blocked"
+    finally:
+        sys.modules.pop("js", None)
+
+
+@pytest.mark.asyncio
+async def test_raw_ws_upgrade_not_cross_site_checked() -> None:
+    """Worker/raw sockets are bearer-authed (no ambient cookie) and send no Origin,
+    so the cross-site guard does not apply — a cross-site header must not block them."""
+    runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
+
+    req = _Req(
+        "https://example.invalid/ws/raw/test-worker",
+        headers={
+            "Upgrade": "websocket",
+            "Authorization": "Bearer test-worker-token-padded-to-32xyz",
+            "Sec-Fetch-Site": "cross-site",
+        },
+    )
+
+    sys.modules["js"] = _fake_js_module()
+    try:
+        resp = await runtime.fetch(req)
+        assert resp.status == 101  # raw socket bypasses the browser-only cross-site check
+    finally:
+        sys.modules.pop("js", None)
+
+
+@pytest.mark.asyncio
 async def test_browser_ws_upgrade_blocked_for_operator_session_with_viewer_role() -> None:
     """Browser WS upgrade to an operator-visibility session returns 403 for a viewer."""
     runtime = _make_runtime_with_token(token="test-worker-token-padded-to-32xyz", mode="jwt")
