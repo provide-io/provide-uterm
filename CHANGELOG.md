@@ -2,10 +2,38 @@
 
 All notable changes to provide-uterm are documented in this file.
 
-## [Unreleased] — enterprise-hardening body (2026-05-06 … 2026-06-01)
+## [Unreleased] — enterprise-hardening body (2026-05-06 … 2026-06-06)
 
 A multi-wave security/compliance hardening pass landed after the
 `0.5.0-dev` snapshot below. Highlights:
+
+### Post-audit hardening (2026-06-02 … 2026-06-06)
+
+A full-codebase re-audit (`artifacts/2026-06-04-reaudit-findings.md`) plus two
+external code reviews drove a focused remediation pass; every actionable finding
+is closed.
+
+- **Cloudflare DO credential-stripping (critical).** `update_kv_session` is now
+  read-modify-write, so the 60 s status heartbeat no longer null-outs the worker/
+  share/control token hashes — tunnel/share/control auth survives every worker
+  connect (`cloudflare/state/registry.py`).
+- **Native capture builds on Linux (critical).** `capture_disable()` moved to the
+  shared section so the `-Werror` Linux build compiles (`native/capture/capture.c`).
+- **Telnet IAC subnegotiation-overflow leak.** An oversized telnet subnegotiation
+  (past the 4 KB cap) no longer drops out of SB-parsing mode mid-stream, so its
+  tail can't leak into the cleaned application data (`gateway/_iac_negotiate.py`).
+- **DO webhook delivery offloaded off the broadcast critical path.** A slow or
+  blackholed webhook URL can no longer stall a Durable Object's PTY stream:
+  delivery runs as a bounded, `asyncio.wait_for`-timed background task
+  (`cloudflare/do/_webhooks.py`, `do/session_runtime/io.py`).
+- **CaptureConnector stdin forwarding is non-blocking.** `_forward_stdin` uses an
+  asyncio Unix stream instead of a blocking `socket.sendall`
+  (`pty/capture_connector.py`).
+- **Lows L1–L7** all fixed: gateway token-file TOCTOU (atomic 0600 create), CF
+  webhook-pattern ReDoS cap, hijack approval-timer leak on dispose, PTY
+  `handle_input` `os.write` OSError guard, annotation cross-boundary carry, and
+  `pty/connector.py` mutation-pragma hygiene (killable codec/buffer mutants now
+  killed; genuine equivalents documented in `mutation_equivalents.toml`).
 
 ### Security
 
