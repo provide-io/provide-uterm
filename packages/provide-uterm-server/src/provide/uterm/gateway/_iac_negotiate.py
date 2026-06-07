@@ -181,6 +181,7 @@ class IacNegotiator:
         # subnegotiation that hasn't closed yet.
         self._sb_option: int | None = None
         self._sb_buf = bytearray()
+        self._sb_overflow = False
         # Partial command bytes carried over from a previous feed() —
         # real telnet clients chunk their output, so an ``IAC WILL`` can
         # arrive split across two reads.
@@ -256,6 +257,7 @@ class IacNegotiator:
                     break
                 self._sb_option = data[i + 2]
                 self._sb_buf = bytearray()
+                self._sb_overflow = False
                 i += 3
                 continue
             if cmd in (_WILL, _WONT, _DO, _DONT):
@@ -296,15 +298,17 @@ class IacNegotiator:
         return b""
 
     def _append_sb(self, byte: int) -> None:
-        """Buffer a subnegotiation byte, abandoning the SB if it grows too large.
+        """Buffer a subnegotiation byte, capping the buffer once it grows too large.
 
-        Past ``_MAX_SB_BYTES`` the subnegotiation is discarded and SB state is
-        reset so a client that never sends ``IAC SE`` cannot grow ``_sb_buf``
-        without bound.
+        Past ``_MAX_SB_BYTES`` we stop buffering and mark the SB overflowed, but
+        stay in SB mode (``_sb_option`` is left set) so the remainder of an
+        oversized subnegotiation is still swallowed up to ``IAC SE`` instead of
+        leaking into the cleaned data stream. The cap keeps ``_sb_buf`` bounded
+        even if the client never sends ``IAC SE``; ``_finish_sb`` then drops the
+        overflowed payload rather than parsing a truncated body.
         """
         if len(self._sb_buf) >= _MAX_SB_BYTES:
-            self._sb_option = None
-            self._sb_buf = bytearray()
+            self._sb_overflow = True
             return
         self._sb_buf.append(byte)
 
@@ -312,8 +316,12 @@ class IacNegotiator:
         """Called when we see ``IAC SE`` that closes a subnegotiation."""
         option = self._sb_option
         payload = bytes(self._sb_buf)
+        overflowed = self._sb_overflow
         self._sb_option = None
         self._sb_buf = bytearray()
+        self._sb_overflow = False
+        if overflowed:
+            return  # oversized SB: drop it entirely rather than parse a truncated body
         if option == _OPT_TTYPE:
             self.term = _parse_ttype_is(payload)
             self._ttype_received = True

@@ -362,16 +362,43 @@ class TestDerivedColormodeStillWorks:
 
 class TestSbBufferCap:
     def test_unterminated_subnegotiation_is_bounded(self) -> None:
+        """Past the cap the buffer stops growing but the negotiator stays in SB
+        mode (``_sb_option`` set) so the unterminated body keeps being swallowed
+        rather than leaking — see the oversized-SB tests below."""
         from provide.uterm.gateway._iac_negotiate import _MAX_SB_BYTES, IacNegotiator
 
         neg = IacNegotiator()
         neg.feed(b"\xff\xfa\x18")  # IAC SB TTYPE
         neg.feed(b"A" * (_MAX_SB_BYTES * 4))
-        assert len(neg._sb_buf) <= _MAX_SB_BYTES
-        assert neg._sb_option is None
+        assert len(neg._sb_buf) <= _MAX_SB_BYTES  # bounded
+        assert neg._sb_option is not None  # still in SB mode (did not drop out mid-SB)
 
     def test_legitimate_small_subnegotiation_still_parses(self) -> None:
         """A well-formed TTYPE IS within the cap parses normally after the cap is in place."""
         n = IacNegotiator()
         n.feed(bytes([IAC, SB, TTYPE, SUB_IS]) + b"xterm-256color" + bytes([IAC, SE]))
         assert n.term == "xterm-256color"
+
+    def test_oversized_subnegotiation_tail_does_not_leak_into_cleaned(self) -> None:
+        """An SB larger than the cap is swallowed up to IAC SE; its overflow tail
+        must not leak into the cleaned data stream (regression: the old reset to
+        ``_sb_option = None`` dropped out of SB mode mid-subnegotiation)."""
+        from provide.uterm.gateway._iac_negotiate import _MAX_SB_BYTES
+
+        neg = IacNegotiator()
+        marker = b"LEAK-MARKER"
+        oversized = b"A" * (_MAX_SB_BYTES + 50) + marker
+        data = bytes([IAC, SB, TTYPE, SUB_IS]) + oversized + bytes([IAC, SE]) + b"after"
+        _, cleaned = neg.feed(data)
+        assert marker not in cleaned
+        assert cleaned == b"after"  # only the post-SE application data passes through
+
+    def test_oversized_subnegotiation_payload_is_dropped_not_parsed(self) -> None:
+        """An overflowed SB is discarded on IAC SE rather than parsed from its
+        truncated buffer, so it cannot set a bogus term."""
+        from provide.uterm.gateway._iac_negotiate import _MAX_SB_BYTES
+
+        neg = IacNegotiator()
+        data = bytes([IAC, SB, TTYPE, SUB_IS]) + b"B" * (_MAX_SB_BYTES + 10) + bytes([IAC, SE])
+        neg.feed(data)
+        assert neg.term == ""  # default, not set from the truncated body
