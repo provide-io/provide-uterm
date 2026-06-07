@@ -86,25 +86,27 @@ def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
+        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+
+        script_path = _resolve_vanilla_asset("src/hijack.ts")
+        css_paths = _resolve_vanilla_css("src/hijack.ts")
+        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
         return (
             "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+            f"{css_links}"
             "<style>*{margin:0;padding:0;box-sizing:border-box}"
             "html,body{width:100%;height:100dvh;background:#0b0f14}"
             "#app{width:100%;height:100%}</style></head>"
             "<body><div id='app'></div>"
             f"{_MOCK_TERMINAL_JS}"
             "<script type='module'>"
-            "import { ProvideHijack } from '/ui/hijack.js';"
-            "import { startReconnectAnim, stopReconnectAnim } from '/ui/hijack-websocket.js';"
-            "const w = new ProvideHijack(document.getElementById('app'),"
+            f"import '/ui/{script_path}';"
+            "const w = new window.ProvideHijack(document.getElementById('app'),"
             f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
             "window._widget = w;"
-            "/* Test-only hooks. The reconnect-anim entry points moved from "
-            "ProvideHijack methods to free functions over HijackState in "
-            "60094ad; expose them here instead of poking widget privates. */ "
             "window.__hijackTestHooks = {"
-            "  startReconnectAnim: () => startReconnectAnim(w._state),"
-            "  stopReconnectAnim: () => stopReconnectAnim(w._state),"
+            "  startReconnectAnim: () => window.__testHooks_startReconnectAnim(w._state),"
+            "  stopReconnectAnim: () => window.__testHooks_stopReconnectAnim(w._state),"
             "};"
             "</script>"
             "</body></html>"

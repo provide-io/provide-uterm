@@ -132,7 +132,6 @@ export class ProvideTerminal {
     this.container = container;
     this.config = { ...DEFAULTS, ...config };
     this.uid = ++instanceCount;
-    injectCss();
     this.buildDom();
     this.settings = loadSettings(this.config);
     this.bindSettingsEvents();

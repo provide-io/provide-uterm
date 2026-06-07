@@ -86,12 +86,15 @@ class TestFrontendV8Coverage:
         page.evaluate("window.demoTerminal.ws.close()")
         page.wait_for_timeout(1200)
 
+        from provide.uterm.server.ui import _resolve_vanilla_asset
+
+        terminal_asset = _resolve_vanilla_asset("src/terminal.ts")
         scripts = _stop_precise_coverage(session)
-        covered, total = _covered_bytes_for_script(session, scripts, "/terminal.js")
+        covered, total = _covered_bytes_for_script(session, scripts, terminal_asset)
         session.detach()
-        _write_coverage_result("terminal.js", covered, total)
+        _write_coverage_result(terminal_asset, covered, total)
         ratio = covered / total if total else 0.0
-        assert ratio >= 1.0, f"terminal.js V8 coverage too low: {ratio:.3%}"
+        assert ratio >= 1.0, f"{terminal_asset} V8 coverage too low: {ratio:.3%}"
 
     def test_hijack_asset_meets_v8_coverage_threshold(self, page: Page, example_server: str) -> None:
         with httpx.Client(base_url=example_server, timeout=5.0) as http:
@@ -119,9 +122,12 @@ class TestFrontendV8Coverage:
         page.locator("#demo-apply").click()
         expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
 
+        from provide.uterm.server.ui import _resolve_vanilla_asset
+
+        hijack_asset = _resolve_vanilla_asset("src/hijack.ts")
         scripts = _stop_precise_coverage(session)
-        covered, total = _covered_bytes_for_script(session, scripts, "/hijack.js")
+        covered, total = _covered_bytes_for_script(session, scripts, hijack_asset)
         session.detach()
-        _write_coverage_result("hijack.js", covered, total)
+        _write_coverage_result(hijack_asset, covered, total)
         ratio = covered / total if total else 0.0
-        assert ratio >= 1.0, f"hijack.js V8 coverage too low: {ratio:.3%}"
+        assert ratio >= 1.0, f"{hijack_asset} V8 coverage too low: {ratio:.3%}"

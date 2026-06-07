@@ -50,12 +50,7 @@ import {
 
 // ── Module-level guards ───────────────────────────────────────────────────────
 let _hijackInstanceCount = 0;
-// Resolve CSS base URL via import.meta.url (works for ES modules; document.currentScript is null for modules)
-const _hijackCssBase = new URL("./", import.meta.url).href;
-
-function _injectHijackCSS(): void {
-  injectHijackCss(_hijackCssBase);
-}
+import '../static/hijack.css';
 
 // ── ProvideHijack class ─────────────────────────────────────────────────────────
 export class ProvideHijack {
@@ -82,7 +77,7 @@ export class ProvideHijack {
    * @param container - Element to mount the widget into.
    * @param config - Configuration options.
    */
-  constructor(container: HTMLElement, config: HijackConfig = {}) {
+  constructor(container: HTMLElement, config: Partial<HijackConfig> = {}) {
     this._container = container;
     this._config = {
       wsUrl: config.wsUrl,
@@ -108,7 +103,6 @@ export class ProvideHijack {
       handleMessage: (msg) => this._handleMessage(msg),
     };
 
-    _injectHijackCSS();
     this._buildDOM();
     this.connect();
   }

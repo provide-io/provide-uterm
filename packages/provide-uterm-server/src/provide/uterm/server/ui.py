@@ -56,6 +56,15 @@ def _resolve_vanilla_asset(entry_name: str) -> str:
     return entry_name.split("/")[-1].replace(".ts", ".js")
 
 
+def _resolve_vanilla_css(entry_name: str) -> list[str]:
+    manifest = _read_vanilla_manifest()
+    if manifest and entry_name in manifest:
+        entry = manifest[entry_name]
+        if isinstance(entry, dict) and "css" in entry:
+            return [str(p) for p in entry["css"]]
+    return []
+
+
 def _read_vite_manifest() -> dict[str, object] | None:
     """Read the Vite manifest.json from the frontend package-data.
 
