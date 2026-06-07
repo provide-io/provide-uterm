@@ -63,6 +63,17 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
         max_response_ms = body.get("max_response_ms", 10_000)
         divergence_threshold = body.get("divergence_threshold", 0.8)
 
+        # A group may only contain sessions the creating principal can read
+        # (ARD multi-session-fanout). Enforced at creation time: any *known*
+        # session the principal cannot read is rejected (unknown worker_ids that
+        # have no registered definition are not gated here).
+        authz = request.app.state.uterm_authz
+        registry = request.app.state.uterm_registry
+        for wid in worker_ids:
+            session_def = await registry.get_definition(wid)
+            if session_def is not None and not await authz.can_read_session(principal, session_def):
+                return JSONResponse({"error": f"forbidden: no read access to session {wid}"}, status_code=403)
+
         group = FanOutGroup(
             group_id=uuid.uuid4().hex,
             name=name,

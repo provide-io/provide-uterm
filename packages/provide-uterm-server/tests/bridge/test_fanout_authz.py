@@ -7,19 +7,33 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server.config_schema import SessionDefinition
+
+VIEWER = {"X-Uterm-Principal": "bob", "X-Uterm-Role": "viewer"}
 
 
-def _make_app() -> Any:
+def _make_app(sessions: list[SessionDefinition] | None = None) -> Any:
     cfg = default_server_config()
     cfg.auth.mode = "header"
     cfg.auth.header_mode_acknowledged = True
     cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
-    cfg.sessions = []
+    cfg.sessions = sessions or []
     return create_server_app(cfg)
+
+
+def _sess(session_id: str, *, owner: str, visibility: str) -> SessionDefinition:
+    return SessionDefinition(
+        session_id=session_id,
+        display_name="T",
+        connector_type="shell",
+        owner=owner,
+        visibility=visibility,  # type: ignore[arg-type]
+    )
 
 
 class TestCreateGroupAndSend:
@@ -100,6 +114,57 @@ class TestGrantAccess:
             json={"grantee": "other-user"},
         )
         assert resp.status_code == 204
+
+
+class TestCreateGroupReadAuthz:
+    def test_rejects_session_principal_cannot_read(self) -> None:
+        # A private session owned by alice; a viewer (bob) cannot read it → 403.
+        app = _make_app([_sess("priv1", owner="alice", visibility="private")])
+        client = TestClient(app)
+        resp = client.post(
+            "/api/fanout/groups",
+            json={"name": "g", "worker_ids": ["priv1"]},
+            headers=VIEWER,
+        )
+        assert resp.status_code == 403
+        assert "priv1" in resp.json()["error"]
+
+    def test_allows_readable_session(self) -> None:
+        # A public session is readable by anyone → group creation succeeds.
+        app = _make_app([_sess("pub1", owner="alice", visibility="public")])
+        client = TestClient(app)
+        resp = client.post(
+            "/api/fanout/groups",
+            json={"name": "g", "worker_ids": ["pub1"]},
+            headers=VIEWER,
+        )
+        assert resp.status_code == 200
+
+
+class TestFanOutObserverTransparency:
+    async def test_send_broadcasts_fanout_input_to_each_target(self) -> None:
+        """Each target session's observers get a fanout_input frame carrying the
+        originating principal, so they can distinguish it from a local hijack."""
+        from provide.uterm.server.bridge.fanout._controller import FanOutController
+        from provide.uterm.server.bridge.fanout._models import FanOutGroup
+
+        hub = MagicMock()
+        hub.broadcast = AsyncMock()
+        hub.send_worker = AsyncMock(return_value=False)  # no workers connected
+        hub.approval_store = None
+        ctrl = FanOutController(hub, fanout_policy_gate=None)
+        group = FanOutGroup(group_id="g1", name="g", worker_ids=["wa", "wb"], created_by="alice", created_at=0.0)
+        await ctrl._store.save(group)
+
+        await ctrl.send("g1", "uptime\n", principal="alice")
+
+        sent = {call.args[0]: call.args[1] for call in hub.broadcast.await_args_list}
+        assert set(sent) == {"wa", "wb"}
+        for frame in sent.values():
+            assert frame["type"] == "fanout_input"
+            assert frame["from_principal"] == "alice"
+            assert frame["command"] == "uptime\n"
+            assert frame["group_id"] == "g1"
 
 
 class TestSendToNonexistentGroup:

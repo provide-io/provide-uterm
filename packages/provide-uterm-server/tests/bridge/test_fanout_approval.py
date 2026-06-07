@@ -68,7 +68,7 @@ async def test_fanout_passthrough_allow(controller, hub, gate):
 
     called = False
 
-    async def fake_send_parallel(group, data, q_ms, m_ms):
+    async def fake_send_parallel(group, data, q_ms, m_ms, *, principal):
         nonlocal called
         called = True
         return FanOutResult(
@@ -102,7 +102,7 @@ async def test_fanout_rejection_deny(controller, hub, gate):
 
     called = False
 
-    async def fake_send_parallel(group, data, q_ms, m_ms):
+    async def fake_send_parallel(group, data, q_ms, m_ms, *, principal):
         nonlocal called
         called = True
         return
@@ -127,7 +127,7 @@ async def test_fanout_approval_lifecycle(controller, hub, gate):
 
     called_with = None
 
-    async def fake_send_parallel(group, data, q_ms, m_ms):
+    async def fake_send_parallel(group, data, q_ms, m_ms, *, principal):
         nonlocal called_with
         called_with = data
         return FanOutResult(
@@ -232,7 +232,7 @@ async def test_fanout_sequential_release(controller, hub, gate):
 
     called_sequential = False
 
-    async def fake_send_sequential(group, data, q_ms, m_ms):
+    async def fake_send_sequential(group, data, q_ms, m_ms, *, principal):
         nonlocal called_sequential
         called_sequential = True
         return FanOutResult(
