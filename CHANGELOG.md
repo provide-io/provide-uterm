@@ -9,9 +9,8 @@ A multi-wave security/compliance hardening pass landed after the
 
 ### Post-audit hardening (2026-06-02 … 2026-06-06)
 
-A full-codebase re-audit (`artifacts/2026-06-04-reaudit-findings.md`) plus two
-external code reviews drove a focused remediation pass; every actionable finding
-is closed.
+A full-codebase internal re-audit plus two external code reviews drove a focused
+remediation pass; every actionable finding is closed.
 
 - **Cloudflare DO credential-stripping (critical).** `update_kv_session` is now
   read-modify-write, so the 60 s status heartbeat no longer null-outs the worker/
