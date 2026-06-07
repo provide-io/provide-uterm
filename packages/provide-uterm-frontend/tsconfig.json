@@ -17,7 +17,9 @@
     "rootDir": "src",
     "outDir": "../../packages/provide-uterm-server/src/provide/uterm/server/frontend",
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true
+    "rewriteRelativeImportExtensions": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*_part*.ts"]
