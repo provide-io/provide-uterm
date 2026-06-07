@@ -168,12 +168,14 @@ A controlling admin browser can initiate fan-out via WS (in addition to REST):
 {"type": "fanout_input", "group_id": "fleet-prod", "send_id": "...", "command": "uptime\n", "from_principal": "alice"}
 ```
 
-> **As-built (2026-06):** only the `fanout_send` → `fanout_result` exchange
-> shipped. The WS handler (`bridge/routes/websockets_impl.py`) handles
-> `fanout_send` and replies `fanout_result` **to the initiating browser
-> only**. There is no `fanout_input` observer-broadcast frame anywhere in the
-> codebase; observers on a target session do not receive a distinct
-> fan-out-origin notification.
+> **As-built (2026-06):** the `fanout_send` → `fanout_result` exchange shipped
+> (WS handler `bridge/routes/websockets_impl.py`, reply to the initiating
+> browser only). **Update (2026-06-06):** the `fanout_input` observer-broadcast
+> frame is now built — `FanOutController._notify_fanout_observers` broadcasts
+> `{type: fanout_input, group_id, send_id, command, from_principal}` to each
+> target session's observers on every send (parallel + sequential + the
+> approved-release path), so observers can distinguish fan-out input from a
+> local hijack.
 
 ### Sequential Mode
 
@@ -231,14 +233,14 @@ This enables AI agents (Claude via MCP) to coordinate fleet-wide terminal operat
 > **As-built (2026-06):** the role split diverged. In the MCP authz policy
 > (`provide-uterm-client/.../ai/policy.py`), `fanout_group_create` is an
 > **operator**-level tool while `fanout_send` is admin — so operators *can*
-> create groups; only broadcasting input is admin-gated. The
-> `fanout_input` observer broadcast was not built (see Browser WS Protocol
-> note above). The per-worker `can_read_session` check at group-creation time
-> was **not** implemented: `FanOutController.create_group`
-> (`server/bridge/fanout/_controller.py`) enforces only `max_group_size` and
-> `error_pattern` regex validation — no per-`worker_id` read-authz check. The
-> non-spoofable `created_by` and configurable max group size shipped as
-> described.
+> create groups; only broadcasting input is admin-gated. The non-spoofable
+> `created_by` and configurable max group size shipped as described.
+> **Update (2026-06-06):** the per-worker `can_read_session` check at
+> group-creation time is now enforced — the create-group route
+> (`server/bridge/fanout/_routes.py`) rejects (403) any *known* session the
+> creating principal cannot read (unknown/unregistered `worker_id`s stay
+> ungated, preserving create-then-connect). The `fanout_input` observer
+> broadcast is also now built (see the Browser WS Protocol note above).
 
 ---
 
