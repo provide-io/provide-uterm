@@ -20,6 +20,7 @@ caller should use the FastAPI package for reliable webhook delivery if needed.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -49,6 +50,12 @@ _outbound_fetch: Any = None
 # CF runtime's hard CPU ceiling backstops the rest.
 _MAX_WEBHOOK_PATTERN_LEN = 256
 
+# Per-delivery wall-clock cap. workerd exposes no fetch timeout we can rely on, so
+# each POST is bounded by asyncio.wait_for. Combined with off-critical-path
+# delivery (SessionRuntime._spawn_webhook_delivery), this keeps a slow or
+# blackholed webhook URL from pinning a delivery task open indefinitely.
+_WEBHOOK_TIMEOUT_S = 10.0
+
 
 async def _deliver_webhook(
     url: str,
@@ -75,12 +82,12 @@ async def _deliver_webhook(
         headers["x-uterm-signature"] = f"sha256={sig}"
 
     try:
-        await fetch_fn(
-            url,
-            method="POST",
-            headers=headers,
-            body=body,
+        await asyncio.wait_for(
+            fetch_fn(url, method="POST", headers=headers, body=body),
+            timeout=_WEBHOOK_TIMEOUT_S,
         )
+    except TimeoutError:
+        logger.warning("webhook_delivery_timeout url=%s after=%ss", url, _WEBHOOK_TIMEOUT_S)
     except Exception as exc:
         logger.warning("webhook_delivery_error url=%s error=%s", url, exc)
 
@@ -90,12 +97,16 @@ async def fire_webhooks(
     event: dict[str, Any],
     *,
     _fetch: Any = None,
+    _webhooks: list[dict[str, Any]] | None = None,
 ) -> None:
     """Fire all registered webhooks that match *event*.
 
-    Called from ``broadcast_worker_frame`` after storing the event.
+    Scheduled off the broadcast critical path by
+    ``SessionRuntime._spawn_webhook_delivery``. *_webhooks* lets that caller pass
+    the already-loaded list so the store is not read twice per frame; when None
+    the list is loaded here (the path direct callers/tests use).
     """
-    webhooks = runtime.store.load_webhooks(runtime.worker_id)
+    webhooks = _webhooks if _webhooks is not None else runtime.store.load_webhooks(runtime.worker_id)
     event_type = str(event.get("type") or "")
     screen = str(event.get("screen") or event.get("data", {}).get("screen") or "")
 

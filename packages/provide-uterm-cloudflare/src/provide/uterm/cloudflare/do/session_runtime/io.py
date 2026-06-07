@@ -11,6 +11,7 @@ broadcast, worker I/O, and the alarm handler.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -49,6 +50,12 @@ tracer = get_tracer(__name__)
 
 _MAX_REQUEST_BODY = 65_536  # 64 KB — guard against memory exhaustion in DO sandbox
 
+# Cap on concurrent in-flight webhook-delivery tasks. Delivery is offloaded off
+# the broadcast critical path (so a slow webhook can't stall the DO frame loop);
+# this bounds how many can pile up before new ones are dropped — preventing an
+# unbounded task/fetch backlog under a high-throughput stream.
+_MAX_INFLIGHT_WEBHOOKS = 64
+
 
 def _mono_to_wall(mono: float | None) -> float | None:
     """Convert a monotonic timestamp to wall-clock for API/WS responses."""
@@ -80,6 +87,7 @@ class _SessionRuntimeIoMixin:
         max_buffer_bytes: int
         _queue_bytes: int
         _flow: FlowController
+        _webhook_tasks: set[asyncio.Task[None]]
         store: Any
         ctx: Any
         meta: Any
@@ -332,10 +340,35 @@ class _SessionRuntimeIoMixin:
         self._flow.on_ack(ws_id, acked_bytes, time.monotonic())
         await self._apply_flow_control()
 
+    def _spawn_webhook_delivery(self, event: dict[str, Any]) -> None:
+        """Deliver matching webhooks OFF the broadcast critical path.
+
+        ``fire_webhooks`` awaits ``fetch`` inline; doing that here would stall the
+        single-threaded DO event loop — and thus the entire PTY stream for this
+        session — whenever a webhook URL is slow or blackholed. Instead we run
+        delivery as a tracked background task. The set both keeps the task from
+        being garbage-collected mid-flight and bounds how many can pile up: over
+        ``_MAX_INFLIGHT_WEBHOOKS`` new deliveries are dropped rather than allowed
+        to grow without bound under a high-throughput stream.
+        """
+        webhooks = self.store.load_webhooks(self.worker_id)  # type: ignore[attr-defined]
+        if not webhooks:
+            return  # common case — nothing configured, don't schedule a task
+        if len(self._webhook_tasks) >= _MAX_INFLIGHT_WEBHOOKS:
+            logger.warning(
+                "webhook delivery backlog full (%d) — dropping delivery for event %s",
+                _MAX_INFLIGHT_WEBHOOKS,
+                event.get("type"),
+            )
+            return
+        task = asyncio.create_task(fire_webhooks(self, event, _webhooks=webhooks))  # type: ignore[arg-type]
+        self._webhook_tasks.add(task)
+        task.add_done_callback(self._webhook_tasks.discard)
+
     async def broadcast_worker_frame(self, payload: dict[str, Any]) -> None:
         event = self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)  # type: ignore[attr-defined]
         await self.broadcast_to_browsers(payload)
-        await fire_webhooks(self, event)  # type: ignore[arg-type]
+        self._spawn_webhook_delivery(event)
 
         text_payload: str | None = None
         frame_type = str(payload.get("type") or "")
