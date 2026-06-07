@@ -223,8 +223,8 @@ class FanOutController:
         m_ms = max_response_ms if max_response_ms is not None else group.max_response_ms
 
         if group.mode == "sequential":
-            return await self._send_sequential(group, data, q_ms, m_ms)
-        return await self._send_parallel(group, data, q_ms, m_ms)
+            return await self._send_sequential(group, data, q_ms, m_ms, principal=principal)
+        return await self._send_parallel(group, data, q_ms, m_ms, principal=principal)
 
     async def release_approved_command(self, request_id: str) -> FanOutResult | None:
         """Execute a previously held fan-out command after approval."""
@@ -248,8 +248,23 @@ class FanOutController:
         m_ms = m_ms if m_ms is not None else group.max_response_ms
 
         if group.mode == "sequential":
-            return await self._send_sequential(group, command, q_ms, m_ms)
-        return await self._send_parallel(group, command, q_ms, m_ms)
+            return await self._send_sequential(group, command, q_ms, m_ms, principal=principal)
+        return await self._send_parallel(group, command, q_ms, m_ms, principal=principal)
+
+    async def _notify_fanout_observers(self, group: FanOutGroup, data: str, send_id: str, principal: str) -> None:
+        """Tell each target session's observers that this input is fan-out-originated,
+        so they can distinguish it from a local hijack (ARD multi-session-fanout)."""
+        frame = {
+            "type": "fanout_input",
+            "group_id": group.group_id,
+            "send_id": send_id,
+            "command": data,
+            "from_principal": principal,
+        }
+        await asyncio.gather(
+            *(self._hub.broadcast(wid, frame) for wid in group.worker_ids),
+            return_exceptions=True,
+        )
 
     # -- Parallel ----------------------------------------------------------
 
@@ -259,10 +274,13 @@ class FanOutController:
         data: str,
         quiesce_ms: int,
         max_response_ms: int,
+        *,
+        principal: str,
     ) -> FanOutResult:
         send_id = uuid.uuid4().hex
         sent_at = time.time()
         frame = {"type": "input", "data": data, "ts": sent_at}
+        await self._notify_fanout_observers(group, data, send_id, principal)
 
         # Send to all workers in parallel
         send_results = await asyncio.gather(
@@ -358,10 +376,13 @@ class FanOutController:
         data: str,
         quiesce_ms: int,
         max_response_ms: int,
+        *,
+        principal: str,
     ) -> FanOutResult:
         send_id = uuid.uuid4().hex
         sent_at = time.time()
         frame = {"type": "input", "data": data, "ts": sent_at}
+        await self._notify_fanout_observers(group, data, send_id, principal)
 
         results: list[SessionFanOutResult] = []
         failed_sessions: list[str] = []
