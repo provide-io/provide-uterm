@@ -103,6 +103,11 @@ coverage + targeted kill-tests locally, with CI's sharded gate authoritative.
   - **Tighten AWS/GitHub regexes** → **left loose** (maintainer decision): a credential detector
     prefers over- to under-matching, so the patterns stay as-is.
 - **Minor tail — now resolved:**
+  - ✅ `IacNegotiator._append_sb` subneg-overflow **leak fixed** (2026-06-06): the cap used to reset
+    `_sb_option = None`, dropping out of SB mode mid-subnegotiation so the oversized SB's tail leaked
+    into the cleaned data stream. It now stays in SB mode past the cap (buffer bounded, payload dropped
+    on `IAC SE` via an `_sb_overflow` flag — not parsed truncated). Regression tests added;
+    `_iac_negotiate.py` stays at 100% line+branch. This was the last genuinely-open minor.
   - ✅ `session_subscribe` regex double-compile → `_compiled_pattern_or_rejection` compiles once.
   - ✅ `PTYConnector.__init__` now validates `input_mode` against `_VALID_MODES` (consistent with `set_mode`).
   - ✅ `CaptureSocket.read_nowait()` added; `poll_messages` no longer reaches into the private `_queue`.
