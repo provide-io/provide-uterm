@@ -108,6 +108,11 @@ class SessionRuntime(
         self._share_token_hash: str | None = None
         self._control_token_hash: str | None = None
         self._issued_ip: str | None = None
+        # Issue-time expiry of the tunnel's share/control tokens (epoch seconds,
+        # = issuance/rotation time + the per-tunnel ttl_s). Enforced in the DO's
+        # share-cookie auth path so a cookie stops authorizing WS/fetch traffic
+        # once the lifetime elapses, mirroring resolve_share_context's HTTP gate.
+        self._session_expires_at: float | None = None
         # Timestamp of the last _ensure_credentials() KV read (None = not loaded).
         # Independent of _meta_loaded so revocation and post-hibernation recovery work.
         self._credentials_loaded_at: float | None = None
@@ -151,6 +156,8 @@ class SessionRuntime(
                 self._share_token_hash = str(data.get("share_token_hash") or "") or None
                 self._control_token_hash = str(data.get("control_token_hash") or "") or None
                 self._issued_ip = str(data.get("issued_ip") or "") or None
+                exp = data.get("expires_at")
+                self._session_expires_at = float(exp) if isinstance(exp, (int, float)) else None
         except Exception:
             logger.debug("_ensure_meta kv read failed for %s", self.worker_id)
         self.store.save_session_meta(self.worker_id, self.meta)
@@ -188,6 +195,8 @@ class SessionRuntime(
                 self._share_token_hash = str(data.get("share_token_hash") or "") or None
                 self._control_token_hash = str(data.get("control_token_hash") or "") or None
                 self._issued_ip = str(data.get("issued_ip") or "") or None
+                exp = data.get("expires_at")
+                self._session_expires_at = float(exp) if isinstance(exp, (int, float)) else None
             # else: key absent → transient miss, keep the last-known hashes.
             self._credentials_loaded_at = now
         except Exception:

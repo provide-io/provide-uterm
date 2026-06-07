@@ -274,6 +274,7 @@ def test_runtime_share_role_wrong_cookie_without_share_hash_returns_none() -> No
     runtime._control_token_hash = hash_token("control-tok")
     runtime._share_token_hash = None
     runtime._issued_ip = None
+    runtime._session_expires_at = None
     request = SimpleNamespace(headers=_Headers(cookie="uterm_tunnel_tunnel-abc=wrong"))
 
     assert runtime._share_role_for_request(request) is None
@@ -288,6 +289,7 @@ def test_runtime_share_role_ip_header_exception_rejects_bound_cookie() -> None:
     runtime._control_token_hash = None
     runtime._share_token_hash = hash_token("share-tok")
     runtime._issued_ip = "203.0.113.10"
+    runtime._session_expires_at = None
     request = SimpleNamespace(headers=_Headers(cookie="uterm_tunnel_tunnel-abc=share-tok", raise_ip=True))
 
     assert runtime._share_role_for_request(request) is None

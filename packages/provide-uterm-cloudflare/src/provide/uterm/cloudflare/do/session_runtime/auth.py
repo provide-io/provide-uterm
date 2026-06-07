@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -75,6 +76,14 @@ class _AuthMixin:
             role = "viewer"
 
         if role is None:
+            return None
+
+        # Issue-time expiry: a share/control cookie stops authorizing the DO's
+        # WS/fetch path once the tunnel's TTL elapses, mirroring the Default
+        # Worker's resolve_share_context gate. expires_at is set at
+        # issuance/rotation (now + ttl_s, configurable per-tunnel, default 1h).
+        expires_at = self._session_expires_at  # type: ignore[attr-defined]
+        if expires_at is not None and time.time() > expires_at:
             return None
 
         if ip_binding:
