@@ -39,7 +39,7 @@ def create_approvals_router() -> APIRouter:
             if req.status == ApprovalStatus.PENDING
         ]
 
-    async def _require_admin(request: Request) -> None:
+    async def _require_admin(request: Request) -> Any:
         principal = getattr(request.state, "uterm_principal", None)
         if not principal:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -47,14 +47,20 @@ def create_approvals_router() -> APIRouter:
         authz = cast("AuthorizationService", request.app.state.uterm_authz)
         if not await authz.is_admin(principal):
             raise HTTPException(status_code=403, detail="Admin role required")
+        return principal
 
     @router.post("/{request_id}/approve")
     async def approve_command(request_id: str, request: Request) -> dict[str, str]:
-        await _require_admin(request)
+        approver = await _require_admin(request)
         hub = request.app.state.uterm_hub
         approval_req = hub.approval_store.get(request_id)
         if not approval_req:
             raise HTTPException(status_code=404, detail="Approval request not found")
+        # require_different_user: no self-approval. The approval gate is a two-person
+        # control, so the admin resolving a command must not be the principal that
+        # submitted it (submitter_id is the submitter's principal subject_id).
+        if approval_req.submitter_id == getattr(approver, "subject_id", None):
+            raise HTTPException(status_code=403, detail="Cannot approve your own command")
 
         if not hub.approval_store.claim(request_id, ApprovalStatus.APPROVED):
             raise HTTPException(status_code=400, detail="Approval request is not pending")

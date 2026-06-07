@@ -102,6 +102,28 @@ def test_reject_request(client):
     assert updated_req.status == ApprovalStatus.REJECTED
 
 
+def test_approve_own_command_rejected(client):
+    """require_different_user: an admin cannot approve a command they submitted."""
+    hub = client.app.state.uterm_hub
+    req_id = str(uuid.uuid4())
+    req = ApprovalRequest(
+        id=req_id,
+        worker_id="worker1",
+        submitter_id="admin-user",  # same principal as ADMIN_H → self-approval
+        command="rm -rf /",
+        status=ApprovalStatus.PENDING,
+        created_at=time.time(),
+        expires_at=time.time() + 60,
+    )
+    hub.approval_store.add(req)
+
+    response = client.post(f"/api/approvals/{req_id}/approve", headers=ADMIN_H)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cannot approve your own command"
+    # Must remain pending — not approved.
+    assert hub.approval_store.get(req_id).status == ApprovalStatus.PENDING
+
+
 def test_approve_not_found(client):
     response = client.post("/api/approvals/non-existent/approve", headers=ADMIN_H)
     assert response.status_code == 404

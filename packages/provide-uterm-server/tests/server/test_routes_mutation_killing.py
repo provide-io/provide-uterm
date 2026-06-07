@@ -2472,6 +2472,27 @@ class TestApprovalsRoutes:
         store.claim.assert_not_called()
         hub.resolve_approval.assert_not_awaited()
 
+    async def test_approve_self_submitted_rejected(self) -> None:
+        """require_different_user: an admin cannot approve a command they submitted
+        (approver subject_id == approval_req.submitter_id) → 403, no claim/resolve."""
+        approve = _endpoint(self._router(), self._APPROVE, "POST")
+        store = MagicMock()
+        store.get = MagicMock(return_value=self._approval(req_id="r-5", submitter_id="alice"))
+        store.claim = MagicMock()
+        hub = MagicMock()
+        hub.approval_store = store
+        hub.resolve_approval = AsyncMock()
+        req = _request(
+            app_state={"uterm_hub": hub, "uterm_authz": self._admin_authz()},
+            state={"uterm_principal": SimpleNamespace(subject_id="alice")},
+        )
+        with pytest.raises(HTTPException) as exc:
+            await approve("r-5", req)
+        assert exc.value.status_code == 403
+        assert exc.value.detail == "Cannot approve your own command"
+        store.claim.assert_not_called()
+        hub.resolve_approval.assert_not_awaited()
+
     # ---- reject_command -----------------------------------------------------
 
     async def test_reject_ok_with_reason_resolves_and_returns_status(self) -> None:
