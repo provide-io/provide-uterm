@@ -88,6 +88,25 @@ def _mono_to_wall(mono_ts: float) -> float:
     return time.time() + (mono_ts - time.monotonic())
 
 
+def _principal_subject(http_request: Request) -> str | None:
+    """The authenticated principal's subject_id, or None (unauthenticated/legacy)."""
+    subject = getattr(getattr(http_request.state, "uterm_principal", None), "subject_id", None)
+    return str(subject) if subject is not None else None
+
+
+async def _may_release_lease(http_request: Request, worker_id: str, hs: Any) -> bool:
+    """REST lease-release ownership: the acquiring principal, the session owner, or a
+    global admin may release. ``acquired_by is None`` (legacy/unauthenticated leases)
+    keeps the prior capability model — possession of the unguessable hijack_id."""
+    requester = _principal_subject(http_request)
+    if hs.acquired_by is None or requester == hs.acquired_by:
+        return True
+    session = await http_request.app.state.uterm_registry.get_definition(worker_id)
+    if session is not None and session.owner == requester:
+        return True
+    return await http_request.app.state.uterm_authz.is_admin(http_request.state.uterm_principal)
+
+
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import TermHub
 
@@ -210,6 +229,11 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
             )
             await hub.broadcast_hijack_state(worker_id)
             session_committed = True
+            # Record the acquiring principal on the live lease so release can verify
+            # ownership (the REST ``owner`` field is a self-declared display label).
+            _acquired = await hub.get_rest_session(worker_id, hijack_id)
+            if _acquired is not None:  # pragma: no branch - present right after commit
+                _acquired.acquired_by = _principal_subject(http_request)
             return {
                 "ok": True,
                 "worker_id": worker_id,
@@ -438,11 +462,18 @@ def register_rest_routes(hub: TermHub, router: APIRouter) -> None:
 
     @router.post("/worker/{worker_id}/hijack/{hijack_id}/release")
     async def hijack_release(
-        worker_id: str = Path(pattern=r"^[\w\-]+$"), hijack_id: str = Path(pattern=r"^[0-9a-f\-]{1,64}$")
+        http_request: Request,
+        worker_id: str = Path(pattern=r"^[\w\-]+$"),
+        hijack_id: str = Path(pattern=r"^[0-9a-f\-]{1,64}$"),
     ) -> Any:
         hs = await hub.get_rest_session(worker_id, hijack_id)
         if hs is None:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
+        # Lease ownership: only the acquiring principal, the session owner, or a
+        # global admin may drop an active lease — not any operator who reaches this
+        # route via shared-session can_mutate_session.
+        if not await _may_release_lease(http_request, worker_id, hs):
+            return JSONResponse({"error": "Not the lease owner."}, status_code=403)
         released, should_resume = await hub.release_rest_hijack(worker_id, hijack_id)
         if not released:
             return JSONResponse({"error": "Invalid or expired hijack session."}, status_code=404)
