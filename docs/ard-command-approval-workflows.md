@@ -150,8 +150,10 @@ These endpoints require admin role. `require_different_user` is enforced server-
 > **400** ("Approval request is not pending"), not 409. There is no
 > single-resource `GET /api/approvals/{request_id}`. The `approve` handler
 > takes no request body / `approver` field; `reject` takes only an optional
-> `?reason` query param. `require_different_user` is **not** implemented — no
-> self-approval check exists.
+> `?reason` query param. **Update (2026-06-06):** `require_different_user` is now
+> enforced (unconditionally, the default) — `approve_command` rejects with 403
+> "Cannot approve your own command" when the admin's `subject_id` equals the
+> request's `submitter_id`. `reject` is unchanged (self-reject is benign).
 
 ### Browser WS Protocol
 
