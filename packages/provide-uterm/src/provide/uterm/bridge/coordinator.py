@@ -30,6 +30,10 @@ class HijackSession:
     lease_expires_at: float
     acquired_at: float = 0.0
     last_heartbeat: float = 0.0
+    # Authenticated subject_id of the principal that acquired this lease (REST
+    # path). Distinct from ``owner`` (a self-declared display label): used to
+    # verify lease ownership at release. None for unauthenticated/legacy leases.
+    acquired_by: str | None = None
 
 
 @dataclass(slots=True)
