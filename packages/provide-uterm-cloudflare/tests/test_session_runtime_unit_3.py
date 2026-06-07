@@ -7,12 +7,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from provide.uterm.cloudflare.bridge.hijack import HijackSession
+from provide.uterm.cloudflare.do import _webhooks as _wh_mod
+from provide.uterm.cloudflare.do._webhooks import _deliver_webhook
 from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 from provide.uterm.cloudflare.state.store import LeaseRecord
 
@@ -389,6 +392,67 @@ async def test_broadcast_worker_frame_no_text_for_unknown_type() -> None:
     rt.raw_sockets[rt.ws_key(raw_ws)] = raw_ws
     await rt.broadcast_worker_frame({"type": "other"})
     assert not raw_ws.sent
+
+
+# ---------------------------------------------------------------------------
+# webhook delivery offloading (HOL-blocking fix)
+# ---------------------------------------------------------------------------
+
+
+async def test_broadcast_worker_frame_no_webhook_task_when_none_configured() -> None:
+    """No webhook configured -> no delivery task spawned (common case)."""
+    rt = _make_runtime()
+    await rt.broadcast_worker_frame({"type": "term", "data": "x"})
+    assert rt._webhook_tasks == set()
+
+
+async def test_broadcast_worker_frame_offloads_webhook_off_critical_path(monkeypatch) -> None:
+    """A configured webhook is delivered in a tracked background task — a slow
+    fetch must NOT block broadcast_worker_frame (the single-threaded DO loop)."""
+    rt = _make_runtime()
+    rt.store.save_webhook("wh1", rt.worker_id, "https://example.com/hook")
+    gate = asyncio.Event()
+    delivered: list[str] = []
+
+    async def gated_fetch(url: str, **_: object) -> None:
+        await gate.wait()
+        delivered.append(url)
+
+    monkeypatch.setattr(_wh_mod, "_outbound_fetch", gated_fetch)
+    await rt.broadcast_worker_frame({"type": "snapshot", "screen": "x"})
+    # Returned even though the fetch is still gated -> the loop was not blocked.
+    assert delivered == []
+    assert len(rt._webhook_tasks) == 1
+    gate.set()
+    await asyncio.gather(*rt._webhook_tasks)
+    assert delivered == ["https://example.com/hook"]
+
+
+async def test_spawn_webhook_delivery_drops_when_backlog_full(monkeypatch) -> None:
+    """At the in-flight cap, new deliveries are dropped (not spawned) — bounding
+    the backlog instead of growing tasks/fetches without bound."""
+    from provide.uterm.cloudflare.do.session_runtime import io as _io_mod
+
+    rt = _make_runtime()
+    rt.store.save_webhook("wh1", rt.worker_id, "https://example.com/hook")
+    monkeypatch.setattr(_io_mod, "_MAX_INFLIGHT_WEBHOOKS", 1)
+    filler = asyncio.create_task(asyncio.Event().wait())
+    rt._webhook_tasks.add(filler)
+    try:
+        await rt.broadcast_worker_frame({"type": "snapshot", "screen": "x"})
+        assert rt._webhook_tasks == {filler}  # dropped — no new task added
+    finally:
+        filler.cancel()
+
+
+async def test_deliver_webhook_times_out_without_raising(monkeypatch) -> None:
+    """A hanging fetch is bounded by _WEBHOOK_TIMEOUT_S and logged, not raised."""
+    monkeypatch.setattr(_wh_mod, "_WEBHOOK_TIMEOUT_S", 0.01)
+
+    async def hanging_fetch(url: str, **_: object) -> None:
+        await asyncio.sleep(1)
+
+    await _deliver_webhook("https://example.com/hook", {}, None, _fetch=hanging_fetch)
 
 
 # ---------------------------------------------------------------------------

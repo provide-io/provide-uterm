@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_tracer
 
@@ -36,6 +36,9 @@ from .flow_control import FlowController
 from .io import _SessionRuntimeIoMixin
 from .lifecycle import _LifecycleMixin
 from .ws_helpers import _WsHelperMixin
+
+if TYPE_CHECKING:
+    import asyncio
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -80,6 +83,9 @@ class SessionRuntime(
             low_water=self.config.limits.backpressure_low_water_bytes,
             ack_grace_s=self.config.limits.backpressure_ack_grace_s,
         )
+        # In-flight webhook-delivery tasks (delivery is offloaded off the broadcast
+        # critical path; the set holds references so tasks aren't GC'd mid-flight).
+        self._webhook_tasks: set[asyncio.Task[None]] = set()
         self.last_snapshot: dict[str, Any] | None = None  # type: ignore[assignment]
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
