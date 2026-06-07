@@ -173,6 +173,29 @@ rather than defects and are not tracked as fixes here.
 
 ---
 
+## Post-audit external review (2026-06-06)
+
+A third external review raised two Cloudflare-DO architectural claims; each was evaluated against
+current `main`:
+
+- **Webhook head-of-line blocking — ACCURATE, fixed.** `broadcast_worker_frame` awaited
+  `fire_webhooks()` inline, which `await fetch()`es per matching webhook with no timeout; on the
+  single-threaded DO loop a slow/blackholed webhook stalled that session's PTY stream (and a
+  no-`event_types` webhook fires on every frame). Delivery now runs off the critical path —
+  `_spawn_webhook_delivery` schedules a tracked, `_MAX_INFLIGHT_WEBHOOKS`-bounded background task, and
+  each POST is `asyncio.wait_for(_WEBHOOK_TIMEOUT_S)`-bounded (`cloudflare/do/_webhooks.py`,
+  `do/session_runtime/io.py`). Tests cover offload/non-blocking, the bounded-backlog drop, and the
+  timeout; all three CF files stay at 100%.
+- **"Illusion of backpressure / silent OOM" — INACCURATE (already solved).** The diagnosis of
+  `_queue_bytes` (per-frame, resets instantly because `ws.send()` is synchronous) is correct, but the
+  ACK-driven sliding window the reviewer recommended is already live: the `FlowController`
+  (`do/session_runtime/flow_control.py`) tracks `sent − acked` per browser, `broadcast_to_browsers`
+  drops congested viewers' term frames and pauses the producer, and the browser sends
+  `{"type":"ack","bytes":N}` (`ws_routes.py` → `note_browser_ack`; frontend `terminal_impl.ts` /
+  `hijack-websocket.ts`). `_queue_bytes` is now only a secondary single-frame guard. No change needed.
+
+---
+
 ## Resolved-claim verification (35/35 confirmed, 0 regressions)
 
 Every "Resolution" + commit in the prior report was re-checked against current source. All confirmed

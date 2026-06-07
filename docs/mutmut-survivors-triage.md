@@ -458,7 +458,7 @@ this possible — and the per-file playbook — are recorded in
   nothing — it covered only the 0-mutant `manager/process.py` shim) unblocked
   the whole server perimeter.
 - **A documented-equivalent allowlist now exists** (`mutation_equivalents.toml`,
-  154 entries). Genuinely-equivalent mutants (trampoline-masked default args,
+  193 entries). Genuinely-equivalent mutants (trampoline-masked default args,
   codec case-folds, `typing.cast` no-ops, dead-initial-value reassignments,
   subclass-redundant `suppress(...)`, …) are subtracted from the `killed==N`
   denominator instead of pinning a file below 100. This is what makes
@@ -497,3 +497,18 @@ The deferred-file list in `[tool.mutmut]` is empty — every perimeter entry is
 active. The remaining *documented-equivalent* survivors (per
 `mutation_equivalents.toml`) are the intentional ceiling, and the
 `--changed-only` gate enforces `killed==100` on whatever a PR touches.
+
+### Wave 8 tail — `connector.py` codec-pragma removal (2026-06-06)
+
+`pty/connector.py` had carried `# pragma: no mutate` on its 4 codec/decode/
+truncation lines — which violated the "no pragma when the line hosts a killable
+sibling" policy above (the `"utf-8"` decoder/encoder and `"replace"` handler each
+host killable `"XXutf-8XX"`/`"XXreplaceXX"`→LookupError and `errors=None`→
+UnicodeDecodeError siblings). The pragmas were removed; the killable siblings are
+now killed by a fork-free suite (`test_connector_mutation_mocked_part2.py`:
+invalid-UTF-8→U+FFFD; buffer cap at exactly 32769), and the 3 genuine residuals —
+two `utf-8`→`UTF-8` codec case-folds and the `> 32768`→`>=` clamp no-op — are
+documented in `mutation_equivalents.toml` with exact mutant IDs. Mutant set + IDs
+were enumerated via mutmut's own AST machinery and kills/equivalences confirmed by
+edit-test-revert (the connector gate is Linux-only — it stalls under the macOS
+fork-loop — so CI is authoritative).
