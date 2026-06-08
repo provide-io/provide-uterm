@@ -3,27 +3,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-interface PinEntry {
-  line: number;
-  name: string;
-  color: string;
-  isOwner: boolean;
-  el: HTMLElement;
-}
-
-interface SelectionEntry {
-  startLine: number;
-  endLine: number;
-  color: string;
-  el: HTMLElement;
-}
+import "./cursor-overlay-element.js";
+import type { CursorOverlayElement, OverlayUser } from "./cursor-overlay-element.js";
 
 export class DeckMuxCursorOverlay {
   private readonly _terminalContainer: HTMLElement;
-  private _overlay: HTMLElement | null = null;
-  private _visible = true;
-  private _pins = new Map<string, PinEntry>();
-  private _selections = new Map<string, SelectionEntry>();
+  private _el: CursorOverlayElement | null = null;
+  private _users = new Map<string, OverlayUser>();
+  private _ownerId: string | null = null;
 
   constructor(terminalContainer: HTMLElement) {
     this._terminalContainer = terminalContainer;
@@ -31,104 +18,75 @@ export class DeckMuxCursorOverlay {
   }
 
   private _buildOverlay(): void {
-    const overlay = document.createElement("div");
-    overlay.className = "dm-cursor-overlay";
-    this._overlay = overlay;
-    this._terminalContainer.appendChild(overlay);
+    const el = document.createElement("uterm-cursor-overlay") as CursorOverlayElement;
+    this._el = el;
+    this._terminalContainer.appendChild(el);
   }
 
   setPin(userId: string, line: number, name: string, color: string, isOwner: boolean): void {
-    const existing = this._pins.get(userId);
-    if (existing) {
-      existing.line = line;
-      existing.name = name;
-      existing.color = color;
-      existing.isOwner = isOwner;
-      this._syncPin(existing);
-    } else {
-      const el = document.createElement("div");
-      el.className = "dm-pin";
-      el.dataset.userId = userId;
-      const entry: PinEntry = { line, name, color, isOwner, el };
-      this._pins.set(userId, entry);
-      this._overlay?.appendChild(el);
-      this._syncPin(entry);
+    const user = this._users.get(userId) || { userId, name, color };
+    user.name = name;
+    user.color = color;
+    user.pin = { line };
+    this._users.set(userId, user);
+    if (isOwner) {
+      this._ownerId = userId;
+    } else if (this._ownerId === userId) {
+      this._ownerId = null;
     }
-    this._applyVisibility();
+    this._sync();
   }
 
   removePin(userId: string): void {
-    const entry = this._pins.get(userId);
-    if (!entry) return;
-    entry.el.remove();
-    this._pins.delete(userId);
+    const user = this._users.get(userId);
+    if (user) {
+      user.pin = undefined;
+      this._cleanupUser(userId, user);
+      this._sync();
+    }
   }
 
   setSelection(userId: string, startLine: number, endLine: number, color: string): void {
-    const existing = this._selections.get(userId);
-    if (existing) {
-      existing.startLine = startLine;
-      existing.endLine = endLine;
-      existing.color = color;
-      this._syncSelection(existing);
-    } else {
-      const el = document.createElement("div");
-      el.className = "dm-selection";
-      el.dataset.userId = userId;
-      const entry: SelectionEntry = { startLine, endLine, color, el };
-      this._selections.set(userId, entry);
-      this._overlay?.appendChild(el);
-      this._syncSelection(entry);
-    }
-    this._applyVisibility();
+    const user = this._users.get(userId) || { userId, name: "", color };
+    user.color = color;
+    user.selection = { startLine, endLine };
+    this._users.set(userId, user);
+    this._sync();
   }
 
   removeSelection(userId: string): void {
-    const entry = this._selections.get(userId);
-    if (!entry) return;
-    entry.el.remove();
-    this._selections.delete(userId);
+    const user = this._users.get(userId);
+    if (user) {
+      user.selection = undefined;
+      this._cleanupUser(userId, user);
+      this._sync();
+    }
   }
 
   setVisible(visible: boolean): void {
-    this._visible = visible;
-    this._applyVisibility();
+    if (this._el) {
+      this._el.visible = visible;
+    }
   }
 
   destroy(): void {
-    this._overlay?.remove();
-    this._overlay = null;
-    this._pins.clear();
-    this._selections.clear();
+    this._el?.remove();
+    this._el = null;
+    this._users.clear();
   }
 
-  private _syncPin(entry: PinEntry): void {
-    const { el, line, name, color, isOwner } = entry;
-    el.style.setProperty("--dm-user-color", color);
-    el.style.top = `${line}lh`;
-    el.classList.toggle("dm-pin--owner", isOwner);
-
-    const icon = isOwner ? "\u2328\ufe0f" : "\uD83D\uDCCC";
-    const label = el.querySelector(".dm-pin-label") ?? document.createElement("span");
-    label.className = "dm-pin-label";
-    label.textContent = `${icon} ${name}`;
-    if (!el.contains(label)) el.appendChild(label);
-
-    const bar = el.querySelector(".dm-pin-bar") ?? document.createElement("div");
-    bar.className = "dm-pin-bar";
-    if (!el.contains(bar)) el.prepend(bar);
+  private _cleanupUser(userId: string, user: OverlayUser): void {
+    if (!user.pin && !user.selection) {
+      this._users.delete(userId);
+      if (this._ownerId === userId) {
+        this._ownerId = null;
+      }
+    }
   }
 
-  private _syncSelection(entry: SelectionEntry): void {
-    const { el, startLine, endLine, color } = entry;
-    const lineCount = Math.max(1, endLine - startLine + 1);
-    el.style.setProperty("--dm-user-color", color);
-    el.style.top = `${startLine}lh`;
-    el.style.height = `${lineCount}lh`;
-  }
-
-  private _applyVisibility(): void {
-    if (!this._overlay) return;
-    this._overlay.style.display = this._visible ? "" : "none";
+  private _sync(): void {
+    if (!this._el) return;
+    this._el.users = Array.from(this._users.values());
+    this._el.ownerId = this._ownerId;
   }
 }
