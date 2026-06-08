@@ -684,7 +684,6 @@ describe("ProvideTerminal input sending via onData", () => {
   });
 });
 
-
 describe("ProvideTerminal fitWithMinCols", () => {
   it("reduces fontSize when proposed cols < minCols", async () => {
     // Override proposeDimensions to return cols smaller than default 80
@@ -1102,7 +1101,6 @@ describe("ProvideTerminal input sending via onData", () => {
   });
 });
 
-
 describe("ProvideTerminal fitWithMinCols", () => {
   it("reduces fontSize when proposed cols < minCols", async () => {
     // Override proposeDimensions to return cols smaller than default 80
@@ -1266,7 +1264,7 @@ describe("ProvideTerminal writeData() — no monkey-patch on term.write", () => 
     const xterm = getXterm();
     // After construction the xterm instance must not have an own 'write' property;
     // the method must still live on the prototype (i.e. it has not been patched).
-    expect(Object.prototype.hasOwnProperty.call(xterm, "write")).toBe(false);
+    expect(Object.hasOwn(xterm, "write")).toBe(false);
   });
 
   it("loading screen hidden after first write via writeData", async () => {

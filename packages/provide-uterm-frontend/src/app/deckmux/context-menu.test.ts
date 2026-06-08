@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import "./context-menu.js";
 import type { ContextMenu } from "./context-menu.js";
 import type { DeckMuxUser } from "./types.js";
 

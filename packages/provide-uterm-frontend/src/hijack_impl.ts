@@ -18,25 +18,20 @@
 
 import type { AnyFrame } from "./generated/frames.js";
 import {
-  ControlChannelDecoder,
-  type FitAddonInstance,
-  type HijackConfig,
-  type ResolvedConfig,
-  type XTerminal,
-} from "./hijack-codec.js";
-import {
   approvalElementClass,
   buildApprovalModalHtml,
   buildApprovalStatusBarHtml,
   computeRemainingSeconds,
 } from "./hijack-approval.js";
 import {
-  buildHijackToolbarHtml,
-  escapeHijackHtml,
-  injectHijackCss,
-  MOBILE_KEYS,
-} from "./hijack-ui.js";
-import { HijackState, type HijackHandlers } from "./hijack-state.js";
+  ControlChannelDecoder,
+  type FitAddonInstance,
+  type HijackConfig,
+  type ResolvedConfig,
+  type XTerminal,
+} from "./hijack-codec.js";
+import { type HijackHandlers, HijackState } from "./hijack-state.js";
+import { buildHijackToolbarHtml, escapeHijackHtml, MOBILE_KEYS } from "./hijack-ui.js";
 import {
   clearHeartbeat,
   connectWs,
@@ -50,7 +45,7 @@ import {
 
 // ── Module-level guards ───────────────────────────────────────────────────────
 let _hijackInstanceCount = 0;
-import '../static/hijack.css';
+import "../static/hijack.css";
 
 // ── ProvideHijack class ─────────────────────────────────────────────────────────
 export class ProvideHijack {
@@ -172,12 +167,6 @@ export class ProvideHijack {
 
   /** The xterm.js Terminal instance, or null if not yet initialized. */
   get terminal(): XTerminal | null {
-    return this._state.term;
-  }
-
-  // Back-compat shim: tests and external callers access `_term` via the `any` cast
-  // to inspect the underlying xterm instance. Keep it as a getter onto state.
-  private get _term(): XTerminal | null {
     return this._state.term;
   }
 

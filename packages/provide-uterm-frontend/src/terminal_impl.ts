@@ -19,13 +19,7 @@ import {
   type TerminalConfig,
   type TerminalSettings,
 } from "./terminal-settings.js";
-import {
-  applyColors,
-  applyThemeClasses,
-  asThemeName,
-  THEME_DEFAULTS,
-  type ThemeName,
-} from "./terminal-themes.js";
+import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
 
 // Throttle for outbound consumption ACKs: at most one ack per window, carrying
 // the cumulative bytes received so the DO can size its Tier-A backpressure
@@ -99,7 +93,7 @@ function resolveCssHref(): string {
   }
 }
 
-function injectCss(): void {
+function _injectCss(): void {
   if (cssInjected) return;
   cssInjected = true;
   const link = document.createElement("link");

@@ -215,8 +215,7 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
       scheduleAck(state);
       const frames = state.wsDecoder.feed(raw);
       for (const frame of frames) {
-        const msg: Record<string, unknown> =
-          frame.type === "data" ? { type: "term", data: frame.data } : frame.control;
+        const msg: Record<string, unknown> = frame.type === "data" ? { type: "term", data: frame.data } : frame.control;
         if (msg.type) {
           handlers.handleMessage(msg);
         }

@@ -107,7 +107,8 @@ export function mountHijackWidget(
   // Forward xterm scroll → presence_update to server (debounced to reduce WS traffic)
   let scrollTimer: ReturnType<typeof setTimeout> | null = null;
   container.addEventListener("uterm:scroll", (e) => {
-    const { viewportY, rows, totalLines } = (e as CustomEvent<{ viewportY: number; rows: number; totalLines: number }>).detail;
+    const { viewportY, rows, totalLines } = (e as CustomEvent<{ viewportY: number; rows: number; totalLines: number }>)
+      .detail;
     if (scrollTimer) clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       widget.sendControlMessage({
