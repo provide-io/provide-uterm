@@ -86,7 +86,7 @@ class SessionRuntime(
         # In-flight webhook-delivery tasks (delivery is offloaded off the broadcast
         # critical path; the set holds references so tasks aren't GC'd mid-flight).
         self._webhook_tasks: set[asyncio.Task[None]] = set()
-        self.last_snapshot: dict[str, Any] | None = None  # type: ignore[assignment]
+        self.last_snapshot: dict[str, Any] | None = None
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
         self.lifecycle_state: str = "stopped"
