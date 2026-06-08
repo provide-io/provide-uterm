@@ -356,7 +356,9 @@ class ConnectionManager:
             _snapshot = initial_state["initial_snapshot"]
             if _snapshot is not None and hub._output_policy_gate is not None:
                 initial_state["initial_snapshot"] = await hub.redact_snapshot_for_recipient(
-                    worker_id, cast("dict[str, Any]", _snapshot), ws
+                    worker_id,
+                    cast("dict[str, Any]", _snapshot),
+                    ws,  # ty: ignore[redundant-cast]  # mypy (warn_redundant_casts=true) requires this cast; ty disagrees
                 )
             logger.info(EVENT_SESSION_REGISTERED, worker_id=worker_id, session_type="browser", role=role)
             return initial_state

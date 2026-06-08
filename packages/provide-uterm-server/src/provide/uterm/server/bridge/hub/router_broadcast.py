@@ -65,7 +65,7 @@ async def payloads_by_role(
         if role in by_role:
             continue
         context = await hub.prepare_policy_context(ws, worker_id, action="output")
-        rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]
+        rules = await hub._output_policy_gate.get_redaction_rules(context)  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]  # None case already guarded for mypy via the type: ignore above
         if (
             rules
         ):  # pragma: no branch — empty-rules fall-through is the default state; covered by output-gate unit tests
