@@ -16,7 +16,7 @@ import {
   type XTerminal,
 } from "./hijack-codec.js";
 import { type HijackHandlers, HijackState } from "./hijack-state.js";
-import { escapeHijackHtml, MOBILE_KEYS } from "./hijack-ui.js";
+import { MOBILE_KEYS } from "./hijack-ui.js";
 import {
   clearHeartbeat,
   connectWs,

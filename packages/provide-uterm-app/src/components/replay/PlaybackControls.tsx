@@ -16,8 +16,8 @@ export function PlaybackControls({ sessionId }: PlaybackControlsProps) {
   return (
     <div className={styles.controlBar}>
       <div className={styles.navButtons}>
-        <NavButton onClick={first} label="|&lt;" />
-        <NavButton onClick={prev} label="&lt;" />
+        <NavButton onClick={first} label="|<" />
+        <NavButton onClick={prev} label="<" />
         <button
           type="button"
           onClick={() => setPlaying(!playing)}
@@ -25,8 +25,8 @@ export function PlaybackControls({ sessionId }: PlaybackControlsProps) {
         >
           {playing ? "\u23F8" : "\u25B6"}
         </button>
-        <NavButton onClick={next} label="&gt;" />
-        <NavButton onClick={last} label="&gt;|" />
+        <NavButton onClick={next} label=">" />
+        <NavButton onClick={last} label=">|" />
       </div>
 
       <select value={String(speed)}
@@ -66,10 +66,8 @@ export function PlaybackControls({ sessionId }: PlaybackControlsProps) {
 
 function NavButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <button type="button" onClick={onClick}
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: static nav symbols
-      dangerouslySetInnerHTML={{ __html: label }}
-      className="nav-btn"
-    />
+    <button type="button" onClick={onClick} className="nav-btn">
+      {label}
+    </button>
   );
 }

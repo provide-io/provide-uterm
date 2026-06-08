@@ -5,7 +5,6 @@
 
 import { LitElement, type PropertyValues, html } from "lit";
 import { property } from "lit/decorators.js";
-import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, type TerminalConfig, type TerminalSettings } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
 import { ControlChannelDecoder, encodeWsFrame } from "./hijack-codec.js";
@@ -118,16 +117,12 @@ export class TerminalElement extends LitElement {
     return node as T;
   }
 
-  private escapeHtml(value: unknown): string {
-    const el = document.createElement("span");
-    el.textContent = String(value);
-    return el.innerHTML;
-  }
 
-  private buildFrame(): string {
-    const title = this.escapeHtml((this.config.title || "Warp Agent Runtime Platform").toUpperCase());
-    const label = this.escapeHtml(this.config.title || "Warp Agent Runtime Platform");
-    return `
+
+  private buildFrame(): import("lit").TemplateResult {
+    const title = (this.config.title || "Warp Agent Runtime Platform").toUpperCase();
+    const label = this.config.title || "Warp Agent Runtime Platform";
+    return html`
       <div class="terminal-frame">
         <div class="frame-header">
           <span class="frame-header-title">${title}</span>
@@ -147,7 +142,7 @@ export class TerminalElement extends LitElement {
               <span class="status-dot" data-status-dot="1" role="status" aria-label="Connecting"></span>
               <span data-status-text="1">Connecting...</span>
             </div>
-            <span data-connection-info="1">${this.settings.cols}×${this.settings.rows}</span>
+            <span data-connection-info="1">80×25</span>
           </div>
         </div>
         <div class="frame-bottom">
@@ -165,10 +160,10 @@ export class TerminalElement extends LitElement {
 
   override render() {
     return html`
-      ${unsafeHTML(buildSettingsPanelHtml(this.uid))}
+      ${buildSettingsPanelHtml(this.uid)}
       <div class="page-wrapper" id="pageWrapper-${this.uid}">
         <div class="frame-root" id="frameRoot-${this.uid}">
-          ${unsafeHTML(this.buildFrame())}
+          ${this.buildFrame()}
         </div>
         <div class="loading" id="loadingScreen-${this.uid}">
           <div>
