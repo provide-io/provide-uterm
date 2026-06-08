@@ -87,7 +87,14 @@ function makeWidget(opts: Record<string, unknown> = {}) {
 }
 
 function q(container: HTMLElement, name: string): HTMLElement | null {
-  return container.querySelector(`[id$="-${name}"]`);
+  let el = container.querySelector<HTMLElement>(`[id$="-${name}"]`);
+  if (el) return el;
+  const prompt = container.querySelector("uterm-approval-prompt");
+  if (prompt?.shadowRoot) {
+    el = prompt.shadowRoot.querySelector<HTMLElement>(`[id$="-${name}"]`);
+    if (el) return el;
+  }
+  return null;
 }
 
 function sendMessage(msg: Record<string, unknown>): void {
@@ -971,7 +978,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
 // should drive UX decisions (modal vs statusbar, admin-only approve/reject
 // buttons), not the constructor-input role.
 describe("ProvideHijack server-confirmed role (Finding #19)", () => {
-  it("renders admin approval modal with approve/reject buttons after a hello frame upgrades a viewer to admin", () => {
+  it("renders admin approval modal with approve/reject buttons after a hello frame upgrades a viewer to admin", async () => {
     const { container } = makeWidget({ role: "viewer", approvalUxMode: "auto" });
     getWs().open();
     // Server confirms this connection is actually admin.
@@ -984,14 +991,15 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // Admin modal renders both buttons.
+    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
     // The container element class should be the modal flavor, not the statusbar.
-    const modal = container.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
+    const modal = container.querySelector("uterm-approval-prompt")?.shadowRoot?.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
     expect(modal?.classList.contains("hijack-approval-modal")).toBe(true);
   });
 
-  it("renders the statusbar (non-admin) UX when neither config nor server role is admin", () => {
+  it("renders the statusbar (non-admin) UX when neither config nor server role is admin", async () => {
     const { container } = makeWidget({ role: "viewer", approvalUxMode: "auto" });
     getWs().open();
     sendMessage({ type: "hello", role: "viewer", worker_online: true });
@@ -1002,11 +1010,12 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // No admin approve/reject buttons; statusbar UX is shown.
+    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeNull();
     expect(q(container, "reject")).toBeNull();
   });
 
-  it("falls back to constructor role when hello carries no role field", () => {
+  it("falls back to constructor role when hello carries no role field", async () => {
     const { container } = makeWidget({ role: "admin", approvalUxMode: "auto" });
     getWs().open();
     // hello with no role field — _effectiveRole() falls back to config.role
@@ -1017,6 +1026,7 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       command: "whoami",
       expires_at: Date.now() / 1000 + 60,
     });
+    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
   });
@@ -1500,7 +1510,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
 // should drive UX decisions (modal vs statusbar, admin-only approve/reject
 // buttons), not the constructor-input role.
 describe("ProvideHijack server-confirmed role (Finding #19)", () => {
-  it("renders admin approval modal with approve/reject buttons after a hello frame upgrades a viewer to admin", () => {
+  it("renders admin approval modal with approve/reject buttons after a hello frame upgrades a viewer to admin", async () => {
     const { container } = makeWidget({ role: "viewer", approvalUxMode: "auto" });
     getWs().open();
     // Server confirms this connection is actually admin.
@@ -1513,14 +1523,15 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // Admin modal renders both buttons.
+    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
     // The container element class should be the modal flavor, not the statusbar.
-    const modal = container.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
+    const modal = container.querySelector("uterm-approval-prompt")?.shadowRoot?.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
     expect(modal?.classList.contains("hijack-approval-modal")).toBe(true);
   });
 
-  it("renders the statusbar (non-admin) UX when neither config nor server role is admin", () => {
+  it("renders the statusbar (non-admin) UX when neither config nor server role is admin", async () => {
     const { container } = makeWidget({ role: "viewer", approvalUxMode: "auto" });
     getWs().open();
     sendMessage({ type: "hello", role: "viewer", worker_online: true });
@@ -1531,11 +1542,12 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // No admin approve/reject buttons; statusbar UX is shown.
+    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeNull();
     expect(q(container, "reject")).toBeNull();
   });
 
-  it("falls back to constructor role when hello carries no role field", () => {
+  it("falls back to constructor role when hello carries no role field", async () => {
     const { container } = makeWidget({ role: "admin", approvalUxMode: "auto" });
     getWs().open();
     // hello with no role field — _effectiveRole() falls back to config.role
@@ -1546,6 +1558,7 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       command: "whoami",
       expires_at: Date.now() / 1000 + 60,
     });
+    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
   });

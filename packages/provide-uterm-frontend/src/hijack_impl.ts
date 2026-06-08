@@ -17,12 +17,8 @@
  */
 
 import type { AnyFrame } from "./generated/frames.js";
-import {
-  approvalElementClass,
-  buildApprovalModalHtml,
-  buildApprovalStatusBarHtml,
-  computeRemainingSeconds,
-} from "./hijack-approval.js";
+import "./approval-prompt-element.js";
+import type { ApprovalPromptElement } from "./approval-prompt-element.js";
 import {
   ControlChannelDecoder,
   type FitAddonInstance,
@@ -63,8 +59,7 @@ export class ProvideHijack {
   private _statusDotElement: HTMLElement | null = null;
   private _root: HTMLElement | null = null;
   private _pendingApproval: { id: string; command: string; expiresAt: number } | null = null;
-  private _approvalElement: HTMLElement | null = null;
-  private _approvalTimer: ReturnType<typeof setInterval> | null = null;
+  private _approvalElement: ApprovalPromptElement | null = null;
 
   /**
    * Create an embeddable hijack control widget.
@@ -513,50 +508,36 @@ export class ProvideHijack {
     this._hideApprovalUI();
 
     const mode = this._getEffectiveUxMode();
-    const el = document.createElement("div");
+    const el = document.createElement("uterm-approval-prompt");
+    el.uid = this._uid;
+    el.mode = mode;
+    el.isAdmin = this._effectiveRole() === "admin";
+    el.pendingApproval = this._pendingApproval;
+
+    el.addEventListener("approval-action", (e: Event) => {
+      const action = (e as CustomEvent).detail as "approve" | "reject";
+      this._resolveApproval(action);
+    });
+
+    el.addEventListener("approval-expired", () => {
+      this._pendingApproval = null;
+      this._hideApprovalUI();
+    });
+
     this._approvalElement = el;
-    el.className = approvalElementClass(mode);
-    const isAdmin = this._effectiveRole() === "admin";
-    el.innerHTML =
-      mode === "modal"
-        ? buildApprovalModalHtml({ uid: this._uid, command: this._pendingApproval.command, isAdmin })
-        : buildApprovalStatusBarHtml({ uid: this._uid });
-
     this._root.appendChild(el);
-    this._startApprovalTimer();
-
-    if (isAdmin) {
-      this._q("approve")?.addEventListener("click", () => this._resolveApproval("approve"));
-      this._q("reject")?.addEventListener("click", () => this._resolveApproval("reject"));
-    }
   }
 
   private _hideApprovalUI(): void {
-    if (this._approvalTimer) {
-      clearInterval(this._approvalTimer);
-      this._approvalTimer = null;
-    }
     if (this._approvalElement) {
       this._approvalElement.parentNode?.removeChild(this._approvalElement);
       this._approvalElement = null;
     }
   }
 
-  private _startApprovalTimer(): void {
-    const update = () => {
-      if (!this._pendingApproval) return;
-      const remaining = computeRemainingSeconds(this._pendingApproval.expiresAt);
-      const el = this._q("approval-timer");
-      if (el) el.textContent = String(remaining);
-      if (remaining <= 0) this._hideApprovalUI();
-    };
-    update();
-    this._approvalTimer = setInterval(update, 1000);
-  }
-
   private async _resolveApproval(action: "approve" | "reject"): Promise<void> {
     if (!this._pendingApproval) return;
-    const btn = this._q(action) as HTMLButtonElement | null;
+    const btn = this._approvalElement?.shadowRoot?.querySelector(`.hijack-btn-${action}`) as HTMLButtonElement | null;
     if (btn) {
       btn.disabled = true;
       btn.textContent = "Sending...";
