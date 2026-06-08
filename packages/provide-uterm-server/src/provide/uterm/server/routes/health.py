@@ -152,6 +152,6 @@ def create_health_router(
             authz = getattr(request.app.state, "uterm_authz", None)
             if principal is None or authz is None:
                 return False
-            return await authz.is_admin(principal) or await authz.has_role(principal, "operator")
+            return bool(await authz.is_admin(principal) or await authz.has_role(principal, "operator"))
 
     return router

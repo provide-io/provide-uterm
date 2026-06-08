@@ -61,7 +61,9 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
 
     for frame in frames:
         if is_worker:
-            frame_type = frame.get("type")
+            # Declared str | None (not the narrow wire Literal) so the browser
+            # branch below can hold runtime-only control types like "ack".
+            frame_type: str | None = frame.get("type")
             if frame_type == "snapshot":
                 runtime.last_snapshot = {"type": "snapshot", "screen": frame.get("screen", ""), "ts": frame.get("ts")}
                 runtime.store.save_snapshot(runtime.worker_id, runtime.last_snapshot)
@@ -129,7 +131,10 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
             await runtime.broadcast_worker_frame(frame)
             continue
 
-        frame_type = frame.get("type")
+        # Widen to `str | None`: browser→DO control frames include runtime-only
+        # types ("ack", "resume", …) that the wire schema's worker-frame Literal
+        # doesn't enumerate, so the narrow inferred type makes those checks look dead.
+        frame_type = cast("str | None", frame.get("type"))
 
         if frame_type == "resume":
             await _handle_resume(runtime, ws, cast("dict[str, Any]", frame))

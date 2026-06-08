@@ -104,7 +104,7 @@ async def _may_release_lease(http_request: Request, worker_id: str, hs: Any) -> 
     session = await http_request.app.state.uterm_registry.get_definition(worker_id)
     if session is not None and session.owner == requester:
         return True
-    return await http_request.app.state.uterm_authz.is_admin(http_request.state.uterm_principal)
+    return bool(await http_request.app.state.uterm_authz.is_admin(http_request.state.uterm_principal))
 
 
 if TYPE_CHECKING:

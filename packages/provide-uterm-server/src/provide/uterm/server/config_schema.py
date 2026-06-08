@@ -334,7 +334,9 @@ class ServerBindConfig(ServerBaseModel):
 # and SERVER_BUILTIN_CONNECTOR_TYPES (which the sibling imports back) and BEFORE
 # UtermServerConfig (which references SessionDefinition). Re-exported below so
 # ``from provide.uterm.server.config_schema import SessionDefinition`` resolves.
-from provide.uterm.server.config_schema_session import SessionDefinition  # noqa: E402
+# `as SessionDefinition` marks this an explicit re-export (PEP 484) so strict
+# mypy lets `from ...config_schema import SessionDefinition` resolve downstream.
+from provide.uterm.server.config_schema_session import SessionDefinition as SessionDefinition  # noqa: E402
 
 
 class PamConfig(ServerBaseModel):

@@ -13,7 +13,7 @@ Example::
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from provide.uterm.server.audit_chain import verify_audit_log
 
@@ -31,7 +31,8 @@ def _cmd_audit_verify(args: argparse.Namespace) -> None:
     if (expected_seq is None) != (expected_hash is None):
         args._parser.error("--expected-seq and --expected-hash must be given together")
 
-    expected_head = (expected_seq, expected_hash) if expected_seq is not None else None
+    # The XOR guard above ensures both are set together; getattr loses that to Any.
+    expected_head = cast("tuple[int, str] | None", (expected_seq, expected_hash) if expected_seq is not None else None)
     result = verify_audit_log(args.path, expected_head=expected_head)
 
     if result.ok:
