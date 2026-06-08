@@ -67,11 +67,13 @@ packages/provide-uterm-server/src/provide/uterm/server/frontend/
 
 # Demo recordings (generated binary artifacts — regenerate with scripts/record_all_demos.py)
 demo/**/*.cast
+demo/**/*.cast.stderr
 demo/**/*.mp4
 demo/**/*.webm
 demo/**/screenshots/
-# Repo-local demo recordings generated during manual runs and should not be tracked.
-demo/recordings/
+# Repo-local scratch recordings from manual runs (dot-dir so it stays out of the
+# way in a `demo/` listing). Renamed from the old demo/recordings/.
+demo/.recordings/
 # Tracked exceptions: just the files site-uterm-io's deploy actually needs
 # (browser_trim.mp4 / poster.png / terminal.cast / screenshots/*.png). Total ~6 MB
 # across 15 demos; intermediate build artifacts (raw recordings, per-frame mp4s,
