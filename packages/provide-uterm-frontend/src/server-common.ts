@@ -40,31 +40,6 @@ export interface RecordingEntry {
   data?: Record<string, unknown>;
 }
 
-export interface ProvideHijackConfig {
-  workerId: string;
-  showAnalysis?: boolean;
-  mobileKeys?: boolean;
-  authToken?: string;
-  onResize?: (cols: number, rows: number) => void;
-  onPresenceMessage?: (msg: Record<string, unknown>) => void;
-}
-
-export interface ProvideHijackInstance {
-  sendControlMessage(msg: Record<string, unknown>): void;
-  readonly terminalElement: HTMLElement | null;
-  dispose(): void;
-}
-
-export interface ProvideHijackConstructor {
-  new (container: HTMLElement, config: ProvideHijackConfig): ProvideHijackInstance;
-}
-
-declare global {
-  interface Window {
-    ProvideHijack?: ProvideHijackConstructor;
-  }
-}
-
 /** Legacy no-op share-token slot. Tunnel auth is cookie-only. */
 let _shareToken: string | null = null;
 
