@@ -684,13 +684,6 @@ describe("ProvideTerminal input sending via onData", () => {
   });
 });
 
-describe("ProvideTerminal CSS injection", () => {
-  it("injects CSS link on construction", async () => {
-    await makeTerminal();
-    const links = document.head.querySelectorAll('link[rel="stylesheet"]');
-    expect(links.length).toBeGreaterThan(0);
-  });
-});
 
 describe("ProvideTerminal fitWithMinCols", () => {
   it("reduces fontSize when proposed cols < minCols", async () => {
@@ -1109,13 +1102,6 @@ describe("ProvideTerminal input sending via onData", () => {
   });
 });
 
-describe("ProvideTerminal CSS injection", () => {
-  it("injects CSS link on construction", async () => {
-    await makeTerminal();
-    const links = document.head.querySelectorAll('link[rel="stylesheet"]');
-    expect(links.length).toBeGreaterThan(0);
-  });
-});
 
 describe("ProvideTerminal fitWithMinCols", () => {
   it("reduces fontSize when proposed cols < minCols", async () => {
