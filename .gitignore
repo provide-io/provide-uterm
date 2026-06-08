@@ -14,6 +14,8 @@ coverage.json
 .tmp-playwright-videos/
 .uterm-recordings/
 .uterm-recordings-proof/
+# Local Gemini/antigravity CLI state (a symlink to ~/.gemini config, machine-local).
+.antigravitycli/
 
 .hypothesis/
 .worktrees/
