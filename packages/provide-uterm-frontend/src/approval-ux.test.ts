@@ -82,7 +82,7 @@ describe("Command Approval UX", () => {
     // Need to await LitElement's update
     await new Promise((r) => setTimeout(r, 0));
     
-    const prompt = container.querySelector("uterm-approval-prompt");
+    const prompt = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt");
     expect(prompt).toBeTruthy();
     const modal = prompt?.shadowRoot?.querySelector(".hijack-approval-modal");
     expect(modal).toBeTruthy();
@@ -105,7 +105,7 @@ describe("Command Approval UX", () => {
 
     await new Promise((r) => setTimeout(r, 0));
     
-    const prompt = container.querySelector("uterm-approval-prompt");
+    const prompt = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt");
     expect(prompt).toBeTruthy();
     const statusbar = prompt?.shadowRoot?.querySelector(".hijack-approval-statusbar");
     expect(statusbar).toBeTruthy();
@@ -125,12 +125,12 @@ describe("Command Approval UX", () => {
       }),
     );
     await new Promise((r) => setTimeout(r, 0));
-    let prompt = container.querySelector("uterm-approval-prompt");
+    let prompt = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt");
     expect(prompt?.shadowRoot?.querySelector(".hijack-approval-modal")).toBeTruthy();
 
     ws.receive(encodeControlFrame({ type: "approval_resolved", outcome: "approved", request_id: "req-1" }));
     await new Promise((r) => setTimeout(r, 0));
-    expect(container.querySelector("uterm-approval-prompt")).toBeFalsy();
+    expect(container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt")).toBeFalsy();
   });
 
   it("clears the approval countdown interval on dispose", async () => {
@@ -146,14 +146,14 @@ describe("Command Approval UX", () => {
       }),
     );
     await new Promise((r) => setTimeout(r, 0));
-    const prompt = container.querySelector("uterm-approval-prompt") as any;
+    const prompt = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt") as any;
     expect(prompt?._timer).not.toBeNull();
 
     hijack.dispose();
 
     // dispose() must clear it, not leak a setInterval against the torn-down widget.
-    expect(container.querySelector("uterm-approval-prompt")).toBeNull();
+    expect(container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt")).toBeFalsy();
     // pending approval should be unset
-    expect((hijack as any)._pendingApproval).toBeNull();
+    expect((hijack as any)._sessionElement._pendingApproval).toBeNull();
   });
 });
