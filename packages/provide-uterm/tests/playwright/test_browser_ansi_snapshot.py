@@ -69,18 +69,15 @@ def xterm_hijack_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/xterm-test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
-        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+        from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/hijack.ts")
-        css_paths = _resolve_vanilla_css("src/hijack.ts")
-        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
         return f"""<!DOCTYPE html>
 <html><head><meta charset='UTF-8'>
-{css_links}
 <link rel="stylesheet" href="{_XTERM_CDN}/css/xterm.css">
 <style>*{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{width:100%;height:100dvh;background:#0b0f14}}
-#app{{width:100%;height:100%}}</style>
+#app,uterm-session{{display:block;width:100%;height:100%}}</style>
 <script src="{_XTERM_CDN}/lib/xterm.js"></script>
 <script src="{_FIT_CDN}/lib/addon-fit.js"></script>
 </head>
@@ -88,8 +85,14 @@ html,body{{width:100%;height:100dvh;background:#0b0f14}}
 <div id='app'></div>
 <script type='module'>
 import '/ui/{script_path}';
-window._widget = new window.ProvideHijack(document.getElementById('app'),
-  {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});
+customElements.whenDefined('uterm-session').then(() => {{
+  const el = document.createElement('uterm-session');
+  el.id = 'app-root';
+  el.config = {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}};
+  document.getElementById('app').appendChild(el);
+  el.connect();
+  window._widget = el;
+}});
 </script>
 </body></html>"""
 
@@ -203,7 +206,7 @@ def _navigate(page: Page, base_url: str, worker_id: str) -> None:
 def _xterm_text(page: Page) -> str:
     result = page.evaluate(
         """() => {
-            const rows = document.querySelector('.xterm-rows');
+            const rows = window.__deepQuery('.xterm-rows');
             return rows ? rows.textContent || '' : '';
         }"""
     )
@@ -229,13 +232,13 @@ class TestSnapshotSoftReset:
         try:
             _navigate(page, base_url, worker_id)
             page.wait_for_function(
-                "() => { const t = document.querySelector('[id$=\"-statustext\"]');"
+                "() => { const t = window.__deepQuery('#statustext');"
                 " return t && t.textContent === 'Connected (watching)'; }",
                 timeout=10000,
             )
             page.wait_for_selector(".xterm-rows", timeout=10000)
             page.wait_for_function(
-                f"() => (document.querySelector('.xterm-rows')?.textContent || '').includes({screen!r})",
+                f"() => (window.__deepQuery('.xterm-rows')?.textContent || '').includes({screen!r})",
                 timeout=10000,
             )
 
@@ -259,20 +262,20 @@ class TestSnapshotSoftReset:
         try:
             _navigate(page, base_url, worker_id)
             page.wait_for_function(
-                "() => { const t = document.querySelector('[id$=\"-statustext\"]');"
+                "() => { const t = window.__deepQuery('#statustext');"
                 " return t && t.textContent === 'Connected (watching)'; }",
                 timeout=10000,
             )
             page.wait_for_selector(".xterm-rows", timeout=10000)
             page.wait_for_function(
-                f"() => (document.querySelector('.xterm-rows')?.textContent || '').includes({first!r})",
+                f"() => (window.__deepQuery('.xterm-rows')?.textContent || '').includes({first!r})",
                 timeout=10000,
             )
 
             worker.push_snapshot(second)
 
             page.wait_for_function(
-                f"() => (document.querySelector('.xterm-rows')?.textContent || '').includes({second!r})",
+                f"() => (window.__deepQuery('.xterm-rows')?.textContent || '').includes({second!r})",
                 timeout=10000,
             )
             page.wait_for_timeout(200)

@@ -5,6 +5,8 @@
 
 import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import { useEffect, useRef } from "react";
+// Side-effect import: registers the <uterm-terminal> custom element.
+import "@provide-uterm-frontend/terminal-element";
 import type { TerminalElement } from "@provide-uterm-frontend/terminal-element";
 import { useTerminalStore } from "../../stores/terminalStore";
 

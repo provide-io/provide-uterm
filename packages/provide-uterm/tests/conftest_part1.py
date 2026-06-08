@@ -229,23 +229,41 @@ def hijack_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
-        # heartbeatInterval=500 ms so heartbeat tests don't take >5 s.
-        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+        # The hijack UI is now a <uterm-session> web component (scoped shadow-DOM
+        # styles, so no external CSS link needed). Mount it via the public
+        # config/connect() API: config must be set BEFORE the element connects
+        # (connectedCallback reads this.config), so create → config → append →
+        # connect. heartbeatInterval=500 ms keeps heartbeat tests fast.
+        from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/hijack.ts")
-        css_paths = _resolve_vanilla_css("src/hijack.ts")
-        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
         return (
             "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-            f"{css_links}"
+            # Shadow-piercing query helper for tests (the UI lives in the
+            # <uterm-session> shadow root; raw document.querySelector can't reach
+            # it). Embedded in the page so it is available to *every* browser
+            # context that loads this fixture, including second-browser tests.
+            "<script>"
+            "window.__deepQuery=(sel)=>{const s=(r)=>{const d=r.querySelector(sel);if(d)return d;"
+            "for(const e of r.querySelectorAll('*')){if(e.shadowRoot){const f=s(e.shadowRoot);if(f)return f;}}return null;};"
+            "return s(document);};"
+            "window.__deepQueryAll=(sel)=>{const o=[];const s=(r)=>{for(const e of r.querySelectorAll(sel))o.push(e);"
+            "for(const e of r.querySelectorAll('*')){if(e.shadowRoot)s(e.shadowRoot);}};s(document);return o;};"
+            "</script>"
             "<style>*{margin:0;padding:0;box-sizing:border-box}"
             "html,body{width:100%;height:100dvh;background:#0b0f14}"
-            "#app{width:100%;height:100%}</style></head>"
+            "#app,uterm-session{display:block;width:100%;height:100%}</style></head>"
             "<body><div id='app'></div>"
             "<script type='module'>"
             f"import '/ui/{script_path}';"
-            "window.demoHijack = new window.ProvideHijack(document.getElementById('app'),"
-            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
+            "customElements.whenDefined('uterm-session').then(() => {"
+            "  const el = document.createElement('uterm-session');"
+            "  el.id = 'app-root';"
+            f"  el.config = {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}};"
+            "  document.getElementById('app').appendChild(el);"
+            "  el.connect();"
+            "  window.demoHijack = el;"
+            "});"
             "</script>"
             "</body></html>"
         )

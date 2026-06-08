@@ -103,7 +103,7 @@ class TestTerminalProxyPage:
         assert b"look" in b"".join(received_chunks)
 
         page.wait_for_function(
-            "() => (document.querySelector('.terminal-div')?.textContent || '').includes('WELCOME FROM TELNET')"
+            "() => (window.__deepQuery('.terminal-div')?.textContent || '').includes('WELCOME FROM TELNET')"
         )
         terminal_text = page.locator(".terminal-div").text_content() or ""
         assert "WELCOME FROM TELNET" in terminal_text

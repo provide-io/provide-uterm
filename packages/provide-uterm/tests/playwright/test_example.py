@@ -60,9 +60,9 @@ class TestExamplePageSingleBrowser:
         expect(page.locator("#demo-session-status")).to_contain_text("provide-shell", timeout=5000)
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
-        expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Hijacked (you)", timeout=5000)
 
-        page.locator("[id$='-inputfield']").fill("hello from playwright\n")
+        page.locator("#inputfield").fill("hello from playwright\n")
         page.get_by_role("button", name="Send").click()
 
         state = _wait_for_example_state(
@@ -81,7 +81,7 @@ class TestExamplePageSingleBrowser:
         )
 
         page.get_by_role("button", name="Analyze").click()
-        expect(page.locator("[id$='-analysistext']")).to_contain_text("interactive demo analysis", timeout=5000)
+        expect(page.locator("#analysistext")).to_contain_text("interactive demo analysis", timeout=5000)
 
         page.locator("#demo-reset").click()
         expect(page.locator("#demo-session-note")).to_contain_text("Session reset.", timeout=5000)
@@ -95,16 +95,16 @@ class TestExamplePageSingleBrowser:
 
         _navigate_example(page, example_server)
         page.get_by_role("button", name="Hijack").click()
-        expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Hijacked (you)", timeout=5000)
 
         for command in ("/help", "/mode open", "/mode hijack"):
-            page.locator("[id$='-inputfield']").fill(command + "\n")
+            page.locator("#inputfield").fill(command + "\n")
             page.get_by_role("button", name="Send").click()
 
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
-        expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
-        page.locator("[id$='-inputfield']").fill("/clear\n")
+        expect(page.locator("#statustext")).to_have_text("Hijacked (you)", timeout=5000)
+        page.locator("#inputfield").fill("/clear\n")
         page.get_by_role("button", name="Send").click()
 
         state = _wait_for_example_state(
@@ -122,21 +122,21 @@ class TestExamplePageTwoBrowsers:
         _navigate_example(page, example_server)
         expect(page.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
         page.get_by_role("button", name="Hijack").click()
-        expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Hijacked (you)", timeout=5000)
 
         ctx2 = browser.new_context()  # type: ignore[attr-defined]
         page2 = ctx2.new_page()
         try:
             _navigate_example(page2, example_server)
-            expect(page2.locator("[id$='-statustext']")).to_have_text("Hijacked (other)", timeout=5000)
+            expect(page2.locator("#statustext")).to_have_text("Hijacked (other)", timeout=5000)
             expect(page2.get_by_role("button", name="Hijack")).to_be_disabled(timeout=5000)
 
             page.get_by_role("button", name="Release").click()
             expect(page2.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
             page2.get_by_role("button", name="Hijack").click()
 
-            expect(page2.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
-            expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (other)", timeout=5000)
+            expect(page2.locator("#statustext")).to_have_text("Hijacked (you)", timeout=5000)
+            expect(page.locator("#statustext")).to_have_text("Hijacked (other)", timeout=5000)
         finally:
             page2.close()
             ctx2.close()
@@ -154,12 +154,12 @@ class TestExamplePageTwoBrowsers:
         try:
             _navigate_example(page2, example_server)
             expect(page2.locator("#demo-session-status")).to_contain_text("open", timeout=5000)
-            expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
-            expect(page2.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
+            expect(page.locator("#statustext")).to_have_text("Connected (shared)", timeout=5000)
+            expect(page2.locator("#statustext")).to_have_text("Connected (shared)", timeout=5000)
 
-            page.locator("[id$='-inputfield']").fill("from first browser\n")
+            page.locator("#inputfield").fill("from first browser\n")
             page.get_by_role("button", name="Send").click()
-            page2.locator("[id$='-inputfield']").fill("from second browser\n")
+            page2.locator("#inputfield").fill("from second browser\n")
             page2.get_by_role("button", name="Send").click()
 
             state = _wait_for_example_state(

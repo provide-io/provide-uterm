@@ -65,27 +65,30 @@ def admin_resolved_server() -> Generator[tuple[str, TermHub, asyncio.AbstractEve
 
     @app.get("/viewer-page/{worker_id}", response_class=HTMLResponse)
     async def viewer_page(worker_id: str) -> str:
-        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+        from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/hijack.ts")
-        css_paths = _resolve_vanilla_css("src/hijack.ts")
-        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
-        # Constructor passes role:"viewer" — server resolves to "admin".
+        # config passes role:"viewer" — server resolves to "admin".
         return f"""<!DOCTYPE html>
 <html><head><meta charset='UTF-8'>
-{css_links}
 <link rel="stylesheet" href="{_XTERM_CDN}/css/xterm.css">
 <style>*{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{width:100%;height:100dvh;background:#0b0f14}}
-#app{{width:100%;height:100%}}</style>
+#app,uterm-session{{display:block;width:100%;height:100%}}</style>
 <script src="{_XTERM_CDN}/lib/xterm.js"></script>
 <script src="{_FIT_CDN}/lib/addon-fit.js"></script>
 </head>
 <body><div id='app'></div>
 <script type='module'>
 import '/ui/{script_path}';
-window._widget = new window.ProvideHijack(document.getElementById('app'),
-  {{workerId:{json.dumps(worker_id)},role:'viewer',heartbeatInterval:500}});
+customElements.whenDefined('uterm-session').then(() => {{
+  const el = document.createElement('uterm-session');
+  el.id = 'app-root';
+  el.config = {{workerId:{json.dumps(worker_id)},role:'viewer',heartbeatInterval:500}};
+  document.getElementById('app').appendChild(el);
+  el.connect();
+  window._widget = el;
+}});
 </script>
 </body></html>"""
 
@@ -228,18 +231,17 @@ class TestServerConfirmedRole:
 
             # Wait for the widget to transition out of "Connecting…".
             page.wait_for_function(
-                "() => { const t = document.querySelector('[id$=\"-statustext\"]');"
-                " return t && t.textContent !== 'Connecting…'; }",
+                "() => { const t = window.__deepQuery('#statustext'); return t && t.textContent !== 'Connecting…'; }",
                 timeout=10000,
             )
 
             # Confirm the server-confirmed role landed on HijackState.
-            server_role = page.evaluate("() => window._widget?._state?.serverRole ?? null")
+            server_role = page.evaluate("() => window._widget?._hijackState?.serverRole ?? null")
             assert server_role == "admin", (
                 f"Server-confirmed role did not propagate to HijackState; got {server_role!r}"
             )
             # And the constructor role is still 'viewer' (proves the test is meaningful).
-            constructor_role = page.evaluate("() => window._widget?._config?.role ?? null")
+            constructor_role = page.evaluate("() => window._widget?.config?.role ?? null")
             assert constructor_role == "viewer", f"Constructor role should be 'viewer'; got {constructor_role!r}"
 
             # Trigger approval_pending via the hub. Because effective role is
