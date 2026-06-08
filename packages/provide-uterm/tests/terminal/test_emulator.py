@@ -142,3 +142,14 @@ class TestTerminalEmulatorAnsiScreen:
         assert "\x1b[" in out
         assert "RED" in out
         assert "PLAIN" in out
+
+    def test_get_raw_tail_tracks_output_and_ignores_empty_input(self) -> None:
+        """get_raw_tail() exposes the rolling raw-decoded tail; processing empty
+        bytes decodes to "" and the ``if text:`` guard leaves the tail unchanged."""
+        emu = TerminalEmulator(cols=20, rows=2)
+        assert emu.get_raw_tail() == ""
+        emu.process(b"hello")
+        assert emu.get_raw_tail() == "hello"
+        # Empty input → text == "" → the tail-update branch is skipped (77->79).
+        emu.process(b"")
+        assert emu.get_raw_tail() == "hello"
