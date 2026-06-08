@@ -30,7 +30,7 @@ import {
 
 // We import the CSS text directly or use a constructed stylesheet.
 // Since Vite is used, importing the CSS might just inject it globally if it's imported normally.
-// But we can also use Lit's css literal. Let's recreate the styles here from static/hijack.css 
+// But we can also use Lit's css literal. Let's recreate the styles here from static/hijack.css
 // with :host replacing .provide-hijack.
 
 const hijackStyles = css`
@@ -277,6 +277,14 @@ const hijackStyles = css`
 export class UtermSessionElement extends LitElement {
   @property({ type: Object }) config: Partial<HijackConfig> = {};
   @property({ type: Number }) uid = 0;
+  /**
+   * Terminal-only embed mode: when set (e.g. `<uterm-session chromeless>`), the
+   * toolbar, input row, mobile keys and analysis panel are not rendered, leaving
+   * the terminal to fill the host. Reflected so external code (demo recorders,
+   * embedders) can toggle it with `setAttribute("chromeless", "")` regardless of
+   * how the element was mounted. A client-only render flag — not a wire field.
+   */
+  @property({ type: Boolean, reflect: true }) chromeless = false;
 
   @state() private _statusLevel = "bad";
   @state() private _statusText = "Connecting…";
@@ -333,8 +341,12 @@ export class UtermSessionElement extends LitElement {
       approvalUxMode: this.config.approvalUxMode ?? "auto",
     };
 
-    this._hijackState = new HijackState(this._resolvedConfig, this.config.workerId ?? "default", new ControlChannelDecoder());
-    
+    this._hijackState = new HijackState(
+      this._resolvedConfig,
+      this.config.workerId ?? "default",
+      new ControlChannelDecoder(),
+    );
+
     this._handlers = {
       setStatus: (level, text) => {
         this._statusLevel = level;
@@ -345,8 +357,6 @@ export class UtermSessionElement extends LitElement {
       handleMessage: (msg) => this._handleMessage(msg),
     };
   }
-
-
 
   connect(): void {
     // config may be assigned AFTER the element mounts (e.g. React renders the
@@ -807,14 +817,21 @@ export class UtermSessionElement extends LitElement {
   override render() {
     const state = this._hijackState;
     if (!state) return html``;
-    const title = this._resolvedConfig?.title ?? (this._resolvedConfig?.workerId ? this._resolvedConfig.workerId : "Terminal");
+    const title =
+      this._resolvedConfig?.title ?? (this._resolvedConfig?.workerId ? this._resolvedConfig.workerId : "Terminal");
 
     const connected = this._connected;
     const isOpen = state.inputMode === "open";
     const hideHijack = isOpen || !state.canHijack;
     const canInput = state.hijackedByMe || isOpen;
+    // Terminal-only embed: skip every chrome surface and let the terminal fill
+    // the host (`.hijack-terminal` is already flex:1 inside the column :host).
+    const chrome = !this.chromeless;
 
     return html`
+      ${
+        chrome
+          ? html`
       <div class="hijack-toolbar">
         <span class="hijack-title">${title}</span>
         <span class="hijack-status">
@@ -822,49 +839,66 @@ export class UtermSessionElement extends LitElement {
           <span id="statustext">${this._statusText}</span>
         </span>
         <div class="hijack-controls">
-          <button class="hbtn primary" id="hijack" 
+          <button class="hbtn primary" id="hijack"
             .disabled=${!connected || hideHijack || state.hijacked || !state.workerOnline}
             style=${hideHijack ? "display: none" : ""}
             @click=${this._doHijack} title="Take exclusive control">Hijack</button>
-          <button class="hbtn" id="step" 
+          <button class="hbtn" id="step"
             .disabled=${!connected || hideHijack || !state.hijackedByMe || !state.hijackStepSupported}
             style=${hideHijack ? "display: none" : ""}
             @click=${this._doStep} title="Send one step, then pause">Step</button>
-          <button class="hbtn danger" id="release" 
+          <button class="hbtn danger" id="release"
             .disabled=${!connected || hideHijack || !state.hijackedByMe}
             style=${hideHijack ? "display: none" : ""}
             @click=${this._doRelease} title="Release hijack control">Release</button>
-          <button class="hbtn" id="resync" 
+          <button class="hbtn" id="resync"
             .disabled=${!connected || !state.workerOnline}
             @click=${this._doResync} title="Request full screen snapshot">⟳ Resync</button>
-          <button class="hbtn" id="analyze" 
+          <button class="hbtn" id="analyze"
             .disabled=${!connected || hideHijack || !state.hijackedByMe}
             @click=${this._doAnalyze} title="AI-readable screen description">Analyze</button>
-          <button class="hbtn" id="kbdtoggle" 
-            @click=${() => this._mobileKeysVisible = !this._mobileKeysVisible} title="Toggle mobile key toolbar">⌨</button>
+          <button class="hbtn" id="kbdtoggle"
+            @click=${() => (this._mobileKeysVisible = !this._mobileKeysVisible)} title="Toggle mobile key toolbar">⌨</button>
         </div>
         <span class="hijack-prompt" id="prompt" title="Current prompt ID">${this._promptId ? `prompt: ${this._promptId}` : ""}</span>
-      </div>
+      </div>`
+          : ""
+      }
       <div class="hijack-terminal" id="terminal"></div>
+      ${
+        chrome
+          ? html`
       <div class="hijack-input-row ${connected && canInput && this._resolvedConfig.showInput ? "visible" : ""}" id="inputrow">
         <input class="hijack-input-field" id="inputfield"
           placeholder="Send keys… (Enter to send, e.g. \\r for Return)"
           autocomplete="off" spellcheck="false"
           @keydown=${this._onInputKeydown}>
         <button class="hijack-input-send" id="inputsend" @click=${this._sendInput}>Send</button>
-      </div>
-      ${this._resolvedConfig.mobileKeys ? html`
+      </div>`
+          : ""
+      }
+      ${
+        chrome && this._resolvedConfig.mobileKeys
+          ? html`
         <div class="mobile-keys ${connected && canInput && this._mobileKeysVisible ? "visible" : ""}" id="mobilekeys">
-          ${MOBILE_KEYS.map(k => html`<button class="mkey" @click=${() => this._sendMkey(k.data)}>${k.label}</button>`)}
+          ${MOBILE_KEYS.map((k) => html`<button class="mkey" @click=${() => this._sendMkey(k.data)}>${k.label}</button>`)}
         </div>
-      ` : ""}
-      ${this._resolvedConfig.showAnalysis ? html`
-        <details class="hijack-analysis" id="analysis" ?open=${this._analysisOpen} @toggle=${(e: Event) => this._analysisOpen = (e.target as HTMLDetailsElement).open}>
+      `
+          : ""
+      }
+      ${
+        chrome && this._resolvedConfig.showAnalysis
+          ? html`
+        <details class="hijack-analysis" id="analysis" ?open=${this._analysisOpen} @toggle=${(e: Event) => (this._analysisOpen = (e.target as HTMLDetailsElement).open)}>
           <summary>Analysis</summary>
           <pre id="analysistext">${this._analysisText}</pre>
         </details>
-      ` : ""}
-      ${this._pendingApproval ? html`
+      `
+          : ""
+      }
+      ${
+        this._pendingApproval
+          ? html`
         <uterm-approval-prompt
           .uid=${this.uid}
           .mode=${this._getEffectiveUxMode()}
@@ -873,7 +907,9 @@ export class UtermSessionElement extends LitElement {
           @approval-action=${this._handleApprovalAction}
           @approval-expired=${this._handleApprovalExpired}
         ></uterm-approval-prompt>
-      ` : ""}
+      `
+          : ""
+      }
     `;
   }
 }
