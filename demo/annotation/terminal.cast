@@ -1,11 +1,10 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1779608769,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_annotation.py --run-demo 2>demo/annotation/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
-[2.076, "o", "\r\n\u001b[1;35m═══════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mAgent self-annotation and automatic detection of 20 security/lifecycle patterns\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═══════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n"]
-[0.021, "o", "\u001b[1;36m  → Posting lifecycle annotations...\u001b[0m\r\n"]
-[0.006, "o", "\u001b[1;32m  ✓ demo_started (severity=info) seq=4\u001b[0m\r\n"]
-[0.003, "o", "\u001b[1;32m  ✓ deploy_begin (severity=warning) seq=5\u001b[0m\r\n\u001b[1;36m  → Triggering security pattern detections...\u001b[0m\r\n"]
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938769,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_annotation.py --run-demo 2>demo/annotation/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[2.069, "o", "\r\n\u001b[1;35m═══════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mAgent self-annotation and automatic detection of 20 security/lifecycle patterns\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═══════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n"]
+[0.032, "o", "\u001b[1;36m  → Posting lifecycle annotations...\u001b[0m\r\n"]
+[0.007, "o", "\u001b[1;32m  ✓ demo_started (severity=info) seq=4\u001b[0m\r\n"]
+[0.002, "o", "\u001b[1;32m  ✓ deploy_begin (severity=warning) seq=5\u001b[0m\r\n\u001b[1;36m  → Triggering security pattern detections...\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ pattern_sudo: 'sudo apt-get update'\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ pattern_aws: 'export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EX'\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ pattern_destructive: 'rm -rf /tmp/build'\u001b[0m\r\n\u001b[1;36m  → Querying annotation entries...\u001b[0m\r\n"]
-[0.024, "o", "    \u001b[2mtotal entries:\u001b[0m \u001b[1m184\u001b[0m\r\n\u001b[1;36m  →   [0] demo_started — info\u001b[0m\r\n\u001b[1;36m  →   [1] deploy_begin — warning\u001b[0m\r\n\u001b[1;36m  →   [2] pattern_sudo — warning\u001b[0m\r\n"]
-[0.000, "o", "\u001b[1;32m  ✓ All annotations stored and queryable\u001b[0m\r\n"]
-[0.076, "x", "0"]
+[0.036, "o", "    \u001b[2mtotal entries:\u001b[0m \u001b[1m200\u001b[0m\r\n\u001b[1;36m  →   [0] step_00 — info\u001b[0m\r\n\u001b[1;36m  →   [1] step_01 — info\u001b[0m\r\n\u001b[1;36m  →   [2] step_02 — info\u001b[0m\r\n\u001b[1;32m  ✓ All annotations stored and queryable\u001b[0m\r\n"]
+[0.070, "x", "0"]

@@ -1,10 +1,10 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1779608793,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_mcp.py --run-demo 2>demo/mcp/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
-[2.069, "o", "\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1m21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Initializing MCP server app...\u001b[0m\r\n"]
-[0.455, "o", "    \u001b[2mtool count:\u001b[0m \u001b[1m21\u001b[0m\r\n\u001b[1;36m  →   • fanout_group_create\u001b[0m\r\n\u001b[1;36m  →   • fanout_send\u001b[0m\r\n\u001b[1;36m  →   • hijack_begin\u001b[0m\r\n\u001b[1;36m  →   • hijack_heartbeat\u001b[0m\r\n\u001b[1;36m  →   • hijack_read\u001b[0m\r\n\u001b[1;36m  →   • hijack_release\u001b[0m\r\n\u001b[1;36m  →   • hijack_send\u001b[0m\r\n\u001b[1;36m  →   • hijack_step\u001b[0m\r\n\u001b[1;36m  →   ... and 13 more\u001b[0m\r\n\u001b[1;36m  → Demonstrating MCP tool calls via HTTP API:\u001b[0m\r\n"]
-[0.025, "o", "\u001b[1;32m  ✓ list_sessions → 1 sessions\u001b[0m\r\n"]
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938795,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_mcp.py --run-demo 2>demo/mcp/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[2.017, "o", "\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1m21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Initializing MCP server app...\u001b[0m\r\n"]
+[0.505, "o", "    \u001b[2mtool count:\u001b[0m \u001b[1m21\u001b[0m\r\n\u001b[1;36m  →   • fanout_group_create\u001b[0m\r\n\u001b[1;36m  →   • fanout_send\u001b[0m\r\n\u001b[1;36m  →   • hijack_begin\u001b[0m\r\n\u001b[1;36m  →   • hijack_heartbeat\u001b[0m\r\n\u001b[1;36m  →   • hijack_read\u001b[0m\r\n\u001b[1;36m  →   • hijack_release\u001b[0m\r\n\u001b[1;36m  →   • hijack_send\u001b[0m\r\n\u001b[1;36m  →   • hijack_step\u001b[0m\r\n\u001b[1;36m  →   ... and 13 more\u001b[0m\r\n\u001b[1;36m  → Demonstrating MCP tool calls via HTTP API:\u001b[0m\r\n"]
+[0.021, "o", "\u001b[1;32m  ✓ list_sessions → 1 sessions\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ get_snapshot(provide-shell) → cols=80 rows=25\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ list_fanout_groups → 0 groups\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ annotate(provide-shell, mcp_demo) → seq=4\u001b[0m\r\n"]
-[0.026, "o", "\u001b[1;32m  ✓ get_recording_entries(provide-shell) → 200 entries\u001b[0m\r\n"]
+[0.035, "o", "\u001b[1;32m  ✓ get_recording_entries(provide-shell) → 200 entries\u001b[0m\r\n"]
 [0.000, "o", "\u001b[1;32m  ✓ 21 MCP tools available — 5 demonstrated via HTTP API\u001b[0m\r\n"]
-[0.139, "x", "0"]
+[0.116, "x", "0"]
