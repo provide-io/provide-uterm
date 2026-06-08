@@ -1,7 +1,7 @@
-import { LitElement, html, css } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
 
-@customElement('uterm-toast-stack')
+@customElement("uterm-toast-stack")
 export class ToastStack extends LitElement {
   static override styles = css`
     :host {

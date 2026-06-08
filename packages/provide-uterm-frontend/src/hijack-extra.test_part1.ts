@@ -959,9 +959,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     // Trigger a reconnect by closing the WS
     getWs().close();
     vi.advanceTimersByTime(1200); // past 1s backoff → second connect
-    const tokenWarnings = warn.mock.calls.filter((c) =>
-      String(c[0] ?? "").includes("?token=…"),
-    );
+    const tokenWarnings = warn.mock.calls.filter((c) => String(c[0] ?? "").includes("?token=…"));
     expect(tokenWarnings.length).toBe(0);
     expect(getWs().url).not.toContain("token=");
     widget.disconnect();
@@ -1490,9 +1488,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     // Trigger a reconnect by closing the WS
     getWs().close();
     vi.advanceTimersByTime(1200); // past 1s backoff → second connect
-    const tokenWarnings = warn.mock.calls.filter((c) =>
-      String(c[0] ?? "").includes("?token=…"),
-    );
+    const tokenWarnings = warn.mock.calls.filter((c) => String(c[0] ?? "").includes("?token=…"));
     expect(tokenWarnings.length).toBe(0);
     expect(getWs().url).not.toContain("token=");
     widget.disconnect();

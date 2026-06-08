@@ -427,7 +427,11 @@ describe("message dispatch", () => {
     const sentBefore = getWs().sent.length;
     vi.advanceTimersByTime(5100);
     // No heartbeat sent (cleared) — ignore Tier-A ACK frames.
-    expect(getWs().sent.slice(sentBefore).filter((f) => !f.includes('"ack"'))).toHaveLength(0);
+    expect(
+      getWs()
+        .sent.slice(sentBefore)
+        .filter((f) => !f.includes('"ack"')),
+    ).toHaveLength(0);
   });
 
   it("hijack_state with input_mode updates status", () => {
@@ -523,7 +527,11 @@ describe("heartbeat", () => {
     vi.advanceTimersByTime(5100);
     // No heartbeat WS frame sent — rest mode skips WS and calls fetch
     // (fetch returns null because _restHijackId is null). Ignore Tier-A ACK frames.
-    expect(getWs().sent.slice(sentBefore).filter((f) => !f.includes('"ack"'))).toHaveLength(0);
+    expect(
+      getWs()
+        .sent.slice(sentBefore)
+        .filter((f) => !f.includes('"ack"')),
+    ).toHaveLength(0);
   });
 });
 
@@ -848,7 +856,7 @@ describe("onResize callback", () => {
     getWs().open();
     sendMessage({ type: "snapshot", screen: "" });
     // biome-ignore lint/suspicious/noExplicitAny: accessing private for test
-    const term = (widget as any)._term as MockTerminal;
+    const term = (widget as any)._state.term as MockTerminal;
     return { widget, term };
   }
 
@@ -998,7 +1006,11 @@ describe("heartbeat (continued)", () => {
     vi.advanceTimersByTime(5100);
     // No heartbeat WS frame sent — rest mode skips WS and calls fetch
     // (fetch returns null because _restHijackId is null). Ignore Tier-A ACK frames.
-    expect(getWs().sent.slice(sentBefore).filter((f) => !f.includes('"ack"'))).toHaveLength(0);
+    expect(
+      getWs()
+        .sent.slice(sentBefore)
+        .filter((f) => !f.includes('"ack"')),
+    ).toHaveLength(0);
   });
 });
 
@@ -1323,7 +1335,7 @@ describe("onResize callback (continued)", () => {
     getWs().open();
     sendMessage({ type: "snapshot", screen: "" });
     // biome-ignore lint/suspicious/noExplicitAny: accessing private for test
-    const term = (widget as any)._term as MockTerminal;
+    const term = (widget as any)._state.term as MockTerminal;
     return { widget, term };
   }
 
@@ -1427,12 +1439,11 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     const ws = getWs();
     ws.open();
     // Make ws.close() throw
-    ws.close = () => { throw new Error("close failed"); };
+    ws.close = () => {
+      throw new Error("close failed");
+    };
     widget.disconnect();
-    expect(debugSpy).toHaveBeenCalledWith(
-      expect.stringContaining("ws.close"),
-      expect.any(Error),
-    );
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("ws.close"), expect.any(Error));
     debugSpy.mockRestore();
   });
 
@@ -1442,7 +1453,9 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     getWs().open();
     // Override Terminal so write throws
     class ThrowingTerminal extends MockTerminal {
-      override write(_s: string): void { throw new Error("write failed"); }
+      override write(_s: string): void {
+        throw new Error("write failed");
+      }
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = ThrowingTerminal;
@@ -1450,10 +1463,7 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     const { widget: w2 } = makeWidget();
     getWs().open();
     sendMessage({ type: "term", data: "hi" });
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("term write"),
-      expect.any(Error),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("term write"), expect.any(Error));
     warnSpy.mockRestore();
     w2.dispose();
   });
@@ -1461,17 +1471,16 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
   it("snapshot message logs console.warn when term.write() throws", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     class ThrowingTerminal2 extends MockTerminal {
-      override write(_s: string): void { throw new Error("write failed on snapshot"); }
+      override write(_s: string): void {
+        throw new Error("write failed on snapshot");
+      }
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = ThrowingTerminal2;
     const { widget: w3 } = makeWidget();
     getWs().open();
     sendMessage({ type: "snapshot", screen: "some screen" });
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("snapshot write"),
-      expect.any(Error),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("snapshot write"), expect.any(Error));
     warnSpy.mockRestore();
     w3.dispose();
   });
@@ -1479,7 +1488,9 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
   it("input field focus-after-send logs console.debug when focus() throws", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     class ThrowOnFocus extends MockTerminal {
-      override focus(): void { throw new Error("focus failed"); }
+      override focus(): void {
+        throw new Error("focus failed");
+      }
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = ThrowOnFocus;
@@ -1494,10 +1505,7 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     if (inputField && inputSend) {
       inputField.value = "test";
       inputSend.click();
-      expect(debugSpy).toHaveBeenCalledWith(
-        expect.stringContaining("focus"),
-        expect.any(Error),
-      );
+      expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("focus"), expect.any(Error));
     }
     debugSpy.mockRestore();
     w4.dispose();
@@ -1505,19 +1513,21 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
 
   it("FitAddon init logs console.debug when fit() throws in requestAnimationFrame", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
-    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => { cb(); return 0; });
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
+      cb();
+      return 0;
+    });
     class ThrowingFitAddon extends MockFitAddon {
-      override fit(): void { throw new Error("fit rAF failed"); }
+      override fit(): void {
+        throw new Error("fit rAF failed");
+      }
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: ThrowingFitAddon };
     const { widget: w5 } = makeWidget();
     getWs().open();
     sendMessage({ type: "snapshot", screen: "" }); // triggers _ensureTerm → fitAddon.fit via rAF
-    expect(debugSpy).toHaveBeenCalledWith(
-      expect.stringContaining("fit"),
-      expect.any(Error),
-    );
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("fit"), expect.any(Error));
     debugSpy.mockRestore();
     w5.dispose();
   });
@@ -1526,19 +1536,29 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).WebLinksAddon = {
-      WebLinksAddon: class { constructor() { throw new Error("weblinks failed"); } },
+      WebLinksAddon: class {
+        constructor() {
+          throw new Error("weblinks failed");
+        }
+      },
     };
     // Stub ResizeObserver so _initTerm can proceed to the WebLinksAddon load step.
-    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
-    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => { cb(); return 0; });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
+      cb();
+      return 0;
+    });
     const { widget: w6 } = makeWidget();
     // WebLinksAddon is loaded during _initTerm, triggered by the first snapshot.
     getWs().open();
     sendMessage({ type: "snapshot", screen: "" });
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("WebLinksAddon"),
-      expect.any(Error),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("WebLinksAddon"), expect.any(Error));
     warnSpy.mockRestore();
     // biome-ignore lint/suspicious/noExplicitAny: cleanup
     delete (window as any).WebLinksAddon;
@@ -1548,15 +1568,22 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
   it("ResizeObserver fit() failure logs console.debug", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     let roCallback: (() => void) | null = null;
-    vi.stubGlobal("ResizeObserver", class {
-      constructor(cb: () => void) { roCallback = cb; }
-      observe() {}
-      disconnect() {}
-    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(cb: () => void) {
+          roCallback = cb;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
     // Suppress rAF — we want to test only the ResizeObserver path
     vi.stubGlobal("requestAnimationFrame", (_cb: () => void) => 0);
     class ThrowingFitAddonRO extends MockFitAddon {
-      override fit(): void { throw new Error("fit ResizeObserver failed"); }
+      override fit(): void {
+        throw new Error("fit ResizeObserver failed");
+      }
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: ThrowingFitAddonRO };
@@ -1565,10 +1592,7 @@ describe("ProvideHijack catch-block observability (Fix 2)", () => {
     sendMessage({ type: "snapshot", screen: "" }); // triggers _initTerm
     // Invoke the captured ResizeObserver callback to exercise the catch block
     roCallback?.();
-    expect(debugSpy).toHaveBeenCalledWith(
-      expect.stringContaining("ResizeObserver"),
-      expect.any(Error),
-    );
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("ResizeObserver"), expect.any(Error));
     debugSpy.mockRestore();
     w7.dispose();
   });

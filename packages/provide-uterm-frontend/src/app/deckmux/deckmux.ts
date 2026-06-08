@@ -32,8 +32,6 @@ export class DeckMux {
   private _users = new Map<string, DeckMuxUser>();
   private _myUserId: string | null = null;
   private _barContainer: HTMLElement | null = null;
-  private _ownCols = 0;
-  private _ownRows = 0;
 
   // wsConnection is reserved for future direct WS dispatch; coordination currently
   // uses CustomEvent bubbling on the terminal container.

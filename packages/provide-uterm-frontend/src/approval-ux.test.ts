@@ -66,7 +66,7 @@ describe("Command Approval UX", () => {
   });
 
   it("shows modal for admin in auto mode", async () => {
-    const hijack = new ProvideHijack(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
+    const _hijack = new ProvideHijack(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
     const ws = (global as any).wsInstances[0];
 
     // Simulate approval_pending
@@ -86,7 +86,7 @@ describe("Command Approval UX", () => {
   });
 
   it("shows statusbar for operator in auto mode", async () => {
-    const hijack = new ProvideHijack(container, { workerId: "w1", role: "operator", approvalUxMode: "auto" });
+    const _hijack = new ProvideHijack(container, { workerId: "w1", role: "operator", approvalUxMode: "auto" });
     const ws = (global as any).wsInstances[0];
 
     ws.receive(
@@ -104,7 +104,7 @@ describe("Command Approval UX", () => {
   });
 
   it("hides UI on approval_resolved", async () => {
-    const hijack = new ProvideHijack(container, { workerId: "w1", role: "admin" });
+    const _hijack = new ProvideHijack(container, { workerId: "w1", role: "admin" });
     const ws = (global as any).wsInstances[0];
 
     ws.receive(
