@@ -1,7 +1,7 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1779608783,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_http_inspect.py --run-demo 2>demo/http_inspect/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
-[0.361, "o", "\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mProxy HTTP traffic through uterm inspect tunnel, inspect requests/responses in browser\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Starting inline target API server (items + users endpoints)...\u001b[0m\r\n"]
-[0.068, "o", "\u001b[1;32m  ✓ Target API running on http://127.0.0.1:58524\u001b[0m\r\n"]
-[0.221, "o", "\u001b[1;36m  → Creating HTTP inspect tunnel via /api/tunnels...\u001b[0m\r\n"]
-[0.009, "o", "    \u001b[2mtunnel_id:\u001b[0m \u001b[1mtunnel-5bbdf...\u001b[0m\r\n    \u001b[2mtarget:\u001b[0m \u001b[1mhttp://127.0.0.1:58524\u001b[0m\r\n\u001b[1;36m  → Fetching active tunnels...\u001b[0m\r\n"]
-[0.002, "o", "    \u001b[2mtunnel count:\u001b[0m \u001b[1m0\u001b[0m\r\n\u001b[1;36m  → (Proxied HTTP traffic inspectable in browser — see browser recording)\u001b[0m\r\n\u001b[1;32m  ✓ HTTP inspect tunnel active — requests/responses captured\u001b[0m\r\n"]
-[0.075, "x", "0"]
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938784,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_http_inspect.py --run-demo 2>demo/http_inspect/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[0.334, "o", "\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mProxy HTTP traffic through uterm inspect tunnel, inspect requests/responses in browser\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m══════════════════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Starting inline target API server (items + users endpoints)...\u001b[0m\r\n"]
+[0.065, "o", "\u001b[1;32m  ✓ Target API running on http://127.0.0.1:50118\u001b[0m\r\n"]
+[0.203, "o", "\u001b[1;36m  → Creating HTTP inspect tunnel via /api/tunnels...\u001b[0m\r\n"]
+[0.007, "o", "    \u001b[2mtunnel_id:\u001b[0m \u001b[1mtunnel-36ae3...\u001b[0m\r\n    \u001b[2mtarget:\u001b[0m \u001b[1mhttp://127.0.0.1:50118\u001b[0m\r\n\u001b[1;36m  → Fetching active tunnels...\u001b[0m\r\n"]
+[0.001, "o", "    \u001b[2mtunnel count:\u001b[0m \u001b[1m0\u001b[0m\r\n\u001b[1;36m  → (Proxied HTTP traffic inspectable in browser — see browser recording)\u001b[0m\r\n\u001b[1;32m  ✓ HTTP inspect tunnel active — requests/responses captured\u001b[0m\r\n"]
+[0.064, "x", "0"]

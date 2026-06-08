@@ -1,8 +1,7 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1779673028,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_deckmux.py --run-demo 2>demo/recordings/deckmux/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
-[2.377, "o", "\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1m9-person production incident response with DeckMux collaborative presence\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n"]
-[0.028, "o", "\u001b[1;36m  → Fetching session info...\u001b[0m\r\n"]
-[0.009, "o", "    \u001b[2msession_id:\u001b[0m \u001b[1mprovide-shell\u001b[0m\r\n    \u001b[2mconnected:\u001b[0m \u001b[1mTrue\u001b[0m\r\n\u001b[1;36m  → Fetching terminal snapshot...\u001b[0m\r\n"]
-[0.003, "o", "    \u001b[2mcols:\u001b[0m \u001b[1m80\u001b[0m\r\n    \u001b[2mrows:\u001b[0m \u001b[1m24\u001b[0m\r\n"]
-[0.000, "o", "\u001b[1;36m  → (Presence cursors are live via WebSocket -- see browser recording)\u001b[0m\r\n"]
-[0.000, "o", "\u001b[1;32m  ✓ DeckMux presence enabled -- multiple cursors share the session\u001b[0m\r\n"]
-[0.085, "x", "0"]
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938499,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_deckmux_impl.py --run-demo 2>demo/deckmux/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[2.056, "o", "\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1m9-person production incident response with DeckMux collaborative presence\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n"]
+[0.024, "o", "\u001b[1;36m  → Fetching session info...\u001b[0m\r\n"]
+[0.006, "o", "    \u001b[2msession_id:\u001b[0m \u001b[1mprovide-shell\u001b[0m\r\n    \u001b[2mconnected:\u001b[0m \u001b[1mTrue\u001b[0m\r\n\u001b[1;36m  → Fetching terminal snapshot...\u001b[0m\r\n"]
+[0.002, "o", "    \u001b[2mcols:\u001b[0m \u001b[1m80\u001b[0m\r\n    \u001b[2mrows:\u001b[0m \u001b[1m25\u001b[0m\r\n"]
+[0.000, "o", "\u001b[1;36m  → (Presence cursors are live via WebSocket -- see browser recording)\u001b[0m\r\n\u001b[1;32m  ✓ DeckMux presence enabled -- multiple cursors share the session\u001b[0m\r\n"]
+[0.067, "x", "0"]
