@@ -6,6 +6,16 @@
 // We need to set up all global state before importing it.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// terminal-page.ts now calls widget.connect() after mounting; register a stub
+// <uterm-terminal> so the generic element has the config/connect surface it uses.
+class _StubTerminal extends HTMLElement {
+  config: unknown = {};
+  connect(): void {}
+}
+if (!customElements.get("uterm-terminal")) {
+  customElements.define("uterm-terminal", _StubTerminal);
+}
+
 describe("terminal-page (module-level execution)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

@@ -5,6 +5,12 @@
 import { render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTerminalStore } from "../../stores/terminalStore";
+
+// HijackHost side-effect-imports the real session-element (to register
+// <uterm-session>); stub that module out so our lightweight stub element below
+// is the one registered, instead of the full Lit element (xterm/WS/DeckMux).
+vi.mock("@provide-uterm-frontend/session-element", () => ({}));
+
 import { HijackHost } from "./HijackHost";
 
 // HijackHost renders a <uterm-session> custom element and drives it

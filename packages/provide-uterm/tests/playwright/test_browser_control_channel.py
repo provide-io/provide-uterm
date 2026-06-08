@@ -91,9 +91,12 @@ def terminal_decoder_server() -> Generator[str, None, None]:
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/lib/addon-fit.js"></script>
   <script type="module">
     import '/ui/{script_path}';
-    window._term = new window.ProvideTerminal(document.getElementById('app'), {{
-      wsUrl: '/ws/term-test',
-      title: 'decoder-test',
+    customElements.whenDefined('uterm-terminal').then(() => {{
+      const el = document.createElement('uterm-terminal');
+      el.config = {{ wsUrl: '/ws/term-test', title: 'decoder-test' }};
+      document.getElementById('app').appendChild(el);
+      el.connect();
+      window._term = el;
     }});
   </script>
 </body>
@@ -129,7 +132,7 @@ def terminal_decoder_server() -> Generator[str, None, None]:
 def _xterm_text(page: Page) -> str:
     result = page.evaluate(
         """() => {
-            const rows = document.querySelector('.xterm-rows');
+            const rows = window.__deepQuery('.xterm-rows');
             return rows ? rows.textContent || '' : '';
         }"""
     )
@@ -146,7 +149,7 @@ class TestProvideTerminalControlDecoder:
         # Wait for xterm to mount + the visible raw payload to land.
         page.wait_for_selector(".xterm-rows", timeout=10000)
         page.wait_for_function(
-            "() => (document.querySelector('.xterm-rows')?.textContent || '').includes('VISIBLE_RAW_OUTPUT_42')",
+            "() => (window.__deepQuery('.xterm-rows')?.textContent || '').includes('VISIBLE_RAW_OUTPUT_42')",
             timeout=15000,
         )
         # Settle one frame so any late writes are visible.

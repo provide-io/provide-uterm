@@ -84,22 +84,25 @@ def resume_server() -> Generator[tuple[str, TermHub, InMemoryResumeStore], None,
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
     def test_page(worker_id: str) -> str:
-        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+        from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/hijack.ts")
-        css_paths = _resolve_vanilla_css("src/hijack.ts")
-        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
         return (
             "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-            f"{css_links}"
             "<style>*{margin:0;padding:0;box-sizing:border-box}"
             "html,body{width:100%;height:100dvh;background:#0b0f14}"
-            "#app{width:100%;height:100%}</style></head>"
+            "#app,uterm-session{display:block;width:100%;height:100%}</style></head>"
             "<body><div id='app'></div>"
             "<script type='module'>"
             f"import '/ui/{script_path}';"
-            "window.demoHijack = new window.ProvideHijack(document.getElementById('app'),"
-            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
+            "customElements.whenDefined('uterm-session').then(() => {"
+            "  const el = document.createElement('uterm-session');"
+            "  el.id = 'app-root';"
+            f"  el.config = {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}};"
+            "  document.getElementById('app').appendChild(el);"
+            "  el.connect();"
+            "  window.demoHijack = el;"
+            "});"
             "</script>"
             "</body></html>"
         )
@@ -139,7 +142,7 @@ class TestResumeTokenInHello:
 
         # Wait for status to move past "Connecting…"
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting…'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
             timeout=5000,
         )
 
@@ -157,7 +160,7 @@ class TestResumeTokenInHello:
         page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting…'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
             timeout=5000,
         )
 
@@ -217,7 +220,7 @@ class TestResumeOnReconnect:
         page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting…'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
             timeout=5000,
         )
 

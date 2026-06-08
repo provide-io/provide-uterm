@@ -86,28 +86,30 @@ def spinner_server() -> Generator[tuple[str, TermHub], None, None]:
 
     @app.get("/test-page/{worker_id}", response_class=HTMLResponse)
     async def test_page(worker_id: str) -> str:
-        from provide.uterm.server.ui import _resolve_vanilla_asset, _resolve_vanilla_css
+        from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/hijack.ts")
-        css_paths = _resolve_vanilla_css("src/hijack.ts")
-        css_links = "".join([f"<link rel='stylesheet' href='/ui/{path}'>" for path in css_paths])
         return (
             "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-            f"{css_links}"
             "<style>*{margin:0;padding:0;box-sizing:border-box}"
             "html,body{width:100%;height:100dvh;background:#0b0f14}"
-            "#app{width:100%;height:100%}</style></head>"
+            "#app,uterm-session{display:block;width:100%;height:100%}</style></head>"
             "<body><div id='app'></div>"
             f"{_MOCK_TERMINAL_JS}"
             "<script type='module'>"
             f"import '/ui/{script_path}';"
-            "const w = new window.ProvideHijack(document.getElementById('app'),"
-            f"{{workerId:{json.dumps(worker_id)},heartbeatInterval:500}});"
-            "window._widget = w;"
-            "window.__hijackTestHooks = {"
-            "  startReconnectAnim: () => window.__testHooks_startReconnectAnim(w._state),"
-            "  stopReconnectAnim: () => window.__testHooks_stopReconnectAnim(w._state),"
-            "};"
+            "customElements.whenDefined('uterm-session').then(() => {"
+            "  const w = document.createElement('uterm-session');"
+            "  w.id = 'app-root';"
+            f"  w.config = {{workerId:{json.dumps(worker_id)},heartbeatInterval:500}};"
+            "  document.getElementById('app').appendChild(w);"
+            "  w.connect();"
+            "  window._widget = w;"
+            "  window.__hijackTestHooks = {"
+            "    startReconnectAnim: () => window.__testHooks_startReconnectAnim(w._hijackState),"
+            "    stopReconnectAnim: () => window.__testHooks_stopReconnectAnim(w._hijackState),"
+            "  };"
+            "});"
             "</script>"
             "</body></html>"
         )
@@ -138,7 +140,7 @@ _BRAILLE = set("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
 
 
 def _status(page: Page) -> str:
-    return page.locator("[id$='-statustext']").text_content() or ""
+    return page.locator("#statustext").text_content() or ""
 
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
@@ -148,14 +150,14 @@ def _navigate(page: Page, base_url: str, worker_id: str) -> None:
 def _wait_ws_open(page: Page, timeout: float = 5000) -> None:
     """Wait until the widget's WS is in OPEN state (readyState === 1)."""
     page.wait_for_function(
-        "window._widget._state.ws !== null && window._widget._state.ws.readyState === 1",
+        "window._widget._hijackState.ws !== null && window._widget._hijackState.ws.readyState === 1",
         timeout=timeout,
     )
 
 
 def _wait_reconnecting(page: Page, timeout: float = 3000) -> None:
     page.wait_for_function(
-        "document.querySelector('[id$=\"-statustext\"]')?.textContent.includes('Reconnecting')",
+        "window.__deepQuery('#statustext')?.textContent.includes('Reconnecting')",
         timeout=timeout,
     )
 
@@ -172,7 +174,7 @@ def _fire_key(page: Page) -> None:
 
 def _force_close_ws(page: Page) -> None:
     """Close the browser-side WS socket so the widget enters reconnect mode."""
-    page.evaluate("if (window._widget._state.ws) window._widget._state.ws.close()")
+    page.evaluate("if (window._widget._hijackState.ws) window._widget._hijackState.ws.close()")
 
 
 # ---------------------------------------------------------------------------
@@ -189,19 +191,19 @@ class TestNudgeReconnect:
         _navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting\u2026'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting\u2026'",
             timeout=5000,
         )
         _init_term(page)
         _force_close_ws(page)
         _wait_reconnecting(page)
 
-        has_timer_before = page.evaluate("window._widget._state.reconnectTimer !== null")
+        has_timer_before = page.evaluate("window._widget._hijackState.reconnectTimer !== null")
         assert has_timer_before, "reconnect timer must be set while in backoff"
 
         _fire_key(page)
 
-        timer_after = page.evaluate("window._widget._state.reconnectTimer")
+        timer_after = page.evaluate("window._widget._hijackState.reconnectTimer")
         assert timer_after is None, "_nudgeReconnect must clear the backoff timer"
 
     @pytest.mark.playwright
@@ -212,7 +214,7 @@ class TestNudgeReconnect:
         _navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting\u2026'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting\u2026'",
             timeout=5000,
         )
         _init_term(page)
@@ -237,7 +239,7 @@ class TestSpinnerAnim:
         _navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting\u2026'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting\u2026'",
             timeout=5000,
         )
         _init_term(page)
@@ -275,7 +277,7 @@ class TestSpinnerAnim:
         _navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting\u2026'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting\u2026'",
             timeout=5000,
         )
         _init_term(page)
@@ -287,14 +289,14 @@ class TestSpinnerAnim:
             timeout=500,
         )
 
-        assert page.evaluate("window._widget._state.reconnectAnimTimer !== null"), (
+        assert page.evaluate("window._widget._hijackState.reconnectAnimTimer !== null"), (
             "_reconnectAnimTimer must be non-null while running"
         )
 
         page.evaluate("window._termWrites.length = 0")
         page.evaluate("window.__hijackTestHooks.stopReconnectAnim()")
 
-        anim_timer = page.evaluate("window._widget._state.reconnectAnimTimer")
+        anim_timer = page.evaluate("window._widget._hijackState.reconnectAnimTimer")
         assert anim_timer is None, "_reconnectAnimTimer must be null after stop"
 
         writes = page.evaluate("window._termWrites")
@@ -314,7 +316,7 @@ class TestSpinnerAnim:
         _navigate(page, base_url, worker_id)
 
         page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting\u2026'",
+            "window.__deepQuery('#statustext')?.textContent !== 'Connecting\u2026'",
             timeout=5000,
         )
         _init_term(page)
@@ -329,7 +331,7 @@ class TestSpinnerAnim:
         # evaluate returns — still, same-call guarantees the read happens first).
         timer_set_during_keypress = page.evaluate("""() => {
           if (window._onDataCb) window._onDataCb('a');
-          return window._widget._state.reconnectAnimTimer !== null;
+          return window._widget._hijackState.reconnectAnimTimer !== null;
         }""")
         assert timer_set_during_keypress, "_startReconnectAnim must set _reconnectAnimTimer immediately on keypress"
 
@@ -338,9 +340,9 @@ class TestSpinnerAnim:
 
         # Give onopen a tick to call _stopReconnectAnim
         page.wait_for_function(
-            "window._widget._state.reconnectAnimTimer === null",
+            "window._widget._hijackState.reconnectAnimTimer === null",
             timeout=1000,
         )
-        assert page.evaluate("window._widget._state.reconnectAnimTimer") is None, (
+        assert page.evaluate("window._widget._hijackState.reconnectAnimTimer") is None, (
             "_reconnectAnimTimer must be cleared after WS reconnects"
         )

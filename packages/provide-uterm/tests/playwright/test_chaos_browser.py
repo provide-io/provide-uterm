@@ -35,7 +35,7 @@ def _release_btn(page: Page) -> object:
 
 
 def _input_field(page: Page) -> object:
-    return page.locator("[id$='-inputfield']")
+    return page.locator("#inputfield")
 
 
 def _send_btn(page: Page) -> object:
@@ -43,26 +43,26 @@ def _send_btn(page: Page) -> object:
 
 
 def _status_text(page: Page) -> str:
-    return page.locator("[id$='-statustext']").text_content() or ""
+    return page.locator("#statustext").text_content() or ""
 
 
 def _wait_connected(page: Page, timeout: int = 5000) -> None:
     page.wait_for_function(
-        "() => document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Connected (watching)'",
+        "() => window.__deepQuery('#statustext')?.textContent === 'Connected (watching)'",
         timeout=timeout,
     )
 
 
 def _wait_hijacked_by_me(page: Page, timeout: int = 5000) -> None:
     page.wait_for_function(
-        "() => document.querySelector('[id$=\"-statustext\"]')?.textContent?.includes('Hijacked (you)')",
+        "() => window.__deepQuery('#statustext')?.textContent?.includes('Hijacked (you)')",
         timeout=timeout,
     )
 
 
 def _wait_not_hijacked_by_me(page: Page, timeout: int = 5000) -> None:
     page.wait_for_function(
-        "() => !document.querySelector('[id$=\"-statustext\"]')?.textContent?.includes('Hijacked (you)')",
+        "() => !window.__deepQuery('#statustext')?.textContent?.includes('Hijacked (you)')",
         timeout=timeout,
     )
 
@@ -95,7 +95,7 @@ class TestWorkerCrashDuringHijack:
             # Widget must NOT get stuck on "Acquiring..." — it should show Offline
             page.wait_for_function(
                 "() => {"
-                "  const st = document.querySelector('[id$=\"-statustext\"]')?.textContent || '';"
+                "  const st = window.__deepQuery('#statustext')?.textContent || '';"
                 "  return st === 'Offline' || st === 'Disconnected';"
                 "}",
                 timeout=10000,
@@ -241,11 +241,11 @@ class TestThreeBrowserChurn:
 
             # B and C should show "Hijacked (other)"
             page_b.wait_for_function(
-                "() => document.querySelector('[id$=\"-statustext\"]')?.textContent?.includes('Hijacked')",
+                "() => window.__deepQuery('#statustext')?.textContent?.includes('Hijacked')",
                 timeout=5000,
             )
             page_c.wait_for_function(
-                "() => document.querySelector('[id$=\"-statustext\"]')?.textContent?.includes('Hijacked')",
+                "() => window.__deepQuery('#statustext')?.textContent?.includes('Hijacked')",
                 timeout=5000,
             )
 

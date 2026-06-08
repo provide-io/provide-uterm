@@ -39,19 +39,19 @@ def _release_btn(page: Page) -> object:
 
 
 def _status_text(page: Page) -> str:
-    return page.locator("[id$='-statustext']").text_content() or ""
+    return page.locator("#statustext").text_content() or ""
 
 
 def _wait_connected(page: Page, timeout: int = 5000) -> None:
     page.wait_for_function(
-        "() => document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Connected (watching)'",
+        "() => window.__deepQuery('#statustext')?.textContent === 'Connected (watching)'",
         timeout=timeout,
     )
 
 
 def _wait_hijacked_by_me(page: Page, timeout: int = 5000) -> None:
     page.wait_for_function(
-        "() => document.querySelector('[id$=\"-statustext\"]')?.textContent?.includes('Hijacked (you)')",
+        "() => window.__deepQuery('#statustext')?.textContent?.includes('Hijacked (you)')",
         timeout=timeout,
     )
 
@@ -60,7 +60,7 @@ def _wait_stable_state(page: Page, timeout: int = 10000) -> None:
     """Wait until status text is a known stable state (not transitioning)."""
     page.wait_for_function(
         """() => {
-            const st = document.querySelector('[id$="-statustext"]')?.textContent || '';
+            const st = window.__deepQuery('#statustext')?.textContent || '';
             return st === 'Connected (watching)' || st === 'Hijacked (you)'
                 || st === 'Offline' || st === 'Disconnected'
                 || st === 'Connected (shared)';
@@ -285,7 +285,7 @@ class TestWebSocketCloseCodeRace:
             # Widget should reach Offline or Disconnected
             page.wait_for_function(
                 """() => {
-                    const st = document.querySelector('[id$="-statustext"]')?.textContent || '';
+                    const st = window.__deepQuery('#statustext')?.textContent || '';
                     return st === 'Offline' || st === 'Disconnected';
                 }""",
                 timeout=10000,

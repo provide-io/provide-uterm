@@ -49,7 +49,7 @@ def _navigate(page: Page, base_url: str, worker_id: str) -> None:
 
 def _status_text(page: Page) -> str:
     """Return the current status text shown by the widget."""
-    return page.locator("[id$='-statustext']").text_content() or ""
+    return page.locator("#statustext").text_content() or ""
 
 
 from playwright.sync_api import Locator
@@ -97,7 +97,7 @@ class TestWidgetInitialState:
         _navigate(page, base_url, worker_id)
 
         # Wait for WS hello to arrive (widget transitions out of "Connecting…")
-        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent !== 'Connecting…'")
+        page.wait_for_function("window.__deepQuery('#statustext')?.textContent !== 'Connecting…'")
 
         expect(_hijack_btn(page)).to_be_disabled()
         expect(_step_btn(page)).to_be_disabled()
@@ -109,7 +109,7 @@ class TestWidgetInitialState:
         worker_id = f"offline-{_uid()}"
         _navigate(page, base_url, worker_id)
 
-        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Offline'")
+        page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Offline'")
         assert _status_text(page) == "Offline"
 
     def test_mobile_keys_row_hidden_before_hijack(self, page: Page, hijack_server: tuple[str, object]) -> None:
@@ -147,9 +147,7 @@ class TestWorkerOnlineState:
         ctrl = WorkerController(base_url, worker_id).start()
         try:
             _navigate(page, base_url, worker_id)
-            page.wait_for_function(
-                "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Connected (watching)'"
-            )
+            page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Connected (watching)'")
             assert _status_text(page) == "Connected (watching)"
         finally:
             ctrl.stop()
@@ -172,13 +170,11 @@ class TestWorkerOnlineState:
         worker_id = f"woffline-{_uid()}"
         ctrl = WorkerController(base_url, worker_id).start()
         _navigate(page, base_url, worker_id)
-        page.wait_for_function(
-            "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Connected (watching)'"
-        )
+        page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Connected (watching)'")
 
         ctrl.stop()
 
-        page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Offline'")
+        page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Offline'")
         assert _status_text(page) == "Offline"
 
 
@@ -230,7 +226,7 @@ class TestHijackAcquireRelease:
             expect(_hijack_btn(page)).to_be_enabled(timeout=5000)
             _hijack_btn(page).click()
 
-            page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (you)'")
+            page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (you)'")
             assert _status_text(page) == "Hijacked (you)"
         finally:
             ctrl.stop()
@@ -292,7 +288,7 @@ class TestInputSend:
             expect(_step_btn(page)).to_be_enabled(timeout=5000)
 
             # .hijack-input-row must have class "visible"
-            page.wait_for_function("document.querySelector('.hijack-input-row')?.classList.contains('visible')")
+            page.wait_for_function("window.__deepQuery('.hijack-input-row')?.classList.contains('visible')")
         finally:
             ctrl.stop()
 
@@ -308,9 +304,9 @@ class TestInputSend:
             expect(_step_btn(page)).to_be_enabled(timeout=5000)
 
             # Wait for input row to appear
-            page.wait_for_function("document.querySelector('.hijack-input-row')?.classList.contains('visible')")
+            page.wait_for_function("window.__deepQuery('.hijack-input-row')?.classList.contains('visible')")
 
-            page.locator("[id$='-inputfield']").fill("hello\\r")
+            page.locator("#inputfield").fill("hello\\r")
             page.get_by_role("button", name="Send").click()
 
             msg = ctrl.wait_for(lambda m: m.get("type") == "input")
@@ -329,11 +325,11 @@ class TestInputSend:
             _navigate(page, base_url, worker_id)
             expect(_hijack_btn(page)).to_be_enabled(timeout=5000)
             _hijack_btn(page).click()
-            page.wait_for_function("document.querySelector('.hijack-input-row')?.classList.contains('visible')")
+            page.wait_for_function("window.__deepQuery('.hijack-input-row')?.classList.contains('visible')")
 
             _release_btn(page).click()
 
-            page.wait_for_function("!document.querySelector('.hijack-input-row')?.classList.contains('visible')")
+            page.wait_for_function("!window.__deepQuery('.hijack-input-row')?.classList.contains('visible')")
         finally:
             ctrl.stop()
 
@@ -388,7 +384,7 @@ class TestTwoBrowsers:
             _navigate(page, base_url, worker_id)
             expect(_hijack_btn(page)).to_be_enabled(timeout=5000)
             _hijack_btn(page).click()
-            page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (you)'")
+            page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (you)'")
 
             # Browser 2 opens in a new context
 
@@ -396,10 +392,8 @@ class TestTwoBrowsers:
             page2 = ctx2.new_page()
             try:
                 page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
-                page2.wait_for_function(
-                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (other)'"
-                )
-                assert page2.locator("[id$='-statustext']").text_content() == "Hijacked (other)", (
+                page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
+                assert page2.locator("#statustext").text_content() == "Hijacked (other)", (
                     "Second browser should see 'Hijacked (other)'"
                 )
                 # Hijack button should be disabled for the second browser
@@ -427,9 +421,7 @@ class TestTwoBrowsers:
             page2 = ctx2.new_page()
             try:
                 page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
-                page2.wait_for_function(
-                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (other)'"
-                )
+                page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
 
                 # Browser 1 releases
                 _release_btn(page).click()
@@ -453,28 +445,22 @@ class TestTwoBrowsers:
             _navigate(page, base_url, worker_id)
             expect(_hijack_btn(page)).to_be_enabled(timeout=5000)
             _hijack_btn(page).click()
-            page.wait_for_function("document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (you)'")
+            page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (you)'")
 
             ctx2 = browser.new_context()  # type: ignore[attr-defined]
             page2 = ctx2.new_page()
             try:
                 page2.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
-                page2.wait_for_function(
-                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (other)'"
-                )
+                page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
 
                 _release_btn(page).click()
                 expect(page2.get_by_role("button", name="Hijack")).to_be_enabled(timeout=5000)
                 page2.get_by_role("button", name="Hijack").click()
 
-                page2.wait_for_function(
-                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (you)'"
-                )
-                page.wait_for_function(
-                    "document.querySelector('[id$=\"-statustext\"]')?.textContent === 'Hijacked (other)'"
-                )
+                page2.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (you)'")
+                page.wait_for_function("window.__deepQuery('#statustext')?.textContent === 'Hijacked (other)'")
                 assert _status_text(page) == "Hijacked (other)"
-                assert page2.locator("[id$='-statustext']").text_content() == "Hijacked (you)"
+                assert page2.locator("#statustext").text_content() == "Hijacked (you)"
             finally:
                 page2.close()
                 ctx2.close()

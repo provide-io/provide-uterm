@@ -27,6 +27,11 @@ function initTerminalPage(): void {
     title: "Provide Terminal Cloudflare",
   };
   container.appendChild(widget);
+  // Exposed for e2e/Playwright tests (handleTerminalInput/getBufferText).
+  (window as any).demoTerminal = widget;
+  // The element does not auto-connect (connectedCallback only loads settings);
+  // open the WebSocket explicitly, mirroring hijack.ts's self-assemble path.
+  widget.connect();
 }
 
 initTerminalPage();

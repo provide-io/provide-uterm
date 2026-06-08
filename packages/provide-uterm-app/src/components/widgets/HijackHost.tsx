@@ -4,6 +4,10 @@
 //
 
 import { DeckMux } from "@provide-uterm-frontend/app/deckmux/deckmux";
+// Side-effect import: registers the <uterm-session> custom element. The React
+// app renders the tag directly, so it must ensure the element is defined rather
+// than relying on the vanilla hijack.ts entry being loaded on the page.
+import "@provide-uterm-frontend/session-element";
 import type { UtermSessionElement } from "@provide-uterm-frontend/session-element";
 import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import { useEffect, useRef } from "react";

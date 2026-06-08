@@ -61,6 +61,42 @@ def pytest_collection_modifyitems(items: list) -> None:
 
 @pytest.fixture(autouse=True)
 def _attach_uterm_auth_headers(page: Page) -> None:
+    # The session/terminal UI now lives inside the <uterm-session>/<uterm-terminal>
+    # web components' (open) shadow roots. Raw `document.querySelector` used in
+    # wait_for_function/evaluate bodies does not pierce shadow DOM, so expose a
+    # deep query helper that walks light DOM + every open shadowRoot. It is a
+    # superset of document.querySelector (still finds light-DOM nodes), so call
+    # sites can use it uniformly.
+    page.add_init_script(
+        """
+        window.__deepQuery = (sel) => {
+          const search = (root) => {
+            const direct = root.querySelector(sel);
+            if (direct) return direct;
+            for (const el of root.querySelectorAll('*')) {
+              if (el.shadowRoot) {
+                const found = search(el.shadowRoot);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+          return search(document);
+        };
+        window.__deepQueryAll = (sel) => {
+          const out = [];
+          const search = (root) => {
+            for (const el of root.querySelectorAll(sel)) out.push(el);
+            for (const el of root.querySelectorAll('*')) {
+              if (el.shadowRoot) search(el.shadowRoot);
+            }
+          };
+          search(document);
+          return out;
+        };
+        """
+    )
+
     def _inject(route: Any) -> None:
         req = route.request
         url = req.url

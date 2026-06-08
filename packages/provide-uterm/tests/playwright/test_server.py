@@ -58,15 +58,15 @@ class TestReferenceServerPages:
             page.get_by_role("button", name="Connect").click()
 
         # Session page for the ephemeral shell session should be connected
-        expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Connected (shared)", timeout=5000)
 
     def test_user_page_is_shared_and_not_operator_console(self, page: Page, reference_server: str) -> None:
         page.goto(_user_url(reference_server), wait_until="domcontentloaded")
 
         expect(page.get_by_text("Provide Shell").first).to_be_visible(timeout=5000)
-        expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Connected (shared)", timeout=5000)
         expect(page.get_by_role("button", name="Hijack")).to_have_count(0)
-        expect(page.locator("[id$='-inputfield']")).to_be_visible(timeout=5000)
+        expect(page.locator("#inputfield")).to_be_visible(timeout=5000)
 
     def test_operator_page_can_switch_modes_and_hijack(self, page: Page, reference_server: str) -> None:
         page.goto(_operator_url(reference_server), wait_until="domcontentloaded")
@@ -74,13 +74,13 @@ class TestReferenceServerPages:
         expect(page.get_by_role("button", name="Exclusive")).to_be_visible(timeout=5000)
         page.get_by_role("button", name="Exclusive").click()
         expect(page.get_by_role("button", name="Hijack")).to_be_visible(timeout=5000)
-        expect(page.locator("[id$='-statustext']")).to_have_text("Connected (watching)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Connected (watching)", timeout=5000)
 
         page.get_by_role("button", name="Hijack").click()
-        expect(page.locator("[id$='-statustext']")).to_have_text("Hijacked (you)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Hijacked (you)", timeout=5000)
 
         page.get_by_role("button", name="Shared").click()
-        expect(page.locator("[id$='-statustext']")).to_have_text("Connected (shared)", timeout=5000)
+        expect(page.locator("#statustext")).to_have_text("Connected (shared)", timeout=5000)
 
     def test_replay_page_loads_events_and_navigation_works(self, page: Page, reference_server: str) -> None:
         page.goto(f"{reference_server}/app/replay/provide-shell", wait_until="domcontentloaded")
