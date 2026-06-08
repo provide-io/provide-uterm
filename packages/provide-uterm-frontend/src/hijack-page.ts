@@ -7,7 +7,6 @@ import { apiJson, type ProvideHijackConstructor, requireElement, type SessionSta
 
 declare global {
   interface Window {
-    ProvideHijack?: ProvideHijackConstructor;
     demoHijack?: {
       widget: unknown;
       loadSession: () => Promise<void>;
@@ -32,11 +31,10 @@ class HijackDemoPage {
     this.modeElement = requireElement<HTMLSelectElement>("#demo-mode");
     this.statusElement = requireElement<HTMLElement>("#demo-session-status");
     this.noteElement = requireElement<HTMLElement>("#demo-session-note");
-    const HijackWidget = window.ProvideHijack;
-    if (typeof HijackWidget !== "function") {
-      throw new Error("ProvideHijack is not available");
-    }
-    this.widget = new HijackWidget(appElement, { workerId: this.workerId });
+    const widget = document.createElement("uterm-session") as any;
+    widget.config = { workerId: this.workerId };
+    appElement.appendChild(widget);
+    this.widget = widget;
     requireElement<HTMLButtonElement>("#demo-apply").addEventListener("click", () => {
       void this.applyMode();
     });

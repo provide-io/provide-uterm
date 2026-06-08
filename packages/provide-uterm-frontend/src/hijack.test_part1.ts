@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProvideHijack } from "./hijack.js";
+import { UtermSessionElement } from "./session-element.js";
+import "./session-element.js";
 import { encodeControlFrame, encodeDataFrame } from "./hijack-codec.js";
 
 // ── WebSocket mock ────────────────────────────────────────────────────────────
@@ -115,7 +116,14 @@ function getWs(): MockWebSocket {
 function makeWidget(opts: Record<string, unknown> = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const widget = new ProvideHijack(container, { workerId: "test-worker", ...opts });
+  const widget = document.createElement("uterm-session") as UtermSessionElement;
+  widget.config = { workerId: "test-worker", ...opts };
+  container.appendChild(widget);
+  // Custom elements might not upgrade synchronously if imported asynchronously in tests,
+  // but since we imported the file statically above, it should be synchronous.
+  if (widget.connect) {
+    widget.connect();
+  }
   flushLit(container);
   return { widget, container };
 }
@@ -189,7 +197,11 @@ describe("ProvideHijack construction", () => {
   it("defaults workerId to 'default' if not provided", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    new ProvideHijack(container);
+    const w = document.createElement("uterm-session") as UtermSessionElement;
+    w.config = {};
+    container.appendChild(w);
+    if (w.connect) w.connect();
+    flushLit(container);
     expect(getWs().url).toContain("default");
   });
 
@@ -789,7 +801,7 @@ describe("local echo and activity indicator", () => {
     const w = widget as any;
 
     // Verify state variables exist for activity indicator feature
-    expect(w._sessionElement._activityFlashTimer).toBeNull();
+    expect(w._activityFlashTimer).toBeNull();
   });
 
   it("mobile key buttons send input (tests local echo code path)", () => {
@@ -835,13 +847,13 @@ describe("local echo and activity indicator", () => {
     const w = widget as any;
 
     // Set up timer
-    w._sessionElement._activityFlashTimer = setTimeout(() => {}, 200);
+    w._activityFlashTimer = setTimeout(() => {}, 200);
 
     // Dispose should clear it
     widget.dispose();
 
     // After dispose, timers should be null
-    expect(w._sessionElement._activityFlashTimer).toBeNull();
+    expect(w._activityFlashTimer).toBeNull();
   });
 });
 
@@ -868,7 +880,7 @@ describe("onResize callback", () => {
 
   /** Create widget and init terminal via a snapshot message. */
   function makeWidgetWithTerm(opts: Record<string, unknown> = {}): {
-    widget: ProvideHijack;
+    widget: UtermSessionElement;
     term: MockTerminal;
   } {
     const { widget, container } = makeWidget(opts);
@@ -956,7 +968,7 @@ describe("onResize callback", () => {
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = TermWithDims;
-    let latestWidget: ProvideHijack | null = null;
+    let latestWidget: UtermSessionElement | null = null;
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
       latestWidget?.dispose(); // dispose before the callback fires → _term = null
       cb();
@@ -1275,7 +1287,7 @@ describe("local echo and activity indicator (continued)", () => {
     const w = widget as any;
 
     // Verify state variables exist for activity indicator feature
-    expect(w._sessionElement._activityFlashTimer).toBeNull();
+    expect(w._activityFlashTimer).toBeNull();
   });
 
   it("mobile key buttons send input (tests local echo code path)", () => {
@@ -1322,13 +1334,13 @@ describe("local echo and activity indicator (continued)", () => {
     const w = widget as any;
 
     // Set up timer
-    w._sessionElement._activityFlashTimer = setTimeout(() => {}, 200);
+    w._activityFlashTimer = setTimeout(() => {}, 200);
 
     // Dispose should clear it
     widget.dispose();
 
     // After dispose, timers should be null
-    expect(w._sessionElement._activityFlashTimer).toBeNull();
+    expect(w._activityFlashTimer).toBeNull();
   });
 });
 
@@ -1354,7 +1366,7 @@ describe("onResize callback (continued)", () => {
   });
 
   function makeWidgetWithTerm(opts: Record<string, unknown> = {}): {
-    widget: ProvideHijack;
+    widget: UtermSessionElement;
     term: MockTerminal;
   } {
     const { widget, container } = makeWidget(opts);
@@ -1442,7 +1454,7 @@ describe("onResize callback (continued)", () => {
     }
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = TermWithDims;
-    let latestWidget: ProvideHijack | null = null;
+    let latestWidget: UtermSessionElement | null = null;
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
       latestWidget?.dispose(); // dispose before the callback fires → _term = null
       cb();

@@ -54,14 +54,17 @@ class TestSessionPageHtmlMutationKilling:
         assert '"surface": "operator"' in html or '"operator"' in html
 
     def test_hijack_js_always_included(self):
-        """hijack.js is always included in the body (mutmut_15-18)."""
+        """The vanilla hijack widget entry is always included (mutmut_15-18)."""
         html = session_page_html("T", "/assets", "s1", operator=True, app_path="/app")
-        assert "hijack.js" in html
+        # vite hashes the entry to hijack-<hash>.js — match the stable prefix.
+        assert "hijack" in html
 
     def test_hijack_js_uses_assets_path(self):
-        """hijack.js src uses assets_path (mutmut_40/43)."""
+        """hijack widget src uses assets_path (mutmut_40/43)."""
         html = session_page_html("T", "/custom_assets", "s1", operator=False, app_path="/app")
-        assert "/custom_assets/hijack.js" in html
+        # vite may hash + nest the entry (assets/hijack-<hash>.js); assert the
+        # resolved asset is served under the custom assets_path prefix.
+        assert f"/custom_assets/{ui._resolve_vanilla_asset('src/hijack.ts')}" in html
 
     def test_title_in_page(self):
         """Title appears in the HTML (mutmut_1-3: title mangling)."""

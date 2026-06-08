@@ -3,12 +3,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import { useEffect, useRef } from "react";
+import type { TerminalElement } from "@provide-uterm-frontend/terminal-element";
 import { useTerminalStore } from "../../stores/terminalStore";
 
-declare global {
-  interface Window {
-    ProvideTerminal?: new (container: HTMLElement, config: Record<string, unknown>) => { dispose(): void };
+declare module "react" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "uterm-terminal": DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
+        config?: unknown;
+        ref?: Ref<TerminalElement>;
+      };
+    }
   }
 }
 
@@ -17,28 +24,22 @@ interface TerminalHostProps {
 }
 
 export function TerminalHost({ config }: TerminalHostProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<TerminalElement>(null);
   const mountedRef = useRef(false);
   const setMounted = useTerminalStore((s) => s.setMounted);
 
   useEffect(() => {
     if (mountedRef.current || !containerRef.current) return;
-    const TermWidget = window.ProvideTerminal;
-    if (typeof TermWidget !== "function") {
-      setMounted(false, "ProvideTerminal is not available");
-      return;
-    }
-    const widget = new TermWidget(containerRef.current, config ?? {});
     mountedRef.current = true;
     setMounted(true);
+    const widget = containerRef.current;
+    widget.config = config ?? {};
+    widget.connect();
+    
     return () => {
-      widget.dispose();
-      // Reset so a re-run (config change / StrictMode double-mount) re-creates
-      // the widget instead of the init guard skipping it — which would dispose
-      // the terminal and leave it blank.
       mountedRef.current = false;
     };
   }, [config, setMounted]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+  return <uterm-terminal ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

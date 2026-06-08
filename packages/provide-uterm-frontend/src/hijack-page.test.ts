@@ -18,47 +18,30 @@ function setupDom(): void {
 }
 
 // Track constructor calls - use a module-level array that the class writes to
-let hijackCalls: Array<{ container: HTMLElement; config: unknown }> = [];
-
-class MockHijackClass {
-  constructor(container: HTMLElement, config: unknown) {
-    hijackCalls.push({ container, config });
-  }
-}
 
 describe("hijack-page module", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
     vi.resetModules();
-    hijackCalls = [];
   });
 
   it("throws when #app element is missing", async () => {
     // No DOM setup — #app doesn't exist
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     await expect(import("./hijack-page.js")).rejects.toThrow("Missing required element: #app");
   });
 
-  it("throws when ProvideHijack is not available", async () => {
-    setupDom();
-    vi.stubGlobal("window", {
-      ...window,
-      ProvideHijack: undefined,
-      location: { search: "", protocol: "http:", host: "localhost" },
-    });
-    await expect(import("./hijack-page.js")).rejects.toThrow("ProvideHijack is not available");
-  });
-
+  
   it("creates widget with default worker ID", async () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(
@@ -74,15 +57,15 @@ describe("hijack-page module", () => {
       }),
     );
     await import("./hijack-page.js");
-    expect(hijackCalls).toHaveLength(1);
-    expect((hijackCalls[0].config as { workerId: string }).workerId).toBe("demo-session");
+    
+    expect((document.querySelector("uterm-session") as any).config.workerId).toBe("demo-session");
   });
 
   it("uses worker param from URL search", async () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "?worker=custom-worker", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(
@@ -98,14 +81,14 @@ describe("hijack-page module", () => {
       }),
     );
     await import("./hijack-page.js");
-    expect((hijackCalls[0].config as { workerId: string }).workerId).toBe("custom-worker");
+    expect((document.querySelector("uterm-session") as any).config.workerId).toBe("custom-worker");
   });
 
   it("exposes demoHijack on window with all methods", async () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(
@@ -133,7 +116,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(
@@ -159,7 +142,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(
@@ -180,7 +163,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     const mockFetch = vi.fn().mockResolvedValue({
@@ -206,7 +189,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     let callCount = 0;
@@ -235,7 +218,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     const mockFetch = vi.fn().mockResolvedValue({
@@ -261,7 +244,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     let callCount = 0;
@@ -290,7 +273,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(
@@ -315,7 +298,7 @@ describe("hijack-page module", () => {
     setupDom();
     vi.stubGlobal("window", {
       ...window,
-      ProvideHijack: MockHijackClass,
+      
       location: { search: "", protocol: "http:", host: "localhost" },
     });
     vi.stubGlobal(

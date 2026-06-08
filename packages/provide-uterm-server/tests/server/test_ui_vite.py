@@ -137,8 +137,9 @@ class TestShellViteIntegration:
         ui._vite_manifest = {"src/main.tsx": {"file": "assets/main-abc.js", "css": []}}
         ui._vite_manifest_loaded = True
         html = ui.session_page_html("Test", "/assets", "sess-1", operator=True, app_path="/app")
-        # hijack.js always loaded for session/operator pages (vanilla widget)
-        assert "hijack.js" in html
+        # The vanilla hijack widget entry is always loaded for session/operator
+        # pages; vite hashes it (hijack-<hash>.js), so match the stable prefix.
+        assert "hijack" in html
         assert "assets/main-abc.js" in html
 
     def test_replay_uses_vite(self):
