@@ -1,4 +1,4 @@
-import { LitElement, html, css, PropertyValues } from "lit";
+import { LitElement, html, css, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { computeRemainingSeconds } from "./hijack-approval.js";
 
@@ -18,7 +18,7 @@ export class ApprovalPromptElement extends LitElement {
   @state() private _remainingSeconds = 0;
   private _timer: ReturnType<typeof setInterval> | null = null;
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
     }
@@ -160,17 +160,17 @@ export class ApprovalPromptElement extends LitElement {
     }
   `;
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
     this._startApprovalTimer();
   }
 
-  disconnectedCallback() {
+  override disconnectedCallback() {
     super.disconnectedCallback();
     this._stopApprovalTimer();
   }
 
-  protected updated(changedProperties: PropertyValues): void {
+  protected override updated(changedProperties: PropertyValues): void {
     if (changedProperties.has("pendingApproval")) {
       if (this.pendingApproval) {
         this._startApprovalTimer();
@@ -214,7 +214,7 @@ export class ApprovalPromptElement extends LitElement {
     );
   }
 
-  render() {
+  override render() {
     if (!this.pendingApproval) return html``;
 
     if (this.mode === "modal") {

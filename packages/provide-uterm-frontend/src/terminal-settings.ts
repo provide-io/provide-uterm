@@ -59,10 +59,10 @@ export const DEFAULTS: TerminalSettings = {
  * from localStorage on top. localStorage parse errors silently fall back to
  * the config-only baseline so a corrupt entry can never wedge startup.
  */
-export function loadSettings(config: TerminalSettings & { wsUrl?: string }): TerminalSettings {
+export function loadSettings(config: TerminalConfig): TerminalSettings {
   const base: TerminalSettings = { ...DEFAULTS, ...config, theme: asThemeName(config.theme) };
   try {
-    const raw = localStorage.getItem(config.storageKey);
+    const raw = localStorage.getItem(base.storageKey);
     if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<TerminalSettings>;
     return {

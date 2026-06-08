@@ -1,4 +1,4 @@
-import { LitElement, html, css, PropertyValues } from "lit";
+import { LitElement, html, css, type PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { styleMap } from "lit/directives/style-map.js";
 
@@ -18,7 +18,7 @@ export class UtermGhostOverlayElement extends LitElement {
   @property({ type: Number }) ownRows = 0;
   @property({ type: Array }) entries: GhostEntryState[] = [];
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
       position: absolute;
@@ -65,7 +65,7 @@ export class UtermGhostOverlayElement extends LitElement {
     }
   `;
 
-  render() {
+  override render() {
     if (!this.visible || this.ownCols === 0 || this.ownRows === 0) {
       return html``;
     }

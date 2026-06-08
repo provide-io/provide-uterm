@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { LitElement, html, css, PropertyValues, unsafeCSS } from "lit";
+import { LitElement, html, css, type PropertyValues, unsafeCSS } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import type { AnyFrame } from "./generated/frames.js";
 import "./approval-prompt-element.js";
@@ -298,19 +298,19 @@ export class UtermSessionElement extends LitElement {
   private _ro: ResizeObserver | null = null;
   private _activityFlashTimer: ReturnType<typeof setTimeout> | null = null;
 
-  static styles = [hijackStyles];
+  static override styles = [hijackStyles];
 
   // Provide public API mirroring original ProvideHijack
   get terminal(): XTerminal | null {
     return this._hijackState?.term ?? null;
   }
 
-  connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
     this._init();
   }
 
-  disconnectedCallback() {
+  override disconnectedCallback() {
     super.disconnectedCallback();
     this.disconnect();
     this.dispose();
@@ -795,7 +795,7 @@ export class UtermSessionElement extends LitElement {
     wsSend(state, { type: "input", data });
   }
 
-  render() {
+  override render() {
     const state = this._hijackState;
     if (!state) return html``;
     const title = this._resolvedConfig?.title ?? (this._resolvedConfig?.workerId ? this._resolvedConfig.workerId : "Terminal");
