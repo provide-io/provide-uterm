@@ -259,20 +259,16 @@ def record_fleet_complete(
                 ".app-header,header{display:none!important}"
                 ".card{padding:0!important;margin:0!important;border-radius:0!important}"
                 "#widget{min-height:0!important;height:100%!important;flex:1!important}"
-                ".hijack-toolbar{display:none!important}"
-                ".hijack-input-row{display:none!important}"
-                ".hijack-analysis{display:none!important}"
-                ".mobile-keys{display:none!important}"
-                ".provide-hijack{height:100%!important}"
-                ".hijack-terminal{height:100%!important}"
+                # Widget chrome lives in the <uterm-session> shadow root now, so
+                # page CSS can't hide it — the script sets the element's
+                # first-class `chromeless` attribute instead. The host is light
+                # DOM and still page-stylable, so stretch it to fill the cell.
+                "uterm-session{height:100%!important;flex:1!important;min-height:0!important;display:flex!important;flex-direction:column!important}"
                 "</style>"
                 "<script>(function(){"
                 "function hide(el){if(el)el.style.setProperty('display','none','important');}"
                 "function applyLayout(){"
-                "hide(document.querySelector('.hijack-toolbar'));"
-                "hide(document.querySelector('.hijack-input-row'));"
-                "hide(document.querySelector('.hijack-analysis'));"
-                "hide(document.querySelector('.mobile-keys'));"
+                "document.querySelectorAll('uterm-session').forEach(function(el){el.setAttribute('chromeless','');});"
                 "hide(document.querySelector('.app-header,header'));"
                 "var ss=document.querySelector('#session-status');"
                 "if(ss&&ss.closest('.card'))ss.closest('.card').style.setProperty('display','none','important');"
