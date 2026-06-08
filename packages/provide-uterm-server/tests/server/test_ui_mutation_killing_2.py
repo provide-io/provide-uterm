@@ -18,9 +18,15 @@ from provide.uterm.server.ui import (
 
 @pytest.fixture(autouse=True)
 def _reset_vite_cache():
-    """Reset vite manifest cache before and after each test."""
+    """Force the vanilla (no-React) surface for these mutation tests.
+
+    ``_vite_manifest_loaded = True`` with a ``None`` manifest makes
+    ``_read_vite_manifest`` return None without touching disk — otherwise a real
+    built ``.vite/manifest.json`` would flip session_page_html to the React
+    surface, which omits the vanilla hijack entry these tests assert on.
+    """
     ui._vite_manifest = None
-    ui._vite_manifest_loaded = False
+    ui._vite_manifest_loaded = True
     yield
     ui._vite_manifest = None
     ui._vite_manifest_loaded = False

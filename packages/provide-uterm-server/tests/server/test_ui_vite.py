@@ -133,13 +133,14 @@ class TestShellViteIntegration:
         assert "server-session-page.js" not in html
         assert "server-app-foundation.css" not in html
 
-    def test_session_page_includes_hijack_js_always(self):
+    def test_session_page_omits_vanilla_hijack_when_vite_present(self):
         ui._vite_manifest = {"src/main.tsx": {"file": "assets/main-abc.js", "css": []}}
         ui._vite_manifest_loaded = True
         html = ui.session_page_html("Test", "/assets", "sess-1", operator=True, app_path="/app")
-        # The vanilla hijack widget entry is always loaded for session/operator
-        # pages; vite hashes it (hijack-<hash>.js), so match the stable prefix.
-        assert "hijack" in html
+        # With the React (vite) app present it registers the custom elements
+        # itself; also loading the vanilla hijack entry would double-register and
+        # throw. Only the React bundle is loaded here.
+        assert "hijack" not in html
         assert "assets/main-abc.js" in html
 
     def test_replay_uses_vite(self):

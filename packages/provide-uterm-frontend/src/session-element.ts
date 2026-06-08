@@ -349,6 +349,14 @@ export class UtermSessionElement extends LitElement {
 
 
   connect(): void {
+    // config may be assigned AFTER the element mounts (e.g. React renders the
+    // <uterm-session> tag, then sets .config and calls connect() in an effect),
+    // so _init() ran with the default workerId. Re-resolve if the workerId now
+    // differs — but not on a plain reconnect (config unchanged), which must keep
+    // the existing HijackState (resume token, reconnect counters, …).
+    if (this._hijackState && this.config.workerId && this._hijackState.workerId !== this.config.workerId) {
+      this._init();
+    }
     if (this._hijackState && this._handlers) {
       connectWs(this._hijackState, this._handlers);
     }
