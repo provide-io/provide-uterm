@@ -237,12 +237,17 @@ def session_page_html(
         f"{_bootstrap_tag(bootstrap)}"
         "</body>"
     )
+    # The vanilla hijack entry registers the custom elements and self-assembles
+    # the <uterm-session>. When the React (vite) app is present it imports and
+    # registers those elements itself, so also loading hijack.js would re-run
+    # customElements.define() (uterm-approval-prompt, …) and throw — crashing the
+    # React mount. Only load it for the vanilla surface.
+    pre_vite = () if vite_tags else (_resolve_vanilla_asset("src/hijack.ts"),)
     return _shell(
         title,
         assets_path,
         body,
-        # hijack.js configures the Web Component directly
-        pre_vite_modules=(f"{_resolve_vanilla_asset('src/hijack.ts')}",),
+        pre_vite_modules=pre_vite,
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,
         fonts_cdn=fonts_cdn,
