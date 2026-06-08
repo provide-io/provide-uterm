@@ -83,18 +83,34 @@ function makeWidget(opts: Record<string, unknown> = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const widget = new ProvideHijack(container, { workerId: "test-worker", ...opts });
+  flushLit(container);
   return { widget, container };
 }
 
-function q(container: HTMLElement, name: string): HTMLElement | null {
-  let el = container.querySelector<HTMLElement>(`[id$="-${name}"]`);
-  if (el) return el;
-  const prompt = container.querySelector("uterm-approval-prompt");
-  if (prompt?.shadowRoot) {
-    el = prompt.shadowRoot.querySelector<HTMLElement>(`[id$="-${name}"]`);
-    if (el) return el;
+function flushLit(container: HTMLElement) {
+  const session = container.querySelector("uterm-session") as any;
+  if (session && session.isUpdatePending) {
+    session.performUpdate();
   }
-  return null;
+}
+
+function q(container: HTMLElement, name: string): HTMLElement | null {
+  flushLit(container);
+  const session = container.querySelector("uterm-session");
+  if (session && session.shadowRoot) {
+    let el = session.shadowRoot.querySelector(`[id="${name}"]`) as HTMLElement | null;
+    if (el) return el;
+    
+    // Also check inside approval prompt if it exists
+    const prompt = session.shadowRoot.querySelector("uterm-approval-prompt");
+    if (prompt && prompt.shadowRoot) {
+      el = prompt.shadowRoot.querySelector(`[id="${name}"]`) as HTMLElement | null;
+      if (el) return el;
+      el = prompt.shadowRoot.querySelector(`[id$="-${name}"]`) as HTMLElement | null;
+      if (el) return el;
+    }
+  }
+  return container.querySelector(`[id$="-${name}"]`);
 }
 
 function sendMessage(msg: Record<string, unknown>): void {
@@ -296,7 +312,7 @@ describe("hijack.ts branch coverage - constructor config variants", () => {
 
   it("constructs with title option", () => {
     const { container } = makeWidget({ title: "My Custom Title" });
-    expect(container.innerHTML).toContain("My Custom Title");
+    expect(container.querySelector("uterm-session")?.shadowRoot?.innerHTML).toContain("My Custom Title");
   });
 });
 
@@ -991,11 +1007,11 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // Admin modal renders both buttons.
-    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
+    flushLit(container); const __s = container.querySelector("uterm-session"); const __p = __s?.shadowRoot?.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
     // The container element class should be the modal flavor, not the statusbar.
-    const modal = container.querySelector("uterm-approval-prompt")?.shadowRoot?.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
+    const modal = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt")?.shadowRoot?.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
     expect(modal?.classList.contains("hijack-approval-modal")).toBe(true);
   });
 
@@ -1010,7 +1026,7 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // No admin approve/reject buttons; statusbar UX is shown.
-    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
+    flushLit(container); const __s = container.querySelector("uterm-session"); const __p = __s?.shadowRoot?.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeNull();
     expect(q(container, "reject")).toBeNull();
   });
@@ -1026,7 +1042,7 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       command: "whoami",
       expires_at: Date.now() / 1000 + 60,
     });
-    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
+    flushLit(container); const __s = container.querySelector("uterm-session"); const __p = __s?.shadowRoot?.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
   });
@@ -1040,13 +1056,8 @@ describe("ProvideHijack snapshot reset emits real ESC sequence (Finding #5 guard
   it("writes the soft-reset ESC sequence on snapshot before the screen contents", () => {
     const { widget } = makeWidget();
     getWs().open();
-    // The snapshot handler in hijack.ts wraps the terminal init in try/catch;
-    // a mock-Terminal incompatibility would swallow the call silently. Reach
-    // in directly to instantiate a known-good term, then exercise the handler.
-    // biome-ignore lint/suspicious/noExplicitAny: reach into private state for test
-    const widgetAny = widget as any;
     const term = new MockTerminal();
-    widgetAny._state.term = term;
+    (widget as any)._sessionElement._hijackState.term = term;
     sendMessage({ type: "snapshot", screen: "hello" });
     // The very first frame after the snapshot handler runs is the reset sequence.
     expect(term.written[0]).toBe("\x1b[!p\x1b[2J\x1b[H");
@@ -1523,11 +1534,11 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // Admin modal renders both buttons.
-    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
+    flushLit(container); const __s = container.querySelector("uterm-session"); const __p = __s?.shadowRoot?.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
     // The container element class should be the modal flavor, not the statusbar.
-    const modal = container.querySelector("uterm-approval-prompt")?.shadowRoot?.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
+    const modal = container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt")?.shadowRoot?.querySelector(".hijack-approval-modal, .hijack-approval-statusbar");
     expect(modal?.classList.contains("hijack-approval-modal")).toBe(true);
   });
 
@@ -1542,7 +1553,7 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       expires_at: Date.now() / 1000 + 60,
     });
     // No admin approve/reject buttons; statusbar UX is shown.
-    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
+    flushLit(container); const __s = container.querySelector("uterm-session"); const __p = __s?.shadowRoot?.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeNull();
     expect(q(container, "reject")).toBeNull();
   });
@@ -1558,7 +1569,7 @@ describe("ProvideHijack server-confirmed role (Finding #19)", () => {
       command: "whoami",
       expires_at: Date.now() / 1000 + 60,
     });
-    const __p = container.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
+    flushLit(container); const __s = container.querySelector("uterm-session"); const __p = __s?.shadowRoot?.querySelector("uterm-approval-prompt"); if (__p) await (__p as any).updateComplete;
     expect(q(container, "approve")).toBeTruthy();
     expect(q(container, "reject")).toBeTruthy();
   });
@@ -1572,13 +1583,8 @@ describe("ProvideHijack snapshot reset emits real ESC sequence (Finding #5 guard
   it("writes the soft-reset ESC sequence on snapshot before the screen contents", () => {
     const { widget } = makeWidget();
     getWs().open();
-    // The snapshot handler in hijack.ts wraps the terminal init in try/catch;
-    // a mock-Terminal incompatibility would swallow the call silently. Reach
-    // in directly to instantiate a known-good term, then exercise the handler.
-    // biome-ignore lint/suspicious/noExplicitAny: reach into private state for test
-    const widgetAny = widget as any;
     const term = new MockTerminal();
-    widgetAny._state.term = term;
+    (widget as any)._sessionElement._hijackState.term = term;
     sendMessage({ type: "snapshot", screen: "hello" });
     // The very first frame after the snapshot handler runs is the reset sequence.
     expect(term.written[0]).toBe("\x1b[!p\x1b[2J\x1b[H");
