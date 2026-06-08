@@ -29,6 +29,14 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _PYTEST_SUITES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("provide-uterm + provide-uterm-cloudflare (root pytest)", (), ()),
+    # Core unit coverage gate. The root run above executes core+cloudflare (incl.
+    # the playwright browser suites) under the *root* config, which carries no
+    # --cov. Re-run the core unit tests FROM the package dir (via uv --directory)
+    # so pytest picks up packages/provide-uterm/pyproject.toml's
+    # --cov-fail-under=100 gate; its --cov=src/provide/uterm path only resolves
+    # with the package as CWD. (Its addopts deselect playwright/memray/slow,
+    # which the root run still covers.)
+    ("provide-uterm (core, coverage gate)", ("--directory", "packages/provide-uterm"), ("tests",)),
     ("provide-uterm-annotation", (), ("packages/provide-uterm-annotation/tests/",)),
     ("provide-uterm-server", (), ("packages/provide-uterm-server/tests/",)),
     ("provide-uterm-client", (), ("packages/provide-uterm-client/tests/",)),

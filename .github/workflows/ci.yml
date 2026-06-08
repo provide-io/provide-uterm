@@ -59,6 +59,12 @@ jobs:
       # Core-package pytest gate, including the playwright browser suites (the
       # example-page and V8-coverage suites are now reliable and gated here too).
       - run: uv run python scripts/run_pytest_gate.py -q
+      # Core unit coverage gate: the gate above runs under the root config (no
+      # --cov). Re-run the core unit tests FROM the package dir (uv --directory)
+      # so pytest uses packages/provide-uterm/pyproject.toml's
+      # --cov-fail-under=100 gate; its --cov=src/provide/uterm path only resolves
+      # with the package as CWD.
+      - run: uv run --directory packages/provide-uterm pytest -q tests
       # Cloudflare worker / Durable Object test suite.
       - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
 
