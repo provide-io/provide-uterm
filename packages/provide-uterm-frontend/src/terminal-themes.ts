@@ -55,9 +55,11 @@ export function applyColors(root: HTMLElement, pageBg: string, termBg: string): 
   root.style.background = pageBg;
 }
 
+import { html, type TemplateResult } from "lit";
+
 /** HTML fragment for the theme-picker row in the settings panel. */
-export function buildThemeButtonsHtml(): string {
-  return `
+export function buildThemeButtonsHtml(): TemplateResult {
+  return html`
         <div class="theme-options" role="group" aria-label="Theme">
           <button type="button" class="theme-btn" data-theme="code" aria-label="Code theme">Code</button>
           <button type="button" class="theme-btn" data-theme="crt" aria-label="CRT theme">CRT</button>
