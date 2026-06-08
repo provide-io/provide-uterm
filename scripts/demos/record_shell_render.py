@@ -333,17 +333,15 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             set(shell, ';height:100vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;');
         }
 
-        // Hide hijack chrome (non-hashed stable class names)
-        hide('.hijack-toolbar');
-        hide('.hijack-input-row');
-        hide('.mobile-keys');
-        hide('.hijack-analysis');
-
-        // Expand terminal widget to fill remaining space
-        document.querySelectorAll('.provide-hijack').forEach(el =>
-            set(el, ';height:100%!important;flex:1!important;min-height:0!important;display:flex!important;flex-direction:column!important;'));
-        document.querySelectorAll('.hijack-terminal').forEach(el =>
-            set(el, ';flex:1!important;min-height:0!important;height:100%!important;'));
+        // Terminal-only embed: the widget chrome now lives in the
+        // <uterm-session> shadow root, unreachable from page CSS. Toggle the
+        // first-class `chromeless` attribute instead — the element drops its
+        // toolbar/input/analysis and lets the terminal fill the host — and
+        // stretch the host element (light DOM) to fill the remaining space.
+        document.querySelectorAll('uterm-session').forEach(el => {
+            el.setAttribute('chromeless', '');
+            set(el, ';height:100%!important;flex:1!important;min-height:0!important;display:flex!important;flex-direction:column!important;');
+        });
 
         function hide_el(el) { if (el) set(el, ';display:none!important'); }
     }"""

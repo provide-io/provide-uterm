@@ -95,18 +95,33 @@ _XTERM_CDN = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
 _FITADDON_CDN = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
 
 
-def _build_grid_html(session_ids: list[str], cols: int, rows: int, auth_token: str = "") -> str:
+def _hijack_script_url() -> str:
+    """Resolve the content-hashed hijack entry script to its served URL.
+
+    Vite emits hashed filenames (``assets/hijack_script-<hash>.js``), so the
+    literal ``/_terminal/hijack.js`` the pre-Vite demos imported no longer exists.
+    Resolve the real path from the built vanilla manifest, reusing the server's
+    own lookup so the demo can never drift from how the server resolves it.
+    """
+    from provide.uterm.server.ui import _resolve_vanilla_asset
+
+    return f"/_terminal/{_resolve_vanilla_asset('src/hijack.ts')}"
+
+
+def _build_grid_html(
+    session_ids: list[str], cols: int, rows: int, auth_token: str = "", hijack_script_url: str = ""
+) -> str:
     """Build the full 9-terminal grid HTML including hijack.js script tags.
 
     Uses root-relative URLs so the page works when served from the terminal
     server via page.route() — keeping the correct origin for WebSocket construction.
     xterm.js is loaded as a UMD global (window.Terminal) from CDN before hijack.js.
 
-    ``auth_token`` is embedded into each ProvideHijack widget's ``authToken``
+    ``auth_token`` is embedded into each <uterm-session> widget's ``authToken``
     config; hijack-websocket.ts appends it as ``?token=...`` to the WS URL so
     the server's JWT validator accepts the browser connection. Without this,
-    every ProvideHijack WS hits the JWT validator with no credential and the
-    page renders 9 empty cells.
+    every widget's WS hits the JWT validator with no credential and the page
+    renders 9 empty cells.
     """
     cells_html = "\n  ".join(f'<div class="cell" id="cell-{i}"></div>' for i in range(cols * rows))
     sessions_json = str(session_ids).replace("'", '"')
@@ -117,7 +132,6 @@ def _build_grid_html(session_ids: list[str], cols: int, rows: int, auth_token: s
 <meta charset="utf-8">
 <title>Terminal Grid</title>
 <link rel="stylesheet" href="{_XTERM_CDN}/css/xterm.css">
-<link rel="stylesheet" href="/_terminal/hijack.css">
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   html, body {{
@@ -136,13 +150,11 @@ def _build_grid_html(session_ids: list[str], cols: int, rows: int, auth_token: s
     background: #111;
   }}
   .cell {{ overflow: hidden; position: relative; display: flex; flex-direction: column; }}
-  .cell .provide-hijack {{ flex: 1; min-height: 0; display: flex; flex-direction: column; }}
-  .cell .hijack-toolbar {{ display: none !important; }}
-  .cell .hijack-input-row {{ display: none !important; }}
-  .cell .mobile-keys {{ display: none !important; }}
-  .cell .hijack-analysis {{ display: none !important; }}
-  .cell .hijack-terminal {{ flex: 1 !important; min-height: 0 !important; }}
-  .cell .xterm, .cell .xterm-viewport, .cell .xterm-screen {{ height: 100% !important; }}
+  /* Chrome is hidden via the <uterm-session> `chromeless` attribute set in the
+     mount script; the host element is light DOM so it stays page-stylable. The
+     toolbar/input/terminal all live inside the shadow root now, so .hijack-* and
+     .xterm page rules no longer apply — the terminal fills the host on its own. */
+  .cell uterm-session {{ flex: 1; min-height: 0; display: flex; flex-direction: column; }}
 </style>
 </head>
 <body>
@@ -153,12 +165,20 @@ def _build_grid_html(session_ids: list[str], cols: int, rows: int, auth_token: s
 <script src="{_XTERM_CDN}/lib/xterm.js"></script>
 <script src="{_FITADDON_CDN}/lib/addon-fit.js"></script>
 <script type="module">
-  import {{ ProvideHijack }} from '/_terminal/hijack.js';
+  // Side-effect import registers the <uterm-session> custom element (the old
+  // ProvideHijack constructor was removed in the web-components migration).
+  // Vite content-hashes the entry, so the URL is resolved from the manifest.
+  import '{hijack_script_url}';
+  await customElements.whenDefined('uterm-session');
   const sessions = {sessions_json};
   const authToken = {auth_json};
   const cells = document.querySelectorAll('.cell');
   sessions.forEach(function(sid, i) {{
-    new ProvideHijack(cells[i], {{ workerId: sid, authToken: authToken }});
+    const el = document.createElement('uterm-session');
+    el.setAttribute('chromeless', '');  // terminal-only embed, no toolbar/input
+    el.config = {{ workerId: sid, authToken: authToken }};
+    cells[i].appendChild(el);
+    el.connect();
   }});
 </script>
 </body>
@@ -217,10 +237,10 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Build full grid HTML — served via page.route() at /demo-grid so the page
     # keeps the correct server origin and WebSocket construction uses location.host.
     # Extract the raw JWT from the bearer header so it can be embedded in the
-    # grid page. ProvideHijack passes it to the WS handshake as ``?token=...``.
+    # grid page. The widget passes it to the WS handshake as ``?token=...``.
     _bearer = dev_bearer_headers().get("Authorization", "")
     _grid_auth_token = _bearer.removeprefix("Bearer ").strip()
-    grid_html = _build_grid_html(GRID_SESSION_IDS, _COLS, _ROWS, _grid_auth_token)
+    grid_html = _build_grid_html(GRID_SESSION_IDS, _COLS, _ROWS, _grid_auth_token, _hijack_script_url())
     grid_html_bytes = grid_html.encode()
 
     def _register_grid_route(page: object) -> None:
@@ -244,7 +264,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
         with contextlib.suppress(Exception):
             page.wait_for_selector(  # type: ignore[union-attr]
-                ".hijack-terminal .xterm-rows span",
+                ".xterm-rows span",  # Playwright pierces the <uterm-session> shadow root
                 state="attached",
                 timeout=15000,
             )

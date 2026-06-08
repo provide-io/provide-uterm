@@ -6,10 +6,24 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import TYPE_CHECKING
 
 from scripts.demos.ffmpeg import ffmpeg_to_mp4
+
+
+def _attach_console_debug(page: object) -> None:
+    """When DEMO_DEBUG_CONSOLE is set, echo page console + uncaught errors.
+
+    Demo widgets mount inside iframes/custom pages where a silent JS failure
+    (bad import, throwing handler) just yields a blank video. This surfaces them.
+    """
+    if not os.environ.get("DEMO_DEBUG_CONSOLE"):
+        return
+    page.on("console", lambda m: print(f"  [console.{m.type}] {m.text}", flush=True))  # type: ignore[union-attr]
+    page.on("pageerror", lambda e: print(f"  [pageerror] {e}", flush=True))  # type: ignore[union-attr]
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -129,7 +143,7 @@ def _dev_auth_cookies_or_empty(base_url: str) -> list[dict[str, object]]:
     """Build a list of cookies that authenticate page-driven fetches/WebSockets.
 
     ``_dev_auth_headers_or_empty`` only covers navigation requests. WebSocket
-    connections opened from inside the page (e.g. ``new ProvideHijack(...)``
+    connections opened from inside the page (e.g. the <uterm-session> element
     constructing ``new WebSocket("/ws/browser/...")``) don't carry custom
     HTTP headers — browsers don't allow it. They *do* carry cookies. The
     server's auth resolver reads the ``uterm_token`` cookie via the same
@@ -169,7 +183,15 @@ def record_perspective(
     ]
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            # Disable Chromium's Local/Private Network Access checks: demos whose
+            # page is served via route.fulfill() get an "unknown" address space,
+            # so a WebSocket to the localhost server is treated as a public→local
+            # request and blocked (net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS).
+            # This is a headless recorder, so relaxing the check is safe.
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessChecks"],
+            )
             ctx = browser.new_context(
                 viewport={"width": 1280, "height": 720},
                 record_video_dir=str(feature_dir),
@@ -180,6 +202,7 @@ def record_perspective(
             if _auth_cookies:
                 ctx.add_cookies(_auth_cookies)  # type: ignore[arg-type]
             page = ctx.new_page()
+            _attach_console_debug(page)
             _run_steps(page, resolved, shots_dir)
             ctx.close()
             browser.close()
@@ -214,7 +237,15 @@ def record_perspective_with_background(
     ]
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            # Disable Chromium's Local/Private Network Access checks: demos whose
+            # page is served via route.fulfill() get an "unknown" address space,
+            # so a WebSocket to the localhost server is treated as a public→local
+            # request and blocked (net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS).
+            # This is a headless recorder, so relaxing the check is safe.
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessChecks"],
+            )
             bg_ctx, _bg_page = open_background_context(browser, base_url, background_path, wait_s=background_wait_s)
             ctx = browser.new_context(
                 viewport={"width": 1280, "height": 720},
@@ -226,6 +257,7 @@ def record_perspective_with_background(
             if _auth_cookies:
                 ctx.add_cookies(_auth_cookies)  # type: ignore[arg-type]
             page = ctx.new_page()
+            _attach_console_debug(page)
             _run_steps(page, resolved, shots_dir)
             ctx.close()
             bg_ctx.close()
