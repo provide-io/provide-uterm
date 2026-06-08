@@ -379,10 +379,10 @@ class WebhookOutputPolicyGate:
             # Fail CLOSED: a non-200 webhook response must not silently
             # disable redaction. Fall back to the built-in default ruleset
             # so secrets keep getting redacted from terminal output.
-            return default_rules()
+            return default_rules()  # ty: ignore[invalid-return-type]  # ty can't resolve default_rules() across the lazy (circular-avoiding) import
         except Exception:
             # Fail CLOSED on any transport/egress error — same rationale.
-            return default_rules()
+            return default_rules()  # ty: ignore[invalid-return-type]  # ty can't resolve default_rules() across the lazy (circular-avoiding) import
 
 
 # Lazily-built singleton redactor for outbound governance webhook payloads.
