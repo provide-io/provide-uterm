@@ -28,9 +28,10 @@ afterEach(() => {
 
 function clickAvatar(userId: string): void {
   // Avatars live in the presence bar host inserted before the terminal.
-  // Match on dataset (not a CSS selector) so the test harness itself does
-  // not depend on CSS.escape — we are exercising production code's lookup.
-  const wraps = parent.querySelectorAll<HTMLElement>(".dm-avatar-wrap");
+  const presenceBar = parent.querySelector("uterm-presence-bar");
+  if (!presenceBar || !presenceBar.shadowRoot) throw new Error("presence bar not found");
+  
+  const wraps = presenceBar.shadowRoot.querySelectorAll<HTMLElement>(".dm-avatar-wrap");
   let wrap: HTMLElement | null = null;
   for (const w of wraps) {
     if (w.dataset.userId === userId) wrap = w;
@@ -40,9 +41,12 @@ function clickAvatar(userId: string): void {
 }
 
 describe("DeckMux avatar lookup", () => {
-  it("avatar lookup survives a userId with CSS-special chars", () => {
+  it("avatar lookup survives a userId with CSS-special chars", async () => {
     const userId = 'a"]b';
     dm.handleMessage({ type: "dm_join", user_id: userId, name: "x", color: "#fff" });
+
+    const pb = parent.querySelector("uterm-presence-bar") as any;
+    if (pb) await pb.updateComplete;
 
     expect(() => clickAvatar(userId)).not.toThrow();
   });
