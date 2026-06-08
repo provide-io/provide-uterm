@@ -194,6 +194,27 @@ describe("ProvideHijack construction", () => {
     expect(session?.shadowRoot?.querySelector(".hijack-analysis")).toBeFalsy();
   });
 
+  it("chromeless mode renders the terminal only (no toolbar/input/mobile-keys/analysis)", () => {
+    // mobileKeys:true so the chrome short-circuit (not the per-config flag) is
+    // what drops the mobile-keys row.
+    const { widget, container } = makeWidget({ mobileKeys: true });
+    widget.chromeless = true;
+    flushLit(container);
+    const root = container.querySelector("uterm-session")?.shadowRoot;
+    expect(root?.querySelector(".hijack-terminal")).toBeTruthy();
+    expect(root?.querySelector(".hijack-toolbar")).toBeFalsy();
+    expect(root?.querySelector(".hijack-input-row")).toBeFalsy();
+    expect(root?.querySelector(".mobile-keys")).toBeFalsy();
+    expect(root?.querySelector(".hijack-analysis")).toBeFalsy();
+  });
+
+  it("chromeless reflects to an attribute so external embedders can toggle it", () => {
+    const { widget, container } = makeWidget();
+    widget.chromeless = true;
+    flushLit(container);
+    expect(container.querySelector("uterm-session")?.hasAttribute("chromeless")).toBe(true);
+  });
+
   it("defaults workerId to 'default' if not provided", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -687,7 +708,7 @@ describe("button clicks", () => {
     getWs().open();
     sendMessage({ type: "hijack_state", hijacked: true, owner: "other", input_mode: "hijack" });
     flushLit(container); // ensure rendered
-    
+
     const mkRow = q(container, "mobilekeys");
     if (mkRow) {
       const escBtn = Array.from(mkRow.querySelectorAll(".mkey")).find(
@@ -1173,7 +1194,7 @@ describe("button clicks (continued)", () => {
     // To satisfy the test, let's just make sure clicking them doesn't send anything.
     sendMessage({ type: "hijack_state", hijacked: true, owner: "other", input_mode: "hijack" });
     flushLit(container); // ensure rendered
-    
+
     const mkRow = q(container, "mobilekeys");
     if (mkRow) {
       const escBtn = Array.from(mkRow.querySelectorAll(".mkey")).find(
