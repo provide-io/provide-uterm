@@ -56,8 +56,9 @@ jobs:
       # the CF vendor tree, and package artifacts. Runs every check and reports
       # all failures (no fail-fast masking of later checks).
       - run: bash ci/quality_checks.sh
-      # Core-package pytest gate (playwright suites excluded — run separately).
-      - run: uv run python scripts/run_pytest_gate.py -q --ignore=packages/provide-uterm/tests/playwright/test_example.py --ignore=packages/provide-uterm/tests/playwright/test_frontend_coverage.py
+      # Core-package pytest gate, including the playwright browser suites (the
+      # example-page and V8-coverage suites are now reliable and gated here too).
+      - run: uv run python scripts/run_pytest_gate.py -q
       # Cloudflare worker / Durable Object test suite.
       - run: uv run pytest -q packages/provide-uterm-cloudflare/tests
 

@@ -6,6 +6,16 @@
 // We test it by setting up the DOM and globals before importing.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// hijack-page.ts now calls widget.connect() after mounting; register a stub
+// <uterm-session> so the generic element has the config/connect surface it uses.
+class _StubSession extends HTMLElement {
+  config: unknown = {};
+  connect(): void {}
+}
+if (!customElements.get("uterm-session")) {
+  customElements.define("uterm-session", _StubSession);
+}
+
 function setupDom(): void {
   document.body.innerHTML = `
     <div id="app"></div>
