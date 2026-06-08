@@ -114,8 +114,12 @@ addopts = [
     "-ra",
     "-m",
     "not playwright and not memray and not slow and not docker",
-    # Coverage source is the package root (see [tool.coverage.run].source);
-    # genuinely out-of-scope modules are listed in [tool.coverage.run].omit.
+    # Coverage scoped to this package's source dir. An import name can't be used
+    # (`provide.uterm` is a namespace shared by every package → would pull in
+    # server/client/cloudflare/… and report ~69%). This package-relative path
+    # only resolves when pytest's CWD is the package dir, so the gate MUST be run
+    # from here — CI and scripts/run_all_tests.py invoke it via
+    # `uv run --directory packages/provide-uterm pytest tests`. Waivers below.
     "--cov=src/provide/uterm",
     "--cov-branch",
     "--cov-report=term-missing",
@@ -130,11 +134,13 @@ addopts = [
 source = ["src/provide/uterm"]
 omit = [
     "tests/*",
-    # DEFERRED (CORE-cov follow-up): worker-side HijackableMixin checkpoint
-    # gating; substantial async-loop surface not yet under the 100% gate.
+    # DEFERRED (CORE-cov follow-up, tracked in docs/coverage-deferred.md):
+    # worker-side HijackableMixin checkpoint gating; substantial async-loop
+    # surface not yet under the 100% gate.
     "src/provide/uterm/bridge/base.py",
-    # DEFERRED (CORE-cov follow-up): asciinema-style recording writer; file-IO
-    # and rotation branches not yet fully covered.
+    # DEFERRED (CORE-cov follow-up, tracked in docs/coverage-deferred.md):
+    # asciinema-style recording writer; file-IO and rotation branches not yet
+    # fully covered.
     "src/provide/uterm/recording.py",
 ]
 branch = true
