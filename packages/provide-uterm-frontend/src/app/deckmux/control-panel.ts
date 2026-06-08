@@ -4,6 +4,7 @@
 //
 
 import type { ContextAction, DeckMuxUser } from "./types.js";
+import "./context-menu.js";
 
 const TOAST_AUTO_DISMISS_MS = 6_000;
 const KEYSTROKE_AUTO_HIDE_MS = 2_000;
@@ -37,57 +38,17 @@ export class DeckMuxControlPanel {
   ): void {
     this.hideContextMenu();
 
-    const menu = document.createElement("div");
-    menu.className = "dm-context-menu";
+    const menu = document.createElement("uterm-context-menu") as any;
+    menu.user = user;
+    menu.actions = actions.map((a) => ({
+      ...a,
+      onClick: () => {
+        this.hideContextMenu();
+        a.onClick();
+      },
+    }));
     menu.style.left = `${position.x}px`;
     menu.style.top = `${position.y}px`;
-
-    const header = document.createElement("div");
-    header.className = "dm-context-menu-header";
-
-    const dot = document.createElement("span");
-    dot.className = "dm-context-menu-dot";
-    dot.style.background = user.color;
-
-    const userName = document.createElement("span");
-    userName.textContent = user.name;
-
-    header.appendChild(dot);
-    header.appendChild(userName);
-    menu.appendChild(header);
-
-    for (const action of actions) {
-      const item = document.createElement("button");
-      item.className = "dm-context-menu-item";
-      if (action.danger) item.classList.add("dm-context-menu-item--danger");
-
-      const iconEl = document.createElement("span");
-      iconEl.className = "dm-context-menu-icon";
-      iconEl.textContent = action.icon;
-
-      const labelWrap = document.createElement("span");
-      labelWrap.className = "dm-context-menu-label-wrap";
-
-      const labelEl = document.createElement("span");
-      labelEl.className = "dm-context-menu-label";
-      labelEl.textContent = action.label;
-      labelWrap.appendChild(labelEl);
-
-      if (action.sublabel) {
-        const sub = document.createElement("span");
-        sub.className = "dm-context-menu-sublabel";
-        sub.textContent = action.sublabel;
-        labelWrap.appendChild(sub);
-      }
-
-      item.appendChild(iconEl);
-      item.appendChild(labelWrap);
-      item.addEventListener("click", () => {
-        this.hideContextMenu();
-        action.onClick();
-      });
-      menu.appendChild(item);
-    }
 
     this._contextMenu = menu;
     this._container.appendChild(menu);
