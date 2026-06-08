@@ -81,60 +81,60 @@ class _LifecycleMixin:
         push_worker_input: Any
 
     async def webSocketOpen(self, ws: CFWebSocket) -> None:  # noqa: N802
-        if self._deleted_at is not None:  # type: ignore[attr-defined]
+        if self._deleted_at is not None:
             with contextlib.suppress(Exception):
                 ws.close(1001, "session deleted")
             return
-        ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
-        role = self._socket_role(ws)  # type: ignore[attr-defined]
+        ws_id = self.ws_key(ws)
+        role = self._socket_role(ws)
         # Check before _register_socket so we can detect fetch()-initialized browser sockets.
         # fetch() sends hello before the 101 response; webSocketOpen() fires after the upgrade.
         # For the normal (non-hibernation) path the socket is already registered — skip hello.
-        already_initialized = ws_id in self.browser_sockets  # type: ignore[attr-defined]
-        self._register_socket(ws, role)  # type: ignore[attr-defined]
+        already_initialized = ws_id in self.browser_sockets
+        self._register_socket(ws, role)
         if role == "worker":
             self.worker_ws = ws
             self.lifecycle_state = "running"
-            await self.broadcast_worker_frame(  # type: ignore[attr-defined]
-                {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}  # type: ignore[attr-defined]
+            await self.broadcast_worker_frame(
+                {"type": "worker_connected", "worker_id": self.worker_id, "ts": time.time()}
             )
             await update_kv_session(
-                self.env,  # type: ignore[attr-defined]
-                self.worker_id,  # type: ignore[attr-defined]
+                self.env,
+                self.worker_id,
                 connected=True,
-                hijacked=self.hijack.session is not None,  # type: ignore[attr-defined]
-                input_mode=self.input_mode,  # type: ignore[attr-defined]
-                meta=self.meta,  # type: ignore[attr-defined]
+                hijacked=self.hijack.session is not None,
+                input_mode=self.input_mode,
+                meta=self.meta,
             )
         elif role == "raw":
-            self.raw_sockets[ws_id] = ws  # type: ignore[attr-defined]
-            if self.last_snapshot is not None and isinstance(self.last_snapshot.get("screen"), str):  # type: ignore[attr-defined]
-                await self._send_text(ws, str(self.last_snapshot.get("screen")))  # type: ignore[attr-defined]
+            self.raw_sockets[ws_id] = ws
+            if self.last_snapshot is not None and isinstance(self.last_snapshot.get("screen"), str):
+                await self._send_text(ws, str(self.last_snapshot.get("screen")))
         else:
-            self.browser_sockets[ws_id] = ws  # type: ignore[attr-defined]
-            browser_role = self._socket_browser_role(ws)  # type: ignore[attr-defined]
+            self.browser_sockets[ws_id] = ws
+            browser_role = self._socket_browser_role(ws)
             if not already_initialized:
                 # Hibernation-restore path: fetch() did not run for this connection, so
                 # send hello here.  For normal upgrades fetch() already sent it.
                 _open_resume_token = secrets.token_urlsafe(32)
-                _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))  # type: ignore[attr-defined]
-                self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)  # type: ignore[attr-defined]
-                self.browser_resume_tokens[ws_id] = _open_resume_token  # type: ignore[attr-defined]
-                await self.send_ws(  # type: ignore[attr-defined]
+                _open_resume_ttl = float(getattr(self.config, "resume_ttl_s", 300))
+                self.store.create_resume_token(_open_resume_token, self.worker_id, browser_role, _open_resume_ttl)
+                self.browser_resume_tokens[ws_id] = _open_resume_token
+                await self.send_ws(
                     ws,
                     {
                         "type": "hello",
-                        "worker_id": self.worker_id,  # type: ignore[attr-defined]
-                        "worker_online": self.worker_ws is not None or self._ushell is not None,  # type: ignore[attr-defined]
+                        "worker_id": self.worker_id,
+                        "worker_online": self.worker_ws is not None or self._ushell is not None,
                         # can_hijack and role reflect the JWT-resolved browser role.
                         "can_hijack": browser_role == "admin",
-                        "input_mode": self.input_mode,  # type: ignore[attr-defined]
+                        "input_mode": self.input_mode,
                         "role": browser_role,
                         "hijack_control": "rest",
                         "hijack_step_supported": True,
                         "resume_supported": True,
                         "resume_token": _open_resume_token,
-                        "presence_enabled": bool(self.meta.get("presence")),  # type: ignore[attr-defined]
+                        "presence_enabled": bool(self.meta.get("presence")),
                         "protocol_version": CURRENT_PROTOCOL_VERSION,
                         "protocol": {
                             "selected": PREFERRED_PROTOCOL_VERSION,
@@ -144,25 +144,25 @@ class _LifecycleMixin:
                         "ts": time.time(),
                     },
                 )
-            await self._maybe_send_presence_sync(ws, exclude_self=True)  # type: ignore[attr-defined]
-            await self.send_hijack_state(ws)  # type: ignore[attr-defined]
-            if self.last_snapshot is not None:  # type: ignore[attr-defined]
-                await self.send_ws(ws, self.last_snapshot)  # type: ignore[attr-defined]
+            await self._maybe_send_presence_sync(ws, exclude_self=True)
+            await self.send_hijack_state(ws)
+            if self.last_snapshot is not None:
+                await self.send_ws(ws, self.last_snapshot)
             # For ushell sessions, broadcast worker_connected + welcome on first browser join.
             await on_browser_connected(self)
 
     async def webSocketMessage(self, ws: CFWebSocket, message: Any) -> None:  # noqa: N802
-        if self._deleted_at is not None:  # type: ignore[attr-defined]
+        if self._deleted_at is not None:
             with contextlib.suppress(Exception):
                 ws.close(1001, "session deleted")
             return
-        role = self._socket_role(ws)  # type: ignore[attr-defined]
-        self._register_socket(ws, role)  # type: ignore[attr-defined]
+        role = self._socket_role(ws)
+        self._register_socket(ws, role)
         if role == "raw":
             payload = (
                 message.decode("latin-1", errors="replace") if isinstance(message, (bytes, bytearray)) else str(message)
             )
-            await self.push_worker_input(payload)  # type: ignore[attr-defined]
+            await self.push_worker_input(payload)
             return
 
         # Tunnel protocol: binary frames from the tunnel agent (worker role).
@@ -190,52 +190,44 @@ class _LifecycleMixin:
 
     async def webSocketClose(self, ws: CFWebSocket, code: int, reason: str, was_clean: bool = True) -> None:  # noqa: N802
         _ = (code, reason, was_clean)
-        deleted = self._deleted_at is not None  # type: ignore[attr-defined]
+        deleted = self._deleted_at is not None
         # Use _socket_role() instead of `ws is self.worker_ws` — after hibernation,
         # self.worker_ws is None so the identity check would always be False.
-        role = self._socket_role(ws)  # type: ignore[attr-defined]
-        wid = self._socket_worker_id(ws)  # type: ignore[attr-defined]
+        role = self._socket_role(ws)
+        wid = self._socket_worker_id(ws)
         if role == "browser" and not deleted:
-            ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
-            if self.meta.get("presence"):  # type: ignore[attr-defined]
-                await self.broadcast_to_browsers(  # type: ignore[attr-defined]
-                    {"type": "presence_leave", "user_id": ws_id, "ts": time.time()}
-                )
+            ws_id = self.ws_key(ws)
+            if self.meta.get("presence"):
+                await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
             # Mark the resume token as hijack owner before removing socket, so the
             # browser can reclaim ownership on reconnect.
-            if ws_id in self.browser_hijack_owner:  # type: ignore[attr-defined]
-                token = self.browser_resume_tokens.get(ws_id)  # type: ignore[attr-defined]
+            if ws_id in self.browser_hijack_owner:
+                token = self.browser_resume_tokens.get(ws_id)
                 if token:
-                    self.store.mark_resume_hijack_owner(token, True)  # type: ignore[attr-defined]
-        self._remove_ws(ws)  # type: ignore[attr-defined]
+                    self.store.mark_resume_hijack_owner(token, True)
+        self._remove_ws(ws)
         if role == "worker":
             if not deleted:
                 self.lifecycle_state = "stopped"
-                await self.broadcast_worker_frame(  # type: ignore[attr-defined]
-                    {"type": "worker_disconnected", "worker_id": wid, "ts": time.time()}
-                )
-            await update_kv_session(self.env, wid, connected=False)  # type: ignore[attr-defined]
+                await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
+            await update_kv_session(self.env, wid, connected=False)
 
     async def webSocketError(self, ws: CFWebSocket, error: Any) -> None:  # noqa: N802
-        role = self._socket_role(ws)  # type: ignore[attr-defined]
-        wid = self._socket_worker_id(ws)  # type: ignore[attr-defined]
+        role = self._socket_role(ws)
+        wid = self._socket_worker_id(ws)
         logger.warning("ws_error worker_id=%s role=%s error=%s", wid, role, error)
-        deleted = self._deleted_at is not None  # type: ignore[attr-defined]
+        deleted = self._deleted_at is not None
         if role == "browser" and not deleted:
-            ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
-            if self.meta.get("presence"):  # type: ignore[attr-defined]
-                await self.broadcast_to_browsers(  # type: ignore[attr-defined]
-                    {"type": "presence_leave", "user_id": ws_id, "ts": time.time()}
-                )
-            if ws_id in self.browser_hijack_owner:  # type: ignore[attr-defined]
-                token = self.browser_resume_tokens.get(ws_id)  # type: ignore[attr-defined]
+            ws_id = self.ws_key(ws)
+            if self.meta.get("presence"):
+                await self.broadcast_to_browsers({"type": "presence_leave", "user_id": ws_id, "ts": time.time()})
+            if ws_id in self.browser_hijack_owner:
+                token = self.browser_resume_tokens.get(ws_id)
                 if token:
-                    self.store.mark_resume_hijack_owner(token, True)  # type: ignore[attr-defined]
-        self._remove_ws(ws)  # type: ignore[attr-defined]
+                    self.store.mark_resume_hijack_owner(token, True)
+        self._remove_ws(ws)
         if role == "worker":
             if not deleted:
                 self.lifecycle_state = "error"
-                await self.broadcast_worker_frame(  # type: ignore[attr-defined]
-                    {"type": "worker_disconnected", "worker_id": wid, "ts": time.time()}
-                )
-            await update_kv_session(self.env, wid, connected=False)  # type: ignore[attr-defined]
+                await self.broadcast_worker_frame({"type": "worker_disconnected", "worker_id": wid, "ts": time.time()})
+            await update_kv_session(self.env, wid, connected=False)

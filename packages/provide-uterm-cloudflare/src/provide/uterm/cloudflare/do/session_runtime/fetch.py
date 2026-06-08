@@ -117,8 +117,8 @@ class _FetchMixin:
                 status=404,
                 headers={"content-type": "application/json"},
             )
-        await self._ensure_meta()  # type: ignore[attr-defined]
-        await self._ensure_credentials()  # type: ignore[attr-defined]
+        await self._ensure_meta()
+        await self._ensure_credentials()
 
         # Parse URL once — reused for worker WS check and socket role routing.
         upgrade_header = str(request.headers.get("Upgrade") or "").lower()
@@ -157,7 +157,7 @@ class _FetchMixin:
             )
             _principal, auth_error = None, None
         else:
-            _principal, auth_error = await self.resolve_principal(request)  # type: ignore[attr-defined]
+            _principal, auth_error = await self.resolve_principal(request)
             if auth_error is not None:
                 return auth_error
         if upgrade_header == "websocket":
@@ -186,12 +186,12 @@ class _FetchMixin:
                         status=403,
                         headers={"content-type": "application/json"},
                     )
-                browser_role = await self.browser_role_for_request(request)  # type: ignore[attr-defined]
+                browser_role = await self.browser_role_for_request(request)
                 # Enforce session visibility before upgrading browser WebSockets.
                 # Only browser sockets carry a JWT and require visibility checks.
                 visibility = str(self.meta.get("visibility") or "public")
                 if visibility != "public" and browser_role != "admin":
-                    subject = await self.browser_subject_for_request(request)  # type: ignore[attr-defined]
+                    subject = await self.browser_subject_for_request(request)
                     owner = self.meta.get("owner")
                     permitted = subject is not None and subject == owner
                     if not permitted and visibility == "operator":
@@ -203,8 +203,8 @@ class _FetchMixin:
                             headers={"content-type": "application/json"},
                         )
 
-            client, server = WebSocketPair.new().object_values()  # type: ignore[union-attr]
-            self.ctx.acceptWebSocket(server)  # type: ignore[attr-defined]
+            client, server = WebSocketPair.new().object_values()
+            self.ctx.acceptWebSocket(server)
             try:
                 # Encode socket type, browser role, and worker_id for hibernation safety.
                 # Format: "browser:admin:e2e-abc123", "worker:admin:e2e-abc123", "raw:admin:e2e-abc123"
@@ -220,7 +220,7 @@ class _FetchMixin:
                 server._ut_browser_role = browser_role
             # Register here so the role is available if fetch() is re-entered
             # before webSocketOpen() fires (hibernation-restore path).
-            self._register_socket(server, socket_role)  # type: ignore[attr-defined]  # server is Any from WebSocketPair
+            self._register_socket(server, socket_role)  # server is Any from WebSocketPair
 
             # For worker connections, write KV registration eagerly in fetch() before
             # returning 101. In CF hibernation mode, async operations in webSocketOpen()
@@ -246,7 +246,7 @@ class _FetchMixin:
                 resume_token = secrets.token_urlsafe(32)
                 resume_ttl_s = float(getattr(self.config, "resume_ttl_s", 300))
                 self.store.create_resume_token(resume_token, self.worker_id, browser_role, resume_ttl_s)
-                self.browser_resume_tokens[self.ws_key(server)] = resume_token  # type: ignore[attr-defined]  # server is Any
+                self.browser_resume_tokens[self.ws_key(server)] = resume_token  # server is Any
                 try:
                     server.send(
                         encode_control(
@@ -275,7 +275,7 @@ class _FetchMixin:
                 except Exception as exc:
                     logger.warning("failed to send hello from fetch(): %s", exc)
                 try:
-                    await self._maybe_send_presence_sync(server, exclude_self=False)  # type: ignore[attr-defined]
+                    await self._maybe_send_presence_sync(server, exclude_self=False)
                 except Exception as exc:  # pragma: no cover — requires real WS upgrade + presence
                     logger.warning("failed to send presence_sync from fetch(): %s", exc)
 

@@ -114,11 +114,11 @@ class _SessionRuntimeIoMixin:
     # ------------------------------------------------------------------
 
     def _restore_state(self) -> None:
-        saved_meta = self.store.load_session_meta(self.worker_id)  # type: ignore[attr-defined]
+        saved_meta = self.store.load_session_meta(self.worker_id)
         if saved_meta is not None:
             self.meta = saved_meta
             self._meta_loaded = True
-        row = self.store.load_session(self.worker_id)  # type: ignore[attr-defined]
+        row = self.store.load_session(self.worker_id)
         if row is None:
             return
         deleted_at = row.get("deleted_at")
@@ -137,7 +137,7 @@ class _SessionRuntimeIoMixin:
             and isinstance(lease_expires_at, (float, int))
             and float(lease_expires_at) > time.time()
         ):
-            self.hijack._session = HijackSession(  # type: ignore[attr-defined]
+            self.hijack._session = HijackSession(
                 hijack_id=hijack_id,
                 owner=owner,
                 lease_expires_at=_wall_to_mono(float(lease_expires_at)),
@@ -156,12 +156,12 @@ class _SessionRuntimeIoMixin:
     async def request_json(self, request: Any) -> dict[str, Any]:
         # Require application/json so a CSRF "simple request" (text/plain or a form
         # encoding — both skip the CORS preflight) cannot deliver a parseable body.
-        content_type = str(request.headers.get("Content-Type") or "").lower()  # type: ignore[attr-defined]
+        content_type = str(request.headers.get("Content-Type") or "").lower()
         if "application/json" not in content_type:
             logger.warning("request_json: rejected non-JSON content-type %r", content_type)
             return {}
 
-        body = await request.text()  # type: ignore[attr-defined]
+        body = await request.text()
         if not body:
             return {}
         if len(body) > _MAX_REQUEST_BODY:
@@ -173,21 +173,21 @@ class _SessionRuntimeIoMixin:
         return value
 
     def persist_lease(self, session: HijackSession | None) -> None:
-        _persist_lease(self.store, self.ctx, self.worker_id, session, LeaseRecord)  # type: ignore[attr-defined]
+        _persist_lease(self.store, self.ctx, self.worker_id, session, LeaseRecord)
 
     def clear_lease(self) -> None:
-        _clear_lease(self.store, self.worker_id)  # type: ignore[attr-defined]
+        _clear_lease(self.store, self.worker_id)
 
     # ------------------------------------------------------------------
     # Hijack state broadcast
     # ------------------------------------------------------------------
 
     async def send_hijack_state(self, ws: CFWebSocket) -> None:
-        ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
-        session = self.hijack.session  # type: ignore[attr-defined]
+        ws_id = self.ws_key(ws)
+        session = self.hijack.session
         owner = None
         if session is not None:
-            owner = "me" if self.browser_hijack_owner.get(ws_id) == session.hijack_id else "other"  # type: ignore[attr-defined]
+            owner = "me" if self.browser_hijack_owner.get(ws_id) == session.hijack_id else "other"
         await self.send_ws(
             ws,
             {
@@ -201,12 +201,12 @@ class _SessionRuntimeIoMixin:
         )
 
     async def broadcast_hijack_state(self) -> None:
-        for ws_id, ws in list(self.browser_sockets.items()):  # type: ignore[attr-defined]
+        for ws_id, ws in list(self.browser_sockets.items()):
             try:
                 await self.send_hijack_state(ws)
             except Exception:
-                self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
-                self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
+                self.browser_sockets.pop(ws_id, None)
+                self.browser_hijack_owner.pop(ws_id, None)
 
     # ------------------------------------------------------------------
     # Worker I/O
@@ -214,27 +214,27 @@ class _SessionRuntimeIoMixin:
 
     async def push_worker_control(self, action: str, *, owner: str, lease_s: int) -> bool:
         # ushell acknowledges control frames as no-ops (always returns True).
-        if self._ushell is not None:  # type: ignore[attr-defined]
-            await self._ushell.handle_control(action)  # type: ignore[attr-defined]
+        if self._ushell is not None:
+            await self._ushell.handle_control(action)
             return True
-        if self.worker_ws is None:  # type: ignore[attr-defined]
+        if self.worker_ws is None:
             return False
         await self.send_ws(
-            self.worker_ws,  # type: ignore[attr-defined]
+            self.worker_ws,
             {"type": "control", "action": action, "owner": owner, "lease_s": lease_s, "ts": time.time()},
         )
         return True
 
     async def push_worker_input(self, data: str) -> bool:
         # Route input to ushell when active; fall back to external worker WS.
-        if self._ushell is not None:  # type: ignore[attr-defined]
-            frames = await self._ushell.handle_input(data)  # type: ignore[attr-defined]
+        if self._ushell is not None:
+            frames = await self._ushell.handle_input(data)
             for frame in frames:
                 await self.broadcast_to_browsers(frame)
             return True
-        if self.worker_ws is None:  # type: ignore[attr-defined]
+        if self.worker_ws is None:
             return False
-        await self.send_ws(self.worker_ws, {"type": "input", "data": data, "ts": time.time()})  # type: ignore[attr-defined]
+        await self.send_ws(self.worker_ws, {"type": "input", "data": data, "ts": time.time()})
         return True
 
     async def broadcast_to_browsers(self, payload: dict[str, Any]) -> None:
@@ -242,16 +242,16 @@ class _SessionRuntimeIoMixin:
         # to enumerate all live sockets. In local pywrangler dev, ctx.getWebSockets()
         # returns [] (no hibernation state) — fall back to the in-memory dict when empty.
         try:
-            all_ws = list(self.ctx.getWebSockets())  # type: ignore[attr-defined]
+            all_ws = list(self.ctx.getWebSockets())
         except Exception:
             all_ws = []
         if not all_ws:
-            all_ws = list(self.browser_sockets.values())  # type: ignore[attr-defined]
+            all_ws = list(self.browser_sockets.values())
         frame_type = str(payload.get("type") or "")
         for ws in all_ws:
-            if self._socket_role(ws) != "browser":  # type: ignore[attr-defined]
+            if self._socket_role(ws) != "browser":
                 continue
-            ws_id = self.ws_key(ws)  # type: ignore[attr-defined]
+            ws_id = self.ws_key(ws)
             # Tier B: drop high-volume term frames to a congested viewer so one slow
             # viewer can't stall the producer for everyone. It is resynced with a
             # fresh snapshot once it drains below low-water (see _apply_flow_control).
@@ -289,8 +289,8 @@ class _SessionRuntimeIoMixin:
                     # guard and is dropped.
                     self._queue_bytes = max(0, self._queue_bytes - msg_len)
             except Exception:
-                self.browser_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
-                self.browser_hijack_owner.pop(ws_id, None)  # type: ignore[attr-defined]
+                self.browser_sockets.pop(ws_id, None)
+                self.browser_hijack_owner.pop(ws_id, None)
                 self._flow.forget(ws_id)
         await self._apply_flow_control()
 
@@ -351,7 +351,7 @@ class _SessionRuntimeIoMixin:
         ``_MAX_INFLIGHT_WEBHOOKS`` new deliveries are dropped rather than allowed
         to grow without bound under a high-throughput stream.
         """
-        webhooks = self.store.load_webhooks(self.worker_id)  # type: ignore[attr-defined]
+        webhooks = self.store.load_webhooks(self.worker_id)
         if not webhooks:
             return  # common case — nothing configured, don't schedule a task
         if len(self._webhook_tasks) >= _MAX_INFLIGHT_WEBHOOKS:
@@ -366,7 +366,7 @@ class _SessionRuntimeIoMixin:
         task.add_done_callback(self._webhook_tasks.discard)
 
     async def broadcast_worker_frame(self, payload: dict[str, Any]) -> None:
-        event = self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)  # type: ignore[attr-defined]
+        event = self.store.append_event(self.worker_id, str(payload.get("type") or "event"), payload)
         await self.broadcast_to_browsers(payload)
         self._spawn_webhook_delivery(event)
 
@@ -386,38 +386,38 @@ class _SessionRuntimeIoMixin:
         if text_payload is None:
             return
 
-        for ws_id, ws in list(self.raw_sockets.items()):  # type: ignore[attr-defined]
+        for ws_id, ws in list(self.raw_sockets.items()):
             try:
-                await self._send_text(ws, text_payload)  # type: ignore[attr-defined]
+                await self._send_text(ws, text_payload)
             except Exception:
-                self.raw_sockets.pop(ws_id, None)  # type: ignore[attr-defined]
+                self.raw_sockets.pop(ws_id, None)
 
     async def alarm(self) -> None:
         mono_now = time.monotonic()
         wall_now = time.time()
-        session = self.hijack.session  # type: ignore[attr-defined]
+        session = self.hijack.session
         if session is not None and session.lease_expires_at <= mono_now:
             logger.info("alarm: auto-releasing expired lease owner=%s", session.owner)
-            self.hijack.release(session.hijack_id)  # type: ignore[attr-defined]
+            self.hijack.release(session.hijack_id)
             self.clear_lease()
             with contextlib.suppress(Exception):
                 await self.push_worker_control("resume", owner="lease_expired", lease_s=0)
             await self.broadcast_hijack_state()
-        if self.worker_ws is not None or self._ushell is not None:  # type: ignore[attr-defined]
+        if self.worker_ws is not None or self._ushell is not None:
             await update_kv_session(
-                self.env,  # type: ignore[attr-defined]
+                self.env,
                 self.worker_id,
                 connected=True,
-                hijacked=self.hijack.session is not None,  # type: ignore[attr-defined]
+                hijacked=self.hijack.session is not None,
                 input_mode=self.input_mode,
             )
-            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
+            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
                 _s.setAlarm(int((wall_now + KV_REFRESH_S) * 1000))
-        elif self.hijack.session is not None:  # type: ignore[attr-defined]
-            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):  # type: ignore[attr-defined]
+        elif self.hijack.session is not None:
+            if (_s := getattr(self.ctx, "storage", None)) is not None and callable(getattr(_s, "setAlarm", None)):
                 # ``self.hijack.session.lease_expires_at`` is a non-None float
                 # (the surrounding branch already gated on ``session is not
                 # None``), so ``_mono_to_wall`` cannot return None here.
-                lease_wall = _mono_to_wall(self.hijack.session.lease_expires_at)  # type: ignore[attr-defined]
+                lease_wall = _mono_to_wall(self.hijack.session.lease_expires_at)
                 assert lease_wall is not None
                 _s.setAlarm(int(lease_wall * 1000))
