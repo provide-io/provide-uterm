@@ -77,7 +77,7 @@ def terminal_decoder_server() -> Generator[str, None, None]:
         from provide.uterm.server.ui import _resolve_vanilla_asset
 
         script_path = _resolve_vanilla_asset("src/terminal.ts")
-        page_html = f"""<!DOCTYPE html>
+        return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
