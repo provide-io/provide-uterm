@@ -34,6 +34,10 @@ class HijackDemoPage {
     const widget = document.createElement("uterm-session") as any;
     widget.config = { workerId: this.workerId };
     appElement.appendChild(widget);
+    // The element does not auto-connect (connectedCallback only initialises
+    // state); open the WebSocket explicitly. config is set before append, so
+    // connectedCallback already saw the right workerId.
+    widget.connect();
     this.widget = widget;
     requireElement<HTMLButtonElement>("#demo-apply").addEventListener("click", () => {
       void this.applyMode();
