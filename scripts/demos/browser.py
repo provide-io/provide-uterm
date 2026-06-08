@@ -19,10 +19,13 @@ if TYPE_CHECKING:
     from scripts.demos.server import BrowserStep
 
 
-def wait_for_terminal(page: Page, uid: int = 1, timeout: float = 15.0) -> bool:
+def wait_for_terminal(page: Page, timeout: float = 15.0) -> bool:
     """Wait for xterm.js to render content into the DOM. Returns True on success."""
     try:
-        page.locator(f"#h-{uid}-terminal .xterm-rows span").first.wait_for(state="attached", timeout=timeout * 1000)
+        # Playwright locators pierce the <uterm-session> open shadow root; the
+        # terminal renders `.xterm-rows` whether the page mounts the session
+        # widget (shadow DOM) or the bare <uterm-terminal> (light DOM).
+        page.locator(".xterm-rows span").first.wait_for(state="attached", timeout=timeout * 1000)
         return True
     except Exception:
         return False
@@ -31,41 +34,40 @@ def wait_for_terminal(page: Page, uid: int = 1, timeout: float = 15.0) -> bool:
 def wait_for_presence_bar(page: Page, min_users: int = 2, timeout: float = 10.0) -> bool:
     """Wait for DeckMux presence bar with at least min_users avatars. Returns True/False."""
     try:
-        page.wait_for_function(
-            f"document.querySelectorAll('.dm-presence-bar .dm-avatar').length >= {min_users}",
-            timeout=timeout * 1000,
-        )
+        # Avatars live inside the <uterm-presence-bar> shadow root, which a plain
+        # document.querySelectorAll can't see; a Playwright locator pierces it.
+        # Waiting for the (min_users-1)th node asserts the count is reached.
+        page.locator(".dm-avatar").nth(min_users - 1).wait_for(state="attached", timeout=timeout * 1000)
         return True
     except Exception:
         return False
 
 
-def type_in_terminal(page: Page, text: str, uid: int = 1) -> None:
+def type_in_terminal(page: Page, text: str) -> None:
     """Send input to the terminal via the hijack input row."""
-    field = page.locator(f"#h-{uid}-inputfield")
+    field = page.locator("#inputfield")
     field.fill(text)
-    page.locator(f"#h-{uid}-inputsend").click()
+    page.locator("#inputsend").click()
 
 
-def wait_for_status(page: Page, text: str, uid: int = 1, timeout: float = 10.0) -> bool:
+def wait_for_status(page: Page, text: str, timeout: float = 10.0) -> bool:
     """Wait for the status text element to contain `text`. Returns True/False."""
     try:
-        page.locator(f"#h-{uid}-statustext", has_text=text).wait_for(state="visible", timeout=timeout * 1000)
+        page.locator("#statustext", has_text=text).wait_for(state="visible", timeout=timeout * 1000)
         return True
     except Exception:
         return False
 
 
-def click_hijack(page: Page, uid: int = 1, timeout: float = 10.0) -> bool:
+def click_hijack(page: Page, timeout: float = 10.0) -> bool:
     """Wait for the hijack button and click it. Returns True/False."""
-    btn = page.locator(f"#h-{uid}-hijack")
+    btn = page.locator("#hijack")
     try:
         btn.wait_for(state="visible", timeout=timeout * 1000)
-        page.wait_for_function(
-            f"!document.getElementById('h-{uid}-hijack')?.disabled",
-            timeout=timeout * 1000,
-        )
-        btn.click()
+        # Playwright's click() runs actionability checks (including waiting for
+        # the button to become enabled), so the old getElementById disabled-poll
+        # — which couldn't see into the shadow root anyway — is unnecessary.
+        btn.click(timeout=timeout * 1000)
         return True
     except Exception:
         return False
