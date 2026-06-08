@@ -21,14 +21,12 @@ function initTerminalPage(): void {
   if (!(container instanceof HTMLElement)) {
     throw new Error("Missing #app container");
   }
-  const TerminalWidget = window.ProvideTerminal;
-  if (typeof TerminalWidget !== "function") {
-    throw new Error("ProvideTerminal is not available");
-  }
-  window.demoTerminal = new TerminalWidget(container, {
+  const widget = document.createElement("uterm-terminal") as any;
+  widget.config = {
     wsUrl: resolveWsPath(),
     title: "Provide Terminal Cloudflare",
-  });
+  };
+  container.appendChild(widget);
 }
 
 initTerminalPage();

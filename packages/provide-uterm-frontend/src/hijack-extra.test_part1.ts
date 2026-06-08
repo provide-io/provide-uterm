@@ -4,7 +4,8 @@
 //
 // Additional branch coverage tests for hijack.ts to supplement hijack.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProvideHijack } from "./hijack.js";
+import { UtermSessionElement } from "./session-element.js";
+import "./session-element.js";
 import { encodeControlFrame } from "./hijack-codec.js";
 
 class MockWebSocket {
@@ -82,7 +83,12 @@ function getWs(): MockWebSocket {
 function makeWidget(opts: Record<string, unknown> = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const widget = new ProvideHijack(container, { workerId: "test-worker", ...opts });
+  const widget = document.createElement("uterm-session") as UtermSessionElement;
+  widget.config = { workerId: "test-worker", ...opts };
+  container.appendChild(widget);
+  if (widget.connect) {
+    widget.connect();
+  }
   flushLit(container);
   return { widget, container };
 }
@@ -277,7 +283,7 @@ describe("hijack.ts branch coverage - constructor config variants", () => {
   it("constructs with custom wsUrl (absolute)", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { wsUrl: "ws://custom-host/ws" });
+    const { widget } = makeWidget({ wsUrl: "ws://custom-host/ws" });
     expect(instances.length).toBeGreaterThan(0);
     expect(instances[instances.length - 1].url).toBe("ws://custom-host/ws");
     widget.disconnect();
@@ -287,7 +293,7 @@ describe("hijack.ts branch coverage - constructor config variants", () => {
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { wsUrl: "/custom/ws/path" });
+    const { widget } = makeWidget({ wsUrl: "/custom/ws/path" });
     expect(instances[instances.length - 1].url).toBe("ws://localhost/custom/ws/path");
     widget.disconnect();
   });
@@ -296,7 +302,7 @@ describe("hijack.ts branch coverage - constructor config variants", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "worker-1" });
+    const { widget } = makeWidget({ workerId: "worker-1" });
     expect(instances[instances.length - 1].url).toContain("wss://");
     widget.disconnect();
   });
@@ -305,7 +311,7 @@ describe("hijack.ts branch coverage - constructor config variants", () => {
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w1", wsPathPrefix: "/custom/path" });
+    const { widget } = makeWidget({ workerId: "w1", wsPathPrefix: "/custom/path" });
     expect(instances[instances.length - 1].url).toContain("/custom/path/w1/term");
     widget.disconnect();
   });
@@ -363,7 +369,7 @@ describe("hijack.ts branch coverage - disconnect/dispose", () => {
     const container = document.createElement("div");
     // Don't append to body — root.parentNode will be null after manual removal
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "test" });
+    const { widget } = makeWidget({ workerId: "test" });
     // Remove root from container before dispose
     const ws = getWs();
     ws.open();
@@ -942,7 +948,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
+    const { widget } = makeWidget({ workerId: "w", authToken: "shh-secret" });
     expect(getWs().url).toBe("wss://secure.example.com/ws/browser/w/term");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
@@ -954,7 +960,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
+    const { widget } = makeWidget({ workerId: "w", authToken: "shh-secret" });
     expect(getWs().url).toBe("ws://localhost/ws/browser/w/term");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
@@ -966,7 +972,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w" });
+    const { widget } = makeWidget({ workerId: "w" });
     expect(getWs().url).not.toContain("token=");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
@@ -978,7 +984,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh" });
+    const { widget } = makeWidget({ workerId: "w", authToken: "shh" });
     // Trigger a reconnect by closing the WS
     getWs().close();
     vi.advanceTimersByTime(1200); // past 1s backoff → second connect
@@ -1057,7 +1063,7 @@ describe("ProvideHijack snapshot reset emits real ESC sequence (Finding #5 guard
     const { widget } = makeWidget();
     getWs().open();
     const term = new MockTerminal();
-    (widget as any)._sessionElement._hijackState.term = term;
+    (widget as any)._hijackState.term = term;
     sendMessage({ type: "snapshot", screen: "hello" });
     // The very first frame after the snapshot handler runs is the reset sequence.
     expect(term.written[0]).toBe("\x1b[!p\x1b[2J\x1b[H");
@@ -1469,7 +1475,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
+    const { widget } = makeWidget({ workerId: "w", authToken: "shh-secret" });
     expect(getWs().url).toBe("wss://secure.example.com/ws/browser/w/term");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
@@ -1481,7 +1487,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh-secret" });
+    const { widget } = makeWidget({ workerId: "w", authToken: "shh-secret" });
     expect(getWs().url).toBe("ws://localhost/ws/browser/w/term");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
@@ -1493,7 +1499,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w" });
+    const { widget } = makeWidget({ workerId: "w" });
     expect(getWs().url).not.toContain("token=");
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("?token=…"));
     widget.disconnect();
@@ -1505,7 +1511,7 @@ describe("hijack-websocket.ts cookie-only auth", () => {
     vi.stubGlobal("location", { protocol: "https:", host: "secure.example.com" });
     const container = document.createElement("div");
     document.body.appendChild(container);
-    const widget = new ProvideHijack(container, { workerId: "w", authToken: "shh" });
+    const { widget } = makeWidget({ workerId: "w", authToken: "shh" });
     // Trigger a reconnect by closing the WS
     getWs().close();
     vi.advanceTimersByTime(1200); // past 1s backoff → second connect
@@ -1584,7 +1590,7 @@ describe("ProvideHijack snapshot reset emits real ESC sequence (Finding #5 guard
     const { widget } = makeWidget();
     getWs().open();
     const term = new MockTerminal();
-    (widget as any)._sessionElement._hijackState.term = term;
+    (widget as any)._hijackState.term = term;
     sendMessage({ type: "snapshot", screen: "hello" });
     // The very first frame after the snapshot handler runs is the reset sequence.
     expect(term.written[0]).toBe("\x1b[!p\x1b[2J\x1b[H");

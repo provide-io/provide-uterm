@@ -4,10 +4,22 @@
 //
 
 import { DeckMux } from "@provide-uterm-frontend/app/deckmux/deckmux";
-import type { ProvideHijackInstance } from "@provide-uterm-frontend/server-common";
+import type { UtermSessionElement } from "@provide-uterm-frontend/session-element";
+import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import { useEffect, useRef } from "react";
 import type { SessionSurface } from "../../api/types";
 import { useTerminalStore } from "../../stores/terminalStore";
+
+declare module "react" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "uterm-session": DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
+        config?: unknown;
+        ref?: Ref<UtermSessionElement>;
+      };
+    }
+  }
+}
 
 interface HijackHostProps {
   sessionId: string;
@@ -15,18 +27,13 @@ interface HijackHostProps {
 }
 
 export function HijackHost({ sessionId, surface }: HijackHostProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<UtermSessionElement>(null);
   const mountedRef = useRef(false);
   const setMounted = useTerminalStore((s) => s.setMounted);
   const setDimensions = useTerminalStore((s) => s.setDimensions);
 
   useEffect(() => {
     if (mountedRef.current || !containerRef.current) return;
-    const HijackCtor = window.ProvideHijack;
-    if (typeof HijackCtor !== "function") {
-      setMounted(false, "ProvideHijack is not available — ensure hijack.js is loaded");
-      return;
-    }
     const isOperator = surface === "operator";
     mountedRef.current = true;
     setMounted(true);
@@ -34,15 +41,15 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
     // DeckMux state — lazily initialised on first presence_sync
     let deckMux: DeckMux | null = null;
     const presenceUsers = new Map<string, { name: string; color: string }>();
-    const container = containerRef.current;
+    const widget = containerRef.current;
     const ownDimsRef = { cols: 0, rows: 0 };
     let myUserId: string | null = null;
 
-    const widget = new HijackCtor(container, {
+    widget.config = {
       workerId: sessionId,
       showAnalysis: isOperator,
       mobileKeys: isOperator,
-      onResize: (cols, rows) => {
+      onResize: (cols: number, rows: number) => {
         setDimensions(cols, rows);
         ownDimsRef.cols = cols;
         ownDimsRef.rows = rows;
@@ -123,7 +130,10 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
           }
         }
       },
-    });
+    };
+    
+    // Explicitly connect the session
+    widget.connect();
 
     // Forward xterm scroll events → presence_update (normalized to 0-1 fractions).
     // Named (not inline) so the cleanup can removeEventListener it — see return below.
@@ -140,14 +150,14 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
         scroll_range: [normTop, normBottom],
       });
     };
-    container.addEventListener("uterm:scroll", onScroll);
+    widget.addEventListener("uterm:scroll", onScroll);
 
     // Forward DeckMux outbound events → WS (request_control and hand_off both ask for control)
     const onRequestControl = () => {
       widget.sendControlMessage({ type: "control_request" });
     };
-    container.addEventListener("deckmux:request_control", onRequestControl);
-    container.addEventListener("deckmux:hand_off", onRequestControl);
+    widget.addEventListener("deckmux:request_control", onRequestControl);
+    widget.addEventListener("deckmux:hand_off", onRequestControl);
 
     // Keepalive: send dims every 15 s so server-side idle pruning can evict dead connections
     const keepaliveInterval = setInterval(() => {
@@ -157,13 +167,14 @@ export function HijackHost({ sessionId, surface }: HijackHostProps) {
     }, 15_000);
 
     return () => {
-      container.removeEventListener("uterm:scroll", onScroll);
-      container.removeEventListener("deckmux:request_control", onRequestControl);
-      container.removeEventListener("deckmux:hand_off", onRequestControl);
+      widget.removeEventListener("uterm:scroll", onScroll);
+      widget.removeEventListener("deckmux:request_control", onRequestControl);
+      widget.removeEventListener("deckmux:hand_off", onRequestControl);
       clearInterval(keepaliveInterval);
-      widget.dispose();
+      mountedRef.current = false;
     };
   }, [sessionId, surface, setMounted, setDimensions]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+  return <uterm-session ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }
+

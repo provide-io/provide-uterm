@@ -56,15 +56,6 @@ def _resolve_vanilla_asset(entry_name: str) -> str:
     return entry_name.split("/")[-1].replace(".ts", ".js")
 
 
-def _resolve_vanilla_css(entry_name: str) -> list[str]:
-    manifest = _read_vanilla_manifest()
-    if manifest and entry_name in manifest:
-        entry = manifest[entry_name]
-        if isinstance(entry, dict) and "css" in entry:
-            return [str(p) for p in entry["css"]]
-    return []
-
-
 def _read_vite_manifest() -> dict[str, object] | None:
     """Read the Vite manifest.json from the frontend package-data.
 
@@ -235,9 +226,13 @@ def session_page_html(
         "surface": "operator" if operator else "user",
         "share_role": share_role,
     }
+
+    vite_tags = _vite_entry_tags(assets_path)
+    app_container = "<div id='app-root'></div>" if vite_tags else "<uterm-session id='app-root'></uterm-session>"
+
     body = (
         "<body>"
-        "<div id='app-root'></div>"
+        f"{app_container}"
         "<noscript><div class='page'><div class='card'>This application requires JavaScript.</div></div></noscript>"
         f"{_bootstrap_tag(bootstrap)}"
         "</body>"
@@ -246,9 +241,7 @@ def session_page_html(
         title,
         assets_path,
         body,
-        # hijack.js must appear before the Vite React bundle so window.ProvideHijack
-        # is set before React's useEffect runs (both are deferred modules; document
-        # order determines execution order).
+        # hijack.js configures the Web Component directly
         pre_vite_modules=(f"{_resolve_vanilla_asset('src/hijack.ts')}",),
         xterm_cdn=xterm_cdn,
         fitaddon_cdn=fitaddon_cdn,

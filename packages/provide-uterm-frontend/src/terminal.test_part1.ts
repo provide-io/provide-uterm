@@ -5,6 +5,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ControlChannelDecoder } from "./hijack-codec.js";
+import { UtermTerminalElement } from "./terminal-element.js";
+import "./terminal-element.js";
 
 // ── Mock classes ──────────────────────────────────────────────────────────────
 
@@ -167,24 +169,13 @@ function getWs(): MockWebSocket {
   return MockWebSocket.instances[MockWebSocket.instances.length - 1];
 }
 
-// Helper to create an ProvideTerminal instance using window.ProvideTerminal
-// (terminal.ts is script-mode and registers itself on window)
-// biome-ignore lint/suspicious/noExplicitAny: accessing window global
-type TerminalCtor = new (container: HTMLElement, config?: Record<string, unknown>) => any;
-
-async function loadTerminal(): Promise<TerminalCtor> {
-  await import("./terminal.js");
-  // biome-ignore lint/suspicious/noExplicitAny: window global
-  const ctor = (window as any).ProvideTerminal as TerminalCtor;
-  if (!ctor) throw new Error("ProvideTerminal not set on window");
-  return ctor;
-}
-
 async function makeTerminal(config: Record<string, unknown> = {}) {
-  const Ctor = await loadTerminal();
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const terminal = new Ctor(container, config);
+  const terminal = document.createElement("uterm-terminal") as UtermTerminalElement;
+  terminal.config = config;
+  container.appendChild(terminal);
+  if (terminal.connect) terminal.connect();
   return { terminal, container };
 }
 
@@ -207,33 +198,30 @@ describe("ProvideTerminal construction", () => {
     expect(container.querySelector(`[id^="settingsPanel-"]`)).toBeTruthy();
   });
 
-  it("is registered on window after import", async () => {
-    await import("./terminal.js");
-    // biome-ignore lint/suspicious/noExplicitAny: test access
-    expect(typeof (window as any).ProvideTerminal).toBe("function");
-  });
-
   it("throws when Terminal (xterm) is not loaded", async () => {
-    // First load the module to get the constructor
-    const Ctor = await loadTerminal();
     const container = document.createElement("div");
     document.body.appendChild(container);
     // Now remove Terminal before constructing
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = undefined;
-    expect(() => new Ctor(container)).toThrow("xterm.js (Terminal) not loaded");
+    const terminal = document.createElement("uterm-terminal") as UtermTerminalElement;
+    terminal.config = {};
+    container.appendChild(terminal);
+    await expect(terminal.updateComplete).rejects.toThrow("xterm.js (Terminal) not loaded");
     // Restore for other tests
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).Terminal = MockXterm;
   });
 
   it("throws when FitAddon is not loaded", async () => {
-    const Ctor = await loadTerminal();
     const container = document.createElement("div");
     document.body.appendChild(container);
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = undefined;
-    expect(() => new Ctor(container)).toThrow("addon-fit (FitAddon) not loaded");
+    const terminal = document.createElement("uterm-terminal") as UtermTerminalElement;
+    terminal.config = {};
+    container.appendChild(terminal);
+    await expect(terminal.updateComplete).rejects.toThrow("addon-fit (FitAddon) not loaded");
     // Restore for other tests
     // biome-ignore lint/suspicious/noExplicitAny: test mock
     (window as any).FitAddon = { FitAddon: MockFitAddon };

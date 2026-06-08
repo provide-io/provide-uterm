@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProvideHijack } from "./hijack.js";
+import { UtermSessionElement } from "./session-element.js";
+import "./session-element.js";
 import { encodeControlFrame } from "./hijack-codec.js";
 
 // Reuse mocks logic
@@ -41,6 +42,19 @@ class MockTerminal {
   }
 }
 
+function makeWidget(container: HTMLElement, opts: Record<string, unknown> = {}) {
+  const widget = document.createElement("uterm-session") as UtermSessionElement;
+  widget.config = { workerId: "test-worker", ...opts };
+  container.appendChild(widget);
+  if (widget.connect) {
+    widget.connect();
+  }
+  if (widget.isUpdatePending) {
+    widget.performUpdate();
+  }
+  return widget;
+}
+
 describe("Command Approval UX", () => {
   let container: HTMLElement;
 
@@ -66,7 +80,7 @@ describe("Command Approval UX", () => {
   });
 
   it("shows modal for admin in auto mode", async () => {
-    const _hijack = new ProvideHijack(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
+    const _hijack = makeWidget(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
     const ws = (global as any).wsInstances[0];
 
     // Simulate approval_pending
@@ -91,7 +105,7 @@ describe("Command Approval UX", () => {
   });
 
   it("shows statusbar for operator in auto mode", async () => {
-    const _hijack = new ProvideHijack(container, { workerId: "w1", role: "operator", approvalUxMode: "auto" });
+    const _hijack = makeWidget(container, { workerId: "w1", role: "operator", approvalUxMode: "auto" });
     const ws = (global as any).wsInstances[0];
 
     ws.receive(
@@ -113,7 +127,7 @@ describe("Command Approval UX", () => {
   });
 
   it("hides UI on approval_resolved", async () => {
-    const _hijack = new ProvideHijack(container, { workerId: "w1", role: "admin" });
+    const _hijack = makeWidget(container, { workerId: "w1", role: "admin" });
     const ws = (global as any).wsInstances[0];
 
     ws.receive(
@@ -134,7 +148,7 @@ describe("Command Approval UX", () => {
   });
 
   it("clears the approval countdown interval on dispose", async () => {
-    const hijack = new ProvideHijack(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
+    const hijack = makeWidget(container, { workerId: "w1", role: "admin", approvalUxMode: "auto" });
     const ws = (global as any).wsInstances[0];
 
     ws.receive(
@@ -154,6 +168,6 @@ describe("Command Approval UX", () => {
     // dispose() must clear it, not leak a setInterval against the torn-down widget.
     expect(container.querySelector("uterm-session")?.shadowRoot?.querySelector("uterm-approval-prompt")).toBeFalsy();
     // pending approval should be unset
-    expect((hijack as any)._sessionElement._pendingApproval).toBeNull();
+    expect((hijack as any)._pendingApproval).toBeNull();
   });
 });

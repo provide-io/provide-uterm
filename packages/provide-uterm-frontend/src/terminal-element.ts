@@ -8,6 +8,9 @@ import { property } from "lit/decorators.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, type TerminalConfig, type TerminalSettings } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
+import { ControlChannelDecoder, encodeWsFrame } from "./hijack-codec.js";
+
+const ACK_THROTTLE_MS = 100;
 
 interface XtermLine {
   translateToString(trimRight?: boolean): string;
@@ -72,6 +75,13 @@ export class TerminalElement extends LitElement {
   private settings: TerminalSettings = { ...DEFAULTS };
   private resizeObserver: ResizeObserver | null = null;
   private _firstDataWritten = false;
+
+  private ws: WebSocket | null = null;
+  private reconnectEnabled = false;
+  private reconnectTimer: number | null = null;
+  private readonly wsDecoder = new ControlChannelDecoder();
+  private _ackBytes = 0;
+  private _ackTimer: number | null = null;
 
   override createRenderRoot() {
     return this; // Render to light DOM to avoid shadow boundary issues with xterm
@@ -377,10 +387,110 @@ export class TerminalElement extends LitElement {
   }
 
   private handleTerminalInput(data: string): void {
+    if (!data || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(data);
     this.dispatchEvent(new CustomEvent("uterm-data", { detail: data }));
   }
 
+  private resolveWsUrl(): string {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    if (this.config.wsUrl) {
+      return this.config.wsUrl.startsWith("/") ? `${proto}//${location.host}${this.config.wsUrl}` : this.config.wsUrl;
+    }
+    return `${proto}//${location.host}/ws/terminal`;
+  }
+
+  private scheduleAck(): void {
+    if (this._ackTimer !== null) return;
+    this._ackTimer = window.setTimeout(() => {
+      this._ackTimer = null;
+      this.sendAck();
+    }, ACK_THROTTLE_MS);
+  }
+
+  private sendAck(): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(encodeWsFrame({ type: "ack", bytes: this._ackBytes }));
+    }
+  }
+
+  private clearAckTimer(): void {
+    if (this._ackTimer !== null) {
+      window.clearTimeout(this._ackTimer);
+      this._ackTimer = null;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer !== null) return;
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.reconnectEnabled && this.ws === null) {
+        this.connectWebSocket();
+      }
+    }, 1000);
+  }
+
+  private connectWebSocket(): void {
+    this.reconnectEnabled = true;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.ws?.close();
+    const ws = new WebSocket(this.resolveWsUrl());
+    this.ws = ws;
+    this.wsDecoder.reset();
+    this._ackBytes = 0;
+    this.clearAckTimer();
+    ws.onopen = () => {
+      if (this.ws !== ws) return;
+      this.connected = true;
+      this.updateStatus(true);
+    };
+    ws.onmessage = (event) => {
+      const payload = typeof event.data === "string" ? event.data : "";
+      if (!payload) return;
+      this._ackBytes += payload.length;
+      this.scheduleAck();
+      let frames: ReturnType<ControlChannelDecoder["feed"]>;
+      try {
+        frames = this.wsDecoder.feed(payload);
+      } catch {
+        this.wsDecoder.reset();
+        this.writeData(payload);
+        return;
+      }
+      for (const frame of frames) {
+        if (frame.type === "data") this.writeData(frame.data);
+      }
+    };
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.ws = null;
+      this.connected = false;
+      this.updateStatus(false);
+      if (this.reconnectEnabled) this.scheduleReconnect();
+    };
+    ws.onerror = () => ws.close();
+  }
+
   // --- Public API ---
+
+  public connect(): void {
+    this.connectWebSocket();
+  }
+
+  public disconnect(): void {
+    this.reconnectEnabled = false;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.ws?.close();
+    this.ws = null;
+    this.clearAckTimer();
+  }
 
   public writeData(data: string): void {
     if (!this._firstDataWritten) {
@@ -409,11 +519,13 @@ export class TerminalElement extends LitElement {
   }
 
   public dispose(): void {
+    this.disconnect();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.term?.dispose();
     this.term = null;
     this.fitAddon = null;
+    this.remove();
   }
 }
 

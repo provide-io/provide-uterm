@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import jwt as _jwt
 from fastapi.testclient import TestClient
@@ -89,31 +89,7 @@ def _session(
 
 
 class TestUiGaps:
-    """Covers lines 31-33 (_hijack_js_version exception) and 256-273 (inspect_page_html)."""
-
-    def test_hijack_js_version_returns_zero_on_exception(self) -> None:
-        """Lines 31-33: _hijack_js_version returns '0' when exception occurs."""
-        from provide.uterm.server import ui
-
-        with patch("importlib.resources.files", side_effect=Exception("boom")):
-            result = ui._hijack_js_version()
-        assert result == "0"
-
-    def test_hijack_js_version_returns_zero_when_not_file(self) -> None:
-        """Lines 31-33: _hijack_js_version returns '0' when path is not a file."""
-        from provide.uterm.server import ui
-
-        mock_path = MagicMock()
-        mock_path.is_file.return_value = False
-
-        frontend_mock = MagicMock()
-        frontend_mock.__truediv__ = lambda self, name: mock_path
-
-        with patch("importlib.resources.files") as mock_files:
-            mock_files.return_value = MagicMock(__truediv__=lambda self, name: frontend_mock)
-            result = ui._hijack_js_version()
-        # Should be "0" since path is not a file
-        assert result == "0"
+    """Covers inspect_page_html (lines 256-273)."""
 
     def test_inspect_page_html_minimal(self) -> None:
         """Lines 256-273: inspect_page_html with minimal args."""

@@ -1,2 +1,1 @@
-// Split shim to keep file size below 500 LOC.
-export * from "./terminal_impl.ts";
+export * from "./terminal-element.js";

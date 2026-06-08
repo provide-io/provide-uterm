@@ -389,6 +389,7 @@ export class UtermSessionElement extends LitElement {
       this._hijackState.term = null;
     }
     this._fitAddon = null;
+    this.remove();
   }
 
   sendControlMessage(msg: Record<string, unknown>): void {
