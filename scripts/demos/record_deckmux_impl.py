@@ -178,8 +178,8 @@ def _scroll_up(lines: int):
         with contextlib.suppress(Exception):
             page.evaluate(  # type: ignore[union-attr]
                 f"""() => {{
-                    const w = document.querySelector('.provide-hijack')?.__provideHijack;
-                    if (w && w.terminal) w.terminal.scrollLines(-{lines});
+                    const t = document.querySelector('uterm-session')?.terminal;
+                    if (t) t.scrollLines(-{lines});
                 }}"""
             )
 
@@ -195,8 +195,8 @@ def _scroll_to_bottom():
         with contextlib.suppress(Exception):
             page.evaluate(  # type: ignore[union-attr]
                 """() => {
-                    const w = document.querySelector('.provide-hijack')?.__provideHijack;
-                    if (w && w.terminal) w.terminal.scrollToBottom();
+                    const t = document.querySelector('uterm-session')?.terminal;
+                    if (t) t.scrollToBottom();
                 }"""
             )
 
@@ -228,8 +228,8 @@ def _type_from_self(text: str, wait_s: float = 1.0):
         import contextlib
 
         with contextlib.suppress(Exception):
-            page.fill('[id$="-inputfield"]', cmd_text + "\\r")  # type: ignore[union-attr]
-            page.click('[id$="-inputsend"]')  # type: ignore[union-attr]
+            page.fill("#inputfield", cmd_text + "\\r")  # type: ignore[union-attr]
+            page.click("#inputsend")  # type: ignore[union-attr]
         time.sleep(wait_s)
 
     return _do
@@ -287,8 +287,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Commands are sent by typing into Tanuki Tim's browser input field (open/shared mode).
     # Using the hijack REST API puts browsers into "Hijacked (other)" observer mode
     # which shows a static snapshot instead of live terminal output.
-    # The input field (id="h-provide-shell-inputfield") unescapes \\r to \r before
-    # sending via WebSocket, so we append \\r to each command to send Enter.
+    # The input field (id="inputfield", in the <uterm-session> shadow root)
+    # unescapes \\r to \r before sending via WebSocket, so we append \\r to each
+    # command to send Enter.
     _tim_page: list[Any] = []  # filled by the first step callable
 
     def _capture_tim_page(page: object) -> None:
@@ -339,8 +340,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         We strip the trailing \\r from the keys arg and append \\\\r so the
         widget sends the proper carriage return to the terminal.
 
-        Element IDs use a sequential numeric UID (e.g. ``h-1-inputfield``),
-        not the session ID, so we match with ``[id$="-inputfield"]``.
+        The <uterm-session> web component renders plain, shadow-scoped IDs
+        (``#inputfield``/``#inputsend``); Playwright locators pierce the open
+        shadow root, so we target them directly.
         """
         cmd_text = keys.rstrip("\r")
 
@@ -351,8 +353,8 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             if page is None:
                 return
             with contextlib.suppress(Exception):
-                page.fill('[id$="-inputfield"]', cmd_text + "\\r")  # type: ignore[union-attr]
-                page.click('[id$="-inputsend"]')  # type: ignore[union-attr]
+                page.fill("#inputfield", cmd_text + "\\r")  # type: ignore[union-attr]
+                page.click("#inputsend")  # type: ignore[union-attr]
             time.sleep(wait_s)
 
         return _do
