@@ -46,7 +46,7 @@ def record_reel(base_out: Path = BASE_OUT, *, force: bool = False) -> Path | Non
     """Run all 14 demos (skipping cached), collect highlights, build super reel.
 
     Skips re-recording demos whose output already exists unless force=True.
-    Returns path to demo/recordings/reel.mp4 or None on failure.
+    Returns path to demo/reel.mp4 or None on failure.
     """
     titled_clips: list[Path] = []
 

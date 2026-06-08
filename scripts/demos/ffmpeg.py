@@ -15,6 +15,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from scripts.demos.output import keep_intermediates
+
 
 def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
     """Record a terminal demo via asciinema. Returns output path or None.
@@ -51,6 +53,11 @@ def asciinema_record(script_path: str | Path, out_path: Path) -> Path | None:
             env=env,
             cwd=repo_root,
         )
+        # Recording succeeded, so the stderr log was just bootstrap noise — drop
+        # it unless the caller asked to keep intermediates. (On the failure paths
+        # below it is left on disk for diagnosis.)
+        if not keep_intermediates():
+            stderr_log.unlink(missing_ok=True)
         return out_path
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
         print(f"  [WARN] asciinema failed: {exc}", flush=True)
@@ -77,6 +84,10 @@ def ffmpeg_to_mp4(webm_path: Path) -> Path | None:
             check=True,
             timeout=120,
         )
+        # The mp4 is the deliverable; the source .webm is a large raw capture
+        # nothing reuses. Drop it by default (toggle with DEMO_KEEP_INTERMEDIATES).
+        if not keep_intermediates():
+            webm_path.unlink(missing_ok=True)
         return mp4_path
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
         print(f"  [WARN] ffmpeg_to_mp4 failed: {exc}", flush=True)

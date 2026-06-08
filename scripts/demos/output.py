@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -52,10 +53,43 @@ def kv(key: str, value: Any) -> None:
 
 
 def out_dir(feature: str, base: Path = BASE_OUT) -> Path:
-    """Return demo/recordings/<feature>/, creating it and screenshots/ if absent."""
+    """Return demo/<feature>/, creating it and its screenshots/ subdir if absent."""
     d = base / feature
     (d / "screenshots").mkdir(parents=True, exist_ok=True)
     return d
+
+
+def keep_intermediates() -> bool:
+    """True if raw recording intermediates should be retained instead of cleaned.
+
+    By default the recorders delete regenerate-able byproducts after a successful
+    render (raw ``.webm`` captures, ``.cast.stderr`` logs); set the
+    ``DEMO_KEEP_INTERMEDIATES`` env var to keep them, e.g. to debug a bad capture.
+    """
+    return bool(os.environ.get("DEMO_KEEP_INTERMEDIATES"))
+
+
+def clean_intermediates(target: Path = BASE_OUT) -> int:
+    """Delete regenerate-able recording intermediates under *target*; return count.
+
+    Removes raw Playwright captures (``*.webm``), asciinema stderr logs
+    (``*.cast.stderr``), title-card variants (``*_titled.mp4``), and any full
+    untrimmed ``<stem>.mp4`` whose trimmed sibling ``<stem>_trim.mp4`` exists — the
+    site manifest only ever serves the ``_trim`` clips. Files without a ``_trim``
+    sibling (e.g. ``reel.mp4``) are left alone, so this never removes a deliverable.
+    """
+    removed = 0
+    for pattern in ("**/*.webm", "**/*.cast.stderr", "**/*_titled.mp4"):
+        for p in target.glob(pattern):
+            p.unlink(missing_ok=True)
+            removed += 1
+    for mp4 in target.glob("**/*.mp4"):
+        if mp4.stem.endswith(("_trim", "_titled")):
+            continue
+        if mp4.with_name(f"{mp4.stem}_trim.mp4").exists():
+            mp4.unlink(missing_ok=True)
+            removed += 1
+    return removed
 
 
 def clean_terminal_output(raw: str) -> str:
