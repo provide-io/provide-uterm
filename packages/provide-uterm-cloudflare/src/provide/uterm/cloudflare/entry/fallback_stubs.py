@@ -142,6 +142,9 @@ except ImportError:  # pragma: no cover — Pyodide flat-layout / validation pha
                 async def fetch(self, _request):
                     return Response.json({"error": "not initialized"}, status=503)
 
+        def get_kv_session(*_a: object, **_k: object) -> None:
+            return None
+
         def delete_kv_session(*_a: object, **_k: object) -> None:
             return None
 
