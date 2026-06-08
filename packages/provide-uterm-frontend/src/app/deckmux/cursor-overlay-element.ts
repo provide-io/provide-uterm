@@ -17,7 +17,7 @@ export class CursorOverlayElement extends LitElement {
   @property({ type: String }) ownerId: string | null = null;
   @property({ type: Boolean }) visible: boolean = true;
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
       position: absolute;
@@ -74,7 +74,7 @@ export class CursorOverlayElement extends LitElement {
     }
   `;
 
-  render() {
+  override render() {
     return html`
       <div class="dm-cursor-overlay" style=${styleMap({ display: this.visible ? "" : "none" })}>
         ${this.users.map((u) => this._renderSelection(u))}

@@ -75,8 +75,6 @@ export class DeckMux {
   }
 
   setOwnDimensions(cols: number, rows: number): void {
-    this._ownCols = cols;
-    this._ownRows = rows;
     this._ghostOverlay?.setOwnDimensions(cols, rows);
   }
 

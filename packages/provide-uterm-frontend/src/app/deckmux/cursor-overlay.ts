@@ -40,7 +40,7 @@ export class DeckMuxCursorOverlay {
   removePin(userId: string): void {
     const user = this._users.get(userId);
     if (user) {
-      user.pin = undefined;
+      delete user.pin;
       this._cleanupUser(userId, user);
       this._sync();
     }
@@ -57,7 +57,7 @@ export class DeckMuxCursorOverlay {
   removeSelection(userId: string): void {
     const user = this._users.get(userId);
     if (user) {
-      user.selection = undefined;
+      delete user.selection;
       this._cleanupUser(userId, user);
       this._sync();
     }

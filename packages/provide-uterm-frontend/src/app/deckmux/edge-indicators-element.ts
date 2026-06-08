@@ -22,7 +22,7 @@ export class EdgeIndicatorsElement extends LitElement {
   @property({ type: Array }) users: EdgeIndicatorUser[] = [];
   @property({ type: Boolean }) namesVisible = false;
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: contents;
     }
@@ -86,7 +86,7 @@ export class EdgeIndicatorsElement extends LitElement {
     }
   `;
 
-  render() {
+  override render() {
     return html`
       <div class="dm-edge-track">
         ${this.users.map((u) => this._renderUser(u))}

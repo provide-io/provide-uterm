@@ -21,7 +21,7 @@ export class PresenceBar extends LitElement {
   @state() private _cursorsVisible = true;
   @state() private _ghostBoxVisible = true;
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
       width: 100%;
@@ -180,7 +180,7 @@ export class PresenceBar extends LitElement {
     }
   `;
 
-  render() {
+  override render() {
     return html`
       <div class="dm-presence-bar">
         <div class="dm-avatar-row">
