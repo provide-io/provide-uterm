@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
+from typing import cast
 
 _DEFAULT_MAX_AGE_S = 300.0
 
@@ -52,5 +53,6 @@ def verify_webhook_signature(
         supplied = supplied.split("=", 1)[1].strip()
     if not supplied:
         return False
-    expected = build_webhook_signature(secret, body, timestamp_header).split("=", 1)[1]
+    # The fail-closed guard above guarantees secret is a non-empty str here.
+    expected = build_webhook_signature(cast("str", secret), body, timestamp_header).split("=", 1)[1]
     return hmac.compare_digest(supplied, expected)

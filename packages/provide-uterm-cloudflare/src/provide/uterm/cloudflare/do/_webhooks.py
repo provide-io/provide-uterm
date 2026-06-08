@@ -28,7 +28,7 @@ import logging
 import re
 import time
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 try:
     from provide.uterm.cloudflare.do._webhook_crypto import decrypt_secret, encrypt_secret
@@ -176,7 +176,7 @@ async def route_webhooks(
             except re.error:
                 return json_response({"error": "pattern is not a valid regex"}, status=422)
         wh_id = uuid.uuid4().hex
-        secret_raw = payload.get("secret")
+        secret_raw = cast("str | None", payload.get("secret"))
         secret_stored = await encrypt_secret(getattr(runtime, "env", None), secret_raw) if secret_raw else None
         runtime.store.save_webhook(
             wh_id,

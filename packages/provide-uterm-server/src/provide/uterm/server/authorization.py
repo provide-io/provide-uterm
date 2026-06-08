@@ -302,7 +302,7 @@ class WebhookAuthorizationProvider:
                 # mint a privileged or bogus role string. ``_filter_known_roles``
                 # yields a non-empty frozenset (falling back to viewer), so
                 # ``next(iter(...))`` is always safe.
-                from provide.uterm.server.auth import _filter_known_roles
+                from provide.uterm.server.auth_roles import _filter_known_roles
 
                 raw_role = resp.json().get("role", "viewer")
                 return next(iter(_filter_known_roles([raw_role])))
