@@ -134,14 +134,6 @@ addopts = [
 source = ["src/provide/uterm"]
 omit = [
     "tests/*",
-    # DEFERRED (CORE-cov follow-up, tracked in docs/coverage-deferred.md):
-    # worker-side HijackableMixin checkpoint gating; substantial async-loop
-    # surface not yet under the 100% gate.
-    "src/provide/uterm/bridge/base.py",
-    # DEFERRED (CORE-cov follow-up, tracked in docs/coverage-deferred.md):
-    # asciinema-style recording writer; file-IO and rotation branches not yet
-    # fully covered.
-    "src/provide/uterm/recording.py",
 ]
 branch = true
 
