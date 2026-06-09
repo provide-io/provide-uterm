@@ -96,6 +96,38 @@ def encode_control(payload: Mapping[str, Any]) -> str:
     return f"{DLE}{STX}{len(serialized.encode('utf-8')):08x}:{serialized}"
 
 
+def is_control_framed(message: str) -> bool:
+    """Return ``True`` when *message* is a full control-framed payload.
+
+    The check is structural only: it validates the magic bytes, length
+    header syntax, and that the declared UTF-8 payload bytes are fully
+    present in the string.
+    """
+    if len(message) < _HEADER_BYTES:
+        return False
+    if not message.startswith(f"{DLE}{STX}"):
+        return False
+    if message[10] != ":":
+        return False
+    length_hex = message[2:10]
+    if any(char not in _HEX_DIGITS for char in length_hex):
+        return False
+    try:
+        payload_bytes = int(length_hex, 16)
+    except ValueError:
+        return False
+    if payload_bytes > _MAX_CONTROL_PAYLOAD_BYTES:
+        return False
+
+    try:
+        decoder = ControlChannelDecoder()
+        payload_end = decoder._payload_end_for_utf8_length(message, _HEADER_BYTES, payload_bytes)
+    except ControlChannelProtocolError:
+        return False
+
+    return payload_end is not None and payload_end == len(message)
+
+
 def _check_json_depth(value: Any, *, max_depth: int) -> None:
     """Raise ``ControlChannelProtocolError`` if ``value`` nests deeper than ``max_depth``.
 

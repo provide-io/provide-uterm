@@ -197,6 +197,12 @@ class TransportSession:
     ) -> None:
         """Register a callback fired with each raw byte chunk read from the wire.
 
+        This is the supported tap for raw terminal bytes on every transport
+        session (telnet and websocket): register the watcher here to receive
+        IAC-stripped, ANSI/CP437-intact bytes before pyte processes them.
+        For examples, see :meth:`add_watch` and
+        ``session.add_watch(lambda state, raw: buf.extend(raw))``.
+
         Called from ``_reader_loop`` immediately after IAC stripping and
         *before* the emulator processes the bytes — so the chunk still
         contains every ANSI SGR escape, cursor-positioning sequence and
