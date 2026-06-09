@@ -13,12 +13,21 @@ else
     CFLAGS  = -fPIC -O2 -Wall -Wextra -Werror
 endif
 
-.PHONY: all clean install
+.PHONY: all clean install test
 
 all: $(TARGET)
 
 $(TARGET): pam_uterm.c
 	cc $(CFLAGS) $(LDFLAGS) -o $(TARGET) pam_uterm.c
+
+# Build & run the C self-test for the static helpers (e.g. _json_escape). The
+# module source is #include'd to reach the static function, so -lpam is needed
+# to resolve the PAM session symbols it pulls in. The native lib is not built in
+# CI, so this is a local correctness gate.
+test: test_pam_uterm.c pam_uterm.c
+	cc $(CFLAGS) -o pam_uterm_selftest test_pam_uterm.c -lpam
+	./pam_uterm_selftest
+	rm -f pam_uterm_selftest
 
 install:
 ifeq ($(UNAME), Darwin)
@@ -28,4 +37,4 @@ else
 endif
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) pam_uterm_selftest

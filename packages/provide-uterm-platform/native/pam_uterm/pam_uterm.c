@@ -52,6 +52,9 @@
 #define DEFAULT_CAP_DIR "/run"
 #define MAX_PATH        256
 #define MAX_ENV         512  /* "KEY=value" — must hold prefix + MAX_PATH */
+/* Escaped-JSON field buffer: a username/tty (<= 256 bytes) where every byte
+ * expands to a 6-char \uXXXX escape, plus the trailing NUL. */
+#define MAX_JSON_FIELD  (6 * 256 + 1)
 
 /* ── arg parsing ────────────────────────────────────────────────────────── */
 
@@ -86,6 +89,51 @@ static char *_build_json(const char *fmt, ...) {
     buf[len] = '\n';
     buf[len + 1] = '\0';
     return buf;
+}
+
+/* ── JSON string escaping ────────────────────────────────────────────────── */
+
+/* Escape arbitrary bytes into a JSON string *body* (no surrounding quotes) per
+ * RFC 8259: ", \, and control characters (< 0x20) are escaped. Without this a
+ * username or tty containing a quote or newline (e.g. `alice"\n{"username":
+ * "root"}`) could break out of its field and inject a second newline-delimited
+ * event line into the notify stream. The result is written to dst (capacity
+ * dstsize), truncated at a complete escape boundary on overflow, and is always
+ * NUL-terminated. src may be NULL (treated as ""). */
+static void _json_escape(char *dst, size_t dstsize, const char *src) {
+    if (dstsize == 0) return;
+    size_t o = 0;
+    if (!src) src = "";
+    for (const unsigned char *p = (const unsigned char *)src; *p; p++) {
+        char unicode[7];
+        const char *rep;
+        size_t replen;
+        unsigned char c = *p;
+        switch (c) {
+            case '"':  rep = "\\\""; replen = 2; break;
+            case '\\': rep = "\\\\"; replen = 2; break;
+            case '\b': rep = "\\b";  replen = 2; break;
+            case '\f': rep = "\\f";  replen = 2; break;
+            case '\n': rep = "\\n";  replen = 2; break;
+            case '\r': rep = "\\r";  replen = 2; break;
+            case '\t': rep = "\\t";  replen = 2; break;
+            default:
+                if (c < 0x20) {
+                    snprintf(unicode, sizeof(unicode), "\\u%04x", c);
+                    rep = unicode;
+                    replen = 6;
+                } else {
+                    unicode[0] = (char)c;
+                    unicode[1] = '\0';
+                    rep = unicode;
+                    replen = 1;
+                }
+        }
+        if (o + replen + 1 > dstsize) break;  /* leave room for NUL; truncate clean */
+        memcpy(dst + o, rep, replen);
+        o += replen;
+    }
+    dst[o] = '\0';
 }
 
 /* ── unix socket notifier ────────────────────────────────────────────────── */
@@ -126,6 +174,13 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
     const char *tty = NULL;
     pam_get_item(pamh, PAM_TTY, (const void **)&tty);
 
+    /* Escape user-influenced fields so a crafted username/tty cannot break out
+     * of its JSON string or inject a second newline-delimited event line. */
+    char user_esc[MAX_JSON_FIELD];
+    char tty_esc[MAX_JSON_FIELD];
+    _json_escape(user_esc, sizeof(user_esc), username);
+    _json_escape(tty_esc, sizeof(tty_esc), tty);
+
     char *json;
     if (capture) {
         char cap_sock[MAX_PATH];
@@ -134,9 +189,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
         json = _build_json(
                  "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
                  "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\"}",
-                 username ? username : "",
-                 tty      ? tty      : "",
-                 pid, cap_sock);
+                 user_esc, tty_esc, pid, cap_sock);
 
         /* Inject LD_PRELOAD and capture socket path into the PAM environment.
          * These are inherited by the child shell that sshd/login spawns.      */
@@ -153,9 +206,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
         json = _build_json(
                  "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
                  "\"pid\":%d,\"mode\":\"notify\"}",
-                 username ? username : "",
-                 tty      ? tty      : "",
-                 pid);
+                 user_esc, tty_esc, pid);
     }
 
     if (json) {
@@ -178,12 +229,15 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh, int flags __attribute__(
     const char *tty = NULL;
     pam_get_item(pamh, PAM_TTY, (const void **)&tty);
 
+    char user_esc[MAX_JSON_FIELD];
+    char tty_esc[MAX_JSON_FIELD];
+    _json_escape(user_esc, sizeof(user_esc), username);
+    _json_escape(tty_esc, sizeof(tty_esc), tty);
+
     char *json = _build_json(
              "{\"event\":\"close\",\"username\":\"%s\",\"tty\":\"%s\","
              "\"pid\":%d,\"mode\":\"%s\"}",
-             username ? username : "",
-             tty      ? tty      : "",
-             pid,
+             user_esc, tty_esc, pid,
              capture ? "capture" : "notify");
 
     if (json) {
