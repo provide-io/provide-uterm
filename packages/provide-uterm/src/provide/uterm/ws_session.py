@@ -43,6 +43,11 @@ async def connect_ws(
 
     Returns:
         A :class:`WebSocketSession` that satisfies :class:`~provide.uterm.io.Session`.
+
+    Tip:
+        To tap raw bytes from the terminal stream, call
+        ``session.add_watch(...)`` on the returned session; do not monkey-patch
+        the emulator internals.
     """
     session = WebSocketSession(url, cols=cols, rows=rows)
     await session.connect()
