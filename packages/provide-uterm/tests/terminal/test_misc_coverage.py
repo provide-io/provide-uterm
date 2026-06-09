@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import json
 import tempfile
+import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -250,32 +252,137 @@ class TestWaitForGuardNoNewSnapshot:
 
 
 class TestHijackableMixinBranches:
-    async def test_watchdog_fires_with_on_stuck_none(self) -> None:
-        """Lines 146->152: on_stuck is None, watchdog fires but does not call it."""
+    @staticmethod
+    def _worker() -> Any:
         from provide.uterm.bridge.base import HijackableMixin
 
         class MyWorker(HijackableMixin):
             pass
 
-        worker = MyWorker()
-        # Start watchdog with on_stuck=None and tiny timeouts
-        worker.start_watchdog(stuck_timeout_s=0.05, check_interval_s=0.05, on_stuck=None)
-        # Wait for the watchdog to fire at least once
-        await asyncio.sleep(0.2)
+        return MyWorker()
+
+    # -- await_if_hijacked: the three exit paths -------------------------------
+
+    async def test_await_if_hijacked_returns_when_not_hijacked(self) -> None:
+        """Line 66-67: not hijacked → return immediately."""
+        worker = self._worker()
+        await asyncio.wait_for(worker.await_if_hijacked(), timeout=1.0)
+
+    async def test_await_if_hijacked_consumes_a_step_token(self) -> None:
+        """Line 68-70: a step token is available → pass without blocking, decrement."""
+        worker = self._worker()
+        await worker.set_hijacked(True)
+        await worker.request_step(1)
+        await asyncio.wait_for(worker.await_if_hijacked(), timeout=1.0)
+        assert worker._hijack_step_tokens == 0
+
+    async def test_await_if_hijacked_blocks_until_resumed(self) -> None:
+        """Line 71: hijacked, no tokens → block on the event until resumed."""
+        worker = self._worker()
+        await worker.set_hijacked(True)
+        task = asyncio.create_task(worker.await_if_hijacked())
+        await asyncio.sleep(0.02)
+        assert not task.done()  # blocked on the cleared event
+        await worker.set_hijacked(False)  # resume → event set
+        await asyncio.wait_for(task, timeout=1.0)
+
+    # -- set_hijacked: idempotent / enable / disable --------------------------
+
+    async def test_set_hijacked_is_idempotent(self) -> None:
+        """Line 78-79: setting the same value is a no-op."""
+        worker = self._worker()
+        await worker.set_hijacked(False)  # already not hijacked
+        assert worker._hijacked is False
+        await worker.set_hijacked(True)
+        await worker.set_hijacked(True)  # same value → no-op
+        assert worker._hijacked is True
+        assert not worker._hijack_event.is_set()  # enable cleared the event
+
+    # -- request_step: no-op / accumulate + cap -------------------------------
+
+    async def test_request_step_is_noop_when_not_hijacked(self) -> None:
+        """Line 95-96: not hijacked → no tokens granted."""
+        worker = self._worker()
+        await worker.request_step(5)
+        assert worker._hijack_step_tokens == 0
+
+    async def test_request_step_accumulates_and_caps_at_100(self) -> None:
+        """Line 97: tokens accumulate but are capped at 100."""
+        worker = self._worker()
+        await worker.set_hijacked(True)
+        await worker.request_step(2)
+        assert worker._hijack_step_tokens == 2
+        await worker.request_step(200)
+        assert worker._hijack_step_tokens == 100
+
+    # -- start_watchdog: idempotency + loop-body branches ---------------------
+    # The loop floors its sleep at max(0.5, check_interval_s), so the body only
+    # runs after ~0.5s — every watchdog-body test waits past that floor.
+
+    async def test_start_watchdog_is_idempotent_while_running(self) -> None:
+        """Line 133-134: a second start while running returns the same task."""
+        worker = self._worker()
+        worker.start_watchdog(stuck_timeout_s=10.0, check_interval_s=10.0)
+        first = worker._watchdog_task
+        worker.start_watchdog(stuck_timeout_s=10.0, check_interval_s=10.0)
+        assert worker._watchdog_task is first
         await worker.stop_watchdog()
-        # No assertion needed — just ensure no error raised
+
+    async def test_watchdog_fires_with_on_stuck_none(self) -> None:
+        """Line 146->152: idle exceeds the timeout, on_stuck is None → no callback."""
+        worker = self._worker()
+        worker._last_progress_mono = time.monotonic() - 1000.0
+        worker.start_watchdog(stuck_timeout_s=0.0, check_interval_s=0.0, on_stuck=None)
+        await asyncio.sleep(0.7)  # > the 0.5s loop-sleep floor → ≥1 iteration
+        await worker.stop_watchdog()
+
+    async def test_watchdog_calls_on_stuck_when_idle(self) -> None:
+        """Line 146-148: idle exceeds the timeout → the on_stuck callback runs."""
+        worker = self._worker()
+        on_stuck = AsyncMock()
+        worker._last_progress_mono = time.monotonic() - 1000.0
+        worker.start_watchdog(stuck_timeout_s=0.0, check_interval_s=0.0, on_stuck=on_stuck)
+        await asyncio.sleep(0.7)
+        await worker.stop_watchdog()
+        on_stuck.assert_awaited()
+
+    async def test_watchdog_continues_when_within_timeout(self) -> None:
+        """Line 143-145: idle is below the timeout → the loop continues, no fire."""
+        worker = self._worker()
+        on_stuck = AsyncMock()
+        worker.note_progress()  # fresh progress
+        worker.start_watchdog(stuck_timeout_s=100.0, check_interval_s=0.0, on_stuck=on_stuck)
+        await asyncio.sleep(0.7)
+        await worker.stop_watchdog()
+        on_stuck.assert_not_awaited()
+
+    async def test_watchdog_is_suppressed_while_hijacked(self) -> None:
+        """Line 140-142: while hijacked the watchdog self-defers (never fires)."""
+        worker = self._worker()
+        on_stuck = AsyncMock()
+        await worker.set_hijacked(True)
+        worker._last_progress_mono = time.monotonic() - 1000.0
+        worker.start_watchdog(stuck_timeout_s=0.0, check_interval_s=0.0, on_stuck=on_stuck)
+        await asyncio.sleep(0.7)
+        await worker.stop_watchdog()
+        on_stuck.assert_not_awaited()
+
+    # -- stop_watchdog / cleanup ----------------------------------------------
 
     async def test_stop_watchdog_before_start_is_noop(self) -> None:
         """Line 163->exit: stop_watchdog() when _watchdog_task is None."""
-        from provide.uterm.bridge.base import HijackableMixin
-
-        class MyWorker(HijackableMixin):
-            pass
-
-        worker = MyWorker()
+        worker = self._worker()
         assert worker._watchdog_task is None
-        # Should not raise
-        await worker.stop_watchdog()
+        await worker.stop_watchdog()  # should not raise
+
+    async def test_cleanup_hijack_resets_and_stops(self) -> None:
+        """Line 169-172: cleanup resumes automation and cancels the watchdog."""
+        worker = self._worker()
+        await worker.set_hijacked(True)
+        worker.start_watchdog(stuck_timeout_s=10.0, check_interval_s=10.0)
+        await worker.cleanup_hijack()
+        assert worker._hijacked is False
+        assert worker._watchdog_task is None
 
 
 # ---------------------------------------------------------------------------
