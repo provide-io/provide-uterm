@@ -28,6 +28,15 @@ _HEADER = struct.Struct(">BI")  # channel (1B) + length (4B big-endian)
 # best-effort, so dropping beats blocking the connection handler).
 _QUEUE_MAXSIZE = 4096
 
+# Upper bound on a single frame's payload. The 4-byte length field admits up to
+# ~4 GiB, and ``readexactly(length)`` accumulates that many bytes before
+# enqueueing — so a malicious or buggy producer on the (owner-only) socket could
+# announce a huge length and drive the host into OOM. Legitimate frames are at
+# most a single intercepted ``write()`` (capture.c emits one frame per write,
+# kilobytes in practice), so we cap well above any real frame and treat an
+# over-cap length as a framing violation: drop the connection (PLAT-cap).
+_MAX_FRAME_BYTES = 16 * 1024 * 1024  # 16 MiB
+
 # Owner-only permissions for the listening Unix socket.
 _SOCKET_MODE = 0o600
 # umask that yields 0o600 at file creation (0o777 & ~0o177 == 0o600). Set around
@@ -112,6 +121,12 @@ class CaptureSocket:
             while True:
                 header_bytes = await reader.readexactly(_HEADER.size)
                 channel, length = _HEADER.unpack(header_bytes)
+                if length > _MAX_FRAME_BYTES:
+                    # Hostile/corrupt producer: refuse to allocate gigabytes for
+                    # one frame. Drop the connection rather than read the body —
+                    # checking BEFORE readexactly is what prevents the OOM.
+                    logger.warning("capture_frame_too_large", length=length, cap=_MAX_FRAME_BYTES)
+                    break
                 data = await reader.readexactly(length)
                 self._enqueue(CaptureFrame(channel=channel, data=data))
         except (asyncio.IncompleteReadError, ConnectionResetError):
