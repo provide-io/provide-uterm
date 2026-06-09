@@ -515,6 +515,26 @@ def test_config_metrics_require_auth_can_be_enabled() -> None:
     assert SecurityConfig(metrics_require_auth=True).metrics_require_auth is True
 
 
+def test_config_default_session_visibility_default_public() -> None:
+    """SecurityConfig.default_session_visibility defaults to 'public' (back-compat)."""
+    from provide.uterm.server.config_schema import SecurityConfig
+
+    assert SecurityConfig().default_session_visibility == "public"
+
+
+def test_config_default_session_visibility_can_be_locked_down() -> None:
+    """SecurityConfig.default_session_visibility accepts 'private'/'operator' for a
+    locked-down 'private unless shared' posture; an invalid value is rejected."""
+    from pydantic import ValidationError
+
+    from provide.uterm.server.config_schema import SecurityConfig
+
+    assert SecurityConfig(default_session_visibility="private").default_session_visibility == "private"
+    assert SecurityConfig(default_session_visibility="operator").default_session_visibility == "operator"
+    with pytest.raises(ValidationError):
+        SecurityConfig(default_session_visibility="everyone")
+
+
 # ---------------------------------------------------------------------------
 # V-H1: SSRF chokepoint in SessionRegistry.create_session / update_session.
 #

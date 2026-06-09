@@ -36,6 +36,7 @@ def _make_registry(
     recording: RecordingConfig | None = None,
     tunnel_tokens: dict[str, dict[str, object]] | None = None,
     block_private: bool = False,
+    default_visibility: str = "public",
 ) -> SessionRegistry:
     hub = _make_hub()
     recording_cfg = recording or RecordingConfig()
@@ -47,6 +48,7 @@ def _make_registry(
         recording_store=LocalFileRecordingStore(recording_cfg.directory),
         tunnel_tokens=tunnel_tokens,
         block_private_connector_targets=block_private,
+        default_visibility=default_visibility,  # type: ignore[arg-type]  # test passes valid Visibility literals
     )
 
 
@@ -193,6 +195,31 @@ class TestCreateSessionValidation:
         reg = _make_registry()
         with pytest.raises(SessionValidationError, match="visibility must be"):
             await reg.create_session({"session_id": "valid-id", "visibility": "uterm-test-secret-32-byte-minimum-key"})
+
+    async def test_create_without_visibility_defaults_to_public(self) -> None:
+        """With the default config, an unspecified visibility stays 'public' (back-compat)."""
+        reg = _make_registry()
+        await reg.create_session({"session_id": "s1"})
+        async with reg._lock:
+            defn = reg._require_session("s1")
+        assert defn.visibility == "public"
+
+    async def test_create_without_visibility_uses_configured_default(self) -> None:
+        """An unspecified visibility takes the registry's configured default
+        (server.security.default_session_visibility), e.g. 'private'."""
+        reg = _make_registry(default_visibility="private")
+        await reg.create_session({"session_id": "s1"})
+        async with reg._lock:
+            defn = reg._require_session("s1")
+        assert defn.visibility == "private"
+
+    async def test_create_explicit_visibility_overrides_configured_default(self) -> None:
+        """An explicit per-session visibility overrides the configured default."""
+        reg = _make_registry(default_visibility="private")
+        await reg.create_session({"session_id": "s1", "visibility": "public"})
+        async with reg._lock:
+            defn = reg._require_session("s1")
+        assert defn.visibility == "public"
 
     async def test_duplicate_session_raises_value_error(self) -> None:
         reg = _make_registry([_session("existing")])

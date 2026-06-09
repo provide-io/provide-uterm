@@ -69,6 +69,7 @@ class SessionRegistry:
         detector: PatternDetector | None = None,
         tunnel_tokens: dict[str, dict[str, object]] | None = None,
         block_private_connector_targets: bool = False,
+        default_visibility: Visibility = "public",
     ) -> None:
         self._hub = hub
         self._recording = recording
@@ -76,6 +77,10 @@ class SessionRegistry:
         # ALWAYS blocked at the chokepoint below; private/internal hosts are
         # blocked only when this is True (multi-tenant / hosted posture).
         self._block_private = block_private_connector_targets
+        # Visibility for a session created without an explicit ``visibility``
+        # (server.security.default_session_visibility). Defaults to ``public``
+        # for back-compat; ``private`` gives a "private unless shared" posture.
+        self._default_visibility = default_visibility
 
         if recording_store is None:
             from provide.uterm.recording import LocalFileRecordingStore
@@ -184,12 +189,13 @@ class SessionRegistry:
         async with self._lock:
             return self._sessions.get(session_id)
 
-    @staticmethod
-    def _validate_create_payload(payload: dict[str, Any]) -> tuple[str, str, str, str]:
+    def _validate_create_payload(self, payload: dict[str, Any]) -> tuple[str, str, str, str]:
         """Validate and extract core fields from a session creation payload.
 
         Raises SessionValidationError on invalid input.
         Returns (session_id, connector_type_raw, input_mode_raw, visibility_raw).
+        A payload that omits ``visibility`` takes ``self._default_visibility``
+        (server.security.default_session_visibility).
         """
         session_id = str(payload["session_id"])
         if not re.match(r"^[\w\-]+$", session_id):
@@ -203,7 +209,7 @@ class SessionRegistry:
         input_mode_raw = str(payload.get("input_mode", "open"))
         if input_mode_raw not in {"open", "hijack"}:
             raise SessionValidationError(f"input_mode must be 'open' or 'hijack', got: {input_mode_raw!r}")
-        visibility_raw = str(payload.get("visibility", "public"))
+        visibility_raw = str(payload.get("visibility", self._default_visibility))
         if visibility_raw not in {"public", "operator", "private"}:
             raise SessionValidationError(
                 f"visibility must be 'public', 'operator', or 'private', got: {visibility_raw!r}"

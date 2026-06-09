@@ -174,6 +174,12 @@ value is never observable downstream — behaviorally equivalent."""
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ__init____mutmut_1"
 reason = "block_private_connector_targets=False->True — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
 [[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ__init____mutmut_2"
+reason = "default_visibility='public'->'XXpublicXX' — Trampoline-masked default-argument mutation (same class as __init____mutmut_1): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the mutated default is dead code. The real 'public' default is exercised behaviorally by test_visibility_defaults_to_init_default_public (a registry built without an explicit default creates a public session)."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ__init____mutmut_3"
+reason = "default_visibility='public'->'PUBLIC' — Trampoline-masked default-argument mutation (same class as __init____mutmut_1): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the mutated default is dead code. The real 'public' default is exercised behaviorally by test_visibility_defaults_to_init_default_public."
+[[equivalent]]
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁrecording_entries__mutmut_1"
 reason = "limit=200->201 — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."
 [[equivalent]]
