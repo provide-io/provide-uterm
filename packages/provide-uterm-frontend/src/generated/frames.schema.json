@@ -723,6 +723,67 @@
       "title": "HijackStepFrame",
       "type": "object"
     },
+    "IdentityFrame": {
+      "additionalProperties": true,
+      "description": "Inline control-channel identity frame.",
+      "properties": {
+        "claims": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claims"
+        },
+        "fingerprint": {
+          "default": "",
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signature"
+        },
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        },
+        "transport": {
+          "default": "ssh",
+          "title": "Transport",
+          "type": "string"
+        },
+        "type": {
+          "const": "identity",
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "subject"
+      ],
+      "title": "IdentityFrame",
+      "type": "object"
+    },
     "InputFrame": {
       "additionalProperties": false,
       "description": "Browser/operator input destined for the worker.",
@@ -786,6 +847,127 @@
         "input_mode"
       ],
       "title": "InputModeChangedFrame",
+      "type": "object"
+    },
+    "LinkPatternEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "cmd",
+            "url",
+            "key",
+            "focus"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Class"
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flags"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "hover": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hover"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        },
+        "payload": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload"
+        }
+      },
+      "required": [
+        "pattern",
+        "action"
+      ],
+      "title": "LinkPatternEntry",
+      "type": "object"
+    },
+    "LinkPatternsFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "patterns": {
+          "items": {
+            "$ref": "#/definitions/LinkPatternEntry"
+          },
+          "title": "Patterns",
+          "type": "array"
+        },
+        "type": {
+          "const": "link_patterns",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "patterns"
+      ],
+      "title": "LinkPatternsFrame",
       "type": "object"
     },
     "PingFrame": {
@@ -959,6 +1141,33 @@
       "title": "PresenceUpdateFrame",
       "type": "object"
     },
+    "ResumeFailedFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "type": {
+          "const": "resume_failed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ResumeFailedFrame",
+      "type": "object"
+    },
     "ResumeFrame": {
       "additionalProperties": false,
       "properties": {
@@ -989,6 +1198,53 @@
         "token"
       ],
       "title": "ResumeFrame",
+      "type": "object"
+    },
+    "ResumeOkFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "resume_ok",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ResumeOkFrame",
+      "type": "object"
+    },
+    "SessionTokenFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Id"
+        },
+        "token": {
+          "title": "Token",
+          "type": "string"
+        },
+        "type": {
+          "const": "session_token",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "token"
+      ],
+      "title": "SessionTokenFrame",
       "type": "object"
     },
     "SnapshotFrame": {
@@ -1333,14 +1589,19 @@
       "hijack_request": "#/definitions/HijackRequestFrame",
       "hijack_state": "#/definitions/HijackStateFrame",
       "hijack_step": "#/definitions/HijackStepFrame",
+      "identity": "#/definitions/IdentityFrame",
       "input": "#/definitions/InputFrame",
       "input_mode_changed": "#/definitions/InputModeChangedFrame",
+      "link_patterns": "#/definitions/LinkPatternsFrame",
       "ping": "#/definitions/PingFrame",
       "pong": "#/definitions/PongFrame",
       "presence_leave": "#/definitions/PresenceLeaveFrame",
       "presence_sync": "#/definitions/PresenceSyncFrame",
       "presence_update": "#/definitions/PresenceUpdateFrame",
       "resume": "#/definitions/ResumeFrame",
+      "resume_failed": "#/definitions/ResumeFailedFrame",
+      "resume_ok": "#/definitions/ResumeOkFrame",
+      "session_token": "#/definitions/SessionTokenFrame",
       "snapshot": "#/definitions/SnapshotFrame",
       "snapshot_req": "#/definitions/SnapshotReqFrame",
       "status": "#/definitions/StatusFrame",
@@ -1405,6 +1666,21 @@
     },
     {
       "$ref": "#/definitions/ResumeFrame"
+    },
+    {
+      "$ref": "#/definitions/IdentityFrame"
+    },
+    {
+      "$ref": "#/definitions/SessionTokenFrame"
+    },
+    {
+      "$ref": "#/definitions/ResumeOkFrame"
+    },
+    {
+      "$ref": "#/definitions/ResumeFailedFrame"
+    },
+    {
+      "$ref": "#/definitions/LinkPatternsFrame"
     },
     {
       "$ref": "#/definitions/AnalysisFrame"

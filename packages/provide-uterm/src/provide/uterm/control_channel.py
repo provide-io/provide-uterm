@@ -112,9 +112,8 @@ def is_control_framed(message: str) -> bool:
     length_hex = message[2:10]
     if any(char not in _HEX_DIGITS for char in length_hex):
         return False
-    try:
-        payload_bytes = int(length_hex, 16)
-    except ValueError:
+    payload_bytes = int(length_hex, 16)
+    if f"{payload_bytes:08x}" != length_hex:
         return False
     if payload_bytes > _MAX_CONTROL_PAYLOAD_BYTES:
         return False

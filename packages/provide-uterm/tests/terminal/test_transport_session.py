@@ -265,6 +265,15 @@ async def test_send_encodes_cp437() -> None:
     assert transport.sent == [b"Hello\r"]
 
 
+async def test_send_expect_delegates_to_shared_helper() -> None:
+    transport = _FakeTransport()
+    session = TransportSession(transport)
+    result = await session.send_expect("Hello\r", expect_text="Hello", timeout_ms=0, sanitize=False)
+
+    assert result.timed_out is True
+    assert transport.sent == [b"Hello\r"]
+
+
 async def test_send_encoding_errors_replace() -> None:
     """Characters not representable in the encoding are replaced, never raise."""
     transport = _FakeTransport()

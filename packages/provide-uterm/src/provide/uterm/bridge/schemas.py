@@ -225,6 +225,53 @@ class ResumeFrame(_FrameBase):
     player_id: int | None = None
 
 
+class IdentityFrame(_FrameBase):
+    """Inline control-channel identity frame."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal["identity"]
+    version: int = 1
+    subject: str
+    fingerprint: str = ""
+    transport: str = "ssh"
+    claims: dict[str, Any] | None = None
+    signature: str | None = None
+
+
+class SessionTokenFrame(_FrameBase):
+    type: Literal["session_token"]
+    token: str
+    player_id: int | None = None
+
+
+class ResumeOkFrame(_FrameBase):
+    type: Literal["resume_ok"]
+
+
+class ResumeFailedFrame(_FrameBase):
+    type: Literal["resume_failed"]
+    reason: str | None = None
+
+
+class LinkPatternEntry(_FrameBase):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    pattern: str
+    action: Literal["cmd", "url", "key", "focus"]
+    id: str | None = None
+    flags: str | None = None
+    group: int | str | None = None
+    payload: Any | None = None
+    hover: str | None = None
+    class_: str | None = Field(default=None, alias="class")
+
+
+class LinkPatternsFrame(_FrameBase):
+    type: Literal["link_patterns"]
+    patterns: list[LinkPatternEntry]
+
+
 # ---------------------------------------------------------------------------
 # Misc server → browser
 # ---------------------------------------------------------------------------
@@ -353,6 +400,11 @@ AnyFrame = Annotated[
     | PongFrame
     | HelloFrame
     | ResumeFrame
+    | IdentityFrame
+    | SessionTokenFrame
+    | ResumeOkFrame
+    | ResumeFailedFrame
+    | LinkPatternsFrame
     | AnalysisFrame
     | ErrorFrame
     | StatusFrame
@@ -382,14 +434,20 @@ __all__ = [
     "HijackRequestFrame",
     "HijackStateFrame",
     "HijackStepFrame",
+    "IdentityFrame",
     "InputFrame",
     "InputModeChangedFrame",
+    "LinkPatternEntry",
+    "LinkPatternsFrame",
     "PingFrame",
     "PongFrame",
     "PresenceLeaveFrame",
     "PresenceSyncFrame",
     "PresenceUpdateFrame",
+    "ResumeFailedFrame",
     "ResumeFrame",
+    "ResumeOkFrame",
+    "SessionTokenFrame",
     "SnapshotFrame",
     "SnapshotReqFrame",
     "StatusFrame",

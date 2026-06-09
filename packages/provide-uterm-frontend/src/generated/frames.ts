@@ -23,6 +23,11 @@ export type AnyFrame =
   | PongFrame
   | HelloFrame
   | ResumeFrame
+  | IdentityFrame
+  | SessionTokenFrame
+  | ResumeOkFrame
+  | ResumeFailedFrame
+  | LinkPatternsFrame
   | AnalysisFrame
   | ErrorFrame
   | StatusFrame
@@ -115,48 +120,72 @@ export type WorkerOnline = boolean | null;
 export type PlayerId = number | null;
 export type Token1 = string;
 export type Type17 = "resume";
+export type Claims = {
+  [k: string]: unknown;
+} | null;
+export type Fingerprint = string;
+export type Signature = string | null;
+export type Subject = string;
+export type Transport = string;
+export type Type18 = "identity";
+export type Version = number;
+export type PlayerId1 = number | null;
+export type Token2 = string;
+export type Type19 = "session_token";
+export type Type20 = "resume_ok";
+export type Reason = string | null;
+export type Type21 = "resume_failed";
+export type Action1 = "cmd" | "url" | "key" | "focus";
+export type Class = string | null;
+export type Flags = string | null;
+export type Group = number | string | null;
+export type Hover = string | null;
+export type Id = string | null;
+export type Pattern = string;
+export type Patterns = LinkPatternEntry[];
+export type Type22 = "link_patterns";
 export type Formatted = string;
 export type Ts16 = number | null;
-export type Type18 = "analysis";
+export type Type23 = "analysis";
 export type ClientMax = number | null;
 export type ClientMin = number | null;
 export type Message = string;
-export type Reason = string | null;
+export type Reason1 = string | null;
 export type ServerMax = number | null;
 export type ServerMin = number | null;
-export type Type19 = "error";
+export type Type24 = "error";
 export type Ts17 = number | null;
-export type Type20 = "status";
+export type Type25 = "status";
 export type InputMode2 = string;
 export type Ts18 = number | null;
-export type Type21 = "input_mode_changed";
+export type Type26 = "input_mode_changed";
 export type Command = string;
 export type ExpiresAt = number;
 export type RequestId = string;
-export type Type22 = "approval_pending";
+export type Type27 = "approval_pending";
 export type Outcome = string;
 export type RequestId1 = string;
-export type Type23 = "approval_resolved";
-export type Type24 = "presence_update";
+export type Type28 = "approval_resolved";
+export type Type29 = "presence_update";
 export type UserId = string | null;
 export type Config = {
   [k: string]: unknown;
 } | null;
 export type OwnerId = string | null;
-export type Type25 = "presence_sync";
+export type Type30 = "presence_sync";
 export type Users =
   | {
       [k: string]: unknown;
     }[]
   | null;
 export type Ts19 = number | null;
-export type Type26 = "presence_leave";
+export type Type31 = "presence_leave";
 export type UserId1 = string;
 export type FromUserId = string | null;
 export type QueuedKeys = string | null;
-export type Reason1 = string | null;
+export type Reason2 = string | null;
 export type ToUserId = string | null;
-export type Type27 = "control_transfer";
+export type Type32 = "control_transfer";
 
 /**
  * Raw terminal output bytes from the worker to subscribers.
@@ -308,20 +337,59 @@ export interface ResumeFrame {
   token: Token1;
   type: Type17;
 }
+/**
+ * Inline control-channel identity frame.
+ */
+export interface IdentityFrame {
+  claims?: Claims;
+  fingerprint?: Fingerprint;
+  signature?: Signature;
+  subject: Subject;
+  transport?: Transport;
+  type: Type18;
+  version?: Version;
+  [k: string]: unknown;
+}
+export interface SessionTokenFrame {
+  player_id?: PlayerId1;
+  token: Token2;
+  type: Type19;
+}
+export interface ResumeOkFrame {
+  type: Type20;
+}
+export interface ResumeFailedFrame {
+  reason?: Reason;
+  type: Type21;
+}
+export interface LinkPatternsFrame {
+  patterns: Patterns;
+  type: Type22;
+}
+export interface LinkPatternEntry {
+  action: Action1;
+  class?: Class;
+  flags?: Flags;
+  group?: Group;
+  hover?: Hover;
+  id?: Id;
+  pattern: Pattern;
+  payload?: unknown;
+}
 export interface AnalysisFrame {
   formatted: Formatted;
   raw?: unknown;
   ts?: Ts16;
-  type: Type18;
+  type: Type23;
 }
 export interface ErrorFrame {
   client_max?: ClientMax;
   client_min?: ClientMin;
   message: Message;
-  reason?: Reason;
+  reason?: Reason1;
   server_max?: ServerMax;
   server_min?: ServerMin;
-  type: Type19;
+  type: Type24;
 }
 /**
  * Worker-originated status passthrough (``coerce_worker_status_frame``).
@@ -332,24 +400,24 @@ export interface ErrorFrame {
  */
 export interface StatusFrame {
   ts?: Ts17;
-  type: Type20;
+  type: Type25;
   [k: string]: unknown;
 }
 export interface InputModeChangedFrame {
   input_mode: InputMode2;
   ts?: Ts18;
-  type: Type21;
+  type: Type26;
 }
 export interface ApprovalPendingFrame {
   command: Command;
   expires_at: ExpiresAt;
   request_id: RequestId;
-  type: Type22;
+  type: Type27;
 }
 export interface ApprovalResolvedFrame {
   outcome: Outcome;
   request_id: RequestId1;
-  type: Type23;
+  type: Type28;
 }
 /**
  * DeckMux per-user presence update — schema is permissive because
@@ -357,7 +425,7 @@ export interface ApprovalResolvedFrame {
  * attached only when relevant.
  */
 export interface PresenceUpdateFrame {
-  type: Type24;
+  type: Type29;
   user_id?: UserId;
   [k: string]: unknown;
 }
@@ -367,13 +435,13 @@ export interface PresenceUpdateFrame {
 export interface PresenceSyncFrame {
   config?: Config;
   owner_id?: OwnerId;
-  type: Type25;
+  type: Type30;
   users?: Users;
   [k: string]: unknown;
 }
 export interface PresenceLeaveFrame {
   ts?: Ts19;
-  type: Type26;
+  type: Type31;
   user_id: UserId1;
 }
 /**
@@ -382,7 +450,7 @@ export interface PresenceLeaveFrame {
 export interface ControlTransferFrame {
   from_user_id?: FromUserId;
   queued_keys?: QueuedKeys;
-  reason?: Reason1;
+  reason?: Reason2;
   to_user_id?: ToUserId;
-  type: Type27;
+  type: Type32;
 }

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from inspect import signature
 
 from provide.uterm.recording import InMemoryRecordingStore, NullRecordingStore, RecordingStore
 
@@ -90,6 +91,9 @@ class TestInMemoryRecordingStoreMeta:
 
 
 class TestInMemoryRecordingStoreGetEntries:
+    def test_default_limit_is_200(self) -> None:
+        assert signature(InMemoryRecordingStore.get_entries).parameters["limit"].default == 200
+
     async def test_tail_behaviour_default(self) -> None:
         store = InMemoryRecordingStore()
         await store.start_session("s1", {})
@@ -171,6 +175,14 @@ class TestInMemoryRecordingStoreGetEntries:
         entries = await store.get_entries("s1", limit=9999)
         assert len(entries) == 500
 
+    async def test_default_limit_returns_last_200_entries(self) -> None:
+        store = InMemoryRecordingStore()
+        await store.append_events("s1", [{"ts": float(i), "event": "read", "data": {"i": i}} for i in range(250)])
+        entries = await store.get_entries("s1")
+        assert len(entries) == 200
+        assert entries[0]["data"]["i"] == 50
+        assert entries[-1]["data"]["i"] == 249
+
 
 class TestInMemoryRecordingStoreGetPath:
     async def test_get_path_returns_none(self) -> None:
@@ -185,6 +197,9 @@ class TestNullRecordingStoreProtocol:
 
 
 class TestNullRecordingStoreOperations:
+    def test_get_entries_default_limit_is_200(self) -> None:
+        assert signature(NullRecordingStore.get_entries).parameters["limit"].default == 200
+
     async def test_start_session_is_noop(self) -> None:
         store = NullRecordingStore()
         result = await store.start_session("s1", {"key": "value"})

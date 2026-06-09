@@ -39,6 +39,8 @@ def test_transports_package_defers_optional_transports() -> None:
     if not ws_preloaded:
         assert "provide.uterm.transports.websocket" not in sys.modules
 
+    assert mod.ReconnectPolicy.__name__ == "ReconnectPolicy"
+    assert "provide.uterm.transports.reconnect" in sys.modules
     _ = mod.start_ssh_server
     assert "provide.uterm.transports.ssh" in sys.modules
     with pytest.raises(AttributeError):

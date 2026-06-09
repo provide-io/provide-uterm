@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import stat
+import os  # noqa: F401  # re-exported for tests that monkeypatch syscall helpers
 import time
 from collections import deque
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from provide.uterm.file_io import secure_open_append
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
@@ -61,18 +62,7 @@ def _open_append_owner_only(path: Path) -> TextIOWrapper:
       path — there is no legitimate non-regular recording sink, and refusing
       closes a residual write-blocking / observation vector.
     """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
-    try:
-        st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode):
-            raise OSError(f"Refusing to open non-regular recording sink: {path}")
-        # Re-tighten a pre-existing loose-perm file (mode arg only applies on
-        # create). Targets the fd to avoid a TOCTOU path-swap race.
-        os.fchmod(fd, 0o600)
-    except BaseException:
-        os.close(fd)
-        raise
-    return os.fdopen(fd, "a", encoding="utf-8")
+    return secure_open_append(path)
 
 
 @runtime_checkable

@@ -131,6 +131,27 @@ class TransportSession:
         """Send a string to the server, encoded with the configured codec."""
         await self._transport.send(data.encode(self._send_encoding, errors="replace"))
 
+    async def send_expect(
+        self,
+        keys: str,
+        *,
+        expect_text: str | None = None,
+        expect_regex: str | None = None,
+        timeout_ms: int = 5000,
+        sanitize: bool = True,
+    ) -> Any:
+        """Send keys and wait for expected terminal output."""
+        from provide.uterm.expect import send_and_expect
+
+        return await send_and_expect(
+            self,
+            keys,
+            expect_text=expect_text,
+            expect_regex=expect_regex,
+            timeout_ms=timeout_ms,
+            sanitize=sanitize,
+        )
+
     async def wait_for_update(self, *, timeout_ms: int, since: int | None = None) -> bool:
         """Wait until new bytes arrive from the server, or timeout.
 

@@ -20,6 +20,8 @@ from provide.uterm.control_channel import (
     is_control_framed,
 )
 
+MAX_CONTROL_PAYLOAD_BYTES = 1_048_576
+
 
 def test_encode_data_escapes_dle() -> None:
     assert encode_data(f"a{DLE}b") == f"a{DLE}{DLE}b"
@@ -82,6 +84,12 @@ def test_decoder_handles_escaped_literal_dle() -> None:
     assert decoder.feed(encode_data(f"x{DLE}y")) == [DataChunk(f"x{DLE}y")]
 
 
+def test_decoder_joins_multiple_plain_data_parts_before_control() -> None:
+    decoder = ControlChannelDecoder()
+    raw = encode_data(f"a{DLE}b") + encode_control({"type": "ping"})
+    assert decoder.feed(raw) == [DataChunk(f"a{DLE}b"), ControlChunk({"type": "ping"})]
+
+
 def test_decoder_rejects_invalid_prefix() -> None:
     decoder = ControlChannelDecoder()
     with pytest.raises(ControlChannelProtocolError, match="invalid control prefix"):
@@ -112,9 +120,37 @@ def test_is_control_framed_detects_control_prefix() -> None:
     assert is_control_framed(framed) is True
 
 
+def test_is_control_framed_accepts_exact_header_only_zero_payload() -> None:
+    assert is_control_framed(f"{DLE}{STX}00000000:") is True
+
+
+def test_is_control_framed_accepts_payload_at_global_limit() -> None:
+    payload = "a" * MAX_CONTROL_PAYLOAD_BYTES
+    assert is_control_framed(f"{DLE}{STX}{MAX_CONTROL_PAYLOAD_BYTES:08x}:{payload}") is True
+
+
+def test_is_control_framed_rejects_noncanonical_short_length_header() -> None:
+    assert is_control_framed(f"{DLE}{STX}0000002:{{}}") is False
+
+
+def test_is_control_framed_rejects_uppercase_length_header() -> None:
+    assert is_control_framed(f"{DLE}{STX}0000000A:aaaaaaaaaa") is False
+
+
+def test_is_control_framed_rejects_complete_frame_with_trailing_data() -> None:
+    assert is_control_framed(f"{encode_control({'type': 'resume_ok'})}tail") is False
+
+
 def test_is_control_framed_rejects_unframed_text() -> None:
     assert is_control_framed("just terminal output\r\n") is False
     assert is_control_framed("") is False
+
+
+def test_is_control_framed_rejects_malformed_header_variants() -> None:
+    assert is_control_framed(f"{DLE}{STX}{'0' * 8};{{}}") is False
+    assert is_control_framed(f"{DLE}{STX}zzzzzzzz:{{}}") is False
+    assert is_control_framed(f"{DLE}{STX}00100001:{{}}") is False
+    assert is_control_framed(f"{DLE}{STX}00000001:é") is False
 
 
 def test_finish_rejects_truncated_payload() -> None:

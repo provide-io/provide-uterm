@@ -7,9 +7,42 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from provide.uterm.ansi import DEFAULT_PALETTE
+
+if TYPE_CHECKING:
+    from io import TextIOWrapper
+
+
+def _ensure_owner_only_dir(directory: Path, *, mode: int) -> None:
+    directory.mkdir(mode=mode, parents=True, exist_ok=True)
+    directory.chmod(mode)
+
+
+def secure_create(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700) -> int:
+    """Create/open *path* for append with owner-only permissions and no symlink following."""
+    target = Path(path)
+    _ensure_owner_only_dir(target.parent, mode=dir_mode)
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, mode)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError(f"Refusing to open non-regular recording sink: {target}")
+        os.fchmod(fd, mode)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def secure_open_append(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700) -> TextIOWrapper:
+    """Open *path* for append using :func:`secure_create`."""
+    fd = secure_create(path, mode=mode, dir_mode=dir_mode)
+    return os.fdopen(fd, "a", encoding="utf-8")
 
 
 def load_ans(path: Path | str, encoding: str = "latin-1") -> str:

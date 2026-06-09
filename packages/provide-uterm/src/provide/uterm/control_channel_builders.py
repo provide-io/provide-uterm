@@ -16,6 +16,8 @@ import hmac
 import json
 from typing import TYPE_CHECKING, Any
 
+from provide.uterm.bridge import schemas
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
@@ -85,7 +87,7 @@ def make_identity(
         signature = hmac.new(secret_bytes, payload, hashlib.sha256).hexdigest()
         msg["signature"] = signature
 
-    return msg
+    return schemas.IdentityFrame.model_validate(msg).model_dump(exclude_none=True)
 
 
 def make_session_token(token: str, player_id: int | None = None) -> dict[str, Any]:
@@ -106,7 +108,7 @@ def make_session_token(token: str, player_id: int | None = None) -> dict[str, An
     msg: dict[str, Any] = {"type": "session_token", "token": token}
     if player_id is not None:
         msg["player_id"] = player_id
-    return msg
+    return schemas.SessionTokenFrame.model_validate(msg).model_dump(exclude_none=True)
 
 
 def make_resume(token: str, player_id: int | None = None) -> dict[str, Any]:
@@ -127,7 +129,7 @@ def make_resume(token: str, player_id: int | None = None) -> dict[str, Any]:
     msg: dict[str, Any] = {"type": "resume", "token": token}
     if player_id is not None:
         msg["player_id"] = player_id
-    return msg
+    return schemas.ResumeFrame.model_validate(msg).model_dump(exclude_none=True)
 
 
 def make_resume_ok() -> dict[str, Any]:
@@ -136,7 +138,7 @@ def make_resume_ok() -> dict[str, Any]:
     Returns:
         A dict ready for ``encode_control()``.
     """
-    return {"type": "resume_ok"}
+    return schemas.ResumeOkFrame(type="resume_ok").model_dump()
 
 
 def make_resume_failed(reason: str | None = None) -> dict[str, Any]:
@@ -151,7 +153,7 @@ def make_resume_failed(reason: str | None = None) -> dict[str, Any]:
     msg: dict[str, Any] = {"type": "resume_failed"}
     if reason is not None:
         msg["reason"] = reason
-    return msg
+    return schemas.ResumeFailedFrame.model_validate(msg).model_dump(exclude_none=True)
 
 
 def _validate_link_pattern_entry(entry: Mapping[str, Any], index: int) -> dict[str, Any]:
@@ -204,7 +206,8 @@ def make_link_patterns(patterns: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         ValueError: If any pattern entry is malformed.
     """
     validated = [_validate_link_pattern_entry(entry, i) for i, entry in enumerate(patterns)]
-    return {"type": "link_patterns", "patterns": validated}
+    msg = {"type": "link_patterns", "patterns": validated}
+    return schemas.LinkPatternsFrame.model_validate(msg).model_dump(exclude_none=True, by_alias=True)
 
 
 def make_presence_update(user_id: str, **fields: Any) -> dict[str, Any]:
@@ -219,4 +222,4 @@ def make_presence_update(user_id: str, **fields: Any) -> dict[str, Any]:
     """
     msg: dict[str, Any] = {"type": "presence_update", "user_id": user_id}
     msg.update(fields)
-    return msg
+    return schemas.PresenceUpdateFrame.model_validate(msg).model_dump(exclude_none=True)

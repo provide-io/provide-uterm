@@ -6,6 +6,7 @@ from provide.uterm.detection.buffer import BufferManager, ScreenBuffer
 from provide.uterm.detection.detector import PromptDetector
 from provide.uterm.detection.engine import DetectionEngine
 from provide.uterm.detection.extractor import KVExtractor, extract_kv
+from provide.uterm.detection.flow import FlowEngine, FlowStep
 from provide.uterm.detection.input_type import auto_detect_input_type
 from provide.uterm.detection.loader import load_ruleset
 from provide.uterm.detection.models import (
@@ -20,6 +21,8 @@ from provide.uterm.detection.saver import ScreenSaver
 __all__ = [
     "BufferManager",
     "DetectionEngine",
+    "FlowEngine",
+    "FlowStep",
     "KVExtractor",
     "PromptDetection",
     "PromptDetectionDiagnostics",

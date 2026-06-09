@@ -62,7 +62,9 @@ async def test_connect_transport_args() -> None:
 
     await session._connect_transport()
 
-    transport.connect.assert_awaited_once_with(host="", port=0, url="wss://example.com/ws")
+    transport.connect.assert_awaited_once_with(
+        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20
+    )
 
 
 async def test_connect_starts_reader() -> None:
@@ -73,7 +75,9 @@ async def test_connect_starts_reader() -> None:
     await session.connect()
     assert session.is_connected()
     assert session._read_task is not None
-    transport.connect.assert_awaited_once_with(host="", port=0, url="wss://example.com/ws")
+    transport.connect.assert_awaited_once_with(
+        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20
+    )
 
     await session.close()
     assert not session.is_connected()
@@ -96,7 +100,9 @@ async def test_connect_ws_factory() -> None:
         assert session.is_connected()
         assert session._cols == 100
         assert session._rows == 30
-        mock_t.connect.assert_awaited_once_with(host="", port=0, url="wss://bbs.example.com/ws")
+        mock_t.connect.assert_awaited_once_with(
+            host="", port=0, url="wss://bbs.example.com/ws", ping_interval=20, ping_timeout=20
+        )
 
         await session.close()
 

@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from provide.telemetry import get_logger
+from provide.uterm.redaction import redact_text
+
+from provide.uterm.file_io import secure_open_append
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,7 +52,7 @@ class SessionLogger:
             # Legacy compatibility: tests pass a full file path like tmp/s.jsonl.
             # We must ensure that start(session_id) writes to THIS EXACT path,
             # regardless of session_id.
-            from provide.uterm.recording import RecordingStore, _open_append_owner_only
+            from provide.uterm.recording import RecordingStore
 
             class LegacyFileStore(RecordingStore):
                 def __init__(self, path: Path):
@@ -61,18 +64,18 @@ class SessionLogger:
                     # Always append to support 'test_file_opens_in_append_mode'.
                     # Create owner-only (0o600) atomically — no chmod-after-open
                     # TOCTOU window where the log is briefly world/group-readable.
-                    with _open_append_owner_only(self._path) as f:
+                    with secure_open_append(self._path) as f:
                         f.write(json.dumps(event) + "\n")
 
                 async def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
                     self._path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                    with _open_append_owner_only(self._path) as f:
+                    with secure_open_append(self._path) as f:
                         for e in events:
                             f.write(json.dumps(e) + "\n")
 
                 async def end_session(self, session_id: str) -> None:
                     event = {"ts": time.time(), "event": "log_stop", "data": {}, "session_id": session_id}
-                    with self._path.open("a", encoding="utf-8") as f:
+                    with secure_open_append(self._path) as f:
                         f.write(json.dumps(event) + "\n")
 
                 async def get_path(self, session_id: str) -> Path | None:
@@ -295,9 +298,7 @@ class SessionLogger:
                 )
 
     def _redact_text(self, value: str) -> str:
-        if self._redactor is None:
-            return value
-        return self._redactor(value)
+        return redact_text(value, self._redactor)
 
     def _redact_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         return {k: self._redact_value(v) for k, v in snapshot.items()}
