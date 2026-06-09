@@ -239,6 +239,9 @@ class TestMakeResumeOk:
         msg = make_resume_ok()
         assert msg == {"type": "resume_ok"}
 
+    def test_no_none_fields_are_emitted(self) -> None:
+        assert None not in make_resume_ok().values()
+
     def test_returns_fresh_dict(self) -> None:
         a = make_resume_ok()
         b = make_resume_ok()
@@ -390,6 +393,10 @@ class TestMakePresenceUpdate:
         msg = make_presence_update("u1")
         assert msg["type"] == "presence_update"
         assert msg["user_id"] == "u1"
+
+    def test_none_fields_are_omitted(self) -> None:
+        msg = make_presence_update("u1", scroll_line=None)
+        assert msg == {"type": "presence_update", "user_id": "u1"}
 
     def test_happy_path_with_extra_fields(self) -> None:
         msg = make_presence_update("u2", scroll_line=42, cursor_col=10)

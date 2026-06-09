@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from inspect import signature
 from pathlib import Path
 
 from provide.uterm.recording import LocalFileRecordingStore, RecordingStore
@@ -99,6 +100,9 @@ class TestLocalFileRecordingStoreMeta:
 
 
 class TestLocalFileRecordingStoreGetEntries:
+    def test_default_limit_is_200(self) -> None:
+        assert signature(LocalFileRecordingStore.get_entries).parameters["limit"].default == 200
+
     async def test_missing_file_returns_empty(self, tmp_path: Path) -> None:
         store = LocalFileRecordingStore(tmp_path)
         assert await store.get_entries("missing") == []
@@ -165,6 +169,14 @@ class TestLocalFileRecordingStoreGetEntries:
         await store.append_events("s1", [{"event": "e", "n": i} for i in range(600)])
         out = await store.get_entries("s1", limit=1000)
         assert len(out) == 500
+
+    async def test_default_limit_returns_last_200_entries(self, tmp_path: Path) -> None:
+        store = LocalFileRecordingStore(tmp_path)
+        await store.append_events("s1", [{"event": "e", "n": i} for i in range(250)])
+        out = await store.get_entries("s1")
+        assert len(out) == 200
+        assert out[0]["n"] == 50
+        assert out[-1]["n"] == 249
 
 
 class TestLocalFileRecordingStoreGetPath:

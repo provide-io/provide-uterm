@@ -34,6 +34,7 @@ from provide.uterm.control_channel import (
     encode_control,
     encode_data,
 )
+from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.bridge.models import _safe_int
 
 logger = get_logger(__name__)
@@ -270,9 +271,9 @@ class TermBridge:
                 async with websockets.connect(
                     url,
                     max_size=self._max_ws_message_bytes,
-                    ping_interval=20,
-                    ping_timeout=20,
-                    close_timeout=10,
+                    ping_interval=TerminalDefaults.WS_PING_INTERVAL,
+                    ping_timeout=TerminalDefaults.WS_PING_TIMEOUT,
+                    close_timeout=TerminalDefaults.WS_CLOSE_TIMEOUT,
                 ) as ws:
                     attempt = 0  # reset backoff on successful connect
                     await self._handle_connection(ws)

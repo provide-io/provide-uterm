@@ -47,8 +47,14 @@ class WebSocketTransport(ConnectionTransport):
         # real websockets.connect error (no unreachable "no URL" branch).
         self._url = kwargs.get("url") or f"wss://{host}:{port}"
 
+        forwarded: dict[str, Any] = {}
+        for key in ("max_size", "ping_interval", "ping_timeout", "close_timeout"):
+            value = kwargs.get(key)
+            if value is not None:
+                forwarded[key] = value
+
         try:
-            self._ws = await websockets.connect(self._url)
+            self._ws = await websockets.connect(self._url, **forwarded)
             self._connected = True
             logger.debug("WebSocketTransport connected to %s", self._url)
         except Exception as exc:

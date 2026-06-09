@@ -27,12 +27,16 @@ from __future__ import annotations
 from provide.uterm.transport_session import TransportSession
 from provide.uterm.transports.ws_transport import WebSocketTransport
 
+from provide.uterm.defaults import TerminalDefaults
+
 
 async def connect_ws(
     url: str,
     *,
     cols: int = 80,
     rows: int = 25,
+    ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
+    ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
 ) -> WebSocketSession:
     """Connect to a WebSocket server and return a Session-protocol-compliant object.
 
@@ -49,7 +53,13 @@ async def connect_ws(
         ``session.add_watch(...)`` on the returned session; do not monkey-patch
         the emulator internals.
     """
-    session = WebSocketSession(url, cols=cols, rows=rows)
+    session = WebSocketSession(
+        url,
+        cols=cols,
+        rows=rows,
+        ping_interval=ping_interval,
+        ping_timeout=ping_timeout,
+    )
     await session.connect()
     return session
 
@@ -67,10 +77,20 @@ class WebSocketSession(TransportSession):
         *,
         cols: int = 80,
         rows: int = 25,
+        ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
+        ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
     ) -> None:
         self.url = url
+        self._ping_interval = ping_interval
+        self._ping_timeout = ping_timeout
         super().__init__(WebSocketTransport(), cols=cols, rows=rows, send_encoding="utf-8")
 
     async def _connect_transport(self) -> None:
         """Open the WebSocket connection to :attr:`url`."""
-        await self._transport.connect(host="", port=0, url=self.url)
+        await self._transport.connect(
+            host="",
+            port=0,
+            url=self.url,
+            ping_interval=self._ping_interval,
+            ping_timeout=self._ping_timeout,
+        )

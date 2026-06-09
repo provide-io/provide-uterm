@@ -72,6 +72,30 @@ class TestConnect:
         connect_mock.assert_awaited_once_with("wss://host.example:8443")
         assert t._connected is True
 
+    async def test_connect_forwards_keepalive_kwargs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ws = _make_ws()
+        connect_mock = AsyncMock(return_value=ws)
+        monkeypatch.setattr("websockets.connect", connect_mock)
+
+        t = WebSocketTransport()
+        await t.connect(
+            "h",
+            1,
+            url="wss://example.com/ws",
+            ping_interval=17,
+            ping_timeout=23,
+            max_size=2_097_152,
+            close_timeout=12,
+        )
+
+        connect_mock.assert_awaited_once_with(
+            "wss://example.com/ws",
+            ping_interval=17,
+            ping_timeout=23,
+            max_size=2_097_152,
+            close_timeout=12,
+        )
+
     async def test_connect_failure_wraps_in_connection_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         connect_mock = AsyncMock(side_effect=OSError("boom"))
         monkeypatch.setattr("websockets.connect", connect_mock)

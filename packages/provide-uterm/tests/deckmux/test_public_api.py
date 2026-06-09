@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from provide.uterm import deckmux
 
 
@@ -22,3 +24,15 @@ def test_deckmux_init_has_public_name() -> None:
 
     assert hasattr(DeckMuxMixin, "_deckmux_init")
     assert hasattr(DeckMuxMixin, "deckmux_init")
+
+
+def test_deckmux_init_calls_private_initializer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The public hook delegates to the existing private initializer."""
+    from provide.uterm.deckmux import DeckMuxMixin
+
+    calls: list[DeckMuxMixin] = []
+    monkeypatch.setattr(DeckMuxMixin, "_deckmux_init", lambda self: calls.append(self))
+    hub = DeckMuxMixin()
+    hub.deckmux_init()
+
+    assert calls == [hub]

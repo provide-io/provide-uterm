@@ -40,6 +40,14 @@ Python's codec registry lookup is case-insensitive (encodings.normalize_encoding
 so "utf-8" and "UTF-8" select the identical codec and produce byte-identical output. \
 No test can distinguish them — behaviorally equivalent."""
 
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁget_entries__mutmut_1"
+reason = """\
+NullRecordingStore discards all writes and get_entries() always returns an empty list. \
+The public signature keeps the same limit/offset/event parameters as the real stores \
+for RecordingStore compatibility, but those parameters are intentionally ignored. \
+Changing the default limit from 200 to 201 cannot change any runtime result."""
+
 # --- connection.py / connection_hijack.py (ConnectionManager) -------------
 # The hijack-clearing-lifecycle bodies (disconnect_worker / _event_bus_close /
 # force_release_hijack) were split into connection_hijack.py as module-level

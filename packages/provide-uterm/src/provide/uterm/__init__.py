@@ -12,6 +12,7 @@ packages and should be imported from their explicit submodules.
 from __future__ import annotations
 
 import pkgutil
+from importlib import import_module
 
 # Allow other installed packages to contribute sub-packages under provide.uterm
 # (e.g. provide-uterm-cloudflare contributes provide.uterm.cloudflare).
@@ -140,7 +141,14 @@ __all__ = [
     # control-plane namespaces
     "control_channel_namespace",
     "control_plane_namespace",
+    "frames",
 ]
 
 from provide.uterm.control import channel as control_channel_namespace
 from provide.uterm.control import plane as control_plane_namespace
+
+
+def __getattr__(name: str) -> object:
+    if name == "frames":
+        return import_module("provide.uterm.frames")
+    raise AttributeError(name)

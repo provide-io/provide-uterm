@@ -30,6 +30,9 @@ class TerminalDefaults:
     SERVER_PORT: int = 8780  # provide-uterm-server default port
     TELNET_REMOTE_PORT: int = 23  # default remote telnet port (connect-to)
     SSH_REMOTE_PORT: int = 22  # default remote SSH port (connect-to)
+    WS_PING_INTERVAL: int = 20  # websocket ping interval (seconds)
+    WS_PING_TIMEOUT: int = 20  # websocket ping response timeout (seconds)
+    WS_CLOSE_TIMEOUT: int = 10  # websocket close timeout (seconds)
 
     @classmethod
     def token_file(cls) -> Path:
