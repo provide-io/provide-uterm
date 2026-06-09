@@ -102,3 +102,17 @@ All architectural tiers emit standardized Domain-Action-Status (DAS) events via 
 - `terminal.agent.spawned`
 - `terminal.agent.exited`
 - `terminal.agent.killed`
+
+## 6. Raw Byte Tapping for Session Observers
+
+For any transport session that supports ``add_watch`` (`TelnetSession`, `WebSocketSession`, and derived classes), wire bytes are available through one hook:
+
+```python
+session = await connect_telnet("twgs.example.com", 2300)
+buf: list[bytes] = []
+session.add_watch(lambda _state, raw: buf.append(raw))
+```
+
+Use ``session.add_watch`` when you need colors/escape-sequences/cp437 bytes for replay, telemetry, or screen snapshots. Use ``snapshot()`` / ``ansi_screen()`` for parsed display state.
+
+If you see advice to monkey-patch the emulator in older consumer code, this is the replacement path.

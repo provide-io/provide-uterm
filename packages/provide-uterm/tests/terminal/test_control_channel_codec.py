@@ -17,6 +17,7 @@ from provide.uterm.control_channel import (
     DataChunk,
     encode_control,
     encode_data,
+    is_control_framed,
 )
 
 
@@ -104,6 +105,16 @@ def test_decoder_rejects_payload_over_limit() -> None:
     decoder = ControlChannelDecoder(max_control_payload_bytes=5)
     with pytest.raises(ControlChannelProtocolError, match="control payload too large"):
         decoder.feed(encode_control({"type": "much-too-large"}))
+
+
+def test_is_control_framed_detects_control_prefix() -> None:
+    framed = encode_control({"type": "resume_ok"})
+    assert is_control_framed(framed) is True
+
+
+def test_is_control_framed_rejects_unframed_text() -> None:
+    assert is_control_framed("just terminal output\r\n") is False
+    assert is_control_framed("") is False
 
 
 def test_finish_rejects_truncated_payload() -> None:
