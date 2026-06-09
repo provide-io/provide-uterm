@@ -4,7 +4,7 @@
 
 **Goal:** Close the API gaps in `provide-uterm` that force its largest real consumer (`uwarp-space`) to reimplement, work around, or under-use uterm features — then (optionally, Part B) update `uwarp-space` to adopt the cleaned-up surface.
 
-**Implementation status (2026-06-09):** Part A is complete on `main` through commit `d5602c0b` (`Implement uterm consumer API gaps`), building on earlier merged subagent commits `68750619` (U6) and `af8b7fa8` (U7/U8 and subagent branch merges). Verified with `make quality-gate`, `uv run python scripts/run_all_tests.py`, and the changed-only mutation gate (`mutation_score=100.00`, with one documented equivalent in `mutation_equivalents.toml`). Part B remains a downstream `uwarp-space` migration and was not edited in this repository.
+**Implementation status (2026-06-09):** Part A is complete on `main` through commit `d5602c0b` (`Implement uterm consumer API gaps`), building on earlier merged subagent commits `68750619` (U6) and `af8b7fa8` (U7/U8 and subagent branch merges). Verified with `make quality-gate`, `uv run python scripts/run_all_tests.py`, and the changed-only mutation gate (`mutation_score=100.00`, with one documented equivalent in `mutation_equivalents.toml`). Part B is in the downstream `uwarp-space` branch `feat/uterm-part-b-adoption`: commit `bef5d3f50` has the public API adoption batch pushed, and a follow-up FlowEngine/runtime-prompt slice is in progress/verification.
 
 **Handoff notes:** this plan is intentionally in `docs/superpowers/plans/` and assumes a subagentized execution. Keep Part A and Part B split by repository boundaries; if another LLM only owns uterm work, copy §6 into a separate `uwarp` handoff file and leave this doc as the uterm source of truth.
 
@@ -578,7 +578,7 @@ These are listed shortest-leash first. **Tier B1** needs no uterm change (do any
 ### Tier B3 — gated on Part A, larger
 
 - **B-F8 (gated on U3):** Consume `det.kv_data` for sector/credits/port instead of the parallel regexes (`worker_runtime_execution.py:23`); match menus via `det.match.prompt_id` against existing rule IDs (`:41-43`) instead of new module-level regexes.
-- **B-F9 (gated on U3):** Drive login/character-creation through `FlowEngine.advance(...)` + the existing `_dispatch_known_prompt` map (`worker_runtime_transport.py:150-184`) instead of `login.py:113-240`'s substring state machine. The matching prompts already exist in `games/tw2002/rules.json`; add a `flows` section there.
+- **B-F9 (gated on U3):** Drive login/character-creation through `FlowEngine.advance(...)` + the existing `_dispatch_known_prompt` map (`worker_runtime_transport.py:150-184`) instead of `login.py:113-240`'s substring state machine. The matching prompts already exist in `games/tw2002/rules.json`; add a `flows` section there. **Status:** runtime prompt recovery now uses a `flow.worker_runtime_prompts` rules flow in `games/tw2002/rules.json` and `_dispatch_known_prompt` calls uterm `FlowEngine`; tests cover rendered credentials, game-gate vs character password discrimination, and stale scrollback prompt priority. Live TWGS smoke as `merchant` reached the command prompt through the production login path and through the FlowEngine prompt path. Full replacement of the standalone `login.py` / `login_twgs.py` state machines remains a later, larger migration because character creation and recovery policy are still uwarp-specific.
 
 ### Not doing (documented decisions)
 
