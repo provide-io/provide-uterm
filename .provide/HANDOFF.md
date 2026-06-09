@@ -163,8 +163,11 @@ Current repo status as of 2026-06-09:
       `d5602c0b` (`Implement uterm consumer API gaps`).
 - [x] Post-commit verification passed: `make quality-gate` and
       `uv run python scripts/run_all_tests.py`.
-- [x] Subagent task branches for U1-U8 have no unique commits relative to
-      `main`; their work is represented by the merged local commits.
+- [x] API-gap subagent task branches/worktrees for U1-U8 were merged,
+      verified to have no unique commits relative to `main`, removed, and
+      pruned.
+- [x] Unrelated dependency-upgrade worktrees remain isolated:
+      `upgrade/python-latest` and `upgrade/js-docker`.
 - [ ] Push local `main` when ready. At this checkpoint it is ahead of
       `origin/main`; no push was performed in the API-gap implementation turn.
 
