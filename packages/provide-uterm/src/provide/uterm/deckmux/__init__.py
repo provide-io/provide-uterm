@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from provide.uterm.deckmux._edge import viewport_to_edge_range
+from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from provide.uterm.deckmux._identity import (
     identity_as_principal,
     parse_identity_frame,
@@ -37,5 +38,6 @@ __all__ = [
     "identity_as_principal",
     "parse_identity_frame",
     "presence_from_identity",
+    "DeckMuxMixin",
     "viewport_to_edge_range",
 ]
