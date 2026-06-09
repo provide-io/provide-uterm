@@ -64,6 +64,11 @@ async def connect_telnet(
 
     Returns:
         A :class:`TelnetSession` that satisfies :class:`~provide.uterm.io.Session`.
+
+    Tip:
+        To tap raw bytes from the terminal stream, call
+        ``session.add_watch(...)`` on the returned session; do not monkey-patch
+        the emulator internals.
     """
     session = TelnetSession(host, port, cols=cols, rows=rows, term=term, connect_timeout=connect_timeout)
     await session.connect()
