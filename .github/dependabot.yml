@@ -1,9 +1,16 @@
-# Weekly dependency updates. Closes the supply-chain gap identified in
-# docs/security-considerations.md §1 — without Dependabot, dep updates
-# only land when a human notices a CVE.
+# Dependabot configuration — SECURITY UPDATES ONLY.
 #
-# All ecosystems use the same weekly cadence on Monday morning so the
-# PRs land together and can be reviewed in one batch.
+# Routine version-update PRs are DISABLED via open-pull-requests-limit: 0 on
+# every ecosystem: the batched weekly bumps were too noisy. Dependabot SECURITY
+# updates are a separate feature with their own internal limit (10) and are
+# UNAFFECTED by the 0 limit, so advisory-driven PRs still land — keeping the
+# supply-chain gap in docs/security-considerations.md §1 closed without the
+# routine churn. Routine bumps are now applied manually (uv lock --upgrade for
+# Python; npm / docker as needed).
+#
+# The per-ecosystem entries are kept (not deleted) so security updates still
+# know which directories/registries to scan. Raise a limit above 0 to
+# temporarily re-enable scheduled version updates for that ecosystem.
 
 version: 2
 updates:
@@ -15,7 +22,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0  # security updates only
     labels:
       - "dependencies"
       - "python"
@@ -43,7 +50,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0  # security updates only
     labels:
       - "dependencies"
       - "javascript"
@@ -67,7 +74,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0  # security updates only
     labels:
       - "dependencies"
       - "javascript"
@@ -91,7 +98,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0  # security updates only
     labels:
       - "dependencies"
       - "javascript"
@@ -108,7 +115,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0  # security updates only
     labels:
       - "dependencies"
       - "ci"
@@ -129,7 +136,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0  # security updates only
     labels:
       - "dependencies"
       - "docker"
