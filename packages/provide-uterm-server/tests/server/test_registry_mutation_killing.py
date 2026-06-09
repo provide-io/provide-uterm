@@ -234,11 +234,19 @@ class TestListGet:
 
 class TestValidateCreatePayload:
     def _v(self, payload: dict[str, Any]) -> tuple[str, str, str, str]:
-        return SessionRegistry._validate_create_payload(payload)
+        # _validate_create_payload is an instance method (it reads
+        # self._default_visibility); a default registry's default is "public".
+        return _make_registry()._validate_create_payload(payload)
 
     def test_valid_payload_returns_fields(self) -> None:
         out = self._v({"session_id": "abc-1", "connector_type": "ssh", "input_mode": "hijack", "visibility": "private"})
         assert out == ("abc-1", "ssh", "hijack", "private")
+
+    def test_operator_visibility_accepted(self) -> None:
+        # "operator" is a valid visibility — pins it as accepted so the mutants
+        # that corrupt the "operator" entry of the allowed-set
+        # ({"public", "operator", "private"}) are killed (they'd reject it).
+        assert self._v({"session_id": "x", "visibility": "operator"}) == ("x", "shell", "open", "operator")
 
     def test_defaults_when_omitted(self) -> None:
         assert self._v({"session_id": "x"}) == ("x", "shell", "open", "public")
@@ -312,6 +320,32 @@ class TestCreateSession:
         s = reg._sessions["n"]
         assert s.recording_enabled is None
         assert s.owner is None
+
+    async def test_visibility_defaults_to_init_default_public(self) -> None:
+        # A registry built WITHOUT an explicit default_visibility uses the
+        # __init__ default "public"; a session created without `visibility` must
+        # come out public. Kills the __init__ default mutants ("public" ->
+        # "XXpublicXX"/"PUBLIC") and the validator's drop-default mutant — each
+        # would make the defaulted value fail the visibility validator (raise).
+        reg = _make_registry()
+        await reg.create_session({"session_id": "n"})
+        assert reg._sessions["n"].visibility == "public"
+
+    async def test_visibility_takes_configured_default(self) -> None:
+        # A non-"public" configured default must propagate to a session created
+        # without an explicit `visibility`. Kills a mutant that hardcodes
+        # "public" or ignores self._default_visibility.
+        reg = SessionRegistry(
+            [],
+            hub=_make_hub(),
+            public_base_url="http://h:9999",
+            recording=RecordingConfig(),
+            recording_store=MagicMock(name="recstore"),
+            worker_bearer_token="bearer-x",
+            default_visibility="private",
+        )
+        await reg.create_session({"session_id": "n"})
+        assert reg._sessions["n"].visibility == "private"
 
     async def test_default_display_name_is_session_id(self) -> None:
         reg = _make_registry()

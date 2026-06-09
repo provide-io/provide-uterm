@@ -362,6 +362,7 @@ def create_server_app(
         detector=detector,
         tunnel_tokens=tunnel_tokens,
         block_private_connector_targets=config.security.block_private_connector_targets,
+        default_visibility=config.security.default_session_visibility,
     )
     profile_store = FileProfileStore(config.profiles.directory)
 

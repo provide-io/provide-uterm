@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from provide.uterm.bridge.contracts import Visibility  # noqa: TC001 — Pydantic needs it at runtime
 from provide.uterm.defaults import TerminalDefaults
 
 # CDN URLs for xterm.js and fonts loaded into the operator dashboard HTML.
@@ -278,6 +279,13 @@ class SecurityConfig(ServerBaseModel):
     # enable it to require auth when the endpoints are reachable from untrusted
     # networks.
     metrics_require_auth: bool = False
+    # Visibility applied to a session created WITHOUT an explicit ``visibility``.
+    # ``public`` (default, back-compat) means any authenticated viewer can list,
+    # read, and subscribe to it; ``operator`` restricts it to the operator role
+    # and ``private`` to the owner/admins. Set ``private`` for a "private unless
+    # shared" posture so a low-trust viewer cannot enumerate every default
+    # session. An explicit per-session ``visibility`` always overrides this.
+    default_session_visibility: Visibility = "public"
 
 
 class TunnelConfig(ServerBaseModel):

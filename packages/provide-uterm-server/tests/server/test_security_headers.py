@@ -170,15 +170,17 @@ class TestFieldToHeaderMapping:
         """Ensure every header-related config field has a mapping.
 
         Behavioral flags (``mode``, ``dev_mode_acknowledged``,
-        ``block_private_connector_targets``, ``metrics_require_auth``) are
-        excluded because they control connector egress, mode selection, or
-        metrics access — not HTTP response headers.
+        ``block_private_connector_targets``, ``metrics_require_auth``,
+        ``default_session_visibility``) are excluded because they control
+        connector egress, mode selection, metrics access, or session default
+        visibility — not HTTP response headers.
         """
         _NON_HEADER_FIELDS = {
             "mode",
             "dev_mode_acknowledged",
             "block_private_connector_targets",
             "metrics_require_auth",
+            "default_session_visibility",
         }
         config_fields = {f for f in SecurityConfig.model_fields if f not in _NON_HEADER_FIELDS}
         assert config_fields == set(_FIELD_TO_HEADER.keys())
