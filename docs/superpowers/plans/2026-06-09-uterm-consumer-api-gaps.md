@@ -19,10 +19,8 @@
 
 **Worktree execution status:**
 - `/Volumes/data/pyv/provide-uterm` (main): Part A implementation complete and committed.
-- `.claude/worktrees/agent-u6-uws` (`feat/subagent-u6-uwrap-plans`): merged into `main` by `68750619`; no unique commits remain.
-- `.claude/worktrees/agent-u7-u1` (`feat/subagent-u7-u1-u8`): merged into `main` by `af8b7fa8`; no unique commits remain.
-- `.claude/worktrees/agent-u1a`, `.claude/worktrees/agent-u2-u3`, `.claude/worktrees/agent-u4-u5`, `.worktrees/full-uterm-migration`: no unique commits remain relative to `main`; implementation is represented by `af8b7fa8` + `d5602c0b`.
-- `.claude/worktrees/agent-aa59...` (`upgrade/python-latest`) and `.claude/worktrees/agent-af3...` (`upgrade/js-docker`) untouched.
+- API-gap subagent worktrees/branches (`agent-u1a`, `agent-u2-u3`, `agent-u4-u5`, `agent-u6-uws`, `agent-u7-u1`, `full-uterm-migration`) were merged into `main`, verified to have no unique commits, removed, and pruned.
+- `.claude/worktrees/agent-aa59...` (`upgrade/python-latest`) and `.claude/worktrees/agent-af3...` (`upgrade/js-docker`) are unrelated dependency-upgrade worktrees with unique commits and remain isolated for the next phase.
 
 **Tech Stack:** Python ≥3.11, uv workspace, pytest (`asyncio_mode=auto`), Pydantic v2 (wire frames), `websockets`, `asyncssh`, pyte (terminal emulation), ruff + mypy strict + bandit. Mutation testing (mutmut). TypeScript frontend consumes generated frame schemas.
 
@@ -213,7 +211,7 @@ Each task: **Files → Steps (TDD) → Acceptance.** Tasks are ordered easiest-f
 
 ### Task U6: Promote `DeckMuxMixin` to public API — *blocker (F12)*
 
-*Status: in-progress in worktree `agent-u6-uws` (`feat/subagent-u6-uwrap-plans`).*
+*Status: complete; merged into `main` and API-gap worktree removed.*
 
 **Files:**
 - Modify: `packages/provide-uterm/src/provide/uterm/deckmux/__init__.py`
@@ -254,7 +252,7 @@ def test_deckmux_init_has_public_name():
 
 ### Task U7: `is_control_framed()` helper — *enabler (F3)*
 
-*Status: in-progress in worktree `agent-u7-u1` (`feat/subagent-u7-u1-u8`).*
+*Status: complete; merged into `main` and API-gap worktree removed.*
 
 **Files:**
 - Modify: `packages/provide-uterm/src/provide/uterm/control_channel.py` (header layout is at `:44-46,225-240`)
@@ -536,7 +534,7 @@ The `FlowRule` schema already exists in `rules.py:109` — read it to learn its 
 
 ### Task U8: Document `add_watch` as the raw-byte tap — *enabler (F4/F5)*
 
-*Status: in-progress in worktree `agent-u7-u1` (`feat/subagent-u7-u1-u8`).*
+*Status: complete; merged into `main` and API-gap worktree removed.*
 
 **Files:**
 - Modify: docstrings in `packages/provide-uterm/src/provide/uterm/transport_session.py:192` (`add_watch`), `telnet_session.py:43` (`connect_telnet`), `ws_session.py:31` (`connect_ws`).
