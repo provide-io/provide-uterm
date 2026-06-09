@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from provide.uterm.pty.capture import (
+    _MAX_FRAME_BYTES,
     CHANNEL_CONNECT,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
@@ -232,6 +233,55 @@ async def test_socket_umask_constrains_bind_and_is_restored(monkeypatch) -> None
             await cap.stop()
         finally:
             os.umask(prev)
+
+
+async def test_oversized_frame_length_is_rejected_without_reading_body() -> None:
+    """A frame announcing a length above the cap is dropped BEFORE its body is read.
+
+    Regression (PLAT-cap, capture OOM): the 4-byte length field admits ~4 GiB and
+    ``readexactly(length)`` would accumulate that many bytes before enqueueing. The
+    cap must short-circuit on the header alone and never attempt the body read.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+
+        header = struct.pack(">BI", CHANNEL_STDOUT, _MAX_FRAME_BYTES + 1)
+        reader = AsyncMock()
+        # 1st readexactly → the header. A 2nd call would be the body read; make it
+        # blow up so the test fails loudly if the cap fails to short-circuit.
+        reader.readexactly.side_effect = [header, AssertionError("body read attempted past the cap")]
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        await cap._handle_connection(reader, writer)
+
+        assert reader.readexactly.await_count == 1  # header only — body never read
+        assert cap._queue.qsize() == 0  # nothing enqueued
+        writer.close.assert_called_once()  # connection dropped
+
+
+async def test_frame_length_exactly_at_cap_is_accepted(monkeypatch) -> None:
+    """A frame whose length equals the cap is accepted (boundary: ``>`` not ``>=``)."""
+    from provide.uterm.pty import capture as capture_mod
+
+    monkeypatch.setattr(capture_mod, "_MAX_FRAME_BYTES", 4)
+    with tempfile.TemporaryDirectory() as td:
+        path = str(Path(td) / "cap.sock")
+        cap = CaptureSocket(path)
+
+        header = struct.pack(">BI", CHANNEL_STDOUT, 4)
+        reader = AsyncMock()
+        reader.readexactly.side_effect = [header, b"abcd", asyncio.IncompleteReadError(b"", 0)]
+        writer = MagicMock()
+        writer.close = MagicMock()
+        writer.wait_closed = AsyncMock()
+
+        await cap._handle_connection(reader, writer)
+
+        assert cap._queue.qsize() == 1
+        assert cap._queue.get_nowait().data == b"abcd"
 
 
 async def test_handle_connection_wait_closed_exception_ignored() -> None:
