@@ -73,6 +73,13 @@ class DeckMuxMixin:
         """
         self.deckmux = DeckMuxPresence(self)
 
+    def deckmux_init(self) -> None:
+        """Public alias for :meth:`_deckmux_init`.
+
+        Prefer this name for user-facing callers.
+        """
+        self._deckmux_init()
+
     # -- Backward-compatible container aliases ----------------------------
     # ``hub._presence_stores`` / ``hub._transfer_managers`` are read
     # directly by tests (and an e2e ssh test). Expose them as properties
