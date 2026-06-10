@@ -317,17 +317,17 @@ class TestMakeLinkPatterns:
             make_link_patterns([{"pattern": "x"}])
 
     def test_invalid_action_raises(self) -> None:
-        with pytest.raises(ValueError, match="invalid action"):
+        with pytest.raises(ValueError, match=r"entry\[0\]"):
             make_link_patterns([{"pattern": "x", "action": "teleport"}])
 
-    def test_invalid_action_error_mentions_valid_choices(self) -> None:
+    def test_invalid_action_error_mentions_index_and_valid_choices(self) -> None:
         with pytest.raises(ValueError) as exc_info:
             make_link_patterns([{"pattern": "x", "action": "bad"}])
 
-        assert (
-            str(exc_info.value)
-            == "make_link_patterns: entry[0] has invalid action 'bad'; must be one of: cmd, focus, key, url"
-        )
+        message = str(exc_info.value)
+        assert "entry[0]" in message
+        for choice in ("cmd", "url", "key", "focus"):
+            assert choice in message
 
     def test_error_mentions_entry_index(self) -> None:
         with pytest.raises(ValueError, match=r"entry\[1\]"):
@@ -381,6 +381,20 @@ class TestMakeLinkPatterns:
         entry: dict = {"pattern": "x", "action": "cmd"}
         make_link_patterns([entry])
         assert set(entry.keys()) == {"pattern", "action"}
+
+    def test_line_contains_preserved(self) -> None:
+        """``line_contains`` scopes a pattern to matching lines; it must survive."""
+        msg = make_link_patterns([{"pattern": r"\((\d+)\)", "action": "cmd", "line_contains": "Warps to Sector"}])
+        assert msg["patterns"][0]["line_contains"] == "Warps to Sector"
+
+    def test_line_contains_absent_when_not_given(self) -> None:
+        msg = make_link_patterns([{"pattern": "x", "action": "cmd"}])
+        assert "line_contains" not in msg["patterns"][0]
+
+    def test_unknown_field_raises_instead_of_silent_drop(self) -> None:
+        """An unmodelled field must fail loud, not vanish at the wire."""
+        with pytest.raises(ValueError, match=r"entry\[0\]"):
+            make_link_patterns([{"pattern": "x", "action": "cmd", "bogus": 1}])
 
 
 # ---------------------------------------------------------------------------

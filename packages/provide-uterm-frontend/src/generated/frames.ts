@@ -141,6 +141,7 @@ export type Flags = string | null;
 export type Group = number | string | null;
 export type Hover = string | null;
 export type Id = string | null;
+export type LineContains = string | null;
 export type Pattern = string;
 export type Patterns = LinkPatternEntry[];
 export type Type22 = "link_patterns";
@@ -373,6 +374,7 @@ export interface LinkPatternEntry {
   group?: Group;
   hover?: Hover;
   id?: Id;
+  line_contains?: LineContains;
   pattern: Pattern;
   payload?: unknown;
 }
