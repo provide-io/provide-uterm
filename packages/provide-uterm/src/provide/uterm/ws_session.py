@@ -37,6 +37,7 @@ async def connect_ws(
     rows: int = 25,
     ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
     ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
+    close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
 ) -> WebSocketSession:
     """Connect to a WebSocket server and return a Session-protocol-compliant object.
 
@@ -59,6 +60,7 @@ async def connect_ws(
         rows=rows,
         ping_interval=ping_interval,
         ping_timeout=ping_timeout,
+        close_timeout=close_timeout,
     )
     await session.connect()
     return session
@@ -79,10 +81,12 @@ class WebSocketSession(TransportSession):
         rows: int = 25,
         ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
         ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
+        close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
     ) -> None:
         self.url = url
         self._ping_interval = ping_interval
         self._ping_timeout = ping_timeout
+        self._close_timeout = close_timeout
         super().__init__(WebSocketTransport(), cols=cols, rows=rows, send_encoding="utf-8")
 
     async def _connect_transport(self) -> None:
@@ -93,4 +97,5 @@ class WebSocketSession(TransportSession):
             url=self.url,
             ping_interval=self._ping_interval,
             ping_timeout=self._ping_timeout,
+            close_timeout=self._close_timeout,
         )

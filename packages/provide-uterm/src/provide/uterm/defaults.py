@@ -33,6 +33,9 @@ class TerminalDefaults:
     WS_PING_INTERVAL: int = 20  # websocket ping interval (seconds)
     WS_PING_TIMEOUT: int = 20  # websocket ping response timeout (seconds)
     WS_CLOSE_TIMEOUT: int = 10  # websocket close timeout (seconds)
+    RECONNECT_MAX_RETRIES: int = 5  # reconnect attempts before giving up
+    RECONNECT_BASE_BACKOFF_S: float = 0.5  # initial reconnect backoff (seconds)
+    RECONNECT_MAX_BACKOFF_S: float = 30.0  # ceiling for reconnect backoff (seconds)
 
     @classmethod
     def token_file(cls) -> Path:
