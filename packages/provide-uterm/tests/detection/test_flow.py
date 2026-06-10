@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 import pytest
 
@@ -145,6 +146,59 @@ def test_flow_engine_handles_end_anchored_prompt_with_trailing_blank_lines() -> 
     engine = FlowEngine(ruleset)
     step = engine.advance("f", "Command [TL=00:00]:\n\n")
     assert step.current_prompt_id == "cmd"
+
+
+def test_match_position_password_prompt_over_pause_tail_does_not_crash() -> None:
+    """Regression for the live FlowEngine crash, verified end-to-end 2026-06-10.
+
+    The TWGS character-login ``password`` prompt (regex ``password[?:]\\s*$``,
+    MULTILINE) matched the detector's tail *region* but found nothing in the full
+    screen once the password was echoed and a ``[Pause]`` banner took the tail.
+    ``advance()`` then calls ``_match_position`` with an empty ``re.finditer``:
+    pre-fix ``max(())`` raised ``ValueError``, which propagated through
+    ``advance`` -> ``_character_login_loop`` (uwarp login_twgs_character.py:129)
+    and CRASHED the live login — the login path catches only ``TimeoutError``, so
+    nothing swallowed it. A live A/B confirmed pre-fix crashes / post-fix recovers
+    on the captured real screen; the fix returns ``len(screen)`` (tail-most).
+
+    This is a genuine regression guard, not documentation: the ``finditer == []``
+    assertion makes the pre-fix body ``max(())`` an unavoidable ValueError, so
+    reverting ``default=len(screen)`` makes this test error rather than pass.
+    """
+    ruleset = RuleSet.model_validate(
+        {
+            "version": "1.0",
+            "game": "test",
+            "prompts": [
+                {
+                    "id": "char_password",
+                    "match": {"pattern": r"password[?:]\s*$", "match_mode": "regex"},
+                    "input_type": "multi_key",
+                }
+            ],
+            "flows": [
+                {
+                    "id": "f",
+                    "description": "x",
+                    "steps": [
+                        {
+                            "id": "pw",
+                            "kind": "noop",
+                            "expects_prompt": "char_password",
+                            "gate_prompts": ["char_password"],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    engine = FlowEngine(ruleset)
+    # Captured live shape: password already entered/echoed, [Pause] banner at the
+    # tail, so the end-anchored password regex finds NOTHING in the full screen.
+    screen = "What is your name?\nAlpha-Striker\nPassword? ********\n\n[Pause]"
+    assert list(re.finditer(engine._prompt_patterns["char_password"]["regex"], screen)) == []
+    # Fix: empty finditer -> len(screen) (treated as tail-most), not a max() crash.
+    assert engine._match_position(screen, "char_password") == len(screen)
 
 
 def test_flow_engine_keeps_earlier_step_when_it_is_the_tail_prompt(login_ruleset: RuleSet) -> None:
