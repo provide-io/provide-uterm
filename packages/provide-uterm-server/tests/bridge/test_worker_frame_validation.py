@@ -107,6 +107,27 @@ def test_bad_snapshot_raises_in_builder() -> None:
         )
 
 
+def test_server_snapshot_frame_matches_core_builder() -> None:
+    """The server builder delegates to the canonical core builder; this guards
+    against the two implementations silently re-diverging on the wire."""
+    from provide.uterm.frames import make_snapshot_frame as core_make_snapshot_frame
+    from provide.uterm.server.bridge.frames import make_snapshot_frame
+
+    kwargs: dict[str, Any] = {
+        "screen": "hello",
+        "cursor": {"x": 3, "y": 1},
+        "cols": 80,
+        "rows": 25,
+        "screen_hash": "abc123",
+        "cursor_at_end": True,
+        "has_trailing_space": False,
+        "prompt_detected": None,
+        "ts": 123.0,
+        "raw_tail": None,
+    }
+    assert make_snapshot_frame(**kwargs) == core_make_snapshot_frame(**kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Drop path (default) — session survives, metric increments
 # ---------------------------------------------------------------------------

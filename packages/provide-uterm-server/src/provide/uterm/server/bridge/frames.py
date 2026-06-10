@@ -34,9 +34,6 @@ from provide.uterm.bridge.schemas import (
     PongFrame as _PongModel,
 )
 from provide.uterm.bridge.schemas import (
-    SnapshotFrame as _SnapshotModel,
-)
-from provide.uterm.bridge.schemas import (
     TermFrame as _TermModel,
 )
 from provide.uterm.bridge.schemas import (
@@ -45,6 +42,7 @@ from provide.uterm.bridge.schemas import (
 from provide.uterm.bridge.schemas import (
     WorkerDisconnectedFrame as _WorkerDisconnectedModel,
 )
+from provide.uterm.frames import make_snapshot_frame as _core_make_snapshot_frame
 
 
 class ErrorFrame(TypedDict):
@@ -206,13 +204,13 @@ def make_snapshot_frame(
     ts: float,
     raw_tail: str | None = None,
 ) -> SnapshotFrame:
-    # exclude_none=False preserves ``prompt_detected: None`` on the wire —
-    # consumers depend on the field being present (even when null) to
-    # distinguish "no prompt" from "field missing".
+    # Snapshot construction lives once in ``provide.uterm.frames``; this thin
+    # wrapper only re-types the result as the local ``SnapshotFrame`` TypedDict
+    # so server-side callers and signatures don't churn. The core builder
+    # already preserves ``prompt_detected: None`` on the wire (exclude_none=False).
     return cast(
         "SnapshotFrame",
-        _SnapshotModel(
-            type="snapshot",
+        _core_make_snapshot_frame(
             screen=screen,
             cursor=cursor,
             cols=cols,
@@ -221,9 +219,9 @@ def make_snapshot_frame(
             cursor_at_end=cursor_at_end,
             has_trailing_space=has_trailing_space,
             prompt_detected=prompt_detected,
-            raw_tail=raw_tail,
             ts=ts,
-        ).model_dump(exclude_none=False),
+            raw_tail=raw_tail,
+        ),
     )
 
 
