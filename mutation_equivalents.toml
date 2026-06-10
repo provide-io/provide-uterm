@@ -167,6 +167,17 @@ reason = "parsed.hostname.rstrip('.') -> rstrip('XX.XX'). urlparse always lowerc
 mutant = "provide.uterm.server.webhooks.x__address_allowed__mutmut_10"
 reason = "(is_loopback or is_link_local) -> (is_loopback and is_link_local) in the deny chain. is_loopback is always False here (the earlier `if ip.is_loopback: return` short-circuits), and EVERY link-local address also satisfies is_private (the first operand) — verified no ip has is_link_local and not is_private — so the mutated sub-expression can never change the chain's result. Equivalent."
 
+# --- detection/flow.py (FlowEngine tail-most prompt selection) -------------
+# Newly mutation-enforced. Its sole equivalent is the cursor argument: the
+# FlowEngine's per-call PromptDetector discards cursor_in_region (assigned to
+# `_cursor_above`, unused — detector.py) and uses the cursor x/y only in the
+# detection fingerprint, a cross-call cache key the FlowEngine never reuses
+# (a fresh PromptDetector per advance() call). So the cursor cannot change the
+# result, and dropping it is unobservable.
+[[equivalent]]
+mutant = "provide.uterm.detection.flow.xǁFlowEngineǁadvance__mutmut_7"
+reason = "self._snapshot(screen, cursor) -> self._snapshot(screen, None). The cursor reaches the PromptDetector only via _snapshot's cursor dict, where cursor_in_region is computed-then-discarded (_cursor_above) and cursor x/y feed only the detection fingerprint — a cross-call cache key the FlowEngine never reuses (fresh PromptDetector per advance call). So the cursor cannot change advance()'s current_prompt_id for any input; dropping it is unobservable. Equivalent."
+
 [[equivalent]]
 mutant = "provide.uterm.server.config_schema.x__require_secure_url__mutmut_14"
 reason = """\

@@ -234,6 +234,11 @@ paths_to_mutate = [
     "src/provide/uterm/detection/detector.py",
     "src/provide/uterm/detection/detector_compile.py",
     "src/provide/uterm/detection/engine.py",
+    # detection/flow.py — FlowEngine.advance tail-most prompt selection
+    #   (login-load-bearing; a hand-rolled max() once slipped the 100% coverage
+    #   gate, so it is mutation-enforced). Bound by test_flow.py, wired into
+    #   tests_dir below.
+    "src/provide/uterm/detection/flow.py",
     "src/provide/uterm/io.py",
     "src/provide/uterm/recording.py",
     # Bridge protocol negotiation — boundary-heavy, security-relevant.
@@ -451,6 +456,7 @@ tests_dir = [
     "packages/provide-uterm/tests/detection/test_rules.py",
     "packages/provide-uterm/tests/detection/test_saver.py",
     "packages/provide-uterm/tests/detection/test_buffer.py",
+    "packages/provide-uterm/tests/detection/test_flow.py",
     "packages/provide-uterm/tests/test_io.py",
     "packages/provide-uterm/tests/test_io_mutations.py",
     "packages/provide-uterm/tests/test_io_mutations_2.py",
