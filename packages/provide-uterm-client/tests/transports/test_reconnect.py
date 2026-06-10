@@ -266,3 +266,13 @@ def test_retryable_error_without_websockets_exception(monkeypatch: pytest.Monkey
 
     assert rs._is_retryable_error(ConnectionError("drop")) is True
     assert rs._is_retryable_error(ValueError("bad")) is False
+
+
+def test_policy_defaults_track_terminal_defaults() -> None:
+    """The reconnect backoff budget is centralised in TerminalDefaults."""
+    from provide.uterm.defaults import TerminalDefaults
+
+    policy = reconnect.ReconnectPolicy()
+    assert policy.max_retries == TerminalDefaults.RECONNECT_MAX_RETRIES
+    assert policy.base_backoff_s == TerminalDefaults.RECONNECT_BASE_BACKOFF_S
+    assert policy.max_backoff_s == TerminalDefaults.RECONNECT_MAX_BACKOFF_S

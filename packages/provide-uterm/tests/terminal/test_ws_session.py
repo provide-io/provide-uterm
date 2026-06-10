@@ -63,7 +63,19 @@ async def test_connect_transport_args() -> None:
     await session._connect_transport()
 
     transport.connect.assert_awaited_once_with(
-        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20
+        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20, close_timeout=10
+    )
+
+
+async def test_connect_transport_threads_close_timeout() -> None:
+    session = WebSocketSession("wss://example.com/ws", close_timeout=7)
+    transport = _mock_transport()
+    session._transport = transport
+
+    await session._connect_transport()
+
+    transport.connect.assert_awaited_once_with(
+        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20, close_timeout=7
     )
 
 
@@ -76,7 +88,7 @@ async def test_connect_starts_reader() -> None:
     assert session.is_connected()
     assert session._read_task is not None
     transport.connect.assert_awaited_once_with(
-        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20
+        host="", port=0, url="wss://example.com/ws", ping_interval=20, ping_timeout=20, close_timeout=10
     )
 
     await session.close()
@@ -101,7 +113,7 @@ async def test_connect_ws_factory() -> None:
         assert session._cols == 100
         assert session._rows == 30
         mock_t.connect.assert_awaited_once_with(
-            host="", port=0, url="wss://bbs.example.com/ws", ping_interval=20, ping_timeout=20
+            host="", port=0, url="wss://bbs.example.com/ws", ping_interval=20, ping_timeout=20, close_timeout=10
         )
 
         await session.close()

@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeAlias, TypeVar
 
+from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.transport_session import TransportSession
 
 _WebsocketsConnectionClosed: type[BaseException] | None
@@ -50,9 +51,9 @@ def _policy_delay(policy: ReconnectPolicy, attempt: int) -> float:
 class ReconnectPolicy:
     """Retry budget and backoff for reconnect attempts."""
 
-    max_retries: int = 5
-    base_backoff_s: float = 0.5
-    max_backoff_s: float = 30.0
+    max_retries: int = TerminalDefaults.RECONNECT_MAX_RETRIES
+    base_backoff_s: float = TerminalDefaults.RECONNECT_BASE_BACKOFF_S
+    max_backoff_s: float = TerminalDefaults.RECONNECT_MAX_BACKOFF_S
 
 
 OnReconnect: TypeAlias = Callable[[TransportSession], Awaitable[None]]
