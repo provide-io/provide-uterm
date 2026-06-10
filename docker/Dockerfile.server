@@ -119,6 +119,20 @@ COPY --from=frontend-build /src/${FRONTEND_DIR}/ ${FRONTEND_DIR}/
 # escaped UV_FROZEN (unpinned/hash-unverified); pyte is now in uv.lock.
 RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
 
+# Strip build backends from the runtime venv. uv resolves the build deps
+# (pip / setuptools / wheel / jaraco.* / etc.) into the env to build the
+# --no-editable workspace wheels, but they are NOT needed to RUN the server and
+# Trivy flags them (e.g. wheel / jaraco.context HIGH CVEs). Remove them so the
+# runtime image's venv carries only runtime-required packages.
+RUN uv pip uninstall --python /app/.venv/bin/python \
+        pip setuptools wheel \
+    ; rm -rf /app/.venv/lib/python*/site-packages/jaraco* \
+             /app/.venv/lib/python*/site-packages/pkg_resources \
+             /app/.venv/lib/python*/site-packages/_distutils_hack \
+             /app/.venv/lib/python*/site-packages/distutils-precedence.pth \
+             /app/.venv/bin/pip* \
+             /app/.venv/bin/wheel*
+
 # ---- runtime stage ----------------------------------------------------------
 FROM python:3.11-slim AS runtime
 
