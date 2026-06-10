@@ -925,6 +925,18 @@
           "default": null,
           "title": "Id"
         },
+        "line_contains": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Contains"
+        },
         "pattern": {
           "title": "Pattern",
           "type": "string"

@@ -16,16 +16,12 @@ import hmac
 import json
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from provide.uterm.bridge import schemas
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-
-# Valid actions for link-pattern entries.
-_LINK_PATTERN_ACTIONS = frozenset({"cmd", "url", "key", "focus"})
-
-# Optional keys allowed in a link-pattern entry (beyond required "pattern"/"action").
-_LINK_PATTERN_OPTIONAL_KEYS = frozenset({"id", "flags", "group", "payload", "hover", "class"})
 
 
 def _canonical_identity_signature_payload(
@@ -156,45 +152,16 @@ def make_resume_failed(reason: str | None = None) -> dict[str, Any]:
     return schemas.ResumeFailedFrame.model_validate(msg).model_dump(exclude_none=True)
 
 
-def _validate_link_pattern_entry(entry: Mapping[str, Any], index: int) -> dict[str, Any]:
-    """Validate and normalise a single link-pattern entry.
-
-    Required keys: ``pattern`` (str), ``action`` (one of cmd/url/key/focus).
-    Optional keys: ``id``, ``flags``, ``group``, ``payload``, ``hover``, ``class``.
-
-    Args:
-        entry: The raw pattern mapping to validate.
-        index: Zero-based position in the patterns list (for error messages).
-
-    Returns:
-        A clean dict with required fields and any present optional fields.
-
-    Raises:
-        ValueError: If required fields are missing or ``action`` is invalid.
-    """
-    if "pattern" not in entry:
-        raise ValueError(f"make_link_patterns: entry[{index}] missing required field 'pattern'")
-    if "action" not in entry:
-        raise ValueError(f"make_link_patterns: entry[{index}] missing required field 'action'")
-    action = entry["action"]
-    if action not in _LINK_PATTERN_ACTIONS:
-        valid = ", ".join(sorted(_LINK_PATTERN_ACTIONS))
-        raise ValueError(f"make_link_patterns: entry[{index}] has invalid action {action!r}; must be one of: {valid}")
-    result: dict[str, Any] = {"pattern": entry["pattern"], "action": action}
-    for key in _LINK_PATTERN_OPTIONAL_KEYS:
-        if key in entry:
-            result[key] = entry[key]
-    return result
-
-
 def make_link_patterns(patterns: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Build a ``link_patterns`` control message.
 
-    Each entry in *patterns* must contain:
-    - ``pattern`` (str): the regex or literal pattern to match.
-    - ``action`` (str): one of ``"cmd"``, ``"url"``, ``"key"``, ``"focus"``.
-
-    Optional per-entry keys: ``id``, ``flags``, ``group``, ``payload``, ``hover``, ``class``.
+    Each entry is validated against
+    :class:`~provide.uterm.bridge.schemas.LinkPatternEntry`, the single source of
+    truth for the link-pattern field set. Required keys are ``pattern`` (str) and
+    ``action`` (one of ``cmd``/``url``/``key``/``focus``); optional keys include
+    ``id``, ``flags``, ``group``, ``payload``, ``hover``, ``line_contains`` and
+    ``class``. The model is ``extra="forbid"``, so an unmodelled field raises
+    instead of being silently dropped on the wire.
 
     Args:
         patterns: Sequence of pattern mapping dicts.
@@ -203,11 +170,17 @@ def make_link_patterns(patterns: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         A dict ready for ``encode_control()``.
 
     Raises:
-        ValueError: If any pattern entry is malformed.
+        ValueError: If any pattern entry is malformed (missing or invalid field,
+            or an unknown field not modelled by ``LinkPatternEntry``).
     """
-    validated = [_validate_link_pattern_entry(entry, i) for i, entry in enumerate(patterns)]
-    msg = {"type": "link_patterns", "patterns": validated}
-    return schemas.LinkPatternsFrame.model_validate(msg).model_dump(exclude_none=True, by_alias=True)
+    entries: list[schemas.LinkPatternEntry] = []
+    for index, entry in enumerate(patterns):
+        try:
+            entries.append(schemas.LinkPatternEntry.model_validate(dict(entry)))
+        except ValidationError as exc:
+            raise ValueError(f"make_link_patterns: entry[{index}] is invalid: {exc}") from exc
+    frame = schemas.LinkPatternsFrame(type="link_patterns", patterns=entries)
+    return frame.model_dump(exclude_none=True, by_alias=True)
 
 
 def make_presence_update(user_id: str, **fields: Any) -> dict[str, Any]:

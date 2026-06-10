@@ -264,6 +264,9 @@ class LinkPatternEntry(_FrameBase):
     group: int | str | None = None
     payload: Any | None = None
     hover: str | None = None
+    # Scopes the pattern: the client only runs the regex on lines whose
+    # (SGR-stripped) text contains this substring. Empty/absent = every line.
+    line_contains: str | None = None
     class_: str | None = Field(default=None, alias="class")
 
 
