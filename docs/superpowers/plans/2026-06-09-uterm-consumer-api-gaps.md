@@ -139,7 +139,7 @@ uv run python scripts/codegen_frames.py            # regenerate
 uv run python scripts/codegen_frames.py --check     # CI drift check
 
 # Mutation gate (changed-only):
-uv run python scripts/run_mutation_gate.py --changed-only
+uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100
 ```
 
 > ⚠️ **Never run a foreground `uv` command while a background gate is running** — the `.venv` race causes exit code 2. (Recorded operational hazard.)
@@ -403,7 +403,7 @@ def redact_text(text: str, redactor: Callable[[str], str] | None) -> str: ...
 - [x] **Step 2 — Failing tests for `redaction`:** a redactor masks matched secrets; `redact_text(x, None)` returns `x` unchanged.
 - [x] **Step 3 — Implement** `secure_create`/`secure_open_append` in `file_io.py` by lifting the exact logic currently inside `SessionLogger.__init__`'s `LegacyFileStore` (`session_logger.py:54-81`). Implement `redaction.py` from the `_redact_text`/`_redactor` logic (`session_logger.py:127`).
 - [x] **Step 4 — Refactor `SessionLogger`** to call the extracted helpers instead of owning them. Run the FULL existing `SessionLogger` test suite — behavior must be unchanged: `uv run pytest packages/provide-uterm/tests -k "session_logger or recording" -vv`.
-- [x] **Step 5 — Run `run_all_tests.py`** (SessionLogger is security-critical and likely on the mutation perimeter — confirm in root `pyproject.toml [tool.mutmut]`; if `file_io.py`/`redaction.py` should be on the perimeter, add them to `paths_to_mutate`). Then `uv run python scripts/run_mutation_gate.py --changed-only`.
+- [x] **Step 5 — Run `run_all_tests.py`** (SessionLogger is security-critical and likely on the mutation perimeter — confirm in root `pyproject.toml [tool.mutmut]`; if `file_io.py`/`redaction.py` should be on the perimeter, add them to `paths_to_mutate`). Then `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100`.
 - [x] **Step 6 — Commit.** Two commits: `refactor(file-io): extract hardened secure_create/secure_open_append` then `refactor(session-logger): consume extracted secure-open + redaction helpers`.
 
 **Acceptance:** A consumer writing custom logs can `from provide.uterm.file_io import secure_open_append` and `from provide.uterm.redaction import make_redactor` to inherit the 0o600/0o700/no-symlink hardening + redaction WITHOUT adopting `SessionLogger`. `SessionLogger` behavior byte-identical (existing tests green). No hardening logic duplicated.
@@ -438,7 +438,7 @@ def test_builder_facade_exposes_full_set():
 - [x] **Step 2 — Run, verify fail** (`provide.uterm.frames` facade doesn't exist; some builders don't validate).
 - [x] **Step 3 — Implement.** Create `frames.py` re-exporting the control builders + (lazily, to avoid a core→server dep) document where server-side `make_snapshot_frame` lives, OR move snapshot building into the schema-backed core if it has no server-only deps. Make each core dict-builder validate against its `schemas.py` model before returning. **Do not** create a core→server import cycle — if `make_snapshot_frame` must stay server-side, the facade re-exports it only within the server package and the test for it lives there.
 - [x] **Step 4 — If you added/changed any model in `schemas.py`:** `uv run python scripts/codegen_frames.py` then commit `schemas.py` + `frames.schema.json` + `frames.ts` together. Run `scripts/codegen_frames.py --check`.
-- [x] **Step 5 — Run** `uv run python scripts/run_all_tests.py` (frame schemas are on the mutation perimeter — run `run_mutation_gate.py --changed-only`).
+- [x] **Step 5 — Run** `uv run python scripts/run_all_tests.py` (frame schemas are on the mutation perimeter — run `run_mutation_gate.py --changed-only --min-mutation-score 100`).
 - [x] **Step 6 — Commit.** `refactor(frames): single validating builder facade across control + bridge frames`
 
 **Acceptance:** One discoverable import (`provide.uterm.frames`) exposes all builders; each validates against its schema; no import cycle; codegen check green. Document in `CLAUDE.md`'s "Frame Schemas" section: "always build frames via `make_*`; never hand-write dicts."
@@ -525,7 +525,7 @@ The `FlowRule` schema already exists in `rules.py:109` — read it to learn its 
 - [x] **Step 3 — Run, verify fail.**
 - [x] **Step 4 — Implement `FlowEngine.advance`** reusing the existing `PromptDetector` (two-pass, `negative_match`) — do NOT write a new matcher. Reuse `KVExtractor` for `kv_data`.
 - [x] **Step 5 — Surface `kv_data`/`is_idle`** from `DetectionEngine.process_screen` if not already returned (read `engine.py` first; the data is computed — just thread it to the result/`PromptDetection`). Add a regression test asserting `process_screen(...).kv_data` is non-empty for a screen with a `kv_extract` prompt.
-- [x] **Step 6 — Run** `uv run pytest packages/provide-uterm/tests/detection/ -vv` then `uv run python scripts/run_all_tests.py`. Detection `detector.py` is on the mutation perimeter — `uv run python scripts/run_mutation_gate.py --changed-only`.
+- [x] **Step 6 — Run** `uv run pytest packages/provide-uterm/tests/detection/ -vv` then `uv run python scripts/run_all_tests.py`. Detection `detector.py` is on the mutation perimeter — `uv run python scripts/run_mutation_gate.py --changed-only --min-mutation-score 100`.
 - [x] **Step 7 — Commit.** Two commits: `feat(detection): expose kv_data/is_idle from process_screen` then `feat(detection): add FlowEngine to drive declarative multi-stage flows`.
 
 **Acceptance:** Given a `rules.json` with a `flows` section, a consumer can drive a multi-stage login/char-create via `FlowEngine.advance(flow_id, screen)` instead of hand-rolled substring matching; `kv_data` and `is_idle` are accessible from the engine result. Reuses the existing detector/extractor (no parallel matcher). `flows`/`menus` are no longer dead data.
