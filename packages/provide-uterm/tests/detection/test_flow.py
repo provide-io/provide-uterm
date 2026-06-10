@@ -4,9 +4,12 @@
 #
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from provide.uterm.detection import FlowEngine, RuleSet
+from provide.uterm.detection.rules import ActionRule
 
 
 @pytest.fixture
@@ -163,6 +166,7 @@ def test_flow_engine_no_matching_stage_returns_idle_step(login_ruleset: RuleSet)
     engine = FlowEngine(login_ruleset)
     step = engine.advance("login", "No prompt here")
 
+    assert step.flow_id == "login"
     assert step.current_prompt_id is None
     assert step.next_action is None
     assert step.done is False
@@ -223,3 +227,107 @@ def test_flow_engine_wait_action_is_not_sendable(login_ruleset: RuleSet) -> None
     assert step.current_prompt_id == "login.name"
     assert step.next_action is None
     assert step.done is False
+
+
+# ---------------------------------------------------------------------------
+# Direct unit coverage of the internal helpers (mutation-perimeter kill-tests)
+# ---------------------------------------------------------------------------
+
+
+def test_flow_engine_snapshot_without_cursor(login_ruleset: RuleSet) -> None:
+    engine = FlowEngine(login_ruleset)
+    assert engine._snapshot("a\nb ", None) == {
+        "screen": "a\nb ",
+        "screen_hash": hashlib.sha256(b"a\nb ").hexdigest(),
+        "cursor_at_end": True,
+        "has_trailing_space": True,
+        "cursor": {"x": 0, "y": 1},
+    }
+
+
+def test_flow_engine_snapshot_with_explicit_cursor(login_ruleset: RuleSet) -> None:
+    engine = FlowEngine(login_ruleset)
+    snap = engine._snapshot("xyz", (3, 7))
+    assert snap["cursor"] == {"x": 3, "y": 7}
+    assert snap["has_trailing_space"] is False
+    assert snap["cursor_at_end"] is True
+    assert snap["screen"] == "xyz"
+    assert snap["screen_hash"] == hashlib.sha256(b"xyz").hexdigest()
+
+
+def test_flow_engine_is_terminal_all_cases(login_ruleset: RuleSet) -> None:
+    engine = FlowEngine(login_ruleset)
+    noop = ActionRule(id="n", kind="noop")
+    send = ActionRule(id="s", kind="send_keys", keys="x")
+    send_no_keys = ActionRule(id="sn", kind="send_keys", keys=None)
+    assert engine._is_terminal(noop, is_last=False) is True
+    assert engine._is_terminal(send, is_last=True) is False
+    assert engine._is_terminal(send, is_last=False) is False
+    assert engine._is_terminal(send_no_keys, is_last=True) is True
+    assert engine._is_terminal(send_no_keys, is_last=False) is False
+
+
+def test_flow_engine_candidate_prompt_ids_dedupes_expects_prompt(login_ruleset: RuleSet) -> None:
+    engine = FlowEngine(login_ruleset)
+    assert engine._candidate_prompt_ids(
+        ActionRule(id="a", kind="send_keys", gate_prompts=["g"], expects_prompt="e")
+    ) == ["g", "e"]
+    assert engine._candidate_prompt_ids(
+        ActionRule(id="b", kind="send_keys", gate_prompts=["g"], expects_prompt="g")
+    ) == ["g"]
+    assert engine._candidate_prompt_ids(ActionRule(id="c", kind="send_keys", gate_prompts=["g"])) == ["g"]
+    assert engine._candidate_prompt_ids(ActionRule(id="d", kind="send_keys")) == []
+
+
+def test_flow_engine_match_position_tail_most_and_default(login_ruleset: RuleSet) -> None:
+    engine = FlowEngine(login_ruleset)
+    # single match -> its start offset
+    assert engine._match_position("xx Command [TL]", "main.command") == 3
+    # multiple matches -> rightmost (tail-most)
+    assert engine._match_position("Command [a]\nCommand [b]", "main.command") == 12
+    # no match in the full screen -> default len(screen) (treated as tail-most)
+    assert engine._match_position("no match", "main.command") == len("no match")
+
+
+def _two_prompt_engine(p0_pat: str, p1_pat: str) -> FlowEngine:
+    return FlowEngine(
+        RuleSet.model_validate(
+            {
+                "version": "1.0",
+                "game": "test",
+                "prompts": [
+                    {"id": "p0", "match": {"pattern": p0_pat, "match_mode": "contains"}, "input_type": "single_key"},
+                    {"id": "p1", "match": {"pattern": p1_pat, "match_mode": "contains"}, "input_type": "single_key"},
+                ],
+                "flows": [
+                    {
+                        "id": "f",
+                        "description": "x",
+                        "steps": [
+                            {"id": "s0", "kind": "send_keys", "keys": "0\r", "gate_prompts": ["p0"]},
+                            {"id": "s1", "kind": "send_keys", "keys": "1\r", "gate_prompts": ["p1"]},
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+
+
+def test_flow_engine_position_tie_keeps_earliest_step() -> None:
+    """Two prompts matching at the SAME offset must keep the earliest flow step
+    (strict '>', not '>=', so a later step does not steal a tie)."""
+    engine = _two_prompt_engine("DUP", "DUP")
+    step = engine.advance("f", "DUP")
+    assert step.current_prompt_id == "p0"
+    assert step.next_action == "0\r"
+
+
+def test_flow_engine_ranks_by_position_not_step_index() -> None:
+    """Tail-most uses the match POSITION, not the step index: an earlier step
+    whose prompt is further down the screen beats a later step higher up."""
+    # p0 (step 0) at offset 9; p1 (step 1) at offset 2 — p0 is tail-most.
+    engine = _two_prompt_engine("ZZZ", "WWW")
+    step = engine.advance("f", "xxWWWxxxxZZZ")
+    assert step.current_prompt_id == "p0"
+    assert step.next_action == "0\r"

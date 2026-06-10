@@ -33,7 +33,6 @@ class FlowEngine:
     """Advance named flows using existing prompt detectors and rule metadata."""
 
     def __init__(self, ruleset: RuleSet) -> None:
-        self._ruleset = ruleset
         self._flows = {flow.id: flow for flow in ruleset.flows}
         self._prompt_patterns = {pattern["id"]: pattern for pattern in ruleset.to_prompt_patterns()}
 
@@ -62,10 +61,10 @@ class FlowEngine:
                 best = (position, index, action, match)
 
         if best is None:
-            return FlowStep(flow_id=flow.id, current_prompt_id=None, next_action=None, done=False, kv_data={})
+            return FlowStep(flow_id=flow.id, current_prompt_id=None, next_action=None, done=False)
 
         _position, index, action, match = best
-        pattern = self._prompt_patterns.get(match.prompt_id, {})
+        pattern = self._prompt_patterns[match.prompt_id]
         kv_data = extract_kv(screen, pattern.get("kv_extract")) or {}
         terminal = self._is_terminal(action, is_last=index == last_index)
         send_keys = action.keys if action.kind == "send_keys" else None
