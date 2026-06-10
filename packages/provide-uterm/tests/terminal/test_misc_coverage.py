@@ -201,24 +201,37 @@ class TestExtractPromptId:
 
 
 # ---------------------------------------------------------------------------
-# 7. hijack/hub/polling.py line 106->109 — no new snapshot since last poll
+# 7. hub/polling_service.py line 161->163 — no new snapshot since last poll
 # ---------------------------------------------------------------------------
 
 
 class TestWaitForGuardNoNewSnapshot:
     async def test_snap_ts_not_advanced_triggers_request_snapshot(self) -> None:
-        """Line 106->109: snap_ts <= last_snap_ts → request_snapshot called again."""
+        """polling_service 161->163: snap_ts <= last_snap_ts → request_snapshot again.
+
+        Deterministic by construction: the poll loop's monotonic clock is mocked
+        so the loop runs *exactly two* iterations regardless of host speed, and
+        ``asyncio.sleep`` is neutralised. The retry branch only fires from the
+        second iteration (the first poll sets ``last_snap_ts`` from 0.0 → snap_ts),
+        so a healthy retry yields exactly one extra request on top of the initial.
+
+        The prior version relied on wall-clock time — ``timeout_ms=150`` had to
+        fit at least two real 30ms polls — and flaked on starved CI runners where
+        only one iteration ran before the deadline (``request_count == 1``).
+        """
+        import types
+
         from provide.uterm.server.bridge.hub import TermHub
         from provide.uterm.server.bridge.models import WorkerTermState
 
         hub = TermHub()
 
-        # Register a worker with a snapshot that has an old timestamp
+        # Worker snapshot whose ts never advances, so every poll after the first
+        # sees snap_ts <= last_snap_ts and must re-request.
         async with hub._lock:
             st = hub.registry._workers.setdefault("w1", WorkerTermState())
             st.worker_ws = AsyncMock()
             st.worker_ws.send_text = AsyncMock()
-            # Set a snapshot with ts=1.0 (old, won't match future time)
             st.last_snapshot = {"screen": "no match here", "ts": 1.0}
 
         request_count = 0
@@ -231,19 +244,26 @@ class TestWaitForGuardNoNewSnapshot:
 
         hub.request_snapshot = counting_req  # type: ignore[method-assign]
 
-        # Run wait_for_guard with an expect_regex that won't match.
-        # Use a very short timeout so it exits quickly.
-        matched, snap, reason = await hub.wait_for_guard(
-            "w1",
-            expect_prompt_id=None,
-            expect_regex="NEVER_MATCH_12345",
-            timeout_ms=150,
-            poll_interval_ms=30,
-        )
+        # Pin the loop to exactly two iterations: the first monotonic() sets
+        # end = 0.0 + timeout; the next two ticks (0.0, 0.001) are < end so two
+        # iterations run, then the exhausted iterator yields 999.0 to exit. With
+        # sleep no-op'd, no real time elapses, so host speed can't change the count.
+        ticks = iter([0.0, 0.0, 0.001])
+        fake_time = types.SimpleNamespace(monotonic=lambda: next(ticks, 999.0))
+        ps = "provide.uterm.server.bridge.hub.polling_service"
+        with patch(f"{ps}.time", fake_time), patch(f"{ps}.asyncio.sleep", AsyncMock()):
+            matched, _snap, reason = await hub.wait_for_guard(
+                "w1",
+                expect_prompt_id=None,
+                expect_regex="NEVER_MATCH_12345",
+                timeout_ms=150,
+                poll_interval_ms=30,
+            )
 
         assert matched is False
-        # request_snapshot should have been called multiple times (initial + retries when ts <= last)
-        assert request_count >= 2
+        assert reason == "prompt_guard_not_satisfied"
+        # 1 initial request + exactly 1 retry on the second poll (ts did not advance).
+        assert request_count == 2
 
 
 # ---------------------------------------------------------------------------
