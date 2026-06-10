@@ -14,7 +14,7 @@ from provide.uterm.detection.detector import PromptDetector
 from provide.uterm.detection.extractor import extract_kv
 
 if TYPE_CHECKING:
-    from provide.uterm.detection.rules import ActionRule, FlowRule, RuleSet
+    from provide.uterm.detection.rules import ActionRule, RuleSet
 
 
 @dataclass(frozen=True)
@@ -43,18 +43,21 @@ class FlowEngine:
             raise ValueError(f"unknown flow: {flow_id}")
 
         snapshot = self._snapshot(screen, cursor)
-        for action in flow.steps:
+        last_index = len(flow.steps) - 1
+        for index, action in enumerate(flow.steps):
             prompt_ids = self._candidate_prompt_ids(action)
             match = self._detect_prompt(snapshot, prompt_ids)
             if match is None:
                 continue
             pattern = self._prompt_patterns.get(match.prompt_id, {})
             kv_data = extract_kv(screen, pattern.get("kv_extract")) or {}
+            terminal = self._is_terminal(action, is_last=index == last_index)
+            send_keys = action.keys if action.kind == "send_keys" else None
             return FlowStep(
                 flow_id=flow.id,
                 current_prompt_id=match.prompt_id,
-                next_action=self._action_keys(action, flow),
-                done=self._is_terminal(action, flow),
+                next_action=None if terminal else send_keys,
+                done=terminal,
                 kv_data=kv_data,
             )
 
@@ -74,15 +77,10 @@ class FlowEngine:
             return None
         return PromptDetector(patterns).detect_prompt(snapshot)
 
-    def _action_keys(self, action: ActionRule, flow: FlowRule) -> str | None:
-        if self._is_terminal(action, flow):
-            return None
-        return action.keys if action.kind == "send_keys" else None
-
-    def _is_terminal(self, action: ActionRule, flow: FlowRule) -> bool:
+    def _is_terminal(self, action: ActionRule, *, is_last: bool) -> bool:
         if action.kind == "noop":
             return True
-        return flow.steps.index(action) == len(flow.steps) - 1 and action.keys is None
+        return is_last and action.keys is None
 
     def _snapshot(self, screen: str, cursor: tuple[int, int] | None) -> dict[str, Any]:
         if cursor is None:

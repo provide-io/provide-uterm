@@ -96,6 +96,25 @@ def encode_control(payload: Mapping[str, Any]) -> str:
     return f"{DLE}{STX}{len(serialized.encode('utf-8')):08x}:{serialized}"
 
 
+def _utf8_payload_end(buf: str, start: int, payload_bytes: int) -> int | None:
+    """Return the character index ending a UTF-8 byte-length payload.
+
+    Returns None when *buf* does not yet contain ``payload_bytes`` bytes from
+    *start*. Raises :class:`ControlChannelProtocolError` when the declared byte
+    length splits a Unicode code point (which appending more text cannot fix).
+    """
+    byte_count = 0
+    idx = start
+    while idx < len(buf) and byte_count < payload_bytes:
+        byte_count += len(buf[idx].encode("utf-8"))
+        idx += 1
+        if byte_count > payload_bytes:
+            raise ControlChannelProtocolError("invalid control payload length")
+    if byte_count < payload_bytes:
+        return None
+    return idx
+
+
 def is_control_framed(message: str) -> bool:
     """Return ``True`` when *message* is a full control-framed payload.
 
@@ -119,8 +138,7 @@ def is_control_framed(message: str) -> bool:
         return False
 
     try:
-        decoder = ControlChannelDecoder()
-        payload_end = decoder._payload_end_for_utf8_length(message, _HEADER_BYTES, payload_bytes)
+        payload_end = _utf8_payload_end(message, _HEADER_BYTES, payload_bytes)
     except ControlChannelProtocolError:
         return False
 
@@ -226,22 +244,12 @@ class ControlChannelDecoder:
         return payload
 
     def _payload_end_for_utf8_length(self, buf: str, start: int, payload_bytes: int) -> int | None:
-        """Return the character index ending a UTF-8 byte-length payload.
-
-        Returns None when the current buffer does not yet contain enough bytes.
-        Raises when the declared byte length splits a Unicode code point, which
-        cannot become valid by appending more text to this str buffer.
-        """
-        byte_count = 0
-        idx = start
-        while idx < len(buf) and byte_count < payload_bytes:
-            byte_count += len(buf[idx].encode("utf-8"))
-            idx += 1
-            if byte_count > payload_bytes:
-                raise self._report_error("invalid control payload length")
-        if byte_count < payload_bytes:
-            return None
-        return idx
+        """Locate the payload end via the shared helper, firing the decoder's
+        error hook when the declared byte length splits a Unicode code point."""
+        try:
+            return _utf8_payload_end(buf, start, payload_bytes)
+        except ControlChannelProtocolError as exc:
+            raise self._report_error(str(exc)) from exc
 
     def _try_parse_frame(self, buf: str, idx: int, buf_len: int, *, final: bool) -> tuple[ControlChunk, int] | None:
         """Parse a control frame at buf[idx]. Returns (chunk, frame_end) or None if incomplete.
