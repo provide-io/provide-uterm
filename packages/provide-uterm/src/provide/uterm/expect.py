@@ -57,7 +57,10 @@ async def send_and_expect(
     payload = prepare_keystrokes(keys) if sanitize else keys
     expect_re = re.compile(expect_regex) if expect_regex is not None else None
     since = session.screen_change_seq()
-    await session.send(payload)
+    # An empty payload is a no-op write; skip it so callers can use this as a
+    # pure read/wait (e.g. a read-only snapshot) without emitting a stray frame.
+    if payload:
+        await session.send(payload)
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + max(0, timeout_ms) / 1000.0
