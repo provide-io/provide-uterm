@@ -108,3 +108,15 @@ async def test_send_and_expect_without_expectation_settles_after_first_update() 
     assert result.timed_out is False
     assert result.screen == "After"
     assert session.sent == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_send_and_expect_empty_keys_does_not_send() -> None:
+    """An empty payload must not be written to the wire — this lets callers use
+    send_and_expect as a pure read/wait (e.g. a read-only snapshot tool)."""
+    session = _ScriptedSession(["Command [TL=00:00]:"])
+    result = await send_and_expect(session, "", timeout_ms=0)
+
+    assert session.sent == []
+    assert result.matched is False
+    assert result.timed_out is False
