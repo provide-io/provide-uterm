@@ -95,6 +95,64 @@ def test_flow_engine_reports_terminal_stage_done(login_ruleset: RuleSet) -> None
     assert step.done is True
 
 
+def test_flow_engine_prefers_tail_prompt_over_stale_scrollback(login_ruleset: RuleSet) -> None:
+    """A stale earlier-step prompt left in scrollback must not beat the current
+    prompt at the tail (cursor region). Without this, advance() returns the
+    first flow step whose prompt matches anywhere, so scrollback wins."""
+    engine = FlowEngine(login_ruleset)
+    # 'Enter your name' (step 0) is stale scrollback; 'Command [' (step 2) is current.
+    step = engine.advance("login", "Enter your name\r\nalice\r\nCommand [TL=00:00]:")
+
+    assert step.current_prompt_id == "main.command"
+    assert step.done is True
+
+
+def test_flow_engine_tail_preference_keeps_single_match(login_ruleset: RuleSet) -> None:
+    """When only one prompt matches, tail-preference is a no-op."""
+    engine = FlowEngine(login_ruleset)
+    step = engine.advance("login", "Enter your name:")
+    assert step.current_prompt_id == "login.name"
+
+
+def test_flow_engine_handles_end_anchored_prompt_with_trailing_blank_lines() -> None:
+    """Regression: an end-anchored prompt (\\Z/$) can match the detector's tail
+    region while finding nothing in the full screen when trailing blank lines
+    shift the anchor. advance() must treat it as tail-most, not crash on an
+    empty finditer (max() ValueError)."""
+    ruleset = RuleSet.model_validate(
+        {
+            "version": "1.0",
+            "game": "test",
+            "prompts": [
+                {
+                    "id": "cmd",
+                    "match": {"pattern": r"Command \[.*\Z", "match_mode": "regex"},
+                    "input_type": "single_key",
+                }
+            ],
+            "flows": [
+                {
+                    "id": "f",
+                    "description": "x",
+                    "steps": [{"id": "done", "kind": "noop", "expects_prompt": "cmd", "gate_prompts": ["cmd"]}],
+                }
+            ],
+        }
+    )
+    engine = FlowEngine(ruleset)
+    step = engine.advance("f", "Command [TL=00:00]:\n\n")
+    assert step.current_prompt_id == "cmd"
+
+
+def test_flow_engine_keeps_earlier_step_when_it_is_the_tail_prompt(login_ruleset: RuleSet) -> None:
+    """When an earlier flow step's prompt is the live tail prompt and a later
+    step's prompt is only in scrollback, the earlier (tail-most) one is kept."""
+    engine = FlowEngine(login_ruleset)
+    # 'Command [' (step 2) is stale scrollback; 'Enter your name' (step 0) is live.
+    step = engine.advance("login", "Command [TL=00:00]:\r\nx\r\nEnter your name:")
+    assert step.current_prompt_id == "login.name"
+
+
 def test_flow_engine_unknown_flow_raises(login_ruleset: RuleSet) -> None:
     engine = FlowEngine(login_ruleset)
     with pytest.raises(ValueError, match="unknown flow"):

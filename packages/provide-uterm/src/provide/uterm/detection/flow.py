@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -37,31 +38,57 @@ class FlowEngine:
         self._prompt_patterns = {pattern["id"]: pattern for pattern in ruleset.to_prompt_patterns()}
 
     def advance(self, flow_id: str, screen: str, cursor: tuple[int, int] | None = None) -> FlowStep:
-        """Return the next action for *flow_id* on the current screen."""
+        """Return the next action for *flow_id* on the current screen.
+
+        When several flow steps' gate prompts match (e.g. a stale prompt left in
+        scrollback above the live one), the prompt whose match sits closest to the
+        tail — the current cursor region — wins, so scrollback does not beat the
+        live prompt. Ties keep the earliest flow step.
+        """
         flow = self._flows.get(flow_id)
         if flow is None:
             raise ValueError(f"unknown flow: {flow_id}")
 
         snapshot = self._snapshot(screen, cursor)
         last_index = len(flow.steps) - 1
+        best: tuple[int, int, ActionRule, Any] | None = None
         for index, action in enumerate(flow.steps):
             prompt_ids = self._candidate_prompt_ids(action)
             match = self._detect_prompt(snapshot, prompt_ids)
             if match is None:
                 continue
-            pattern = self._prompt_patterns.get(match.prompt_id, {})
-            kv_data = extract_kv(screen, pattern.get("kv_extract")) or {}
-            terminal = self._is_terminal(action, is_last=index == last_index)
-            send_keys = action.keys if action.kind == "send_keys" else None
-            return FlowStep(
-                flow_id=flow.id,
-                current_prompt_id=match.prompt_id,
-                next_action=None if terminal else send_keys,
-                done=terminal,
-                kv_data=kv_data,
-            )
+            position = self._match_position(screen, match.prompt_id)
+            if best is None or position > best[0]:
+                best = (position, index, action, match)
 
-        return FlowStep(flow_id=flow.id, current_prompt_id=None, next_action=None, done=False, kv_data={})
+        if best is None:
+            return FlowStep(flow_id=flow.id, current_prompt_id=None, next_action=None, done=False, kv_data={})
+
+        _position, index, action, match = best
+        pattern = self._prompt_patterns.get(match.prompt_id, {})
+        kv_data = extract_kv(screen, pattern.get("kv_extract")) or {}
+        terminal = self._is_terminal(action, is_last=index == last_index)
+        send_keys = action.keys if action.kind == "send_keys" else None
+        return FlowStep(
+            flow_id=flow.id,
+            current_prompt_id=match.prompt_id,
+            next_action=None if terminal else send_keys,
+            done=terminal,
+            kv_data=kv_data,
+        )
+
+    def _match_position(self, screen: str, prompt_id: str) -> int:
+        """Tail-most offset of the prompt's regex in *screen*.
+
+        Used to prefer the live prompt near the cursor over a stale scrollback
+        match of an earlier flow step. The detector only offers candidates it
+        already matched, but an end-anchored pattern (``$``/``\\Z``) can match the
+        detector's tail *region* while finding nothing in the full *screen* when
+        trailing content shifts the anchor. In that case the prompt is at the
+        tail, so it is treated as tail-most (``len(screen)``) rather than absent.
+        """
+        regex = self._prompt_patterns[prompt_id]["regex"]
+        return max((hit.start() for hit in re.finditer(regex, screen)), default=len(screen))
 
     def _candidate_prompt_ids(self, action: ActionRule) -> list[str]:
         candidates = list(action.gate_prompts)
