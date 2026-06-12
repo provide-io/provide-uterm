@@ -50,7 +50,7 @@ class FlowEngine:
 
         snapshot = self._snapshot(screen, cursor)
         last_index = len(flow.steps) - 1
-        best: tuple[int, int, ActionRule, Any] | None = None
+        best: tuple[tuple[int, int], int, ActionRule, Any] | None = None
         for index, action in enumerate(flow.steps):
             prompt_ids = self._candidate_prompt_ids(action)
             match = self._detect_prompt(snapshot, prompt_ids)
@@ -76,18 +76,33 @@ class FlowEngine:
             kv_data=kv_data,
         )
 
-    def _match_position(self, screen: str, prompt_id: str) -> int:
-        """Tail-most offset of the prompt's regex in *screen*.
+    def _match_position(self, screen: str, prompt_id: str) -> tuple[int, int]:
+        """Tail-most ranking key for the prompt's regex in *screen*.
 
-        Used to prefer the live prompt near the cursor over a stale scrollback
-        match of an earlier flow step. The detector only offers candidates it
-        already matched, but an end-anchored pattern (``$``/``\\Z``) can match the
-        detector's tail *region* while finding nothing in the full *screen* when
-        trailing content shifts the anchor. In that case the prompt is at the
-        tail, so it is treated as tail-most (``len(screen)``) rather than absent.
+        Returns ``(end, -start)`` for the prompt's tail-most match, so that
+        :meth:`advance` can pick the prompt closest to the live cursor region
+        and break a same-line tie toward the more-anchored match:
+
+        - **End offset (primary, larger wins).** A match further down the screen
+          ends at a larger absolute offset, so the live cursor-region prompt beats
+          a stale scrollback match of an earlier flow step. Two matches that end at
+          the same offset are necessarily on the same line.
+        - **Negated start offset (secondary, larger ``-start`` = earlier start
+          wins).** When two prompts match the SAME line and end at the same column
+          — e.g. ``Enter your password:`` matched whole-line (start 0) vs. the
+          generic suffix regex ``password[?:]\\s*$`` (start 11) — the anchored,
+          longer match (earlier start) must win, not the suffix. Ranking by the raw
+          tail-most start instead made the suffix steal the resolution.
+
+        The detector only offers candidates it already matched, but an end-anchored
+        pattern (``$``/``\\Z``) can match the detector's tail *region* while finding
+        nothing in the full *screen* when trailing content shifts the anchor. In
+        that case the prompt is at the tail, so the empty ``finditer`` falls back to
+        ``(len(screen), 0)`` (tail-most end, neutral start) rather than crashing on
+        ``max()`` of an empty iterator.
         """
         regex = self._prompt_patterns[prompt_id]["regex"]
-        return max((hit.start() for hit in re.finditer(regex, screen)), default=len(screen))
+        return max(((hit.end(), -hit.start()) for hit in re.finditer(regex, screen)), default=(len(screen), 0))
 
     def _candidate_prompt_ids(self, action: ActionRule) -> list[str]:
         candidates = list(action.gate_prompts)
