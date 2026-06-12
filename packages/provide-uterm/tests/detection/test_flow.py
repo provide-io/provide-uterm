@@ -197,8 +197,8 @@ def test_match_position_password_prompt_over_pause_tail_does_not_crash() -> None
     # tail, so the end-anchored password regex finds NOTHING in the full screen.
     screen = "What is your name?\nAlpha-Striker\nPassword? ********\n\n[Pause]"
     assert list(re.finditer(engine._prompt_patterns["char_password"]["regex"], screen)) == []
-    # Fix: empty finditer -> len(screen) (treated as tail-most), not a max() crash.
-    assert engine._match_position(screen, "char_password") == len(screen)
+    # Fix: empty finditer -> (len(screen), 0) (treated as tail-most), not a max() crash.
+    assert engine._match_position(screen, "char_password") == (len(screen), 0)
 
 
 def test_flow_engine_keeps_earlier_step_when_it_is_the_tail_prompt(login_ruleset: RuleSet) -> None:
@@ -335,12 +335,24 @@ def test_flow_engine_candidate_prompt_ids_dedupes_expects_prompt(login_ruleset: 
 
 def test_flow_engine_match_position_tail_most_and_default(login_ruleset: RuleSet) -> None:
     engine = FlowEngine(login_ruleset)
-    # single match -> its start offset
-    assert engine._match_position("xx Command [TL]", "main.command") == 3
-    # multiple matches -> rightmost (tail-most)
-    assert engine._match_position("Command [a]\nCommand [b]", "main.command") == 12
-    # no match in the full screen -> default len(screen) (treated as tail-most)
-    assert engine._match_position("no match", "main.command") == len("no match")
+    # single match -> (end, -start) key for that match ("Command [" spans 3..12)
+    assert engine._match_position("xx Command [TL]", "main.command") == (12, -3)
+    # multiple matches -> rightmost (tail-most by larger end); 2nd "Command [" spans 12..21
+    assert engine._match_position("Command [a]\nCommand [b]", "main.command") == (21, -12)
+    # no match in the full screen -> default (len(screen), 0) (treated as tail-most)
+    assert engine._match_position("no match", "main.command") == (len("no match"), 0)
+
+
+def test_flow_engine_match_position_same_end_prefers_earlier_start(login_ruleset: RuleSet) -> None:
+    """Two prompts ending at the same column are ranked toward the EARLIER start
+    (the more-anchored, longer match), so a suffix substring never outranks the
+    full-line match it sits inside. ``-start`` makes the larger key the smaller
+    start: (end, -0) > (end, -11)."""
+    engine = FlowEngine(login_ruleset)
+    # 'Enter your name' ends at 15 from start 0; a hypothetical suffix 'name'
+    # would end at 15 from start 11 -> key (15, -11) < (15, 0).
+    assert engine._match_position("Enter your name", "login.name") == (15, 0)
+    assert (15, 0) > (15, -11)
 
 
 def _two_prompt_engine(p0_pat: str, p1_pat: str) -> FlowEngine:
@@ -385,3 +397,53 @@ def test_flow_engine_ranks_by_position_not_step_index() -> None:
     step = engine.advance("f", "xxWWWxxxxZZZ")
     assert step.current_prompt_id == "p0"
     assert step.next_action == "0\r"
+
+
+def test_flow_engine_same_line_prefers_anchored_over_suffix_substring() -> None:
+    """Regression: when two prompts match the SAME line and one's regex is a
+    suffix substring of the other (same end offset, later start), the anchored /
+    longer match must win — not the suffix.
+
+    This is the live TWGS ``Enter your password:`` ambiguity: ``login_password``
+    matches the whole line (start 0) while the generic ``character_password``
+    suffix regex ``password[?:]\\s*$`` matches only the tail (start 11) and ends
+    at the same column. Ranking by raw tail-most START offset (dd4ccc75) made the
+    suffix win because 11 > 0, so the runtime dispatched the character password
+    on the BBS-game gate. Tail-most must compare by match END (so true scrollback
+    still loses), and on an equal end prefer the EARLIER start (the more-anchored,
+    longer match)."""
+    engine = FlowEngine(
+        RuleSet.model_validate(
+            {
+                "version": "1.0",
+                "game": "test",
+                "prompts": [
+                    # Whole-line anchored match (start 0), earlier flow step.
+                    {
+                        "id": "anchored",
+                        "match": {"pattern": r"Enter your password:\s*$", "match_mode": "regex"},
+                        "input_type": "multi_key",
+                    },
+                    # Suffix substring of the same line (start > 0, same end), later step.
+                    {
+                        "id": "suffix",
+                        "match": {"pattern": r"password[?:]\s*$", "match_mode": "regex"},
+                        "input_type": "multi_key",
+                    },
+                ],
+                "flows": [
+                    {
+                        "id": "f",
+                        "description": "x",
+                        "steps": [
+                            {"id": "s0", "kind": "send_keys", "keys": "anchored\r", "gate_prompts": ["anchored"]},
+                            {"id": "s1", "kind": "send_keys", "keys": "suffix\r", "gate_prompts": ["suffix"]},
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    step = engine.advance("f", "Enter your password: ")
+    assert step.current_prompt_id == "anchored"
+    assert step.next_action == "anchored\r"
