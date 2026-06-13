@@ -43,6 +43,7 @@ class SshSessionConnector(SessionConnector):
             "known_hosts",
             "insecure_no_host_check",
             "input_mode",
+            "hub_overlay",
         }
     )
 
@@ -96,6 +97,7 @@ class SshSessionConnector(SessionConnector):
                 self._host,
             )
         self._input_mode = str(config.get("input_mode", "open"))
+        self._hub_overlay: bool = bool(config.get("hub_overlay", True))
         self._paused = False
         self._connected = False
         self._bytes_received = 0
@@ -107,6 +109,8 @@ class SshSessionConnector(SessionConnector):
         self._stdout: Any = None
 
     def _screen(self) -> str:
+        if not self._hub_overlay:
+            return self._screen_buffer
         header = [
             f"\x1b[1;35m[{self._display_name} ({self._session_id})]\x1b[0m",
             "-" * 60,

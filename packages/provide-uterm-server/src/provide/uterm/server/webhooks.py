@@ -42,6 +42,7 @@ from urllib.parse import urlparse
 import httpx
 
 from provide.telemetry import get_logger
+from provide.uterm.server._net import _METADATA_IPS, _resolve_host
 from provide.uterm.server.tracing import inject_trace_context
 
 if TYPE_CHECKING:
@@ -73,15 +74,6 @@ _MAX_BLOCKED_DELIVERIES = 3
 Resolver = Callable[[str], Sequence[str] | Awaitable[Sequence[str]]]
 # OnMetric type alias: callable(name, value=1) or None
 _OnMetric = Callable[[str, int], None] | None
-
-_METADATA_IPS = frozenset(
-    {
-        ipaddress.ip_address("169.254.169.254"),
-        ipaddress.ip_address("100.100.100.200"),
-        ipaddress.ip_address("fd00:ec2::254"),
-    }
-)
-
 
 _REGISTER_DNS_TIMEOUT_S = 2.0
 
@@ -397,11 +389,6 @@ class WebhookManager:
             cfg.webhook_id,
             cfg.url,
         )
-
-
-async def _resolve_host(hostname: str) -> tuple[str, ...]:
-    infos = await asyncio.to_thread(socket.getaddrinfo, hostname, None, type=socket.SOCK_STREAM)
-    return tuple({str(info[4][0]) for info in infos})
 
 
 async def _delivery_url_allowed(

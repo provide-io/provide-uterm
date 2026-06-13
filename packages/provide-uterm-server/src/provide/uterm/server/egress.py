@@ -12,7 +12,7 @@ import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from provide.uterm.server.webhooks import _METADATA_IPS, _resolve_host
+from provide.uterm.server._net import _METADATA_IPS, _resolve_host
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
