@@ -18,8 +18,7 @@ from typing import Any
 import httpx
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus
-
+from ._live_server import live_server_with_bus
 from .test_fanout_e2e_part1 import _drain_initial, _sessions, _ws_url
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}

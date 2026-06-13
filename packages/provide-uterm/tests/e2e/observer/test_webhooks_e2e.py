@@ -27,7 +27,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus
+from .._live_server import live_server_with_bus  # noqa: TID252
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -136,7 +136,7 @@ async def test_webhook_snapshot_delivered(shell_server: Any) -> None:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()  # snapshot_req
             await asyncio.sleep(0.1)
-            await worker.send(json.dumps(snapshot_msg("$ webhook e2e")))
+            await worker.send_json(snapshot_msg("$ webhook e2e"))
 
             payload = await asyncio.wait_for(received.get(), timeout=8.0)
 
@@ -168,7 +168,7 @@ async def test_webhook_event_types_filter(shell_server: Any) -> None:
             await asyncio.sleep(0.1)
 
             # snapshot — should be filtered
-            await worker.send(json.dumps(snapshot_msg("$ filtered")))
+            await worker.send_json(snapshot_msg("$ filtered"))
             await asyncio.sleep(0.2)
             assert received.empty()
 
@@ -207,7 +207,7 @@ async def test_webhook_unregister_stops_delivery(shell_server: Any) -> None:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()
             await asyncio.sleep(0.1)
-            await worker.send(json.dumps(snapshot_msg("$ after unregister")))
+            await worker.send_json(snapshot_msg("$ after unregister"))
             await asyncio.sleep(0.5)
 
     # Nothing delivered — queue should be empty
@@ -257,7 +257,7 @@ async def test_webhook_hmac_signature_header(shell_server: Any) -> None:
         async with connect_async_ws(ws_url(base_url, "/ws/worker/wh1/term")) as worker:
             await worker.recv()
             await asyncio.sleep(0.1)
-            await worker.send(json.dumps(snapshot_msg("$ signed")))
+            await worker.send_json(snapshot_msg("$ signed"))
             # Wait for delivery
             deadline2 = loop.time() + 8.0
             while not captured and loop.time() < deadline2:

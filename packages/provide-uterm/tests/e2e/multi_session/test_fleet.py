@@ -18,15 +18,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 from typing import Any
 
 import httpx
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus
-from tests.e2e.conftest import _drain_all, _snapshot_msg
-
+from .._live_server import live_server_with_bus  # noqa: TID252
+from ..conftest import _drain_all, _snapshot_msg  # noqa: TID252
 from .conftest import snapshot_msg, ws_url
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
@@ -71,7 +69,7 @@ async def test_cross_session_eventbus_isolation_under_load() -> None:
             # All 3 workers send 10 snapshots concurrently
             async def _send_batch(ws: Any, sid: str) -> None:
                 for i in range(10):
-                    await ws.send(json.dumps(snapshot_msg(f"$ {sid}-snap-{i}")))
+                    await ws.send_json(snapshot_msg(f"$ {sid}-snap-{i}"))
 
             await asyncio.gather(
                 _send_batch(w1, "s1"),
@@ -202,7 +200,7 @@ async def test_fleet_broadcast_storm_with_dead_socket_cleanup() -> None:
             # First batch: each worker sends 5 snapshots concurrently
             async def _send_snapshots(ws: Any, sid: str, batch: int, count: int = 5) -> None:
                 for i in range(count):
-                    await ws.send(json.dumps(_snapshot_msg(f"{sid}-screen-batch{batch}-{i}")))
+                    await ws.send_json(_snapshot_msg(f"{sid}-screen-batch{batch}-{i}"))
 
             await asyncio.gather(
                 _send_snapshots(w1, "bs1", 1),

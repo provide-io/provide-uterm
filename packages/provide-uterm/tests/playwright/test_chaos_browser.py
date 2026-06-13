@@ -15,7 +15,7 @@ import uuid
 import pytest
 from playwright.sync_api import Page, expect
 
-from tests.conftest import WorkerController
+from ..conftest import WorkerController  # noqa: TID252
 
 
 def _uid() -> str:

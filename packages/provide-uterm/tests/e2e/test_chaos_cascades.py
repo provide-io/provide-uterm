@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any
 
@@ -104,7 +103,7 @@ class TestWorkerReconnectClearsStaleHijack:
 class TestEventbusQueueOverflowPreservesSentinel:
     async def test_eventbus_queue_overflow_preserves_sentinel(self) -> None:
         """Flooding snapshots saturates the queue; events are dropped but sequence continues."""
-        from tests.e2e._live_server import live_server_with_bus
+        from ._live_server import live_server_with_bus
 
         sessions = [{"session_id": "flood1", "display_name": "Flood", "connector_type": "shell", "auto_start": False}]
 
@@ -119,7 +118,7 @@ class TestEventbusQueueOverflowPreservesSentinel:
                 async with bus.watch("flood1") as sub:
                     # Flood 20 snapshots rapidly without draining
                     for i in range(20):
-                        await worker.send(json.dumps(_snapshot_msg(f"screen-{i}")))
+                        await worker.send_json(_snapshot_msg(f"screen-{i}"))
 
                     # Give the hub time to process all snapshots
                     await asyncio.sleep(1.0)
@@ -163,7 +162,7 @@ class TestHeartbeatRaceWithLeaseCleanup:
                 await _drain_all(browser)
 
                 # Browser acquires WS hijack
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 state = await _drain_until(browser, "hijack_state")
                 assert state is not None, "Should receive hijack_state"
                 assert state.get("owner") == "me", f"Browser should own hijack, got {state}"
@@ -179,7 +178,7 @@ class TestHeartbeatRaceWithLeaseCleanup:
 
                 # Concurrent: 3 heartbeats + 3 cleanup attempts
                 async def send_heartbeat() -> None:
-                    await browser.send(json.dumps({"type": "heartbeat"}))
+                    await browser.send_json({"type": "heartbeat"})
                     await asyncio.sleep(0.01)
 
                 async def do_cleanup() -> None:

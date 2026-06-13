@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-import json
 import os
 import time
 from collections import Counter
@@ -44,7 +43,7 @@ import httpx
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
-from provide.uterm.control_channel import ControlChannelDecoder, ControlChunk
+from provide.uterm.control_channel import ControlChunk, ControlFrameDecoder, encode_control_frame
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -119,7 +118,7 @@ async def _await_hello(ws_url: str, token: str, timeout_s: float) -> str:
         open_timeout=timeout_s,
         close_timeout=timeout_s,
     ) as ws:
-        decoder = ControlChannelDecoder()
+        decoder = ControlFrameDecoder()
         async for raw in ws:
             # The inline control channel is text framed; coerce binary frames defensively.
             text = raw if isinstance(raw, str) else raw.decode()
@@ -150,7 +149,7 @@ async def _authenticated_session_once(ws_url: str, token: str, budget_s: float, 
 async def _burst_ws_once(ws_url: str, timeout_s: float) -> str:
     try:
         async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
-            await ws.send(json.dumps({"type": "input", "data": "echo burst\n"}))
+            await ws.send(encode_control_frame({"type": "input", "data": "echo burst\n"}))
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(ws.recv(), timeout=1.0)
             return COMPLETED
@@ -163,7 +162,7 @@ async def _oversized_ws_frame_once(ws_url: str, payload_bytes: int, timeout_s: f
     msg = {"type": "input", "data": giant}
     try:
         async with websockets.connect(ws_url, open_timeout=timeout_s, close_timeout=timeout_s) as ws:
-            await ws.send(json.dumps(msg))
+            await ws.send(encode_control_frame(msg))
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(ws.recv(), timeout=1.0)
             # NOTE: under a fail-closed server the connect is refused BEFORE this

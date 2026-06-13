@@ -3,7 +3,7 @@
   "controlstream_total_allocations": 1000000,
   "hub_total_allocations": 2500000,
   "eventbus_total_allocations": 84025,
-  "deckmux_total_allocations": 22287,
-  "intercept_total_allocations": 13461,
+  "deckmux_total_allocations": 47954,
+  "intercept_total_allocations": 38976,
   "webhook_total_allocations": 1495338
 }

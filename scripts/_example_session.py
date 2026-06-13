@@ -12,11 +12,11 @@ from threading import RLock
 from typing import Any, Literal
 
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
-    ControlChannelProtocolError,
+    ControlFrameDecoder,
+    ControlFrameProtocolError,
     DataChunk,
-    encode_control,
-    encode_data,
+    encode_control_frame,
+    encode_terminal_data,
 )
 from provide.uterm.server.bridge.hub import TermHub
 
@@ -386,8 +386,8 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
 
     def _encode_frame(payload: dict[str, Any]) -> str:
         if str(payload.get("type") or "") == "term":
-            return encode_data(str(payload.get("data", "")))
-        return encode_control(payload)
+            return encode_terminal_data(str(payload.get("data", "")))
+        return encode_control_frame(payload)
 
     ws_url = base_url.replace("http://", "ws://") + f"/ws/worker/{worker_id}/term"
     backoff_s = [0.5, 1.0, 2.0, 5.0, 10.0]
@@ -400,7 +400,7 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
                 attempt = 0
                 session.connected = True
                 session.outbound_queue = asyncio.Queue()
-                decoder = ControlChannelDecoder()
+                decoder = ControlFrameDecoder()
                 logger.info("demo_session_connected worker_id=%s", worker_id)
 
                 await ws.send(_encode_frame(_worker_hello(session)))
@@ -430,7 +430,7 @@ async def _run_session_worker(base_url: str, worker_id: str) -> None:
 
                     try:
                         events = decoder.feed(raw)
-                    except ControlChannelProtocolError:
+                    except ControlFrameProtocolError:
                         continue
 
                     for event in events:

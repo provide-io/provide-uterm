@@ -5,7 +5,7 @@
 """Coverage tests for gateway/_gateway.py uncovered branches.
 
 Targets:
-- lines 86-93: ControlFrameProtocolError fallback to JSON parse in _handle_ws_control
+- ControlFrameProtocolError is rejected in _handle_ws_control
 - line 96: empty events list → return False
 - lines 112-113: AttributeError in _handle_ws_control_frame → return False
 - lines 236-237: ControlFrameProtocolError in _ws_to_tcp → continue
@@ -52,37 +52,24 @@ class _MockWriter:
 
 
 # ---------------------------------------------------------------------------
-# _handle_ws_control — lines 86-93: ControlFrameProtocolError → JSON library fallback
+# _handle_ws_control — ControlFrameProtocolError → rejected
 # ---------------------------------------------------------------------------
 
 
-class TestHandleWsControlProtocolErrorFallback:
-    """ControlFrameProtocolError is raised by decoder.feed → fall back to JSON parse.
+class TestHandleWsControlProtocolError:
+    """ControlFrameProtocolError is raised by decoder.feed and rejected.
 
     The control channel decoder raises ControlFrameProtocolError when it encounters
     the DLE character (\\x10) followed by an invalid byte (not DLE or STX).
-    We prefix messages with DLE+X to reliably trigger this error path.
     """
 
     async def test_invalid_control_channel_valid_json_dict_with_type(self) -> None:
-        """Lines 87-93: decode fails → JSON parse succeeds → dict with type → dispatched.
-
-        Prefix with DLE+X to force ControlFrameProtocolError, then the message
-        body is valid JSON with a known type → _handle_ws_control_frame is called.
-        """
+        """Decode failure rejects even a JSON-shaped bare control message."""
         written: list[bytes] = []
 
         async def _write_fn(data: bytes) -> None:
             written.append(data)
 
-        # DLE (\x10) + 'X' triggers 'invalid control prefix' ProtocolError.
-        # The full message IS valid JSON after stripping the prefix — but since
-        # the entire message string is passed to json.loads, we need it to be
-        # valid JSON by itself. We use a JSON-valid string that starts with DLE+X.
-        # Actually: the entire `message` arg is passed to json.loads on fallback.
-        # So we need the message to be valid JSON AND start with a DLE+X sequence.
-        # That's impossible since DLE is not valid JSON.
-        # Instead: patch decoder.feed to raise directly, then use a valid JSON message body.
         from unittest.mock import patch
 
         from provide.uterm.control_channel import (
@@ -97,9 +84,8 @@ class TestHandleWsControlProtocolErrorFallback:
             msg = '{"type": "resume_ok"}'
             result = await _handle_ws_control(msg, [None], _write_fn)
 
-        # resume_ok should be handled → True, and writes a message
-        assert result is True
-        assert any(b"resumed" in w.lower() for w in written)
+        assert result is False
+        assert written == []
 
     async def test_invalid_control_channel_invalid_json_returns_false(self) -> None:
         """Lines 89-90: decode fails AND JSON parse fails → return False."""

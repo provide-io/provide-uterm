@@ -28,7 +28,8 @@ from starlette.staticfiles import StaticFiles
 
 from provide.uterm.deckmux._hub_mixin import DeckMuxMixin
 from provide.uterm.server.bridge.hub import TermHub
-from tests.conftest import WorkerController
+
+from ..conftest import WorkerController  # noqa: TID252
 
 SCREENSHOTS_DIR = Path("packages/provide-uterm/tests/playwright/screenshots")
 

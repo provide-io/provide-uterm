@@ -18,7 +18,8 @@ from fastapi import FastAPI
 from provide.uterm.client import connect_async_ws
 
 from provide.uterm.server.bridge.hub import InMemoryResumeStore, TermHub
-from tests.e2e._live_server import live_server_with_bus
+
+from .._live_server import live_server_with_bus  # noqa: TID252
 
 # ---------------------------------------------------------------------------
 # Header constants for role-based auth (dev mode)

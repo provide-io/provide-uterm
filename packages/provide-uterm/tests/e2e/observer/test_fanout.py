@@ -14,7 +14,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from typing import Any
 
@@ -22,7 +21,7 @@ import httpx
 import pytest
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus, wait_for_subscribers
+from .._live_server import live_server_with_bus, wait_for_subscribers  # noqa: TID252
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 _N_SUBSCRIBERS = 5
@@ -98,7 +97,7 @@ async def test_five_concurrent_subscribers_all_receive(live_server: Any) -> None
 
         # Worker fires _N_EVENTS snapshots
         for i in range(_N_EVENTS):
-            await worker.send(json.dumps(snapshot_msg(f"$ fanout-{i}")))
+            await worker.send_json(snapshot_msg(f"$ fanout-{i}"))
 
         responses = await asyncio.gather(*[asyncio.wait_for(t, timeout=12.0) for t in poll_tasks])
 
@@ -141,7 +140,7 @@ async def test_worker_reconnect_new_subscription_works(live_server: Any) -> None
         )
         await wait_for_subscribers(hub, "obs1", 1)
 
-        await worker2.send(json.dumps(snapshot_msg("$ after reconnect")))
+        await worker2.send_json(snapshot_msg("$ after reconnect"))
         response = await asyncio.wait_for(poll_task, timeout=8.0)
 
     assert response.status_code == 200

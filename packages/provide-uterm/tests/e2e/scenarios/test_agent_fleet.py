@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 from typing import Any
 
 from provide.uterm.client import connect_async_ws
@@ -40,7 +39,7 @@ async def test_human_interrupts_ai_agent(live_hub: Any) -> None:
 
         # Agent sends rapid output
         for i in range(10):
-            await worker.send(json.dumps(snapshot_msg(f"agent-output-{i}")))
+            await worker.send_json(snapshot_msg(f"agent-output-{i}"))
         await asyncio.sleep(0.3)
 
         # Human connects and watches
@@ -51,7 +50,7 @@ async def test_human_interrupts_ai_agent(live_hub: Any) -> None:
 
             # Agent sends more while human watches
             for i in range(10, 15):
-                await worker.send(json.dumps(snapshot_msg(f"agent-output-{i}")))
+                await worker.send_json(snapshot_msg(f"agent-output-{i}"))
             await asyncio.sleep(0.3)
 
             pre_hijack_msgs = await drain_all(human, timeout=1.0)
@@ -59,7 +58,7 @@ async def test_human_interrupts_ai_agent(live_hub: Any) -> None:
             assert len(pre_snapshots) >= 1, "Human should see live agent output"
 
             # Human hijacks
-            await human.send(json.dumps({"type": "hijack_request"}))
+            await human.send_json({"type": "hijack_request"})
             await drain_until(human, "hijack_state", timeout=3.0)
 
             # Worker should have received pause
@@ -68,11 +67,11 @@ async def test_human_interrupts_ai_agent(live_hub: Any) -> None:
             assert len(pause_msgs) >= 1, "Worker should receive pause on hijack"
 
             # Human sends correction
-            await human.send(json.dumps({"type": "input", "data": "STOP: use --dry-run\r"}))
+            await human.send_json({"type": "input", "data": "STOP: use --dry-run\r"})
             await asyncio.sleep(0.2)
 
             # Human releases
-            await human.send(json.dumps({"type": "hijack_release"}))
+            await human.send_json({"type": "hijack_release"})
             await asyncio.sleep(0.3)
 
             # Worker should have received resume
@@ -82,7 +81,7 @@ async def test_human_interrupts_ai_agent(live_hub: Any) -> None:
 
             # Agent resumes sending output
             for i in range(15, 20):
-                await worker.send(json.dumps(snapshot_msg(f"agent-resumed-{i}")))
+                await worker.send_json(snapshot_msg(f"agent-resumed-{i}"))
             await asyncio.sleep(0.5)
 
             post_msgs = await drain_all(human, timeout=2.0)
@@ -122,9 +121,9 @@ async def test_multi_session_dashboard_disconnect_one(three_session_server: Any)
             await drain_all(b3)
 
             # Each worker sends unique snapshot
-            await w1.send(json.dumps(snapshot_msg("session-1-output")))
-            await w2.send(json.dumps(snapshot_msg("session-2-output")))
-            await w3.send(json.dumps(snapshot_msg("session-3-output")))
+            await w1.send_json(snapshot_msg("session-1-output"))
+            await w2.send_json(snapshot_msg("session-2-output"))
+            await w3.send_json(snapshot_msg("session-3-output"))
             await asyncio.sleep(0.5)
 
             # Verify each browser got its own session's snapshot
@@ -142,8 +141,8 @@ async def test_multi_session_dashboard_disconnect_one(three_session_server: Any)
             await asyncio.sleep(0.3)
 
             # Workers 1 and 3 send more
-            await w1.send(json.dumps(snapshot_msg("s1-after-disconnect")))
-            await w3.send(json.dumps(snapshot_msg("s3-after-disconnect")))
+            await w1.send_json(snapshot_msg("s1-after-disconnect"))
+            await w3.send_json(snapshot_msg("s3-after-disconnect"))
             await asyncio.sleep(0.5)
 
             b1_later = await drain_all(b1, timeout=1.0)
@@ -183,7 +182,7 @@ async def test_agent_recovery_output_resumes(live_hub: Any) -> None:
 
             # Pre-hijack: worker sends 3 snapshots
             for i in range(3):
-                await worker.send(json.dumps(snapshot_msg(f"pre-{i}")))
+                await worker.send_json(snapshot_msg(f"pre-{i}"))
             await asyncio.sleep(0.3)
 
             pre_msgs = await drain_all(browser, timeout=1.0)
@@ -191,23 +190,23 @@ async def test_agent_recovery_output_resumes(live_hub: Any) -> None:
             assert len(pre_snaps) >= 1, "Browser should receive pre-hijack snapshots"
 
             # Hijack
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             await drain_until(browser, "hijack_state", timeout=3.0)
             await drain_all(worker)
 
             # Send input
-            await browser.send(json.dumps({"type": "input", "data": "fix config\r"}))
+            await browser.send_json({"type": "input", "data": "fix config\r"})
             await asyncio.sleep(0.2)
 
             # Release
-            await browser.send(json.dumps({"type": "hijack_release"}))
+            await browser.send_json({"type": "hijack_release"})
             await asyncio.sleep(0.3)
             await drain_all(worker)
             await drain_all(browser)
 
             # Post-hijack: worker sends 3 more snapshots
             for i in range(3):
-                await worker.send(json.dumps(snapshot_msg(f"post-{i}")))
+                await worker.send_json(snapshot_msg(f"post-{i}"))
             await asyncio.sleep(0.5)
 
             post_msgs = await drain_all(browser, timeout=2.0)

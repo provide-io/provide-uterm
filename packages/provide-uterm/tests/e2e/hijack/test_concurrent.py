@@ -22,7 +22,7 @@ import httpx
 import pytest
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus
+from .._live_server import live_server_with_bus  # noqa: TID252
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 

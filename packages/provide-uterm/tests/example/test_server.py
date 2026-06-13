@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tests.conftest import load_example_server_module
+from ..conftest import load_example_server_module  # noqa: TID252
 
 demo = load_example_server_module()
 
