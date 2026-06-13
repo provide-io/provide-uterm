@@ -30,7 +30,7 @@ import uuid
 
 from playwright.sync_api import Page, expect
 
-from tests.conftest import WorkerController
+from ..conftest import WorkerController  # noqa: TID252
 
 # ---------------------------------------------------------------------------
 # Helpers

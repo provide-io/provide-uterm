@@ -8,7 +8,7 @@ import asyncio
 import json
 from unittest.mock import AsyncMock
 
-from provide.uterm.control_channel import ControlChannelDecoder
+from provide.uterm.control_channel import ControlFrameDecoder
 from provide.uterm.server.bridge.hub import PolicyContext, PolicyDecision, TermHub
 from provide.uterm.server.bridge.hub.approvals import ApprovalStatus
 from provide.uterm.server.bridge.routes.browser_handlers import _handle_input
@@ -58,7 +58,7 @@ async def prove_command_approval():
             print("  > Sent '\\n': Line complete. Policy triggered.")
 
     # 3. Verify 'approval_pending' was broadcast
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     found_pending = False
     for call in operator_ws.send_text.call_args_list:
         payload = call[0][0]

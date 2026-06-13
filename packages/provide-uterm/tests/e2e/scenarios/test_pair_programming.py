@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -51,7 +50,7 @@ async def test_instructor_student_alternating_control(single_session_server: Any
                 await drain_all(student)
 
                 # Student sends in open mode — should work
-                await student.send(json.dumps({"type": "input", "data": "ls\r"}))
+                await student.send_json({"type": "input", "data": "ls\r"})
                 await asyncio.sleep(0.3)
 
                 # Switch to hijack mode
@@ -63,20 +62,20 @@ async def test_instructor_student_alternating_control(single_session_server: Any
                 await drain_all(student)
 
                 # Student tries input in hijack mode — should be blocked (no owner)
-                await student.send(json.dumps({"type": "input", "data": "pwd\r"}))
+                await student.send_json({"type": "input", "data": "pwd\r"})
                 await asyncio.sleep(0.2)
 
                 # Instructor hijacks
-                await instructor.send(json.dumps({"type": "hijack_request"}))
+                await instructor.send_json({"type": "hijack_request"})
                 await drain_until(instructor, "hijack_state", timeout=3.0)
                 await drain_all(worker)
 
                 # Instructor sends
-                await instructor.send(json.dumps({"type": "input", "data": "git status\r"}))
+                await instructor.send_json({"type": "input", "data": "git status\r"})
                 await asyncio.sleep(0.2)
 
                 # Instructor releases
-                await instructor.send(json.dumps({"type": "hijack_release"}))
+                await instructor.send_json({"type": "hijack_release"})
                 await asyncio.sleep(0.3)
                 await drain_all(worker)
 
@@ -87,7 +86,7 @@ async def test_instructor_student_alternating_control(single_session_server: Any
                 await asyncio.sleep(0.3)
 
                 # Student sends again — should work
-                await student.send(json.dumps({"type": "input", "data": "git log\r"}))
+                await student.send_json({"type": "input", "data": "git log\r"})
                 await asyncio.sleep(0.3)
 
         # Drain all worker messages and verify inputs
@@ -116,18 +115,18 @@ async def test_viewer_escalation_denied(single_session_server: Any) -> None:
             await drain_all(viewer)
 
             # Viewer tries to hijack — should get error
-            await viewer.send(json.dumps({"type": "hijack_request"}))
+            await viewer.send_json({"type": "hijack_request"})
             await asyncio.sleep(0.3)
             viewer_msgs = await drain_all(viewer, timeout=1.0)
             error_msgs = [m for m in viewer_msgs if m.get("type") == "error"]
             assert len(error_msgs) >= 1, f"Viewer should get error on hijack attempt: {viewer_msgs}"
 
             # Viewer tries to send input in hijack mode — silently dropped
-            await viewer.send(json.dumps({"type": "input", "data": "whoami\r"}))
+            await viewer.send_json({"type": "input", "data": "whoami\r"})
             await asyncio.sleep(0.2)
 
             # Worker sends snapshot — viewer should receive it
-            await worker.send(json.dumps(snapshot_msg("visible output")))
+            await worker.send_json(snapshot_msg("visible output"))
             await asyncio.sleep(0.3)
             viewer_msgs2 = await drain_all(viewer, timeout=1.0)
             snapshot_received = any(
@@ -142,13 +141,13 @@ async def test_viewer_escalation_denied(single_session_server: Any) -> None:
             await drain_all(viewer)
 
             # Viewer tries input in open mode — still blocked
-            await viewer.send(json.dumps({"type": "input", "data": "id\r"}))
+            await viewer.send_json({"type": "input", "data": "id\r"})
             await asyncio.sleep(0.2)
 
             # Admin sends input to prove open mode works
             async with connect_browser(base_url, "s1", role="admin") as admin:
                 await drain_all(admin)
-                await admin.send(json.dumps({"type": "input", "data": "admin-cmd\r"}))
+                await admin.send_json({"type": "input", "data": "admin-cmd\r"})
                 await asyncio.sleep(0.2)
 
         # Verify worker got admin input but not viewer input

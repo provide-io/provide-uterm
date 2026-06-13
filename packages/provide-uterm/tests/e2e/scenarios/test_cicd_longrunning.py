@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -45,7 +44,7 @@ async def test_build_output_event_polling(live_hub: Any) -> None:
 
             # Worker sends 50 snapshots (simulating build output)
             for i in range(50):
-                await worker.send(json.dumps(snapshot_msg(f"build-line-{i}")))
+                await worker.send_json(snapshot_msg(f"build-line-{i}"))
             await asyncio.sleep(1.0)
 
             # Paginate through events
@@ -104,7 +103,7 @@ async def test_worker_clean_shutdown_and_restart(live_hub: Any) -> None:
             assert got_connected, f"Browser should see worker_connected: {connected_msgs}"
 
             # Worker v1 sends snapshot
-            await worker_v1.send(json.dumps(snapshot_msg("version-1 output")))
+            await worker_v1.send_json(snapshot_msg("version-1 output"))
             await asyncio.sleep(0.3)
 
             v1_msgs = await drain_all(browser, timeout=1.0)
@@ -129,7 +128,7 @@ async def test_worker_clean_shutdown_and_restart(live_hub: Any) -> None:
             assert got_reconnected, f"Browser should see worker_connected v2: {reconnect_msgs}"
 
             # Worker v2 sends snapshot
-            await worker_v2.send(json.dumps(snapshot_msg("version-2 fresh start")))
+            await worker_v2.send_json(snapshot_msg("version-2 fresh start"))
             await asyncio.sleep(0.3)
 
             v2_msgs = await drain_all(browser, timeout=1.0)
@@ -153,7 +152,7 @@ async def test_session_survives_brief_network_blip(resume_hub: Any) -> None:
         await worker.recv()  # snapshot_req
 
         # Worker sends initial snapshot
-        await worker.send(json.dumps(snapshot_msg("pre-blip output")))
+        await worker.send_json(snapshot_msg("pre-blip output"))
         await asyncio.sleep(0.2)
 
         # Browser connects, extracts resume token
@@ -188,7 +187,7 @@ async def test_session_survives_brief_network_blip(resume_hub: Any) -> None:
             # depending on implementation, so just verify no crash on reconnect.
 
             # Worker sends new snapshot
-            await worker.send(json.dumps(snapshot_msg("post-blip output")))
+            await worker.send_json(snapshot_msg("post-blip output"))
             await asyncio.sleep(0.5)
 
             post_msgs = await drain_all(browser_new, timeout=1.0)

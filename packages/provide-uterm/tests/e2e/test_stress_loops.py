@@ -14,7 +14,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 from provide.uterm.client import connect_async_ws
@@ -66,12 +65,12 @@ async def test_hijack_acquire_release_50_cycles_no_corruption(live_hub: Any) -> 
 
             for i in range(50):
                 # Acquire
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 state = await _drain_until(browser, "hijack_state", timeout=3.0)
                 assert state is not None, f"Cycle {i}: no hijack_state on acquire"
 
                 # Release
-                await browser.send(json.dumps({"type": "hijack_release"}))
+                await browser.send_json({"type": "hijack_release"})
                 await asyncio.sleep(0.02)  # Brief settle
 
             # Final state: fully released
@@ -96,7 +95,7 @@ async def test_hijack_acquire_release_50_cycles_no_corruption(live_hub: Any) -> 
 
 async def test_eventbus_subscriber_churn_during_snapshot_stream() -> None:
     """5 stable + 5 churning subscribers; stable ones get all events, no errors."""
-    from tests.e2e._live_server import live_server_with_bus
+    from ._live_server import live_server_with_bus
 
     sessions = [
         {"session_id": "churn1", "display_name": "Churn", "connector_type": "shell", "auto_start": False},
@@ -132,7 +131,7 @@ async def test_eventbus_subscriber_churn_during_snapshot_stream() -> None:
 
             # Worker streams 100 snapshots concurrently
             for i in range(100):
-                await worker.send(json.dumps(_snapshot_msg(f"stream-{i}")))
+                await worker.send_json(_snapshot_msg(f"stream-{i}"))
                 if i % 10 == 0:
                     await asyncio.sleep(0.01)  # Brief yield
 

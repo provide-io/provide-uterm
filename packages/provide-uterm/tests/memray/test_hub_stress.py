@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.memray.conftest import assert_allocation_within_threshold
+from .conftest import assert_allocation_within_threshold
 
 
 @pytest.mark.memray

@@ -16,14 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 from typing import Any
 
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus
-from tests.e2e.conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
-
+from .._live_server import live_server_with_bus  # noqa: TID252
+from ..conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url  # noqa: TID252
 from .conftest import ws_url
 
 # ---------------------------------------------------------------------------
@@ -69,7 +67,7 @@ async def test_cross_session_routing_strict_isolation() -> None:
             # Both workers send 20 snapshots concurrently with distinctive markers
             async def send_batch(ws: Any, marker: str) -> None:
                 for i in range(20):
-                    await ws.send(json.dumps(_snapshot_msg(f"{marker}-snap-{i}")))
+                    await ws.send_json(_snapshot_msg(f"{marker}-snap-{i}"))
 
             await asyncio.gather(
                 send_batch(wa, "SESSION-A"),
@@ -145,7 +143,7 @@ async def test_5_sessions_concurrent_worker_disconnect() -> None:
 
             # Workers 3,4 send snapshots after the crash
             for i in (3, 4):
-                await workers[i].send(json.dumps(_snapshot_msg(f"s5-{i}-post-crash")))
+                await workers[i].send_json(_snapshot_msg(f"s5-{i}-post-crash"))
 
             await asyncio.sleep(0.5)
 
@@ -212,7 +210,7 @@ async def test_ephemeral_double_disconnect_race(live_hub: Any) -> None:
 
 async def test_worker_id_reuse_after_cleanup_no_stale_state() -> None:
     """Second worker with same ID starts clean after first worker + hijack + disconnect."""
-    from tests.e2e._live_server import live_server_with_bus
+    from .._live_server import live_server_with_bus  # noqa: TID252
 
     sessions = [
         {"session_id": "reuse-1", "display_name": "Reuse", "connector_type": "shell", "auto_start": False},
@@ -226,12 +224,12 @@ async def test_worker_id_reuse_after_cleanup_no_stale_state() -> None:
 
             async with connect_async_ws(ws_url(base_url, "/ws/browser/reuse-1/term")) as b1:
                 await _drain_all(b1)
-                await b1.send(json.dumps({"type": "hijack_request"}))
+                await b1.send_json({"type": "hijack_request"})
                 await _drain_until(b1, "hijack_state", timeout=3.0)
                 await _drain_all(w1)
 
                 # Worker sends gen-1 snapshot
-                await w1.send(json.dumps(_snapshot_msg("gen-1-data")))
+                await w1.send_json(_snapshot_msg("gen-1-data"))
                 await asyncio.sleep(0.3)
 
         # Both disconnected — give cleanup time
@@ -256,7 +254,7 @@ async def test_worker_id_reuse_after_cleanup_no_stale_state() -> None:
 
                 # Subscribe to EventBus and send gen-2 snapshot
                 async with event_bus.watch("reuse-1") as sub:
-                    await w2.send(json.dumps(_snapshot_msg("gen-2-data")))
+                    await w2.send_json(_snapshot_msg("gen-2-data"))
                     await asyncio.sleep(0.5)
 
                     events: list[dict[str, Any]] = []

@@ -289,7 +289,7 @@ class TestReportError:
         except ControlFrameProtocolError:
             pass
         # The label must be "control_channel_protocol_error" (exact string).
-        assert "control_channel_protocol_error" in captured
+        assert "control_frame_protocol_error" in captured
 
     def test_on_error_not_called_on_happy_path(self) -> None:
         captured: list[str] = []

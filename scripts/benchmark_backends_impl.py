@@ -28,9 +28,9 @@ from typing import Any
 import websockets
 
 from provide.uterm.control_channel import (
-    ControlChannelDecoder,
     ControlChunk,
-    encode_control,
+    ControlFrameDecoder,
+    encode_control_frame,
 )
 
 # ── constants ────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ async def _connect_worker(ws_base: str, worker_id: str):
         "prompt_detected": False,
         "ts": time.time(),
     }
-    await ws.send(encode_control(snapshot))
+    await ws.send(encode_control_frame(snapshot))
     return ws
 
 
@@ -166,7 +166,7 @@ async def _connect_browser(ws_base: str, worker_id: str):
     """Connect a browser and wait for hello. Returns (ws, hello_msg)."""
     uri = f"{ws_base}/ws/browser/{worker_id}/term"
     ws = await websockets.connect(uri)
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     # CF sends hello + hijack_state + snapshot in a burst; drain up to 5 messages
     for _ in range(5):
         try:
@@ -267,7 +267,7 @@ async def bench_broadcast(base: str, n: int) -> tuple[float, list[float]]:
     browser_ws, _hello = await _connect_browser(ws_base, wid)
     await asyncio.sleep(0.2)
 
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     received: list[float] = []
 
     async def _recv_loop():
@@ -299,7 +299,7 @@ async def bench_broadcast(base: str, n: int) -> tuple[float, list[float]]:
             "prompt_detected": False,
             "ts": time.time(),
         }
-        await worker_ws.send(encode_control(snap))
+        await worker_ws.send(encode_control_frame(snap))
 
     await asyncio.sleep(2.0)  # drain
     recv_task.cancel()
@@ -327,11 +327,11 @@ async def bench_scaling(base: str, tiers: list[int], *, settle_s: float = 0.0) -
         worker_ws = await _connect_worker(ws_base, wid)
         await asyncio.sleep(0.5)
         browsers: list[Any] = []
-        decoders: list[ControlChannelDecoder] = []
+        decoders: list[ControlFrameDecoder] = []
         for _ in range(n_browsers):
             bws, _hello = await _connect_browser(ws_base, wid)
             browsers.append(bws)
-            decoders.append(ControlChannelDecoder())
+            decoders.append(ControlFrameDecoder())
             if settle_s:
                 await asyncio.sleep(settle_s)
         await asyncio.sleep(0.3)
@@ -352,7 +352,7 @@ async def bench_scaling(base: str, tiers: list[int], *, settle_s: float = 0.0) -
                 "ts": time.time(),
             }
             t0 = time.perf_counter()
-            await worker_ws.send(encode_control(snap))
+            await worker_ws.send(encode_control_frame(snap))
 
             # Wait for first browser to receive
             try:

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import time
 from typing import Any
 
@@ -34,7 +33,7 @@ from .conftest import _drain_all, _drain_until, _snapshot_msg, _ws_url
 
 async def test_worker_crash_mid_snapshot_flood_with_active_hijack() -> None:
     """Worker floods snapshots while browser holds hijack; worker crash cleans up everything."""
-    from tests.e2e._live_server import live_server_with_bus
+    from ._live_server import live_server_with_bus
 
     sessions = [
         {"session_id": "flood-crash", "display_name": "Flood Crash", "connector_type": "shell", "auto_start": False},
@@ -49,7 +48,7 @@ async def test_worker_crash_mid_snapshot_flood_with_active_hijack() -> None:
                 await _drain_all(browser)
 
                 # Browser acquires hijack
-                await browser.send(json.dumps({"type": "hijack_request"}))
+                await browser.send_json({"type": "hijack_request"})
                 hijack_msg = await _drain_until(browser, "hijack_state", timeout=3.0)
                 assert hijack_msg is not None, "Browser should receive hijack_state"
                 await _drain_all(worker)  # drain pause
@@ -57,7 +56,7 @@ async def test_worker_crash_mid_snapshot_flood_with_active_hijack() -> None:
                 async with event_bus.watch("flood-crash") as sub:
                     # Worker floods 50 snapshots rapidly
                     for i in range(50):
-                        await worker.send(json.dumps(_snapshot_msg(f"flood-{i}")))
+                        await worker.send_json(_snapshot_msg(f"flood-{i}"))
 
                     # Give some snapshots time to propagate
                     await asyncio.sleep(0.3)
@@ -103,7 +102,7 @@ async def test_lease_cleanup_during_reconnect_with_competing_hijack(live_hub: An
         # B1 acquires hijack
         async with connect_async_ws(_ws_url(base_url, "/ws/browser/lease-race/term")) as b1:
             await _drain_all(b1)
-            await b1.send(json.dumps({"type": "hijack_request"}))
+            await b1.send_json({"type": "hijack_request"})
             state = await _drain_until(b1, "hijack_state", timeout=3.0)
             assert state is not None
             await _drain_all(worker)  # drain pause
@@ -127,7 +126,7 @@ async def test_lease_cleanup_during_reconnect_with_competing_hijack(live_hub: An
 
             await asyncio.gather(
                 do_cleanup(),
-                b2.send(json.dumps({"type": "hijack_request"})),
+                b2.send_json({"type": "hijack_request"}),
             )
 
             await asyncio.sleep(0.5)
@@ -185,7 +184,7 @@ async def test_malformed_control_frames_close_worker_cleanly(live_hub: Any) -> N
             await new_worker.recv()  # snapshot_req
 
             # New worker sends valid snapshot
-            await new_worker.send(json.dumps(_snapshot_msg("valid-second")))
+            await new_worker.send_json(_snapshot_msg("valid-second"))
             await asyncio.sleep(0.3)
 
             browser_msgs2 = await _drain_all(browser, timeout=1.0)
@@ -211,7 +210,7 @@ async def test_binary_like_data_through_hijack_input(live_hub: Any) -> None:
             await _drain_all(browser)
 
             # Acquire hijack
-            await browser.send(json.dumps({"type": "hijack_request"}))
+            await browser.send_json({"type": "hijack_request"})
             await _drain_until(browser, "hijack_state", timeout=3.0)
             await _drain_all(worker)  # drain pause
 
@@ -225,7 +224,7 @@ async def test_binary_like_data_through_hijack_input(live_hub: Any) -> None:
             ]
 
             for inp in test_inputs:
-                await browser.send(json.dumps({"type": "input", "data": inp}))
+                await browser.send_json({"type": "input", "data": inp})
                 await asyncio.sleep(0.05)
 
             # Drain worker and check all inputs arrived

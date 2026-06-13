@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -54,7 +53,7 @@ async def test_role_based_access_open_mode(single_session_server: Any) -> None:
             await drain_all(admin)
 
             # Worker sends snapshot — all 3 should see it
-            await worker.send(json.dumps(snapshot_msg("shared-view-1")))
+            await worker.send_json(snapshot_msg("shared-view-1"))
             await asyncio.sleep(0.5)
 
             v_msgs = await drain_all(viewer, timeout=1.0)
@@ -72,15 +71,15 @@ async def test_role_based_access_open_mode(single_session_server: Any) -> None:
             )
 
             # Viewer tries input — silently dropped
-            await viewer.send(json.dumps({"type": "input", "data": "viewer-attempt\r"}))
+            await viewer.send_json({"type": "input", "data": "viewer-attempt\r"})
             await asyncio.sleep(0.2)
 
             # Operator sends input — should work
-            await operator.send(json.dumps({"type": "input", "data": "operator-cmd\r"}))
+            await operator.send_json({"type": "input", "data": "operator-cmd\r"})
             await asyncio.sleep(0.2)
 
             # Admin sends input — should work
-            await admin.send(json.dumps({"type": "input", "data": "admin-cmd\r"}))
+            await admin.send_json({"type": "input", "data": "admin-cmd\r"})
             await asyncio.sleep(0.3)
 
         # Verify worker got operator + admin but not viewer
@@ -110,16 +109,16 @@ async def test_mode_switch_mid_session(single_session_server: Any) -> None:
             await drain_all(operator)
 
             # Admin hijacks
-            await admin.send(json.dumps({"type": "hijack_request"}))
+            await admin.send_json({"type": "hijack_request"})
             await drain_until(admin, "hijack_state", timeout=3.0)
             await drain_all(worker)
 
             # Admin sends input
-            await admin.send(json.dumps({"type": "input", "data": "in-hijack\r"}))
+            await admin.send_json({"type": "input", "data": "in-hijack\r"})
             await asyncio.sleep(0.2)
 
             # Admin releases before mode switch
-            await admin.send(json.dumps({"type": "hijack_release"}))
+            await admin.send_json({"type": "hijack_release"})
             await asyncio.sleep(0.3)
             await drain_all(worker)
             await drain_all(admin)
@@ -134,11 +133,11 @@ async def test_mode_switch_mid_session(single_session_server: Any) -> None:
             await drain_all(operator)
 
             # Operator sends in open mode — should work
-            await operator.send(json.dumps({"type": "input", "data": "now-open\r"}))
+            await operator.send_json({"type": "input", "data": "now-open\r"})
             await asyncio.sleep(0.2)
 
             # Admin also sends in open mode
-            await admin.send(json.dumps({"type": "input", "data": "also-open\r"}))
+            await admin.send_json({"type": "input", "data": "also-open\r"})
             await asyncio.sleep(0.2)
 
             # Switch back to hijack
@@ -150,7 +149,7 @@ async def test_mode_switch_mid_session(single_session_server: Any) -> None:
             await drain_all(operator)
 
             # Operator tries input — blocked (hijack mode, no owner)
-            await operator.send(json.dumps({"type": "input", "data": "blocked\r"}))
+            await operator.send_json({"type": "input", "data": "blocked\r"})
             await asyncio.sleep(0.3)
 
         # Verify
@@ -176,7 +175,7 @@ async def test_terminal_resize_snapshots(live_hub: Any) -> None:
             await drain_all(browser)
 
             # Initial: 80x25
-            await worker.send(json.dumps(snapshot_msg("$ initial prompt", cols=80, rows=25)))
+            await worker.send_json(snapshot_msg("$ initial prompt", cols=80, rows=25))
             await asyncio.sleep(0.3)
             msgs1 = await drain_all(browser, timeout=1.0)
             snap1 = [m for m in msgs1 if m.get("type") == "snapshot"]
@@ -186,7 +185,7 @@ async def test_terminal_resize_snapshots(live_hub: Any) -> None:
             assert "initial prompt" in snap1[-1]["screen"]
 
             # Resized: 120x40
-            await worker.send(json.dumps(snapshot_msg("$ resized terminal", cols=120, rows=40)))
+            await worker.send_json(snapshot_msg("$ resized terminal", cols=120, rows=40))
             await asyncio.sleep(0.3)
             msgs2 = await drain_all(browser, timeout=1.0)
             snap2 = [m for m in msgs2 if m.get("type") == "snapshot"]

@@ -16,7 +16,8 @@ from provide.uterm.client import connect_test_ws
 
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import WorkerTermState
-from tests.helpers import decode_chunk
+
+from ..helpers import decode_chunk  # noqa: TID252
 
 
 def _make_app(**hub_kwargs: Any) -> tuple[TermHub, FastAPI, TestClient]:

@@ -173,15 +173,15 @@ async def _drain_snapshot(ws_url: str, timeout: float = 8.0) -> str | None:
         import websockets  # type: ignore[import-untyped]
 
         from provide.uterm.control_channel import (
-            ControlChannelDecoder,
             ControlChunk,
+            ControlFrameDecoder,
             DataChunk,
         )
     except ImportError as exc:
         _fail(f"missing dependency: {exc}")
         return None
 
-    decoder = ControlChannelDecoder()
+    decoder = ControlFrameDecoder()
     deadline = asyncio.get_event_loop().time() + timeout
     try:
         async with websockets.connect(ws_url, open_timeout=5) as ws:

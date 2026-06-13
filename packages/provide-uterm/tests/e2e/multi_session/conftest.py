@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 import pytest
 
-from tests.e2e._live_server import live_server_with_bus
+from .._live_server import live_server_with_bus  # noqa: TID252
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 

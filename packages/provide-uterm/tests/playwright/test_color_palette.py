@@ -25,15 +25,15 @@ import uvicorn
 from fastapi import FastAPI
 from playwright.sync_api import Page, expect
 
-from tests.playwright._ansi_palettes import (
+from ._ansi_palettes import (
     build_16_color_palette,
     build_256_color_palette,
     build_animation_frames,
     build_ansi_art,
     build_truecolor_palette,
 )
-from tests.playwright._gif_to_ansi import gif_to_ansi_frames
-from tests.playwright.conftest import (
+from ._gif_to_ansi import gif_to_ansi_frames
+from .conftest import (
     SCREENSHOTS_DIR,
     AnimatedWorker,
     ColorWorker,

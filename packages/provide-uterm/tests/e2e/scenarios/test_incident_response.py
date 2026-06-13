@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 from provide.uterm.client import connect_async_ws
@@ -46,12 +45,12 @@ async def test_sre_wifi_drop_mid_hijack_resume(resume_hub: Any) -> None:
                 if m.get("type") == "hello":
                     resume_token = m.get("resume_token")
 
-            await sre_a.send(json.dumps({"type": "hijack_request"}))
+            await sre_a.send_json({"type": "hijack_request"})
             await drain_until(sre_a, "hijack_state", timeout=3.0)
             await drain_all(worker)  # drain pause
 
             # SRE A sends a command
-            await sre_a.send(json.dumps({"type": "input", "data": "kubectl get pods\r"}))
+            await sre_a.send_json({"type": "input", "data": "kubectl get pods\r"})
             await asyncio.sleep(0.2)
 
         # SRE A's WS dropped (exited context manager)
@@ -60,12 +59,12 @@ async def test_sre_wifi_drop_mid_hijack_resume(resume_hub: Any) -> None:
         # Backup SRE B connects and acquires
         async with connect_async_ws(f"{ws_base}/ws/browser/w1/term") as sre_b:
             await drain_all(sre_b)
-            await sre_b.send(json.dumps({"type": "hijack_request"}))
+            await sre_b.send_json({"type": "hijack_request"})
             b_state = await drain_until(sre_b, "hijack_state", timeout=3.0)
             assert b_state is not None
             await drain_all(worker)  # drain pause
 
-            await sre_b.send(json.dumps({"type": "input", "data": "kubectl rollout restart\r"}))
+            await sre_b.send_json({"type": "input", "data": "kubectl rollout restart\r"})
             await asyncio.sleep(0.2)
 
             # SRE A reconnects with resume token
@@ -79,7 +78,7 @@ async def test_sre_wifi_drop_mid_hijack_resume(resume_hub: Any) -> None:
                         assert not last_hs.get("hijacked_by_me", False), "Resumed SRE A should NOT own hijack"
 
                     # B's hijack should still be active — B sends another command
-                    await sre_b.send(json.dumps({"type": "input", "data": "kubectl get status\r"}))
+                    await sre_b.send_json({"type": "input", "data": "kubectl get status\r"})
                     await asyncio.sleep(0.2)
 
         # Verify worker received commands in order
@@ -104,31 +103,31 @@ async def test_shift_handoff_sequential_hijack(single_session_server: Any) -> No
             await drain_all(admin_a)
 
             # A hijacks
-            await admin_a.send(json.dumps({"type": "hijack_request"}))
+            await admin_a.send_json({"type": "hijack_request"})
             await drain_until(admin_a, "hijack_state", timeout=3.0)
             await drain_all(worker)  # drain pause
 
             # A sends commands
-            await admin_a.send(json.dumps({"type": "input", "data": "uptime\r"}))
+            await admin_a.send_json({"type": "input", "data": "uptime\r"})
             await asyncio.sleep(0.1)
-            await admin_a.send(json.dumps({"type": "input", "data": "df -h\r"}))
+            await admin_a.send_json({"type": "input", "data": "df -h\r"})
             await asyncio.sleep(0.1)
 
             async with connect_browser(base_url, "s1", role="admin") as admin_b:
                 await drain_all(admin_b, timeout=1.0)
 
                 # A releases
-                await admin_a.send(json.dumps({"type": "hijack_release"}))
+                await admin_a.send_json({"type": "hijack_release"})
                 await asyncio.sleep(0.3)
                 await drain_all(worker)  # drain resume
 
                 # B hijacks
-                await admin_b.send(json.dumps({"type": "hijack_request"}))
+                await admin_b.send_json({"type": "hijack_request"})
                 await drain_until(admin_b, "hijack_state", timeout=3.0)
                 await drain_all(worker)  # drain pause
 
                 # B sends command
-                await admin_b.send(json.dumps({"type": "input", "data": "tail -f syslog\r"}))
+                await admin_b.send_json({"type": "input", "data": "tail -f syslog\r"})
                 await asyncio.sleep(0.2)
 
         # Verify worker received all 3 inputs
@@ -155,7 +154,7 @@ async def test_long_output_late_joiner_gets_latest(live_hub: Any) -> None:
 
             # Worker sends first 100 snapshots
             for i in range(100):
-                await worker.send(json.dumps(snapshot_msg(f"build-line-{i}")))
+                await worker.send_json(snapshot_msg(f"build-line-{i}"))
             await asyncio.sleep(0.5)
 
             # Browser B joins mid-stream
@@ -168,7 +167,7 @@ async def test_long_output_late_joiner_gets_latest(live_hub: Any) -> None:
 
                 # Worker sends 100 more
                 for i in range(100, 200):
-                    await worker.send(json.dumps(snapshot_msg(f"build-line-{i}")))
+                    await worker.send_json(snapshot_msg(f"build-line-{i}"))
                 await asyncio.sleep(0.5)
 
                 # Drain B's later messages

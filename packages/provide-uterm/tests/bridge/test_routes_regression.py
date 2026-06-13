@@ -21,7 +21,8 @@ from fastapi.testclient import TestClient
 
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.bridge.models import HijackSession, WorkerTermState
-from tests.bridge.control_channel_helpers import decode_control_payloads
+
+from .control_channel_helpers import decode_control_payloads
 
 
 def make_app() -> tuple[FastAPI, TermHub]:

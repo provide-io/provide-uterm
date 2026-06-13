@@ -15,7 +15,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -59,7 +58,7 @@ async def test_three_role_browsers_all_receive_snapshot_eventbus_delivers(live_s
                 )
                 await asyncio.sleep(0.1)
 
-                await worker.send(json.dumps(snapshot_msg("$ three-browser test")))
+                await worker.send_json(snapshot_msg("$ three-browser test"))
 
                 # All three WS connections receive the snapshot
                 results = await asyncio.gather(
@@ -115,7 +114,7 @@ async def test_five_browsers_join_leave_eventbus_stable(live_server: Any) -> Non
 
             # Worker sends 3 snapshots while all 5 browsers are connected
             for i in range(3):
-                await worker.send(json.dumps(snapshot_msg(f"$ snapshot-{i}")))
+                await worker.send_json(snapshot_msg(f"$ snapshot-{i}"))
                 await asyncio.sleep(0.05)
 
             # Disconnect browsers one by one

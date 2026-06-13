@@ -14,7 +14,6 @@ Scenarios
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -53,7 +52,7 @@ async def test_thundering_herd_5_browsers_simultaneous_hijack(live_server: Any) 
                 await drain_all(ws)
 
             # All 5 send hijack_request simultaneously
-            await asyncio.gather(*(ws.send(json.dumps({"type": "hijack_request"})) for ws, _ in browsers))
+            await asyncio.gather(*(ws.send_json({"type": "hijack_request"}) for ws, _ in browsers))
             await asyncio.sleep(0.5)
 
             # Drain all browsers and count who got owner=me
@@ -84,7 +83,7 @@ async def test_thundering_herd_5_browsers_simultaneous_hijack(live_server: Any) 
 
 async def test_mode_switch_during_active_hijack() -> None:
     """REST PATCH to open mode force-releases an active WS hijack."""
-    from tests.e2e._live_server import live_server_with_bus
+    from .._live_server import live_server_with_bus  # noqa: TID252
 
     sessions = [
         {"session_id": "mode1", "display_name": "Mode", "connector_type": "shell", "auto_start": False},
@@ -99,7 +98,7 @@ async def test_mode_switch_during_active_hijack() -> None:
             await drain_all(b1)
 
             # B1 acquires hijack
-            await b1.send(json.dumps({"type": "hijack_request"}))
+            await b1.send_json({"type": "hijack_request"})
             hijack_msg = await drain_until(b1, "hijack_state", timeout=3.0)
             assert hijack_msg is not None
             # Drain worker pause
@@ -181,7 +180,7 @@ async def test_resume_token_reclaim_vs_competing_browser() -> None:
                         resume_token = msg.get("resume_token")
                         break
 
-                await b1.send(json.dumps({"type": "hijack_request"}))
+                await b1.send_json({"type": "hijack_request"})
                 await drain_until(b1, "hijack_state", timeout=3.0)
                 await drain_all(worker)  # drain pause
 
@@ -191,7 +190,7 @@ async def test_resume_token_reclaim_vs_competing_browser() -> None:
             # B2 connects and tries to acquire
             async with connect_async_ws(f"{ws_base}/ws/browser/resume1/term") as b2:
                 await drain_all(b2)
-                await b2.send(json.dumps({"type": "hijack_request"}))
+                await b2.send_json({"type": "hijack_request"})
                 await asyncio.sleep(0.3)
 
                 b2_msgs = await drain_all(b2, timeout=1.0)

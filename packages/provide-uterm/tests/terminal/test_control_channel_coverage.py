@@ -43,13 +43,13 @@ class TestFeedTypeError:
     def test_feed_raises_for_non_str(self) -> None:
         """Covers line 74: TypeError raised when chunk is not str."""
         decoder = ControlFrameDecoder()
-        with pytest.raises(TypeError, match="control channel chunks must be str"):
+        with pytest.raises(TypeError, match="control frame chunks must be str"):
             decoder.feed(b"binary data")  # type: ignore[arg-type]
 
     def test_feed_raises_for_int(self) -> None:
         """Covers line 74: TypeError raised for int input."""
         decoder = ControlFrameDecoder()
-        with pytest.raises(TypeError, match="control channel chunks must be str"):
+        with pytest.raises(TypeError, match="control frame chunks must be str"):
             decoder.feed(123)  # type: ignore[arg-type]
 
 
@@ -231,7 +231,7 @@ class TestDepthErrorWithOnErrorCallback:
         # on_error fires exactly once, via _report_error wrapping the protocol
         # error. The inline re-notification that used to double-fire here was
         # removed (it added dead, mutable literals with no behavioural effect).
-        assert errors == ["control_channel_protocol_error"]
+        assert errors == ["control_frame_protocol_error"]
 
 
 class TestOptionalJsonImplementations:

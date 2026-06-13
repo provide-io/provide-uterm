@@ -24,7 +24,7 @@ import httpx
 import pytest
 from provide.uterm.client import connect_async_ws
 
-from tests.e2e._live_server import live_server_with_bus
+from .._live_server import live_server_with_bus  # noqa: TID252
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -122,7 +122,7 @@ async def test_sse_shell_snapshot_received(shell_server: Any) -> None:
         )
         await asyncio.wait_for(ready.wait(), timeout=3.0)
 
-        await worker.send(json.dumps(snapshot_msg("$ shell sse test")))
+        await worker.send_json(snapshot_msg("$ shell sse test"))
         events = await asyncio.wait_for(collect_task, timeout=10.0)
 
     assert len(events) == 1
@@ -153,12 +153,12 @@ async def test_sse_two_sessions_isolated(multi_session_server: Any) -> None:
         await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         # Fire from telnet session first — should NOT reach sse-shell SSE
-        await w_telnet.send(json.dumps(snapshot_msg("$ telnet event")))
+        await w_telnet.send_json(snapshot_msg("$ telnet event"))
         await asyncio.sleep(0.15)
         assert not collect_task.done()
 
         # Now fire from shell session
-        await w_shell.send(json.dumps(snapshot_msg("$ shell event")))
+        await w_shell.send_json(snapshot_msg("$ shell event"))
         events = await asyncio.wait_for(collect_task, timeout=8.0)
 
     assert len(events) == 1
@@ -223,12 +223,12 @@ async def test_sse_pattern_filter(shell_server: Any) -> None:
         await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         # Non-matching — filtered
-        await worker.send(json.dumps(snapshot_msg("loading...")))
+        await worker.send_json(snapshot_msg("loading..."))
         await asyncio.sleep(0.15)
         assert not collect_task.done()
 
         # Matching
-        await worker.send(json.dumps(snapshot_msg("root@host:~$ ")))
+        await worker.send_json(snapshot_msg("root@host:~$ "))
         events = await asyncio.wait_for(collect_task, timeout=8.0)
 
     assert len(events) == 1
@@ -260,7 +260,7 @@ async def test_sse_event_types_filter(shell_server: Any) -> None:
         await asyncio.wait_for(ready.wait(), timeout=3.0)
 
         # snapshot should be filtered
-        await worker.send(json.dumps(snapshot_msg("$ x")))
+        await worker.send_json(snapshot_msg("$ x"))
         await asyncio.sleep(0.15)
         assert not collect_task.done()
 
