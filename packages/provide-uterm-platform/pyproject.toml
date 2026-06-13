@@ -47,6 +47,7 @@ where = ["src"]
 "provide.uterm.pty" = ["py.typed", "_native/*"]
 
 [tool.pytest.ini_options]
+consider_namespace_packages = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]

@@ -58,6 +58,7 @@ namespaces = true
 "provide.uterm.cloudflare" = ["py.typed"]
 
 [tool.pytest.ini_options]
+consider_namespace_packages = true
 asyncio_mode = "auto"
 pythonpath = ["src"]
 markers = [
