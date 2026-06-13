@@ -186,6 +186,48 @@ def test_read_master_blocking_io_error_returns_empty_bytes() -> None:
     assert result == b""
 
 
+def test_read_master_eof_marks_disconnected() -> None:
+    """_read_master() treats an empty (EOF) read as disconnect.
+
+    On macOS a post-child-exit PTY master read returns b"" instead of raising
+    EIO (as Linux does), so without the EOF branch is_connected() would never
+    flip and EOF would go undetected. Closing the write end of a non-blocking
+    pipe reproduces an EOF read deterministically on any platform.
+    """
+    import fcntl as _fcntl
+
+    conn = make_connector("/bin/echo")
+    r_fd, w_fd = os.pipe()
+    conn._master_fd = r_fd
+    conn._connected = True
+    fl = _fcntl.fcntl(r_fd, _fcntl.F_GETFL)
+    _fcntl.fcntl(r_fd, _fcntl.F_SETFL, fl | os.O_NONBLOCK)
+    os.close(w_fd)  # no writers left → os.read returns b"" (EOF), not EAGAIN
+    result = conn._read_master()
+    os.close(r_fd)
+    conn._master_fd = None
+    assert result == b""
+    assert conn._connected is False
+
+
+def test_read_master_nonempty_read_stays_connected() -> None:
+    """A successful (non-empty) read must NOT flip _connected — only EOF does.
+
+    Guards the EOF branch's ``if not data`` against inverting to ``if data``.
+    """
+    conn = make_connector("/bin/echo")
+    r_fd, w_fd = os.pipe()
+    conn._master_fd = r_fd
+    conn._connected = True
+    os.write(w_fd, b"hello")
+    result = conn._read_master()
+    os.close(r_fd)
+    os.close(w_fd)
+    conn._master_fd = None
+    assert result == b"hello"
+    assert conn._connected is True
+
+
 async def test_poll_messages_buffer_truncated() -> None:
     """poll_messages() truncates buffer to exactly 32768 chars."""
     conn = make_connector("/bin/cat")

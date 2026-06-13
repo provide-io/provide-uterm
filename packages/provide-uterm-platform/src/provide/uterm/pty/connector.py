@@ -401,12 +401,21 @@ class PTYConnector:
         if self._master_fd is None:
             return b""
         try:
-            return os.read(self._master_fd, 4096)  # pragma: no mutate
+            data = os.read(self._master_fd, 4096)  # pragma: no mutate
         except BlockingIOError:
             return b""
         except OSError:
             self._connected = False
             return b""
+        if not data:
+            # EOF on the PTY master: the child has closed the slave (exited).
+            # Linux raises EIO here (handled above); macOS instead returns b"",
+            # so without this branch is_connected() would never flip and the
+            # session would look alive after the child is gone. The master fd is
+            # non-blocking, so b"" is a true EOF — "no data yet" raises EAGAIN
+            # (BlockingIOError) and is handled separately above.
+            self._connected = False
+        return data
 
     def _snapshot(self) -> dict[str, Any]:
         screen = self._buffer
