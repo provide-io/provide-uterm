@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 class WebSocketSessionConnector(SessionConnector):
     """Connect a hosted session to a remote WebSocket endpoint."""
 
-    _VALID_CONFIG_KEYS: frozenset[str] = frozenset({"url", "input_mode"})
+    _VALID_CONFIG_KEYS: frozenset[str] = frozenset({"url", "input_mode", "hub_overlay"})
 
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
         unknown = set(config) - self._VALID_CONFIG_KEYS
@@ -37,12 +37,15 @@ class WebSocketSessionConnector(SessionConnector):
         self._ws: Any | None = None
         self._connected = False
         self._input_mode = str(config.get("input_mode", "open"))
+        self._hub_overlay: bool = bool(config.get("hub_overlay", True))
         self._paused = False
         self._received_bytes = 0
         self._screen_buffer = ""
         self._banner = f"Connecting to {self._url}"
 
     def _screen(self) -> str:
+        if not self._hub_overlay:
+            return self._screen_buffer
         header = [
             f"\x1b[1;35m[{self._display_name} ({self._session_id})]\x1b[0m",
             "-" * 60,
