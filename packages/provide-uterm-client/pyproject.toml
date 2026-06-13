@@ -45,6 +45,7 @@ where = ["src"]
 "provide.uterm" = ["py.typed"]
 
 [tool.pytest.ini_options]
+consider_namespace_packages = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = [

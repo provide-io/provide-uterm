@@ -178,6 +178,7 @@ min_confidence = 80
 paths = ["packages/provide-uterm/src", "packages/provide-uterm/tests"]
 
 [tool.pytest.ini_options]
+consider_namespace_packages = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
